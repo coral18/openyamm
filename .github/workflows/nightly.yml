@@ -135,6 +135,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 240
     env:
+      CMAKE_BUILD_PARALLEL_LEVEL: 4
       OPENYAMM_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.OPENYAMM_ANDROID_KEYSTORE_PASSWORD }}
       OPENYAMM_ANDROID_KEY_ALIAS: openyamm
       OPENYAMM_ANDROID_KEY_PASSWORD: ${{ secrets.OPENYAMM_ANDROID_KEYSTORE_PASSWORD }}
@@ -272,8 +273,10 @@ jobs:
             --output "$baseline_apk"
           echo "5154e6b85393b15ced75c528c6f3099f41453be8c127d4d61deb701f93c48a76  $baseline_apk" | sha256sum --check
           python3 android/test_release_apk.py android/app-release.apk \
-            --serial emulator-5554 --output android-release-test --world mm8 --map out13.odm \
+            --serial emulator-5554 --output android-release-test/mm8 --world mm8 --map out13.odm \
             --baseline-apk "$baseline_apk"
+          python3 android/test_release_apk.py android/app-release.apk \
+            --serial emulator-5554 --output android-release-test/mm6 --world mm6 --map oute3.odm
 
       - name: Upload Android runtime verification
         if: always()
@@ -292,7 +295,6 @@ jobs:
           test -s "$source_apk"
           mkdir -p dist
           cp "$source_apk" "dist/$output"
-          test "$(stat -c '%s' "dist/$output")" -lt 2147483648
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "dist/$output"
           unzip -Z1 "dist/$output" > android-package-contents.txt
           grep -Fxq "lib/arm64-v8a/libmain.so" android-package-contents.txt
@@ -401,7 +403,6 @@ jobs:
           grep -Fxq "OpenYAMM/assets/worlds/mmmerge.zip" windows-package-contents.txt
           mkdir -p dist
           cp "$archive" "dist/$output"
-          test "$(stat -c '%s' "dist/$output")" -lt 2147483648
 
       - name: Upload Windows artifact
         uses: actions/upload-artifact@v7
@@ -474,7 +475,6 @@ jobs:
         run: |
           output="$OUTPUT_NAME"
           test -s "dist/$output"
-          test "$(stat -c '%s' "dist/$output")" -lt 2147483648
           (cd dist && sha256sum "$output" > "$output.sha256")
 
       - name: Upload Flatpak artifact
@@ -500,11 +500,23 @@ jobs:
       - windows
       - flatpak
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    timeout-minutes: 120
     permissions:
       contents: write
 
     steps:
+      - name: Check out Nextcloud uploader
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /packaging/upload_nextcloud.py
+            /packaging/test_upload_nextcloud.py
+
+      - name: Check Nextcloud uploader
+        run: python3 packaging/test_upload_nextcloud.py
+
       - name: Download packaged artifacts
         uses: actions/download-artifact@v8
         with:
@@ -530,11 +542,39 @@ jobs:
           sha256sum -c "$ANDROID_ASSET.sha256"
           sha256sum -c "$WINDOWS_ASSET.sha256"
           sha256sum -c "$FLATPAK_ASSET.sha256"
-          test "$(stat -c '%s' "$ANDROID_ASSET")" -lt 2147483648
-          test "$(stat -c '%s' "$WINDOWS_ASSET")" -lt 2147483648
-          test "$(stat -c '%s' "$FLATPAK_ASSET")" -lt 2147483648
+
+      - name: Check tagged release is unpublished
+        if: needs.package_metadata.outputs.is_tag == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_VERSION: ${{ needs.package_metadata.outputs.version }}
+        run: |
+          if gh release view "$RELEASE_VERSION" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "::error::Release $RELEASE_VERSION already exists; tagged releases are not overwritten."
+            exit 1
+          fi
+
+      - name: Upload complete packages to Nextcloud
+        env:
+          IS_TAG: ${{ needs.package_metadata.outputs.is_tag }}
+          RELEASE_VERSION: ${{ needs.package_metadata.outputs.version }}
+          OPENYAMM_NEXTCLOUD_URL: ${{ vars.OPENYAMM_NEXTCLOUD_URL || 'https://cloud.jasicek.net' }}
+          OPENYAMM_NEXTCLOUD_FOLDER: ${{ vars.OPENYAMM_NEXTCLOUD_FOLDER || 'openyamm' }}
+          OPENYAMM_NEXTCLOUD_PUBLIC_URL: ${{ vars.OPENYAMM_NEXTCLOUD_PUBLIC_URL }}
+          OPENYAMM_NEXTCLOUD_USERNAME: ${{ secrets.OPENYAMM_NEXTCLOUD_USERNAME }}
+          OPENYAMM_NEXTCLOUD_APP_PASSWORD: ${{ secrets.OPENYAMM_NEXTCLOUD_APP_PASSWORD }}
+        run: |
+          remote_path="nightly/$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          if [[ "$IS_TAG" == true ]]; then
+            remote_path="releases/$RELEASE_VERSION/$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          fi
+          python3 packaging/upload_nextcloud.py release-assets \
+            --remote-path "$remote_path" \
+            --links-file nextcloud-downloads.md
+          cat nextcloud-downloads.md >> "$GITHUB_STEP_SUMMARY"
 
       - name: Publish GitHub release
+        if: vars.OPENYAMM_NEXTCLOUD_PUBLIC_URL != ''
         env:
           GH_TOKEN: ${{ github.token }}
           IS_TAG: ${{ needs.package_metadata.outputs.is_tag }}
@@ -544,15 +584,11 @@ jobs:
           FLATPAK_ASSET: ${{ needs.package_metadata.outputs.flatpak_asset_name }}
         run: |
           if [[ "$IS_TAG" == true ]]; then
-            if gh release view "$RELEASE_VERSION" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-              echo "::error::Release $RELEASE_VERSION already exists; tagged releases are not overwritten."
-              exit 1
-            fi
-
-            gh release create "$RELEASE_VERSION" release-assets/* \
+            gh release create "$RELEASE_VERSION" release-assets/*.sha256 \
               --repo "$GITHUB_REPOSITORY" \
               --verify-tag \
               --title "OpenYAMM $RELEASE_VERSION" \
+              --notes-file nextcloud-downloads.md \
               --generate-notes
             exit 0
           fi
@@ -573,6 +609,8 @@ jobs:
             '' \
             'Nightlies are development snapshots and may be unstable. Existing saves should be backed up.' \
             > nightly-release-notes.md
+          printf '\n## Downloads\n\n' >> nightly-release-notes.md
+          cat nextcloud-downloads.md >> nightly-release-notes.md
 
           if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/nightly" >/dev/null 2>&1; then
             gh api \
@@ -605,6 +643,15 @@ jobs:
               --prerelease
           fi
 
-          gh release upload nightly release-assets/* \
+          gh release upload nightly release-assets/*.sha256 \
             --repo "$GITHUB_REPOSITORY" \
             --clobber
+
+          # Remove the previous bundled downloads now that verified replacements are linked above.
+          gh release view nightly --repo "$GITHUB_REPOSITORY" --json assets \
+            --jq '.assets[].name' > previous-nightly-assets.txt
+          for asset in "$ANDROID_ASSET" "$WINDOWS_ASSET" "$FLATPAK_ASSET"; do
+            if grep -Fxq "$asset" previous-nightly-assets.txt; then
+              gh release delete-asset nightly "$asset" --repo "$GITHUB_REPOSITORY" --yes
+            fi
+          done

@@ -121,8 +121,10 @@ camera poses in one run. Ready-to-run MM6/MM7/MM8 water viewpoints are in
 
 The [Nightly releases](https://github.com/pjasicek/openyamm/actions/workflows/nightly.yml) GitHub Actions workflow
 builds unsigned Windows x64, x86_64 Flatpak, and signed Android arm64 packages every day at 03:27 UTC. After all
-packages pass structural and checksum checks, the workflow updates the rolling
-[nightly prerelease](https://github.com/pjasicek/openyamm/releases/tag/nightly). The same workflow can be run manually,
+packages pass structural and checksum checks, the workflow uploads complete packages to Nextcloud and updates the
+[nightly prerelease](https://github.com/pjasicek/openyamm/releases/tag/nightly) with download links and checksums.
+See [Nextcloud publishing setup](packaging/NEXTCLOUD.md) for the repository secrets and public folder share.
+The same workflow can be run manually,
 with publishing optionally disabled so the packages remain short-lived workflow artifacts.
 
 Every push to `main` also gets its own package-build run for Windows x64, x86_64 Flatpak, and Android arm64. Open the
@@ -144,7 +146,8 @@ packaged game assets remains subject to the asset distribution rights noted in t
 ## Tagged Releases
 
 Pushing a canonical `X.Y` tag, such as `0.7`, runs the same validated package builds and creates a normal GitHub
-release for that tag. The release contains versioned Windows, Flatpak, and signed Android packages plus SHA256 files.
+release for that tag. The release links to versioned Windows, Flatpak, and signed Android packages on Nextcloud
+and contains their SHA256 files.
 The Android version name matches the tag; its monotonically increasing version code is calculated as
 `major * 10000 + minor * 100` (`0.7` becomes `700`).
 

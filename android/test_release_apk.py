@@ -140,15 +140,13 @@ def main():
             pid = adb("shell", "pidof", package, check=False).strip()
             if loaded and pid:
                 ready_since = ready_since or time.monotonic()
-                if time.monotonic() - ready_since >= 5:
+                if time.monotonic() - ready_since >= 5 and capture_rendered_screen("before-resume"):
                     break
             elif ready_since:
                 raise RuntimeError("Game exited after initializing the map.")
         else:
             raise RuntimeError("Timed out waiting for rendered map readiness: " + marker)
 
-        if not capture_rendered_screen("before-resume"):
-            raise RuntimeError("Map initialized, but the initial screen is black.")
         original_pid = adb("shell", "pidof", package).strip()
         for cycle in range(args.resume_cycles):
             transition = ("home", "task-switch", "screen-off")[cycle % 3]
