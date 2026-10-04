@@ -14,8 +14,19 @@ installed. `elfutils` provides the `eu-strip` and `eu-elfcompress` tools used wh
 
 ```sh
 packaging/flatpak/build_flatpak.sh
-flatpak run io.github.openyamm.OpenYAMM
+flatpak run --user io.github.openyamm.OpenYAMM
 ```
+
+The wrapper installs the app and its runtime for the current user. When installing the resulting bundle manually,
+use the same installation scope:
+
+```sh
+flatpak install --user build/flatpak/OpenYAMM.flatpak
+flatpak run --user io.github.openyamm.OpenYAMM
+```
+
+Without `--user`, `flatpak install` targets the system installation and cannot use a runtime installed only for your
+user. If the wrapper already installed the app successfully, you can run it directly without reinstalling the bundle.
 
 The same flow is available from CMake:
 

@@ -37,7 +37,7 @@ float fogRatio(float distance)
 
 float spriteAlpha(vec2 uv, float lod)
 {
-    if (any(lessThan(uv, vec2(0.0))) || any(greaterThan(uv, vec2(1.0))))
+    if (any(lessThan(uv, vec2_splat(0.0))) || any(greaterThan(uv, vec2_splat(1.0))))
     {
         return 0.0;
     }
