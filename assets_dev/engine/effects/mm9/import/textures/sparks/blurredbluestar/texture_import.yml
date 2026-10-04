@@ -1,0 +1,64 @@
+schema: openyamm.effectTextureImport.v1
+source:
+  path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/SPARKS/BLURREDBLUESTAR.dtx
+  format: LithTech DTX
+  sha256: 5ac14450362fbb7046b395ba17c21834aa2a0b6948edbe43d531753b4b4e91ff
+runtime:
+  texture: engine/effects/mm9/textures/sparks/blurredbluestar.png
+  format: PNG RGBA8
+  colorSpace: srgb
+  alphaUsage: blend
+  premultipliedAlpha: false
+  mipPolicy: generate-at-runtime
+  minFilter: linear
+  magFilter: linear
+  wrapU: clamp
+  wrapV: clamp
+conversion:
+  decoder: tools/mm9_import_discovery/convert_abc_model.py:decode_dtx_mips
+  decodedRgbChanged: false
+  decodedAlphaChanged: false
+  opaqueAlphaRepair: false
+  zeroAlphaRgbPreserved: true
+  sourceMipArtifacts: mips/*.png
+dtx:
+  version: -5
+  width: 32
+  height: 32
+  mipCount: 4
+  sectionCount: 0
+  internalFlags: 136
+  userFlags: 0
+  extraHex: '000003000000000000000000'
+  bppIdentifier: 3
+  command: ''
+  repairOpaqueAlpha: false
+  mips:
+  - index: 0
+    width: 32
+    height: 32
+    sourceOffset: 164
+    sourceBytes: 4096
+    decodedRgbaSha256: 79b81b4761647a0dba9f8e0cd7d20269fa4a404e924cb984e31b759d19215d35
+    artifact: mips/00.png
+  - index: 1
+    width: 16
+    height: 16
+    sourceOffset: 4260
+    sourceBytes: 1024
+    decodedRgbaSha256: 0af248437771bf8ad32974e13e241e7a7d34b1df38e3bb19771ce32701c83212
+    artifact: mips/01.png
+  - index: 2
+    width: 8
+    height: 8
+    sourceOffset: 5284
+    sourceBytes: 256
+    decodedRgbaSha256: 7a8d695a489f82f7712443b1f610ec2a965343572c4d1563f72e72e17a6e6b2a
+    artifact: mips/02.png
+  - index: 3
+    width: 4
+    height: 4
+    sourceOffset: 5540
+    sourceBytes: 64
+    decodedRgbaSha256: 38709adc304ac3531208be8e0b3822856774e818c08277185fff956232bbcc8d
+    artifact: mips/03.png

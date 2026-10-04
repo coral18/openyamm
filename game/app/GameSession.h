@@ -136,7 +136,7 @@ public:
     void beginFramePerformanceDiagnostics(bool enabled);
     const GameplayUpdateFramePerformanceDiagnostics &lastGameplayUpdateFramePerformanceDiagnostics() const;
     const GameplayUiFramePerformanceDiagnostics &lastGameplayUiFramePerformanceDiagnostics() const;
-    void clearSharedInputFrameResult();
+    void clearSharedInputFrameResult(bool blockWorldInput = false);
     void consumePendingGameplayAudioRequests();
     void renderGameplayUi(int width, int height);
     const GameplaySharedInputFrameResult &sharedInputFrameResult() const;

@@ -1,0 +1,12 @@
+schema: openyamm.effectSprite.v2
+id: mm9:effect-sprite/flies
+source: sprites/flies.spr
+framesPerSecond: 15
+logicalWidth: 16
+logicalHeight: 16
+keyed: false
+translucent: false
+colorKey: 0
+frames:
+- mm9:effect-texture/flies/fly01
+- mm9:effect-texture/flies/fly02

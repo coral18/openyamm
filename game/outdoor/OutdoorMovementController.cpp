@@ -341,36 +341,37 @@ bool calculateFaceHeight(const OutdoorFaceGeometryData &geometry, float x, float
     return true;
 }
 
-bool hasShorterSolution(float a, float b, float c, float currentSolution, float &newSolution)
+bool findContactDistance(float a, float b, float c, float currentSolution, float &newSolution)
 {
-    const float discriminant = b * b - 4.0f * a * c;
-
-    if (discriminant < 0.0f)
+    if (std::fabs(a) <= CollisionEpsilon)
     {
         return false;
     }
 
-    const float root = std::sqrt(discriminant);
-    float alpha1 = (-b - root) / (2.0f * a);
-    float alpha2 = (-b + root) / (2.0f * a);
-
-    if (alpha1 > alpha2)
+    // Normalize the edge quadratic as well: its coefficients use the opposite sign.
+    b /= a;
+    c /= a;
+    if (b >= 0.0f || (c <= 0.0f && b >= -CollisionEpsilon))
     {
-        std::swap(alpha1, alpha2);
+        return false;
     }
-
-    if (alpha1 > 0.0f && alpha1 < currentSolution)
+    // Keep touching and overlapping contacts when moving inward; allow separation and tangential movement.
+    if (c <= 0.0f)
     {
-        newSolution = alpha1;
+        newSolution = 0.0f;
+        return currentSolution > 0.0f;
+    }
+    const float discriminant = b * b - 4.0f * c;
+    if (discriminant < 0.0f)
+    {
+        return false;
+    }
+    const float contactDistance = (-b - std::sqrt(discriminant)) * 0.5f;
+    if (contactDistance >= 0.0f && contactDistance < currentSolution)
+    {
+        newSolution = contactDistance;
         return true;
     }
-
-    if (alpha2 > 0.0f && alpha2 < currentSolution)
-    {
-        newSolution = alpha2;
-        return true;
-    }
-
     return false;
 }
 
@@ -400,7 +401,7 @@ bool collideWithLine(
         edgeLengthSquared * (radius * radius - sphereToVertexLengthSquared)
         + (edgeDotSphereToVertex * edgeDotSphereToVertex);
 
-    if (!hasShorterSolution(a, b, c, currentMoveDistance, newMoveDistance))
+    if (!findContactDistance(a, b, c, currentMoveDistance, newMoveDistance))
     {
         return false;
     }
@@ -435,13 +436,9 @@ bool collideSphereWithFace(
     bx::Vec3 collisionNormal = geometry.normal;
     float dirNormalProjection = vecDot(direction, collisionNormal);
 
-    if (dirNormalProjection > 0.0f)
+    const bool movingAwayFromFace = dirNormalProjection > 0.0f && !doubleSidedFace;
+    if (dirNormalProjection > 0.0f && doubleSidedFace)
     {
-        if (!doubleSidedFace)
-        {
-            return false;
-        }
-
         collisionNormal = vecScale(collisionNormal, -1.0f);
         dirNormalProjection = -dirNormalProjection;
     }
@@ -449,16 +446,16 @@ bool collideSphereWithFace(
     const float centerFaceDistance = vecDot(collisionNormal, vecSubtract(position, geometry.vertices[0]));
     float candidateMoveDistance = 0.0f;
     bx::Vec3 projectedPosition = position;
-    bool sphereInPlane = false;
+    bool boundaryOnly = false;
 
-    if (std::fabs(dirNormalProjection) <= CollisionEpsilon)
+    if (movingAwayFromFace || std::fabs(dirNormalProjection) <= CollisionEpsilon)
     {
         if (std::fabs(centerFaceDistance) >= radius)
         {
             return false;
         }
 
-        sphereInPlane = true;
+        boundaryOnly = true;
     }
     else
     {
@@ -466,14 +463,17 @@ bool collideSphereWithFace(
 
         if (candidateMoveDistance < -radius || candidateMoveDistance > currentMoveDistance)
         {
-            return false;
+            // A plane contact outside this step does not exclude a nearby doorway edge.
+            boundaryOnly = true;
         }
-
-        projectedPosition = vecAdd(position, vecScale(direction, candidateMoveDistance));
-        projectedPosition = vecSubtract(projectedPosition, vecScale(collisionNormal, radius));
+        else
+        {
+            projectedPosition = vecAdd(position, vecScale(direction, candidateMoveDistance));
+            projectedPosition = vecSubtract(projectedPosition, vecScale(collisionNormal, radius));
+        }
     }
 
-    if (!sphereInPlane && isPointInsideOutdoorPolygonProjected(projectedPosition, geometry.vertices, collisionNormal))
+    if (!boundaryOnly && isPointInsideOutdoorPolygonProjected(projectedPosition, geometry.vertices, collisionNormal))
     {
         moveDistance = candidateMoveDistance;
         collisionPoint = projectedPosition;
@@ -493,7 +493,7 @@ bool collideSphereWithFace(
         const float quadraticC = vecDot(vecSubtract(vertex, position), vecSubtract(vertex, position)) - radius * radius;
         float newDistance = 0.0f;
 
-        if (hasShorterSolution(quadraticA, quadraticB, quadraticC, bestDistance, newDistance))
+        if (findContactDistance(quadraticA, quadraticB, quadraticC, bestDistance, newDistance))
         {
             bestDistance = newDistance;
             bestPoint = vertex;
@@ -565,7 +565,7 @@ bool collideSphereWithCylinder(
     const float c = relativeX * relativeX + relativeY * relativeY - combinedRadius * combinedRadius;
     float candidateMoveDistance = 0.0f;
 
-    if (!hasShorterSolution(a, b, c, currentMoveDistance, candidateMoveDistance))
+    if (!findContactDistance(a, b, c, currentMoveDistance, candidateMoveDistance))
     {
         return false;
     }
@@ -638,42 +638,6 @@ bool sphereStartsInsideCylinderOverlap(
         centerLo.z + cylinderHeight);
 }
 
-bool actorMovementStartsInsideActorOverlap(
-    const bx::Vec3 &bodyPosition,
-    float bodyRadius,
-    float bodyHeight,
-    const OutdoorActorCollision &collider,
-    bool actorVsActor)
-{
-    if (!actorVsActor)
-    {
-        return false;
-    }
-
-    const float actorRadius = static_cast<float>(collider.radius);
-    const float combinedRadius = bodyRadius + actorRadius;
-
-    if (combinedRadius <= 0.0f)
-    {
-        return false;
-    }
-
-    const float deltaX = bodyPosition.x - static_cast<float>(collider.worldX);
-    const float deltaY = bodyPosition.y - static_cast<float>(collider.worldY);
-    const float distanceSquared = deltaX * deltaX + deltaY * deltaY;
-
-    if (distanceSquared >= combinedRadius * combinedRadius)
-    {
-        return false;
-    }
-
-    const float bodyMinZ = bodyPosition.z;
-    const float bodyMaxZ = bodyPosition.z + bodyHeight;
-    const float actorMinZ = static_cast<float>(collider.worldZ);
-    const float actorMaxZ = actorMinZ + static_cast<float>(collider.height);
-    return rangesOverlap(bodyMinZ, bodyMaxZ, actorMinZ, actorMaxZ);
-}
-
 void resolveActorCylinderOverlaps(
     bx::Vec3 &bodyPosition,
     float bodyRadius,
@@ -682,19 +646,19 @@ void resolveActorCylinderOverlaps(
     const std::optional<OutdoorIgnoredActorCollider> &ignoredActorCollider,
     std::vector<size_t> *pContactedActorIndices = nullptr)
 {
+    // Actors separate through swept movement, which also checks world geometry.
+    // An unconditional push-out could put them through a nearby wall.
+    if (ignoredActorCollider)
+    {
+        return;
+    }
+
     for (int iteration = 0; iteration < 4; ++iteration)
     {
         bool resolvedAny = false;
 
         for (const OutdoorActorCollision &collider : actorColliders)
         {
-            if (ignoredActorCollider
-                && collider.source == ignoredActorCollider->source
-                && collider.sourceIndex == ignoredActorCollider->sourceIndex)
-            {
-                continue;
-            }
-
             const float actorRadius = static_cast<float>(collider.radius);
             const float combinedRadius = bodyRadius + actorRadius;
             const float deltaX = bodyPosition.x - static_cast<float>(collider.worldX);
@@ -712,16 +676,6 @@ void resolveActorCylinderOverlaps(
             const float actorMaxZ = actorMinZ + static_cast<float>(collider.height);
 
             if (!rangesOverlap(partyMinZ, partyMaxZ, actorMinZ, actorMaxZ))
-            {
-                continue;
-            }
-
-            if (actorMovementStartsInsideActorOverlap(
-                    bodyPosition,
-                    bodyRadius,
-                    bodyHeight,
-                    collider,
-                    ignoredActorCollider.has_value()))
             {
                 continue;
             }
@@ -815,25 +769,13 @@ void collideBodyWithFace(CollisionState &collisionState, const OutdoorFaceGeomet
 {
     auto collideOnce = [&collisionState, &geometry, doubleSidedFace](
                            const bx::Vec3 &oldPosition,
-                           const bx::Vec3 &newPosition,
                            float radius,
                            float heightOffset)
     {
         if (!doubleSidedFace)
         {
             const float distanceOld = vecDot(geometry.normal, vecSubtract(oldPosition, geometry.vertices[0]));
-            const float distanceNew = vecDot(geometry.normal, vecSubtract(newPosition, geometry.vertices[0]));
-
-            if (distanceOld > 0.0f
-                && distanceOld <= radius
-                && distanceNew >= distanceOld - CollisionEpsilon)
-            {
-                return;
-            }
-
-            if (!(distanceOld > 0.0f
-                    && (distanceOld <= radius || distanceNew <= radius)
-                    && distanceNew <= distanceOld))
+            if (distanceOld <= 0.0f)
             {
                 return;
             }
@@ -882,7 +824,7 @@ void collideBodyWithFace(CollisionState &collisionState, const OutdoorFaceGeomet
         };
     };
 
-    collideOnce(collisionState.positionLo, collisionState.newPositionLo, collisionState.radiusLo, 0.0f);
+    collideOnce(collisionState.positionLo, collisionState.radiusLo, 0.0f);
 
     if (!collisionState.checkHi)
     {
@@ -891,13 +833,11 @@ void collideBodyWithFace(CollisionState &collisionState, const OutdoorFaceGeomet
 
     collideOnce(
         collisionState.positionHi,
-        collisionState.newPositionHi,
         collisionState.radiusHi,
         collisionState.positionHi.z - collisionState.positionLo.z);
 
     bx::Vec3 midPosition = vecScale(vecAdd(collisionState.positionLo, collisionState.positionHi), 0.5f);
-    bx::Vec3 newMidPosition = vecScale(vecAdd(collisionState.newPositionLo, collisionState.newPositionHi), 0.5f);
-    collideOnce(midPosition, newMidPosition, collisionState.radiusHi, midPosition.z - collisionState.positionLo.z);
+    collideOnce(midPosition, collisionState.radiusHi, midPosition.z - collisionState.positionLo.z);
 
     const float faceCenterZ = (geometry.minZ + geometry.maxZ) * 0.5f;
 
@@ -907,8 +847,7 @@ void collideBodyWithFace(CollisionState &collisionState, const OutdoorFaceGeomet
     {
         const float heightOffset = faceCenterZ - collisionState.positionLo.z;
         midPosition.z = faceCenterZ;
-        newMidPosition.z = collisionState.newPositionLo.z + heightOffset;
-        collideOnce(midPosition, newMidPosition, collisionState.radiusHi, heightOffset);
+        collideOnce(midPosition, collisionState.radiusHi, heightOffset);
     }
 }
 
@@ -1128,16 +1067,6 @@ void collideOutdoorWithActors(
                     cylinderMaxX,
                     cylinderMaxY,
                     cylinderMaxZ))
-            {
-                continue;
-            }
-
-            if (actorMovementStartsInsideActorOverlap(
-                    bx::Vec3{position.x, position.y, position.z - radius},
-                    radius,
-                    radius * 2.0f,
-                    collider,
-                    ignoredActorCollider.has_value()))
             {
                 continue;
             }
@@ -3297,6 +3226,14 @@ OutdoorMoveState OutdoorMovementController::resolveOutdoorActorMove(
                 continue;
             }
 
+            if (hit.kind == CollisionHit::Kind::Actor)
+            {
+                const float inwardVelocity = std::min(0.0f, vecDot(actorVelocity, slidePlaneNormal));
+                actorVelocity = vecSubtract(actorVelocity, vecScale(slidePlaneNormal, inwardVelocity));
+                actorVelocity = vecScale(actorVelocity, 0.89263916f);
+                continue;
+            }
+
             const float destinationPlaneDistance =
                 vecDot(vecSubtract(collisionState.newPositionLo, slidePlaneOrigin), slidePlaneNormal);
             const bx::Vec3 newDestination = vecSubtract(
@@ -3363,17 +3300,25 @@ OutdoorMoveState OutdoorMovementController::resolveOutdoorActorMove(
         }
         else
         {
-            float velocityDotNormal = vecDot(pGeometry->normal, actorVelocity);
+            const bx::Vec3 contactCenter = vecAdd(
+                actorPosition, bx::Vec3{0.0f, 0.0f, bodyRadius + 1.0f + hit.heightOffset});
+            const bx::Vec3 contactDelta = vecSubtract(contactCenter, hit.collisionPoint);
+            const float contactDistance = vecLength(contactDelta);
+            const bx::Vec3 contactNormal = contactDistance > CollisionEpsilon
+                ? vecScale(contactDelta, 1.0f / contactDistance) : pGeometry->normal;
+            float velocityDotNormal = vecDot(contactNormal, actorVelocity);
             velocityDotNormal = std::max(std::abs(velocityDotNormal), collisionState.speed / 8.0f);
-            actorVelocity = vecAdd(actorVelocity, vecScale(pGeometry->normal, velocityDotNormal));
+            actorVelocity = vecAdd(actorVelocity, vecScale(contactNormal, velocityDotNormal));
 
             if (pGeometry->polygonType != PolygonInBetweenFloorAndWall)
             {
-                const float overshoot = bodyRadius - faceSignedDistance(*pGeometry, actorPosition);
+                // An edge contact must not push the actor back to the infinite wall plane,
+                // which can move it into a neighbor that the movement sweep already avoided.
+                const float overshoot = bodyRadius - contactDistance;
 
                 if (overshoot > 0.0f)
                 {
-                    actorPosition = vecAdd(actorPosition, vecScale(pGeometry->normal, overshoot));
+                    actorPosition = vecAdd(actorPosition, vecScale(contactNormal, overshoot));
                 }
 
                 resolvedVelocityUpdatesYaw = true;

@@ -1,0 +1,396 @@
+#include "engine/models/ModelInstance.h"
+
+#include <algorithm>
+#include <cmath>
+
+namespace OpenYAMM::Engine
+{
+namespace
+{
+void expandBounds(ModelBounds &bounds, const ModelMatrix &matrix, const std::array<float, 3> &point)
+{
+    const std::array<float, 3> transformed = {
+        matrix[0] * point[0] + matrix[4] * point[1] + matrix[8] * point[2] + matrix[12],
+        matrix[1] * point[0] + matrix[5] * point[1] + matrix[9] * point[2] + matrix[13],
+        matrix[2] * point[0] + matrix[6] * point[1] + matrix[10] * point[2] + matrix[14],
+    };
+    if (!bounds.valid)
+    {
+        bounds.min = transformed;
+        bounds.max = transformed;
+        bounds.valid = true;
+        return;
+    }
+    for (size_t axis = 0; axis < transformed.size(); ++axis)
+    {
+        bounds.min[axis] = std::min(bounds.min[axis], transformed[axis]);
+        bounds.max[axis] = std::max(bounds.max[axis], transformed[axis]);
+    }
+}
+}
+
+ModelInstanceHandle ModelInstanceSystem::create(
+    std::shared_ptr<const ModelAsset> asset,
+    const ModelTransform &rootTransform
+)
+{
+    if (asset == nullptr)
+    {
+        return {};
+    }
+
+    uint32_t index = 0;
+    if (m_freeIndices.empty())
+    {
+        index = static_cast<uint32_t>(m_slots.size());
+        m_slots.emplace_back();
+    }
+    else
+    {
+        index = m_freeIndices.back();
+        m_freeIndices.pop_back();
+    }
+
+    Slot &slot = m_slots[index];
+    slot.active = true;
+    slot.visible = true;
+    slot.nodeMarkersVisible = false;
+    slot.playing = false;
+    slot.paused = false;
+    slot.clipSelected = false;
+    slot.playbackMode = ModelPlaybackMode::Once;
+    slot.clipIndex = 0;
+    slot.timeSeconds = 0.0f;
+    slot.rootTransform = rootTransform;
+    slot.asset = std::move(asset);
+    evaluate(slot);
+    ++m_activeCount;
+    return {index, slot.generation};
+}
+
+bool ModelInstanceSystem::destroy(ModelInstanceHandle handle)
+{
+    Slot *pSlot = find(handle);
+    if (pSlot == nullptr)
+    {
+        return false;
+    }
+    pSlot->active = false;
+    pSlot->asset.reset();
+    pSlot->pose = {};
+    pSlot->bounds = {};
+    ++pSlot->generation;
+    if (pSlot->generation == 0)
+    {
+        pSlot->generation = 1;
+    }
+    m_freeIndices.push_back(handle.index);
+    --m_activeCount;
+    return true;
+}
+
+void ModelInstanceSystem::clear()
+{
+    for (uint32_t index = 0; index < m_slots.size(); ++index)
+    {
+        Slot &slot = m_slots[index];
+        if (!slot.active)
+        {
+            continue;
+        }
+        slot.active = false;
+        slot.asset.reset();
+        slot.pose = {};
+        slot.bounds = {};
+        ++slot.generation;
+        if (slot.generation == 0)
+        {
+            slot.generation = 1;
+        }
+    }
+    m_freeIndices.clear();
+    for (uint32_t index = 0; index < m_slots.size(); ++index)
+    {
+        m_freeIndices.push_back(index);
+    }
+    m_activeCount = 0;
+}
+
+bool ModelInstanceSystem::contains(ModelInstanceHandle handle) const
+{
+    return find(handle) != nullptr;
+}
+
+bool ModelInstanceSystem::setTransform(ModelInstanceHandle handle, const ModelTransform &transform)
+{
+    Slot *pSlot = find(handle);
+    if (pSlot == nullptr)
+    {
+        return false;
+    }
+    pSlot->rootTransform = transform;
+    evaluate(*pSlot);
+    return true;
+}
+
+bool ModelInstanceSystem::setVisible(ModelInstanceHandle handle, bool visible)
+{
+    Slot *pSlot = find(handle);
+    if (pSlot == nullptr)
+    {
+        return false;
+    }
+    pSlot->visible = visible;
+    return true;
+}
+
+bool ModelInstanceSystem::setNodeMarkersVisible(ModelInstanceHandle handle, bool visible)
+{
+    Slot *pSlot = find(handle);
+    if (pSlot == nullptr)
+    {
+        return false;
+    }
+    pSlot->nodeMarkersVisible = visible;
+    return true;
+}
+
+bool ModelInstanceSystem::play(ModelInstanceHandle handle, const std::string &clipName, ModelPlaybackMode mode)
+{
+    Slot *pSlot = find(handle);
+    if (pSlot == nullptr)
+    {
+        return false;
+    }
+    const std::optional<uint32_t> clipIndex = pSlot->asset->findClip(clipName);
+    if (!clipIndex)
+    {
+        return false;
+    }
+    pSlot->clipIndex = *clipIndex;
+    pSlot->clipSelected = true;
+    pSlot->playbackMode = mode;
+    pSlot->timeSeconds = 0.0f;
+    pSlot->playing = true;
+    pSlot->paused = false;
+    evaluate(*pSlot);
+    return true;
+}
+
+bool ModelInstanceSystem::pause(ModelInstanceHandle handle, bool paused)
+{
+    Slot *pSlot = find(handle);
+    if (pSlot == nullptr)
+    {
+        return false;
+    }
+    pSlot->paused = paused;
+    return true;
+}
+
+bool ModelInstanceSystem::stop(ModelInstanceHandle handle)
+{
+    Slot *pSlot = find(handle);
+    if (pSlot == nullptr)
+    {
+        return false;
+    }
+    pSlot->playing = false;
+    pSlot->paused = false;
+    pSlot->clipSelected = false;
+    pSlot->timeSeconds = 0.0f;
+    evaluate(*pSlot);
+    return true;
+}
+
+bool ModelInstanceSystem::setTime(ModelInstanceHandle handle, float timeSeconds)
+{
+    Slot *pSlot = find(handle);
+    if (pSlot == nullptr || !std::isfinite(timeSeconds) || timeSeconds < 0.0f)
+    {
+        return false;
+    }
+    if (!pSlot->asset->clips.empty())
+    {
+        const float duration = pSlot->asset->clips[pSlot->clipIndex].durationSeconds;
+        pSlot->timeSeconds = std::min(timeSeconds, duration);
+    }
+    else
+    {
+        pSlot->timeSeconds = 0.0f;
+    }
+    evaluate(*pSlot);
+    return true;
+}
+
+void ModelInstanceSystem::update(float deltaSeconds)
+{
+    if (!std::isfinite(deltaSeconds) || deltaSeconds <= 0.0f)
+    {
+        return;
+    }
+    for (Slot &slot : m_slots)
+    {
+        if (!slot.active || !slot.playing || slot.paused || slot.asset->clips.empty())
+        {
+            continue;
+        }
+        const float duration = slot.asset->clips[slot.clipIndex].durationSeconds;
+        if (duration <= 0.0f)
+        {
+            slot.timeSeconds = 0.0f;
+            slot.playing = false;
+        }
+        else if (slot.playbackMode == ModelPlaybackMode::Loop)
+        {
+            slot.timeSeconds = std::fmod(slot.timeSeconds + deltaSeconds, duration);
+        }
+        else
+        {
+            slot.timeSeconds = std::min(slot.timeSeconds + deltaSeconds, duration);
+            if (slot.timeSeconds >= duration)
+            {
+                slot.playing = false;
+            }
+        }
+        evaluate(slot);
+    }
+}
+
+const ModelAsset *ModelInstanceSystem::asset(ModelInstanceHandle handle) const
+{
+    const Slot *pSlot = find(handle);
+    return pSlot != nullptr ? pSlot->asset.get() : nullptr;
+}
+
+std::shared_ptr<const ModelAsset> ModelInstanceSystem::sharedAsset(ModelInstanceHandle handle) const
+{
+    const Slot *pSlot = find(handle);
+    return pSlot != nullptr ? pSlot->asset : nullptr;
+}
+
+const ModelPose *ModelInstanceSystem::pose(ModelInstanceHandle handle) const
+{
+    const Slot *pSlot = find(handle);
+    return pSlot != nullptr ? &pSlot->pose : nullptr;
+}
+
+const ModelMatrix *ModelInstanceSystem::nodeMatrix(ModelInstanceHandle handle, uint32_t nodeIndex) const
+{
+    const Slot *pSlot = find(handle);
+    if (pSlot == nullptr || nodeIndex >= pSlot->pose.globalMatrices.size())
+    {
+        return nullptr;
+    }
+    return &pSlot->pose.globalMatrices[nodeIndex];
+}
+
+const ModelMatrix *ModelInstanceSystem::nodeMatrix(ModelInstanceHandle handle, const std::string &nodeName) const
+{
+    const Slot *pSlot = find(handle);
+    if (pSlot == nullptr)
+    {
+        return nullptr;
+    }
+    const std::optional<uint32_t> nodeIndex = pSlot->asset->findNode(nodeName);
+    return nodeIndex ? &pSlot->pose.globalMatrices[*nodeIndex] : nullptr;
+}
+
+const ModelBounds *ModelInstanceSystem::bounds(ModelInstanceHandle handle) const
+{
+    const Slot *pSlot = find(handle);
+    return pSlot != nullptr ? &pSlot->bounds : nullptr;
+}
+
+float ModelInstanceSystem::playbackTime(ModelInstanceHandle handle) const
+{
+    const Slot *pSlot = find(handle);
+    return pSlot != nullptr ? pSlot->timeSeconds : 0.0f;
+}
+
+bool ModelInstanceSystem::isPlaying(ModelInstanceHandle handle) const
+{
+    const Slot *pSlot = find(handle);
+    return pSlot != nullptr && pSlot->playing;
+}
+
+bool ModelInstanceSystem::isVisible(ModelInstanceHandle handle) const
+{
+    const Slot *pSlot = find(handle);
+    return pSlot != nullptr && pSlot->visible;
+}
+
+bool ModelInstanceSystem::areNodeMarkersVisible(ModelInstanceHandle handle) const
+{
+    const Slot *pSlot = find(handle);
+    return pSlot != nullptr && pSlot->nodeMarkersVisible;
+}
+
+std::vector<ModelInstanceHandle> ModelInstanceSystem::handles() const
+{
+    std::vector<ModelInstanceHandle> result;
+    result.reserve(m_activeCount);
+    for (uint32_t index = 0; index < m_slots.size(); ++index)
+    {
+        if (m_slots[index].active)
+        {
+            result.push_back({index, m_slots[index].generation});
+        }
+    }
+    return result;
+}
+
+size_t ModelInstanceSystem::size() const
+{
+    return m_activeCount;
+}
+
+ModelInstanceSystem::Slot *ModelInstanceSystem::find(ModelInstanceHandle handle)
+{
+    if (handle.index >= m_slots.size())
+    {
+        return nullptr;
+    }
+    Slot &slot = m_slots[handle.index];
+    return slot.active && slot.generation == handle.generation ? &slot : nullptr;
+}
+
+const ModelInstanceSystem::Slot *ModelInstanceSystem::find(ModelInstanceHandle handle) const
+{
+    if (handle.index >= m_slots.size())
+    {
+        return nullptr;
+    }
+    const Slot &slot = m_slots[handle.index];
+    return slot.active && slot.generation == handle.generation ? &slot : nullptr;
+}
+
+void ModelInstanceSystem::evaluate(Slot &slot)
+{
+    if (slot.clipSelected && !slot.asset->clips.empty())
+    {
+        evaluateModelClip(*slot.asset, slot.clipIndex, slot.timeSeconds, slot.pose);
+    }
+    else
+    {
+        resetModelPose(*slot.asset, slot.pose);
+    }
+    evaluateModelHierarchy(*slot.asset, composeModelTransform(slot.rootTransform), slot.pose);
+    slot.bounds = {};
+    for (size_t nodeIndex = 0; nodeIndex < slot.asset->nodes.size(); ++nodeIndex)
+    {
+        const ModelNode &node = slot.asset->nodes[nodeIndex];
+        if (node.meshIndex < 0)
+        {
+            continue;
+        }
+        for (const ModelPrimitive &primitive : slot.asset->meshes[node.meshIndex].primitives)
+        {
+            for (const ModelVertex &vertex : primitive.vertices)
+            {
+                expandBounds(slot.bounds, slot.pose.globalMatrices[nodeIndex], vertex.position);
+            }
+        }
+    }
+}
+}

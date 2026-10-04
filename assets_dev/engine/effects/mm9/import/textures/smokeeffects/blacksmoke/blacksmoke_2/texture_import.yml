@@ -1,0 +1,64 @@
+schema: openyamm.effectTextureImport.v1
+source:
+  path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/SMOKEEFFECTS/BLACKSMOKE/BLACKSMOKE_2.dtx
+  format: LithTech DTX
+  sha256: dd18ea42cd6ec066260b22980b5e371bef81383af21b6523594eacb5fd0b770e
+runtime:
+  texture: engine/effects/mm9/textures/smokeeffects/blacksmoke/blacksmoke_2.png
+  format: PNG RGBA8
+  colorSpace: srgb
+  alphaUsage: blend
+  premultipliedAlpha: false
+  mipPolicy: generate-at-runtime
+  minFilter: linear
+  magFilter: linear
+  wrapU: clamp
+  wrapV: clamp
+conversion:
+  decoder: tools/mm9_import_discovery/convert_abc_model.py:decode_dtx_mips
+  decodedRgbChanged: false
+  decodedAlphaChanged: false
+  opaqueAlphaRepair: false
+  zeroAlphaRgbPreserved: true
+  sourceMipArtifacts: mips/*.png
+dtx:
+  version: -5
+  width: 128
+  height: 128
+  mipCount: 4
+  sectionCount: 0
+  internalFlags: 136
+  userFlags: 0
+  extraHex: '000003000000000000000000'
+  bppIdentifier: 3
+  command: ''
+  repairOpaqueAlpha: false
+  mips:
+  - index: 0
+    width: 128
+    height: 128
+    sourceOffset: 164
+    sourceBytes: 65536
+    decodedRgbaSha256: 7cebab7d1fc5dc1c350925a6d53b6a5a48883673039f22a9824b5fe89798834b
+    artifact: mips/00.png
+  - index: 1
+    width: 64
+    height: 64
+    sourceOffset: 65700
+    sourceBytes: 16384
+    decodedRgbaSha256: 02ca7a2db33c49d29db8439a0984a56bd5fc025036331ff1ca8044a1ee4e88d6
+    artifact: mips/01.png
+  - index: 2
+    width: 32
+    height: 32
+    sourceOffset: 82084
+    sourceBytes: 4096
+    decodedRgbaSha256: 5a968e5ccd99e6a7bca8a6072b39886e54fea3047cc84bdb3983020483b0aa97
+    artifact: mips/02.png
+  - index: 3
+    width: 16
+    height: 16
+    sourceOffset: 86180
+    sourceBytes: 1024
+    decodedRgbaSha256: 51bf81b2eb7eb2e0bb7cf5db93c9869b71087c5684920efcd9de34ce845465a1
+    artifact: mips/03.png

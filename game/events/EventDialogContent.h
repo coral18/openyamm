@@ -23,6 +23,7 @@ class MergedNewsProfessionTopicTable;
 class MergedNpcBtbTable;
 class MergedTeacherTopicTable;
 class MergedContinentSettingTable;
+struct MergedNpcProfessionEntry;
 
 enum class EventDialogActionKind
 {
@@ -32,6 +33,7 @@ enum class EventDialogActionKind
     HouseExtraExit,
     HouseResident,
     NpcTopic,
+    ArenaChallenge,
     NpcProfessionNews,
     NpcProfessionAction,
     NpcProfessionDescription,
@@ -122,6 +124,15 @@ std::vector<uint32_t> collectSelectableResidentNpcIds(
     const NpcDialogTable &npcDialogTable,
     const EventRuntimeState &eventRuntimeState
 );
+
+std::string formatNpcProfessionText(
+    std::string text,
+    const NpcEntry &npc,
+    const MergedNpcProfessionEntry &profession,
+    const Party *pParty,
+    int effectiveReputation = 0,
+    std::optional<int> requiredReputation = std::nullopt,
+    float currentGameMinutes = 0.0f);
 
 uint32_t npcBtbDialogueAccessVariableKey(uint32_t npcId);
 uint32_t npcBtbDialogueAccessDay(float currentGameMinutes);

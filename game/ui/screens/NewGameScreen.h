@@ -2,7 +2,7 @@
 
 #include "game/data/GameDataRepository.h"
 #include "game/party/Party.h"
-#include "game/ui/MenuScreenBase.h"
+#include "game/ui/MenuDesignScreen.h"
 #include "game/ui/UiLayoutManager.h"
 
 #include <SDL3/SDL.h>
@@ -18,7 +18,7 @@ namespace OpenYAMM::Game
 {
 class GameAudioSystem;
 
-class NewGameScreen : public MenuScreenBase
+class NewGameScreen : public MenuDesignScreen
 {
 public:
     enum class StatId
@@ -65,9 +65,9 @@ public:
     void onEnter() override;
     void onExit() override;
     void handleSdlEvent(const SDL_Event &event) override;
-    bool textInputActive() const;
+    bool textInputActive() const override;
 
-private:
+  private:
     enum class FlowStage
     {
         ContinentSelection,
@@ -145,48 +145,11 @@ private:
     void resetCurrentState(bool applyCandidateDefaults = false);
     void confirmCreation();
     void cancelCreation();
-    bool ensureLayoutLoaded();
-    bool ensureContinentLayoutLoaded();
-    std::optional<MenuScreenBase::Rect> resolveLayoutRect(
-        const std::string &layoutId,
-        float fallbackWidth = 0.0f,
-        float fallbackHeight = 0.0f) const;
-    std::optional<MenuScreenBase::Rect> resolveContinentLayoutRect(
-        const std::string &layoutId,
-        float fallbackWidth = 0.0f,
-        float fallbackHeight = 0.0f) const;
-    ButtonVisualSet resolveButtonVisuals(
-        const std::string &layoutId,
-        const ButtonVisualSet &fallbackVisuals) const;
-    ButtonVisualSet resolveContinentButtonVisuals(
-        const std::string &layoutId,
-        const ButtonVisualSet &fallbackVisuals) const;
-    std::string resolveAssetName(const std::string &layoutId, const std::string &fallbackAssetName) const;
-    std::string resolveContinentAssetName(const std::string &layoutId, const std::string &fallbackAssetName) const;
-    ButtonState drawEllipseButton(const ButtonVisualSet &visuals, const Rect &rect);
     Character buildVoicePreviewCharacter() const;
-    void renderSkillInspectPopup(
-        const SkillInspectEntry &entry,
-        const std::string &skillName,
-        const MenuScreenBase::Rect &sourceRect,
-        const Character &character,
-        float scale);
-    void renderStatInspectPopup(
-        const StatInspectEntry &entry,
-        const MenuScreenBase::Rect &sourceRect,
-        float scale);
-    void renderClassInspectPopup(
-        const ClassInspectEntry &entry,
-        const MenuScreenBase::Rect &sourceRect,
-        float scale);
     void showCreationCompletionError();
-    void renderCreationCompletionErrorMessageBox(
-        const MenuScreenBase::Rect &rootRect,
-        float scale);
     std::optional<TexturePixelsBgra> buildCreationPreviewDollPixels(
         const CharacterDollEntry &entry,
         const CharacterDollTypeEntry *pDollType);
-    void playUiClickSound(SoundId soundId) const;
     void playVoicePreview();
 
     GameAudioSystem *m_pGameAudioSystem = nullptr;
@@ -196,8 +159,6 @@ private:
     bool m_allowIncompleteCharacterCreation = false;
     ContinueAction m_continueAction;
     BackAction m_backAction;
-    UiLayoutManager m_layoutManager;
-    UiLayoutManager m_continentLayoutManager;
     FlowStage m_stage = FlowStage::ContinentSelection;
     SelectedContinent m_selectedContinent = {};
     std::vector<CreationCandidate> m_candidates;
@@ -210,11 +171,8 @@ private:
     bool m_pcNamesLoaded = false;
     bool m_nameBackspaceHeld = false;
     float m_nameBackspaceRepeatTimer = 0.0f;
-    float m_creationCompletionErrorSeconds = 0.0f;
     std::string m_creationPreviewDollCacheKey;
     std::optional<TexturePixelsBgra> m_creationPreviewDollPixels;
-    bool m_layoutLoaded = false;
-    bool m_continentLayoutLoaded = false;
     bool m_characterCreationInitialized = false;
     bool m_escapePressed = false;
     bool m_returnPressed = false;

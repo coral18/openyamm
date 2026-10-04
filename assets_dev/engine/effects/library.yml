@@ -1,0 +1,5 @@
+schema: openyamm.effectLibrary.v1
+imports:
+  - engine/effects/mm9/library.yml
+  - engine/effects/authored/library.yml
+effects: []

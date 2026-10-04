@@ -20,6 +20,10 @@ public:
         const std::filesystem::path &basePath,
         const std::string &mapFileName
     ) const;
+    int runBuildMap(
+        const std::filesystem::path &basePath,
+        const std::filesystem::path &sourcePath
+    ) const;
 
 private:
     Engine::ApplicationConfig m_config;

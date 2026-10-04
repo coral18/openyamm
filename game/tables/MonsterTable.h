@@ -68,6 +68,9 @@ struct MonsterEntry
     std::array<uint16_t, 4> soundSampleIds = {};
     std::string internalName;
     std::array<std::string, 8> spriteNames = {};
+    int inspectYOffset = 0;
+    int inspectAttackChance = 100;
+    bool inspectFidgetWhenMoving = false;
 };
 
 class MonsterTable

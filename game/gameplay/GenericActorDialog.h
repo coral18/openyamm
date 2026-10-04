@@ -52,6 +52,12 @@ void applyGenericActorDialogResolution(
     const GenericActorDialogResolution &resolution
 );
 
+std::optional<std::string> generatedNpcGroupNewsText(
+    const EventRuntimeState &runtimeState,
+    const NpcDialogTable &npcDialogTable,
+    uint32_t npcId,
+    const MapStatsEntry *pCurrentMap);
+
 bool hideGeneratedNpcActor(
     EventRuntimeState &runtimeState,
     uint32_t npcId,

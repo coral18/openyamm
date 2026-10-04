@@ -1,0 +1,64 @@
+schema: openyamm.effectTextureImport.v1
+source:
+  path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/DRAGONBREATH/FIREBREATH4.dtx
+  format: LithTech DTX
+  sha256: f5263f3122c9417e02c2e2e66777fe5ee9727ebbf8682944e0b078afeefddc65
+runtime:
+  texture: engine/effects/mm9/textures/dragonbreath/firebreath4.png
+  format: PNG RGBA8
+  colorSpace: srgb
+  alphaUsage: blend
+  premultipliedAlpha: false
+  mipPolicy: generate-at-runtime
+  minFilter: linear
+  magFilter: linear
+  wrapU: clamp
+  wrapV: clamp
+conversion:
+  decoder: tools/mm9_import_discovery/convert_abc_model.py:decode_dtx_mips
+  decodedRgbChanged: false
+  decodedAlphaChanged: false
+  opaqueAlphaRepair: false
+  zeroAlphaRgbPreserved: true
+  sourceMipArtifacts: mips/*.png
+dtx:
+  version: -5
+  width: 32
+  height: 32
+  mipCount: 4
+  sectionCount: 0
+  internalFlags: 136
+  userFlags: 0
+  extraHex: '000003000000000000000000'
+  bppIdentifier: 3
+  command: ''
+  repairOpaqueAlpha: false
+  mips:
+  - index: 0
+    width: 32
+    height: 32
+    sourceOffset: 164
+    sourceBytes: 4096
+    decodedRgbaSha256: 684c842d0c1e9f31fc8fb994dd61419512734dbd17fbcef92d965a14bfdfd292
+    artifact: mips/00.png
+  - index: 1
+    width: 16
+    height: 16
+    sourceOffset: 4260
+    sourceBytes: 1024
+    decodedRgbaSha256: 8f484eb4205424caf7547c237aeca029811874223b3991f44e0df96146b925a7
+    artifact: mips/01.png
+  - index: 2
+    width: 8
+    height: 8
+    sourceOffset: 5284
+    sourceBytes: 256
+    decodedRgbaSha256: 3f0bbef43a0ccdf8a08ab70ce858adab15ec266efbf9f197bdfec643dcd51893
+    artifact: mips/02.png
+  - index: 3
+    width: 4
+    height: 4
+    sourceOffset: 5540
+    sourceBytes: 64
+    decodedRgbaSha256: de403af36eff2e54a92a24a8fbf8c699bec85eaa0c69e60fb4f0f9b636640372
+    artifact: mips/03.png

@@ -1,0 +1,24 @@
+schema: openyamm.effectSprite.v2
+id: mm9:effect-sprite/spells/lightball
+source: sprites/spells/lightball.spr
+framesPerSecond: 15
+logicalWidth: 64
+logicalHeight: 64
+keyed: false
+translucent: false
+colorKey: 0
+frames:
+- mm9:effect-texture/electricity/lball_000
+- mm9:effect-texture/electricity/lball_001
+- mm9:effect-texture/electricity/lball_002
+- mm9:effect-texture/electricity/lball_003
+- mm9:effect-texture/electricity/lball_004
+- mm9:effect-texture/electricity/lball_005
+- mm9:effect-texture/electricity/lball_006
+- mm9:effect-texture/electricity/lball_007
+- mm9:effect-texture/electricity/lball_008
+- mm9:effect-texture/electricity/lball_009
+- mm9:effect-texture/electricity/lball_010
+- mm9:effect-texture/electricity/lball_011
+- mm9:effect-texture/electricity/lball_012
+- mm9:effect-texture/electricity/lball_013

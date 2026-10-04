@@ -17,6 +17,7 @@
 #include "game/tables/SpriteTables.h"
 #include "game/tables/TextureFrameTable.h"
 
+#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -37,7 +38,10 @@ struct OutdoorTerrainAtlasRegion
     float v1 = 0.0f;
     bool isValid = false;
     bool isWater = false;
+    // Some native lava tiles also carry the Water flag; keep their legacy animation without water shading.
+    bool isWaterSurface = false;
     bool isTransitionOverlay = false;
+    uint32_t waterColorAbgr = 0;
 };
 
 struct OutdoorAnimatedWaterTileSource
@@ -58,6 +62,7 @@ struct OutdoorTerrainTextureAtlas
     std::array<OutdoorTerrainAtlasRegion, 256> tileRegions = {};
     std::array<std::string, 256> tileTextureNames = {};
     std::vector<OutdoorAnimatedWaterTileSource> animatedWaterTiles;
+    std::array<std::vector<uint8_t>, 256> waterCoverageMasks;
 };
 
 struct OutdoorBitmapTexture
@@ -71,7 +76,11 @@ struct OutdoorBitmapTexture
     bool hasTransparentPixels = false;
     bool hasPartialAlphaPixels = false;
     bool pixelsPreparedForUpload = false;
+    SurfaceMaterialSemantic surfaceSemantic = SurfaceMaterialSemantic::GenericAnimated;
+    uint32_t waterColorAbgr = 0;
     std::vector<uint8_t> pixels;
+    // Explicit source identity for map-local art that overrides a shared sprite name.
+    std::string resourceIdentity;
 };
 
 struct OutdoorBModelTextureSet
@@ -276,6 +285,11 @@ using MapLoadProgressPump = std::function<void()>;
 
 struct MapAssetLoadSharedCache
 {
+#if defined(__ANDROID__)
+    static constexpr size_t BitmapRetentionBudget = 32 * 1024 * 1024;
+#else
+    static constexpr size_t BitmapRetentionBudget = 128 * 1024 * 1024;
+#endif
     std::optional<std::vector<std::vector<std::string>>> decorationRows;
     std::optional<TextureFrameTable> textureFrameTable;
     std::optional<SurfaceMaterialTable> surfaceMaterialTable;
@@ -287,11 +301,60 @@ struct MapAssetLoadSharedCache
     std::unordered_map<std::string, std::optional<std::vector<uint8_t>>> bitmapBinaryFilesByPath;
     std::unordered_map<std::string, std::optional<std::array<uint8_t, 256 * 3>>> actPalettesByKey;
     std::unordered_map<std::string, std::optional<MapAssetBitmapPixelsResult>> bitmapPixelsByKey;
+    std::unordered_map<std::string, uint64_t> bitmapLastUse;
+    uint64_t bitmapUseSerial = 0;
+    uint64_t contentGeneration = 0;
 
-    void clearTransientBitmapData()
+    void beginLoad(uint64_t generation)
+    {
+        if (contentGeneration != generation)
+        {
+            *this = {};
+            contentGeneration = generation;
+        }
+    }
+
+    void touchBitmap(const std::string &key)
+    {
+        bitmapLastUse[key] = ++bitmapUseSerial;
+    }
+
+    size_t retainedBitmapBytes() const
+    {
+        size_t bytes = 0;
+        for (const auto &[key, image] : bitmapPixelsByKey)
+        {
+            bytes += image ? image->pixels.size() : 0;
+        }
+        return bytes;
+    }
+
+    void trimBitmapData(size_t budget = BitmapRetentionBudget)
     {
         bitmapBinaryFilesByPath.clear();
-        bitmapPixelsByKey.clear();
+        size_t bytes = retainedBitmapBytes();
+        if (bytes <= budget)
+        {
+            return;
+        }
+        std::vector<std::pair<uint64_t, std::string>> oldest;
+        oldest.reserve(bitmapPixelsByKey.size());
+        for (const auto &[key, image] : bitmapPixelsByKey)
+        {
+            oldest.emplace_back(bitmapLastUse[key], key);
+        }
+        std::sort(oldest.begin(), oldest.end());
+        for (const auto &[serial, key] : oldest)
+        {
+            const std::optional<MapAssetBitmapPixelsResult> &image = bitmapPixelsByKey.at(key);
+            bytes -= image ? image->pixels.size() : 0;
+            bitmapPixelsByKey.erase(key);
+            bitmapLastUse.erase(key);
+            if (bytes <= budget)
+            {
+                break;
+            }
+        }
     }
 };
 

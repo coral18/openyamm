@@ -1,0 +1,64 @@
+schema: openyamm.effectTextureImport.v1
+source:
+  path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/FLAMEEFFECTS/TORCHFLAME/TORCHFLAME_ADDITIVE0035.dtx
+  format: LithTech DTX
+  sha256: 3747daef82792aa68b73cbe9344eb5f6885fed63eb18fc0c7c0975df153d00c1
+runtime:
+  texture: engine/effects/mm9/textures/flameeffects/torchflame/torchflame_additive0035.png
+  format: PNG RGBA8
+  colorSpace: srgb
+  alphaUsage: blend
+  premultipliedAlpha: false
+  mipPolicy: generate-at-runtime
+  minFilter: linear
+  magFilter: linear
+  wrapU: clamp
+  wrapV: clamp
+conversion:
+  decoder: tools/mm9_import_discovery/convert_abc_model.py:decode_dtx_mips
+  decodedRgbChanged: false
+  decodedAlphaChanged: false
+  opaqueAlphaRepair: false
+  zeroAlphaRgbPreserved: true
+  sourceMipArtifacts: mips/*.png
+dtx:
+  version: -5
+  width: 64
+  height: 64
+  mipCount: 4
+  sectionCount: 0
+  internalFlags: 136
+  userFlags: 0
+  extraHex: '000006000000000000000000'
+  bppIdentifier: 6
+  command: ''
+  repairOpaqueAlpha: false
+  mips:
+  - index: 0
+    width: 64
+    height: 64
+    sourceOffset: 164
+    sourceBytes: 4096
+    decodedRgbaSha256: 4317486aaa520b0870bddc3ba327795dbf9fb775eadc214b850e32aa864fc346
+    artifact: mips/00.png
+  - index: 1
+    width: 32
+    height: 32
+    sourceOffset: 4260
+    sourceBytes: 1024
+    decodedRgbaSha256: 968e84432cfa4fb3b5428f64ae3c8d4ba4a1fbf724b6a2f74fb726f4ce8c3465
+    artifact: mips/01.png
+  - index: 2
+    width: 16
+    height: 16
+    sourceOffset: 5284
+    sourceBytes: 256
+    decodedRgbaSha256: c468042b76aab4a8f34cef9d656133603f67b998843582d47efd33fb6f864d41
+    artifact: mips/02.png
+  - index: 3
+    width: 8
+    height: 8
+    sourceOffset: 5540
+    sourceBytes: 64
+    decodedRgbaSha256: 6a91a779ef84e07667fcf82da91803af2270d20f882fc96555d9eb292392e390
+    artifact: mips/03.png

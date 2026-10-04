@@ -378,7 +378,7 @@ spawns:
     position:
       x: 2880
       y: 5504
-      z: -608192
+      z: 480
     radius: 32
     type_id: 3
     index: 3

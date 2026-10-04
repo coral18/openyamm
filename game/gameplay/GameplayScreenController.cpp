@@ -12,6 +12,7 @@
 #include "game/gameplay/GameplayScreenRuntime.h"
 #include "game/ui/GameplayPartyOverlayRenderer.h"
 #include "game/ui/GameplayUiRenderer.h"
+#include "game/ui/RestHourglassAnimation.h"
 
 #include <SDL3/SDL.h>
 
@@ -564,7 +565,8 @@ void GameplayScreenController::updateRestOverlayProgress(
     }
 
     const float safeDeltaSeconds = std::max(0.0f, deltaSeconds);
-    restScreen.hourglassElapsedSeconds += safeDeltaSeconds;
+    restScreen.hourglassElapsedSeconds = std::fmod(
+        restScreen.hourglassElapsedSeconds + safeDeltaSeconds, RestHourglassCycleSeconds);
 
     if (restScreen.mode == GameplayUiController::RestMode::None || context.worldRuntime() == nullptr)
     {

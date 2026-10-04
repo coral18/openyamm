@@ -150,12 +150,22 @@ jobs:
           sparse-checkout-cone-mode: false
           sparse-checkout: |
             /CMakeLists.txt
+            /LICENSE
+            /COPYRIGHT
             /settings.ini
             /cmake/
             /engine/
             /game/
             /android/
+            /packaging/licenses/
             /tools/openyamm_shaderc_stubs.cpp
+            /tools/cook_sprite_atlases_main.cpp
+            /tools/SpriteAtlasEncode.cpp
+            /tools/SpriteAtlasEncode.h
+            /tools/cook_sprite_atlases.py
+            /tools/package_runtime_assets.py
+            /assets_cooked/android/sprites_new/
+            /assets_dev/_legacy/sprites_original/
             /assets_dev/engine/
             /assets_dev/worlds/mm6/
             /assets_dev/worlds/mm7/
@@ -325,12 +335,20 @@ jobs:
           sparse-checkout-cone-mode: false
           sparse-checkout: |
             /CMakeLists.txt
+            /LICENSE
+            /COPYRIGHT
             /settings_release.ini
             /cmake/
             /engine/
             /game/
             /packaging/
             /tools/openyamm_shaderc_stubs.cpp
+            /tools/cook_sprite_atlases_main.cpp
+            /tools/SpriteAtlasEncode.cpp
+            /tools/SpriteAtlasEncode.h
+            /tools/cook_sprite_atlases.py
+            /tools/package_runtime_assets.py
+            /assets_dev/_legacy/sprites_original/
             /assets_dev/engine/
             /assets_dev/worlds/mm6/
             /assets_dev/worlds/mm7/
@@ -409,12 +427,20 @@ jobs:
           sparse-checkout-cone-mode: false
           sparse-checkout: |
             /CMakeLists.txt
+            /LICENSE
+            /COPYRIGHT
             /settings_release.ini
             /cmake/
             /engine/
             /game/
             /packaging/
             /tools/openyamm_shaderc_stubs.cpp
+            /tools/cook_sprite_atlases_main.cpp
+            /tools/SpriteAtlasEncode.cpp
+            /tools/SpriteAtlasEncode.h
+            /tools/cook_sprite_atlases.py
+            /tools/package_runtime_assets.py
+            /assets_dev/_legacy/sprites_original/
             /assets_dev/engine/
             /assets_dev/worlds/mm6/
             /assets_dev/worlds/mm7/
@@ -424,7 +450,8 @@ jobs:
       - name: Install Flatpak tooling
         run: |
           sudo apt-get update
-          sudo apt-get install --no-install-recommends -y elfutils flatpak flatpak-builder ostree
+          sudo apt-get install --no-install-recommends -y elfutils flatpak flatpak-builder ostree \
+            libgl1-mesa-dev libx11-dev libxext-dev python3
 
       - name: Build Flatpak bundle
         env:

@@ -1,10 +1,12 @@
 #pragma once
 
 #include "game/app/GameSettings.h"
+#include "game/render/CombatActorHealthBarPolicy.h"
 #include "game/tables/ChestTable.h"
 #include "game/events/EventDialogContent.h"
 #include "game/gameplay/GameplayDialogUiFlow.h"
 #include "game/gameplay/GameplayRuntimeInterfaces.h"
+#include "game/gameplay/GameplayTouchControl.h"
 #include "game/ui/GameplayOverlayAdapters.h"
 #include "game/ui/GameplayOverlayTypes.h"
 #include "game/tables/HouseTable.h"
@@ -92,6 +94,8 @@ public:
     Party *party() const;
     const Party *partyReadOnly() const;
     bool mobileFlightControlsAvailable() const;
+    std::vector<GameplayTouchControl> mobileTouchControls(int width, int height) const;
+    const char *mobileInspectLayoutId() const;
     bool mobileInspectControlAvailable() const;
     float partyX() const;
     float partyY() const;
@@ -198,6 +202,7 @@ public:
     void openChestTransferInventoryOverlay();
     void toggleCharacterInventoryScreen();
     uint32_t closeActiveEventDialog();
+    void closeActiveDialogForMapMove();
     void handleDialogueCloseRequest();
     void closeRestOverlay();
     void completeRestAction(bool closeRestScreenAfterCompletion);
@@ -302,6 +307,8 @@ public:
     bool trySaveToSelectedGameSlot(const SaveGameExecutor &executor);
     bool trySaveToSelectedGameSlot();
     int restFoodRequired() const;
+    CombatActorHealthBarRuntime &enemyHealthBars() const;
+    void updateEnemyHealthBars(float seconds, std::span<const GameplayCombatFeedbackEvent> events) const;
     const GameSettings &settingsSnapshot() const;
     GameplayUiRuntime &gameplayUiRuntime() const;
     SharedUiBootstrapResult initializeSharedUiRuntime(const SharedUiBootstrapConfig &config);
@@ -345,6 +352,8 @@ public:
         float fallbackHeight) const;
     std::optional<ResolvedHudLayoutElement> resolvePartyPortraitRect(int width, int height, size_t memberIndex) const;
     std::optional<size_t> resolvePartyPortraitIndexAtPoint(int width, int height, float x, float y) const;
+    float characterSkillRowHeight() const;
+    float characterSkillsContentHeight(int width, int height) const;
     std::optional<ResolvedHudLayoutElement> resolveChestGridArea(int width, int height) const;
     std::optional<ResolvedHudLayoutElement> resolveInventoryNestedOverlayGridArea(int width, int height) const;
     std::optional<ResolvedHudLayoutElement> resolveHouseShopOverlayFrame(int width, int height) const;
@@ -367,7 +376,9 @@ public:
     void renderLayoutLabel(
         const HudLayoutElement &layout,
         const ResolvedHudLayoutElement &resolved,
-        const std::string &label) const;
+        const std::string &label,
+        bool applyButtonState = true,
+        const ResolvedHudLayoutElement *pClip = nullptr) const;
     std::optional<HudFontHandle> findHudFont(const std::string &fontName) const;
     float measureHudTextWidth(const HudFontHandle &font, const std::string &text) const;
     std::vector<std::string> wrapHudTextToWidth(
@@ -381,7 +392,8 @@ public:
         const std::string &text,
         float textX,
         float textY,
-        float fontScale) const;
+        float fontScale,
+        const GameplayResolvedHudLayoutElement *pClip = nullptr) const;
     void bindHudRenderBackend(const GameplayHudRenderBackend &backend);
     void clearHudRenderBackend();
     void releaseHudGpuResources(bool destroyBgfxResources);
@@ -490,10 +502,12 @@ private:
     GameplayDialogController::Context buildDialogContext(EventRuntimeState &eventRuntimeState);
     void returnToHouseBankMainDialogShared();
 
+    mutable CombatActorHealthBarRuntime m_enemyHealthBars;
     GameSession &m_session;
     GameAudioSystem *m_pAudioSystem = nullptr;
     GameSettings *m_pSettings = nullptr;
     IGameplayOverlaySceneAdapter *m_pSceneAdapter = nullptr;
+    DialogueCloseCallback m_pendingMapMoveDialogClose;
     std::optional<DelayedSpeechReaction> m_delayedSpeechReaction;
     uint64_t m_lastSpellFailSoundTicks = 0;
     mutable std::optional<std::string> m_resolvedInteractiveAssetName;

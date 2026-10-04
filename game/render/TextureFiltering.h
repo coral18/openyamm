@@ -15,6 +15,7 @@ enum class TextureFilterProfile
     Sky,
     Billboard,
     Ui,
+    UiIllustration,
     Text,
     SmoothText,
 };

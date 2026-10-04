@@ -4,6 +4,7 @@
 #include "game/maps/MapDeltaData.h"
 #include "game/outdoor/OutdoorMovementController.h"
 #include "game/outdoor/OutdoorPathfindingBuilder.h"
+#include "game/pathfinding/ActorPathRuntime.h"
 #include "game/pathfinding/PathPlanner.h"
 #include "tests/RegressionMapLoader.h"
 
@@ -243,6 +244,7 @@ PathObject makeOutdoorPathObject()
     object.radius = 8.0f;
     object.stepLength = 24.0f;
     object.stepHeight = 48.0f;
+    object.dropHeight = 48.0f;
     return object;
 }
 
@@ -869,6 +871,7 @@ TEST_CASE("new sorpigal bridge path exposes terrain to bridge route")
     object.radius = 40.0f;
     object.stepLength = 64.0f;
     object.stepHeight = 128.0f;
+    object.dropHeight = 128.0f;
 
     PathPlanRequest request = {};
     request.source = {-17420.1f, -7168.5f, 1.0f};
@@ -930,6 +933,7 @@ TEST_CASE("new sorpigal bridge lip path keeps ramp waypoints when direct handoff
     object.radius = 40.0f;
     object.stepLength = 64.0f;
     object.stepHeight = 128.0f;
+    object.dropHeight = 128.0f;
 
     PathPlanRequest request = {};
     request.source = {-15118.1f, -4840.0f, 1.0f};
@@ -1016,6 +1020,114 @@ TEST_CASE("new sorpigal bridge path terrain waypoint can step onto bridge ramp")
 
     CHECK_EQ(state.supportKind, OutdoorSupportKind::BModelFace);
     CHECK(state.footZ > 1.0f);
+}
+
+TEST_CASE("new sorpigal tavern balcony path leaves railing contact through the stairs")
+{
+    REQUIRE_MESSAGE(regressionMapLoaderLoaded(), regressionMapLoaderFailure());
+
+    OpenYAMM::Game::GameDataLoader gameDataLoader = regressionMapLoader().gameDataLoader;
+    REQUIRE(gameDataLoader.loadMapByFileNameForHeadlessGameplay(regressionMapLoader().assetFileSystem, "oute3.odm"));
+    const std::optional<OpenYAMM::Game::MapAssetInfo> &selectedMap = gameDataLoader.getSelectedMap();
+    REQUIRE(selectedMap.has_value());
+    REQUIRE(selectedMap->outdoorMapData.has_value());
+
+    OutdoorPathMapBuildOptions options = {};
+    options.terrainMode = OutdoorPathTerrainMode::LandOnly;
+    const OutdoorPathMapBuildResult buildResult = OutdoorPathfindingBuilder::buildPathMap(
+        *selectedMap->outdoorMapData,
+        selectedMap->outdoorMapDeltaData ? &*selectedMap->outdoorMapDeltaData : nullptr,
+        nullptr,
+        options,
+        selectedMap->outdoorLandMask ? &*selectedMap->outdoorLandMask : nullptr);
+
+    PathPlanRequest request = {};
+    request.target = {-11954.8f, -3201.93f, 424.639f};
+    request.object.radius = 40.0f;
+    request.object.stepLength = 64.0f;
+    request.object.stepHeight = 128.0f;
+    request.object.dropHeight = 128.0f;
+    request.mapRevision = buildResult.pathMap.revision();
+    request.preferredSourceFacetSourceId = OutdoorPathfindingBuilder::bModelSourceId(83, 17);
+    request.sourceSnapDistance = 512.0f;
+    request.allowPartialPath = true;
+    request.allowDirect = false;
+
+    const OutdoorMovementController controller(*selectedMap->outdoorMapData,
+        selectedMap->outdoorLandMask, std::nullopt, std::nullopt, std::nullopt);
+
+    // GOBLIN_PF_TEST: the corner goblin, the goblin along the railing, and the unobstructed king.
+    for (const PathPoint &source : std::vector<PathPoint>{
+        {-13224.0f, -1312.0f, 833.0f},
+        {-13481.9f, -1312.0f, 833.0f},
+        {-13588.9f, -1178.06f, 833.0f}})
+    {
+        request.source = source;
+        INFO("source=" << source.x << "," << source.y << "," << source.z);
+        const OpenYAMM::Game::PathWalkSegmentDebug departure = buildResult.pathMap.debugTraceWalkSegment(
+            {source.x, source.y, 832.0f}, {source.x - 64.0f, source.y + 64.0f, 832.0f}, request.object);
+        CHECK(departure.success);
+
+        PathPlanner planner;
+        const PathPlanResult plan = planner.plan(buildResult.pathMap, request);
+        REQUIRE(plan.status == PathPlanStatus::Success);
+        REQUIRE_FALSE(plan.waypoints.empty());
+        bool usedStairs = false;
+        for (const PathPoint &waypoint : plan.waypoints)
+        {
+            const PathFloorSample floor = buildResult.pathMap.floorAt({waypoint.x, waypoint.y, waypoint.z + 1.0f});
+            REQUIRE(floor.hasFloor);
+            const int32_t sourceId = buildResult.pathMap.facets()[floor.facetIndex].sourceId;
+            usedStairs = usedStairs || (sourceId >= OutdoorPathfindingBuilder::bModelSourceId(82, 0)
+                && sourceId < OutdoorPathfindingBuilder::bModelSourceId(83, 0));
+        }
+        CHECK(usedStairs);
+        CHECK(plan.waypoints.back().x == doctest::Approx(request.target.x));
+        CHECK(plan.waypoints.back().y == doctest::Approx(request.target.y));
+
+        OpenYAMM::Game::OutdoorMoveState state = controller.initializeActorStateForBodyPreservingZ(
+            source.x, source.y, source.z, request.object.radius);
+        OpenYAMM::Game::ActorPathRuntime runtime;
+        OpenYAMM::Game::ActorPathResolveRequest follow = {};
+        follow.target = request.target;
+        follow.object = request.object;
+        follow.mapRevision = request.mapRevision;
+        follow.waypointReachDistance = 48.0f;
+        follow.allowDirect = false;
+        bool descendedStairs = false;
+        bool arrived = false;
+
+        for (int step = 0; step < 30 * 128; ++step)
+        {
+            const float targetX = state.x - request.target.x;
+            const float targetY = state.y - request.target.y;
+            if (targetX * targetX + targetY * targetY <= 128.0f * 128.0f)
+            {
+                arrived = true;
+                break;
+            }
+
+            follow.source = {state.x, state.y, state.footZ};
+            follow.nowSeconds = step / 128.0;
+            const OpenYAMM::Game::ActorPathResolveResult waypoint =
+                runtime.resolveWaypoint(buildResult.pathMap, follow);
+            REQUIRE(waypoint.pathActive);
+            const float deltaX = waypoint.waypoint.x - state.x;
+            const float deltaY = waypoint.waypoint.y - state.y;
+            const float distance = std::sqrt(deltaX * deltaX + deltaY * deltaY);
+            REQUIRE(distance > 0.0f);
+            state = controller.resolveOutdoorActorMove(state,
+                OpenYAMM::Game::OutdoorBodyDimensions{40.0f, 128.0f},
+                deltaX / distance * 300.0f, deltaY / distance * 300.0f,
+                state.verticalVelocity, false, 1.0f / 128.0f);
+            descendedStairs = descendedStairs || (state.supportKind == OutdoorSupportKind::BModelFace
+                && state.supportBModelIndex == 82 && state.footZ < 832.0f);
+        }
+
+        CHECK(descendedStairs);
+        CHECK(arrived);
+        CHECK(state.supportKind == OutdoorSupportKind::Terrain);
+    }
 }
 
 TEST_CASE("ravenshore house stairs move party onto bmodel support")

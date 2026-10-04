@@ -1819,6 +1819,7 @@ const MergedBolsterMapEntry *MergedBolsterMapTable::findById(uint32_t id) const
 bool MergedBolsterMonsterTable::loadFromRows(const std::vector<std::vector<std::string>> &rows)
 {
     m_entries.clear();
+    m_entryIndexById.clear();
 
     for (size_t rowIndex = 1; rowIndex < rows.size(); ++rowIndex)
     {
@@ -1852,6 +1853,8 @@ bool MergedBolsterMonsterTable::loadFromRows(const std::vector<std::vector<std::
         entry.summonId = parseOptionalUnsignedValue(row, 14);
         entry.extraPoints = parseOptionalUnsignedValue(row, 15);
         entry.maxHpBoostPercent = parseOptionalUnsignedValue(row, 16);
+        // Preserve the first matching row when an input table contains duplicate IDs.
+        m_entryIndexById.try_emplace(entry.id, m_entries.size());
         m_entries.push_back(std::move(entry));
     }
 
@@ -1865,15 +1868,8 @@ const std::vector<MergedBolsterMonsterEntry> &MergedBolsterMonsterTable::entries
 
 const MergedBolsterMonsterEntry *MergedBolsterMonsterTable::findById(uint32_t id) const
 {
-    for (const MergedBolsterMonsterEntry &entry : m_entries)
-    {
-        if (entry.id == id)
-        {
-            return &entry;
-        }
-    }
-
-    return nullptr;
+    const std::unordered_map<uint32_t, size_t>::const_iterator found = m_entryIndexById.find(id);
+    return found != m_entryIndexById.end() ? &m_entries[found->second] : nullptr;
 }
 
 bool MergedCharacterVoiceTable::loadFromRows(const std::vector<std::vector<std::string>> &rows)

@@ -4,11 +4,13 @@
 
 #include <ft2build.h>
 #include FT_FREETYPE_H
+#include FT_MULTIPLE_MASTERS_H
 #include <yaml-cpp/yaml.h>
 
 #include <algorithm>
 #include <cctype>
 #include <cstdlib>
+#include <cmath>
 
 namespace OpenYAMM::Engine
 {
@@ -198,13 +200,14 @@ uint32_t cp1252CodePoint(int character)
     return character >= 128 && character < 160 ? Extended[character - 128] : uint32_t(character);
 }
 
-void allocateAtlas(FontAtlasImage &image)
+void allocateAtlas(FontAtlasImage &image, bool white = false)
 {
     FontAtlas &atlas = image.atlas;
     const size_t byteCount = size_t(atlas.atlasWidth) * atlas.atlasHeight * 4;
-    atlas.mainAtlasPixels.resize(byteCount, atlas.atlasScale > 1 ? 255 : 0);
+    atlas.mainAtlasPixels.resize(byteCount, white || atlas.atlasScale > 1 ? 255 : 0);
     image.shadowPixels.resize(byteCount, 0);
-    // White even outside the ink prevents dark fringes with straight-alpha bilinear filtering.
+    // White even outside the ink prevents dark fringes with straight-alpha
+    // bilinear filtering.
     for (size_t offset = 3; offset < byteCount; offset += 4)
     {
         atlas.mainAtlasPixels[offset] = 0;
@@ -249,6 +252,193 @@ bool FontSettings::usesTrueType(const std::string &fontName) const
     {
         return normalizedFontName(candidate) == name;
     });
+}
+
+std::optional<FontAtlasImage> loadTrueTypeFontAtlas(const AssetFileSystem &assetFileSystem, const std::string &fontName,
+                                                    std::string &error, int pixelHeight)
+{
+    error.clear();
+    const std::string name = normalizedFontName(fontName);
+    if (name.empty() || name.find_first_not_of("abcdefghijklmnopqrstuvwxyz0123456789_-") != std::string::npos)
+    {
+        error = "Invalid outline font name";
+        return std::nullopt;
+    }
+    const std::optional<std::string> descriptorText = assetFileSystem.readTextFile("fonts/truetype/" + name + ".yml");
+    FontAtlasImage image;
+    FontAtlas &atlas = image.atlas;
+    std::string file;
+    int baseline = 0;
+    std::optional<int> weight;
+    try
+    {
+        const YAML::Node descriptor = YAML::Load(descriptorText.value_or(""));
+        file = descriptor["file"].as<std::string>();
+        atlas.fontHeight = descriptor["logical_height"].as<int>();
+        baseline = descriptor["baseline"].as<int>();
+        if (descriptor["weight"])
+        {
+            weight = descriptor["weight"].as<int>();
+        }
+        if (descriptor["metrics"].as<std::string>() != "freetype" ||
+            descriptor["encoding"].as<std::string>() != "windows-1252" || file.empty() ||
+            file.find_first_of("/\\") != std::string::npos || atlas.fontHeight < 8 || atlas.fontHeight > 64 ||
+            baseline < 0 || baseline > atlas.fontHeight || (weight && (*weight < 1 || *weight > 1000)))
+        {
+            error = "Invalid independent outline font descriptor: " + name;
+            return std::nullopt;
+        }
+    }
+    catch (const YAML::Exception &exception)
+    {
+        error = "Invalid outline descriptor: " + name + ": " + exception.what();
+        return std::nullopt;
+    }
+    if (pixelHeight < 0 || pixelHeight > 512)
+    {
+        error = "Invalid outline font pixel height";
+        return std::nullopt;
+    }
+    const int logicalHeight = atlas.fontHeight;
+    atlas.fontHeight = pixelHeight > 0 ? pixelHeight : logicalHeight;
+    baseline = int(std::lround(float(baseline) * atlas.fontHeight / logicalHeight));
+    atlas.atlasPadding = int(std::ceil(8.0f * atlas.fontHeight / logicalHeight)) + 1;
+    const std::optional<std::vector<uint8_t>> bytes = assetFileSystem.readBinaryFile("fonts/truetype/" + file);
+    FreeTypeFace font;
+    atlas.atlasScale = 1;
+    atlas.firstChar = 32;
+    atlas.lastChar = 255;
+    if (!bytes || bytes->empty() || bytes->size() > 32 * 1024 * 1024 || FT_Init_FreeType(&font.library) != 0 ||
+        FT_New_Memory_Face(font.library, bytes->data(), FT_Long(bytes->size()), 0, &font.face) != 0 ||
+        !FT_IS_SCALABLE(font.face) || FT_Select_Charmap(font.face, FT_ENCODING_UNICODE) != 0 ||
+        FT_Set_Pixel_Sizes(font.face, 0, atlas.fontHeight * atlas.atlasScale) != 0)
+    {
+        error = "Unable to open outline font: " + file;
+        return std::nullopt;
+    }
+    if (weight)
+    {
+        FT_MM_Var *pVariations = nullptr;
+        if (FT_Get_MM_Var(font.face, &pVariations) != 0)
+        {
+            error = "Font has no variable weight axis: " + file;
+            return std::nullopt;
+        }
+        std::vector<FT_Fixed> coordinates(pVariations->num_axis);
+        const FT_Fixed requestedWeight = FT_Fixed(*weight) * 65536;
+        bool validWeight = false;
+        for (size_t axisIndex = 0; axisIndex < coordinates.size(); ++axisIndex)
+        {
+            const FT_Var_Axis &axis = pVariations->axis[axisIndex];
+            coordinates[axisIndex] = axis.def;
+            if (axis.tag == FT_MAKE_TAG('w', 'g', 'h', 't'))
+            {
+                validWeight = requestedWeight >= axis.minimum && requestedWeight <= axis.maximum;
+                coordinates[axisIndex] = requestedWeight;
+            }
+        }
+        FT_Done_MM_Var(font.library, pVariations);
+        if (!validWeight
+            || FT_Set_Var_Design_Coordinates(font.face, coordinates.size(), coordinates.data()) != 0)
+        {
+            error = "Invalid variable font weight: " + file;
+            return std::nullopt;
+        }
+    }
+    for (int character = atlas.firstChar; character <= atlas.lastChar; ++character)
+    {
+        const uint32_t point = cp1252CodePoint(character);
+        if (point == 0)
+        {
+            continue;
+        }
+        if (FT_Load_Char(font.face, point, FT_LOAD_TARGET_LIGHT | FT_LOAD_NO_BITMAP) != 0)
+        {
+            error = "Unable to measure outline glyph: " + std::to_string(point);
+            return std::nullopt;
+        }
+        const FT_GlyphSlot pGlyph = font.face->glyph;
+        const float divisor = 64.0f * atlas.atlasScale;
+        FontGlyphMetrics &metrics = atlas.glyphMetrics[character];
+        metrics.leftSpacing = int(std::floor(pGlyph->metrics.horiBearingX / divisor));
+        metrics.width =
+            int(std::ceil((pGlyph->metrics.horiBearingX + pGlyph->metrics.width) / divisor)) - metrics.leftSpacing;
+        metrics.rightSpacing = int(std::round(pGlyph->advance.x / divisor)) - metrics.leftSpacing - metrics.width;
+        // Keep fractional horizontal spacing while light hinting fits glyphs to the
+        // target pixel size.
+        metrics.outlineAdvance = pGlyph->linearHoriAdvance / 65536.0f;
+        atlas.atlasCellWidth = std::max(atlas.atlasCellWidth, metrics.width);
+    }
+    if (FT_HAS_KERNING(font.face))
+    {
+        for (int previous = atlas.firstChar; previous <= atlas.lastChar; ++previous)
+        {
+            for (int current = atlas.firstChar; current <= atlas.lastChar; ++current)
+            {
+                FT_Vector adjustment{};
+                FT_Get_Kerning(font.face, FT_Get_Char_Index(font.face, cp1252CodePoint(previous)),
+                               FT_Get_Char_Index(font.face, cp1252CodePoint(current)), FT_KERNING_UNFITTED,
+                               &adjustment);
+                if (adjustment.x != 0)
+                {
+                    atlas.kerningPairs[uint16_t(previous * 256 + current)] = adjustment.x / (64.0f * atlas.atlasScale);
+                }
+            }
+        }
+    }
+    atlas.atlasWidth = (atlas.atlasCellWidth + 2 * atlas.atlasPadding) * 16 * atlas.atlasScale;
+    atlas.atlasHeight = (atlas.fontHeight + 2 * atlas.atlasPadding) * 16 * atlas.atlasScale;
+    if (atlas.atlasWidth > 8192 || atlas.atlasHeight > 8192)
+    {
+        error = "Outline atlas exceeds texture limit";
+        return std::nullopt;
+    }
+    allocateAtlas(image, true);
+    for (int character = atlas.firstChar; character <= atlas.lastChar; ++character)
+    {
+        const uint32_t point = cp1252CodePoint(character);
+        if (point == 0)
+        {
+            continue;
+        }
+        if (FT_Load_Char(font.face, point, FT_LOAD_TARGET_LIGHT | FT_LOAD_NO_BITMAP) != 0 ||
+            FT_Render_Glyph(font.face->glyph, FT_RENDER_MODE_NORMAL) != 0)
+        {
+            error = "Unable to render outline glyph";
+            return std::nullopt;
+        }
+        const FT_GlyphSlot pGlyph = font.face->glyph;
+        const FT_Bitmap &raster = pGlyph->bitmap;
+        const int scale = atlas.atlasScale;
+        const int originX =
+            (atlas.atlasPadding - atlas.glyphMetrics[character].leftSpacing) * scale + pGlyph->bitmap_left;
+        const int originY = (baseline + atlas.atlasPadding) * scale - pGlyph->bitmap_top;
+        const int width = (atlas.atlasCellWidth + 2 * atlas.atlasPadding) * scale;
+        const int height = (atlas.fontHeight + 2 * atlas.atlasPadding) * scale;
+        if (raster.width != 0 && raster.rows != 0 &&
+            (raster.pixel_mode != FT_PIXEL_MODE_GRAY || originX < 0 || originY < 0 ||
+             originX + int(raster.width) + scale > width || originY + int(raster.rows) + scale > height))
+        {
+            error = "Outline glyph exceeds cell: " + std::to_string(point);
+            return std::nullopt;
+        }
+        const int cellX = (character % 16) * width;
+        const int cellY = (character / 16) * height;
+        for (unsigned int y = 0; y < raster.rows; ++y)
+        {
+            const uint8_t *pRow =
+                raster.buffer + (raster.pitch >= 0 ? y : raster.rows - 1 - y) * size_t(std::abs(raster.pitch));
+            for (unsigned int x = 0; x < raster.width; ++x)
+            {
+                const size_t offset = (size_t(cellY + originY + y) * atlas.atlasWidth + cellX + originX + x) * 4;
+                atlas.mainAtlasPixels[offset + 3] = pRow[x];
+                // The renderer positions this mask one display pixel away; do not bake
+                // a second offset into it.
+                image.shadowPixels[offset + 3] = pRow[x];
+            }
+        }
+    }
+    return image;
 }
 
 std::optional<FontAtlasImage> loadFontAtlas(

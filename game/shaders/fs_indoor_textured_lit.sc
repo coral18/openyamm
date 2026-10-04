@@ -1,6 +1,7 @@
 $input v_texcoord0, v_worldPosition, v_texcoord1, v_screenspace, v_flowInfo, v_color0
 
 #include "common.sh"
+#include "world_clip.sh"
 
 SAMPLER2D(s_texColor, 0);
 
@@ -36,6 +37,7 @@ vec3 getIndoorLighting(vec3 worldPosition, vec3 vertexLighting)
 
 void main()
 {
+    clipWorldPosition(v_worldPosition);
     vec2 texcoord = v_texcoord0;
 
     if (v_flowInfo.w < -1.5)

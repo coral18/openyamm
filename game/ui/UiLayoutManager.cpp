@@ -5,6 +5,7 @@
 #include <yaml-cpp/yaml.h>
 
 #include <algorithm>
+#include <cmath>
 #include <cstdlib>
 #include <functional>
 #include <iostream>
@@ -378,6 +379,26 @@ bool UiLayoutManager::loadLayoutText(const std::string &sourceName, const std::s
 
                 element.width = yamlFloatOrDefault(node, "width", 0.0f);
                 element.height = yamlFloatOrDefault(node, "height", 0.0f);
+                const YAML::Node arcNode = node["meter_arc"];
+                if (arcNode)
+                {
+                    if (!arcNode.IsMap())
+                    {
+                        return false;
+                    }
+                    MeterArc arc;
+                    arc.startDegrees = yamlFloatOrDefault(arcNode, "start_degrees", 0);
+                    arc.sweepDegrees = yamlFloatOrDefault(arcNode, "sweep_degrees", 0);
+                    arc.strokeWidth = yamlFloatOrDefault(arcNode, "stroke_width", 0);
+                    if (!std::isfinite(arc.startDegrees) || !std::isfinite(arc.sweepDegrees)
+                        || !std::isfinite(arc.strokeWidth) || arc.sweepDegrees == 0
+                        || std::abs(arc.sweepDegrees) > 360 || arc.strokeWidth <= 0
+                        || arc.strokeWidth >= std::min(element.width, element.height))
+                    {
+                        return false;
+                    }
+                    element.meterArc = arc;
+                }
                 element.bottomToId = yamlStringOrEmpty(node, "bottom_to");
                 element.bottomGap = yamlFloatOrDefault(node, "bottom_gap", 0.0f);
                 element.visible = yamlBoolOrDefault(node, "visible", true);
@@ -414,6 +435,8 @@ bool UiLayoutManager::loadLayoutText(const std::string &sourceName, const std::s
                         }
 
                         element.pressedAsset = yamlStringOrEmpty(assetNode, "pressed");
+                        element.selectedAsset = yamlStringOrEmpty(assetNode, "selected");
+                        element.disabledAsset = yamlStringOrEmpty(assetNode, "disabled");
                         element.secondaryAsset = yamlStringOrEmpty(assetNode, "selected");
                         element.tertiaryAsset = yamlStringOrEmpty(assetNode, "frame");
                         element.quaternaryAsset = yamlStringOrEmpty(assetNode, "health_bar");

@@ -5882,6 +5882,49 @@ int luaPlaySoundName(lua_State *pLuaState)
     return 0;
 }
 
+int luaSpawnWorldEffect(lua_State *pLuaState)
+{
+    EventRuntimeState *pRuntimeState = writableRuntimeState(pLuaState);
+    if (pRuntimeState == nullptr)
+    {
+        return 0;
+    }
+
+    EventRuntimeState::WorldEffectRequest request;
+    request.id = sanitizeEventString(luaL_checkstring(pLuaState, 1));
+    request.position = {
+        static_cast<float>(luaL_checknumber(pLuaState, 2)),
+        static_cast<float>(luaL_checknumber(pLuaState, 3)),
+        static_cast<float>(luaL_checknumber(pLuaState, 4)),
+    };
+    request.scale = static_cast<float>(luaL_optnumber(pLuaState, 5, 1.0));
+    request.yawRadians = static_cast<float>(luaL_optnumber(pLuaState, 6, 0.0));
+    pRuntimeState->worldEffectRequests.push_back(std::move(request));
+    return 0;
+}
+
+int luaSpawnWorldModel(lua_State *pLuaState)
+{
+    EventRuntimeState *pRuntimeState = writableRuntimeState(pLuaState);
+    if (pRuntimeState == nullptr)
+    {
+        return 0;
+    }
+
+    EventRuntimeState::WorldModelRequest request;
+    request.assetPath = sanitizeEventString(luaL_checkstring(pLuaState, 1));
+    request.position = {
+        static_cast<float>(luaL_checknumber(pLuaState, 2)),
+        static_cast<float>(luaL_checknumber(pLuaState, 3)),
+        static_cast<float>(luaL_checknumber(pLuaState, 4)),
+    };
+    request.scale = static_cast<float>(luaL_optnumber(pLuaState, 5, 1.0));
+    request.yawRadians = static_cast<float>(luaL_optnumber(pLuaState, 6, 0.0));
+    request.clipName = sanitizeEventString(luaL_optstring(pLuaState, 7, ""));
+    pRuntimeState->worldModelRequests.push_back(std::move(request));
+    return 0;
+}
+
 int luaMoveNpc(lua_State *pLuaState)
 {
     EventRuntimeState *pRuntimeState = writableRuntimeState(pLuaState);
@@ -6123,7 +6166,7 @@ int luaSetSprite(lua_State *pLuaState)
         + " cog=" + std::to_string(cogNumber)
         + " visible=" + (visible ? std::string("true") : std::string("false"))
         + " hidden=" + (!visible ? std::string("true") : std::string("false"))
-        + " texture=" + traceQuoted(spriteOverride.textureName.value_or(std::string())));
+        + " texture=" + traceQuoted(pRuntimeState->spriteOverrides.at(cogNumber).textureName.value_or(std::string())));
     return 0;
 }
 
@@ -8268,6 +8311,8 @@ void registerEventBindings(LuaSessionCache &session)
     registerLuaFunction(pLuaState, "PlaySound", luaPlaySound);
     registerLuaFunction(pLuaState, "PlaySoundOnce", luaPlaySoundOnce);
     registerLuaFunction(pLuaState, "PlaySoundName", luaPlaySoundName);
+    registerLuaFunction(pLuaState, "SpawnWorldEffect", luaSpawnWorldEffect);
+    registerLuaFunction(pLuaState, "SpawnWorldModel", luaSpawnWorldModel);
     registerLuaFunction(pLuaState, "MoveToMap", luaMoveToMap);
     registerLuaFunction(pLuaState, "OpenChest", luaOpenChest);
     registerLuaFunction(pLuaState, "SearchLootProp", luaSearchLootProp);

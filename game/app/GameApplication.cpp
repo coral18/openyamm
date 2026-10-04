@@ -1,4 +1,5 @@
 #include "game/app/GameApplication.h"
+#include "game/gameplay/SavePreviewImage.h"
 
 #include "game/StringUtils.h"
 #include "game/app/ProfilingControl.h"
@@ -2794,24 +2795,23 @@ void setDebugTownPortalUnlocks(Party &party, bool unlocked)
 GameApplication::GameApplication(const Engine::ApplicationConfig &config)
     : m_config(config)
     , m_engineApplication(
-        config,
-        std::bind(&GameApplication::loadGameData, this, std::placeholders::_1),
-        std::bind(&GameApplication::initializeRenderer, this),
-        std::bind(&GameApplication::handleSdlEvent, this, std::placeholders::_1),
-        std::bind(
-            &GameApplication::renderFrame,
-            this,
-            std::placeholders::_1,
-            std::placeholders::_2,
-            std::placeholders::_3,
-            std::placeholders::_4
-        ),
-        std::bind(&GameApplication::shutdownApplication, this),
-        std::bind(&GameApplication::applicationTextInputActive, this)
-    )
+          config,
+          std::bind(&GameApplication::loadGameData, this, std::placeholders::_1),
+          std::bind(&GameApplication::initializeRenderer, this),
+          std::bind(&GameApplication::handleSdlEvent, this, std::placeholders::_1),
+          [this](int width, int height, float mouseWheelDelta, float deltaSeconds)
+          {
+              renderFrame(width, height, mouseWheelDelta, deltaSeconds);
+              drawLoadingOverlay();
+              updateScreenshotCaptureFrame();
+          },
+          std::bind(&GameApplication::shutdownApplication, this),
+          std::bind(&GameApplication::applicationTextInputActive, this)
+      )
     , m_gameSession()
+    , m_indoorRenderer(m_spriteAtlasCache, m_nativeSpriteCache)
     , m_indoorGameView(m_gameSession)
-    , m_outdoorGameView(m_gameSession)
+    , m_outdoorGameView(m_gameSession, m_spriteAtlasCache, m_nativeSpriteCache)
     , m_pAssetFileSystem(nullptr)
     , m_lastFrameWidth(config.windowWidth)
     , m_lastFrameHeight(config.windowHeight)
@@ -2920,6 +2920,16 @@ void GameApplication::registerDebugConsoleCommands()
         return &pIndoorRuntime->worldRuntime();
     };
 
+    const auto activeWorldFx = [this]() -> WorldFxSystem *
+    {
+        if (m_pMapSceneRuntime == nullptr)
+        {
+            return nullptr;
+        }
+        return m_pMapSceneRuntime->kind() == SceneKind::Outdoor
+            ? &m_outdoorGameView.worldFxSystem() : &m_indoorRenderer.worldFxSystem();
+    };
+
     m_debugConsole.registerCommand({
         .name = "help",
         .description = "Show available commands.",
@@ -2939,8 +2949,471 @@ void GameApplication::registerDebugConsoleCommands()
                 << "player add <class-id|class-name> [name], hire <profession-id>, gold get|add|set <amount>, "
                 << "food get|add|set <amount>, hp full, item search <text>, item give <id|text> [qty], "
                 << "tp <x> <y> <z>, config get|set|toggle immortal|unlimited_mana|invisible, "
-                << "config get|set|toggle terrain_decorations, memory, reload map";
+                << "config get|set|toggle terrain_decorations, "
+                << "effect list|stats|rate|spawn|impact-rebind|pause|scrub|replay|stop, "
+                << "model list|spawn|play|pause|scrub|visible|markers|nodes|orbit|stop, "
+                << "memory, reload map";
             return commandResult(true, out.str());
+        }});
+
+    m_debugConsole.registerCommand({
+        .name = "model",
+        .description = "Inspect and control shared glTF model instances.",
+        .usage = "model list|spawn <path> <x> <y> <z> [scale] [yaw-radians]|play|pause|scrub|visible|"
+            "markers|nodes|orbit|stop",
+        .callback = [this, activeWorldFx, commandResult](const DebugConsole::CommandContext &context)
+        {
+            WorldFxSystem *pWorldFx = activeWorldFx();
+            if (pWorldFx == nullptr || m_pAssetFileSystem == nullptr)
+            {
+                return commandResult(false, "No active map runtime.");
+            }
+            Engine::ModelInstanceSystem &models = pWorldFx->models();
+            m_debugModelHandles.erase(
+                std::remove_if(
+                    m_debugModelHandles.begin(),
+                    m_debugModelHandles.end(),
+                    [&](Engine::ModelInstanceHandle handle)
+                    {
+                        return !models.contains(handle);
+                    }),
+                m_debugModelHandles.end());
+
+            if (context.args.empty() || toLowerCopy(context.args[0]) == "list")
+            {
+                std::ostringstream out;
+                out << "Debug model instances: " << m_debugModelHandles.size();
+                for (size_t index = 0; index < m_debugModelHandles.size(); ++index)
+                {
+                    const Engine::ModelInstanceHandle handle = m_debugModelHandles[index];
+                    const Engine::ModelAsset *pAsset = models.asset(handle);
+                    out << "\n  " << index << " " << (pAsset != nullptr ? pAsset->sourcePath : "<missing>")
+                        << " time=" << models.playbackTime(handle)
+                        << " visible=" << (models.isVisible(handle) ? "yes" : "no")
+                        << " playing=" << (models.isPlaying(handle) ? "yes" : "no");
+                    if (pAsset != nullptr)
+                    {
+                        out << " clips=";
+                        for (const Engine::ModelAnimationClip &clip : pAsset->clips)
+                        {
+                            out << clip.name << '(' << clip.durationSeconds << "s) ";
+                        }
+                    }
+                }
+                return commandResult(true, out.str());
+            }
+
+            const std::string action = toLowerCopy(context.args[0]);
+            if (action == "spawn")
+            {
+                if (context.args.size() < 5 || context.args.size() > 7)
+                {
+                    return commandResult(
+                        false,
+                        "Usage: model spawn <path> <x> <y> <z> [scale] [yaw-radians]");
+                }
+                const std::optional<float> x = parseFloatArgument(context.args[2]);
+                const std::optional<float> y = parseFloatArgument(context.args[3]);
+                const std::optional<float> z = parseFloatArgument(context.args[4]);
+                const std::optional<float> scale = context.args.size() >= 6
+                    ? parseFloatArgument(context.args[5]) : std::optional<float>(1.0f);
+                const std::optional<float> yaw = context.args.size() >= 7
+                    ? parseFloatArgument(context.args[6]) : std::optional<float>(0.0f);
+                if (!x || !y || !z || !scale || !yaw || *scale <= 0.0f)
+                {
+                    return commandResult(false, "Invalid model transform.");
+                }
+                const Engine::ModelLoadResult loaded =
+                    pWorldFx->modelAssets().load(*m_pAssetFileSystem, context.args[1]);
+                if (!loaded)
+                {
+                    return commandResult(false, "Model load failed: " + loaded.error);
+                }
+                const Engine::ModelTransform transform =
+                    Engine::gltfModelPlacement({*x, *y, *z}, *yaw, *scale);
+                const Engine::ModelInstanceHandle handle = models.create(loaded.asset, transform);
+                if (!models.contains(handle))
+                {
+                    return commandResult(false, "Model instance creation failed.");
+                }
+                m_debugModelHandles.push_back(handle);
+                std::ostringstream out;
+                out << "Spawned debug model " << m_debugModelHandles.size() - 1;
+                for (const std::string &warning : loaded.warnings)
+                {
+                    out << "\nWarning: " << warning;
+                }
+                return commandResult(true, out.str());
+            }
+            if (action == "stop" && context.args.size() == 2 && toLowerCopy(context.args[1]) == "all")
+            {
+                for (const Engine::ModelInstanceHandle handle : m_debugModelHandles)
+                {
+                    models.destroy(handle);
+                }
+                m_debugModelHandles.clear();
+                return commandResult(true, "Removed all debug models.");
+            }
+            if (context.args.size() < 2)
+            {
+                return commandResult(false, "Model instance index is required.");
+            }
+            const std::optional<int32_t> parsedIndex = parseInt32Argument(context.args[1]);
+            if (!parsedIndex || *parsedIndex < 0 || static_cast<size_t>(*parsedIndex) >= m_debugModelHandles.size())
+            {
+                return commandResult(false, "Invalid model instance index.");
+            }
+            const Engine::ModelInstanceHandle handle = m_debugModelHandles[static_cast<size_t>(*parsedIndex)];
+            if (action == "play" && context.args.size() >= 3 && context.args.size() <= 4)
+            {
+                const Engine::ModelPlaybackMode mode = context.args.size() == 4 &&
+                    toLowerCopy(context.args[3]) == "once"
+                    ? Engine::ModelPlaybackMode::Once : Engine::ModelPlaybackMode::Loop;
+                const bool success = models.play(handle, context.args[2], mode);
+                return commandResult(success, success ? "Model clip playing." : "Unknown model clip.");
+            }
+            if (action == "pause")
+            {
+                const bool paused = context.args.size() < 3 || toLowerCopy(context.args[2]) != "off";
+                return commandResult(models.pause(handle, paused), paused ? "Model paused." : "Model resumed.");
+            }
+            if (action == "scrub" && context.args.size() == 3)
+            {
+                const std::optional<float> time = parseFloatArgument(context.args[2]);
+                const bool success = time && models.setTime(handle, *time);
+                return commandResult(success, success ? "Model scrubbed." : "Invalid model time.");
+            }
+            if (action == "visible")
+            {
+                const bool visible = context.args.size() < 3 || toLowerCopy(context.args[2]) != "off";
+                return commandResult(
+                    models.setVisible(handle, visible),
+                    visible ? "Model visible." : "Model hidden.");
+            }
+            if (action == "markers")
+            {
+                const bool visible = context.args.size() < 3 || toLowerCopy(context.args[2]) != "off";
+                return commandResult(
+                    models.setNodeMarkersVisible(handle, visible),
+                    visible ? "Model node markers visible." : "Model node markers hidden.");
+            }
+            if (action == "nodes")
+            {
+                const Engine::ModelAsset *pAsset = models.asset(handle);
+                if (pAsset == nullptr)
+                {
+                    return commandResult(false, "Model asset is unavailable.");
+                }
+                const std::string filter = context.args.size() >= 3 ? toLowerCopy(context.args[2]) : "";
+                std::ostringstream out;
+                out << "Nodes: " << pAsset->nodes.size();
+                for (size_t nodeIndex = 0; nodeIndex < pAsset->nodes.size(); ++nodeIndex)
+                {
+                    const Engine::ModelNode &node = pAsset->nodes[nodeIndex];
+                    if (!filter.empty() && toLowerCopy(node.name).find(filter) == std::string::npos)
+                    {
+                        continue;
+                    }
+                    const Engine::ModelMatrix *pMatrix = models.nodeMatrix(handle, static_cast<uint32_t>(nodeIndex));
+                    out << "\n  " << nodeIndex << " " << node.name << " parent=" << node.parentIndex;
+                    if (pMatrix != nullptr)
+                    {
+                        out << " position=" << (*pMatrix)[12] << ',' << (*pMatrix)[13] << ',' << (*pMatrix)[14];
+                    }
+                }
+                return commandResult(true, out.str());
+            }
+            if (action == "orbit")
+            {
+                if (context.args.size() != 5)
+                {
+                    return commandResult(
+                        false,
+                        "Usage: model orbit <index> <azimuth-radians> <elevation-radians> <distance>");
+                }
+                const std::optional<float> azimuth = parseFloatArgument(context.args[2]);
+                const std::optional<float> elevation = parseFloatArgument(context.args[3]);
+                const std::optional<float> distance = parseFloatArgument(context.args[4]);
+                const Engine::ModelBounds *pBounds = models.bounds(handle);
+                if (!azimuth || !elevation || !distance || *distance <= 0.0f || pBounds == nullptr || !pBounds->valid)
+                {
+                    return commandResult(false, "Invalid orbit or model bounds.");
+                }
+
+                const std::array<float, 3> target = {
+                    (pBounds->min[0] + pBounds->max[0]) * 0.5f,
+                    (pBounds->min[1] + pBounds->max[1]) * 0.5f,
+                    (pBounds->min[2] + pBounds->max[2]) * 0.5f,
+                };
+                const float horizontalDistance = std::cos(*elevation) * *distance;
+                const std::array<float, 3> eye = {
+                    target[0] + std::cos(*azimuth) * horizontalDistance,
+                    target[1] + std::sin(*azimuth) * horizontalDistance,
+                    target[2] + std::sin(*elevation) * *distance,
+                };
+                const float targetDeltaX = target[0] - eye[0];
+                const float targetDeltaY = target[1] - eye[1];
+                const float targetDeltaZ = target[2] - eye[2];
+                const float yaw = std::atan2(targetDeltaY, targetDeltaX);
+                const float pitch = std::atan2(
+                    targetDeltaZ,
+                    std::sqrt(targetDeltaX * targetDeltaX + targetDeltaY * targetDeltaY));
+
+                if (m_pMapSceneRuntime == nullptr)
+                {
+                    return commandResult(false, "No active map runtime.");
+                }
+                if (m_pMapSceneRuntime->kind() == SceneKind::Outdoor && m_pOutdoorPartyRuntime != nullptr)
+                {
+                    const WorldPartyMovementDefinition &partyMovement = m_activeWorldManifest.partyMovement;
+                    const float eyeHeight = partyMovement.declared
+                        ? partyMovement.eyeHeight : DefaultOutdoorPartyEyeHeight;
+                    OutdoorPartyRuntime::Snapshot snapshot = m_pOutdoorPartyRuntime->snapshot();
+                    snapshot.movementState = {};
+                    snapshot.movementState.x = eye[0];
+                    snapshot.movementState.y = eye[1];
+                    snapshot.movementState.footZ = eye[2] - eyeHeight;
+                    snapshot.movementState.fallStartZ = snapshot.movementState.footZ;
+                    snapshot.movementState.airborne = true;
+                    m_pOutdoorPartyRuntime->restoreSnapshot(snapshot);
+                    m_outdoorGameView.syncCameraToParty();
+                    m_outdoorGameView.setCameraAngles(yaw, pitch);
+                }
+                else if (m_pMapSceneRuntime->kind() == SceneKind::Indoor)
+                {
+                    IndoorSceneRuntime *pIndoorRuntime =
+                        static_cast<IndoorSceneRuntime *>(m_pMapSceneRuntime.get());
+                    pIndoorRuntime->partyRuntime().teleportEyePosition(eye[0], eye[1], eye[2]);
+                    m_indoorRenderer.setCameraPosition(eye[0], eye[1], eye[2]);
+                    m_indoorRenderer.setCameraAngles(yaw, pitch);
+                }
+                synchronizeSessionFromRuntime();
+                return commandResult(true, "Camera orbit pose applied.");
+            }
+            if (action == "stop")
+            {
+                const bool success = models.destroy(handle);
+                m_debugModelHandles.erase(m_debugModelHandles.begin() + *parsedIndex);
+                return commandResult(success, "Model removed.");
+            }
+            return commandResult(false, "Unknown model action.");
+        }});
+
+    m_debugConsole.registerCommand({
+        .name = "effect",
+        .description = "Inspect and control shared named effects.",
+        .usage = "effect list|stats|rate [30|60|120]|spawn <id> <x> <y> <z> [scale] [yaw-radians]|"
+            "impact-rebind [recipe [effect-id|off]]|pause|scrub|replay|stop",
+        .callback = [this, activeWorldFx, commandResult](const DebugConsole::CommandContext &context)
+        {
+            WorldFxSystem *pWorldFx = activeWorldFx();
+            if (pWorldFx == nullptr)
+            {
+                return commandResult(false, "No active map runtime.");
+            }
+            m_debugEffectHandles.erase(
+                std::remove_if(
+                    m_debugEffectHandles.begin(),
+                    m_debugEffectHandles.end(),
+                    [&](EffectHandle handle)
+                    {
+                        return !pWorldFx->namedEffects().contains(handle);
+                    }),
+                m_debugEffectHandles.end());
+            if (context.args.empty() || toLowerCopy(context.args[0]) == "list")
+            {
+                std::ostringstream out;
+                out << "Definitions:";
+                for (const std::string &id : pWorldFx->namedEffectLibrary().ids())
+                {
+                    out << ' ' << id;
+                }
+                out << "\nDebug instances: " << m_debugEffectHandles.size();
+                for (size_t index = 0; index < m_debugEffectHandles.size(); ++index)
+                {
+                    out << "\n  " << index << " time="
+                        << pWorldFx->namedEffects().elapsedSeconds(m_debugEffectHandles[index]);
+                }
+                return commandResult(true, out.str());
+            }
+
+            const std::string action = toLowerCopy(context.args[0]);
+            if (action == "stats")
+            {
+                const EffectRenderer::Diagnostics &diagnostics =
+                    m_pMapSceneRuntime->kind() == SceneKind::Outdoor
+                    ? m_outdoorGameView.effectRenderDiagnostics()
+                    : m_indoorRenderer.effectRenderDiagnostics();
+                std::ostringstream out;
+                out << "effects=" << pWorldFx->namedEffects().size()
+                    << " particles=" << diagnostics.sourceParticles
+                    << " fixed_sprites=" << diagnostics.sourceFixedSprites
+                    << " models=" << pWorldFx->models().size()
+                    << " visible_quads=" << diagnostics.visibleQuads
+                    << " draw_calls=" << diagnostics.drawCalls
+                    << " texture_switches=" << diagnostics.textureSwitches
+                    << " textures=" << diagnostics.loadedTextures
+                    << " texture_bytes_est=" << diagnostics.estimatedTextureBytes
+                    << " transient_bytes_est=" << pWorldFx->namedEffects().estimatedTransientBytes()
+                    << " world_quad_area=" << diagnostics.worldQuadArea;
+                return commandResult(true, out.str());
+            }
+            if (action == "rate")
+            {
+                if (context.args.size() == 1)
+                {
+                    return commandResult(
+                        true,
+                        "Effect reference update rate: "
+                            + std::to_string(pWorldFx->namedEffects().referenceUpdateRate()) + " Hz");
+                }
+                const std::optional<int32_t> rate = parseInt32Argument(context.args[1]);
+                const bool success = rate && *rate > 0
+                    && pWorldFx->namedEffects().setReferenceUpdateRate(static_cast<uint32_t>(*rate));
+                return commandResult(success, success ? "Effect reference update rate changed."
+                    : "Effect rate must be 30, 60, or 120 Hz.");
+            }
+            if (action == "spawn")
+            {
+                if (context.args.size() < 5 || context.args.size() > 7)
+                {
+                    return commandResult(false, "Usage: effect spawn <id> <x> <y> <z> [scale] [yaw-radians]");
+                }
+                const std::optional<float> x = parseFloatArgument(context.args[2]);
+                const std::optional<float> y = parseFloatArgument(context.args[3]);
+                const std::optional<float> z = parseFloatArgument(context.args[4]);
+                const std::optional<float> scale = context.args.size() >= 6
+                    ? parseFloatArgument(context.args[5]) : std::optional<float>(1.0f);
+                const std::optional<float> yaw = context.args.size() >= 7
+                    ? parseFloatArgument(context.args[6]) : std::optional<float>(0.0f);
+                if (!x || !y || !z || !scale || !yaw || *scale <= 0.0f)
+                {
+                    return commandResult(false, "Invalid effect transform.");
+                }
+                EffectSpawnParams params;
+                params.position = {*x, *y, *z};
+                params.rotation = {0.0f, 0.0f, std::sin(*yaw * 0.5f), std::cos(*yaw * 0.5f)};
+                params.scale = *scale;
+                const EffectHandle handle = pWorldFx->namedEffects().spawn(context.args[1], params);
+                if (!pWorldFx->namedEffects().contains(handle))
+                {
+                    return commandResult(false, "Unknown effect id or invalid spawn parameters.");
+                }
+                m_debugEffectHandles.push_back(handle);
+                return commandResult(
+                    true,
+                    "Spawned debug effect " + std::to_string(m_debugEffectHandles.size() - 1));
+            }
+            if (action == "impact-rebind")
+            {
+                if (context.args.size() == 1)
+                {
+                    std::ostringstream out;
+                    out << "Impact effect rebinds:";
+                    bool foundRebind = false;
+                    const int32_t lastRecipe = static_cast<int32_t>(FxRecipes::ProjectileRecipe::GenericLineTrail);
+                    for (int32_t recipeValue = 1; recipeValue <= lastRecipe; ++recipeValue)
+                    {
+                        const FxRecipes::ProjectileRecipe recipe =
+                            static_cast<FxRecipes::ProjectileRecipe>(recipeValue);
+                        const std::string *pEffectId = pWorldFx->projectileImpactEffectRebind(recipe);
+                        if (pEffectId != nullptr)
+                        {
+                            out << '\n' << "  " << FxRecipes::projectileRecipeName(recipe) << " -> " << *pEffectId;
+                            foundRebind = true;
+                        }
+                    }
+                    if (!foundRebind)
+                    {
+                        out << " none";
+                    }
+                    return commandResult(true, out.str());
+                }
+                if (context.args.size() < 2 || context.args.size() > 3)
+                {
+                    return commandResult(
+                        false,
+                        "Usage: effect impact-rebind [recipe [effect-id|off]]");
+                }
+
+                const std::optional<FxRecipes::ProjectileRecipe> recipe =
+                    FxRecipes::projectileRecipeFromName(context.args[1]);
+                if (!recipe || *recipe == FxRecipes::ProjectileRecipe::None)
+                {
+                    return commandResult(false, "Unknown projectile recipe.");
+                }
+
+                const std::string recipeName(FxRecipes::projectileRecipeName(*recipe));
+                if (context.args.size() == 2)
+                {
+                    const std::string *pEffectId = pWorldFx->projectileImpactEffectRebind(*recipe);
+                    return commandResult(
+                        true,
+                        pEffectId != nullptr
+                            ? recipeName + " impact is rebound to " + *pEffectId + "."
+                            : recipeName + " impact uses its default presentation.");
+                }
+
+                const std::string requestedEffect = context.args[2];
+                const std::string normalizedEffect = toLowerCopy(requestedEffect);
+                if (normalizedEffect == "off" || normalizedEffect == "clear" || normalizedEffect == "default")
+                {
+                    pWorldFx->clearProjectileImpactEffectRebind(*recipe);
+                    return commandResult(true, "Restored the default " + recipeName + " impact presentation.");
+                }
+                if (!pWorldFx->setProjectileImpactEffectRebind(*recipe, requestedEffect))
+                {
+                    return commandResult(false, "Unknown named effect id: " + requestedEffect);
+                }
+                return commandResult(
+                    true,
+                    "Rebound " + recipeName + " impact to " + requestedEffect + " for this map runtime.");
+            }
+            if (action == "stop" && context.args.size() == 2 && toLowerCopy(context.args[1]) == "all")
+            {
+                for (EffectHandle handle : m_debugEffectHandles)
+                {
+                    pWorldFx->namedEffects().stop(handle, EffectStopMode::Immediate);
+                }
+                m_debugEffectHandles.clear();
+                return commandResult(true, "Stopped all debug effects.");
+            }
+            if (context.args.size() < 2)
+            {
+                return commandResult(false, "Effect instance index is required.");
+            }
+            const std::optional<int32_t> parsedIndex = parseInt32Argument(context.args[1]);
+            if (!parsedIndex || *parsedIndex < 0 || static_cast<size_t>(*parsedIndex) >= m_debugEffectHandles.size())
+            {
+                return commandResult(false, "Invalid effect instance index.");
+            }
+            const EffectHandle handle = m_debugEffectHandles[static_cast<size_t>(*parsedIndex)];
+            if (action == "pause")
+            {
+                const bool paused = context.args.size() < 3 || toLowerCopy(context.args[2]) != "off";
+                return commandResult(
+                    pWorldFx->namedEffects().pause(handle, paused),
+                    paused ? "Effect paused." : "Effect resumed.");
+            }
+            if (action == "scrub" && context.args.size() == 3)
+            {
+                const std::optional<float> time = parseFloatArgument(context.args[2]);
+                const bool success = time && pWorldFx->namedEffects().seek(handle, *time);
+                return commandResult(success, success ? "Effect scrubbed." : "Invalid effect time.");
+            }
+            if (action == "replay")
+            {
+                return commandResult(
+                    pWorldFx->namedEffects().restart(handle),
+                    "Effect replayed.");
+            }
+            if (action == "stop")
+            {
+                const bool success = pWorldFx->namedEffects().stop(handle, EffectStopMode::Immediate);
+                m_debugEffectHandles.erase(m_debugEffectHandles.begin() + *parsedIndex);
+                return commandResult(success, "Effect stopped.");
+            }
+            return commandResult(false, "Unknown effect action.");
         }});
 
     m_debugConsole.registerCommand({
@@ -4780,12 +5253,67 @@ void GameApplication::registerDebugConsoleCommands()
 
             synchronizeSessionFromRuntime();
 
+            m_pAssetFileSystem->refreshLookupCache();
             if (!loadCurrentSessionMap(true))
             {
                 return commandResult(false, "Reload failed.");
             }
 
             return commandResult(true, "Reloaded " + m_gameSession.currentMapFileName());
+        }});
+
+    m_debugConsole.registerCommand({
+        .name = "screenshot",
+        .description = "Save a PNG screenshot of the current frame.",
+        .usage = "screenshot [name]",
+        .callback = [this, commandResult](const DebugConsole::CommandContext &context)
+        {
+            if (context.args.size() > 1)
+            {
+                return commandResult(false, "Usage: screenshot [name]");
+            }
+            std::string name = "screenshot";
+
+            if (!context.args.empty())
+            {
+                name = context.args[0];
+            }
+
+            if (name.empty() || name.size() > 64)
+            {
+                return commandResult(false, "Screenshot name must contain 1 to 64 characters.");
+            }
+
+            for (const char character : name)
+            {
+                const bool allowed = (character >= 'a' && character <= 'z')
+                    || (character >= 'A' && character <= 'Z')
+                    || (character >= '0' && character <= '9')
+                    || character == '_'
+                    || character == '-';
+
+                if (!allowed)
+                {
+                    return commandResult(
+                        false,
+                        "Name may only contain letters, digits, '_' and '-'.");
+                }
+            }
+
+            const std::filesystem::path outputPath =
+                std::filesystem::path("output") / "screenshots" / (name + ".png");
+            const std::string outputPathText = outputPath.string();
+            // A screenshot requested from the console should capture the screen beneath it.
+            m_debugConsole.setEnabled(false);
+            m_screenshotCaptureService.requestCapture(
+                outputPath,
+                [this](bool success, const std::string &message)
+                {
+                    m_debugConsole.addMessage(
+                        success ? DebugConsole::MessageKind::Success : DebugConsole::MessageKind::Error,
+                        message);
+                });
+            return commandResult(true, "Capture requested: " + outputPathText);
         }});
 
     updateDebugConsoleDataOptions();
@@ -4953,7 +5481,11 @@ void GameApplication::renderDebugConsoleFrame(int width, int height)
         pActiveParty != nullptr && pActiveParty->hasPartyBuff(PartyBuffId::Invisibility));
     m_debugConsole.render(width, height);
     ImGui::Render();
-    m_debugConsoleRenderer.renderDrawData(ImGui::GetDrawData());
+    // A command can close the console after ImGui has already built this frame's window.
+    if (m_debugConsole.enabled())
+    {
+        m_debugConsoleRenderer.renderDrawData(ImGui::GetDrawData());
+    }
     m_debugConsoleFrameBegun = false;
 }
 
@@ -5229,6 +5761,8 @@ void GameApplication::handleSdlEvent(const SDL_Event &event)
 
     IScreen *pActiveScreen = m_screenManager.activeScreen();
 
+    m_gameInputSystem.handleSdlEvent(event);
+
 #if defined(__ANDROID__)
     const bool activeScreenHandlesTouchDirectly =
         pActiveScreen != nullptr
@@ -5240,8 +5774,6 @@ void GameApplication::handleSdlEvent(const SDL_Event &event)
         pActiveScreen->handleSdlEvent(event);
         return;
     }
-
-    m_gameInputSystem.handleSdlEvent(event);
 
     if (m_gameInputSystem.consumeMobileDebugConsoleToggleRequested())
     {
@@ -5289,8 +5821,7 @@ bool GameApplication::applicationTextInputActive() const
 
     if (pActiveScreen != nullptr)
     {
-        const NewGameScreen *pNewGameScreen = dynamic_cast<const NewGameScreen *>(pActiveScreen);
-        return pNewGameScreen != nullptr && pNewGameScreen->textInputActive();
+        return pActiveScreen->textInputActive();
     }
 
     if (pendingInputPromptActive())
@@ -5699,6 +6230,7 @@ void GameApplication::loadOrCreateSettings()
 void GameApplication::applyCurrentSettingsToActiveRuntime()
 {
     m_gameSession.gameplayUiRuntime().setFontSettings(m_settings.fonts);
+    m_gameSession.gameplayUiRuntime().bindSpriteAtlasCache(m_spriteAtlasCache);
     configureGameplayDebugTrace(m_settings.gameplayTrace, m_settings.gameplayTraceFile, m_settings.gameplayTraceAppend);
     configureGameplayCombatTrace(m_settings.combatTrace, m_settings.combatTraceFile, m_settings.combatTraceAppend);
     setTextureFilteringConfig(textureFilteringConfigFromSettings(m_settings));
@@ -5777,6 +6309,8 @@ void GameApplication::shutdownApplication()
     m_pLoadingOverlayScreen.reset();
     m_gameSession.gameplayScreenRuntime().clearSharedUiRuntime();
     shutdownRenderer();
+    m_spriteAtlasCache.clear(Engine::BgfxContext::isBgfxInitialized());
+    m_nativeSpriteCache.clear(Engine::BgfxContext::isBgfxInitialized());
     shutdownDebugConsoleRenderer();
     m_gameAudioSystem.shutdown();
 }
@@ -6108,6 +6642,12 @@ bool GameApplication::initializeStartupSession(bool initializeView)
 
 bool GameApplication::initializeSelectedMapRuntime(bool initializeView)
 {
+    if (m_pAssetFileSystem != nullptr)
+    {
+        m_spriteAtlasCache.beginLevel(*m_pAssetFileSystem, [this]() { pumpLoadingOverlayAnimation(); });
+        m_nativeSpriteCache.beginLevel(*m_pAssetFileSystem);
+    }
+
     const std::optional<MapAssetInfo> &selectedMap = m_gameDataLoader.getSelectedMap();
 
     if (!selectedMap)
@@ -6408,7 +6948,9 @@ bool GameApplication::initializeSelectedMapRuntime(bool initializeView)
                 selectedMap->map,
                 pSavedIndoorState->mapDeltaData->locationInfo,
                 currentMapDay);
-        const bool restoreSavedIndoorState = pSavedIndoorState != nullptr && !indoorTimedRespawn;
+        // Arena encounters last for one visit. Loading a save resumes that visit; returning refills it.
+        const bool restoreSavedIndoorState = pSavedIndoorState != nullptr && !indoorTimedRespawn
+            && (!selectedMap->map.runtimeRestrictions.isArena || m_loadingSavedGameRuntime);
         const int32_t previousIndoorProcessedRespawnCount =
             pSavedIndoorState != nullptr
                 && pSavedIndoorState->mapDeltaData
@@ -6899,30 +7441,52 @@ void GameApplication::beginLoadingOverlay(LoadingOverlayScreen::Presentation pre
     }
     else
     {
-        m_loadingOverlayBackgroundTextureName = "bardata";
+        m_loadingOverlayBackgroundTextureName.clear();
+        // Retain the already submitted outgoing world and dialogue before unloading
+        // their resources. Only this frame targets the frozen loading background.
+        const bgfx::FrameBufferHandle background = m_pLoadingOverlayScreen->createTransitionBackground(
+            std::max(1, m_lastFrameWidth), std::max(1, m_lastFrameHeight));
+        m_cinematicGrading.setOutputFrameBuffer(background);
+        bgfx::setViewFrameBuffer(2, background);
     }
 
     m_loadingOverlayActive = true;
+    m_loadingOverlayReadyToDismiss = false;
     renderLoadingOverlayProgress(0);
+    if (presentation == LoadingOverlayScreen::Presentation::DungeonTransition)
+    {
+        m_cinematicGrading.setOutputFrameBuffer(BGFX_INVALID_HANDLE);
+        bgfx::setViewFrameBuffer(2, BGFX_INVALID_HANDLE);
+    }
 }
 
-void GameApplication::renderLoadingOverlayProgress(int progressPercent)
+void GameApplication::drawLoadingOverlay()
 {
     if (!m_loadingOverlayActive || m_pLoadingOverlayScreen == nullptr)
     {
         return;
     }
 
-    m_loadingOverlayCurrentProgressPercent = std::clamp(progressPercent, 0, 100);
     m_pLoadingOverlayScreen->setBackgroundTextureName(m_loadingOverlayBackgroundTextureName);
-    m_pLoadingOverlayScreen->setProgressPercent(progressPercent);
-    SDL_PumpEvents();
+    m_pLoadingOverlayScreen->setProgressPercent(m_loadingOverlayCurrentProgressPercent);
     m_pLoadingOverlayScreen->renderFrame(
         std::max(1, m_lastFrameWidth),
         std::max(1, m_lastFrameHeight),
         m_gameInputSystem.frame(),
         1.0f / 60.0f);
-    bgfx::frame();
+}
+
+uint32_t GameApplication::renderLoadingOverlayProgress(int progressPercent)
+{
+    if (!m_loadingOverlayActive || m_pLoadingOverlayScreen == nullptr)
+    {
+        return 0;
+    }
+
+    m_loadingOverlayCurrentProgressPercent = std::clamp(progressPercent, 0, 100);
+    SDL_PumpEvents();
+    drawLoadingOverlay();
+    return bgfx::frame();
 }
 
 bool GameApplication::logFramePerformanceDiagnostics(uint32_t currentTick)
@@ -7364,6 +7928,109 @@ void GameApplication::pumpLoadingOverlayAnimation()
     m_loadingOverlayNextAnimationFrameTick = SDL_GetTicks() + DungeonTransitionOverlayFrameMilliseconds;
 }
 
+void GameApplication::prepareGameplayRendering()
+{
+    if (m_pMapSceneRuntime == nullptr || !Engine::BgfxContext::isBgfxInitialized()
+        || bgfx::getRendererType() == bgfx::RendererType::Noop)
+    {
+        return;
+    }
+    const uint64_t beginTick = SDL_GetTicksNS();
+    struct Resources
+    {
+        CinematicGrading &grading;
+        GameSession &session;
+        const GameplayInputFrame *pPreviousInput;
+        bgfx::FrameBufferHandle target = BGFX_INVALID_HANDLE;
+        bgfx::TextureHandle readback = BGFX_INVALID_HANDLE;
+
+        ~Resources()
+        {
+            session.bindCurrentGameplayInputFrame(pPreviousInput);
+            grading.resetViews();
+            for (uint16_t view : {uint16_t(0), uint16_t(1), uint16_t(2)})
+            {
+                bgfx::setViewFrameBuffer(view, BGFX_INVALID_HANDLE);
+            }
+            if (bgfx::isValid(readback))
+            {
+                bgfx::destroy(readback);
+            }
+            if (bgfx::isValid(target))
+            {
+                bgfx::destroy(target);
+            }
+        }
+    } resources{m_cinematicGrading, m_gameSession, m_gameSession.currentGameplayInputFrame()};
+    const int width = std::max(1, m_lastFrameWidth);
+    const int height = std::max(1, m_lastFrameHeight);
+    const bgfx::TextureFormat::Enum format = bgraTextureUploadFormat();
+    const bgfx::FrameBufferHandle target = bgfx::createFrameBuffer(uint16_t(width), uint16_t(height), format);
+    resources.target = target;
+    if (!bgfx::isValid(target))
+    {
+        throw std::runtime_error("Unable to allocate loading render target");
+    }
+    const GameplayInputFrame idleInput = {};
+    m_gameSession.bindCurrentGameplayInputFrame(&idleInput);
+    // Run presentation only. Input, game time, events and indoor mechanisms remain stopped.
+    // A second submission exercises resources discovered by the first real HUD/world render.
+    for (int pass = 0; pass < 2; ++pass)
+    {
+        m_cinematicGrading.resetViews();
+        const bool grading = m_cinematicGrading.begin(
+            width, height, m_settings.cinematicGrading, m_settings.cinematicStrength);
+        if (m_pMapSceneRuntime->kind() == SceneKind::Outdoor)
+        {
+            m_outdoorGameView.render(width, height, idleInput, 0.0f, true);
+        }
+        else
+        {
+            m_indoorGameView.render(width, height, idleInput, 0.0f, true);
+        }
+        if (!grading)
+        {
+            bgfx::setViewFrameBuffer(0, target);
+            bgfx::setViewFrameBuffer(1, target);
+        }
+        m_cinematicGrading.submit(target);
+        m_gameSession.renderGameplayUi(width, height);
+        bgfx::setViewFrameBuffer(2, target);
+        renderLoadingOverlayProgress(100);
+    }
+    const uint64_t requiredCaps = BGFX_CAPS_TEXTURE_BLIT | BGFX_CAPS_TEXTURE_READ_BACK;
+    if ((bgfx::getCaps()->supported & requiredCaps) == requiredCaps)
+    {
+        const bgfx::TextureHandle readback = bgfx::createTexture2D(1, 1, false, 1, format,
+            BGFX_TEXTURE_BLIT_DST | BGFX_TEXTURE_READ_BACK);
+        resources.readback = readback;
+        if (!bgfx::isValid(readback))
+        {
+            throw std::runtime_error("Unable to allocate loading completion readback");
+        }
+        std::array<uint8_t, 4> pixel = {};
+        bgfx::blit(253, readback, 0, 0, bgfx::getTexture(target), 0, 0, 1, 1);
+        const uint32_t readyFrame = bgfx::readTexture(readback, pixel.data());
+        while (int32_t(renderLoadingOverlayProgress(100) - readyFrame) < 0)
+        {
+            // Keep presenting the overlay until the warm render's GPU readback has completed.
+        }
+    }
+    if (mapLoadTimingEnabled())
+    {
+        const SpriteAtlasCache::Statistics atlas = m_spriteAtlasCache.statistics();
+        std::cout << "[LoadingReadiness] warm_ms=" << double(SDL_GetTicksNS() - beginTick) / 1000000.0
+                  << " gpu_readback=" << ((bgfx::getCaps()->supported & requiredCaps) == requiredCaps)
+                  << " atlas_uploaded_pages=" << atlas.uploadedPages
+                  << " atlas_resident_pages=" << atlas.residentPages
+                  << " atlas_resident_bytes=" << atlas.residentBytes
+                  << " atlas_peak_preparation_bytes=" << atlas.peakPreparationBytes
+                  << " native_uploaded_textures=" << m_nativeSpriteCache.uploadedTextures()
+                  << " native_resident_bytes=" << m_nativeSpriteCache.residentBytes()
+                  << " atlas_peak_preparation_jobs=" << atlas.peakPreparationJobs << '\n';
+    }
+}
+
 void GameApplication::completeLoadingOverlay()
 {
     if (!m_loadingOverlayActive)
@@ -7371,18 +8038,17 @@ void GameApplication::completeLoadingOverlay()
         return;
     }
 
+    prepareGameplayRendering();
     renderLoadingOverlayProgress(100);
-    m_loadingOverlayActive = false;
-    m_loadingOverlayBackgroundTextureName.clear();
-    m_loadingOverlayPresentation = LoadingOverlayScreen::Presentation::Fullscreen;
-    m_loadingOverlayCurrentProgressPercent = 0;
-    m_loadingOverlayNextAnimationFrameTick = 0;
-    m_pLoadingOverlayScreen.reset();
+    // The caller may still be finishing the old world's or menu's frame. Keep it
+    // covered until the next application frame can draw the complete new scene.
+    m_loadingOverlayReadyToDismiss = true;
 }
 
 void GameApplication::cancelLoadingOverlay()
 {
     m_loadingOverlayActive = false;
+    m_loadingOverlayReadyToDismiss = false;
     m_loadingOverlayBackgroundTextureName.clear();
     m_loadingOverlayPresentation = LoadingOverlayScreen::Presentation::Fullscreen;
     m_loadingOverlayCurrentProgressPercent = 0;
@@ -7476,6 +8142,7 @@ void GameApplication::shutdownRenderer()
     {
         // bgfx defers freeing destroyed handles until the next frame. Map transitions reconstruct the renderer
         // immediately, so advance the resource lifecycle before the next map starts allocating handles.
+        drawLoadingOverlay();
         bgfx::frame();
     }
 }
@@ -8018,43 +8685,150 @@ bool GameApplication::quickLoadFromPath(const std::filesystem::path &path, bool 
 
 void GameApplication::openMainMenuScreen()
 {
+    openMenuScreen(false);
+}
+
+void GameApplication::openPauseMenuScreen()
+{
+    if (m_screenManager.activeScreen() == nullptr)
+    {
+        m_menuSavePreviewBmp.clear();
+        m_screenshotCaptureService.requestPixels(
+            [this](uint32_t width, uint32_t height, const std::vector<uint8_t> &pixels)
+            {
+                if (width == 0 || height == 0)
+                {
+                    return;
+                }
+                const std::vector<uint8_t> preview =
+                    SavePreviewImage::cropAndScaleBgraPreview(pixels, int(width), int(height), 480, 360);
+                m_menuSavePreviewBmp = SavePreviewImage::encodeBgraToBmp(480, 360, preview);
+            });
+    }
+    m_gameSession.gameplayScreenRuntime().closeMenuOverlay();
+    openMenuScreen(true);
+}
+
+void GameApplication::resumeMenuGameplay()
+{
+    // Keep the Escape used to resume from opening the menu again until it is released.
+    m_gameSession.gameplayScreenRuntime().interactionState().menuToggleLatch = true;
+    m_screenManager.setActiveScreen(nullptr);
+    if (m_pMapSceneRuntime)
+    {
+        m_screenManager.setCurrentMode(m_pMapSceneRuntime->kind() == SceneKind::Indoor ? AppMode::GameplayIndoor
+                                                                                       : AppMode::GameplayOutdoor);
+    }
+    m_gameSession.requestRelativeMouseMotionReset();
+}
+
+bool GameApplication::applyMenuSettings(const GameSettings &settings, bool persist, std::string &error)
+{
+    const GameSettings previous = m_settings;
+    const bool displayChanged =
+        previous.windowMode != settings.windowMode || previous.resolutionWidth != settings.resolutionWidth ||
+        previous.resolutionHeight != settings.resolutionHeight || previous.verticalSync != settings.verticalSync;
+    if (displayChanged && !m_engineApplication.applyDisplaySettings(engineWindowModeForSettings(settings.windowMode),
+                                                                    settings.resolutionWidth, settings.resolutionHeight,
+                                                                    settings.verticalSync, error))
+    {
+        std::string restoreError;
+        m_engineApplication.applyDisplaySettings(engineWindowModeForSettings(previous.windowMode),
+                                                 previous.resolutionWidth, previous.resolutionHeight,
+                                                 previous.verticalSync, restoreError);
+        return false;
+    }
+    if (persist && !saveGameSettings(settingsFilePath(), settings, error))
+    {
+        if (displayChanged)
+        {
+            std::string restoreError;
+            m_engineApplication.applyDisplaySettings(engineWindowModeForSettings(previous.windowMode),
+                                                     previous.resolutionWidth, previous.resolutionHeight,
+                                                     previous.verticalSync, restoreError);
+        }
+        return false;
+    }
+    m_settings = settings;
+    applyCurrentSettingsToActiveRuntime();
+    return true;
+}
+
+void GameApplication::openMenuScreen(bool paused)
+{
     if (m_pAssetFileSystem == nullptr)
     {
         return;
     }
-
-    std::unique_ptr<MainMenuScreen> pScreen = std::make_unique<MainMenuScreen>(
-        *m_pAssetFileSystem,
-        &m_gameAudioSystem,
-        [this]()
+    MainMenuScreen::Actions actions;
+    actions.newGame = [this, paused]()
+    {
+        if (ensureCommonGameDataLoaded())
         {
-            GAMEPLAY_DEBUG_TRACE("menu_action action=new_game source=main_menu");
-            if (!ensureCommonGameDataLoaded())
-            {
-                return;
-            }
-            openNewGameScreen("main_menu");
-        },
-        [this]()
-        {
-            GAMEPLAY_DEBUG_TRACE("menu_action action=load_game source=main_menu");
-            if (!ensureCommonGameDataLoaded())
-            {
-                return;
-            }
-            openLoadGameScreen(false, "main_menu");
-        },
-        [this]()
-        {
-            requestApplicationQuit();
-        });
-
+            openNewGameScreen(paused ? "gameplay_menu" : "main_menu");
+        }
+    };
+    actions.loadGame = [this, paused]() { openLoadGameScreen(paused, paused ? "gameplay_menu" : "main_menu"); };
+    actions.saveGame = [this]() { openSaveGameScreen(); };
+    actions.quit = [this]() { requestApplicationQuit(); };
+    actions.resume = [this]() { resumeMenuGameplay(); };
+    actions.mainMenu = [this]() { openMainMenuScreen(); };
+    actions.continueGame = [this](const std::filesystem::path &path)
+    { return ensureCommonGameDataLoaded() && loadSessionFromPath(path); };
+    actions.applySettings = [this](const GameSettings &settings, bool persist, std::string &error)
+    { return applyMenuSettings(settings, persist, error); };
+    std::string location = m_gameSession.currentMapFileName();
+    if (const std::optional<MapAssetInfo> &map = m_gameDataLoader.getSelectedMap())
+    {
+        location = map->map.name;
+    }
+    const int days = int(m_gameSession.gameMinutes()) / (24 * 60);
+    const std::string date = m_activeWorldManifest.name + " - Day " + std::to_string(days + 1);
+    std::unique_ptr<MainMenuScreen> pScreen =
+        std::make_unique<MainMenuScreen>(*m_pAssetFileSystem, m_gameDataRepository, &m_gameAudioSystem, m_settings,
+                                        std::move(actions), paused, location, date);
     pScreen->setFontSettings(m_settings.fonts);
     pScreen->prepareForFirstFrame();
+    if (SDL_Window *pWindow = SDL_GetKeyboardFocus())
+    {
+        SDL_SetWindowRelativeMouseMode(pWindow, false);
+    }
+    SDL_ShowCursor();
+    if (!paused)
+    {
+        m_gameAudioSystem.setBackgroundMusicTrack(MainMenuMusicTrack);
+        m_mainMenuRenderedFrameCount = 0;
+        m_deferredMainMenuChildWarmupStage = m_mainMenuChildScreensPrepared ? 0 : 1;
+    }
+    m_screenManager.setActiveScreen(std::move(pScreen));
+}
 
-    m_gameAudioSystem.setBackgroundMusicTrack(MainMenuMusicTrack);
-    m_mainMenuRenderedFrameCount = 0;
-    m_deferredMainMenuChildWarmupStage = m_mainMenuChildScreensPrepared ? 0 : 1;
+void GameApplication::openSaveGameScreen()
+{
+    if (m_pAssetFileSystem == nullptr || m_pMapSceneRuntime == nullptr)
+    {
+        return;
+    }
+    std::unique_ptr<LoadGameScreen> pScreen = std::make_unique<LoadGameScreen>(
+        *m_pAssetFileSystem, m_gameSession.data(), LoadGameScreen::LoadAction{}, [this]() { openPauseMenuScreen(); },
+        true, &m_gameAudioSystem);
+    std::string location = m_gameSession.currentMapFileName();
+    if (const std::optional<MapAssetInfo> &map = m_gameDataLoader.getSelectedMap())
+    {
+        location = map->map.name;
+    }
+    pScreen->configureSave(
+        [this](const std::filesystem::path &path, const std::string &name)
+        {
+            if (!quickSaveToPath(path, name, m_menuSavePreviewBmp))
+            {
+                return false;
+            }
+            resumeMenuGameplay();
+            return true;
+        },
+        location, m_gameSession.gameMinutes(), m_menuSavePreviewBmp);
+    pScreen->setFontSettings(m_settings.fonts);
     m_screenManager.setActiveScreen(std::move(pScreen));
 }
 
@@ -8075,40 +8849,20 @@ void GameApplication::openLoadGameScreen(bool returnToGameplayMenu, const std::s
         + " return_to_gameplay_menu=" + (returnToGameplayMenu ? "true" : "false"));
 
     std::unique_ptr<LoadGameScreen> pScreen = std::make_unique<LoadGameScreen>(
-        *m_pAssetFileSystem,
-        m_gameSession.data(),
-        [this](const std::filesystem::path &path) -> bool
-        {
-            return loadSessionFromPath(path);
-        },
+        *m_pAssetFileSystem, m_gameSession.data(),
+        [this](const std::filesystem::path &path) -> bool { return loadSessionFromPath(path); },
         [this, returnToGameplayMenu]()
         {
             if (returnToGameplayMenu)
             {
-                m_screenManager.setActiveScreen(nullptr);
-
-                if (m_pMapSceneRuntime != nullptr)
-                {
-                    m_screenManager.setCurrentMode(
-                        m_pMapSceneRuntime->kind() == SceneKind::Indoor
-                            ? AppMode::GameplayIndoor
-                            : AppMode::GameplayOutdoor);
-                }
-
-                if (m_pMapSceneRuntime != nullptr && m_pMapSceneRuntime->kind() == SceneKind::Indoor)
-                {
-                    m_indoorGameView.reopenMenuScreen();
-                }
-                else
-                {
-                    m_outdoorGameView.reopenMenuScreen();
-                }
+                openPauseMenuScreen();
             }
             else
             {
                 openMainMenuScreen();
             }
-        });
+        },
+        returnToGameplayMenu, &m_gameAudioSystem);
 
     pScreen->setFontSettings(m_settings.fonts);
 
@@ -8530,6 +9284,10 @@ void GameApplication::reportQuickSaveStatus(const std::string &status)
 
 void GameApplication::renderFrame(int width, int height, float mouseWheelDelta, float deltaSeconds)
 {
+    if (m_loadingOverlayReadyToDismiss)
+    {
+        cancelLoadingOverlay();
+    }
     m_cinematicGrading.resetViews();
     const bool gameplayLoaded =
         !m_loadingOverlayActive
@@ -8670,6 +9428,8 @@ void GameApplication::renderFrame(int width, int height, float mouseWheelDelta, 
     const bool mobileGameplayTouchControlsEnabled =
         pActiveScreenForInput == nullptr
         && !pendingSpellTargetForInput.active
+        && m_gameSession.gameplayScreenRuntime().utilitySpellOverlayReadOnly().mode
+            == GameplayUiController::UtilitySpellOverlayMode::None
         && m_gameSession.gameplayScreenRuntime().currentHudScreenState() == GameplayHudScreenState::Gameplay;
     const bool mobileJumpGestureEnabled =
         mobileGameplayTouchControlsEnabled
@@ -8681,6 +9441,13 @@ void GameApplication::renderFrame(int width, int height, float mouseWheelDelta, 
         pActiveScreenForInput == nullptr
         && m_gameSession.gameplayScreenRuntime().mobileInspectControlAvailable();
 
+    std::vector<GameplayTouchControl> touchControls;
+#if defined(__ANDROID__)
+    if (pActiveScreenForInput == nullptr)
+    {
+        touchControls = m_gameSession.gameplayScreenRuntime().mobileTouchControls(width, height);
+    }
+#endif
     m_gameInputSystem.updateFromEngineInput(
         width,
         height,
@@ -8690,7 +9457,10 @@ void GameApplication::renderFrame(int width, int height, float mouseWheelDelta, 
         mobileGameplayTouchControlsEnabled,
         mobileJumpGestureEnabled,
         mobileFlightControlsEnabled,
-        mobileInspectControlEnabled);
+        mobileInspectControlEnabled,
+        touchControls);
+    m_menuInputTour.update(m_settings.menuInputTourPath, m_gameInputSystem.frame(), m_screenManager.activeScreen(),
+                           m_screenshotCaptureService);
     m_gameSession.bindCurrentGameplayInputFrame(&m_gameInputSystem.frame());
     recordFrameDiagnostics(m_framePerformanceDiagnostics.inputNanoseconds, inputBeginTickCount);
 
@@ -8708,6 +9478,23 @@ void GameApplication::renderFrame(int width, int height, float mouseWheelDelta, 
         updateDeferredStartupLoads();
 
         const uint64_t activeScreenBeginTickCount = collectFrameDiagnostics ? SDL_GetTicksNS() : 0;
+        if (pActiveScreen->rendersOverGameplay())
+        {
+            // Rendering a paused world must not reuse the last gameplay frame's mouse-look policy.
+            m_gameSession.clearSharedInputFrameResult(true);
+            if (IGameplayWorldRuntime *pWorldRuntime = m_gameSession.activeWorldRuntime())
+            {
+                GameplayInputFrame backgroundInput;
+                backgroundInput.screenWidth = width;
+                backgroundInput.screenHeight = height;
+                m_gameSession.bindCurrentGameplayInputFrame(&backgroundInput);
+                m_cinematicGrading.begin(width, height, m_settings.cinematicGrading, m_settings.cinematicStrength);
+                pWorldRuntime->renderWorld(width, height, backgroundInput, 0.0f);
+                m_cinematicGrading.submit();
+                m_gameSession.renderGameplayUi(width, height);
+                m_gameSession.bindCurrentGameplayInputFrame(&m_gameInputSystem.frame());
+            }
+        }
         const bool renderedMainMenu = pActiveScreen->mode() == AppMode::MainMenu;
         m_screenManager.beginActiveScreenRender();
         pActiveScreen->renderFrame(width, height, m_gameInputSystem.frame(), deltaSeconds);
@@ -8851,7 +9638,9 @@ void GameApplication::renderFrame(int width, int height, float mouseWheelDelta, 
     recordFrameDiagnostics(m_framePerformanceDiagnostics.pendingStateNanoseconds, pendingStateBeginTickCount);
     const float scaledGameplayDeltaSeconds = gameplayDeltaSeconds(deltaSeconds);
 
-    if (!debugConsoleFreezesGameplay && !skipGameplayUpdateAfterInputPrompt)
+    const bool screenshotTourActive = m_screenshotTourStage == ScreenshotTourStage::Settling
+        || m_screenshotTourStage == ScreenshotTourStage::WaitingForCapture;
+    if (!debugConsoleFreezesGameplay && !skipGameplayUpdateAfterInputPrompt && !screenshotTourActive)
     {
         const uint64_t gameplayUpdateBeginTickCount = collectFrameDiagnostics ? SDL_GetTicksNS() : 0;
         m_gameSession.updateGameplay(m_gameInputSystem.frame(), scaledGameplayDeltaSeconds, collectFrameDiagnostics);
@@ -8887,6 +9676,7 @@ void GameApplication::renderFrame(int width, int height, float mouseWheelDelta, 
             || pendingSpellTargetActive
             || m_gameSession.sharedWorldInteractionBlockedThisFrame()
             || debugConsoleFreezesGameplay
+            || screenshotTourActive
             || rightMouseInspectPauseActive;
 
         if (!gameplayWorldPaused)
@@ -8897,6 +9687,12 @@ void GameApplication::renderFrame(int width, int height, float mouseWheelDelta, 
         }
 
         const uint64_t postWorldBeginTickCount = collectFrameDiagnostics ? SDL_GetTicksNS() : 0;
+        WorldFxSystem &worldFx = m_pMapSceneRuntime->kind() == SceneKind::Outdoor
+            ? m_outdoorGameView.worldFxSystem() : m_indoorRenderer.worldFxSystem();
+        m_gameSession.gameplayFxService().consumePendingWorldFxRequests(
+            pWorldRuntime->eventRuntimeState(),
+            worldFx,
+            *m_pAssetFileSystem);
         m_gameSession.consumePendingGameplayAudioRequests();
         recordFrameDiagnostics(m_framePerformanceDiagnostics.postWorldNanoseconds, postWorldBeginTickCount);
         const uint64_t renderWorldBeginTickCount = collectFrameDiagnostics ? SDL_GetTicksNS() : 0;
@@ -8920,6 +9716,11 @@ void GameApplication::renderFrame(int width, int height, float mouseWheelDelta, 
         if (m_gameSession.consumeRelativeMouseMotionResetRequest())
         {
             m_gameInputSystem.resetRelativeMouseMotion();
+        }
+
+        if (m_gameSession.gameplayScreenRuntime().menuScreenState().active)
+        {
+            openPauseMenuScreen();
         }
 
         if (m_gameSession.consumePendingOpenNewGameScreenRequest())
@@ -8956,14 +9757,18 @@ void GameApplication::renderFrame(int width, int height, float mouseWheelDelta, 
         if (m_pMapSceneRuntime->kind() == SceneKind::Outdoor && m_pOutdoorPartyRuntime != nullptr)
         {
             const OutdoorMoveState &moveState = m_pOutdoorPartyRuntime->movementState();
-            m_gameAudioSystem.update(moveState.x, moveState.y, moveState.footZ + 96.0f, deltaSeconds);
+            m_gameAudioSystem.update(
+                moveState.x, moveState.y, moveState.footZ + 96.0f, deltaSeconds,
+                pWorldRuntime->gameplayCameraYawRadians());
         }
         else if (m_pMapSceneRuntime->kind() == SceneKind::Indoor)
         {
             const IndoorSceneRuntime *pIndoorRuntime =
                 static_cast<const IndoorSceneRuntime *>(m_pMapSceneRuntime.get());
             const IndoorMoveState &moveState = pIndoorRuntime->partyRuntime().movementState();
-            m_gameAudioSystem.update(moveState.x, moveState.y, moveState.eyeZ(), deltaSeconds);
+            m_gameAudioSystem.update(
+                moveState.x, moveState.y, moveState.eyeZ(), deltaSeconds,
+                pWorldRuntime->gameplayCameraYawRadians());
         }
         else
         {
@@ -9041,6 +9846,317 @@ void GameApplication::renderFrame(int width, int height, float mouseWheelDelta, 
     finishFrameDiagnostics();
 }
 
+void GameApplication::updateScreenshotCaptureFrame()
+{
+    m_screenshotCaptureService.update();
+
+    if (m_pMapSceneRuntime == nullptr || m_loadingOverlayActive)
+    {
+        return;
+    }
+
+    if (!m_screenshotGameplayStartTicksValid)
+    {
+        m_screenshotGameplayStartTicksValid = true;
+        m_screenshotGameplayStartTicks = SDL_GetTicks();
+    }
+
+    if (!m_debugLaunchEffectSpawned && !m_settings.effectSpawnId.empty())
+    {
+        WorldFxSystem &worldFx = m_pMapSceneRuntime->kind() == SceneKind::Outdoor
+            ? m_outdoorGameView.worldFxSystem() : m_indoorRenderer.worldFxSystem();
+        EffectSpawnParams params;
+        params.position = m_settings.effectSpawnPosition;
+        params.rotation = {
+            0.0f,
+            0.0f,
+            std::sin(m_settings.effectSpawnYawRadians * 0.5f),
+            std::cos(m_settings.effectSpawnYawRadians * 0.5f),
+        };
+        params.scale = m_settings.effectSpawnScale;
+        m_debugLaunchEffectSpawned = true;
+        size_t spawned = 0;
+        for (uint32_t index = 0; index < m_settings.effectSpawnCount; ++index)
+        {
+            params.seed = index + 1;
+            const EffectHandle handle = worldFx.namedEffects().spawn(m_settings.effectSpawnId, params);
+            if (worldFx.namedEffects().contains(handle))
+            {
+                m_debugEffectHandles.push_back(handle);
+                ++spawned;
+            }
+        }
+        if (spawned != m_settings.effectSpawnCount)
+        {
+            std::cerr << "Launch effect spawn failed: " << m_settings.effectSpawnId
+                      << " spawned=" << spawned << " requested=" << m_settings.effectSpawnCount << '\n';
+        }
+        else
+        {
+            std::cout << "Launch effect spawned: " << m_settings.effectSpawnId
+                      << " count=" << spawned << '\n';
+        }
+    }
+
+    if (!m_debugLaunchModelSpawned && !m_settings.modelSpawnPath.empty())
+    {
+        WorldFxSystem &worldFx = m_pMapSceneRuntime->kind() == SceneKind::Outdoor
+            ? m_outdoorGameView.worldFxSystem() : m_indoorRenderer.worldFxSystem();
+        m_debugLaunchModelSpawned = true;
+        const Engine::ModelLoadResult loaded =
+            worldFx.modelAssets().load(*m_pAssetFileSystem, m_settings.modelSpawnPath);
+        if (!loaded)
+        {
+            std::cerr << "Launch model load failed: " << loaded.error << '\n';
+        }
+        else
+        {
+            const Engine::ModelTransform transform = Engine::gltfModelPlacement(
+                m_settings.modelSpawnPosition,
+                m_settings.modelSpawnYawRadians,
+                m_settings.modelSpawnScale);
+            const Engine::ModelInstanceHandle handle = worldFx.models().create(loaded.asset, transform);
+            if (!worldFx.models().contains(handle))
+            {
+                std::cerr << "Launch model spawn failed: " << m_settings.modelSpawnPath << '\n';
+            }
+            else if (!m_settings.modelSpawnClip.empty() &&
+                !worldFx.models().play(handle, m_settings.modelSpawnClip, Engine::ModelPlaybackMode::Loop))
+            {
+                worldFx.models().destroy(handle);
+                std::cerr << "Launch model clip was not found: " << m_settings.modelSpawnClip << '\n';
+            }
+            else
+            {
+                worldFx.models().setNodeMarkersVisible(handle, m_settings.modelSpawnMarkers);
+                m_debugModelHandles.push_back(handle);
+                std::cout << "Launch model spawned: " << m_settings.modelSpawnPath << '\n';
+            }
+        }
+    }
+
+    if (!m_debugLaunchEffectStatsLogged
+        && m_settings.effectStatsDelaySeconds >= 0.0f
+        && SDL_GetTicks() - m_screenshotGameplayStartTicks
+            >= static_cast<uint32_t>(m_settings.effectStatsDelaySeconds * 1000.0f))
+    {
+        m_debugLaunchEffectStatsLogged = true;
+        WorldFxSystem &worldFx = m_pMapSceneRuntime->kind() == SceneKind::Outdoor
+            ? m_outdoorGameView.worldFxSystem() : m_indoorRenderer.worldFxSystem();
+        const EffectRenderer::Diagnostics &diagnostics = m_pMapSceneRuntime->kind() == SceneKind::Outdoor
+            ? m_outdoorGameView.effectRenderDiagnostics() : m_indoorRenderer.effectRenderDiagnostics();
+        const bgfx::Stats *pBgfxStats = bgfx::getStats();
+        const int64_t gpuMicroseconds = pBgfxStats != nullptr
+            && pBgfxStats->gpuTimerFreq > 0
+            && pBgfxStats->gpuTimeEnd >= pBgfxStats->gpuTimeBegin
+            ? (pBgfxStats->gpuTimeEnd - pBgfxStats->gpuTimeBegin) * 1000000 / pBgfxStats->gpuTimerFreq
+            : -1;
+        std::cout << "Effect diagnostics: effects=" << worldFx.namedEffects().size()
+                  << " particles=" << diagnostics.sourceParticles
+                  << " fixed_sprites=" << diagnostics.sourceFixedSprites
+                  << " models=" << worldFx.models().size()
+                  << " visible_quads=" << diagnostics.visibleQuads
+                  << " draw_calls=" << diagnostics.drawCalls
+                  << " texture_switches=" << diagnostics.textureSwitches
+                  << " textures=" << diagnostics.loadedTextures
+                  << " texture_bytes_est=" << diagnostics.estimatedTextureBytes
+                  << " transient_bytes_est=" << worldFx.namedEffects().estimatedTransientBytes()
+                  << " world_quad_area=" << diagnostics.worldQuadArea
+                  << " frame_draw_calls=" << (pBgfxStats != nullptr ? pBgfxStats->numDraw : 0)
+                  << " frame_gpu_us=" << gpuMicroseconds
+                  << " frame_texture_bytes=" << (pBgfxStats != nullptr ? pBgfxStats->textureMemoryUsed : 0)
+                  << " frame_transient_vb_bytes=" << (pBgfxStats != nullptr ? pBgfxStats->transientVbUsed : 0)
+                  << std::endl;
+    }
+
+    if (!m_settings.screenshotPath.empty()
+        && !m_screenshotScheduledCaptureFired
+        && SDL_GetTicks() - m_screenshotGameplayStartTicks
+            >= static_cast<uint32_t>(m_settings.screenshotDelaySeconds * 1000.0f))
+    {
+        m_screenshotScheduledCaptureFired = true;
+        m_screenshotCaptureService.requestCapture(
+            std::filesystem::path(m_settings.screenshotPath),
+            [this](bool success, const std::string &message)
+            {
+                std::cout << "Screenshot: " << message << std::endl;
+                m_debugConsole.addMessage(
+                    success ? DebugConsole::MessageKind::Success : DebugConsole::MessageKind::Error,
+                    message);
+            });
+    }
+
+    if (m_settings.screenshotTourPath.empty())
+    {
+        return;
+    }
+
+    if (!m_screenshotTour.has_value())
+    {
+        if (m_screenshotTourLoadFailed)
+        {
+            return;
+        }
+
+        std::string error;
+        std::optional<ScreenshotTour> tour = loadScreenshotTour(m_settings.screenshotTourPath, error);
+
+        if (!tour)
+        {
+            m_screenshotTourLoadFailed = true;
+            std::cerr << "GameApplication: " << error << '\n';
+            m_debugConsole.addMessage(DebugConsole::MessageKind::Error, error);
+            return;
+        }
+
+        m_screenshotTour = std::move(tour);
+        m_screenshotTourShotIndex = 0;
+        m_screenshotTourSettleStartTicks = SDL_GetTicks();
+
+        if (!applyScreenshotTourShotPose(m_screenshotTour->shots.front()))
+        {
+            m_screenshotTourStage = ScreenshotTourStage::Finished;
+            m_debugConsole.addMessage(
+                DebugConsole::MessageKind::Error,
+                "screenshot tour could not apply the first shot pose; stopping tour");
+            return;
+        }
+
+        m_screenshotTourStage = ScreenshotTourStage::Settling;
+        m_debugConsole.addMessage(
+            DebugConsole::MessageKind::Info,
+            "screenshot tour started: " + std::to_string(m_screenshotTour->shots.size()) + " shots");
+        return;
+    }
+
+    if (m_screenshotTourStage != ScreenshotTourStage::Settling
+        || m_screenshotTourShotIndex >= m_screenshotTour->shots.size())
+    {
+        return;
+    }
+
+    const ScreenshotTourShot &shot = m_screenshotTour->shots[m_screenshotTourShotIndex];
+    const float settleSeconds = shot.settleSeconds >= 0.0f
+        ? shot.settleSeconds
+        : m_screenshotTour->defaultSettleSeconds;
+    // Keep a small floor so the captured frame reflects the applied pose even with settle_seconds: 0.
+    const uint32_t settleMilliseconds = std::max(static_cast<uint32_t>(settleSeconds * 1000.0f), 100u);
+
+    if (SDL_GetTicks() - m_screenshotTourSettleStartTicks < settleMilliseconds)
+    {
+        return;
+    }
+
+    const size_t shotIndex = m_screenshotTourShotIndex;
+    const std::string indexText = shotIndex + 1 < 10
+        ? "0" + std::to_string(shotIndex + 1)
+        : std::to_string(shotIndex + 1);
+    const std::filesystem::path outputPath = std::filesystem::path(m_screenshotTour->outputDirectory)
+        / (indexText + "-" + shot.name + ".png");
+    m_screenshotTourStage = ScreenshotTourStage::WaitingForCapture;
+    m_screenshotCaptureService.requestCapture(
+        outputPath,
+        [this, shotIndex](bool success, const std::string &message)
+        {
+            std::cout << "Screenshot tour: " << message << std::endl;
+            m_debugConsole.addMessage(
+                success ? DebugConsole::MessageKind::Success : DebugConsole::MessageKind::Error,
+                message);
+            advanceScreenshotTourAfterCapture(shotIndex, success);
+        });
+}
+
+bool GameApplication::applyScreenshotTourShotPose(const ScreenshotTourShot &shot)
+{
+    if (m_pMapSceneRuntime == nullptr)
+    {
+        return false;
+    }
+
+    if (m_pMapSceneRuntime->kind() == SceneKind::Outdoor)
+    {
+        if (m_pOutdoorPartyRuntime == nullptr)
+        {
+            return false;
+        }
+
+        // Tour positions are exact party-foot coordinates, including airborne viewpoints.
+        // Ordinary teleportTo intentionally resolves the floor and would discard the requested height.
+        OutdoorPartyRuntime::Snapshot snapshot = m_pOutdoorPartyRuntime->snapshot();
+        snapshot.movementState = {};
+        snapshot.movementState.x = shot.x;
+        snapshot.movementState.y = shot.y;
+        snapshot.movementState.footZ = shot.z;
+        snapshot.movementState.fallStartZ = shot.z;
+        snapshot.movementState.airborne = true;
+        m_pOutdoorPartyRuntime->restoreSnapshot(snapshot);
+        m_pOutdoorPartyRuntime->setMovementSpeedMultiplier(m_settings.movementSpeedMultiplier);
+        m_outdoorGameView.syncCameraToParty();
+        m_outdoorGameView.setCameraAngles(shot.yawRadians, shot.pitchRadians);
+    }
+    else if (m_pMapSceneRuntime->kind() == SceneKind::Indoor)
+    {
+        IndoorSceneRuntime *pIndoorRuntime = static_cast<IndoorSceneRuntime *>(m_pMapSceneRuntime.get());
+        pIndoorRuntime->partyRuntime().teleportPartyPosition(shot.x, shot.y, shot.z);
+        const IndoorMoveState &moveState = pIndoorRuntime->partyRuntime().movementState();
+        m_indoorRenderer.setCameraPosition(moveState.x, moveState.y, moveState.eyeZ());
+        m_indoorRenderer.setCameraAngles(shot.yawRadians, shot.pitchRadians);
+    }
+    else
+    {
+        return false;
+    }
+
+    synchronizeSessionFromRuntime();
+    std::cout << "Screenshot tour pose: name=" << shot.name
+              << " x=" << shot.x << " y=" << shot.y << " z=" << shot.z
+              << " yaw=" << shot.yawRadians << " pitch=" << shot.pitchRadians << std::endl;
+    return true;
+}
+
+void GameApplication::advanceScreenshotTourAfterCapture(size_t shotIndex, bool success)
+{
+    if (!m_screenshotTour.has_value()
+        || m_screenshotTourStage != ScreenshotTourStage::WaitingForCapture
+        || m_screenshotTourShotIndex != shotIndex)
+    {
+        return;
+    }
+
+    const bool hasMoreShots = success && m_screenshotTourShotIndex + 1 < m_screenshotTour->shots.size();
+
+    if (!hasMoreShots)
+    {
+        m_screenshotTourStage = ScreenshotTourStage::Finished;
+
+        if (success)
+        {
+            m_debugConsole.addMessage(DebugConsole::MessageKind::Info, "screenshot tour finished");
+        }
+
+        if (m_screenshotTour->exitWhenFinished)
+        {
+            requestApplicationQuit();
+        }
+
+        return;
+    }
+
+    ++m_screenshotTourShotIndex;
+    m_screenshotTourSettleStartTicks = SDL_GetTicks();
+
+    if (!applyScreenshotTourShotPose(m_screenshotTour->shots[m_screenshotTourShotIndex]))
+    {
+        m_screenshotTourStage = ScreenshotTourStage::Finished;
+        m_debugConsole.addMessage(
+            DebugConsole::MessageKind::Error,
+            "screenshot tour could not apply the next shot pose; stopping tour");
+        return;
+    }
+
+    m_screenshotTourStage = ScreenshotTourStage::Settling;
+}
+
 bool GameApplication::processPendingMapMove()
 {
     if (m_pAssetFileSystem == nullptr)
@@ -9056,7 +10172,6 @@ bool GameApplication::processPendingMapMove()
     }
 
     synchronizeSessionFromRuntime();
-    closeTransientGameplayUiForMapMove();
 
     const bool isSameMapTeleport =
         !pendingMapMove->mapName
@@ -9086,6 +10201,7 @@ bool GameApplication::processPendingMapMove()
     };
     if (isSameMapTeleport)
     {
+        closeTransientGameplayUiForMapMove();
         const std::string previousMapFileName = m_gameSession.currentMapFileName();
         if (m_pMapSceneRuntime != nullptr
             && m_pMapSceneRuntime->kind() == SceneKind::Outdoor
@@ -9121,6 +10237,12 @@ bool GameApplication::processPendingMapMove()
         return true;
     }
 
+    const LoadingOverlayScreen::Presentation loadingPresentation = pendingMapMove->useFullscreenLoading
+        ? LoadingOverlayScreen::Presentation::Fullscreen
+        : LoadingOverlayScreen::Presentation::DungeonTransition;
+    beginLoadingOverlay(loadingPresentation);
+    closeTransientGameplayUiForMapMove();
+
     EventRuntimeState *pLeavingRuntimeState =
         m_pMapSceneRuntime != nullptr ? m_pMapSceneRuntime->eventRuntimeState() : nullptr;
     executeCurrentMapOnLeaveEvents();
@@ -9134,10 +10256,6 @@ bool GameApplication::processPendingMapMove()
     captureCurrentSceneState();
 
     m_gameSession.setCurrentMapFileName(targetMapName);
-    const LoadingOverlayScreen::Presentation loadingPresentation = pendingMapMove->useFullscreenLoading
-        ? LoadingOverlayScreen::Presentation::Fullscreen
-        : LoadingOverlayScreen::Presentation::DungeonTransition;
-    beginLoadingOverlay(loadingPresentation);
     renderLoadingOverlayProgress(15);
 
     if (!loadCurrentSessionMap(
@@ -9260,7 +10378,7 @@ void GameApplication::closeTransientGameplayUiForMapMove()
     screenRuntime.stopHouseVideoPlayback();
     screenRuntime.closeHouseShopOverlay();
     screenRuntime.closeInventoryNestedOverlay();
-    screenRuntime.closeActiveEventDialog();
+    screenRuntime.closeActiveDialogForMapMove();
     screenRuntime.resetLootOverlayInteractionState();
 }
 

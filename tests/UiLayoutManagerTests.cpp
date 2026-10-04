@@ -20,55 +20,160 @@ std::string loadLayoutSource(const std::filesystem::path &relativePath)
 }
 }
 
-TEST_CASE("mobile gameplay layout overrides preserve follower child draw order")
+TEST_CASE("shared Obsidian gameplay layout preserves command and follower ownership")
 {
-    const std::string gameplayLayout = loadLayoutSource("assets_dev/engine/ui/gameplay/gameplay.yml");
-    const std::string mobileLayout = loadLayoutSource("assets_dev/engine/ui/gameplay/gameplay_mobile.yml");
-    REQUIRE_FALSE(gameplayLayout.empty());
-    REQUIRE_FALSE(mobileLayout.empty());
-
-    OpenYAMM::Game::UiLayoutManager layoutManager;
-    REQUIRE(layoutManager.loadLayoutText("gameplay.yml", gameplayLayout));
-    REQUIRE(layoutManager.loadLayoutText("gameplay_mobile.yml", mobileLayout));
-
-    const std::vector<std::string> layoutIds = layoutManager.sortedLayoutIdsForScreen("OutdoorHud");
-    CHECK_EQ(std::count(layoutIds.begin(), layoutIds.end(), "OutdoorFollowerPanel"), 1);
-
-    const std::vector<std::string>::const_iterator panelIterator =
-        std::find(layoutIds.begin(), layoutIds.end(), "OutdoorFollowerPanel");
-    const std::vector<std::string>::const_iterator portraitIterator =
-        std::find(layoutIds.begin(), layoutIds.end(), "OutdoorFollowerPortrait_1");
-    REQUIRE(panelIterator != layoutIds.end());
-    REQUIRE(portraitIterator != layoutIds.end());
-    CHECK(panelIterator < portraitIterator);
-
-    const OpenYAMM::Game::UiLayoutManager::LayoutElement *pPortrait =
-        layoutManager.findElement("OutdoorFollowerPortrait_1");
-    REQUIRE(pPortrait != nullptr);
-    CHECK_EQ(pPortrait->parentId, "OutdoorFollowerPanel");
-
-    const std::vector<std::string>::const_iterator goldBarIterator =
-        std::find(layoutIds.begin(), layoutIds.end(), "OutdoorGoldBar");
-    REQUIRE(goldBarIterator != layoutIds.end());
-
-    const char *pTopBarButtonIds[] = {
-        "OutdoorButtonRest",
-        "OutdoorButtonBooks",
-        "OutdoorButtonQuickReference",
-        "OutdoorButtonOptions",
-    };
-
-    for (const char *pButtonId : pTopBarButtonIds)
+    OpenYAMM::Game::UiLayoutManager manager;
+    REQUIRE(manager.loadLayoutText("gameplay.yml", loadLayoutSource("assets_dev/engine/ui/gameplay/gameplay.yml")));
+    for (const char *id : {"OutdoorGoldBar", "OutdoorOptionsBar"})
     {
-        CHECK_EQ(std::count(layoutIds.begin(), layoutIds.end(), pButtonId), 1);
-        const std::vector<std::string>::const_iterator buttonIterator =
-            std::find(layoutIds.begin(), layoutIds.end(), pButtonId);
-        REQUIRE(buttonIterator != layoutIds.end());
-        CHECK(goldBarIterator < buttonIterator);
+        const auto *bar = manager.findElement(id);
+        REQUIRE(bar != nullptr);
+        CHECK(bar->parentId == "OutdoorTopBar");
+    }
+    for (const char *id : {"OutdoorButtonRest", "OutdoorButtonBooks", "OutdoorButtonQuickReference", "OutdoorButtonOptions"})
+    {
+        const auto *button = manager.findElement(id);
+        REQUIRE(button != nullptr);
+        CHECK(button->parentId == "OutdoorOptionsBar");
+        CHECK(button->interactive);
+    }
+    const auto *portrait = manager.findElement("OutdoorFollowerPortrait_1");
+    REQUIRE(portrait != nullptr);
+    CHECK(portrait->parentId == "OutdoorFollowerPanel");
+    const auto *followerPanel = manager.findElement("OutdoorFollowerPanel");
+    REQUIRE(followerPanel != nullptr);
+    CHECK(followerPanel->visible); // Open/closed state is controlled by the live HUD classification.
+    const auto *followerToggle = manager.findElement("OutdoorFollowerToggle");
+    REQUIRE(followerToggle != nullptr);
+    CHECK(followerToggle->interactive);
+    CHECK_FALSE(followerToggle->selectedAsset.empty());
+    CHECK(manager.findElement("ObsidianFollowersLabel") == nullptr);
+    CHECK(manager.findElement("ObsidianFollowersPlate") == nullptr);
+    const auto *clock = manager.findElement("ObsidianMinimapClock");
+    REQUIRE(clock != nullptr);
+    CHECK(clock->parentId == "OutdoorMinimapFrame");
+    for (const char *id : {"OutdoorFlyBuffIcon", "OutdoorWaterWalkBuffIcon"})
+    {
+        const auto *movement = manager.findElement(id);
+        REQUIRE(movement != nullptr);
+        CHECK(movement->parentId.empty());
+        CHECK_FALSE(movement->primaryAsset.empty());
+    }
+    for (const char *id : {"OutdoorFollowerScrollUp", "OutdoorFollowerScrollDown"})
+    {
+        const auto *scroll = manager.findElement(id);
+        REQUIRE(scroll != nullptr);
+        CHECK(scroll->interactive);
+        CHECK_FALSE(scroll->disabledAsset.empty());
+        CHECK(scroll->primaryAsset != scroll->disabledAsset);
+    }
+    const auto ids = manager.sortedLayoutIdsForScreen("OutdoorHud");
+    CHECK(std::find(ids.begin(), ids.end(), "OutdoorFollowerPanel")
+        < std::find(ids.begin(), ids.end(), "OutdoorFollowerPortrait_1"));
+    CHECK(manager.findElement("OutdoorStandardBasebar") == nullptr);
+}
 
-        const OpenYAMM::Game::UiLayoutManager::LayoutElement *pButton = layoutManager.findElement(pButtonId);
-        REQUIRE(pButton != nullptr);
-        CHECK_EQ(pButton->parentId, "OutdoorGoldBar");
+TEST_CASE("Obsidian layouts retain inventory geometry and distinct selected and disabled button assets")
+{
+    OpenYAMM::Game::UiLayoutManager manager;
+    REQUIRE(manager.loadLayoutText("character.yml", loadLayoutSource("assets_dev/engine/ui/gameplay/character.yml")));
+    const auto *grid = manager.findElement("CharacterInventoryGrid");
+    REQUIRE(grid != nullptr);
+    CHECK(grid->width == 14 * 32);
+    CHECK(grid->height == 9 * 32);
+    CHECK(grid->gapX == 7);
+    CHECK(grid->gapY == 8);
+    REQUIRE(manager.loadLayoutText("journal.yml", loadLayoutSource("assets_dev/engine/ui/gameplay/journal.yml")));
+    const auto *button = manager.findElement("JournalNextPageButton");
+    REQUIRE(button != nullptr);
+    CHECK(button->selectedAsset == "obsidian_journal_page_selected");
+    CHECK(button->disabledAsset == "obsidian_journal_page_disabled");
+    CHECK(button->selectedAsset != button->pressedAsset);
+    const auto *map = manager.findElement("JournalMapViewport");
+    REQUIRE(map != nullptr);
+    CHECK(map->width == 300);
+    CHECK(map->height == 300);
+    CHECK(map->gapX == 131);
+    CHECK(map->gapY == 101);
+}
+
+TEST_CASE("Obsidian split arcs and indicators stay inside the bottom anchored party frame")
+{
+    using OpenYAMM::Game::UiLayoutManager;
+    UiLayoutManager manager;
+    REQUIRE(manager.loadLayoutText("gameplay.yml", loadLayoutSource("assets_dev/engine/ui/gameplay/gameplay.yml")));
+    const auto *base = manager.findElement("OutdoorGameplayBasebar");
+    REQUIRE(base != nullptr);
+    CHECK(base->anchor == UiLayoutManager::LayoutAnchor::BottomCenter);
+    CHECK(base->anchorSpace == UiLayoutManager::LayoutAnchorSpace::Screen);
+    CHECK(base->offsetY == 0);
+    const float border = 8.533333f * 0.75f;
+    const float corner = 30.933333f * 0.75f;
+    for (int count = 1; count <= 5; ++count)
+    {
+        const float width = base->width - (5 - count) * 80;
+        for (int i = 1; i <= count; ++i)
+        {
+            const std::string id = "ObsidianPc" + std::to_string(i);
+            const auto *slot = manager.findElement(id);
+            REQUIRE(slot != nullptr);
+            for (const char *suffix : {"Face", "Rim", "Selection", "Health", "Mana", "Readiness", "PersonalBuffs"})
+            {
+                const auto *element = manager.findElement(id + suffix);
+                REQUIRE(element != nullptr);
+                float x = slot->gapX + element->gapX;
+                float y = slot->gapY + element->gapY;
+                float w = element->width;
+                float h = element->height;
+                if (element->meterArc)
+                {
+                    const float stroke = element->meterArc->strokeWidth + 1.7f;
+                    x -= stroke * 0.5f;
+                    y -= stroke * 0.5f;
+                    w += stroke;
+                    h += stroke;
+                }
+                if (std::string(suffix) == "Readiness")
+                {
+                    // Include the larger aggro image, not just its layout/hit rectangle.
+                    const float unit = element->width / 22;
+                    x -= 8 * unit;
+                    y -= 8 * unit;
+                    w = 38 * unit;
+                    h = 41 * unit;
+                }
+                CAPTURE(count);
+                CAPTURE(id);
+                CAPTURE(suffix);
+                CHECK(x >= border);
+                CHECK(y >= border);
+                CHECK(x + w <= width - border);
+                CHECK(y + h <= base->height - border);
+                CHECK(((y >= corner && y + h <= base->height - corner)
+                    || (x >= corner && x + w <= width - corner)));
+            }
+            const auto *health = manager.findElement(id + "Health");
+            const auto *mana = manager.findElement(id + "Mana");
+            REQUIRE(health->meterArc);
+            REQUIRE(mana->meterArc);
+            CHECK(health->meterArc->sweepDegrees > 0);
+            CHECK(mana->meterArc->sweepDegrees < 0);
+        }
+    }
+    CHECK(manager.findElement("ObsidianOverlayPc1Health")->meterArc);
+    CHECK(manager.findElement("ObsidianOverlayPc1Mana")->meterArc);
+}
+
+TEST_CASE("Obsidian layout rejects invalid arc geometry")
+{
+    const std::string prefix = "screen: OutdoorHud\nelements:\n- id: Arc\n  anchor: top_left\n"
+        "  width: 60\n  height: 80\n  meter_arc: ";
+    for (const char *arc : {"broken", "{sweep_degrees: 0, stroke_width: 4}",
+        "{sweep_degrees: 361, stroke_width: 4}", "{sweep_degrees: 160, stroke_width: -1}",
+        "{sweep_degrees: 160, stroke_width: 60}", "{start_degrees: .nan, sweep_degrees: 160, stroke_width: 4}"})
+    {
+        OpenYAMM::Game::UiLayoutManager manager;
+        CHECK_FALSE(manager.loadLayoutText("invalid.yml", prefix + arc));
     }
 }
 

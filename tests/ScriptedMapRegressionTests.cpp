@@ -7689,6 +7689,69 @@ TEST_CASE("mm6 castle alamos password plate keeps pressure trigger metadata")
     CHECK_GT(passwordPlateCount, 0u);
 }
 
+TEST_CASE("mm6 ironfist sword removal updates its decoration and restores from quest progress")
+{
+    const OpenYAMM::Tests::RegressionMapLoader &mapLoader = requireRegressionMapLoader();
+    const OpenYAMM::Game::MapAssetInfo *pLoadedMap = loadCachedOutdoorMapWithCompanionOptions(
+        mapLoader.assetFileSystem,
+        mapLoader.gameDataLoader,
+        "outd3.odm",
+        OpenYAMM::Game::MapLoadPurpose::HeadlessGameplay,
+        OpenYAMM::Game::MapCompanionLoadOptions{
+            .allowSceneYml = true,
+            .allowLegacyCompanion = true,
+        });
+
+    REQUIRE(pLoadedMap != nullptr);
+    REQUIRE(pLoadedMap->outdoorMapData.has_value());
+    REQUIRE_GT(pLoadedMap->outdoorMapData->entities.size(), 232u);
+    const OpenYAMM::Game::OutdoorEntity &swordEntity = pLoadedMap->outdoorMapData->entities[230];
+    CHECK_EQ(swordEntity.name, "swrdstn");
+    CHECK_EQ(swordEntity.eventIdSecondary, 225u);
+    const uint32_t swordKey = swordEntity.spriteOverrideKey(230);
+    const uint32_t otherRockKey = pLoadedMap->outdoorMapData->entities[232].spriteOverrideKey(232);
+    REQUIRE_NE(swordKey, otherRockKey);
+
+    std::string error;
+    const std::optional<OpenYAMM::Game::ScriptedEventProgram> localEventProgram =
+        loadMm6MapOverlayProgram(OPENYAMM_SOURCE_DIR, "outd3", "outd3_mmmerge", error);
+    REQUIRE_MESSAGE(localEventProgram.has_value(), error.c_str());
+    OpenYAMM::Game::EventRuntime eventRuntime = {};
+    OpenYAMM::Game::Party party = makeScriptedRegressionParty();
+    OpenYAMM::Game::EventRuntimeState weakState = {};
+    REQUIRE(eventRuntime.executeEventById(localEventProgram, std::nullopt, 225, weakState, &party));
+    CHECK_FALSE(party.hasQuestBit(1327));
+    CHECK(weakState.grantedItems.empty());
+    CHECK(weakState.spriteOverrides.empty());
+
+    OpenYAMM::Game::EventRuntimeState freshLoadState = {};
+    REQUIRE(eventRuntime.buildOnLoadState(localEventProgram, std::nullopt, std::nullopt, freshLoadState, &party));
+    CHECK_FALSE(freshLoadState.spriteOverrides.contains(swordKey));
+
+    REQUIRE(party.member(0) != nullptr);
+    party.member(0)->might = 40;
+    OpenYAMM::Game::EventRuntimeState removalState = {};
+    REQUIRE(eventRuntime.executeEventById(localEventProgram, std::nullopt, 225, removalState, &party));
+    CHECK(party.hasQuestBit(1327));
+    REQUIRE_EQ(removalState.grantedItems.size(), 1u);
+    CHECK_EQ(removalState.grantedItems.front().objectDescriptionId, 1609u);
+    REQUIRE(removalState.spriteOverrides.contains(swordKey));
+    CHECK_EQ(removalState.spriteOverrides.at(swordKey).textureName, "swrdstx");
+    CHECK_FALSE(removalState.spriteOverrides.at(swordKey).hidden);
+    CHECK_FALSE(removalState.spriteOverrides.contains(otherRockKey));
+
+    OpenYAMM::Game::EventRuntimeState repeatedState = {};
+    REQUIRE(eventRuntime.executeEventById(localEventProgram, std::nullopt, 225, repeatedState, &party));
+    CHECK(repeatedState.grantedItems.empty());
+
+    OpenYAMM::Game::EventRuntimeState completedLoadState = {};
+    REQUIRE(eventRuntime.buildOnLoadState(localEventProgram, std::nullopt, std::nullopt, completedLoadState, &party));
+    REQUIRE(completedLoadState.spriteOverrides.contains(swordKey));
+    CHECK_EQ(completedLoadState.spriteOverrides.at(swordKey).textureName, "swrdstx");
+    CHECK_FALSE(completedLoadState.spriteOverrides.contains(otherRockKey));
+    CHECK(completedLoadState.grantedItems.empty());
+}
+
 TEST_CASE("mm6 castle alamos beta memory crystal sprite override targets map sprite index")
 {
     const OpenYAMM::Tests::RegressionMapLoader &mapLoader = requireRegressionMapLoader();
@@ -8999,6 +9062,32 @@ TEST_CASE("outdoor water bmodel faces load terrain-owned animation frames")
     }
 }
 
+TEST_CASE("MM8 lava retains liquid animation without reflective water shading")
+{
+    const OpenYAMM::Tests::RegressionMapLoader &mapLoader = requireRegressionMapLoader();
+    const OpenYAMM::Game::MapAssetInfo *pLoadedMap = loadCachedOutdoorMapWithCompanionOptions(
+        mapLoader.assetFileSystem, mapLoader.gameDataLoader, "elemf.odm",
+        OpenYAMM::Game::MapLoadPurpose::RenderSurfaces,
+        OpenYAMM::Game::MapCompanionLoadOptions{.allowSceneYml = true, .allowLegacyCompanion = true});
+    REQUIRE(pLoadedMap != nullptr);
+    REQUIRE(pLoadedMap->outdoorTerrainTextureAtlas.has_value());
+    const OpenYAMM::Game::OutdoorTerrainTextureAtlas &atlas = *pLoadedMap->outdoorTerrainTextureAtlas;
+    size_t lavaTiles = 0;
+    for (size_t tile = 0; tile < atlas.tileRegions.size(); ++tile)
+    {
+        if (atlas.tileTextureNames[tile] != "lavtyl")
+        {
+            continue;
+        }
+        ++lavaTiles;
+        CHECK(atlas.tileRegions[tile].isValid);
+        CHECK(atlas.tileRegions[tile].isWater);
+        CHECK_FALSE(atlas.tileRegions[tile].isWaterSurface);
+        CHECK(atlas.waterCoverageMasks[tile].empty());
+    }
+    CHECK(lavaTiles > 0);
+}
+
 TEST_CASE("outdoor terrain water transition tiles do not use full-tile shader warp")
 {
     const OpenYAMM::Tests::RegressionMapLoader &mapLoader = requireRegressionMapLoader();
@@ -9015,6 +9104,8 @@ TEST_CASE("outdoor terrain water transition tiles do not use full-tile shader wa
         {"7out01.odm", 126, 138},
         {"oute3.odm", 126, 138},
     }};
+    std::array<uint32_t, 3> waterColors = {};
+    size_t colorIndex = 0;
 
     for (const WaterTransitionMapCase &waterMapCase : waterMapCases)
     {
@@ -9040,15 +9131,23 @@ TEST_CASE("outdoor terrain water transition tiles do not use full-tile shader wa
 
         REQUIRE(fullWaterRegion.isValid);
         CHECK(fullWaterRegion.isWater);
+        CHECK(fullWaterRegion.isWaterSurface);
         CHECK_FALSE(fullWaterRegion.isTransitionOverlay);
 
         REQUIRE(cachedFullWaterRegion.isValid);
         CHECK(cachedFullWaterRegion.isWater);
+        CHECK(cachedFullWaterRegion.isWaterSurface);
         CHECK_FALSE(cachedFullWaterRegion.isTransitionOverlay);
 
         REQUIRE(transitionWaterRegion.isValid);
         CHECK(transitionWaterRegion.isWater);
+        CHECK(transitionWaterRegion.isWaterSurface);
+        CHECK(atlas.waterCoverageMasks[waterMapCase.transitionWaterTileId].size() == 128 * 128);
         CHECK(transitionWaterRegion.isTransitionOverlay);
+        CHECK((fullWaterRegion.waterColorAbgr & 0xff000000u) == 0xff000000u);
+        CHECK(cachedFullWaterRegion.waterColorAbgr == fullWaterRegion.waterColorAbgr);
+        CHECK(transitionWaterRegion.waterColorAbgr == fullWaterRegion.waterColorAbgr);
+        waterColors[colorIndex++] = fullWaterRegion.waterColorAbgr;
 
         const auto findAnimatedTileSource =
             [&](const OpenYAMM::Game::OutdoorTerrainAtlasRegion &region)
@@ -9082,6 +9181,9 @@ TEST_CASE("outdoor terrain water transition tiles do not use full-tile shader wa
         CHECK(pCachedFullWaterSource->animation.frames.size() == 14);
         CHECK(pCachedFullWaterSource->animation.animationLengthTicks == 210);
     }
+    CHECK(waterColors[0] != waterColors[1]);
+    CHECK(waterColors[0] != waterColors[2]);
+    CHECK(waterColors[1] != waterColors[2]);
 }
 
 TEST_CASE("d06 indoor actor loader preserves Blackwell Cooper guaranteed key drop")

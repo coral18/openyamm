@@ -110,7 +110,7 @@ std::optional<ImagePixelsBgra> decodePngPixelsBgra(
         &allocator,
         imageBytes.data(),
         static_cast<uint32_t>(imageBytes.size()),
-        bimg::TextureFormat::BGRA8,
+        bimg::TextureFormat::RGBA8,
         &error);
 
     if (pImage == nullptr)
@@ -141,6 +141,7 @@ std::optional<ImagePixelsBgra> decodePngPixelsBgra(
 
             for (size_t pixelOffset = 0; pixelOffset < pixels.pixels.size(); pixelOffset += 4)
             {
+                std::swap(pixels.pixels[pixelOffset], pixels.pixels[pixelOffset + 2]);
                 const uint8_t blue = pixels.pixels[pixelOffset + 0];
                 const uint8_t green = pixels.pixels[pixelOffset + 1];
                 const uint8_t red = pixels.pixels[pixelOffset + 2];
@@ -509,6 +510,87 @@ std::optional<std::string> findImageAssetPath(
 
     assetPathByKey[cacheKey] = fallbackPath;
     return fallbackPath;
+}
+
+std::optional<ImageDimensions> readImageDimensions(std::span<const uint8_t> header)
+{
+    const auto little = [&header](size_t offset, size_t bytes) -> uint32_t
+    {
+        uint32_t value = 0;
+        for (size_t i = 0; i < bytes; ++i)
+        {
+            value |= uint32_t(header[offset + i]) << (8 * i);
+        }
+        return value;
+    };
+    const auto big = [&header](size_t offset) -> uint32_t
+    {
+        return uint32_t(header[offset]) << 24 | uint32_t(header[offset + 1]) << 16
+            | uint32_t(header[offset + 2]) << 8 | header[offset + 3];
+    };
+    int64_t width = 0;
+    int64_t height = 0;
+    constexpr std::array<uint8_t, 8> pngSignature = {137, 80, 78, 71, 13, 10, 26, 10};
+    if (header.size() >= 33 && std::equal(pngSignature.begin(), pngSignature.end(), header.begin()))
+    {
+        if (big(8) != 13 || big(12) != 0x49484452 || header[26] != 0 || header[27] != 0 || header[28] > 1)
+        {
+            return std::nullopt;
+        }
+        const int depth = header[24];
+        const int color = header[25];
+        const bool validDepth = (color == 0 && (depth == 1 || depth == 2 || depth == 4 || depth == 8 || depth == 16))
+            || (color == 3 && (depth == 1 || depth == 2 || depth == 4 || depth == 8))
+            || ((color == 2 || color == 4 || color == 6) && (depth == 8 || depth == 16));
+        uint32_t crc = 0xffffffffu;
+        for (size_t i = 12; i < 29; ++i)
+        {
+            crc ^= header[i];
+            for (int bit = 0; bit < 8; ++bit)
+            {
+                crc = (crc >> 1) ^ (0xedb88320u & (0u - (crc & 1u)));
+            }
+        }
+        if (!validDepth || (crc ^ 0xffffffffu) != big(29))
+        {
+            return std::nullopt;
+        }
+        width = big(16);
+        height = big(20);
+    }
+    else if (header.size() >= 26 && header[0] == 'B' && header[1] == 'M' && little(14, 4) >= 40)
+    {
+        width = int32_t(little(18, 4));
+        height = int32_t(little(22, 4));
+        height = height < 0 ? -height : height;
+    }
+    else if (header.size() >= 128 && header[0] == 0x0a && header[2] == 1 && header[3] == 8
+        && (header[65] == 1 || header[65] == 3))
+    {
+        width = int64_t(little(8, 2)) - little(4, 2) + 1;
+        height = int64_t(little(10, 2)) - little(6, 2) + 1;
+        if (width > little(66, 2))
+        {
+            return std::nullopt;
+        }
+    }
+    if (width <= 0 || height <= 0 || width > INT32_MAX || height > INT32_MAX)
+    {
+        return std::nullopt;
+    }
+    return ImageDimensions{int(width), int(height)};
+}
+
+std::optional<ImageDimensions> loadImageDimensions(const AssetFileSystem &assets, const std::string &path)
+{
+    const std::unique_ptr<AssetReadStream> pStream = assets.openReadStream(path);
+    if (!pStream)
+    {
+        return std::nullopt;
+    }
+    std::array<uint8_t, 128> header = {};
+    const int64_t count = pStream->read(header.data(), header.size());
+    return count > 0 ? readImageDimensions(std::span(header.data(), size_t(count))) : std::nullopt;
 }
 
 std::optional<ImagePixelsBgra> decodeImagePixelsBgra(

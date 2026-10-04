@@ -1,0 +1,11 @@
+schema: openyamm.effectSprite.v2
+id: mm9:effect-sprite/weapons/blurredbluestar
+source: sprites/weapons/blurredbluestar.spr
+framesPerSecond: 15
+logicalWidth: 32
+logicalHeight: 32
+keyed: false
+translucent: false
+colorKey: 0
+frames:
+- mm9:effect-texture/sparks/blurredbluestar

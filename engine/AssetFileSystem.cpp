@@ -12,6 +12,8 @@
 #include <fstream>
 #include <iostream>
 #include <memory>
+#include <mutex>
+#include <sstream>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -138,7 +140,7 @@ struct MergedRootFile
     std::filesystem::path filePath;
 };
 
-constexpr std::array<VirtualPathAlias, 34> PackagePathAliases = {
+constexpr std::array<VirtualPathAlias, 35> PackagePathAliases = {
     VirtualPathAlias{"engine/audio", "audio"},
     VirtualPathAlias{"engine/data_tables/english", "data_tables/english"},
     VirtualPathAlias{"engine/data_tables", "data_tables"},
@@ -148,6 +150,7 @@ constexpr std::array<VirtualPathAlias, 34> PackagePathAliases = {
     VirtualPathAlias{"engine/fonts", "fonts"},
     VirtualPathAlias{"engine/icons", "icons"},
     VirtualPathAlias{"engine/music", "music"},
+    VirtualPathAlias{"engine/models", "models"},
     VirtualPathAlias{"engine/rendering", "rendering"},
     VirtualPathAlias{"engine/scripts", "scripts"},
     VirtualPathAlias{"engine/sprites", "sprites"},
@@ -395,60 +398,6 @@ struct PhysicsFsListDeleter
     }
 };
 
-std::optional<std::string> findCaseInsensitiveVirtualPath(const std::string &virtualPath)
-{
-    const std::filesystem::path path(virtualPath);
-    const std::string parentPath = path.parent_path().generic_string();
-    const std::string requestedFileName = toLowerAscii(path.filename().string());
-
-    if (requestedFileName.empty())
-    {
-        return std::nullopt;
-    }
-
-    const std::string directoryPath = parentPath.empty() ? "." : parentPath;
-    char **pEnumeratedEntries = PHYSFS_enumerateFiles(directoryPath.c_str());
-    std::unique_ptr<char *, PhysicsFsListDeleter> pEntryList(pEnumeratedEntries);
-
-    if (pEnumeratedEntries == nullptr)
-    {
-        return std::nullopt;
-    }
-
-    for (char **pEntry = pEnumeratedEntries; *pEntry != nullptr; ++pEntry)
-    {
-        if (toLowerAscii(*pEntry) != requestedFileName)
-        {
-            continue;
-        }
-
-        return parentPath.empty()
-            ? std::string(*pEntry)
-            : parentPath + "/" + *pEntry;
-    }
-
-    return std::nullopt;
-}
-
-PHYSFS_File *openReadExactOrCaseInsensitive(const std::string &virtualPath)
-{
-    PHYSFS_File *pFile = PHYSFS_openRead(virtualPath.c_str());
-
-    if (pFile != nullptr)
-    {
-        return pFile;
-    }
-
-    const std::optional<std::string> resolvedPath = findCaseInsensitiveVirtualPath(virtualPath);
-
-    if (!resolvedPath)
-    {
-        return nullptr;
-    }
-
-    return PHYSFS_openRead(resolvedPath->c_str());
-}
-
 bool initializePhysicsFs(const std::filesystem::path &basePath)
 {
 #if defined(__ANDROID__)
@@ -469,12 +418,99 @@ bool initializePhysicsFs(const std::filesystem::path &basePath)
 }
 }
 
+struct AssetFileSystem::LookupCache
+{
+    struct Name
+    {
+        std::string spelling;
+        bool ambiguous = false;
+    };
+    std::mutex mutex;
+    std::unordered_map<std::string, std::unordered_map<std::string, Name>> directories;
+    std::unordered_map<std::string, std::optional<std::string>> files;
+};
+
+std::optional<std::string> AssetFileSystem::findCaseInsensitiveVirtualPath(const std::string &virtualPath) const
+{
+    const std::filesystem::path path(virtualPath);
+    const std::string parent = path.parent_path().generic_string();
+    const std::string name = toLowerAscii(path.filename().string());
+    if (name.empty())
+    {
+        return std::nullopt;
+    }
+    const std::string directory = parent.empty() ? "." : parent;
+    std::lock_guard lock(m_pLookupCache->mutex);
+    auto [entry, inserted] = m_pLookupCache->directories.try_emplace(directory);
+    if (inserted)
+    {
+        char **pEntries = PHYSFS_enumerateFiles(directory.c_str());
+        std::unique_ptr<char *, PhysicsFsListDeleter> pList(pEntries);
+        if (pEntries != nullptr)
+        {
+            for (char **pEntry = pEntries; *pEntry != nullptr; ++pEntry)
+            {
+                auto [file, unique] = entry->second.try_emplace(toLowerAscii(*pEntry), LookupCache::Name{*pEntry});
+                if (!unique && file->second.spelling != *pEntry)
+                {
+                    const auto origin = [&parent](const std::string &spelling)
+                    {
+                        const std::string path = parent.empty() ? spelling : parent + "/" + spelling;
+                        const char *pRoot = PHYSFS_getRealDir(path.c_str());
+                        return pRoot != nullptr ? std::string(pRoot) : std::string();
+                    };
+                    const std::string selectedRoot = origin(file->second.spelling);
+                    const std::string candidateRoot = origin(*pEntry);
+                    if (selectedRoot == candidateRoot)
+                    {
+                        std::cerr << "Ambiguous asset filename in " << selectedRoot << "/" << directory
+                                  << ": " << *pEntry << '\n';
+                        file->second.ambiguous = true;
+                    }
+                    else
+                    {
+                        const auto priority = [this](const std::string &root)
+                        {
+                            return std::find_if(m_searchMounts.begin(), m_searchMounts.end(),
+                                [&root](const SearchMount &mount) { return mount.root.string() == root; });
+                        };
+                        if (priority(candidateRoot) < priority(selectedRoot))
+                        {
+                            file->second = {*pEntry, false};
+                        }
+                    }
+                }
+            }
+        }
+    }
+    const auto file = entry->second.find(name);
+    if (file == entry->second.end() || file->second.ambiguous)
+    {
+        return std::nullopt;
+    }
+    return parent.empty() ? file->second.spelling : parent + "/" + file->second.spelling;
+}
+
+void AssetFileSystem::refreshLookupCache() const
+{
+    std::lock_guard lock(m_pLookupCache->mutex);
+    m_pLookupCache->directories.clear();
+    m_pLookupCache->files.clear();
+    ++m_contentGeneration;
+}
+
+uint64_t AssetFileSystem::contentGeneration() const
+{
+    return m_contentGeneration;
+}
+
 AssetFileSystem::AssetFileSystem()
     : m_isInitialized(false)
     , m_activeWorldId(DefaultActiveWorldId)
     , m_assetScaleTier(AssetScaleTier::X1)
     , m_assetScaleProfile(createUniformAssetScaleProfile(AssetScaleTier::X1))
     , m_androidApkAssetRoot(false)
+    , m_pLookupCache(std::make_unique<LookupCache>())
 {
 }
 
@@ -576,6 +612,12 @@ bool AssetFileSystem::initialize(
             shutdown();
             return false;
         }
+    }
+
+    if (!loadIconPackagePolicy())
+    {
+        shutdown();
+        return false;
     }
 
     m_developmentRoot = assetRoot;
@@ -798,6 +840,7 @@ bool AssetFileSystem::mountAndroidApkAssetRoot(const std::string &activeWorldId)
         return false;
     }
 
+    refreshLookupCache();
     SearchMount searchMount;
     searchMount.root = pApkPath;
     searchMount.mountPoint = "";
@@ -836,7 +879,8 @@ bool AssetFileSystem::mountPackagedAssetRoot(
         return false;
     }
 
-    if (!mountPackageArchiveIfPresent(assetRoot / EngineAssetPackageName, true))
+    const std::filesystem::path engineArchive = assetRoot / EngineAssetPackageName;
+    if (std::filesystem::exists(engineArchive) && !mountSearchRootAt(engineArchive, "/engine", true))
     {
         return false;
     }
@@ -931,6 +975,7 @@ bool AssetFileSystem::mountSearchRootAt(
         m_searchMounts.insert(m_searchMounts.begin(), searchMount);
     }
 
+    refreshLookupCache();
     return true;
 }
 
@@ -1148,20 +1193,47 @@ std::optional<std::string> AssetFileSystem::resolveExistingFilePath(const std::s
     {
         return std::nullopt;
     }
+    {
+        std::lock_guard lock(m_pLookupCache->mutex);
+        const auto file = m_pLookupCache->files.find(virtualPath);
+        if (file != m_pLookupCache->files.end())
+        {
+            return file->second;
+        }
+    }
+    std::optional<std::string> result;
     for (const std::string &candidate : resolveVirtualPathCandidates(virtualPath))
     {
         PHYSFS_Stat stat = {};
         if (PHYSFS_stat(candidate.c_str(), &stat) && stat.filetype == PHYSFS_FILETYPE_REGULAR)
         {
-            return candidate;
+            result = candidate;
+            break;
         }
         const std::optional<std::string> actualPath = findCaseInsensitiveVirtualPath(candidate);
         if (actualPath && PHYSFS_stat(actualPath->c_str(), &stat) && stat.filetype == PHYSFS_FILETYPE_REGULAR)
         {
-            return actualPath;
+            result = actualPath;
+            break;
         }
     }
-    return std::nullopt;
+    std::lock_guard lock(m_pLookupCache->mutex);
+    m_pLookupCache->files.emplace(virtualPath, result);
+    return result;
+}
+
+std::optional<AssetFileInfo> AssetFileSystem::fileInfo(const std::string &virtualPath) const
+{
+    const std::optional<std::string> path = resolveExistingFilePath(virtualPath);
+    PHYSFS_Stat stat = {};
+    if (!path || !PHYSFS_stat(path->c_str(), &stat) || stat.filesize < 0)
+    {
+        return std::nullopt;
+    }
+    const char *pRoot = PHYSFS_getRealDir(path->c_str());
+    const auto mount = std::find_if(m_searchMounts.begin(), m_searchMounts.end(),
+        [pRoot](const SearchMount &entry) { return pRoot != nullptr && entry.root.string() == pRoot; });
+    return AssetFileInfo{uint64_t(stat.filesize), stat.modtime, mount != m_searchMounts.end() && mount->archive};
 }
 
 std::vector<std::string> AssetFileSystem::enumerate(const std::string &virtualPath) const
@@ -1213,29 +1285,20 @@ std::optional<std::string> AssetFileSystem::readTextFile(const std::string &virt
 
 std::unique_ptr<AssetReadStream> AssetFileSystem::openReadStream(const std::string &virtualPath) const
 {
-    if (!isInitialized())
+    const std::optional<std::string> resolved = resolveExistingFilePath(virtualPath);
+    if (!resolved)
     {
         return nullptr;
     }
-
-    const std::vector<std::string> resolvedPaths = resolveVirtualPathCandidates(virtualPath);
-
-    for (const std::string &resolvedPath : resolvedPaths)
+    PHYSFS_File *pFile = PHYSFS_openRead(resolved->c_str());
+    if (pFile == nullptr)
     {
-        PHYSFS_File *pFile = openReadExactOrCaseInsensitive(resolvedPath);
-
-        if (pFile == nullptr)
-        {
-            continue;
-        }
-
-        std::unique_ptr<AssetReadStream::Impl> pImpl = std::make_unique<AssetReadStream::Impl>();
-        pImpl->pFile = pFile;
-        pImpl->virtualPath = resolvedPath;
-        return std::unique_ptr<AssetReadStream>(new AssetReadStream(std::move(pImpl)));
+        return nullptr;
     }
-
-    return nullptr;
+    std::unique_ptr<AssetReadStream::Impl> pImpl = std::make_unique<AssetReadStream::Impl>();
+    pImpl->pFile = pFile;
+    pImpl->virtualPath = *resolved;
+    return std::unique_ptr<AssetReadStream>(new AssetReadStream(std::move(pImpl)));
 }
 
 std::optional<std::vector<uint8_t>> AssetFileSystem::readBinaryFile(const std::string &virtualPath) const
@@ -1383,7 +1446,24 @@ AssetScaleTier AssetFileSystem::getAssetScaleTier(AssetScaleCategory assetScaleC
 
 AssetScaleTier AssetFileSystem::getAssetScaleTierForVirtualPath(const std::string &virtualPath) const
 {
-    return getAssetScaleTier(assetScaleCategoryForVirtualPath(normalizeVirtualPath(virtualPath)));
+    const std::string normalized = normalizeVirtualPath(virtualPath);
+    const AssetScaleCategory category = assetScaleCategoryForVirtualPath(normalized);
+    if (category == AssetScaleCategory::Icons && !m_iconPackages.empty())
+    {
+        std::string package = "engine";
+        if (normalized.starts_with("worlds/"))
+        {
+            package = normalized.substr(0, normalized.find('/', 7));
+        }
+        for (const auto &[root, tier] : m_iconPackages)
+        {
+            if (root == package)
+            {
+                return tier;
+            }
+        }
+    }
+    return getAssetScaleTier(category);
 }
 
 const AssetScaleProfile &AssetFileSystem::getAssetScaleProfile() const
@@ -1393,6 +1473,7 @@ const AssetScaleProfile &AssetFileSystem::getAssetScaleProfile() const
 
 void AssetFileSystem::shutdown()
 {
+    refreshLookupCache();
     if (!isInitialized())
     {
         return;
@@ -1406,6 +1487,7 @@ void AssetFileSystem::shutdown()
     m_activeWorldId = DefaultActiveWorldId;
     m_assetScaleTier = AssetScaleTier::X1;
     m_assetScaleProfile = createUniformAssetScaleProfile(AssetScaleTier::X1);
+    m_iconPackages.clear();
     m_searchMounts.clear();
     m_androidApkAssetRoot = false;
 }
@@ -1511,6 +1593,56 @@ bool AssetFileSystem::validateTierDirectoriesInMountedPackages() const
     return true;
 }
 
+bool AssetFileSystem::loadIconPackagePolicy()
+{
+    const std::optional<std::string> text = readTextFile("engine/icon_packages.txt");
+    if (!text)
+    {
+        return true;
+    }
+    std::istringstream stream(*text);
+    std::string line;
+    std::unordered_set<std::string> packages;
+    while (std::getline(stream, line))
+    {
+        std::istringstream fields(line);
+        std::string package;
+        std::string tierName;
+        std::string extra;
+        if (!(fields >> package) || package.starts_with("#"))
+        {
+            continue;
+        }
+        fields >> tierName;
+        const std::optional<AssetScaleTier> tier = parseAssetScaleTier(tierName);
+        const bool validWorld = package.starts_with("worlds/") && package.size() > 7
+            && package.find('/', 7) == std::string::npos && package.find("..") == std::string::npos;
+        if ((!validWorld && package != "engine") || !tier || (fields >> extra)
+            || !packages.insert(package).second)
+        {
+            std::cerr << "Invalid icon package policy: " << line << '\n';
+            return false;
+        }
+        m_iconPackages.emplace_back(package, *tier);
+    }
+    if (!packages.contains("engine"))
+    {
+        std::cerr << "Icon package policy must declare the engine root\n";
+        return false;
+    }
+    // Match ordinary package precedence: active world, base, then the other declared worlds.
+    std::stable_sort(m_iconPackages.begin(), m_iconPackages.end(), [this](const auto &left, const auto &right)
+    {
+        const auto priority = [this](const std::string &package)
+        {
+            return package == "worlds/" + m_activeWorldId ? 0 : package == "engine" ? 1 : 2;
+        };
+        return priority(left.first) < priority(right.first);
+    });
+    refreshLookupCache();
+    return true;
+}
+
 std::string AssetFileSystem::resolveVirtualPath(const std::string &virtualPath) const
 {
     const std::vector<std::string> candidates = resolveVirtualPathCandidates(virtualPath);
@@ -1523,6 +1655,50 @@ std::vector<std::string> AssetFileSystem::resolveVirtualPathCandidates(const std
     std::unordered_set<std::string> knownPaths;
     const std::string normalizedPath = normalizeVirtualPath(virtualPath);
     const bool packageQualified = normalizedPath.starts_with("engine/") || normalizedPath.starts_with("worlds/");
+    if (!m_iconPackages.empty())
+    {
+        std::string package;
+        std::string relative = normalizedPath;
+        if (normalizedPath.starts_with("engine/"))
+        {
+            package = "engine";
+            relative = normalizedPath.substr(7);
+        }
+        else if (normalizedPath.starts_with("worlds/"))
+        {
+            const size_t separator = normalizedPath.find('/', 7);
+            if (separator != std::string::npos)
+            {
+                package = normalizedPath.substr(0, separator);
+                relative = normalizedPath.substr(separator + 1);
+            }
+        }
+        if (relative.starts_with("Data/"))
+        {
+            relative = relative.substr(5);
+        }
+        const size_t separator = relative.find('/');
+        const std::string directory = relative.substr(0, separator);
+        if (directory == "icons" || directory == "icons_x2" || directory == "icons_x4")
+        {
+            const std::string suffix = separator == std::string::npos ? "" : relative.substr(separator);
+            for (const auto &[root, tier] : m_iconPackages)
+            {
+                if (!package.empty() && root != package)
+                {
+                    continue;
+                }
+                const std::string candidate = root + "/icons" + assetScaleTierDirectorySuffix(tier) + suffix;
+                if (m_androidApkAssetRoot)
+                {
+                    resolvedPaths.push_back("assets/" + candidate);
+                }
+                resolvedPaths.push_back(candidate);
+            }
+            // No native or other-package fallback for a qualified icon request.
+            return resolvedPaths;
+        }
+    }
     const std::vector<std::string> aliasCandidates = expandPackageAliasCandidates(normalizedPath);
 
     const auto appendCandidate = [&resolvedPaths, &knownPaths](const std::string &candidate)

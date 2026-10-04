@@ -1,4 +1,22 @@
-# bgfx desktop OpenGL uniform cache
+# bgfx GL patches
+
+`bgfx-gles-unpack-row-length.patch` recognizes `GL_UNPACK_ROW_LENGTH` as core functionality in GLES 3.
+Without this check, GLES 3 drivers that omit the redundant `EXT_unpack_subimage` extension use the pixel-row
+copy path even for block-compressed textures. Uneven mip dimensions make that temporary buffer smaller than
+the compressed payload, causing an out-of-bounds read during upload. GLES 3 now uploads the original block
+buffer directly. Desktop GL retains its existing path.
+
+The Android release regression check loads New Sorpigal's cooked atlases, whose mip dimensions include
+254×278 and 127×139, with the emulator's GL pipe checksum enabled:
+
+```sh
+python3 android/test_release_apk.py android/app/build/outputs/apk/release/app-release.apk \
+  --serial emulator-5554 --world mm6 --map oute3.odm --output /tmp/openyamm-gles-upload-test
+```
+
+For local visual checks, start the emulator with `-gpu host` and retain its GL pipe checksum checks.
+
+## Desktop uniform cache
 
 `bgfx-gl-uniform-cache.patch` targets the bgfx revision pinned in `cmake/Dependencies.cmake`:
 `a73c12db8f502022d292cc6fb8872482997b0664`.

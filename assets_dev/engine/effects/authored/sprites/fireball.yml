@@ -1,0 +1,22 @@
+schema: openyamm.effectSprite.v2
+id: openyamm:effect-sprite/fireball
+framesPerSecond: 16
+logicalWidth: 128
+logicalHeight: 128
+frames:
+- openyamm:texture/fx/fireball_00
+- openyamm:texture/fx/fireball_01
+- openyamm:texture/fx/fireball_02
+- openyamm:texture/fx/fireball_03
+- openyamm:texture/fx/fireball_04
+- openyamm:texture/fx/fireball_05
+- openyamm:texture/fx/fireball_06
+- openyamm:texture/fx/fireball_07
+- openyamm:texture/fx/fireball_08
+- openyamm:texture/fx/fireball_09
+- openyamm:texture/fx/fireball_10
+- openyamm:texture/fx/fireball_11
+- openyamm:texture/fx/fireball_12
+- openyamm:texture/fx/fireball_13
+- openyamm:texture/fx/fireball_14
+- openyamm:texture/fx/fireball_15

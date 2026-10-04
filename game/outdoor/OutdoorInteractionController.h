@@ -153,6 +153,10 @@ private:
     static GameplayPartyAttackFrameInput buildPartyAttackFrameInput(
         const OutdoorGameView &view,
         const GameplayWorldPickRequest &pickRequest);
+    static std::optional<GameplayWorldPoint> resolvePartyAttackActorContactPoint(
+        const OutdoorGameView &view,
+        size_t actorIndex,
+        const GameplayPartyAttackFallbackQuery &query);
     static std::optional<size_t> resolveSpellActionHoveredActorIndex(const OutdoorGameView &view);
     static std::optional<size_t> resolveClosestVisibleHostileActorIndex(
         const OutdoorGameView &view,

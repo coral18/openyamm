@@ -84,11 +84,6 @@ float distance3d(const PathPoint &from, const PathPoint &to)
     return std::sqrt(distanceSquared3d(from, to));
 }
 
-float maxWalkDropHeight(const PathObject &object)
-{
-    return std::max(object.stepHeight, std::min(object.radius, object.stepHeight * 2.0f));
-}
-
 bool walkStepDeltaAllowed(float fromZ, float toZ, const PathObject &object)
 {
     const float deltaZ = toZ - fromZ;
@@ -98,7 +93,7 @@ bool walkStepDeltaAllowed(float fromZ, float toZ, const PathObject &object)
         return false;
     }
 
-    if (-deltaZ > maxWalkDropHeight(object) + PlannerEpsilon)
+    if (-deltaZ > object.dropHeight + PlannerEpsilon)
     {
         return false;
     }
@@ -496,10 +491,10 @@ PathPlanResult PathPlanner::plan(const PathMap &map, const PathPlanRequest &requ
                 }
             }
 
-            const NodeKey key = makeNodeKey(candidate, stepSize);
-            const float newCost =
+            NodeKey key = makeNodeKey(candidate, stepSize);
+            float newCost =
                 currentCost + travelCost(currentPoint, candidate, request.object.canFly);
-            const auto found = nodeIndexByKey.find(key);
+            auto found = nodeIndexByKey.find(key);
 
             if (found != nodeIndexByKey.end())
             {
@@ -520,10 +515,27 @@ PathPlanResult PathPlanner::plan(const PathMap &map, const PathPlanRequest &requ
                     return;
                 }
             }
-            else if (!map.traceWalkSegment(currentPoint, candidate, request.object))
+            else
             {
-                ++result.debug.rejectedWalkSegment;
-                return;
+                const PathPoint requestedCandidate = candidate;
+                if (!map.resolveWalkStep(currentPoint, candidate, request.object))
+                {
+                    ++result.debug.rejectedWalkSegment;
+                    return;
+                }
+                if (candidate.x != requestedCandidate.x || candidate.y != requestedCandidate.y)
+                {
+                    candidateFloor = map.floorAt({candidate.x, candidate.y, candidate.z + PlannerEpsilon});
+                    key = makeNodeKey(candidate, stepSize);
+                    newCost = currentCost + travelCost(currentPoint, candidate, false);
+                    found = nodeIndexByKey.find(key);
+                    if (found != nodeIndexByKey.end()
+                        && (nodes[found->second].closed || newCost >= nodes[found->second].cost))
+                    {
+                        ++result.debug.rejectedDuplicate;
+                        return;
+                    }
+                }
             }
 
             if (found != nodeIndexByKey.end())

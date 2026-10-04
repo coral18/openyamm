@@ -1,0 +1,33 @@
+abcVersion: 13
+pieces: 4
+nodes: 10
+animations: 1
+sockets: 0
+exportedLod: 0
+coordinateScale: 2.56
+coordinateTransform: LithTech ABC local axes preserved; scene placement converts Y-up
+  to OpenYAMM Z-up
+exportMode: animation-path
+sourceSha256: 52f5c1fad7e6020fd7dbf2dccdf14271e433050b3156321d2be4e81db9c3ccab
+converterVersion: 3
+warnings: []
+trajectoryValidation:
+  status: passed
+  coordinatePlacement: glTF (x,y,z) -> OpenYAMM (x,z,y)
+  nodeNamesExact: true
+  hierarchyExact: true
+  nodes: 10
+  clips: 1
+  keySamples: 21
+  midpointSamples: 20
+  nodeComparisons: 410
+  positionTolerance: 0.0001
+  rotationMatrixTolerance: 1.0e-05
+  maxOpenyammPositionError: 6.177572151451739e-05
+  maxRotationMatrixError: 0.0
+  clipResults:
+  - name: wormpath
+    keySamples: 21
+    midpointSamples: 20
+    maxOpenyammPositionError: 6.177572151451739e-05
+    maxRotationMatrixError: 0.0

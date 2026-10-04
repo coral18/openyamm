@@ -1,0 +1,7 @@
+# Enemy labels use Alegreya's authored weight 600, with its own spacing.
+file: alegreya_variable.ttf
+metrics: freetype
+weight: 600
+logical_height: 24
+baseline: 18
+encoding: windows-1252

@@ -44,6 +44,7 @@
 #include "game/ui/GameplayDialogueRenderer.h"
 #include "game/ui/GameplayHudCommon.h"
 #include "game/ui/GameplayHudOverlaySupport.h"
+#include "game/ui/GameplayUiSkin.h"
 #include "game/gameplay/GameplayScreenRuntime.h"
 #include "engine/ImageAssetLoader.h"
 #include "engine/TextTable.h"
@@ -76,7 +77,6 @@ namespace OpenYAMM::Game
 {
 namespace
 {
-constexpr float CombatTargetPanelDurationSeconds = 4.0f;
 constexpr uint64_t RightMouseInspectRefreshNanoseconds = 33333333ULL;
 
 uint32_t makeCombatHudColor(uint8_t red, uint8_t green, uint8_t blue, uint8_t alpha)
@@ -87,39 +87,10 @@ uint32_t makeCombatHudColor(uint8_t red, uint8_t green, uint8_t blue, uint8_t al
         | static_cast<uint32_t>(red);
 }
 
-void drawCombatHudRect(
-    GameplayScreenRuntime &screenRuntime,
-    const std::string &textureName,
-    float x,
-    float y,
-    float width,
-    float height,
-    uint32_t colorAbgr)
-{
-    const std::optional<GameplayScreenRuntime::HudTextureHandle> texture =
-        screenRuntime.gameplayUiRuntime().ensureSolidHudTextureLoaded(textureName, colorAbgr);
-
-    if (!texture)
-    {
-        return;
-    }
-
-    screenRuntime.submitHudTexturedQuad(*texture, x, y, width, height);
-}
-
 float combatDamageFontScale(int damage)
 {
     const float damageMagnitude = std::sqrt(static_cast<float>(std::max(1, damage)));
     return 1.55f + std::clamp(damageMagnitude / 22.0f, 0.0f, 0.75f);
-}
-
-float combatDamageTextOriginZ(float actorZ, float actorHeight)
-{
-    constexpr float TorsoHeightFraction = 0.55f;
-    constexpr float MinimumTorsoOffset = 48.0f;
-    constexpr float MaximumEffectiveActorHeight = 256.0f;
-    const float effectiveHeight = std::clamp(actorHeight, 0.0f, MaximumEffectiveActorHeight);
-    return actorZ + std::max(MinimumTorsoOffset, effectiveHeight * TorsoHeightFraction);
 }
 
 bool isAutosavePath(const std::filesystem::path &path)
@@ -2851,8 +2822,11 @@ bgfx::VertexLayout OutdoorGameView::LitBillboardVertex::ms_layout;
 bgfx::VertexLayout OutdoorGameView::LightmappedBModelVertex::ms_layout;
 bgfx::VertexLayout OutdoorGameView::ForcePerspectiveVertex::ms_layout;
 
-OutdoorGameView::OutdoorGameView(GameSession &gameSession)
+OutdoorGameView::OutdoorGameView(GameSession &gameSession, SpriteAtlasCache &spriteAtlasCache,
+    NativeSpriteTextureCache &nativeSpriteCache)
     : m_isInitialized(false)
+    , m_spriteAtlasCache(spriteAtlasCache)
+    , m_nativeSpriteCache(nativeSpriteCache)
     , m_isRenderable(false)
     , m_pOutdoorMapData(nullptr)
     , m_vertexBufferHandle(BGFX_INVALID_HANDLE)
@@ -2991,6 +2965,16 @@ bool OutdoorGameView::initialize(
 
     m_isInitialized = true;
     m_pAssetFileSystem = &assetFileSystem;
+    std::string effectLibraryError;
+    if (!m_worldFxSystem.loadNamedEffectLibrary(
+            assetFileSystem,
+            "engine/effects/library.yml",
+            "engine/effects/resource_bindings.yml",
+            effectLibraryError))
+    {
+        std::cerr << "Failed to load shared effect library: " << effectLibraryError << '\n';
+        return false;
+    }
     m_map = map;
     m_pOutdoorMapData = &outdoorMapData;
     m_outdoorDecorationBillboardSet = outdoorDecorationBillboardSet;
@@ -2998,6 +2982,7 @@ bool OutdoorGameView::initialize(
     m_outdoorSpriteObjectBillboardSet = outdoorSpriteObjectBillboardSet;
     m_outdoorMapDeltaData = outdoorMapDeltaData;
     m_pGameAudioSystem = pGameAudioSystem;
+    m_worldFxSystem.bindNamedEffectAudio(m_pGameAudioSystem);
     m_pOutdoorSceneRuntime = &sceneRuntime;
     m_pOutdoorPartyRuntime = &sceneRuntime.partyRuntime();
     m_pOutdoorWorldRuntime = &sceneRuntime.worldRuntime();
@@ -3165,6 +3150,8 @@ bool OutdoorGameView::initialize(
     m_outdoorFxLightColorsUniformHandle = bgfx::createUniform("u_fxLightColors", bgfx::UniformType::Vec4, 8);
     m_outdoorFxLightParamsUniformHandle = bgfx::createUniform("u_fxLightParams", bgfx::UniformType::Vec4);
     m_outdoorSunlightUniformHandle = bgfx::createUniform("u_outdoorSunlight", bgfx::UniformType::Vec4);
+    m_worldClipPlaneUniformHandle = bgfx::createUniform("u_worldClipPlane", bgfx::UniformType::Vec4);
+    m_waterSurfaceControlUniformHandle = bgfx::createUniform("u_waterSurfaceControl", bgfx::UniformType::Vec4);
     m_outdoorFogColorUniformHandle = bgfx::createUniform("u_fogColor", bgfx::UniformType::Vec4);
     m_outdoorFogDensitiesUniformHandle = bgfx::createUniform("u_fogDensities", bgfx::UniformType::Vec4);
     m_outdoorFogDistancesUniformHandle = bgfx::createUniform("u_fogDistances", bgfx::UniformType::Vec4);
@@ -3196,6 +3183,8 @@ bool OutdoorGameView::initialize(
         || !bgfx::isValid(m_outdoorFxLightColorsUniformHandle)
         || !bgfx::isValid(m_outdoorFxLightParamsUniformHandle)
         || !bgfx::isValid(m_outdoorSunlightUniformHandle)
+        || !bgfx::isValid(m_worldClipPlaneUniformHandle)
+        || !bgfx::isValid(m_waterSurfaceControlUniformHandle)
         || !bgfx::isValid(m_outdoorFogColorUniformHandle)
         || !bgfx::isValid(m_outdoorFogDensitiesUniformHandle)
         || !bgfx::isValid(m_outdoorFogDistancesUniformHandle)
@@ -3220,7 +3209,8 @@ bool OutdoorGameView::initialize(
     return true;
 }
 
-void OutdoorGameView::render(int width, int height, const GameplayInputFrame &input, float deltaSeconds)
+void OutdoorGameView::render(int width, int height, const GameplayInputFrame &input, float deltaSeconds,
+    bool preparingResources)
 {
     m_renderGameplayUiThisFrame = false;
 
@@ -3245,7 +3235,7 @@ void OutdoorGameView::render(int width, int height, const GameplayInputFrame &in
 
     GameplayScreenRuntime &overlayContext = m_gameSession.gameplayScreenRuntime();
 
-    if (m_pendingSavePreviewCapture.active
+    if (!preparingResources && m_pendingSavePreviewCapture.active
         && m_pendingSavePreviewCapture.screenshotRequested
         && m_gameSession.canSaveGameToPath())
     {
@@ -3291,7 +3281,8 @@ void OutdoorGameView::render(int width, int height, const GameplayInputFrame &in
 
     GameplayUiController::UtilitySpellOverlayState &utilityOverlay = overlayContext.utilitySpellOverlay();
 
-    if (utilityOverlay.lloydSetPreviewCapturePending && utilityOverlay.lloydSetPreviewScreenshotRequested)
+    if (!preparingResources && utilityOverlay.lloydSetPreviewCapturePending
+        && utilityOverlay.lloydSetPreviewScreenshotRequested)
     {
         const std::optional<Engine::BgfxContext::ScreenshotCapture> screenshot =
             Engine::BgfxContext::consumeScreenshot(utilityOverlay.lloydSetPreviewRequestId);
@@ -3345,12 +3336,14 @@ void OutdoorGameView::render(int width, int height, const GameplayInputFrame &in
         farClipDistance = std::min(farClipDistance, static_cast<float>(pAtmosphereState->fogStrongDistance));
     }
     const bool captureSavePreviewThisFrame =
-        m_pendingSavePreviewCapture.active && !m_pendingSavePreviewCapture.screenshotRequested;
+        !preparingResources && m_pendingSavePreviewCapture.active && !m_pendingSavePreviewCapture.screenshotRequested;
     const bool captureLloydsBeaconPreviewThisFrame =
-        !captureSavePreviewThisFrame
+        !preparingResources && !captureSavePreviewThisFrame
         && utilityOverlay.lloydSetPreviewCapturePending
         && !utilityOverlay.lloydSetPreviewScreenshotRequested;
-    m_renderGameplayUiThisFrame = !captureSavePreviewThisFrame && !captureLloydsBeaconPreviewThisFrame;
+    // Save previews capture the presented gameplay frame. Hiding the HUD here
+    // exposes a HUD-less frame after every travel autosave and quick save.
+    m_renderGameplayUiThisFrame = !captureLloydsBeaconPreviewThisFrame;
 
     bgfx::setViewRect(SkyViewId, 0, 0, viewWidth, viewHeight);
     bgfx::setViewClear(SkyViewId, BGFX_CLEAR_COLOR | BGFX_CLEAR_DEPTH, clearColorAbgr, 1.0f, 0);
@@ -3415,14 +3408,17 @@ void OutdoorGameView::render(int width, int height, const GameplayInputFrame &in
             stageStartTickNanoseconds = nowNanoseconds;
         };
 
-    updateHouseVideoPlayback(deltaSeconds);
-    updateItemInspectOverlayState(width, height, input);
-    updateActorInspectOverlayState(width, height, input);
+    if (!preparingResources)
+    {
+        updateHouseVideoPlayback(deltaSeconds);
+        updateItemInspectOverlayState(width, height, input);
+        updateActorInspectOverlayState(width, height, input);
+    }
     captureFrameTimingStage(overlayStageNanoseconds);
 
     const bool worldCaptureRequired = captureSavePreviewThisFrame || captureLloydsBeaconPreviewThisFrame;
 
-    if (!worldCaptureRequired
+    if (!preparingResources && !worldCaptureRequired
         && gameplayHudScreenFullyOccludesWorld(
             overlayContext.currentHudScreenState(),
             overlayContext.activeEventDialog()))
@@ -3442,7 +3438,11 @@ void OutdoorGameView::render(int width, int height, const GameplayInputFrame &in
             : 0;
     const bool processSpriteWarmupsThisFrame = !cameraMotionInput;
 
-    if (processSpriteWarmupsThisFrame)
+    if (preparingResources)
+    {
+        OutdoorBillboardRenderer::preloadPendingLevelSpriteTextures(*this);
+    }
+    else if (processSpriteWarmupsThisFrame)
     {
         OutdoorBillboardRenderer::processPendingSpriteFrameWarmups(*this, 1);
     }
@@ -3503,6 +3503,8 @@ void OutdoorGameView::render(int width, int height, const GameplayInputFrame &in
 
     const bool rightMouseInspectPauseActive = input.rightMouseButton.held;
     const bool worldFxPaused = gameplayMouseLookState.cursorModeActive || rightMouseInspectPauseActive;
+    m_worldFxSystem.waterRipples().setEnabled(
+        m_gameSettings.waterShader && m_gameSettings.waterMovementRipples && m_waterRenderer.isReady());
     m_worldFxSystem.setShadowsEnabled(m_gameSettings.shadows);
     m_worldFxSystem.updateParticles(deltaSeconds, worldFxPaused);
 
@@ -3516,6 +3518,13 @@ void OutdoorGameView::render(int width, int height, const GameplayInputFrame &in
         m_outdoorSpatialFxRuntime.syncSpatialFx(*this, refreshSpatialFx);
     }
     captureFrameTimingStage(fxStageNanoseconds);
+
+    if (preparingResources && m_pAssetFileSystem != nullptr)
+    {
+        m_modelRenderer.preload(m_worldFxSystem.models());
+        m_effectRenderer.preload(m_worldFxSystem.namedEffects(), m_worldFxSystem.namedEffectResources(),
+            *m_pAssetFileSystem);
+    }
 
     OutdoorRenderer::renderWorldPasses(
         *this,
@@ -3543,9 +3552,12 @@ void OutdoorGameView::render(int width, int height, const GameplayInputFrame &in
         utilityOverlay.lloydSetPreviewScreenshotRequested = true;
     }
 
-    updateFootstepAudio(deltaSeconds);
-    consumePendingWorldAudioEvents();
-    updateCombatFeedback(deltaSeconds);
+    if (!preparingResources)
+    {
+        updateFootstepAudio(deltaSeconds);
+        consumePendingWorldAudioEvents();
+        updateCombatFeedback(deltaSeconds);
+    }
 
     float gameplayViewProjectionMatrix[16] = {};
     bx::mtxMul(gameplayViewProjectionMatrix, wireframeViewMatrix, wireframeProjectionMatrix);
@@ -3641,6 +3653,16 @@ const SpriteFrameTable *OutdoorGameView::actorSpriteFrameTable() const
         : nullptr;
 }
 
+WorldFxSystem &OutdoorGameView::worldFxSystem()
+{
+    return m_worldFxSystem;
+}
+
+const EffectRenderer::Diagnostics &OutdoorGameView::effectRenderDiagnostics() const
+{
+    return m_effectRenderer.diagnostics();
+}
+
 GameplayWorldUiRenderState OutdoorGameView::gameplayUiRenderState(int width, int height) const
 {
     return GameplayWorldUiRenderState{
@@ -3651,6 +3673,8 @@ GameplayWorldUiRenderState OutdoorGameView::gameplayUiRenderState(int width, int
 
 void OutdoorGameView::shutdown()
 {
+    m_effectRenderer.shutdown(Engine::BgfxContext::isBgfxInitialized());
+    m_modelRenderer.shutdown(Engine::BgfxContext::isBgfxInitialized());
     syncGameplayMouseLookMode(SDL_GetMouseFocus(), false);
     GameplayScreenRuntime &screenRuntime = m_gameSession.gameplayScreenRuntime();
     GameplayScreenState &gameplayScreenState = m_gameSession.gameplayScreenState();
@@ -3708,6 +3732,9 @@ void OutdoorGameView::shutdown()
 
     if (!Engine::BgfxContext::isBgfxInitialized())
     {
+        m_waterRenderer.shutdown();
+        m_worldClipPlaneUniformHandle = BGFX_INVALID_HANDLE;
+        m_waterSurfaceControlUniformHandle = BGFX_INVALID_HANDLE;
         m_programHandle = BGFX_INVALID_HANDLE;
         m_screenTintProgramHandle = BGFX_INVALID_HANDLE;
         m_texturedTerrainProgramHandle = BGFX_INVALID_HANDLE;
@@ -3773,6 +3800,16 @@ void OutdoorGameView::shutdown()
         screenRuntime.clearSharedUiRuntime();
         resetRuntimeState();
         return;
+    }
+
+    m_waterRenderer.shutdown();
+    for (bgfx::UniformHandle *pUniform : {&m_worldClipPlaneUniformHandle, &m_waterSurfaceControlUniformHandle})
+    {
+        if (bgfx::isValid(*pUniform))
+        {
+            bgfx::destroy(*pUniform);
+            *pUniform = BGFX_INVALID_HANDLE;
+        }
     }
 
     if (bgfx::isValid(m_screenTintProgramHandle))
@@ -4110,6 +4147,7 @@ void OutdoorGameView::shutdown()
     }
 
     resetRuntimeState();
+    m_worldFxSystem.bindNamedEffectAudio(nullptr);
     m_pGameAudioSystem = nullptr;
     m_outdoorDecorationBillboardSet.reset();
     m_outdoorActorPreviewBillboardSet.reset();
@@ -4320,6 +4358,17 @@ float OutdoorGameView::effectiveCameraPitchRadians() const
     }
 
     return m_cameraPitchRadians + m_pOutdoorWorldRuntime->armageddonCameraShakePitchRadians();
+}
+
+void OutdoorGameView::syncCameraToParty()
+{
+    if (m_pOutdoorPartyRuntime != nullptr)
+    {
+        const OutdoorMoveState &state = m_pOutdoorPartyRuntime->movementState();
+        m_cameraTargetX = state.x;
+        m_cameraTargetY = state.y;
+        m_cameraTargetZ = state.footZ + m_cameraEyeHeight;
+    }
 }
 
 void OutdoorGameView::setCameraAngles(float yawRadians, float pitchRadians)
@@ -4835,10 +4884,7 @@ void OutdoorGameView::setSettingsSnapshot(const GameSettings &settings)
         m_combatFloatingTexts.clear();
     }
 
-    if (!m_gameSettings.combatTargetPanel)
-    {
-        m_combatTargetState = {};
-    }
+
 
     if (m_pOutdoorPartyRuntime != nullptr)
     {
@@ -4896,16 +4942,6 @@ void OutdoorGameView::updateCombatFeedback(float deltaSeconds)
         floatingText.remainingSeconds = std::max(0.0f, floatingText.remainingSeconds - elapsedSeconds);
     }
 
-    if (m_combatTargetState.active)
-    {
-        m_combatTargetState.remainingSeconds =
-            std::max(0.0f, m_combatTargetState.remainingSeconds - elapsedSeconds);
-
-        if (m_combatTargetState.remainingSeconds <= 0.0f)
-        {
-            m_combatTargetState = {};
-        }
-    }
 
     m_combatFloatingTexts.erase(
         std::remove_if(
@@ -4923,22 +4959,12 @@ void OutdoorGameView::updateCombatFeedback(float deltaSeconds)
     }
 
     const std::vector<GameplayCombatFeedbackEvent> events = m_pOutdoorWorldRuntime->drainCombatFeedbackEvents();
-    std::optional<size_t> targetOnlyActorIndex;
-    std::optional<size_t> damagedActorIndex;
+    m_gameSession.gameplayScreenRuntime().updateEnemyHealthBars(elapsedSeconds, events);
 
     for (const GameplayCombatFeedbackEvent &event : events)
     {
         if (event.actorIndex < m_pOutdoorWorldRuntime->mapActorCount())
         {
-            if (event.damage > 0)
-            {
-                damagedActorIndex = event.actorIndex;
-            }
-            else
-            {
-                targetOnlyActorIndex = event.actorIndex;
-            }
-
             if (event.damage > 0 && m_gameSettings.combatText)
             {
                 m_combatFloatingTexts.push_back(
@@ -4948,7 +4974,7 @@ void OutdoorGameView::updateCombatFeedback(float deltaSeconds)
                         .text = std::to_string(event.damage),
                         .x = event.x,
                         .y = event.y,
-                        .z = combatDamageTextOriginZ(event.z, event.height),
+                        .z = GameplayUiSkin::combatDamageTextOriginZ(event.z, event.height),
                         .remainingSeconds = 0.6f,
                         .durationSeconds = 0.6f,
                         .colorAbgr = event.damage >= 100
@@ -4958,15 +4984,6 @@ void OutdoorGameView::updateCombatFeedback(float deltaSeconds)
                     });
             }
         }
-    }
-
-    const std::optional<size_t> panelActorIndex = damagedActorIndex ? damagedActorIndex : targetOnlyActorIndex;
-
-    if (panelActorIndex)
-    {
-        m_combatTargetState.active = true;
-        m_combatTargetState.actorIndex = *panelActorIndex;
-        m_combatTargetState.remainingSeconds = CombatTargetPanelDurationSeconds;
     }
 }
 
@@ -4983,8 +5000,8 @@ void OutdoorGameView::renderCombatFeedbackOverlay(
     GameplayScreenRuntime &screenRuntime = m_gameSession.gameplayScreenRuntime();
     screenRuntime.prepareHudView(width, height);
 
-    constexpr const char *FontName = "Create";
-    constexpr float CombatFontScale = 1.0f;
+    constexpr const char *FontName = GameplayUiSkin::CombatFontName;
+    constexpr float CombatFontScale = GameplayUiSkin::CombatDamageFontScale;
     constexpr float DamageRisePixels = 29.0f;
 
     if (m_gameSettings.combatText)
@@ -5027,90 +5044,7 @@ void OutdoorGameView::renderCombatFeedbackOverlay(
         }
     }
 
-    if (!m_gameSettings.combatTargetPanel)
-    {
-        return;
-    }
 
-    GameplayActorInspectState inspectState = {};
-
-    if (!m_combatTargetState.active
-        || m_combatTargetState.remainingSeconds <= 0.0f
-        || !m_pOutdoorWorldRuntime->actorInspectState(m_combatTargetState.actorIndex, 0, inspectState)
-        || inspectState.maxHp <= 0
-        || inspectState.currentHp <= 0
-        || inspectState.isDead)
-    {
-        m_combatTargetState = {};
-        return;
-    }
-
-    constexpr float PanelWidth = 260.0f;
-    constexpr float PanelHeight = 40.0f;
-    constexpr float BarHeight = 14.0f;
-    constexpr float Border = 2.0f;
-    constexpr float NameScale = 1.0f;
-    const float panelX = (static_cast<float>(width) - PanelWidth) * 0.5f;
-    const float panelY = 0.0f;
-    const float nameWidth = screenRuntime.measureHudTextWidth(FontName, inspectState.displayName) * NameScale;
-    const float nameX = panelX + (PanelWidth - nameWidth) * 0.5f;
-    const float barX = panelX + 12.0f;
-    const float barY = panelY + 22.0f;
-    const float barWidth = PanelWidth - 24.0f;
-    const float fillRatio =
-        std::clamp(static_cast<float>(inspectState.currentHp) / static_cast<float>(inspectState.maxHp), 0.0f, 1.0f);
-
-    drawCombatHudRect(
-        screenRuntime,
-        "__combat_target_panel_bg_tinted_strong__",
-        panelX,
-        panelY,
-        PanelWidth,
-        PanelHeight,
-        makeCombatHudColor(78, 16, 19, 214));
-    drawCombatHudRect(
-        screenRuntime,
-        "__combat_target_panel_highlight_tinted__",
-        panelX,
-        panelY,
-        PanelWidth,
-        1.0f,
-        makeCombatHudColor(158, 41, 44, 230));
-    screenRuntime.renderHudTextLine(
-        FontName,
-        makeCombatHudColor(255, 211, 132, 255),
-        inspectState.displayName,
-        nameX,
-        panelY + 2.0f,
-        NameScale);
-    drawCombatHudRect(
-        screenRuntime,
-        "__combat_target_bar_frame_tinted_strong__",
-        barX,
-        barY,
-        barWidth,
-        BarHeight,
-        makeCombatHudColor(18, 12, 10, 230));
-    const float fillWidth = (barWidth - Border * 2.0f) * fillRatio;
-    if (fillWidth > 0.0f)
-    {
-        drawCombatHudRect(
-            screenRuntime,
-            "__combat_target_bar_fill_tinted__",
-            barX + Border,
-            barY + Border,
-            fillWidth,
-            BarHeight - Border * 2.0f,
-            makeCombatHudColor(177, 25, 28, 245));
-        drawCombatHudRect(
-            screenRuntime,
-            "__combat_target_bar_gloss_tinted__",
-            barX + Border,
-            barY + Border,
-            fillWidth,
-            std::max(1.0f, (BarHeight - Border * 2.0f) * 0.32f),
-            makeCombatHudColor(255, 108, 82, 155));
-    }
 }
 
 void OutdoorGameView::showCombatStatusBarEvent(const std::string &text, float durationSeconds)

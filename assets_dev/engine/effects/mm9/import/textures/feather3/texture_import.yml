@@ -1,0 +1,64 @@
+schema: openyamm.effectTextureImport.v1
+source:
+  path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/FEATHER3.dtx
+  format: LithTech DTX
+  sha256: 2df702d665f1123580676e7215a23fca1f63c5ad7cbf11972ae399838943861e
+runtime:
+  texture: engine/effects/mm9/textures/feather3.png
+  format: PNG RGBA8
+  colorSpace: srgb
+  alphaUsage: blend
+  premultipliedAlpha: false
+  mipPolicy: generate-at-runtime
+  minFilter: linear
+  magFilter: linear
+  wrapU: clamp
+  wrapV: clamp
+conversion:
+  decoder: tools/mm9_import_discovery/convert_abc_model.py:decode_dtx_mips
+  decodedRgbChanged: false
+  decodedAlphaChanged: false
+  opaqueAlphaRepair: false
+  zeroAlphaRgbPreserved: true
+  sourceMipArtifacts: mips/*.png
+dtx:
+  version: -5
+  width: 32
+  height: 32
+  mipCount: 4
+  sectionCount: 0
+  internalFlags: 136
+  userFlags: 0
+  extraHex: '000003000000000000000000'
+  bppIdentifier: 3
+  command: ''
+  repairOpaqueAlpha: false
+  mips:
+  - index: 0
+    width: 32
+    height: 32
+    sourceOffset: 164
+    sourceBytes: 4096
+    decodedRgbaSha256: 10fb8c188be4c7b83f910036984876a0d9d34270d1f72e7675e34c4ca6652f46
+    artifact: mips/00.png
+  - index: 1
+    width: 16
+    height: 16
+    sourceOffset: 4260
+    sourceBytes: 1024
+    decodedRgbaSha256: ddd397b8417f188855ebda68cc995868df78667a5f1720ee7f464e17760e8816
+    artifact: mips/01.png
+  - index: 2
+    width: 8
+    height: 8
+    sourceOffset: 5284
+    sourceBytes: 256
+    decodedRgbaSha256: e42cc6a7a9500c93ffe3ca67939a81a1b9dc5996cf27dd8e129c5d3c819dd426
+    artifact: mips/02.png
+  - index: 3
+    width: 4
+    height: 4
+    sourceOffset: 5540
+    sourceBytes: 64
+    decodedRgbaSha256: 12389a27e42d4f818f405fba078c5df8ac44492ef4add3b1ee31c438c096dd5a
+    artifact: mips/03.png

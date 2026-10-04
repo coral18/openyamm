@@ -83,14 +83,17 @@ TEST_CASE("full-screen gameplay HUD states occlude world rendering")
         GameplayHudScreenState::Gameplay,
         inactiveDialog));
 
-    constexpr std::array<GameplayHudScreenState, 14> occludingStates = {
+    CHECK_FALSE(OpenYAMM::Game::gameplayHudScreenFullyOccludesWorld(
+        GameplayHudScreenState::Menu,
+        inactiveDialog));
+
+    constexpr std::array<GameplayHudScreenState, 13> occludingStates = {
         GameplayHudScreenState::Character,
         GameplayHudScreenState::TownPortal,
         GameplayHudScreenState::LloydsBeacon,
         GameplayHudScreenState::Chest,
         GameplayHudScreenState::Spellbook,
         GameplayHudScreenState::Rest,
-        GameplayHudScreenState::Menu,
         GameplayHudScreenState::Controls,
         GameplayHudScreenState::Keyboard,
         GameplayHudScreenState::VideoOptions,
@@ -4125,7 +4128,7 @@ TEST_CASE("party airborne movement allows water entry without water walk")
     CHECK(isOutdoorPositionWaterForDiagnostics(boundary.mapData, std::nullopt, resolved.x, resolved.y));
 }
 
-TEST_CASE("outdoor actor movement ignores pre-existing actor overlap")
+TEST_CASE("outdoor actor movement can separate from coincident actors")
 {
     const SyntheticOutdoorWaterBoundaryScenario boundary = createSyntheticOutdoorWaterBoundaryScenario();
     OpenYAMM::Game::OutdoorMovementController movementController(
@@ -4658,7 +4661,7 @@ TEST_CASE("outdoor stationary party uses bmodel stair tread under capsule footpr
     CHECK_FALSE(resolved.airborne);
 }
 
-TEST_CASE("indoor actor movement ignores pre-existing actor overlap")
+TEST_CASE("indoor actor movement can separate from pre-existing actor overlap")
 {
     OpenYAMM::Game::IndoorMapData mapData = {};
     mapData.vertices = {
@@ -4713,7 +4716,7 @@ TEST_CASE("indoor actor movement ignores pre-existing actor overlap")
         movementController.resolveMove(
             state,
             body,
-            64.0f,
+            -64.0f,
             0.0f,
             false,
             0.5f,
@@ -4721,7 +4724,7 @@ TEST_CASE("indoor actor movement ignores pre-existing actor overlap")
             7);
 
     CHECK(contactedActorIndices.empty());
-    CHECK(resolved.x > state.x + 24.0f);
+    CHECK(resolved.x < state.x - 24.0f);
 }
 
 TEST_CASE("indoor actor blocked wall recovery moves tangent while pressed into wall")
@@ -5900,6 +5903,37 @@ TEST_CASE("lua event runtime supports evt jump alias")
     REQUIRE(eventRuntime.executeEventById(scriptedProgram, std::nullopt, 1, runtimeState, nullptr, nullptr));
     REQUIRE_FALSE(runtimeState.statusMessages.empty());
     CHECK_EQ(runtimeState.statusMessages.back(), "jump ok");
+}
+
+TEST_CASE("lua event runtime queues transient world effects and rigid models")
+{
+    const std::optional<OpenYAMM::Game::ScriptedEventProgram> scriptedProgram = loadSyntheticScriptedProgram(
+        "evt.map[1] = function()\n"
+        "    evt.SpawnWorldEffect('mm9:column_of_fire', 10, 20, 30, 2.5, 0.75)\n"
+        "    evt.SpawnWorldModel('models/example.glb', 40, 50, 60, 3.5, 1.25, 'turn')\n"
+        "end\n",
+        "@SyntheticWorldFx.lua",
+        OpenYAMM::Game::ScriptedEventScope::Map);
+    REQUIRE(scriptedProgram.has_value());
+
+    OpenYAMM::Game::EventRuntime eventRuntime = {};
+    OpenYAMM::Game::EventRuntimeState runtimeState = {};
+    REQUIRE(eventRuntime.executeEventById(scriptedProgram, std::nullopt, 1, runtimeState, nullptr, nullptr));
+
+    REQUIRE_EQ(runtimeState.worldEffectRequests.size(), 1u);
+    CHECK_EQ(runtimeState.worldEffectRequests.front().id, "mm9:column_of_fire");
+    const std::array<float, 3> expectedEffectPosition = {10.0f, 20.0f, 30.0f};
+    CHECK_EQ(runtimeState.worldEffectRequests.front().position, expectedEffectPosition);
+    CHECK_EQ(runtimeState.worldEffectRequests.front().scale, doctest::Approx(2.5f));
+    CHECK_EQ(runtimeState.worldEffectRequests.front().yawRadians, doctest::Approx(0.75f));
+
+    REQUIRE_EQ(runtimeState.worldModelRequests.size(), 1u);
+    CHECK_EQ(runtimeState.worldModelRequests.front().assetPath, "models/example.glb");
+    CHECK_EQ(runtimeState.worldModelRequests.front().clipName, "turn");
+    const std::array<float, 3> expectedModelPosition = {40.0f, 50.0f, 60.0f};
+    CHECK_EQ(runtimeState.worldModelRequests.front().position, expectedModelPosition);
+    CHECK_EQ(runtimeState.worldModelRequests.front().scale, doctest::Approx(3.5f));
+    CHECK_EQ(runtimeState.worldModelRequests.front().yawRadians, doctest::Approx(1.25f));
 }
 
 TEST_CASE("lua random jump advances between repeated event activations")
@@ -8087,6 +8121,68 @@ TEST_CASE("indoor movement steps over floor lip equal to ground snap slack")
     CHECK(moved.grounded);
     CHECK_EQ(moved.supportFaceIndex, 2u);
     CHECK_EQ(moved.footZ, doctest::Approx(0.0f));
+}
+
+TEST_CASE("indoor actor ledge guard permits falling down steps up to one hundred units")
+{
+    using namespace OpenYAMM::Game;
+    for (const int16_t drop : {16, 96, 100, 101, 160})
+    {
+        CAPTURE(drop);
+        IndoorMapData mapData = {};
+        const int16_t lowerZ = -drop;
+        mapData.vertices = {
+            {-256, 0, 0}, {256, 0, 0}, {256, 128, 0}, {-256, 128, 0},
+            {-256, 128, lowerZ}, {256, 128, lowerZ}, {256, 512, lowerZ}, {-256, 512, lowerZ}
+        };
+        IndoorFace upperFloor = {};
+        upperFloor.vertexIndices = {0, 1, 2, 3};
+        upperFloor.facetType = 3;
+        IndoorFace lowerFloor = {};
+        lowerFloor.vertexIndices = {4, 5, 6, 7};
+        lowerFloor.facetType = 3;
+        mapData.faces = {upperFloor, lowerFloor};
+        IndoorSector sector = {};
+        sector.floorCount = 2;
+        sector.faceCount = 2;
+        sector.nonBspFaceCount = 2;
+        sector.minX = -256;
+        sector.maxX = 256;
+        sector.minY = 0;
+        sector.maxY = 512;
+        sector.minZ = -256;
+        sector.maxZ = 256;
+        sector.floorFaceIds = {0, 1};
+        sector.faceIds = {0, 1};
+        sector.nonBspFaceIds = sector.faceIds;
+        mapData.sectors = {sector};
+        const IndoorMovementController controller(mapData, nullptr, nullptr);
+        const IndoorBodyDimensions body = {};
+        IndoorMoveState state = controller.initializeStateFromEyePosition(0.0f, 64.0f, body.height, body);
+        REQUIRE(state.grounded);
+        bool fell = false;
+        for (int step = 0; step < 256; ++step)
+        {
+            state = controller.resolveMove(state, body, 0.0f, 160.0f, false, 1.0f / 128.0f,
+                nullptr, std::nullopt, false, nullptr, false, false, 420.0f, 1.0f, false, true);
+            fell = fell || (!state.grounded && state.verticalVelocity < 0.0f);
+        }
+        CHECK(state.grounded);
+        if (drop <= IndoorActorMaxDropHeight)
+        {
+            CHECK(fell);
+            CHECK_GT(state.y, 300.0f);
+            CHECK_EQ(state.footZ, doctest::Approx(lowerZ));
+            CHECK_EQ(state.supportFaceIndex, 1u);
+        }
+        else
+        {
+            CHECK_FALSE(fell);
+            CHECK_LT(state.y, 128.0f);
+            CHECK_EQ(state.footZ, doctest::Approx(0.0f));
+            CHECK_EQ(state.supportFaceIndex, 0u);
+        }
+    }
 }
 
 TEST_CASE("indoor actor ledge guard blocks grounded non-flying drops")

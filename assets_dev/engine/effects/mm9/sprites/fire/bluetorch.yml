@@ -1,0 +1,25 @@
+schema: openyamm.effectSprite.v2
+id: mm9:effect-sprite/fire/bluetorch
+source: sprites/fire/bluetorch.spr
+framesPerSecond: 15
+logicalWidth: 64
+logicalHeight: 64
+keyed: false
+translucent: false
+colorKey: 0
+frames:
+- mm9:effect-texture/flameeffects/bluetorch/blueflame01
+- mm9:effect-texture/flameeffects/bluetorch/blueflame02
+- mm9:effect-texture/flameeffects/bluetorch/blueflame03
+- mm9:effect-texture/flameeffects/bluetorch/blueflame04
+- mm9:effect-texture/flameeffects/bluetorch/blueflame05
+- mm9:effect-texture/flameeffects/bluetorch/blueflame06
+- mm9:effect-texture/flameeffects/bluetorch/blueflame07
+- mm9:effect-texture/flameeffects/bluetorch/blueflame08
+- mm9:effect-texture/flameeffects/bluetorch/blueflame09
+- mm9:effect-texture/flameeffects/bluetorch/blueflame10
+- mm9:effect-texture/flameeffects/bluetorch/blueflame11
+- mm9:effect-texture/flameeffects/bluetorch/blueflame12
+- mm9:effect-texture/flameeffects/bluetorch/blueflame13
+- mm9:effect-texture/flameeffects/bluetorch/blueflame14
+- mm9:effect-texture/flameeffects/bluetorch/blueflame15

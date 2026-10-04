@@ -1,0 +1,11 @@
+schema: openyamm.effectSprite.v2
+id: mm9:effect-sprite/weapons/blurredredstar
+source: sprites/weapons/blurredredstar.spr
+framesPerSecond: 15
+logicalWidth: 32
+logicalHeight: 32
+keyed: false
+translucent: false
+colorKey: 0
+frames:
+- mm9:effect-texture/redthingy/blurredredstar

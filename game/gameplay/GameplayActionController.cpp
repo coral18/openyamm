@@ -1,6 +1,7 @@
 #include "game/gameplay/GameplayActionController.h"
 
 #include "game/audio/GameAudioSystem.h"
+#include "game/gameplay/GameplayFxService.h"
 #include "game/gameplay/GameplayScreenRuntime.h"
 #include "game/gameplay/GameplaySpellService.h"
 #include "game/gameplay/TurnBasedCombatRuntime.h"
@@ -24,6 +25,7 @@ constexpr float CharacterRangedAttackDistance = 5120.0f;
 constexpr float DragonBreathSourceHeight = 96.0f;
 constexpr float PartyMemberProjectileLateralSpacing = 28.0f;
 constexpr float ProjectileRightVectorEpsilon = 0.0001f;
+constexpr float MeleeContactNormalEpsilon = 0.0001f;
 
 void resetQuickCastRepeatState(GameplayScreenState::QuickSpellState &quickSpellState)
 {
@@ -66,6 +68,88 @@ GameplayWorldPoint toRuntimeWorldPoint(const GameplayActionController::WorldPoin
         .y = point.y,
         .z = point.z,
     };
+}
+
+void queueMeleeHitBloodEffect(
+    const GameplayActionController::PartyAttackConfig &config,
+    const GameplayActionController::PartyAttackActorFacts &target)
+{
+    if (config.pRuntime == nullptr
+        || !config.pRuntime->settingsSnapshot().meleeHitBloodEffects
+        || config.pMonsterTable == nullptr)
+    {
+        return;
+    }
+
+    const MonsterTable::MonsterStatsEntry *pStats = config.pMonsterTable->findStatsById(target.monsterId);
+    if (pStats == nullptr || !pStats->bloodSplatOnDeath)
+    {
+        return;
+    }
+
+    const GameplayActionController::WorldPoint center = {
+        .x = target.position.x,
+        .y = target.position.y,
+        .z = target.position.z + static_cast<float>(target.height) * 0.5f,
+    };
+    const GameplayActionController::WorldPoint sourceNormal = {
+        .x = config.rangedSource.x - center.x,
+        .y = config.rangedSource.y - center.y,
+        .z = config.rangedSource.z - center.z,
+    };
+    GameplayActionController::WorldPoint normal = sourceNormal;
+    GameplayActionController::WorldPoint contact = center;
+    bool resolvedVisualContact = false;
+    if (config.directTargetActorIndex == target.actorIndex && config.directTargetHitPoint)
+    {
+        contact = *config.directTargetHitPoint;
+        resolvedVisualContact = true;
+    }
+    else if (config.pWorldRuntime != nullptr)
+    {
+        const std::optional<GameplayWorldPoint> fallbackContact =
+            config.pWorldRuntime->partyAttackActorContactPoint(target.actorIndex, config.fallbackQuery);
+        if (fallbackContact)
+        {
+            contact = {fallbackContact->x, fallbackContact->y, fallbackContact->z};
+            resolvedVisualContact = true;
+        }
+    }
+
+    if (resolvedVisualContact)
+    {
+        normal = {
+            .x = contact.x - center.x,
+            .y = contact.y - center.y,
+            .z = contact.z - center.z,
+        };
+    }
+
+    float normalLength = std::sqrt(normal.x * normal.x + normal.y * normal.y + normal.z * normal.z);
+    if (!std::isfinite(normalLength) || normalLength <= MeleeContactNormalEpsilon)
+    {
+        normal = sourceNormal;
+        normalLength = std::sqrt(normal.x * normal.x + normal.y * normal.y + normal.z * normal.z);
+    }
+    if (!std::isfinite(normalLength) || normalLength <= MeleeContactNormalEpsilon)
+    {
+        return;
+    }
+    normal.x /= normalLength;
+    normal.y /= normalLength;
+    normal.z /= normalLength;
+
+    if (!resolvedVisualContact)
+    {
+        const float contactRadius = std::max(1.0f, static_cast<float>(target.radius));
+        contact.x += normal.x * contactRadius;
+        contact.y += normal.y * contactRadius;
+        contact.z += normal.z * contactRadius;
+    }
+
+    config.pRuntime->fxService().queueMeleeHitBloodEffect(
+        {contact.x, contact.y, contact.z},
+        {normal.x, normal.y, normal.z});
 }
 
 float partyMemberProjectileLateralOffset(size_t memberIndex, size_t memberCount)
@@ -712,6 +796,7 @@ GameplayActionController::PartyAttackExecutionResult GameplayActionController::e
             const int appliedDamage = resolveMeleeAppliedDamage(config, *pAttacker, *target, attack, rng);
             appliedMeleeDamage = appliedDamage;
             const int beforeHp = target->currentHp;
+            queueMeleeHitBloodEffect(config, *target);
             attacked = config.pWorldRuntime->applyPartyAttackMeleeDamage(
                 target->actorIndex,
                 appliedDamage,
@@ -852,7 +937,8 @@ GameplayActionController::PartyAttackExecutionResult GameplayActionController::e
                     attack.mode == CharacterAttackMode::Blaster
                         ? config.blasterProjectileObjectId
                         : projectileObjectId,
-                .impactObjectId = attack.mode == CharacterAttackMode::Blaster ? config.blasterProjectileObjectId + 1 : 0,
+                .impactObjectId = attack.mode == CharacterAttackMode::Blaster
+                    ? config.blasterProjectileObjectId + 1 : 0,
                 .damage = attack.damage,
                 .attackBonus = attack.attackBonus,
                 .useActorHitChance = true,

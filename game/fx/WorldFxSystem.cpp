@@ -1,8 +1,10 @@
 #include "game/fx/WorldFxSystem.h"
 
 #include "game/app/GameSession.h"
+#include "game/audio/GameAudioSystem.h"
 #include "game/data/GameDataRepository.h"
 #include "game/fx/ParticleRecipes.h"
+#include "game/fx/import/EffectDefinitionLoader.h"
 #include "game/gameplay/GameplayFxService.h"
 #include "game/party/PartySpellSystem.h"
 #include "game/party/SpellIds.h"
@@ -235,12 +237,53 @@ bool projectileRecipeEmitsTrailParticles(int spellIdValue, FxRecipes::Projectile
         && spellId != SpellId::ToxicCloud
         && spellId != SpellId::Incinerate;
 }
+
+std::optional<std::array<float, 3>> actorCenterPosition(GameSession &session, size_t actorIndex)
+{
+    IGameplayWorldRuntime *pWorldRuntime = session.activeWorldRuntime();
+    GameplayRuntimeActorState actorState = {};
+    if (pWorldRuntime == nullptr || !pWorldRuntime->actorRuntimeState(actorIndex, actorState))
+    {
+        return std::nullopt;
+    }
+
+    return std::array<float, 3>{
+        actorState.preciseX,
+        actorState.preciseY,
+        actorState.preciseZ + static_cast<float>(actorState.height) * 0.5f
+    };
+}
+}
+
+WorldFxSystem::WorldFxSystem()
+{
+    m_namedEffects.setModelRuntime(
+        &m_models,
+        [this](const std::string &id)
+        {
+            return m_namedEffectResources.findModel(id);
+        });
 }
 
 void WorldFxSystem::reset()
 {
     m_particleUpdateAccumulatorSeconds = 0.0f;
     m_particleSystem.reset();
+    m_waterRipples = {};
+    m_namedEffects.clear();
+    processNamedEffectAudio();
+    for (const auto &[key, instanceId] : m_namedSoundInstances)
+    {
+        if (m_pNamedEffectAudioSystem != nullptr)
+        {
+            m_pNamedEffectAudioSystem->stopSoundInstance(instanceId);
+        }
+    }
+    m_namedSoundInstances.clear();
+    m_namedEffectLibrary.clear();
+    m_namedEffectResources.clear();
+    m_models.clear();
+    m_modelAssets.clear();
     m_glowBillboards.clear();
     m_lightEmitters.clear();
     m_contactShadows.clear();
@@ -248,6 +291,61 @@ void WorldFxSystem::reset()
     m_projectileTrailStates.clear();
     m_persistentImpactLights.clear();
     m_seenImpactIds.clear();
+    m_projectileImpactEffectRebinds.clear();
+    m_attachedImpactEffects.clear();
+}
+
+size_t WorldFxSystem::NamedSoundKeyHash::operator()(const NamedSoundKey &key) const
+{
+    size_t value = static_cast<size_t>(key.owner.index);
+    value ^= static_cast<size_t>(key.owner.generation) + 0x9e3779b9u + (value << 6) + (value >> 2);
+    value ^= static_cast<size_t>(key.componentId) + 0x9e3779b9u + (value << 6) + (value >> 2);
+    return value;
+}
+
+void WorldFxSystem::bindNamedEffectAudio(GameAudioSystem *pAudioSystem)
+{
+    if (m_pNamedEffectAudioSystem == pAudioSystem)
+    {
+        return;
+    }
+    for (const auto &[key, instanceId] : m_namedSoundInstances)
+    {
+        if (m_pNamedEffectAudioSystem != nullptr)
+        {
+            m_pNamedEffectAudioSystem->stopSoundInstance(instanceId);
+        }
+    }
+    m_namedSoundInstances.clear();
+    m_pNamedEffectAudioSystem = pAudioSystem;
+}
+
+bool WorldFxSystem::loadNamedEffectLibrary(
+    const Engine::AssetFileSystem &assetFileSystem,
+    const std::string &libraryPath,
+    const std::string &bindingManifestPath,
+    std::string &error)
+{
+    EffectDefinitionLoader loader(&assetFileSystem);
+    const std::optional<std::vector<std::shared_ptr<const EffectDefinition>>> definitions =
+        loader.load(libraryPath, error);
+    if (!definitions)
+    {
+        return false;
+    }
+    EffectLibrary library;
+    EffectResourceLibrary resources;
+    Engine::ModelAssetCache modelAssets;
+    if (!library.replace(*definitions, error) ||
+        !resources.load(assetFileSystem, bindingManifestPath, *definitions, error, &modelAssets))
+    {
+        return false;
+    }
+    m_namedEffects.clear();
+    m_namedEffectLibrary = std::move(library);
+    m_namedEffectResources = std::move(resources);
+    m_modelAssets = std::move(modelAssets);
+    return true;
 }
 
 void WorldFxSystem::beginFrame()
@@ -257,7 +355,14 @@ void WorldFxSystem::beginFrame()
 
 void WorldFxSystem::updateParticles(float deltaSeconds, bool paused)
 {
+    m_waterRipples.advance(deltaSeconds, paused);
     beginFrame();
+    m_namedEffects.update(deltaSeconds, paused);
+    if (!paused)
+    {
+        m_models.update(deltaSeconds);
+    }
+    processNamedEffectAudio();
 
     if (paused)
     {
@@ -272,6 +377,135 @@ void WorldFxSystem::updateParticles(float deltaSeconds, bool paused)
         m_particleSystem.update(ParticleUpdateStepSeconds);
         m_particleUpdateAccumulatorSeconds -= ParticleUpdateStepSeconds;
     }
+}
+
+void WorldFxSystem::processNamedEffectAudio()
+{
+    const std::vector<EffectSoundEvent> events = m_namedEffects.consumeSoundEvents();
+    for (const EffectSoundEvent &event : events)
+    {
+        const NamedSoundKey key = {.owner = event.owner, .componentId = event.componentId};
+        if (event.kind == EffectSoundEventKind::Stop)
+        {
+            const auto iterator = m_namedSoundInstances.find(key);
+            if (iterator != m_namedSoundInstances.end())
+            {
+                if (m_pNamedEffectAudioSystem != nullptr)
+                {
+                    m_pNamedEffectAudioSystem->stopSoundInstance(iterator->second);
+                }
+                m_namedSoundInstances.erase(iterator);
+            }
+            continue;
+        }
+        if (event.kind == EffectSoundEventKind::Move)
+        {
+            const auto iterator = m_namedSoundInstances.find(key);
+            if (iterator != m_namedSoundInstances.end() && m_pNamedEffectAudioSystem != nullptr)
+            {
+                m_pNamedEffectAudioSystem->setSoundInstancePosition(
+                    iterator->second,
+                    {event.position[0], event.position[1], event.position[2]});
+            }
+            continue;
+        }
+        if (m_pNamedEffectAudioSystem == nullptr)
+        {
+            continue;
+        }
+        const std::optional<std::string> path = m_namedEffectResources.findAssetPath(event.soundResource);
+        if (!path)
+        {
+            continue;
+        }
+        const std::optional<GameAudioSystem::WorldPosition> position = event.spatial
+            ? std::optional<GameAudioSystem::WorldPosition>({
+                event.position[0], event.position[1], event.position[2]})
+            : std::nullopt;
+        const uint64_t instanceId = m_pNamedEffectAudioSystem->playAssetInstance(
+            *path,
+            GameAudioSystem::PlaybackGroup::World,
+            position,
+            event.loop,
+            event.volume,
+            event.pitch,
+            event.innerRadius,
+            event.outerRadius);
+        if (instanceId != 0)
+        {
+            m_namedSoundInstances[key] = instanceId;
+        }
+    }
+}
+
+EffectLibrary &WorldFxSystem::namedEffectLibrary()
+{
+    return m_namedEffectLibrary;
+}
+
+const EffectLibrary &WorldFxSystem::namedEffectLibrary() const
+{
+    return m_namedEffectLibrary;
+}
+
+EffectSystem &WorldFxSystem::namedEffects()
+{
+    return m_namedEffects;
+}
+
+const EffectSystem &WorldFxSystem::namedEffects() const
+{
+    return m_namedEffects;
+}
+
+const EffectResourceLibrary &WorldFxSystem::namedEffectResources() const
+{
+    return m_namedEffectResources;
+}
+
+bool WorldFxSystem::setProjectileImpactEffectRebind(
+    FxRecipes::ProjectileRecipe recipe,
+    const std::string &effectId)
+{
+    if (recipe == FxRecipes::ProjectileRecipe::None || m_namedEffectLibrary.find(effectId) == nullptr)
+    {
+        return false;
+    }
+
+    m_projectileImpactEffectRebinds[recipe] = effectId;
+    return true;
+}
+
+bool WorldFxSystem::clearProjectileImpactEffectRebind(FxRecipes::ProjectileRecipe recipe)
+{
+    return m_projectileImpactEffectRebinds.erase(recipe) != 0;
+}
+
+bool WorldFxSystem::hasProjectileImpactEffectRebind(FxRecipes::ProjectileRecipe recipe) const
+{
+    return projectileImpactEffectRebind(recipe) != nullptr;
+}
+
+const std::string *WorldFxSystem::projectileImpactEffectRebind(FxRecipes::ProjectileRecipe recipe) const
+{
+    const std::unordered_map<FxRecipes::ProjectileRecipe, std::string>::const_iterator it =
+        m_projectileImpactEffectRebinds.find(recipe);
+    return it != m_projectileImpactEffectRebinds.end() ? &it->second : nullptr;
+}
+
+Engine::ModelAssetCache &WorldFxSystem::modelAssets()
+{
+    return m_modelAssets;
+}
+
+Engine::ModelInstanceSystem &WorldFxSystem::models()
+{
+    return m_models;
+}
+
+const Engine::ModelInstanceSystem &WorldFxSystem::models() const
+{
+    return m_models;
 }
 
 void WorldFxSystem::syncProjectileFx(GameSession &session, float deltaSeconds, bool refreshSpatialFx)
@@ -789,6 +1023,8 @@ void WorldFxSystem::syncProjectileTrails(GameSession &session, bool refreshSpati
 
 void WorldFxSystem::syncProjectileImpacts(GameSession &session)
 {
+    updateAttachedImpactEffects(session);
+
     const std::vector<GameplayProjectileImpactPresentationState> &impacts =
         session.gameplayFxService().activeProjectileImpactPresentationStates();
 
@@ -800,7 +1036,8 @@ void WorldFxSystem::syncProjectileImpacts(GameSession &session)
             impact.sourceObjectSpriteName,
             impact.sourceObjectFlags);
 
-        if (!FxRecipes::projectileRecipeUsesDedicatedImpactFx(recipe))
+        const std::string *pEffectRebind = projectileImpactEffectRebind(recipe);
+        if (pEffectRebind == nullptr && !FxRecipes::projectileRecipeUsesDedicatedImpactFx(recipe))
         {
             continue;
         }
@@ -809,14 +1046,42 @@ void WorldFxSystem::syncProjectileImpacts(GameSession &session)
 
         if (isNewImpact)
         {
-            FxRecipes::ImpactSpawnContext impactContext = {};
-            impactContext.recipe = recipe;
-            impactContext.objectName = impact.objectName;
-            impactContext.spriteName = impact.objectSpriteName;
-            impactContext.x = impact.x;
-            impactContext.y = impact.y;
-            impactContext.z = impact.z;
-            FxRecipes::spawnImpactParticles(m_particleSystem, impactContext);
+            if (pEffectRebind != nullptr)
+            {
+                EffectSpawnParams params;
+                params.position = {impact.x, impact.y, impact.z};
+                std::optional<std::array<float, 3>> targetPosition;
+                if (impact.targetActorIndex != static_cast<size_t>(-1))
+                {
+                    targetPosition = actorCenterPosition(session, impact.targetActorIndex);
+                    if (targetPosition)
+                    {
+                        params.position = *targetPosition;
+                    }
+                }
+                params.seed = impact.effectId;
+                const EffectHandle handle = m_namedEffects.spawn(*pEffectRebind, params);
+                if (targetPosition && m_namedEffects.contains(handle))
+                {
+                    m_attachedImpactEffects.push_back({handle, impact.targetActorIndex, *targetPosition});
+                }
+            }
+            else
+            {
+                FxRecipes::ImpactSpawnContext impactContext = {};
+                impactContext.recipe = recipe;
+                impactContext.objectName = impact.objectName;
+                impactContext.spriteName = impact.objectSpriteName;
+                impactContext.x = impact.x;
+                impactContext.y = impact.y;
+                impactContext.z = impact.z;
+                FxRecipes::spawnImpactParticles(m_particleSystem, impactContext);
+            }
+        }
+
+        if (pEffectRebind != nullptr)
+        {
+            continue;
         }
 
         const float lightRadius = impactLightRadius(recipe);
@@ -835,6 +1100,40 @@ void WorldFxSystem::syncProjectileImpacts(GameSession &session)
             m_persistentImpactLights[impact.effectId] = light;
         }
     }
+}
+
+void WorldFxSystem::updateAttachedImpactEffects(GameSession &session)
+{
+    m_attachedImpactEffects.erase(
+        std::remove_if(
+            m_attachedImpactEffects.begin(),
+            m_attachedImpactEffects.end(),
+            [&](AttachedImpactEffect &attached)
+            {
+                if (!m_namedEffects.contains(attached.handle))
+                {
+                    return true;
+                }
+
+                const std::optional<std::array<float, 3>> position =
+                    actorCenterPosition(session, attached.actorIndex);
+                if (!position)
+                {
+                    return true;
+                }
+                if (*position == attached.position)
+                {
+                    return false;
+                }
+
+                attached.position = *position;
+                return !m_namedEffects.setTransform(
+                    attached.handle,
+                    attached.position,
+                    {0.0f, 0.0f, 0.0f, 1.0f},
+                    1.0f);
+            }),
+        m_attachedImpactEffects.end());
 }
 
 void WorldFxSystem::cleanupSeenProjectileImpactIds(GameSession &session)

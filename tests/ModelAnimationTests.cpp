@@ -1,0 +1,511 @@
+#include "engine/AssetFileSystem.h"
+#include "engine/AssetScaleTier.h"
+#include "engine/models/GltfModelLoader.h"
+#include "engine/models/ModelInstance.h"
+
+#include <doctest/doctest.h>
+
+#include <chrono>
+#include <cstdint>
+#include <cstring>
+#include <filesystem>
+#include <fstream>
+#include <memory>
+#include <stdexcept>
+#include <string>
+#include <utility>
+#include <vector>
+
+namespace
+{
+std::shared_ptr<OpenYAMM::Engine::ModelAsset> makeAnimatedAsset()
+{
+    using namespace OpenYAMM::Engine;
+    std::shared_ptr<ModelAsset> asset = std::make_shared<ModelAsset>();
+    asset->nodes.resize(2);
+    asset->nodes[0].name = "child";
+    asset->nodes[0].parentIndex = 1;
+    asset->nodes[0].transform.translation = {1.0f, 0.0f, 0.0f};
+    asset->nodes[0].matrix = composeModelTransform(asset->nodes[0].transform);
+    asset->nodes[1].name = "root";
+    asset->nodes[1].childIndices = {0};
+    asset->nodes[1].matrix = identityModelMatrix();
+    asset->hierarchyOrder = {1, 0};
+    asset->nodeIndicesByName = {{"child", 0}, {"root", 1}};
+
+    ModelAnimationChannel translation;
+    translation.nodeIndex = 0;
+    translation.target = ModelAnimationTarget::Translation;
+    translation.interpolation = ModelAnimationInterpolation::Linear;
+    translation.times = {0.0f, 1.0f};
+    translation.values = {{0.0f, 0.0f, 0.0f, 0.0f}, {2.0f, 0.0f, 0.0f, 0.0f}};
+
+    ModelAnimationChannel rotation;
+    rotation.nodeIndex = 0;
+    rotation.target = ModelAnimationTarget::Rotation;
+    rotation.interpolation = ModelAnimationInterpolation::Linear;
+    rotation.times = {0.0f, 1.0f};
+    rotation.values = {{0.0f, 0.0f, 0.0f, 1.0f}, {0.0f, 0.0f, 1.0f, 0.0f}};
+
+    ModelAnimationClip clip;
+    clip.name = "move";
+    clip.durationSeconds = 1.0f;
+    clip.channels = {translation, rotation};
+    asset->clips.push_back(std::move(clip));
+    asset->clipIndicesByName.emplace("move", 0);
+    return asset;
+}
+
+std::filesystem::path makeTemporaryRoot()
+{
+    const uint64_t ticks = static_cast<uint64_t>(
+        std::chrono::steady_clock::now().time_since_epoch().count());
+    return std::filesystem::temp_directory_path() / ("openyamm_model_" + std::to_string(ticks));
+}
+
+void appendFloat(std::vector<uint8_t> &bytes, float value)
+{
+    const size_t offset = bytes.size();
+    bytes.resize(offset + sizeof(value));
+    std::memcpy(bytes.data() + offset, &value, sizeof(value));
+}
+
+void appendUInt16(std::vector<uint8_t> &bytes, uint16_t value)
+{
+    bytes.push_back(static_cast<uint8_t>(value & 0xff));
+    bytes.push_back(static_cast<uint8_t>((value >> 8) & 0xff));
+}
+
+void appendUInt32(std::vector<uint8_t> &bytes, uint32_t value)
+{
+    bytes.push_back(static_cast<uint8_t>(value & 0xff));
+    bytes.push_back(static_cast<uint8_t>((value >> 8) & 0xff));
+    bytes.push_back(static_cast<uint8_t>((value >> 16) & 0xff));
+    bytes.push_back(static_cast<uint8_t>((value >> 24) & 0xff));
+}
+
+void writeUInt16(std::ofstream &stream, uint16_t value)
+{
+    stream.put(static_cast<char>(value & 0xff));
+    stream.put(static_cast<char>((value >> 8) & 0xff));
+}
+
+void writeUInt32(std::ofstream &stream, uint32_t value)
+{
+    stream.put(static_cast<char>(value & 0xff));
+    stream.put(static_cast<char>((value >> 8) & 0xff));
+    stream.put(static_cast<char>((value >> 16) & 0xff));
+    stream.put(static_cast<char>((value >> 24) & 0xff));
+}
+
+uint32_t crc32(const std::vector<uint8_t> &bytes)
+{
+    uint32_t crc = 0xffffffffu;
+    for (uint8_t byte : bytes)
+    {
+        crc ^= byte;
+        for (int bit = 0; bit < 8; ++bit)
+        {
+            crc = (crc >> 1) ^ (0xedb88320u & (0u - (crc & 1u)));
+        }
+    }
+    return crc ^ 0xffffffffu;
+}
+
+void writeFile(const std::filesystem::path &path, const std::string &text)
+{
+    std::filesystem::create_directories(path.parent_path());
+    std::ofstream stream(path, std::ios::binary);
+    stream << text;
+}
+
+void writeFile(const std::filesystem::path &path, const std::vector<uint8_t> &bytes)
+{
+    std::filesystem::create_directories(path.parent_path());
+    std::ofstream stream(path, std::ios::binary);
+    stream.write(reinterpret_cast<const char *>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
+}
+
+std::vector<uint8_t> fixtureBuffer()
+{
+    std::vector<uint8_t> bytes;
+    for (float value : std::initializer_list<float>{0, 0, 0, 1, 0, 0, 0, 1, 0})
+    {
+        appendFloat(bytes, value);
+    }
+    for (int vertex = 0; vertex < 3; ++vertex)
+    {
+        appendFloat(bytes, 0.0f);
+        appendFloat(bytes, 0.0f);
+        appendFloat(bytes, 1.0f);
+    }
+    for (float value : std::initializer_list<float>{0, 0, 1, 0, 0, 1})
+    {
+        appendFloat(bytes, value);
+    }
+    appendUInt16(bytes, 0);
+    appendUInt16(bytes, 1);
+    appendUInt16(bytes, 2);
+    appendUInt16(bytes, 0);
+    appendUInt16(bytes, 2);
+    appendUInt16(bytes, 1);
+    appendFloat(bytes, 0.0f);
+    appendFloat(bytes, 1.0f);
+    for (float value : std::initializer_list<float>{0, 0, 0, 2, 0, 0})
+    {
+        appendFloat(bytes, value);
+    }
+    for (float value : std::initializer_list<float>{1, 1, 1, 2, 2, 2})
+    {
+        appendFloat(bytes, value);
+    }
+    return bytes;
+}
+
+std::string fixtureGltf(const std::string &interpolation = "LINEAR")
+{
+    return R"({
+  "asset": {"version": "2.0"},
+  "scene": 0,
+  "scenes": [{"nodes": [1]}],
+  "nodes": [
+    {"name": "attachment", "mesh": 0, "translation": [1, 0, 0]},
+    {"name": "root", "children": [0], "translation": [10, 0, 0]}
+  ],
+  "meshes": [{"name": "triangle", "primitives": [{
+    "attributes": {"POSITION": 0, "NORMAL": 1, "TEXCOORD_0": 2}, "indices": 3, "material": 0
+  }]}],
+  "materials": [{"name": "opaque", "pbrMetallicRoughness": {"baseColorFactor": [1, 0.5, 0.25, 1]}}],
+  "animations": [
+    {"name": "move", "samplers": [{"input": 4, "output": 5, "interpolation": ")" + interpolation + R"("}],
+     "channels": [{"sampler": 0, "target": {"node": 0, "path": "translation"}}]},
+    {"name": "grow", "samplers": [{"input": 4, "output": 6, "interpolation": "STEP"}],
+     "channels": [{"sampler": 0, "target": {"node": 0, "path": "scale"}}]}
+  ],
+  "buffers": [{"uri": "fixture.bin", "byteLength": 164}],
+  "bufferViews": [
+    {"buffer": 0, "byteOffset": 0, "byteLength": 36},
+    {"buffer": 0, "byteOffset": 36, "byteLength": 36},
+    {"buffer": 0, "byteOffset": 72, "byteLength": 24},
+    {"buffer": 0, "byteOffset": 96, "byteLength": 12},
+    {"buffer": 0, "byteOffset": 108, "byteLength": 8},
+    {"buffer": 0, "byteOffset": 116, "byteLength": 24},
+    {"buffer": 0, "byteOffset": 140, "byteLength": 24}
+  ],
+  "accessors": [
+    {"bufferView": 0, "componentType": 5126, "count": 3, "type": "VEC3"},
+    {"bufferView": 1, "componentType": 5126, "count": 3, "type": "VEC3"},
+    {"bufferView": 2, "componentType": 5126, "count": 3, "type": "VEC2"},
+    {"bufferView": 3, "componentType": 5123, "count": 6, "type": "SCALAR"},
+    {"bufferView": 4, "componentType": 5126, "count": 2, "type": "SCALAR"},
+    {"bufferView": 5, "componentType": 5126, "count": 2, "type": "VEC3"},
+    {"bufferView": 6, "componentType": 5126, "count": 2, "type": "VEC3"}
+  ]
+})";
+}
+
+std::vector<uint8_t> fixtureGlb()
+{
+    std::string json = fixtureGltf();
+    const std::string externalUri = "\"uri\": \"fixture.bin\", ";
+    const size_t uriOffset = json.find(externalUri);
+    if (uriOffset == std::string::npos)
+    {
+        throw std::runtime_error("fixture glTF has no external buffer URI");
+    }
+    json.erase(uriOffset, externalUri.size());
+    while (json.size() % 4 != 0)
+    {
+        json.push_back(' ');
+    }
+    std::vector<uint8_t> binary = fixtureBuffer();
+    while (binary.size() % 4 != 0)
+    {
+        binary.push_back(0);
+    }
+
+    std::vector<uint8_t> glb;
+    appendUInt32(glb, 0x46546c67u);
+    appendUInt32(glb, 2);
+    appendUInt32(glb, static_cast<uint32_t>(12 + 8 + json.size() + 8 + binary.size()));
+    appendUInt32(glb, static_cast<uint32_t>(json.size()));
+    appendUInt32(glb, 0x4e4f534au);
+    glb.insert(glb.end(), json.begin(), json.end());
+    appendUInt32(glb, static_cast<uint32_t>(binary.size()));
+    appendUInt32(glb, 0x004e4942u);
+    glb.insert(glb.end(), binary.begin(), binary.end());
+    return glb;
+}
+
+void writeZipFile(
+    const std::filesystem::path &path,
+    const std::vector<std::pair<std::string, std::vector<uint8_t>>> &files)
+{
+    struct Entry
+    {
+        std::string name;
+        uint32_t checksum = 0;
+        uint32_t size = 0;
+        uint32_t offset = 0;
+    };
+
+    std::filesystem::create_directories(path.parent_path());
+    std::ofstream stream(path, std::ios::binary);
+    std::vector<Entry> entries;
+    for (const auto &[name, bytes] : files)
+    {
+        const Entry entry = {
+            .name = name,
+            .checksum = crc32(bytes),
+            .size = static_cast<uint32_t>(bytes.size()),
+            .offset = static_cast<uint32_t>(stream.tellp()),
+        };
+        entries.push_back(entry);
+        writeUInt32(stream, 0x04034b50u);
+        writeUInt16(stream, 20);
+        writeUInt16(stream, 0);
+        writeUInt16(stream, 0);
+        writeUInt16(stream, 0);
+        writeUInt16(stream, 0);
+        writeUInt32(stream, entry.checksum);
+        writeUInt32(stream, entry.size);
+        writeUInt32(stream, entry.size);
+        writeUInt16(stream, static_cast<uint16_t>(name.size()));
+        writeUInt16(stream, 0);
+        stream.write(name.data(), static_cast<std::streamsize>(name.size()));
+        stream.write(reinterpret_cast<const char *>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
+    }
+    const uint32_t directoryOffset = static_cast<uint32_t>(stream.tellp());
+    for (const Entry &entry : entries)
+    {
+        writeUInt32(stream, 0x02014b50u);
+        writeUInt16(stream, 20);
+        writeUInt16(stream, 20);
+        writeUInt16(stream, 0);
+        writeUInt16(stream, 0);
+        writeUInt16(stream, 0);
+        writeUInt16(stream, 0);
+        writeUInt32(stream, entry.checksum);
+        writeUInt32(stream, entry.size);
+        writeUInt32(stream, entry.size);
+        writeUInt16(stream, static_cast<uint16_t>(entry.name.size()));
+        writeUInt16(stream, 0);
+        writeUInt16(stream, 0);
+        writeUInt16(stream, 0);
+        writeUInt16(stream, 0);
+        writeUInt32(stream, 0);
+        writeUInt32(stream, entry.offset);
+        stream.write(entry.name.data(), static_cast<std::streamsize>(entry.name.size()));
+    }
+    const uint32_t directorySize = static_cast<uint32_t>(stream.tellp()) - directoryOffset;
+    writeUInt32(stream, 0x06054b50u);
+    writeUInt16(stream, 0);
+    writeUInt16(stream, 0);
+    writeUInt16(stream, static_cast<uint16_t>(entries.size()));
+    writeUInt16(stream, static_cast<uint16_t>(entries.size()));
+    writeUInt32(stream, directorySize);
+    writeUInt32(stream, directoryOffset);
+    writeUInt16(stream, 0);
+}
+}
+
+TEST_CASE("ModelAnimation evaluates out-of-order hierarchies and quaternion shortest paths")
+{
+    using namespace OpenYAMM::Engine;
+    const std::shared_ptr<ModelAsset> asset = makeAnimatedAsset();
+    ModelPose pose;
+    evaluateModelClip(*asset, 0, 0.5f, pose);
+    evaluateModelHierarchy(*asset, identityModelMatrix(), pose);
+
+    CHECK(pose.globalMatrices[0][12] == doctest::Approx(1.0f));
+    CHECK(pose.globalMatrices[0][0] == doctest::Approx(0.0f).epsilon(0.0001));
+    CHECK(pose.globalMatrices[0][1] == doctest::Approx(1.0f).epsilon(0.0001));
+}
+
+TEST_CASE("ModelAnimation glTF placement maps Y-up into OpenYAMM Z-up")
+{
+    using namespace OpenYAMM::Engine;
+    const ModelMatrix placement = composeModelTransform(gltfModelPlacement({10.0f, 20.0f, 30.0f}));
+
+    CHECK(placement[4] + placement[12] == doctest::Approx(10.0f));
+    CHECK(placement[5] + placement[13] == doctest::Approx(20.0f));
+    CHECK(placement[6] + placement[14] == doctest::Approx(31.0f));
+    CHECK(placement[8] + placement[12] == doctest::Approx(10.0f));
+    CHECK(placement[9] + placement[13] == doctest::Approx(21.0f));
+    CHECK(placement[10] + placement[14] == doctest::Approx(30.0f));
+    constexpr float HalfPi = 1.5707963267948966192f;
+    const ModelMatrix yawed = composeModelTransform(gltfModelPlacement({}, HalfPi, 2.0f));
+    CHECK(yawed[0] == doctest::Approx(0.0f).epsilon(0.0001));
+    CHECK(yawed[1] == doctest::Approx(2.0f).epsilon(0.0001));
+    CHECK(yawed[6] == doctest::Approx(2.0f).epsilon(0.0001));
+    CHECK(yawed[8] == doctest::Approx(-2.0f).epsilon(0.0001));
+}
+
+TEST_CASE("ModelAnimation instances have independent clocks and generation-checked handles")
+{
+    using namespace OpenYAMM::Engine;
+    const std::shared_ptr<ModelAsset> asset = makeAnimatedAsset();
+    ModelInstanceSystem instances;
+    const ModelInstanceHandle first = instances.create(asset);
+    const ModelInstanceHandle second = instances.create(asset);
+    CHECK_FALSE(instances.areNodeMarkersVisible(first));
+    CHECK(instances.setNodeMarkersVisible(first, true));
+    CHECK(instances.areNodeMarkersVisible(first));
+    CHECK_FALSE(instances.areNodeMarkersVisible(second));
+    REQUIRE(instances.play(first, "move", ModelPlaybackMode::Loop));
+    REQUIRE(instances.play(second, "move", ModelPlaybackMode::Once));
+    REQUIRE(instances.setTime(second, 0.5f));
+
+    instances.update(0.25f);
+    CHECK(instances.playbackTime(first) == doctest::Approx(0.25f));
+    CHECK(instances.playbackTime(second) == doctest::Approx(0.75f));
+    REQUIRE(instances.nodeMatrix(first, "child") != nullptr);
+    REQUIRE(instances.nodeMatrix(second, "child") != nullptr);
+    CHECK((*instances.nodeMatrix(first, "child"))[12] == doctest::Approx(0.5f));
+    CHECK((*instances.nodeMatrix(second, "child"))[12] == doctest::Approx(1.5f));
+
+    instances.update(0.5f);
+    CHECK_FALSE(instances.isPlaying(second));
+    CHECK((*instances.nodeMatrix(second, "child"))[12] == doctest::Approx(2.0f));
+    REQUIRE(instances.destroy(first));
+    CHECK_FALSE(instances.contains(first));
+    const ModelInstanceHandle replacement = instances.create(asset);
+    CHECK_EQ(replacement.index, first.index);
+    CHECK_NE(replacement.generation, first.generation);
+}
+
+TEST_CASE("ModelAnimation loader reads external glTF buffers through AssetFileSystem")
+{
+    using namespace OpenYAMM::Engine;
+    const std::filesystem::path temporaryRoot = makeTemporaryRoot();
+    const std::filesystem::path assetRoot = temporaryRoot / "assets_dev";
+    writeFile(assetRoot / "engine" / "models" / "fixture.gltf", fixtureGltf());
+    writeFile(assetRoot / "engine" / "models" / "fixture.bin", fixtureBuffer());
+
+    {
+        AssetFileSystem assetFileSystem;
+        REQUIRE(assetFileSystem.initialize(temporaryRoot, assetRoot, AssetScaleTier::X1));
+        ModelAssetCache cache;
+        const ModelLoadResult loaded = cache.load(assetFileSystem, "engine/models/fixture.gltf");
+        REQUIRE_MESSAGE(loaded, loaded.error.c_str());
+        REQUIRE_EQ(loaded.asset->hierarchyOrder.size(), 2);
+        CHECK_EQ(loaded.asset->hierarchyOrder[0], 1);
+        CHECK_EQ(loaded.asset->hierarchyOrder[1], 0);
+        CHECK_EQ(loaded.asset->clips.size(), 2);
+        CHECK_EQ(loaded.asset->meshes[0].primitives[0].indices.size(), 6);
+        CHECK(loaded.asset->staticBounds.min[0] == doctest::Approx(11.0f));
+        CHECK(loaded.asset->staticBounds.max[0] == doctest::Approx(12.0f));
+
+        ModelInstanceSystem instances;
+        const ModelInstanceHandle handle = instances.create(loaded.asset);
+        REQUIRE(instances.play(handle, "move", ModelPlaybackMode::Once));
+        REQUIRE(instances.setTime(handle, 1.0f));
+        REQUIRE(instances.bounds(handle) != nullptr);
+        CHECK(instances.bounds(handle)->min[0] == doctest::Approx(12.0f));
+        CHECK(instances.bounds(handle)->max[0] == doctest::Approx(13.0f));
+
+        const ModelLoadResult cached = cache.load(assetFileSystem, "engine/models/fixture.gltf");
+        REQUIRE(cached);
+        CHECK_EQ(cached.asset.get(), loaded.asset.get());
+        CHECK_EQ(cache.size(), 1);
+        cache.clear();
+        CHECK_EQ(cache.size(), 0);
+    }
+    std::filesystem::remove_all(temporaryRoot);
+}
+
+TEST_CASE("ModelAnimation loader rejects unsupported interpolation explicitly")
+{
+    using namespace OpenYAMM::Engine;
+    const std::filesystem::path temporaryRoot = makeTemporaryRoot();
+    const std::filesystem::path assetRoot = temporaryRoot / "assets_dev";
+    writeFile(assetRoot / "engine" / "models" / "fixture.gltf", fixtureGltf("CUBICSPLINE"));
+    writeFile(assetRoot / "engine" / "models" / "fixture.bin", fixtureBuffer());
+
+    {
+        AssetFileSystem assetFileSystem;
+        REQUIRE(assetFileSystem.initialize(temporaryRoot, assetRoot, AssetScaleTier::X1));
+        GltfModelLoader loader;
+        const ModelLoadResult loaded = loader.load(assetFileSystem, "engine/models/fixture.gltf");
+        CHECK_FALSE(loaded);
+        CHECK(loaded.error.find("CUBICSPLINE") != std::string::npos);
+    }
+    std::filesystem::remove_all(temporaryRoot);
+}
+
+TEST_CASE("ModelAnimation loader reads GLB and packaged external buffers")
+{
+    using namespace OpenYAMM::Engine;
+    const std::filesystem::path temporaryRoot = makeTemporaryRoot();
+    const std::filesystem::path developmentAssets = temporaryRoot / "assets_dev";
+    writeFile(developmentAssets / "engine" / "models" / "fixture.glb", fixtureGlb());
+    {
+        AssetFileSystem assetFileSystem;
+        REQUIRE(assetFileSystem.initialize(temporaryRoot, developmentAssets, AssetScaleTier::X1));
+        const ModelLoadResult loaded = GltfModelLoader().load(assetFileSystem, "engine/models/fixture.glb");
+        REQUIRE_MESSAGE(loaded, loaded.error.c_str());
+        CHECK_EQ(loaded.asset->clips.size(), 2);
+        CHECK_EQ(loaded.asset->meshes.size(), 1);
+    }
+
+    const std::filesystem::path packagedAssets = temporaryRoot / "assets";
+    const std::string gltf = fixtureGltf();
+    writeZipFile(
+        packagedAssets / "engine.zip",
+        {
+            {"models/fixture.gltf", std::vector<uint8_t>(gltf.begin(), gltf.end())},
+            {"models/fixture.bin", fixtureBuffer()},
+        });
+    {
+        AssetFileSystem assetFileSystem;
+        REQUIRE(assetFileSystem.initialize(temporaryRoot, packagedAssets, AssetScaleTier::X1));
+        const ModelLoadResult loaded = GltfModelLoader().load(assetFileSystem, "engine/models/fixture.gltf");
+        INFO(loaded.error);
+        REQUIRE(loaded);
+        CHECK_EQ(loaded.asset->hierarchyOrder.size(), 2);
+        CHECK_EQ(loaded.asset->clips.size(), 2);
+        CHECK_FALSE(assetFileSystem.resolvePhysicalPath("engine/models/fixture.bin").has_value());
+    }
+    std::filesystem::remove_all(temporaryRoot);
+}
+
+TEST_CASE("ModelAnimation checked-in fixture covers rendering and animation contract")
+{
+    using namespace OpenYAMM::Engine;
+    const std::filesystem::path sourceRoot = OPENYAMM_SOURCE_DIR;
+    AssetFileSystem assetFileSystem;
+    REQUIRE(assetFileSystem.initialize(sourceRoot, sourceRoot / "assets_dev", AssetScaleTier::X1));
+
+    const ModelLoadResult loaded = GltfModelLoader().load(
+        assetFileSystem,
+        "engine/models/fixtures/shared_model_fixture.glb");
+    INFO(loaded.error);
+    REQUIRE(loaded);
+    REQUIRE_EQ(loaded.asset->nodes.size(), 3);
+    REQUIRE_EQ(loaded.asset->hierarchyOrder.size(), 3);
+    CHECK_EQ(loaded.asset->hierarchyOrder[0], 2);
+    CHECK_EQ(loaded.asset->hierarchyOrder[1], 0);
+    CHECK_EQ(loaded.asset->hierarchyOrder[2], 1);
+    CHECK_EQ(loaded.asset->nodes[2].matrix[12], doctest::Approx(0.25f));
+    REQUIRE_EQ(loaded.asset->meshes.size(), 1);
+    CHECK_EQ(loaded.asset->meshes[0].primitives.size(), 2);
+    REQUIRE_EQ(loaded.asset->materials.size(), 2);
+    CHECK_EQ(loaded.asset->materials[0].alphaMode, ModelAlphaMode::Opaque);
+    CHECK_EQ(loaded.asset->materials[1].alphaMode, ModelAlphaMode::Blend);
+    CHECK(loaded.asset->materials[1].doubleSided);
+    CHECK(loaded.asset->materials[1].unlit);
+    REQUIRE_EQ(loaded.asset->images.size(), 1);
+    CHECK_EQ(loaded.asset->clips.size(), 2);
+    CHECK(loaded.asset->findNode("animated_attachment").has_value());
+
+    ModelInstanceSystem instances;
+    const ModelInstanceHandle handle = instances.create(loaded.asset);
+    REQUIRE(instances.play(handle, "bob_spin", ModelPlaybackMode::Loop));
+    const ModelMatrix *pInitial = instances.nodeMatrix(handle, "animated_attachment");
+    REQUIRE(pInitial != nullptr);
+    const float initialY = (*pInitial)[13];
+    instances.update(1.0f);
+    const ModelMatrix *pAnimated = instances.nodeMatrix(handle, "animated_attachment");
+    REQUIRE(pAnimated != nullptr);
+    CHECK((*pAnimated)[13] > initialY);
+}

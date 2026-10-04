@@ -1,0 +1,64 @@
+schema: openyamm.effectTextureImport.v1
+source:
+  path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/SMOKEEFFECTS/NOISESMOKEUPWARDPHASE/NOISE_SMOKE_UPWARDPHASE_0002.dtx
+  format: LithTech DTX
+  sha256: d72241cd94b40d1ae63eb0d665b822761fad49af5a208aa34813c9b4d182c104
+runtime:
+  texture: engine/effects/mm9/textures/smokeeffects/noisesmokeupwardphase/noise_smoke_upwardphase_0002.png
+  format: PNG RGBA8
+  colorSpace: srgb
+  alphaUsage: blend
+  premultipliedAlpha: false
+  mipPolicy: generate-at-runtime
+  minFilter: linear
+  magFilter: linear
+  wrapU: clamp
+  wrapV: clamp
+conversion:
+  decoder: tools/mm9_import_discovery/convert_abc_model.py:decode_dtx_mips
+  decodedRgbChanged: false
+  decodedAlphaChanged: false
+  opaqueAlphaRepair: false
+  zeroAlphaRgbPreserved: true
+  sourceMipArtifacts: mips/*.png
+dtx:
+  version: -5
+  width: 128
+  height: 128
+  mipCount: 4
+  sectionCount: 0
+  internalFlags: 136
+  userFlags: 0
+  extraHex: '000003000000000000000000'
+  bppIdentifier: 3
+  command: ''
+  repairOpaqueAlpha: false
+  mips:
+  - index: 0
+    width: 128
+    height: 128
+    sourceOffset: 164
+    sourceBytes: 65536
+    decodedRgbaSha256: fc1a00c016818ea15484196c4fa53a9e393e32691fbe9ff0869b3bc249fa52a2
+    artifact: mips/00.png
+  - index: 1
+    width: 64
+    height: 64
+    sourceOffset: 65700
+    sourceBytes: 16384
+    decodedRgbaSha256: 265779fd8109a6cbba08a2dbdfa4dcde96dba896a021eae57d81b255f6beba6d
+    artifact: mips/01.png
+  - index: 2
+    width: 32
+    height: 32
+    sourceOffset: 82084
+    sourceBytes: 4096
+    decodedRgbaSha256: 55eb18f76b7532891901b87cceeaabd9af5d93bacf884a253ae8a1eb8f09a1e2
+    artifact: mips/02.png
+  - index: 3
+    width: 16
+    height: 16
+    sourceOffset: 86180
+    sourceBytes: 1024
+    decodedRgbaSha256: 8b817ca5c922eac20d457077f482c9b3711e9112841efe1e2cfc25d404bdd1ac
+    artifact: mips/03.png

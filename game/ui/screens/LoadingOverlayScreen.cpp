@@ -1,11 +1,12 @@
 #include "game/ui/screens/LoadingOverlayScreen.h"
+#include "engine/BgfxContext.h"
+#include "game/ui/RestHourglassAnimation.h"
 
 #include <SDL3/SDL.h>
 
 #include <algorithm>
-#include <array>
 #include <cmath>
-#include <cstdio>
+#include <stdexcept>
 
 namespace OpenYAMM::Game
 {
@@ -20,30 +21,58 @@ constexpr float ProgressBarWidth = 299.0f;
 constexpr float ProgressBarHeight = 14.0f;
 constexpr int ProgressStepPercent = 5;
 constexpr int ProgressStepCount = 20;
-constexpr float DungeonProgressBarX = 94.0f;
-constexpr float DungeonProgressBarY = 42.0f;
-constexpr float DungeonProgressBarWidth = 113.0f;
-constexpr float DungeonProgressBarHeight = 16.0f;
-constexpr float DungeonTurnHourX = 20.0f;
-constexpr float DungeonTurnHourY = 24.0f;
-constexpr int TurnHourFrameCount = 10;
-constexpr uint64_t TurnHourFrameMilliseconds = 50;
-constexpr uint16_t FullscreenLoadingViewId = 0;
-constexpr uint16_t DungeonTransitionLoadingViewId = 3;
-
-std::string turnHourFrameName()
-{
-    const int frameIndex = static_cast<int>(
-        (SDL_GetTicks() / TurnHourFrameMilliseconds) % TurnHourFrameCount) + 1;
-    char frameName[16] = {};
-    std::snprintf(frameName, sizeof(frameName), "ia02-%03d", frameIndex);
-    return frameName;
-}
+constexpr float LoadingHourglassSpeed = 4.0f;
+constexpr uint16_t LoadingViewId = 254;
 }
 
 LoadingOverlayScreen::LoadingOverlayScreen(const Engine::AssetFileSystem &assetFileSystem)
-    : MenuScreenBase(assetFileSystem)
+    : MenuDesignScreen(assetFileSystem)
 {
+    // Loading can start after world, HUD or menu draws have already been submitted.
+    // Cover them with the retained screen or loading artwork on every loading frame.
+    setRenderViewId(LoadingViewId);
+    setClearBackground(true);
+}
+
+LoadingOverlayScreen::~LoadingOverlayScreen()
+{
+    if (bgfx::isValid(m_transitionBackground) && Engine::BgfxContext::isBgfxInitialized())
+    {
+        bgfx::destroy(m_transitionBackground);
+    }
+}
+
+bgfx::FrameBufferHandle LoadingOverlayScreen::createTransitionBackground(int width, int height)
+{
+    if (bgfx::isValid(m_transitionBackground))
+    {
+        bgfx::destroy(m_transitionBackground);
+        m_transitionBackground = BGFX_INVALID_HANDLE;
+    }
+
+    const uint64_t flags = BGFX_TEXTURE_RT | BGFX_SAMPLER_U_CLAMP | BGFX_SAMPLER_V_CLAMP;
+    const bgfx::TextureHandle attachments[] = {
+        bgfx::createTexture2D(uint16_t(width), uint16_t(height), false, 1, bgfx::TextureFormat::RGBA8, flags),
+        bgfx::createTexture2D(
+            uint16_t(width), uint16_t(height), false, 1, bgfx::TextureFormat::D24S8, BGFX_TEXTURE_RT_WRITE_ONLY)
+    };
+    if (!bgfx::isValid(attachments[0]) || !bgfx::isValid(attachments[1]))
+    {
+        for (bgfx::TextureHandle texture : attachments)
+        {
+            if (bgfx::isValid(texture))
+            {
+                bgfx::destroy(texture);
+            }
+        }
+        throw std::runtime_error("Unable to allocate transition background textures");
+    }
+    m_transitionBackground = bgfx::createFrameBuffer(2, attachments, true);
+    if (!bgfx::isValid(m_transitionBackground))
+    {
+        throw std::runtime_error("Unable to allocate transition background framebuffer");
+    }
+    return m_transitionBackground;
 }
 
 AppMode LoadingOverlayScreen::mode() const
@@ -54,11 +83,12 @@ AppMode LoadingOverlayScreen::mode() const
 void LoadingOverlayScreen::setPresentation(Presentation presentation)
 {
     m_presentation = presentation;
-    setRenderViewId(
-        presentation == Presentation::DungeonTransition
-            ? DungeonTransitionLoadingViewId
-            : FullscreenLoadingViewId);
-    setClearBackground(presentation == Presentation::Fullscreen);
+    m_animationStartTicks = SDL_GetTicks();
+    if (presentation == Presentation::DungeonTransition)
+    {
+        loadDesign("gameplay/loading");
+        preloadLayoutAssets(m_designLayouts);
+    }
 }
 
 void LoadingOverlayScreen::setBackgroundTextureName(const std::string &textureName)
@@ -71,9 +101,59 @@ void LoadingOverlayScreen::setProgressPercent(int progressPercent)
     m_progressPercent = std::clamp(progressPercent, 0, 100);
 }
 
+void LoadingOverlayScreen::drawHourglass(const Rect &rect)
+{
+    namespace Atlas = RestHourglassAtlas;
+    const UiLayoutManager::LayoutElement *pLayout = m_designLayouts.findElement("LoadingHourglass");
+    const std::optional<TextureSize> sandSize = textureSize(pLayout->primaryAsset);
+    if (!sandSize)
+    {
+        return;
+    }
+    const uint64_t cycleMilliseconds = uint64_t(RestHourglassCycleSeconds * 1000.0f / LoadingHourglassSpeed);
+    const float elapsed = float((SDL_GetTicks() - m_animationStartTicks) % cycleMilliseconds)
+        * LoadingHourglassSpeed / 1000.0f;
+    const RestHourglassFrame pose = restHourglassFrame(elapsed);
+    const float sourceScaleX = sandSize->width / float(Atlas::atlasWidth);
+    const float sourceScaleY = sandSize->height / float(Atlas::atlasHeight);
+    const SourceRect crop{
+        float((pose.sandFrame % Atlas::columns) * Atlas::cellWidth + Atlas::padding) * sourceScaleX,
+        float((pose.sandFrame / Atlas::columns) * Atlas::cellHeight + Atlas::padding) * sourceScaleY,
+        float(Atlas::cropWidth) * sourceScaleX, float(Atlas::cropHeight) * sourceScaleY};
+    const float sx = rect.width / float(Atlas::canvasWidth);
+    const float sy = rect.height / float(Atlas::canvasHeight);
+    // Both atlas crop and glass shell share the same centre, including during the turn.
+    drawTextureRegionColor(pLayout->primaryAsset, crop,
+        {rect.x + float(Atlas::cropX) * sx, rect.y + float(Atlas::cropY) * sy,
+         float(Atlas::cropWidth) * sx, float(Atlas::cropHeight) * sy}, 0xffffffffu, pose.sandRotationRadians);
+    drawTextureRegionColor(pLayout->tertiaryAsset, {}, rect, 0xffffffffu, pose.frameRotationRadians);
+}
+
+void LoadingOverlayScreen::drawTransition()
+{
+    const UiLayoutManager::LayoutElement *pPanel = m_designLayouts.findElement("LoadingPanel");
+    drawTexture(pPanel->primaryAsset, designRect("LoadingPanel"));
+    drawHourglass(designRect("LoadingHourglass"));
+    label("LoadingTitle", m_designLayouts.findElement("LoadingTitle")->labelText);
+
+    const Rect track = designRect("LoadingProgress");
+    const float line = std::max(1.0f, designScale());
+    drawSolidRect(track, 0xff556975u);
+    const Rect inside{track.x + line, track.y + line, track.width - 2 * line, track.height - 2 * line};
+    drawSolidRect(inside, 0xff111813u);
+    const float filledWidth = inside.width * float(m_progressPercent) / 100.0f;
+    if (filledWidth > 0)
+    {
+        drawSolidRect({inside.x, inside.y, filledWidth, inside.height}, 0xff3134cfu);
+        drawSolidRect({inside.x, inside.y, filledWidth, line}, 0xff4752e6u);
+        drawSolidRect({inside.x, inside.y + inside.height - line, filledWidth, line}, 0xff1e208cu);
+    }
+}
+
 void LoadingOverlayScreen::drawScreen(float deltaSeconds)
 {
     static_cast<void>(deltaSeconds);
+    bgfx::setViewFrameBuffer(LoadingViewId, BGFX_INVALID_HANDLE);
 
     const float baseScale = std::min(
         std::min(
@@ -87,78 +167,13 @@ void LoadingOverlayScreen::drawScreen(float deltaSeconds)
 
     if (m_presentation == Presentation::DungeonTransition)
     {
-        const std::array<std::string, 2> bardataCandidates = {
-            m_backgroundTextureName,
-            "bardata"
-        };
-        std::string bardataTextureName;
-        std::optional<TextureSize> bardataSize;
+        drawTextureHandle(
+            bgfx::getTexture(m_transitionBackground),
+            Rect{0.0f, 0.0f, float(frameWidth()), float(frameHeight())},
+            bgfx::getCaps()->originBottomLeft,
+            false);
 
-        for (const std::string &candidate : bardataCandidates)
-        {
-            bardataSize = textureSize(candidate);
-
-            if (bardataSize)
-            {
-                bardataTextureName = candidate;
-                break;
-            }
-        }
-
-        if (!bardataSize)
-        {
-            return;
-        }
-
-        const float imageWidth = bardataSize->width * baseScale;
-        const float imageHeight = bardataSize->height * baseScale;
-        const float imageX = std::round((static_cast<float>(frameWidth()) - imageWidth) * 0.5f);
-        const float imageY = std::round((static_cast<float>(frameHeight()) - imageHeight) * 0.5f);
-
-        drawTexture(
-            bardataTextureName,
-            Rect{
-                imageX,
-                imageY,
-                std::round(imageWidth),
-                std::round(imageHeight)
-            });
-
-        const std::string turnHourTextureName = turnHourFrameName();
-        const std::optional<TextureSize> turnHourSize = textureSize(turnHourTextureName);
-
-        if (turnHourSize)
-        {
-            drawTexture(
-                turnHourTextureName,
-                Rect{
-                    std::round(imageX + DungeonTurnHourX * baseScale),
-                    std::round(imageY + DungeonTurnHourY * baseScale),
-                    std::round(turnHourSize->width * baseScale),
-                    std::round(turnHourSize->height * baseScale)
-                });
-        }
-
-        const float fillFraction = static_cast<float>(std::clamp(m_progressPercent, 0, 100)) / 100.0f;
-        const int fillWidth = static_cast<int>(std::round(DungeonProgressBarWidth * fillFraction));
-
-        if (fillWidth <= 0)
-        {
-            return;
-        }
-
-        const std::vector<uint8_t> redPixelBgra = {0, 0, 220, 255};
-        drawPixelsBgra(
-            "__dungeon_transition_loading_red_pixel__",
-            1,
-            1,
-            redPixelBgra,
-            Rect{
-                std::round(imageX + DungeonProgressBarX * baseScale),
-                std::round(imageY + DungeonProgressBarY * baseScale),
-                std::round(static_cast<float>(fillWidth) * baseScale),
-                std::round(DungeonProgressBarHeight * baseScale)
-            });
+        drawTransition();
         return;
     }
 

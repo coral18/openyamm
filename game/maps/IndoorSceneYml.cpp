@@ -131,6 +131,54 @@ bool parsePositionNode(
     return false;
 }
 
+bool parseArenaDefinition(
+    const YAML::Node &rootNode,
+    std::optional<MapArenaDefinition> &definition,
+    std::string &errorMessage)
+{
+    const YAML::Node node = rootNode["arena"];
+    if (!node)
+    {
+        return true;
+    }
+    if (!node.IsMap())
+    {
+        errorMessage = "arena must be a map";
+        return false;
+    }
+    MapArenaDefinition arena = {};
+    if (!readScalarNode(node, "minimum_monster_id", arena.minimumMonsterId, errorMessage)
+        || !readScalarNode(node, "maximum_monster_id", arena.maximumMonsterId, errorMessage)
+        || !parsePositionNode(node["party_position"], arena.partyPosition.x,
+            arena.partyPosition.y, arena.partyPosition.z, errorMessage)
+        || !readScalarNode(node, "party_direction_degrees", arena.partyDirectionDegrees, errorMessage))
+    {
+        return false;
+    }
+    if (arena.minimumMonsterId <= 0 || arena.maximumMonsterId < arena.minimumMonsterId)
+    {
+        errorMessage = "arena monster id range is invalid";
+        return false;
+    }
+    const YAML::Node positions = node["monster_positions"];
+    if (!positions || !positions.IsSequence() || positions.size() < 20)
+    {
+        errorMessage = "arena.monster_positions must contain at least 20 positions";
+        return false;
+    }
+    for (const YAML::Node &position : positions)
+    {
+        ArenaPosition parsed = {};
+        if (!parsePositionNode(position, parsed.x, parsed.y, parsed.z, errorMessage))
+        {
+            return false;
+        }
+        arena.monsterPositions.push_back(parsed);
+    }
+    definition = std::move(arena);
+    return true;
+}
+
 bool parseBoolFlagConsistency(
     const YAML::Node &flagsNode,
     const char *key,
@@ -658,7 +706,8 @@ std::optional<IndoorSceneData> IndoorSceneYmlLoader::loadFromText(
         return std::nullopt;
     }
 
-    if (!parseMapItemSourceData(rootNode, sceneData.itemSources, errorMessage))
+    if (!parseArenaDefinition(rootNode, sceneData.arena, errorMessage)
+        || !parseMapItemSourceData(rootNode, sceneData.itemSources, errorMessage))
     {
         return std::nullopt;
     }
@@ -1337,6 +1386,11 @@ bool IndoorSceneYmlLoader::applyOverlayFromText(
     if (!readScalarNode(rootNode, "kind", kind, errorMessage) || toLowerCopy(kind) != "indoor_scene_overlay")
     {
         errorMessage = "kind must be \"indoor_scene_overlay\"";
+        return false;
+    }
+
+    if (!parseArenaDefinition(rootNode, sceneData.arena, errorMessage))
+    {
         return false;
     }
 

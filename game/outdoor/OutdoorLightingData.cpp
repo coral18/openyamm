@@ -491,7 +491,8 @@ std::optional<OutdoorLightingData> OutdoorLightingDataLoader::loadFromBytes(
                 return std::nullopt;
             }
             const std::string path(reinterpret_cast<const char *>(lightingBytes.data() + cursor), length);
-            if ((!path.starts_with("worlds/") && !path.starts_with("engine/"))
+            if ((!path.starts_with("worlds/") && !path.starts_with("engine/")
+                    && !path.starts_with("_legacy/sprites_original/"))
                 || path.find("..") != std::string::npos || path.find('\\') != std::string::npos
                 || path.find('\0') != std::string::npos)
             {

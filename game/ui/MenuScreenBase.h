@@ -102,12 +102,14 @@ protected:
         int height,
         const std::vector<uint8_t> &pixelsBgra,
         const Rect &rect);
-    void drawTextureHandle(bgfx::TextureHandle textureHandle, const Rect &rect);
+    void drawTextureHandle(
+        bgfx::TextureHandle textureHandle, const Rect &rect, bool flipVertically = false, bool blendAlpha = true);
     void drawTextureRegionColor(
         const std::string &textureName,
         const SourceRect &sourceRect,
         const Rect &rect,
-        uint32_t colorAbgr);
+        uint32_t colorAbgr,
+        float rotationRadians = 0.0f);
     std::optional<TextureSize> textureSize(const std::string &textureName);
     std::optional<TexturePixelsBgra> texturePixelsBgra(const std::string &textureName);
     bool drawText(
@@ -129,8 +131,11 @@ protected:
     void preloadTexture(const std::string &textureName);
     void preloadFont(const std::string &fontName);
     void preloadLayoutAssets(const UiLayoutManager &layoutManager);
+    void setClipRect(const std::optional<Rect> &rect);
+    void drawSolidRect(const Rect &rect, uint32_t colorAbgr);
+    void drawEllipseOutline(const Rect &rect, float thickness, uint32_t colorAbgr);
 
-private:
+  private:
     struct MenuVertex
     {
         float x;
@@ -155,13 +160,6 @@ private:
         bgfx::TextureHandle handle = BGFX_INVALID_HANDLE;
     };
 
-    struct TextureColorHandle
-    {
-        std::string normalizedTextureName;
-        uint32_t colorAbgr = 0xffffffffu;
-        bgfx::TextureHandle handle = BGFX_INVALID_HANDLE;
-    };
-
     struct DynamicTextureHandle
     {
         std::string cacheKey;
@@ -175,15 +173,9 @@ private:
     struct FontHandle : Engine::FontAtlas
     {
         std::string normalizedFontName;
+        int rasterPixelHeight = 0;
         bgfx::TextureHandle mainTextureHandle = BGFX_INVALID_HANDLE;
         bgfx::TextureHandle shadowTextureHandle = BGFX_INVALID_HANDLE;
-    };
-
-    struct FontColorHandle
-    {
-        std::string normalizedFontName;
-        uint32_t colorAbgr = 0xffffffffu;
-        bgfx::TextureHandle handle = BGFX_INVALID_HANDLE;
     };
 
     virtual void drawScreen(float deltaSeconds) = 0;
@@ -193,16 +185,16 @@ private:
     const TextureHandle *findTexture(const std::string &textureName) const;
     const TextureHandle *ensureTexture(const std::string &textureName);
     Engine::FontSettings m_fontSettings;
-    std::string fontCacheKey(const std::string &fontName) const;
-    const FontHandle *findFont(const std::string &fontName) const;
-    const FontHandle *ensureFont(const std::string &fontName);
+    std::string fontCacheKey(const std::string &fontName, int pixelHeight) const;
+    const FontHandle *findFont(const std::string &fontName, int pixelHeight) const;
+    const FontHandle *ensureFont(const std::string &fontName, int pixelHeight = 0);
+    const FontHandle *ensureTextFont(const std::string &fontName, float &scale);
+    void resizeFontCache(int width, int height);
     bgfx::TextureHandle ensureDynamicTexture(
         const std::string &cacheKey,
         int width,
         int height,
         const std::vector<uint8_t> &pixelsBgra);
-    bgfx::TextureHandle ensureTextureColor(const TextureHandle &texture, uint32_t colorAbgr);
-    bgfx::TextureHandle ensureFontColor(const FontHandle &font, uint32_t colorAbgr);
     std::optional<std::string> resolveTexturePath(const std::string &textureName);
     std::optional<std::string> resolveFontPath(const std::string &fontName);
 
@@ -220,15 +212,19 @@ private:
     bool m_rendererInitialized = false;
     uint16_t m_renderViewId = 0;
     bool m_clearBackground = true;
+    std::optional<Rect> m_clipRect;
+    void applyClipRect() const;
     bgfx::ProgramHandle m_texturedProgramHandle = BGFX_INVALID_HANDLE;
     bgfx::UniformHandle m_textureUniformHandle = BGFX_INVALID_HANDLE;
+    bgfx::UniformHandle m_tintUniformHandle = BGFX_INVALID_HANDLE;
+    uint32_t m_drawTint = 0xffffffffu;
     static std::vector<TextureHandle> s_textureHandles;
-    static std::vector<TextureColorHandle> s_textureColorHandles;
     static std::vector<DynamicTextureHandle> s_dynamicTextureHandles;
     static std::vector<FontHandle> s_fontHandles;
-    static std::vector<FontColorHandle> s_fontColorHandles;
     static std::unordered_map<std::string, size_t> s_textureIndexByName;
     static std::unordered_map<std::string, size_t> s_fontIndexByName;
+    static int s_fontFrameWidth;
+    static int s_fontFrameHeight;
     static std::unordered_map<std::string, std::unordered_map<std::string, std::string>> s_directoryEntriesByPath;
     static std::unordered_map<std::string, std::optional<std::string>> s_resolvedTexturePaths;
     static std::unordered_map<std::string, std::optional<std::string>> s_resolvedFontPaths;

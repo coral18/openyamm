@@ -1,0 +1,64 @@
+schema: openyamm.effectTextureImport.v1
+source:
+  path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/WHITEFLARE2.dtx
+  format: LithTech DTX
+  sha256: 44b1b55f18e177c25d030f1c01c4a15b5d900354726646b9e3a26e9d7b239d38
+runtime:
+  texture: engine/effects/mm9/textures/whiteflare2.png
+  format: PNG RGBA8
+  colorSpace: srgb
+  alphaUsage: blend
+  premultipliedAlpha: false
+  mipPolicy: generate-at-runtime
+  minFilter: linear
+  magFilter: linear
+  wrapU: clamp
+  wrapV: clamp
+conversion:
+  decoder: tools/mm9_import_discovery/convert_abc_model.py:decode_dtx_mips
+  decodedRgbChanged: false
+  decodedAlphaChanged: false
+  opaqueAlphaRepair: false
+  zeroAlphaRgbPreserved: true
+  sourceMipArtifacts: mips/*.png
+dtx:
+  version: -5
+  width: 32
+  height: 32
+  mipCount: 4
+  sectionCount: 0
+  internalFlags: 136
+  userFlags: 0
+  extraHex: '000003000000000000000000'
+  bppIdentifier: 3
+  command: ''
+  repairOpaqueAlpha: false
+  mips:
+  - index: 0
+    width: 32
+    height: 32
+    sourceOffset: 164
+    sourceBytes: 4096
+    decodedRgbaSha256: 8ee1f576528908f2443382308bb627cdf90c61c0e13c8d02374389e8189f8fa1
+    artifact: mips/00.png
+  - index: 1
+    width: 16
+    height: 16
+    sourceOffset: 4260
+    sourceBytes: 1024
+    decodedRgbaSha256: 7a0c8e14fd7b21613db03f020fb35ad0e02c0719e057a783c020abc8d31a842e
+    artifact: mips/01.png
+  - index: 2
+    width: 8
+    height: 8
+    sourceOffset: 5284
+    sourceBytes: 256
+    decodedRgbaSha256: 01eac703736bab04812ea5b0403d1d4d0eb520c7ff00b028429e15343e99dcd1
+    artifact: mips/02.png
+  - index: 3
+    width: 4
+    height: 4
+    sourceOffset: 5540
+    sourceBytes: 64
+    decodedRgbaSha256: c1f1b9946651a76b17b5ea528676ba342cfba387420c1e3878d4d75a068bf1b3
+    artifact: mips/03.png

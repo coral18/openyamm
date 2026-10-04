@@ -1,0 +1,191 @@
+#include <doctest/doctest.h>
+
+#include "engine/TextTable.h"
+#include "game/gameplay/GameplayActorService.h"
+#include "game/indoor/IndoorPartyRuntime.h"
+#include "game/indoor/IndoorWorldRuntime.h"
+#include "game/maps/IndoorSceneYml.h"
+#include "tests/RegressionGameData.h"
+
+#include <filesystem>
+#include <fstream>
+#include <iterator>
+
+using namespace OpenYAMM::Game;
+
+namespace
+{
+constexpr uint32_t DetectionAttributes = uint32_t(EvtActorAttribute::Nearby)
+    | uint32_t(EvtActorAttribute::Active) | uint32_t(EvtActorAttribute::FullAi);
+
+std::vector<uint8_t> readFixture(const std::filesystem::path &path)
+{
+    std::ifstream stream(path, std::ios::binary);
+    REQUIRE(stream.good());
+    return {std::istreambuf_iterator<char>(stream), std::istreambuf_iterator<char>()};
+}
+
+std::vector<std::vector<std::string>> readTable(const std::filesystem::path &path)
+{
+    const std::vector<uint8_t> bytes = readFixture(path);
+    const std::optional<OpenYAMM::Engine::TextTable> table =
+        OpenYAMM::Engine::TextTable::parseTabSeparated(std::string(bytes.begin(), bytes.end()));
+    REQUIRE(table);
+    std::vector<std::vector<std::string>> rows;
+    for (size_t row = 0; row < table->getRowCount(); ++row)
+    {
+        rows.push_back(table->getRow(row));
+    }
+    return rows;
+}
+
+struct GoblinwatchFactionFixture
+{
+    const OpenYAMM::Tests::RegressionGameData &data = OpenYAMM::Tests::regressionGameData();
+    MonsterTable monsters = data.monsterTable;
+    IndoorMapData map;
+    std::optional<MapDeltaData> delta = MapDeltaData{};
+    std::optional<EventRuntimeState> events = EventRuntimeState{};
+    ObjectTable objects;
+    ChestTable chests;
+    GameplayActorService actorService;
+    std::unique_ptr<IndoorPartyRuntime> partyRuntime;
+    IndoorWorldRuntime world;
+
+    GoblinwatchFactionFixture()
+    {
+        REQUIRE_MESSAGE(OpenYAMM::Tests::regressionGameDataLoaded(), OpenYAMM::Tests::regressionGameDataFailure());
+        const std::filesystem::path tables =
+            std::filesystem::path(OPENYAMM_SOURCE_DIR) / "assets_dev/engine/data_tables";
+        REQUIRE(monsters.loadEntriesFromRows(readTable(tables / "monster_descriptors.txt")));
+        REQUIRE(monsters.loadStatsFromRows(readTable(tables / "monster_data.txt")));
+        const std::filesystem::path root = std::filesystem::path(OPENYAMM_SOURCE_DIR) / "assets_dev/worlds/mm6/maps";
+        std::optional<IndoorMapData> loadedMap = IndoorMapDataLoader{}.loadFromBytes(readFixture(root / "6d01.blv"));
+        REQUIRE(loadedMap);
+        map = std::move(*loadedMap);
+        const std::vector<uint8_t> sceneBytes = readFixture(root / "6d01.scene.yml");
+        std::string error;
+        const std::optional<IndoorSceneData> scene =
+            IndoorSceneYmlLoader{}.loadFromText(std::string(sceneBytes.begin(), sceneBytes.end()), error);
+        REQUIRE_MESSAGE(scene, error);
+        REQUIRE_MESSAGE(buildIndoorMapStateFromScene(*scene, map, *delta, error), error);
+        map.spawns.clear();
+        delta->actors.clear();
+
+        const auto addActor = [&](int16_t monsterId, int x, int y, int z, int16_t sectorId, uint32_t attributes)
+        {
+            const MonsterTable::MonsterStatsEntry *pStats = monsters.findStatsById(monsterId);
+            REQUIRE(pStats != nullptr);
+            MapDeltaActor actor = {};
+            actor.monsterId = monsterId;
+            actor.monsterInfoId = monsterId;
+            actor.hp = pStats->hitPoints;
+            actor.x = x;
+            actor.y = y;
+            actor.z = z;
+            actor.sectorId = sectorId;
+            actor.attributes = attributes;
+            delta->actors.push_back(actor);
+        };
+
+        // GW_3's victim upstairs and allies in the sealed lower room. Start without its bad cached detection.
+        addActor(487, -152, 4225, 0, 3, 0);
+        addActor(487, 1671, 3845, -632, 24, 0);
+        addActor(488, 1595, 3807, -632, 24, DetectionAttributes | uint32_t(EvtActorAttribute::Aggressor));
+        addActor(487, 6665, 7033, 128, 44, 0);
+        addActor(550, 2300, 3750, -768, 24, 0);
+        EventRuntime{}.initializeMapRuntimeState(*delta, *events);
+        partyRuntime = std::make_unique<IndoorPartyRuntime>(
+            IndoorMovementController(map, &delta, &events), data.itemTable);
+        partyRuntime->initializePartyPosition(1356.65f, 4589.76f, 0.0f);
+        REQUIRE_EQ(partyRuntime->movementState().sectorId, 45);
+        partyRuntime->party().applyPartyBuff(PartyBuffId::WizardEye, 3600.0f, 1, 0, 1, SkillMastery::Normal, 0);
+        actorService.bindTables(&monsters, &data.spellTable);
+        MapStatsEntry mapStats = {};
+        mapStats.fileName = "6d01.blv";
+        mapStats.worldId = "mm6";
+        mapStats.name = "Goblinwatch";
+        world.initialize(mapStats, monsters, objects, data.itemTable, chests,
+            &partyRuntime->party(), partyRuntime.get(), &delta, &events, &actorService, nullptr, &map);
+        REQUIRE_EQ(world.mapActorCount(), 5);
+        REQUIRE_EQ(world.snapshot().mapActorAiStates[1].sectorId, 24);
+    }
+
+    void checkUndetectedAlly() const
+    {
+        const IndoorWorldRuntime::MapActorAiState ally = world.snapshot().mapActorAiStates[1];
+        CHECK(ally.hostileToParty);
+        CHECK_FALSE(ally.hasDetectedParty);
+        CHECK_FALSE(ally.spellEffects.hasDetectedParty);
+        CHECK_EQ(delta->actors[1].attributes & DetectionAttributes, 0u);
+        CHECK_NE(ally.motionState, ActorAiMotionState::Pursuing);
+        CHECK_NE(ally.motionState, ActorAiMotionState::Attacking);
+    }
+};
+}
+
+TEST_CASE("indoor faction alerts preserve detection and leave Goblinwatch's unseen allies dormant")
+{
+    GoblinwatchFactionFixture fixture;
+    int damage = 1;
+    SUBCASE("surviving victim")
+    {
+        damage = 1;
+    }
+    SUBCASE("killed victim")
+    {
+        damage = 10000;
+    }
+
+    const IndoorWorldRuntime::Snapshot before = fixture.world.snapshot();
+    const std::vector<MapDeltaActor> actorsBefore = fixture.delta->actors;
+    REQUIRE(fixture.world.applyPartyAttackMeleeDamage(0, damage, {1356.65f, 4589.76f, 96.0f}));
+    const IndoorWorldRuntime::Snapshot after = fixture.world.snapshot();
+
+    CHECK(after.mapActorAiStates[0].hostileToParty);
+    CHECK(after.mapActorAiStates[0].hasDetectedParty);
+    CHECK_EQ(fixture.delta->actors[0].hp == 0, damage == 10000);
+    fixture.checkUndetectedAlly();
+    CHECK_EQ(fixture.delta->actors[1].hostilityType, 4);
+    CHECK_EQ(fixture.delta->actors[1].attributes, uint32_t(EvtActorAttribute::Aggressor));
+    CHECK(after.mapActorAiStates[1].spellEffects.hostileToParty);
+
+    // Alerts retain existing encounter memory and do not restart another actor's action.
+    CHECK(after.mapActorAiStates[2].hasDetectedParty);
+    CHECK(after.mapActorAiStates[2].spellEffects.hasDetectedParty);
+    CHECK_EQ(fixture.delta->actors[2].attributes, actorsBefore[2].attributes);
+    CHECK_EQ(after.mapActorAiStates[2].motionState, before.mapActorAiStates[2].motionState);
+    CHECK_EQ(after.mapActorAiStates[2].actionSeconds, before.mapActorAiStates[2].actionSeconds);
+    for (size_t actorIndex : {3u, 4u})
+    {
+        CAPTURE(actorIndex);
+        CHECK_EQ(fixture.delta->actors[actorIndex].attributes, actorsBefore[actorIndex].attributes);
+        CHECK_EQ(fixture.delta->actors[actorIndex].hostilityType, actorsBefore[actorIndex].hostilityType);
+        CHECK_EQ(after.mapActorAiStates[actorIndex].hasDetectedParty,
+            before.mapActorAiStates[actorIndex].hasDetectedParty);
+    }
+
+    fixture.world.updateActorAi(0.1f);
+    fixture.checkUndetectedAlly();
+    std::vector<GameplayMinimapMarkerState> markers;
+    fixture.world.collectGameplayMinimapMarkers(markers);
+    CHECK_EQ(markers.size(), 2); // Direct victim (or corpse) and the previously detected ally only.
+}
+
+TEST_CASE("indoor faction alert survives restore without granting detection and allows a later encounter")
+{
+    GoblinwatchFactionFixture fixture;
+    REQUIRE(fixture.world.applyPartyAttackMeleeDamage(0, 1, {1356.65f, 4589.76f, 96.0f}));
+    const IndoorWorldRuntime::Snapshot saved = fixture.world.snapshot();
+    fixture.world.restoreSnapshot(saved);
+    fixture.world.updateActorAi(0.1f);
+    fixture.checkUndetectedAlly();
+
+    fixture.partyRuntime->teleportPartyPosition(2300.0f, 3400.0f, -768.0f);
+    REQUIRE_EQ(fixture.partyRuntime->movementState().sectorId, 24);
+    fixture.world.updateActorAi(0.1f);
+    const IndoorWorldRuntime::Snapshot encountered = fixture.world.snapshot();
+    CHECK(encountered.mapActorAiStates[1].hasDetectedParty);
+    CHECK((fixture.delta->actors[1].attributes & uint32_t(EvtActorAttribute::FullAi)) != 0);
+    CHECK((fixture.delta->actors[1].attributes & uint32_t(EvtActorAttribute::Nearby)) != 0);
+}

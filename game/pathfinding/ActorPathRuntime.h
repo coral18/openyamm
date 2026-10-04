@@ -37,6 +37,8 @@ struct ActorPathResolveRequest
     double nowSeconds = 0.0;
     double failedRetrySeconds = 3.0;
     double directCheckIntervalSeconds = 0.25;
+    float distantRouteReuseDistance = 0.0f;
+    double distantRouteCheckIntervalSeconds = 1.0;
     double minReplanIntervalSeconds = 1.0;
     double shortcutCheckIntervalSeconds = 0.5;
     bool allowPlan = true;
@@ -46,6 +48,7 @@ struct ActorPathResolveRequest
 
 struct ActorPathResolveResult
 {
+    bool directChecked = false;
     bool directReachable = false;
     bool pathActive = false;
     bool planned = false;
@@ -77,6 +80,7 @@ public:
 
     void setWorkerCount(size_t workerCount);
     void clear();
+    void beginReachabilityFrame(size_t maxChecks);
     void resetActor(size_t actorIndex);
     bool actorHasPendingPlan(size_t actorIndex) const;
     bool actorHasActivePath(size_t actorIndex) const;
@@ -110,22 +114,23 @@ private:
     ActorPathState &stateForActor(size_t actorIndex);
     bool pathIsStale(const ActorPathState &state, const ActorPathResolveRequest &request) const;
     bool pathCanStillBeFollowed(const ActorPathState &state) const;
+    bool consumeReachabilityCheck(size_t actorIndex);
     void resetWaypointProgress(ActorPathState &state, const ActorPathResolveRequest &request) const;
     size_t advanceReachedWaypoints(
         const PathMap &pathMap,
         ActorPathState &state,
         const ActorPathResolveRequest &request
-    ) const;
+    );
     size_t advanceShortcutWaypoints(
         const PathMap &pathMap,
         ActorPathState &state,
         const ActorPathResolveRequest &request
-    ) const;
+    );
     size_t advanceStalledWaypoint(
         const PathMap &pathMap,
         ActorPathState &state,
         const ActorPathResolveRequest &request
-    ) const;
+    );
     bool consumeCompletedPlan(
         ActorPathState &state,
         const ActorPathResolveRequest &request,
@@ -150,6 +155,11 @@ private:
 
     PathPlanner m_planner;
     std::vector<ActorPathState> m_actorStates;
+    std::deque<size_t> m_pendingReachabilityActors;
+    std::vector<bool> m_reachabilityQueued;
+    std::vector<bool> m_reachabilityGranted;
+    size_t m_reachabilityChecksRemaining = 0;
+    bool m_reachabilityBudgetEnabled = false;
     std::mutex m_jobMutex;
     std::condition_variable m_jobCondition;
     std::deque<PendingPlanJob> m_pendingPlanJobs;

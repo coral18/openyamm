@@ -1,9 +1,11 @@
 
 #include "common.sh"
+#include "world_clip.sh"
 
 #if TERRAIN_TEXTURE_ARRAY
 SAMPLER2DARRAY(s_texColor, 0);
 SAMPLER2DARRAY(s_texTerrainWater, 1);
+SAMPLER2DARRAY(s_texWaterCoverage, 4);
 #elif TERRAIN_DECORATION
 SAMPLER2DARRAY(s_texColor, 0);
 #else
@@ -24,6 +26,7 @@ uniform vec4 u_fxLightPositions[8];
 uniform vec4 u_fxLightColors[8];
 uniform vec4 u_fxLightParams;
 uniform vec4 u_secretPulseParams;
+uniform vec4 u_waterSurfaceControl;
 
 float safeSmoothstep(float edge0, float edge1, float value)
 {
@@ -90,10 +93,24 @@ vec3 getFxLighting(vec3 worldPosition, float sunlight)
 
 void main()
 {
+    clipWorldPosition(v_worldPosition);
     vec2 texcoord = v_texcoord0;
     bool terrainWater = v_texcoord1.x < -0.5;
 
-    if (terrainWater)
+#if TERRAIN_TEXTURE_ARRAY
+    if (terrainWater && v_flowInfo.y > 0.5
+        && (u_waterSurfaceControl.x > 0.5 || abs(u_worldClipPlane.z) > 0.5))
+    {
+        float coverage = v_texcoord1.x < -1.5
+            ? texture2DArray(s_texWaterCoverage, vec3(texcoord, v_flowInfo.x)).r : 1.0;
+        if (coverage >= 0.999)
+        {
+            discard;
+        }
+    }
+#endif
+
+    if (terrainWater && v_texcoord1.x > -1.5)
     {
 #if TERRAIN_TEXTURE_ARRAY
         vec2 atlasMin = vec2(0.0, 0.0);
@@ -141,7 +158,7 @@ void main()
     // Water repeats across cells. Land and shore overlays retain clamped sampling because
     // their opposite edges can contain different materials. Both samplers share one array.
     vec4 textureColor;
-    if (terrainWater)
+    if (terrainWater && v_texcoord1.x > -1.5)
     {
         textureColor = texture2DArray(s_texTerrainWater, vec3(texcoord, v_flowInfo.x));
     }

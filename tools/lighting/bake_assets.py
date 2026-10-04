@@ -6,6 +6,9 @@ def texture_paths(asset_root, world, category):
     active = asset_root / 'worlds' / world / category
     roots = [active, asset_root / 'engine' / category]
     roots.extend(path for path in sorted((asset_root / 'worlds').glob('*/' + category)) if path != active)
+    if category == 'sprites':
+        # Approved non-creature BMPs moved here; baked shadows retain their native-source provenance.
+        roots.append(asset_root / '_legacy/sprites_original')
     paths = {}
     for root in roots:
         for path in sorted(root.glob('*.bmp')):

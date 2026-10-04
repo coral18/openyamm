@@ -1,0 +1,7119 @@
+schema: openyamm.effectLibrary.v1
+source:
+  recipe: engine/effects/mm9/source/spells.fxf
+  sha256: 468cbe2265fac31539b30c09f203517cca2900f4be6ad9dcea548019d02879bf
+  resource_bindings: engine/effects/mm9/resource_bindings.yml
+  coordinate_policy: MM9 Y-up to OpenYAMM Z-up (X,Z,Y), source units multiplied by
+    2.56
+effects:
+- id: mm9:sparklies
+  source_name: sparklies
+  source_offset: 4
+  source_phase_seconds: 5.0
+  duration_seconds: 5.0
+  compatibility_profile: mm9_native_60hz
+  support: supported
+  capabilities:
+  - sprite
+  - sprite_system
+  components:
+  - type: sprite_system
+    id: 2
+    start_seconds: 0.0
+    end_seconds: 5.0
+    repeat_count: 1
+    sprite_resource: mm9:effect-sprite/weapons/blurredgreenorastar
+    sprites_per_emission: 2
+    emission_interval_seconds: 0.019999999552965164
+    particle_lifetime_seconds: 1.0
+    emission_shape: plane_in
+    radius: 51.2
+    plane_direction:
+    - 0.0
+    - 0.0
+    - 1.0
+    velocity: 25.6
+    wind_direction:
+    - 0.0
+    - 0.0
+    - 153.6
+    wind_amount: 5.0
+    offset:
+    - 0.0
+    - 0.0
+    - -25.6
+    rotation_per_tick:
+    - -0.0
+    - -0.10000000149011612
+    - -0.0
+    stretch_u: 1.0
+    stretch_v: 2.0
+    blend: additive
+    particle_space: world
+    alignment: camera_facing
+    color_keys:
+    - time: 0.0
+      rgb:
+      - 128
+      - 0
+      - 128
+      transparency: 47
+    - time: 1.0
+      rgb:
+      - 79
+      - 0
+      - 79
+      transparency: 255
+    scale_keys:
+    - time: 0.0
+      value: 0.0
+    - time: 0.31810489296913147
+      value: 0.727272720336914
+    - time: 1.0
+      value: 0.37818180084228514
+    motion_keys: []
+  - type: sprite_system
+    id: 4
+    start_seconds: 0.0
+    end_seconds: 5.0
+    repeat_count: 1
+    sprite_resource: mm9:effect-sprite/flareparticle
+    sprites_per_emission: 1
+    emission_interval_seconds: 0.10000000149011612
+    particle_lifetime_seconds: 1.5
+    emission_shape: plane
+    radius: 25.6
+    plane_direction:
+    - 0.0
+    - 0.0
+    - 1.0
+    velocity: 128.0
+    wind_direction:
+    - 0.0
+    - 0.0
+    - 76.8
+    wind_amount: 1.0
+    offset:
+    - 0.0
+    - 0.0
+    - -25.6
+    rotation_per_tick:
+    - -0.0
+    - -0.0
+    - -0.0
+    stretch_u: 1.0
+    stretch_v: 2.0
+    blend: additive
+    particle_space: world
+    alignment: camera_facing
+    color_keys:
+    - time: 0.0
+      rgb:
+      - 255
+      - 255
+      - 255
+      transparency: 0
+    - time: 1.0
+      rgb:
+      - 255
+      - 255
+      - 255
+      transparency: 0
+    scale_keys:
+    - time: 0.0
+      value: 0.2560000038146973
+    - time: 0.48900169134140015
+      value: 1.3963636779785156
+    - time: 1.0
+      value: 0.2560000038146973
+    motion_keys: []
+  - type: sprite
+    id: 5
+    start_seconds: 0.0
+    end_seconds: 5.0
+    repeat_count: 1
+    sprite_resource: mm9:effect-sprite/weapons/blurredbluestar
+    offset:
+    - 0.0
+    - 0.0
+    - -25.6
+    stretch_u: 1.0
+    stretch_v: 1.0
+    blend: additive
+    alignment: world_plane
+    plane_right:
+    - 0.0
+    - 1.0
+    - 0.0
+    plane_up:
+    - 1.0
+    - 0.0
+    - 0.0
+    color_keys:
+    - time: 0.0
+      rgb:
+      - 255
+      - 255
+      - 255
+      transparency: 0
+    - time: 1.0
+      rgb:
+      - 255
+      - 255
+      - 255
+      transparency: 0
+    scale_keys:
+    - time: 0.0
+      value: 2.56
+    - time: 1.0
+      value: 2.56
+    motion_keys: []
+  - type: sprite_system
+    id: 6
+    start_seconds: 0.0
+    end_seconds: 0.687000036239624
+    repeat_count: 1
+    sprite_resource: mm9:effect-sprite/flareparticle
+    sprites_per_emission: 1
+    emission_interval_seconds: 0.05000000074505806
+    particle_lifetime_seconds: 0.4000000059604645
+    emission_shape: point
+    radius: 12.8
+    plane_direction:
+    - 0.0
+    - 1.0
+    - 0.0
+    velocity: 25.6
+    wind_direction:
+    - 0.0
+    - 0.0
+    - 0.0
+    wind_amount: 1.0
+    offset:
+    - 0.0
+    - 0.0
+    - 0.0
+    rotation_per_tick:
+    - -0.0
+    - -0.0
+    - -0.0
+    stretch_u: 2.0
+    stretch_v: 1.0
+    blend: additive
+    particle_space: world
+    alignment: camera_facing
+    color_keys:
+    - time: 0.0
+      rgb:
+      - 255
+      - 255
+      - 0
+      transparency: 8
+    - time: 1.0
+      rgb:
+      - 128
+      - 0
+      - 64
+      transparency: 237
+    scale_keys:
+    - time: 0.0
+      value: 0.0
+    - time: 0.5008460283279419
+      value: 0.6981818389892578
+    - time: 1.0
+      value: 0.17454545974731445
+    motion_keys:
+    - time: 0.0
+      value:
+      - 0.0
+      - 0.0
+      - 5.12
+    - time: 0.00648771645501256
+      value:
+      - 7.68
+      - 0.0
+      - 122.88
+    - time: 0.16249673068523407
+      value:
+      - 23.04
+      - 0.0
+      - 179.20000000000002
+    - time: 0.3914359211921692
+      value:
+      - 53.76
+      - 0.0
+      - 215.04
+    - time: 1.0
+      value:
+      - 94.72
+      - 0.0
+      - 240.64000000000001
+  - type: sprite_system
+    id: 7
+    start_seconds: 1.2980000972747803
+    end_seconds: 1.9840000867843628
+    repeat_count: 1
+    sprite_resource: mm9:effect-sprite/flareparticle
+    sprites_per_emission: 1
+    emission_interval_seconds: 0.05000000074505806
+    particle_lifetime_seconds: 0.4000000059604645
+    emission_shape: point
+    radius: 12.8
+    plane_direction:
+    - 0.0
+    - 1.0
+    - 0.0
+    velocity: 25.6
+    wind_direction:
+    - 0.0
+    - 0.0
+    - 0.0
+    wind_amount: 1.0
+    offset:
+    - 0.0
+    - 0.0
+    - 0.0
+    rotation_per_tick:
+    - -0.0
+    - -0.0
+    - -0.0
+    stretch_u: 2.0
+    stretch_v: 1.0
+    blend: additive
+    particle_space: world
+    alignment: camera_facing
+    color_keys:
+    - time: 0.0
+      rgb:
+      - 255
+      - 255
+      - 0
+      transparency: 8
+    - time: 1.0
+      rgb:
+      - 128
+      - 0
+      - 64
+      transparency: 237
+    scale_keys:
+    - time: 0.0
+      value: 0.0
+    - time: 0.5008460283279419
+      value: 0.6981818389892578
+    - time: 1.0
+      value: 0.17454545974731445
+    motion_keys:
+    - time: 0.0
+      value:
+      - 0.0
+      - 0.0
+      - 5.12
+    - time: 0.006487697828561068
+      value:
+      - 0.7018708038330078
+      - 7.648199462890625
+      - 122.88
+    - time: 0.16249628365039825
+      value:
+      - 2.105612335205078
+      - 22.944599609375
+      - 179.20000000000002
+    - time: 0.3914349675178528
+      value:
+      - 4.913095397949219
+      - 53.5373974609375
+      - 215.04
+    - time: 1.0
+      value:
+      - 8.65640625
+      - 94.32779296875
+      - 240.64000000000001
+  - type: sprite_system
+    id: 8
+    start_seconds: 2.5450000762939453
+    end_seconds: 3.2160000801086426
+    repeat_count: 1
+    sprite_resource: mm9:effect-sprite/flareparticle
+    sprites_per_emission: 1
+    emission_interval_seconds: 0.05000000074505806
+    particle_lifetime_seconds: 0.4000000059604645
+    emission_shape: point
+    radius: 12.8
+    plane_direction:
+    - 0.0
+    - 1.0
+    - 0.0
+    velocity: 25.6
+    wind_direction:
+    - 0.0
+    - 0.0
+    - 0.0
+    wind_amount: 1.0
+    offset:
+    - 0.0
+    - 0.0
+    - 0.0
+    rotation_per_tick:
+    - -0.0
+    - -0.0
+    - -0.0
+    stretch_u: 2.0
+    stretch_v: 1.0
+    blend: additive
+    particle_space: world
+    alignment: camera_facing
+    color_keys:
+    - time: 0.0
+      rgb:
+      - 255
+      - 255
+      - 0
+      transparency: 8
+    - time: 1.0
+      rgb:
+      - 128
+      - 0
+      - 64
+      transparency: 237
+    scale_keys:
+    - time: 0.0
+      value: 0.0
+    - time: 0.5008460283279419
+      value: 0.6981818389892578
+    - time: 1.0
+      value: 0.17454545974731445
+    motion_keys:
+    - time: 0.0
+      value:
+      - 0.0
+      - 0.0
+      - 5.12
+    - time: 0.006487817969173193
+      value:
+      - -5.13067138671875
+      - 5.712288208007813
+      - 122.88
+    - time: 0.16249912977218628
+      value:
+      - -15.39201416015625
+      - 17.136865234375
+      - 179.20000000000002
+    - time: 0.3914409875869751
+      value:
+      - -35.914699707031254
+      - 39.98601806640625
+      - 215.04
+    - time: 1.0
+      value:
+      - -63.27828125
+      - 70.451552734375
+      - 240.64000000000001
+  - type: sprite_system
+    id: 13
+    start_seconds: 3.745000123977661
+    end_seconds: 4.432000160217285
+    repeat_count: 1
+    sprite_resource: mm9:effect-sprite/flareparticle
+    sprites_per_emission: 1
+    emission_interval_seconds: 0.05000000074505806
+    particle_lifetime_seconds: 0.4000000059604645
+    emission_shape: point
+    radius: 12.8
+    plane_direction:
+    - 0.0
+    - 1.0
+    - 0.0
+    velocity: 25.6
+    wind_direction:
+    - 0.0
+    - 0.0
+    - 0.0
+    wind_amount: 1.0
+    offset:
+    - 0.0
+    - 0.0
+    - 0.0
+    rotation_per_tick:
+    - -0.0
+    - -0.0
+    - -0.0
+    stretch_u: 2.0
+    stretch_v: 1.0
+    blend: additive
+    particle_space: world
+    alignment: camera_facing
+    color_keys:
+    - time: 0.0
+      rgb:
+      - 255
+      - 255
+      - 0
+      transparency: 8
+    - time: 1.0
+      rgb:
+      - 128
+      - 0
+      - 64
+      transparency: 237
+    scale_keys:
+    - time: 0.0
+      value: 0.0
+    - time: 0.5008460283279419
+      value: 0.6981818389892578
+    - time: 1.0
+      value: 0.17454545974731445
+    motion_keys:
+    - time: 0.0
+      value:
+      - 0.0
+      - 0.0
+      - 5.12
+    - time: 0.006487617269158363
+      value:
+      - 2.7729962158203127
+      - -7.163853759765625
+      - 122.88
+    - time: 0.16249439120292664
+      value:
+      - 8.3189892578125
+      - -21.4915625
+      - 179.20000000000002
+    - time: 0.39143094420433044
+      value:
+      - 19.41097412109375
+      - -50.146977539062505
+      - 215.04
+    - time: 1.0
+      value:
+      - 34.20028564453125
+      - -88.354189453125
+      - 240.64000000000001
+  - type: sprite_system
+    id: 9
+    start_seconds: 0.6940000057220459
+    end_seconds: 1.380000114440918
+    repeat_count: 1
+    sprite_resource: mm9:effect-sprite/flareparticle
+    sprites_per_emission: 1
+    emission_interval_seconds: 0.05000000074505806
+    particle_lifetime_seconds: 0.4000000059604645
+    emission_shape: point
+    radius: 12.8
+    plane_direction:
+    - 0.0
+    - 1.0
+    - 0.0
+    velocity: 25.6
+    wind_direction:
+    - 0.0
+    - 0.0
+    - 0.0
+    wind_amount: 1.0
+    offset:
+    - 0.0
+    - 0.0
+    - 0.0
+    rotation_per_tick:
+    - -0.0
+    - -0.0
+    - -0.0
+    stretch_u: 2.0
+    stretch_v: 1.0
+    blend: additive
+    particle_space: world
+    alignment: camera_facing
+    color_keys:
+    - time: 0.0
+      rgb:
+      - 255
+      - 255
+      - 0
+      transparency: 8
+    - time: 1.0
+      rgb:
+      - 128
+      - 0
+      - 64
+      transparency: 237
+    scale_keys:
+    - time: 0.0
+      value: 0.0
+    - time: 0.5008460283279419
+      value: 0.6981818389892578
+    - time: 1.0
+      value: 0.17454545974731445
+    motion_keys:
+    - time: 0.0
+      value:
+      - 0.0
+      - 0.0
+      - 5.12
+    - time: 0.00648771645501256
+      value:
+      - -7.679998779296875
+      - -0.008205626010894775
+      - 122.88
+    - time: 0.16249673068523407
+      value:
+      - -23.0399951171875
+      - -0.024616878032684326
+      - 179.20000000000002
+    - time: 0.3914359211921692
+      value:
+      - -53.759990234375
+      - -0.05743937969207764
+      - 215.04
+    - time: 1.0
+      value:
+      - -94.71998046875
+      - -0.10120271682739258
+      - 240.64000000000001
+  - type: sprite_system
+    id: 10
+    start_seconds: 1.9320000410079956
+    end_seconds: 2.619000196456909
+    repeat_count: 1
+    sprite_resource: mm9:effect-sprite/flareparticle
+    sprites_per_emission: 1
+    emission_interval_seconds: 0.05000000074505806
+    particle_lifetime_seconds: 0.4000000059604645
+    emission_shape: point
+    radius: 12.8
+    plane_direction:
+    - 0.0
+    - 1.0
+    - 0.0
+    velocity: 25.6
+    wind_direction:
+    - 0.0
+    - 0.0
+    - 0.0
+    wind_amount: 1.0
+    offset:
+    - 0.0
+    - 0.0
+    - 0.0
+    rotation_per_tick:
+    - -0.0
+    - -0.0
+    - -0.0
+    stretch_u: 2.0
+    stretch_v: 1.0
+    blend: additive
+    particle_space: world
+    alignment: camera_facing
+    color_keys:
+    - time: 0.0
+      rgb:
+      - 255
+      - 255
+      - 0
+      transparency: 8
+    - time: 1.0
+      rgb:
+      - 128
+      - 0
+      - 64
+      transparency: 237
+    scale_keys:
+    - time: 0.0
+      value: 0.0
+    - time: 0.5008460283279419
+      value: 0.6981818389892578
+    - time: 1.0
+      value: 0.17454545974731445
+    motion_keys:
+    - time: 0.0
+      value:
+      - 0.0
+      - 0.0
+      - 5.12
+    - time: 0.006487709935754538
+      value:
+      - -0.23620773315429688
+      - -7.676480102539062
+      - 122.88
+    - time: 0.16249658167362213
+      value:
+      - -0.7086231994628907
+      - -23.02944091796875
+      - 179.20000000000002
+    - time: 0.3914356231689453
+      value:
+      - -1.6534541320800782
+      - -53.735361328125
+      - 215.04
+    - time: 1.0
+      value:
+      - -2.9132287597656252
+      - -94.676591796875
+      - 240.64000000000001
+  - type: sprite_system
+    id: 12
+    start_seconds: 3.1480002403259277
+    end_seconds: 3.8350002765655518
+    repeat_count: 1
+    sprite_resource: mm9:effect-sprite/flareparticle
+    sprites_per_emission: 1
+    emission_interval_seconds: 0.05000000074505806
+    particle_lifetime_seconds: 0.4000000059604645
+    emission_shape: point
+    radius: 12.8
+    plane_direction:
+    - 0.0
+    - 1.0
+    - 0.0
+    velocity: 25.6
+    wind_direction:
+    - 0.0
+    - 0.0
+    - 0.0
+    wind_amount: 1.0
+    offset:
+    - 0.0
+    - 0.0
+    - 0.0
+    rotation_per_tick:
+    - -0.0
+    - -0.0
+    - -0.0
+    stretch_u: 2.0
+    stretch_v: 1.0
+    blend: additive
+    particle_space: world
+    alignment: camera_facing
+    color_keys:
+    - time: 0.0
+      rgb:
+      - 255
+      - 255
+      - 0
+      transparency: 8
+    - time: 1.0
+      rgb:
+      - 128
+      - 0
+      - 64
+      transparency: 237
+    scale_keys:
+    - time: 0.0
+      value: 0.0
+    - time: 0.5008460283279419
+      value: 0.6981818389892578
+    - time: 1.0
+      value: 0.17454545974731445
+    motion_keys:
+    - time: 0.0
+      value:
+      - 0.0
+      - 0.0
+      - 5.12
+    - time: 0.006487807724624872
+      value:
+      - 4.787205505371094
+      - 6.003284301757812
+      - 122.88
+    - time: 0.16249887645244598
+      value:
+      - 14.361617431640624
+      - 18.009852294921874
+      - 179.20000000000002
+    - time: 0.3914404809474945
+      value:
+      - 33.510439453125
+      - 42.02298828125
+      - 215.04
+    - time: 1.0
+      value:
+      - 59.042202148437504
+      - 74.0405078125
+      - 240.64000000000001
+  - type: sprite_system
+    id: 14
+    start_seconds: 4.314000129699707
+    end_seconds: 5.0
+    repeat_count: 1
+    sprite_resource: mm9:effect-sprite/flareparticle
+    sprites_per_emission: 1
+    emission_interval_seconds: 0.05000000074505806
+    particle_lifetime_seconds: 0.4000000059604645
+    emission_shape: point
+    radius: 12.8
+    plane_direction:
+    - 0.0
+    - 1.0
+    - 0.0
+    velocity: 25.6
+    wind_direction:
+    - 0.0
+    - 0.0
+    - 0.0
+    wind_amount: 1.0
+    offset:
+    - 0.0
+    - 0.0
+    - 0.0
+    rotation_per_tick:
+    - -0.0
+    - -0.0
+    - -0.0
+    stretch_u: 2.0
+    stretch_v: 1.0
+    blend: additive
+    particle_space: world
+    alignment: camera_facing
+    color_keys:
+    - time: 0.0
+      rgb:
+      - 255
+      - 255
+      - 0
+      transparency: 8
+    - time: 1.0
+      rgb:
+      - 128
+      - 0
+      - 64
+      transparency: 237
+    scale_keys:
+    - time: 0.0
+      value: 0.0
+    - time: 0.5008460283279419
+      value: 0.6981818389892578
+    - time: 1.0
+      value: 0.17454545974731445
+    motion_keys:
+    - time: 0.0
+      value:
+      - 0.0
+      - 0.0
+      - 5.12
+    - time: 0.006487702019512653
+      value:
+      - 0.5338194656372071
+      - 7.661689453125
+      - 122.88
+    - time: 0.16249637305736542
+      value:
+      - 1.601458282470703
+      - 22.985068359375
+      - 179.20000000000002
+    - time: 0.3914351761341095
+      value:
+      - 3.736736145019531
+      - 53.631826171875
+      - 215.04
+    - time: 1.0
+      value:
+      - 6.5837731933593755
+      - 94.494169921875
+      - 240.64000000000001
+- id: mm9:paralyze
+  source_name: spell-paralyze
+  source_offset: 19486
+  source_phase_seconds: 1.0
+  duration_seconds: 1.0
+  compatibility_profile: mm9_native_60hz
+  support: supported
+  capabilities:
+  - sound
+  - sprite_system
+  components:
+  - type: sprite_system
+    id: 4
+    start_seconds: 0.0
+    end_seconds: 1.0
+    repeat_count: 1
+    sprite_resource: mm9:effect-sprite/spells/bwring
+    sprites_per_emission: 1
+    emission_interval_seconds: 0.019999999552965164
+    particle_lifetime_seconds: 1.0
+    emission_shape: point
+    radius: 2.56
+    plane_direction:
+    - 0.0
+    - 0.0
+    - 1.0
+    velocity: 25.6
+    wind_direction:
+    - 0.0
+    - 0.0
+    - 0.0
+    wind_amount: 2.0
+    offset:
+    - 0.0
+    - 0.0
+    - -51.2
+    rotation_per_tick:
+    - -0.0
+    - -0.0
+    - -0.0
+    stretch_u: 1.0
+    stretch_v: 1.0
+    blend: alpha
+    particle_space: world
+    alignment: world_plane
+    plane_right:
+    - 0.0
+    - 1.0
+    - 0.0
+    plane_up:
+    - 1.0
+    - 0.0
+    - 0.0
+    color_keys:
+    - time: 0.0
+      rgb:
+      - 128
+      - 64
+      - 0
+      transparency: 127
+    - time: 1.0
+      rgb:
+      - 128
+      - 0
+      - 0
+      transparency: 127
+    scale_keys:
+    - time: 0.0
+      value: 0.0
+    - time: 1.0
+      value: 2.56
+    motion_keys:
+    - time: 0.0
+      value:
+      - -2.56
+      - 0.0
+      - -2.56
+    - time: 1.0
+      value:
+      - 0.0
+      - 0.0
+      - 207.36
+  - type: sprite_system
+    id: 9
+    start_seconds: 0.0
+    end_seconds: 1.0
+    repeat_count: 1
+    sprite_resource: mm9:effect-sprite/spells/bwring
+    sprites_per_emission: 1
+    emission_interval_seconds: 0.019999999552965164
+    particle_lifetime_seconds: 1.0
+    emission_shape: point
+    radius: 2.56
+    plane_direction:
+    - 0.0
+    - 0.0
+    - 1.0
+    velocity: 25.6
+    wind_direction:
+    - 0.0
+    - 0.0
+    - 0.0
+    wind_amount: 2.0
+    offset:
+    - 0.0
+    - 0.0
+    - -51.2
+    rotation_per_tick:
+    - -0.0
+    - -0.0
+    - -0.0
+    stretch_u: 1.0
+    stretch_v: 1.0
+    blend: alpha
+    particle_space: world
+    alignment: world_plane
+    plane_right:
+    - 0.0
+    - 1.0
+    - 0.0
+    plane_up:
+    - 1.0
+    - 0.0
+    - 0.0
+    color_keys:
+    - time: 0.0
+      rgb:
+      - 0
+      - 128
+      - 0
+      transparency: 127
+    - time: 1.0
+      rgb:
+      - 128
+      - 0
+      - 128
+      transparency: 127
+    scale_keys:
+    - time: 0.0
+      value: 0.0
+    - time: 1.0
+      value: 2.56
+    motion_keys:
+    - time: 0.0
+      value:
+      - 0.0
+      - 0.0
+      - 184.32
+    - time: 1.0
+      value:
+      - 0.0
+      - 0.0
+      - -2.56
+  - type: sprite_system
+    id: 11
+    start_seconds: 0.0
+    end_seconds: 1.0
+    repeat_count: 1
+    sprite_resource: mm9:effect-sprite/weapons/blurredbluestar
+    sprites_per_emission: 1
+    emission_interval_seconds: 0.05000000074505806
+    particle_lifetime_seconds: 2.0
+    emission_shape: plane
+    radius: 25.6
+    plane_direction:
+    - 0.0
+    - 0.0
+    - -1.0
+    velocity: 51.2
+    wind_direction:
+    - 0.0
+    - 0.0
+    - -51.2
+    wind_amount: 2.0
+    offset:
+    - 0.0
+    - 0.0
+    - 179.20000000000002
+    rotation_per_tick:
+    - -0.0
+    - -0.0
+    - -0.0
+    stretch_u: 0.5
+    stretch_v: 4.0
+    blend: alpha
+    particle_space: world
+    alignment: camera_facing
+    color_keys:
+    - time: 0.0
+      rgb:
+      - 255
+      - 255
+      - 255
+      transparency: 255
+    - time: 0.5008264183998108
+      rgb:
+      - 255
+      - 255
+      - 255
+      transparency: 94
+    - time: 1.0
+      rgb:
+      - 255
+      - 255
+      - 255
+      transparency: 255
+    scale_keys:
+    - time: 0.0
+      value: 0.25599998474121094
+    - time: 0.5989847779273987
+      value: 1.454545440673828
+    - time: 1.0
+      value: 0.25599998474121094
+    motion_keys: []
+  - type: sound
+    id: 12
+    start_seconds: 0.0
+    end_seconds: 1.0
+    sound_resource: mm9:sound/spells/paralyze
+    spatial: true
+    loop: false
+    volume: 1.0
+    pitch: 1.0
+    inner_radius: 256.0
+    outer_radius: 1280.0
+    follows_emitter: true
+- id: mm9:fg_spell-elemental_protection
+  source_name: fg spell-elemental protection
+  source_offset: 31529
+  source_phase_seconds: 3.0
+  duration_seconds: 3.000000238418579
+  compatibility_profile: mm9_native_60hz
+  support: supported
+  capabilities:
+  - sound
+  - sprite_system
+  components:
+  - type: sprite_system
+    id: 38
+    start_seconds: 0.0
+    end_seconds: 3.000000238418579
+    repeat_count: 1
+    sprite_resource: mm9:effect-sprite/flareparticle
+    sprites_per_emission: 1
+    emission_interval_seconds: 0.05000000074505806
+    particle_lifetime_seconds: 1.5
+    emission_shape: plane
+    radius: 51.2
+    plane_direction:
+    - 0.0
+    - 0.0
+    - -1.0
+    velocity: 51.2
+    wind_direction:
+    - 0.0
+    - 0.0
+    - -51.2
+    wind_amount: 1.0
+    offset:
+    - 0.0
+    - 0.0
+    - 192.0
+    rotation_per_tick:
+    - -0.0
+    - -0.0
+    - -0.0
+    stretch_u: 1.0
+    stretch_v: 1.0
+    blend: additive
+    particle_space: world
+    alignment: camera_facing
+    color_keys:
+    - time: 0.0
+      rgb:
+      - 255
+      - 255
+      - 0
+      transparency: 127
+    - time: 1.0
+      rgb:
+      - 255
+      - 128
+      - 64
+      transparency: 127
+    scale_keys:
+    - time: 0.0
+      value: 0.0
+    - time: 0.46869713068008423
+      value: 0.4072727203369141
+    - time: 1.0
+      value: 0.0
+    motion_keys: []
+  - type: sprite_system
+    id: 37
+    start_seconds: 0.0
+    end_seconds: 3.000000238418579
+    repeat_count: 1
+    sprite_resource: mm9:effect-sprite/flareparticle
+    sprites_per_emission: 4
+    emission_interval_seconds: 0.05000000074505806
+    particle_lifetime_seconds: 1.5
+    emission_shape: plane
+    radius: 51.2
+    plane_direction:
+    - 0.0
+    - 0.0
+    - -1.0
+    velocity: 76.8
+    wind_direction:
+    - 0.0
+    - 0.0
+    - -76.8
+    wind_amount: 1.0
+    offset:
+    - -25.6
+    - 0.0
+    - 192.0
+    rotation_per_tick:
+    - -0.0
+    - -0.0
+    - -0.05000000074505806
+    stretch_u: 1.0
+    stretch_v: 1.0
+    blend: additive
+    particle_space: world
+    alignment: camera_facing
+    color_keys:
+    - time: 0.0
+      rgb:
+      - 0
+      - 255
+      - 255
+      transparency: 127
+    - time: 1.0
+      rgb:
+      - 0
+      - 0
+      - 255
+      transparency: 127
+    scale_keys:
+    - time: 0.0
+      value: 0.0
+    - time: 0.46869713068008423
+      value: 0.4072727203369141
+    - time: 1.0
+      value: 0.0
+    motion_keys: []
+  - type: sound
+    id: 39
+    start_seconds: 0.0
+    end_seconds: 3.000000238418579
+    sound_resource: mm9:sound/spells/eprotection
+    spatial: true
+    loop: false
+    volume: 1.0
+    pitch: 1.0
+    inner_radius: 256.0
+    outer_radius: 1280.0
+    follows_emitter: true
+- id: mm9:town_portal
+  source_name: spell-town portal
+  source_offset: 36632
+  source_phase_seconds: 5.0
+  duration_seconds: 5.0
+  compatibility_profile: mm9_native_60hz
+  support: supported
+  capabilities:
+  - sprite
+  - sprite_system
+  components:
+  - type: sprite_system
+    id: 8
+    start_seconds: 0.0
+    end_seconds: 5.0
+    repeat_count: 1
+    sprite_resource: mm9:effect-sprite/spells/bwring
+    sprites_per_emission: 1
+    emission_interval_seconds: 0.10000000149011612
+    particle_lifetime_seconds: 2.0
+    emission_shape: plane_out
+    radius: 2.56
+    plane_direction:
+    - 0.0
+    - 1.0
+    - 0.0
+    velocity: 0.0
+    wind_direction:
+    - 0.0
+    - 0.0
+    - 0.0
+    wind_amount: 0.0
+    offset:
+    - 0.0
+    - 0.0
+    - 128.0
+    rotation_per_tick:
+    - -0.0
+    - -0.0
+    - -0.0
+    stretch_u: 1.0
+    stretch_v: 1.0
+    blend: alpha
+    particle_space: world
+    alignment: world_plane
+    plane_right:
+    - 1.0
+    - 0.0
+    - 0.0
+    plane_up:
+    - 0.0
+    - 0.0
+    - 1.0
+    color_keys:
+    - time: 0.0
+      rgb:
+      - 0
+      - 64
+      - 128
+      transparency: 228
+    - time: 1.0
+      rgb:
+      - 0
+      - 64
+      - 0
+      transparency: 142
+    scale_keys:
+    - time: 0.0
+      value: 3.2
+    - time: 1.0
+      value: 0.0
+    motion_keys: []
+  - type: sprite
+    id: 4
+    start_seconds: 0.0
+    end_seconds: 5.0
+    repeat_count: 1
+    sprite_resource: mm9:effect-sprite/weapons/blurredgreenorastar
+    offset:
+    - 0.0
+    - 0.0
+    - 128.0
+    stretch_u: 1.0
+    stretch_v: 1.0
+    blend: additive
+    alignment: world_plane
+    plane_right:
+    - 1.0
+    - 0.0
+    - 0.0
+    plane_up:
+    - 0.0
+    - 0.0
+    - 1.0
+    color_keys:
+    - time: 0.0
+      rgb:
+      - 255
+      - 255
+      - 255
+      transparency: 0
+    - time: 1.0
+      rgb:
+      - 255
+      - 255
+      - 255
+      transparency: 0
+    scale_keys:
+    - time: 0.0
+      value: 0.0
+    - time: 0.25380709767341614
+      value: 9.890908813476562
+    - time: 0.5025380849838257
+      value: 0.8727272033691407
+    - time: 0.7428088188171387
+      value: 9.309091186523437
+    - time: 1.0
+      value: 0.0
+    motion_keys: []
+  - type: sprite_system
+    id: 5
+    start_seconds: 0.0
+    end_seconds: 5.0
+    repeat_count: 1
+    sprite_resource: mm9:effect-sprite/flareparticle
+    sprites_per_emission: 1
+    emission_interval_seconds: 0.009999999776482582
+    particle_lifetime_seconds: 1.0
+    emission_shape: plane_in
+    radius: 153.6
+    plane_direction:
+    - 0.0
+    - 1.0
+    - 0.0
+    velocity: 115.2
+    wind_direction:
+    - 0.0
+    - 25.6
+    - 0.0
+    wind_amount: 1.0
+    offset:
+    - 0.0
+    - 0.0
+    - 128.0
+    rotation_per_tick:
+    - -0.0
+    - -0.0
+    - -0.0
+    stretch_u: 1.0
+    stretch_v: 1.0
+    blend: additive
+    particle_space: world
+    alignment: camera_facing
+    color_keys:
+    - time: 0.0
+      rgb:
+      - 255
+      - 255
+      - 0
+      transparency: 255
+    - time: 0.1851239651441574
+      rgb:
+      - 128
+      - 0
+      - 0
+      transparency: 127
+    - time: 1.0
+      rgb:
+      - 255
+      - 128
+      - 0
+      transparency: 243
+    scale_keys:
+    - time: 0.0
+      value: 2.56
+    - time: 1.0
+      value: 0.0
+    motion_keys: []
+- id: mm9:dark_grasp
+  source_name: spell-dark grasp
+  source_offset: 41560
+  source_phase_seconds: 1.0
+  duration_seconds: 1.0
+  compatibility_profile: mm9_native_60hz
+  support: supported
+  capabilities:
+  - sound
+  - sprite_system
+  components:
+  - type: sprite_system
+    id: 15
+    start_seconds: 0.0
+    end_seconds: 1.0
+    repeat_count: 1
+    sprite_resource: mm9:effect-sprite/spells/redflare
+    sprites_per_emission: 1
+    emission_interval_seconds: 0.5
+    particle_lifetime_seconds: 2.0
+    emission_shape: sphere
+    radius: 12.8
+    plane_direction:
+    - 0.0
+    - 1.0
+    - 0.0
+    velocity: 51.2
+    wind_direction:
+    - 0.0
+    - 0.0
+    - 2.56
+    wind_amount: 0.0
+    offset:
+    - 0.0
+    - 0.0
+    - 51.2
+    rotation_per_tick:
+    - -0.05000000074505806
+    - -0.0
+    - -0.0
+    stretch_u: 1.0
+    stretch_v: 1.0
+    blend: alpha
+    particle_space: world
+    alignment: camera_facing
+    color_keys:
+    - time: 0.0
+      rgb:
+      - 255
+      - 255
+      - 255
+      transparency: 94
+    - time: 1.0
+      rgb:
+      - 255
+      - 255
+      - 255
+      transparency: 255
+    scale_keys:
+    - time: 0.0
+      value: 0.8145454406738282
+    - time: 1.0
+      value: 0.0
+    motion_keys: []
+  - type: sound
+    id: 16
+    start_seconds: 0.0
+    end_seconds: 1.0
+    sound_resource: mm9:sound/spells/darkgrasp
+    spatial: true
+    loop: false
+    volume: 1.0
+    pitch: 1.0
+    inner_radius: 256.0
+    outer_radius: 1280.0
+    follows_emitter: true
+  - type: sprite_system
+    id: 17
+    start_seconds: 0.0
+    end_seconds: 1.0
+    repeat_count: 1
+    sprite_resource: mm9:effect-sprite/spells/bluering
+    sprites_per_emission: 1
+    emission_interval_seconds: 0.05000000074505806
+    particle_lifetime_seconds: 2.0
+    emission_shape: sphere
+    radius: 12.8
+    plane_direction:
+    - 0.0
+    - 0.0
+    - 1.0
+    velocity: 51.2
+    wind_direction:
+    - 0.0
+    - 0.0
+    - 0.0
+    wind_amount: 0.0
+    offset:
+    - 0.0
+    - 0.0
+    - 51.2
+    rotation_per_tick:
+    - -0.0
+    - -0.0
+    - -0.0
+    stretch_u: 1.0
+    stretch_v: 1.0
+    blend: alpha
+    particle_space: world
+    alignment: camera_facing
+    color_keys:
+    - time: 0.0
+      rgb:
+      - 255
+      - 255
+      - 255
+      transparency: 0
+    - time: 1.0
+      rgb:
+      - 255
+      - 255
+      - 255
+      transparency: 0
+    scale_keys:
+    - time: 0.0
+      value: 2.56
+    - time: 1.0
+      value: 2.56
+    motion_keys: []
+- id: mm9:disease
+  source_name: spell-disease
+  source_offset: 73512
+  source_phase_seconds: 3.0
+  duration_seconds: 3.000000238418579
+  compatibility_profile: mm9_native_60hz
+  support: supported
+  capabilities:
+  - sound
+  - sprite_system
+  components:
+  - type: sprite_system
+    id: 28
+    start_seconds: 0.0
+    end_seconds: 3.000000238418579
+    repeat_count: 1
+    sprite_resource: mm9:effect-sprite/weapons/blurredgreenyelstar
+    sprites_per_emission: 1
+    emission_interval_seconds: 0.07999999821186066
+    particle_lifetime_seconds: 1.5
+    emission_shape: sphere
+    radius: 25.6
+    plane_direction:
+    - 0.0
+    - 0.0
+    - 1.0
+    velocity: 51.2
+    wind_direction:
+    - 0.0
+    - 0.0
+    - -102.4
+    wind_amount: 1.0
+    offset:
+    - 0.0
+    - 0.0
+    - 140.8
+    rotation_per_tick:
+    - -0.0
+    - -0.0
+    - -0.0
+    stretch_u: 3.0
+    stretch_v: 5.0
+    blend: alpha
+    particle_space: world
+    alignment: camera_facing
+    color_keys:
+    - time: 0.0
+      rgb:
+      - 154
+      - 204
+      - 51
+      transparency: 0
+    - time: 0.44958677887916565
+      rgb:
+      - 19
+      - 91
+      - 145
+      transparency: 91
+    - time: 1.0
+      rgb:
+      - 167
+      - 108
+      - 88
+      transparency: 255
+    scale_keys:
+    - time: 0.0
+      value: 0.0
+    - time: 0.5008460283279419
+      value: 0.2909090995788574
+    - time: 1.0
+      value: 0.17454545974731445
+    motion_keys: []
+  - type: sprite_system
+    id: 33
+    start_seconds: 0.0
+    end_seconds: 3.000000238418579
+    repeat_count: 1
+    sprite_resource: mm9:effect-sprite/weapons/blurredgreenyelstar
+    sprites_per_emission: 1
+    emission_interval_seconds: 0.05000000074505806
+    particle_lifetime_seconds: 1.0
+    emission_shape: point
+    radius: 5.12
+    plane_direction:
+    - 0.0
+    - 0.0
+    - -1.0
+    velocity: 76.8
+    wind_direction:
+    - 0.0
+    - 0.0
+    - 102.4
+    wind_amount: 2.0
+    offset:
+    - 0.0
+    - 0.0
+    - 0.0
+    rotation_per_tick:
+    - -0.0
+    - -0.0
+    - -0.0
+    stretch_u: 3.0
+    stretch_v: 5.0
+    blend: alpha
+    particle_space: world
+    alignment: camera_facing
+    color_keys:
+    - time: 0.0
+      rgb:
+      - 203
+      - 157
+      - 52
+      transparency: 115
+    - time: 1.0
+      rgb:
+      - 64
+      - 84
+      - 44
+      transparency: 237
+    scale_keys:
+    - time: 0.0
+      value: 0.96
+    - time: 0.5008460283279419
+      value: 0.2909090995788574
+    - time: 1.0
+      value: 0.0
+    motion_keys:
+    - time: 0.0
+      value:
+      - 2.4063999938964846
+      - 0.0
+      - 137.164794921875
+    - time: 0.10973119735717773
+      value:
+      - 0.0
+      - 0.0
+      - 154.00959960937502
+    - time: 0.2041255086660385
+      value:
+      - -2.4063999938964846
+      - 0.0
+      - 139.571201171875
+    - time: 0.34719741344451904
+      value:
+      - 2.4063999938964846
+      - 0.0
+      - 161.228798828125
+    - time: 0.4868623614311218
+      value:
+      - 2.4063999938964846
+      - 0.0
+      - 139.571201171875
+    - time: 0.5909624695777893
+      value:
+      - -4.812799987792969
+      - 0.0
+      - 154.00959960937502
+    - time: 0.7189298868179321
+      value:
+      - 0.0
+      - 0.0
+      - 134.7583984375
+    - time: 0.8440426588058472
+      value:
+      - 2.4063999938964846
+      - 0.0
+      - 154.00959960937502
+    - time: 0.9999999403953552
+      value:
+      - 0.0
+      - 0.0
+      - 129.945595703125
+  - type: sprite_system
+    id: 36
+    start_seconds: 0.0
+    end_seconds: 3.000000238418579
+    repeat_count: 1
+    sprite_resource: mm9:effect-sprite/weapons/blurredyellowstar
+    sprites_per_emission: 1
+    emission_interval_seconds: 0.05000000074505806
+    particle_lifetime_seconds: 1.0
+    emission_shape: sphere
+    radius: 12.8
+    plane_direction:
+    - 0.0
+    - 0.0
+    - 1.0
+    velocity: 51.2
+    wind_direction:
+    - 0.0
+    - 0.0
+    - -102.4
+    wind_amount: 2.0
+    offset:
+    - 0.0
+    - 0.0
+    - 128.0
+    rotation_per_tick:
+    - -0.0
+    - -0.0
+    - -0.019999999552965164
+    stretch_u: 1.0
+    stretch_v: 2.0
+    blend: alpha
+    particle_space: world
+    alignment: camera_facing
+    color_keys:
+    - time: 0.0
+      rgb:
+      - 255
+      - 255
+      - 0
+      transparency: 47
+    - time: 1.0
+      rgb:
+      - 255
+      - 0
+      - 0
+      transparency: 255
+    scale_keys:
+    - time: 0.0
+      value: 0.11636363983154296
+    - time: 0.31979694962501526
+      value: 0.7563636016845703
+    - time: 1.0
+      value: 1.105454559326172
+    motion_keys: []
+  - type: sound
+    id: 37
+    start_seconds: 0.0
+    end_seconds: 2.992000102996826
+    sound_resource: mm9:sound/spells/disease
+    spatial: true
+    loop: false
+    volume: 1.0
+    pitch: 1.0
+    inner_radius: 256.0
+    outer_radius: 1280.0
+    follows_emitter: true
+- id: mm9:enrage
+  source_name: spell-enrage
+  source_offset: 80546
+  source_phase_seconds: 3.0
+  duration_seconds: 3.000000238418579
+  compatibility_profile: mm9_native_60hz
+  support: supported
+  capabilities:
+  - sound
+  - sprite_system
+  components:
+  - type: sprite_system
+    id: 30
+    start_seconds: 0.0
+    end_seconds: 3.000000238418579
+    repeat_count: 1
+    sprite_resource: mm9:effect-sprite/weapons/blurredredstar
+    sprites_per_emission: 1
+    emission_interval_seconds: 0.07999999821186066
+    particle_lifetime_seconds: 1.0
+    emission_shape: plane_out
+    radius: 2.56
+    plane_direction:
+    - 0.0
+    - 0.0
+    - 1.0
+    velocity: 12.8
+    wind_direction:
+    - 0.0
+    - 0.0
+    - 25.6
+    wind_amount: 1.0
+    offset:
+    - 0.0
+    - 0.0
+    - 76.8
+    rotation_per_tick:
+    - -0.0
+    - -0.05000000074505806
+    - -0.0
+    stretch_u: 2.0
+    stretch_v: 4.0
+    blend: alpha
+    particle_space: world
+    alignment: camera_facing
+    color_keys:
+    - time: 0.0
+      rgb:
+      - 128
+      - 0
+      - 0
+      transparency: 127
+    - time: 0.4876033067703247
+      rgb:
+      - 255
+      - 0
+      - 0
+      transparency: 255
+    - time: 1.0
+      rgb:
+      - 128
+      - 0
+      - 64
+      transparency: 127
+    scale_keys:
+    - time: 0.0
+      value: 2.56
+    - time: 1.0
+      value: 2.56
+    motion_keys: []
+  - type: sprite_system
+    id: 29
+    start_seconds: 0.0
+    end_seconds: 3.000000238418579
+    repeat_count: 1
+    sprite_resource: mm9:effect-sprite/weapons/blurredredstar
+    sprites_per_emission: 1
+    emission_interval_seconds: 0.10000000149011612
+    particle_lifetime_seconds: 1.2000000476837158
+    emission_shape: sphere
+    radius: 25.6
+    plane_direction:
+    - 0.0
+    - 0.0
+    - 1.0
+    velocity: 51.2
+    wind_direction:
+    - 0.0
+    - 0.0
+    - -102.4
+    wind_amount: 2.0
+    offset:
+    - 0.0
+    - 0.0
+    - 25.6
+    rotation_per_tick:
+    - -0.0
+    - -0.0
+    - -0.0
+    stretch_u: 2.0
+    stretch_v: 3.0
+    blend: alpha
+    particle_space: world
+    alignment: camera_facing
+    color_keys:
+    - time: 0.0
+      rgb:
+      - 255
+      - 0
+      - 0
+      transparency: 0
+    - time: 0.2016528993844986
+      rgb:
+      - 255
+      - 255
+      - 0
+      transparency: 0
+    - time: 0.4628099203109741
+      rgb:
+      - 128
+      - 0
+      - 255
+      transparency: 0
+    - time: 0.6694214940071106
+      rgb:
+      - 0
+      - 255
+      - 0
+      transparency: 0
+    - time: 1.0
+      rgb:
+      - 255
+      - 66
+      - 255
+      transparency: 118
+    scale_keys:
+    - time: 0.0
+      value: 0.0
+    - time: 0.5008460283279419
+      value: 0.2909090995788574
+    - time: 1.0
+      value: 0.17454545974731445
+    motion_keys:
+    - time: 0.0
+      value:
+      - 10.24
+      - 0.0
+      - 120.32000000000001
+    - time: 0.1886192113161087
+      value:
+      - -10.24
+      - 0.0
+      - 135.68
+    - time: 0.4011540412902832
+      value:
+      - 12.8
+      - 0.0
+      - 143.36
+    - time: 0.625973105430603
+      value:
+      - -12.8
+      - 0.0
+      - 122.88
+    - time: 1.0
+      value:
+      - 12.8
+      - 0.0
+      - 115.2
+  - type: sprite_system
+    id: 31
+    start_seconds: 0.0
+    end_seconds: 3.000000238418579
+    repeat_count: 1
+    sprite_resource: mm9:effect-sprite/weapons/blurredredstar
+    sprites_per_emission: 1
+    emission_interval_seconds: 0.009999999776482582
+    particle_lifetime_seconds: 1.5
+    emission_shape: circle
+    radius: 76.8
+    plane_direction:
+    - 0.0
+    - 0.0
+    - -1.0
+    velocity: 51.2
+    wind_direction:
+    - 0.0
+    - 0.0
+    - -102.4
+    wind_amount: 2.0
+    offset:
+    - 0.0
+    - 0.0
+    - 204.8
+    rotation_per_tick:
+    - -0.0
+    - -0.0
+    - -0.05000000074505806
+    stretch_u: 1.0
+    stretch_v: 2.0
+    blend: alpha
+    particle_space: world
+    alignment: camera_facing
+    color_keys:
+    - time: 0.0
+      rgb:
+      - 255
+      - 128
+      - 0
+      transparency: 0
+    - time: 0.3338842988014221
+      rgb:
+      - 0
+      - 0
+      - 255
+      transparency: 0
+    - time: 0.6677685976028442
+      rgb:
+      - 255
+      - 255
+      - 0
+      transparency: 71
+    - time: 1.0
+      rgb:
+      - 128
+      - 0
+      - 0
+      transparency: 88
+    scale_keys:
+    - time: 0.0
+      value: 0.0
+    - time: 0.48561760783195496
+      value: 0.2909090995788574
+    - time: 1.0
+      value: 0.0
+    motion_keys: []
+  - type: sound
+    id: 32
+    start_seconds: 0.0
+    end_seconds: 2.992000102996826
+    sound_resource: mm9:sound/spells/enrage
+    spatial: true
+    loop: false
+    volume: 1.0
+    pitch: 1.0
+    inner_radius: 256.0
+    outer_radius: 1280.0
+    follows_emitter: true
+- id: mm9:column_of_fire
+  source_name: spell-column of fire
+  source_offset: 87401
+  source_phase_seconds: 3.5
+  duration_seconds: 3.5
+  compatibility_profile: mm9_native_60hz
+  support: supported
+  capabilities:
+  - sound
+  - sprite_system
+  components:
+  - type: sprite_system
+    id: 6
+    start_seconds: 0.0
+    end_seconds: 0.7910000085830688
+    repeat_count: 1
+    sprite_resource: mm9:effect-sprite/fire/torchflame4
+    sprites_per_emission: 1
+    emission_interval_seconds: 0.009999999776482582
+    particle_lifetime_seconds: 1.0
+    emission_shape: plane_in
+    radius: 25.6
+    plane_direction:
+    - 0.0
+    - 0.0
+    - -1.0
+    velocity: 25.6
+    wind_direction:
+    - 0.0
+    - 0.0
+    - -128.0
+    wind_amount: 2.0
+    offset:
+    - 0.0
+    - 0.0
+    - 0.0
+    rotation_per_tick:
+    - -0.0
+    - -0.0
+    - -0.0
+    stretch_u: 2.0
+    stretch_v: 4.0
+    blend: alpha
+    particle_space: world
+    alignment: camera_facing
+    color_keys:
+    - time: 0.0
+      rgb:
+      - 255
+      - 255
+      - 0
+      transparency: 100
+    - time: 0.613223135471344
+      rgb:
+      - 255
+      - 0
+      - 0
+      transparency: 189
+    - time: 1.0
+      rgb:
+      - 128
+      - 0
+      - 0
+      transparency: 213
+    scale_keys:
+    - time: 0.0
+      value: 0.523636360168457
+    - time: 1.0
+      value: 0.6109090805053711
+    motion_keys:
+    - time: 0.0
+      value:
+      - 0.0
+      - 0.0
+      - 568.32
+    - time: 1.0
+      value:
+      - 0.0
+      - 0.0
+      - -168.96
+  - type: sprite_system
+    id: 8
+    start_seconds: 0.0
+    end_seconds: 0.800000011920929
+    repeat_count: 1
+    sprite_resource: mm9:effect-sprite/fire/torchflame3
+    sprites_per_emission: 1
+    emission_interval_seconds: 0.009999999776482582
+    particle_lifetime_seconds: 1.0
+    emission_shape: plane_in
+    radius: 25.6
+    plane_direction:
+    - 0.0
+    - 0.0
+    - -1.0
+    velocity: 25.6
+    wind_direction:
+    - 0.0
+    - 0.0
+    - -128.0
+    wind_amount: 2.0
+    offset:
+    - 0.0
+    - 0.0
+    - 0.0
+    rotation_per_tick:
+    - -0.0
+    - -0.0
+    - -0.0
+    stretch_u: 2.0
+    stretch_v: 4.0
+    blend: alpha
+    particle_space: world
+    alignment: camera_facing
+    color_keys:
+    - time: 0.0
+      rgb:
+      - 255
+      - 255
+      - 0
+      transparency: 100
+    - time: 0.613223135471344
+      rgb:
+      - 255
+      - 0
+      - 0
+      transparency: 189
+    - time: 1.0
+      rgb:
+      - 128
+      - 0
+      - 0
+      transparency: 213
+    scale_keys:
+    - time: 0.0
+      value: 0.523636360168457
+    - time: 1.0
+      value: 0.6109090805053711
+    motion_keys:
+    - time: 0.0
+      value:
+      - 0.0
+      - 0.0
+      - 568.32
+    - time: 1.0
+      value:
+      - 0.0
+      - 0.0
+      - -168.96
+  - type: sprite_system
+    id: 9
+    start_seconds: 1.5970001220703125
+    end_seconds: 2.867000102996826
+    repeat_count: 1
+    sprite_resource: mm9:effect-sprite/fire/torchflame4
+    sprites_per_emission: 1
+    emission_interval_seconds: 0.03999999910593033
+    particle_lifetime_seconds: 1.0
+    emission_shape: plane
+    radius: 76.8
+    plane_direction:
+    - 0.0
+    - 0.0
+    - 1.0
+    velocity: 51.2
+    wind_direction:
+    - 0.0
+    - 0.0
+    - 153.6
+    wind_amount: 2.0
+    offset:
+    - 0.0
+    - 0.0
+    - -51.2
+    rotation_per_tick:
+    - -0.0
+    - -0.0
+    - -0.0
+    stretch_u: 1.0
+    stretch_v: 2.0
+    blend: alpha
+    particle_space: world
+    alignment: camera_facing
+    color_keys:
+    - time: 0.0
+      rgb:
+      - 128
+      - 0
+      - 0
+      transparency: 121
+    - time: 1.0
+      rgb:
+      - 94
+      - 34
+      - 79
+      transparency: 240
+    scale_keys:
+    - time: 0.0
+      value: 0.7854545593261719
+    - time: 1.0
+      value: 0.05818181991577148
+    motion_keys: []
+  - type: sprite_system
+    id: 7
+    start_seconds: 0.49500003457069397
+    end_seconds: 2.5420000553131104
+    repeat_count: 1
+    sprite_resource: mm9:effect-sprite/fire/torchflame4
+    sprites_per_emission: 1
+    emission_interval_seconds: 0.05000000074505806
+    particle_lifetime_seconds: 0.800000011920929
+    emission_shape: sphere
+    radius: 51.2
+    plane_direction:
+    - 0.0
+    - 0.0
+    - 1.0
+    velocity: 25.6
+    wind_direction:
+    - 0.0
+    - 0.0
+    - 230.4
+    wind_amount: 3.0
+    offset:
+    - 0.0
+    - 0.0
+    - -25.6
+    rotation_per_tick:
+    - -0.0
+    - -0.0
+    - 0.05000000074505806
+    stretch_u: 2.0
+    stretch_v: 3.0
+    blend: alpha
+    particle_space: world
+    alignment: camera_facing
+    color_keys:
+    - time: 0.0
+      rgb:
+      - 255
+      - 128
+      - 0
+      transparency: 80
+    - time: 1.0
+      rgb:
+      - 128
+      - 0
+      - 64
+      transparency: 186
+    scale_keys:
+    - time: 0.0
+      value: 0.2560000038146973
+    - time: 1.0
+      value: 1.047272720336914
+    motion_keys: []
+  - type: sound
+    id: 10
+    start_seconds: 0.49400001764297485
+    end_seconds: 2.8600001335144043
+    sound_resource: mm9:sound/spells/column03
+    spatial: true
+    loop: false
+    volume: 1.0
+    pitch: 1.0
+    inner_radius: 256.0
+    outer_radius: 1280.0
+    follows_emitter: true
+- id: mm9:meteor_shower
+  source_name: spell-meteor shower
+  source_offset: 95952
+  source_phase_seconds: 3.0
+  duration_seconds: 3.000000238418579
+  compatibility_profile: mm9_native_60hz
+  support: supported
+  capabilities:
+  - null_transform
+  - sound
+  - sprite
+  - sprite_system
+  components:
+  - type: sprite
+    id: 15
+    start_seconds: 0.0
+    end_seconds: 0.5690000057220459
+    repeat_count: 1
+    sprite_resource: mm9:effect-sprite/weapons/firebolt
+    offset:
+    - 0.0
+    - 0.0
+    - 0.0
+    stretch_u: 1.0
+    stretch_v: 1.0
+    blend: additive
+    alignment: camera_facing
+    color_keys:
+    - time: 0.0
+      rgb:
+      - 255
+      - 255
+      - 255
+      transparency: 157
+    - time: 1.0
+      rgb:
+      - 255
+      - 255
+      - 255
+      transparency: 53
+    scale_keys:
+    - time: 0.0
+      value: 0.6981818389892578
+    - time: 1.0
+      value: 1.6290908813476563
+    motion_keys:
+    - time: 0.0
+      value:
+      - 0.0
+      - 0.0
+      - 568.32
+    - time: 1.0
+      value:
+      - 0.0
+      - 0.0
+      - -40.96
+  - type: sprite
+    id: 16
+    start_seconds: 0.5690000057220459
+    end_seconds: 1.255000114440918
+    repeat_count: 1
+    sprite_resource: mm9:effect-sprite/weapons/blurredredyelstar
+    offset:
+    - 0.0
+    - 0.0
+    - -38.4
+    stretch_u: 1.0
+    stretch_v: 1.0
+    blend: additive
+    alignment: camera_facing
+    color_keys:
+    - time: 0.0
+      rgb:
+      - 255
+      - 255
+      - 255
+      transparency: 127
+    - time: 1.0
+      rgb:
+      - 255
+      - 255
+      - 255
+      transparency: 252
+    scale_keys:
+    - time: 0.0
+      value: 2.909090881347656
+    - time: 0.07614213228225708
+      value: 9.6
+    - time: 0.11675126850605011
+      value: 3.4909091186523438
+    - time: 0.18612521886825562
+      value: 9.309091186523437
+    - time: 1.0
+      value: 0.0
+    motion_keys: []
+  - type: sprite_system
+    id: 18
+    start_seconds: 0.5
+    end_seconds: 0.6710000038146973
+    repeat_count: 1
+    sprite_resource: mm9:effect-sprite/firebreath
+    sprites_per_emission: 15
+    emission_interval_seconds: 0.05000000074505806
+    particle_lifetime_seconds: 0.5
+    emission_shape: sphere
+    radius: 2.56
+    plane_direction:
+    - 0.0
+    - 0.0
+    - 1.0
+    velocity: 640.0
+    wind_direction:
+    - 0.0
+    - 0.0
+    - -128.0
+    wind_amount: 15.0
+    offset:
+    - 0.0
+    - 0.0
+    - -38.4
+    rotation_per_tick:
+    - -0.0
+    - -0.0
+    - -0.0
+    stretch_u: 1.0
+    stretch_v: 1.0
+    blend: alpha
+    particle_space: world
+    alignment: camera_facing
+    color_keys:
+    - time: 0.0
+      rgb:
+      - 255
+      - 0
+      - 0
+      transparency: 50
+    - time: 1.0
+      rgb:
+      - 255
+      - 128
+      - 64
+      transparency: 127
+    scale_keys:
+    - time: 0.0
+      value: 0.2560000038146973
+    - time: 1.0
+      value: 0.23272727966308593
+    motion_keys: []
+  - type: sprite_system
+    id: 20
+    start_seconds: 0.8990000486373901
+    end_seconds: 1.9200000762939453
+    repeat_count: 1
+    sprite_resource: mm9:effect-sprite/fire/torchflame4
+    sprites_per_emission: 1
+    emission_interval_seconds: 0.03999999910593033
+    particle_lifetime_seconds: 1.0
+    emission_shape: plane
+    radius: 64.0
+    plane_direction:
+    - 0.0
+    - 0.0
+    - 1.0
+    velocity: 51.2
+    wind_direction:
+    - 0.0
+    - 0.0
+    - 179.20000000000002
+    wind_amount: 2.0
+    offset:
+    - 0.0
+    - 0.0
+    - -64.0
+    rotation_per_tick:
+    - -0.0
+    - -0.0
+    - -0.05000000074505806
+    stretch_u: 3.0
+    stretch_v: 4.0
+    blend: alpha
+    particle_space: world
+    alignment: camera_facing
+    color_keys:
+    - time: 0.0
+      rgb:
+      - 128
+      - 0
+      - 0
+      transparency: 127
+    - time: 1.0
+      rgb:
+      - 94
+      - 34
+      - 79
+      transparency: 219
+    scale_keys:
+    - time: 0.0
+      value: 0.2560000038146973
+    - time: 1.0
+      value: 0.2560000038146973
+    motion_keys: []
+  - type: sprite_system
+    id: 22
+    start_seconds: 0.0
+    end_seconds: 0.5680000185966492
+    repeat_count: 1
+    sprite_resource: mm9:effect-sprite/dragonbreath
+    sprites_per_emission: 1
+    emission_interval_seconds: 0.009999999776482582
+    particle_lifetime_seconds: 0.6000000238418579
+    emission_shape: point
+    radius: 5.12
+    plane_direction:
+    - 0.0
+    - 0.0
+    - -1.0
+    velocity: 51.2
+    wind_direction:
+    - 0.0
+    - 0.0
+    - -204.8
+    wind_amount: 3.0
+    offset:
+    - 0.0
+    - 0.0
+    - 0.0
+    rotation_per_tick:
+    - -0.0
+    - -0.0
+    - -0.0
+    stretch_u: 2.0
+    stretch_v: 3.0
+    blend: alpha
+    particle_space: world
+    alignment: camera_facing
+    color_keys:
+    - time: 0.0
+      rgb:
+      - 255
+      - 255
+      - 0
+      transparency: 0
+    - time: 0.46611571311950684
+      rgb:
+      - 255
+      - 128
+      - 64
+      transparency: 133
+    - time: 1.0
+      rgb:
+      - 128
+      - 0
+      - 64
+      transparency: 255
+    scale_keys:
+    - time: 0.0
+      value: 0.1454545497894287
+    - time: 1.0
+      value: 1.5709091186523438
+    motion_keys:
+    - time: 0.0
+      value:
+      - 0.0
+      - 0.0
+      - 565.76
+    - time: 1.0
+      value:
+      - 0.0
+      - 0.0
+      - -43.52
+  - type: sprite_system
+    id: 24
+    start_seconds: 0.0
+    end_seconds: 0.5640000104904175
+    repeat_count: 1
+    sprite_resource: mm9:effect-sprite/dragonbreath
+    sprites_per_emission: 1
+    emission_interval_seconds: 0.009999999776482582
+    particle_lifetime_seconds: 0.5
+    emission_shape: cone
+    radius: 76.8
+    plane_direction:
+    - 0.0
+    - 0.0
+    - 1.0
+    velocity: 128.0
+    wind_direction:
+    - 0.0
+    - 0.0
+    - 128.0
+    wind_amount: 2.0
+    offset:
+    - 0.0
+    - 0.0
+    - 25.6
+    rotation_per_tick:
+    - -0.0
+    - -0.0
+    - -0.0
+    stretch_u: 1.0
+    stretch_v: 3.0
+    blend: alpha
+    particle_space: world
+    alignment: camera_facing
+    color_keys:
+    - time: 0.0
+      rgb:
+      - 255
+      - 255
+      - 0
+      transparency: 59
+    - time: 0.45289257168769836
+      rgb:
+      - 255
+      - 128
+      - 64
+      transparency: 154
+    - time: 1.0
+      rgb:
+      - 128
+      - 0
+      - 64
+      transparency: 255
+    scale_keys:
+    - time: 0.0
+      value: 0.2560000038146973
+    - time: 1.0
+      value: 2.0363636779785157
+    motion_keys:
+    - time: 0.0
+      value:
+      - 0.0
+      - 0.0
+      - 565.76
+    - time: 1.0
+      value:
+      - 0.0
+      - 0.0
+      - -43.52
+  - type: sprite_system
+    id: 25
+    start_seconds: 0.5330000519752502
+    end_seconds: 1.4910000562667847
+    repeat_count: 1
+    sprite_resource: mm9:effect-sprite/firebreath
+    sprites_per_emission: 1
+    emission_interval_seconds: 0.019999999552965164
+    particle_lifetime_seconds: 1.100000023841858
+    emission_shape: point
+    radius: 102.4
+    plane_direction:
+    - 0.0
+    - 0.0
+    - 1.0
+    velocity: 102.4
+    wind_direction:
+    - 0.0
+    - 0.0
+    - 153.6
+    wind_amount: 2.0
+    offset:
+    - 0.0
+    - 0.0
+    - -51.2
+    rotation_per_tick:
+    - -0.0
+    - -0.0
+    - -0.0
+    stretch_u: 2.0
+    stretch_v: 4.0
+    blend: alpha
+    particle_space: world
+    alignment: camera_facing
+    color_keys:
+    - time: 0.0
+      rgb:
+      - 255
+      - 255
+      - 255
+      transparency: 127
+    - time: 1.0
+      rgb:
+      - 255
+      - 255
+      - 255
+      transparency: 255
+    scale_keys:
+    - time: 0.0
+      value: 0.0
+    - time: 0.46700507402420044
+      value: 0.7854545593261719
+    - time: 1.0
+      value: 0.8727272796630859
+    motion_keys: []
+  - type: sprite_system
+    id: 26
+    start_seconds: 0.5330000519752502
+    end_seconds: 1.7590000629425049
+    repeat_count: 1
+    sprite_resource: mm9:effect-sprite/fire/torchflame3
+    sprites_per_emission: 1
+    emission_interval_seconds: 0.05000000074505806
+    particle_lifetime_seconds: 1.2000000476837158
+    emission_shape: cone
+    radius: 76.8
+    plane_direction:
+    - 0.0
+    - 0.0
+    - 1.0
+    velocity: 102.4
+    wind_direction:
+    - 0.0
+    - 0.0
+    - 153.6
+    wind_amount: 2.0
+    offset:
+    - 0.0
+    - 0.0
+    - -51.2
+    rotation_per_tick:
+    - -0.0
+    - -0.0
+    - -0.05000000074505806
+    stretch_u: 3.0
+    stretch_v: 5.0
+    blend: alpha
+    particle_space: world
+    alignment: camera_facing
+    color_keys:
+    - time: 0.0
+      rgb:
+      - 255
+      - 255
+      - 255
+      transparency: 127
+    - time: 1.0
+      rgb:
+      - 255
+      - 255
+      - 255
+      transparency: 255
+    scale_keys:
+    - time: 0.0
+      value: 0.20363636016845704
+    - time: 0.46700507402420044
+      value: 0.7854545593261719
+    - time: 1.0
+      value: 0.8727272796630859
+    motion_keys: []
+  - type: null_transform
+    id: 28
+    start_seconds: 1.7590000629425049
+    end_seconds: 3.000000238418579
+    repeat_count: 1
+    offset:
+    - 0.0
+    - 0.0
+    - 0.0
+    rotation_per_tick:
+    - -0.0
+    - -0.0
+    - -0.0
+    scale_keys:
+    - time: 0.0
+      value: 2.56
+    - time: 1.0
+      value: 2.56
+    motion_keys: []
+  - type: sound
+    id: 29
+    start_seconds: 0.5360000133514404
+    end_seconds: 2.992000102996826
+    sound_resource: mm9:sound/spells/meteorshower03
+    spatial: true
+    loop: false
+    volume: 1.0
+    pitch: 1.0
+    inner_radius: 256.0
+    outer_radius: 1280.0
+    follows_emitter: true
+- id: mm9:poison
+  source_name: spell-poison
+  source_offset: 110903
+  source_phase_seconds: 1.0
+  duration_seconds: 1.0
+  compatibility_profile: mm9_native_60hz
+  support: supported
+  capabilities:
+  - sound
+  - sprite_system
+  components:
+  - type: sprite_system
+    id: 11
+    start_seconds: 0.0
+    end_seconds: 1.0
+    repeat_count: 1
+    sprite_resource: mm9:effect-sprite/weapons/greenoraringexplode
+    sprites_per_emission: 1
+    emission_interval_seconds: 0.07999999821186066
+    particle_lifetime_seconds: 1.0
+    emission_shape: point
+    radius: 2.56
+    plane_direction:
+    - 0.0
+    - 0.0
+    - 1.0
+    velocity: 12.8
+    wind_direction:
+    - 0.0
+    - 0.0
+    - 0.0
+    wind_amount: 0.0
+    offset:
+    - 0.0
+    - 0.0
+    - 179.20000000000002
+    rotation_per_tick:
+    - -0.0
+    - -0.05000000074505806
+    - -0.0
+    stretch_u: 5.0
+    stretch_v: 2.0
+    blend: alpha
+    particle_space: world
+    alignment: camera_facing
+    color_keys:
+    - time: 0.0
+      rgb:
+      - 255
+      - 255
+      - 0
+      transparency: 255
+    - time: 0.48264461755752563
+      rgb:
+      - 0
+      - 255
+      - 0
+      transparency: 65
+    - time: 1.0
+      rgb:
+      - 0
+      - 128
+      - 64
+      transparency: 255
+    scale_keys:
+    - time: 0.0
+      value: 0.552727279663086
+    - time: 0.46023687720298767
+      value: 1.0181818389892578
+    - time: 1.0
+      value: 0.727272720336914
+    motion_keys: []
+  - type: sprite_system
+    id: 12
+    start_seconds: 0.0
+    end_seconds: 1.0
+    repeat_count: 1
+    sprite_resource: mm9:effect-sprite/spells/greendot
+    sprites_per_emission: 1
+    emission_interval_seconds: 0.05000000074505806
+    particle_lifetime_seconds: 1.0
+    emission_shape: plane
+    radius: 25.6
+    plane_direction:
+    - 0.0
+    - 0.0
+    - -1.0
+    velocity: 51.2
+    wind_direction:
+    - 0.0
+    - 0.0
+    - -25.6
+    wind_amount: 2.0
+    offset:
+    - 0.0
+    - 0.0
+    - 179.20000000000002
+    rotation_per_tick:
+    - -0.0
+    - -0.0
+    - -0.029999999329447746
+    stretch_u: 1.0
+    stretch_v: 3.0
+    blend: alpha
+    particle_space: world
+    alignment: camera_facing
+    color_keys:
+    - time: 0.0
+      rgb:
+      - 0
+      - 255
+      - 0
+      transparency: 255
+    - time: 0.4727272689342499
+      rgb:
+      - 0
+      - 128
+      - 0
+      transparency: 94
+    - time: 1.0
+      rgb:
+      - 0
+      - 0
+      - 160
+      transparency: 255
+    scale_keys:
+    - time: 0.0
+      value: 0.0
+    - time: 1.0
+      value: 0.32
+    motion_keys: []
+  - type: sprite_system
+    id: 13
+    start_seconds: 0.0
+    end_seconds: 1.0
+    repeat_count: 1
+    sprite_resource: mm9:effect-sprite/spells/greendot
+    sprites_per_emission: 1
+    emission_interval_seconds: 0.05000000074505806
+    particle_lifetime_seconds: 1.0
+    emission_shape: circle
+    radius: 25.6
+    plane_direction:
+    - 0.0
+    - 0.0
+    - -1.0
+    velocity: 51.2
+    wind_direction:
+    - 0.0
+    - 0.0
+    - -51.2
+    wind_amount: 2.0
+    offset:
+    - 0.0
+    - 0.0
+    - 179.20000000000002
+    rotation_per_tick:
+    - -0.0
+    - -0.0
+    - 0.05000000074505806
+    stretch_u: 1.0
+    stretch_v: 2.0
+    blend: alpha
+    particle_space: world
+    alignment: camera_facing
+    color_keys:
+    - time: 0.0
+      rgb:
+      - 0
+      - 255
+      - 0
+      transparency: 255
+    - time: 0.4727272689342499
+      rgb:
+      - 0
+      - 128
+      - 0
+      transparency: 94
+    - time: 1.0
+      rgb:
+      - 0
+      - 0
+      - 160
+      transparency: 255
+    scale_keys:
+    - time: 0.0
+      value: 0.0
+    - time: 1.0
+      value: 0.32
+    motion_keys: []
+  - type: sound
+    id: 14
+    start_seconds: 0.0
+    end_seconds: 1.0
+    sound_resource: mm9:sound/spells/poison03
+    spatial: true
+    loop: false
+    volume: 1.0
+    pitch: 1.0
+    inner_radius: 256.0
+    outer_radius: 1280.0
+    follows_emitter: true
+- id: mm9:turn_undead
+  source_name: spell-turn undead
+  source_offset: 117436
+  source_phase_seconds: 3.0
+  duration_seconds: 3.000000238418579
+  compatibility_profile: mm9_native_60hz
+  support: supported
+  capabilities:
+  - sound
+  - sprite
+  - sprite_system
+  components:
+  - type: sprite_system
+    id: 7
+    start_seconds: 0.0
+    end_seconds: 3.000000238418579
+    repeat_count: 1
+    sprite_resource: mm9:effect-sprite/weapons/blurredyellowstar
+    sprites_per_emission: 1
+    emission_interval_seconds: 0.07999999821186066
+    particle_lifetime_seconds: 1.0
+    emission_shape: sphere
+    radius: 12.8
+    plane_direction:
+    - 0.0
+    - 0.0
+    - -1.0
+    velocity: 76.8
+    wind_direction:
+    - 0.0
+    - 0.0
+    - -25.6
+    wind_amount: 1.0
+    offset:
+    - 0.0
+    - 0.0
+    - 192.0
+    rotation_per_tick:
+    - -0.0
+    - -0.0
+    - -0.0
+    stretch_u: 1.0
+    stretch_v: 2.0
+    blend: alpha
+    particle_space: world
+    alignment: camera_facing
+    color_keys:
+    - time: 0.0
+      rgb:
+      - 255
+      - 128
+      - 0
+      transparency: 11
+    - time: 1.0
+      rgb:
+      - 255
+      - 255
+      - 0
+      transparency: 255
+    scale_keys:
+    - time: 0.0
+      value: 0.05818181991577148
+    - time: 0.31641286611557007
+      value: 0.4072727203369141
+    - time: 1.0
+      value: 0.14545455932617188
+    motion_keys: []
+  - type: sprite
+    id: 8
+    start_seconds: 0.0
+    end_seconds: 3.000000238418579
+    repeat_count: 1
+    sprite_resource: mm9:effect-sprite/flareparticle
+    offset:
+    - 0.0
+    - 0.0
+    - 179.20000000000002
+    stretch_u: 1.0
+    stretch_v: 1.0
+    blend: additive
+    alignment: camera_facing
+    color_keys:
+    - time: 0.0
+      rgb:
+      - 255
+      - 255
+      - 0
+      transparency: 8
+    - time: 1.0
+      rgb:
+      - 255
+      - 128
+      - 64
+      transparency: 17
+    scale_keys:
+    - time: 0.0
+      value: 2.56
+    - time: 0.4822334945201874
+      value: 6.4
+    - time: 1.0
+      value: 2.56
+    motion_keys: []
+  - type: sprite_system
+    id: 9
+    start_seconds: 0.0
+    end_seconds: 3.000000238418579
+    repeat_count: 1
+    sprite_resource: mm9:effect-sprite/weapons/blurredwhitestar
+    sprites_per_emission: 1
+    emission_interval_seconds: 0.07999999821186066
+    particle_lifetime_seconds: 1.0
+    emission_shape: cone
+    radius: 2.56
+    plane_direction:
+    - 0.0
+    - 0.0
+    - -1.0
+    velocity: 51.2
+    wind_direction:
+    - 0.0
+    - 0.0
+    - -25.6
+    wind_amount: 2.0
+    offset:
+    - 0.0
+    - 0.0
+    - 204.8
+    rotation_per_tick:
+    - -0.0
+    - -0.0
+    - -0.0
+    stretch_u: 1.0
+    stretch_v: 3.0
+    blend: additive
+    particle_space: world
+    alignment: camera_facing
+    color_keys:
+    - time: 0.0
+      rgb:
+      - 255
+      - 128
+      - 0
+      transparency: 0
+    - time: 1.0
+      rgb:
+      - 255
+      - 255
+      - 0
+      transparency: 255
+    scale_keys:
+    - time: 0.0
+      value: 0.0
+    - time: 0.46869713068008423
+      value: 0.727272720336914
+    - time: 1.0
+      value: 0.37818180084228514
+    motion_keys: []
+  - type: sound
+    id: 10
+    start_seconds: 0.0
+    end_seconds: 2.992000102996826
+    sound_resource: mm9:sound/spells/turnundead
+    spatial: true
+    loop: false
+    volume: 1.0
+    pitch: 1.0
+    inner_radius: 256.0
+    outer_radius: 1280.0
+    follows_emitter: true
+- id: mm9:souldrinker
+  source_name: spell-souldrinker
+  source_offset: 123759
+  source_phase_seconds: 5.0
+  duration_seconds: 5.0
+  compatibility_profile: mm9_native_60hz
+  support: supported
+  capabilities:
+  - sound
+  - sprite_system
+  components:
+  - type: sprite_system
+    id: 2
+    start_seconds: 0.0
+    end_seconds: 5.0
+    repeat_count: 1
+    sprite_resource: mm9:effect-sprite/weapons/blurredwhitestar
+    sprites_per_emission: 1
+    emission_interval_seconds: 0.05000000074505806
+    particle_lifetime_seconds: 1.2000000476837158
+    emission_shape: plane_in
+    radius: 102.4
+    plane_direction:
+    - 0.0
+    - 1.0
+    - 0.0
+    velocity: 102.4
+    wind_direction:
+    - 0.0
+    - 0.0
+    - 0.0
+    wind_amount: 1.0
+    offset:
+    - 0.0
+    - 0.0
+    - 102.4
+    rotation_per_tick:
+    - -0.0
+    - -0.0
+    - -0.0
+    stretch_u: 1.0
+    stretch_v: 1.0
+    blend: alpha
+    particle_space: world
+    alignment: camera_facing
+    color_keys:
+    - time: 0.0
+      rgb:
+      - 128
+      - 0
+      - 128
+      transparency: 100
+    - time: 1.0
+      rgb:
+      - 255
+      - 0
+      - 255
+      transparency: 222
+    scale_keys:
+    - time: 0.0
+      value: 0.6109090805053711
+    - time: 1.0
+      value: 0.0
+    motion_keys: []
+  - type: sprite_system
+    id: 4
+    start_seconds: 0.0
+    end_seconds: 5.0
+    repeat_count: 1
+    sprite_resource: mm9:effect-sprite/spells/bluering
+    sprites_per_emission: 1
+    emission_interval_seconds: 0.20000000298023224
+    particle_lifetime_seconds: 2.0
+    emission_shape: cone
+    radius: 25.6
+    plane_direction:
+    - 0.0
+    - 0.0
+    - 1.0
+    velocity: 25.6
+    wind_direction:
+    - 0.0
+    - 0.0
+    - 2.56
+    wind_amount: 1.0
+    offset:
+    - 0.0
+    - 0.0
+    - 102.4
+    rotation_per_tick:
+    - -0.0
+    - -0.05000000074505806
+    - -0.05000000074505806
+    stretch_u: 1.0
+    stretch_v: 1.0
+    blend: alpha
+    particle_space: world
+    alignment: camera_facing
+    color_keys:
+    - time: 0.0
+      rgb:
+      - 206
+      - 0
+      - 206
+      transparency: 0
+    - time: 1.0
+      rgb:
+      - 102
+      - 0
+      - 102
+      transparency: 255
+    scale_keys:
+    - time: 0.0
+      value: 0.0
+    - time: 1.0
+      value: 1.9490908813476564
+    motion_keys: []
+  - type: sound
+    id: 5
+    start_seconds: 0.0
+    end_seconds: 4.999000072479248
+    sound_resource: mm9:sound/spells/souldrinker
+    spatial: true
+    loop: false
+    volume: 1.0
+    pitch: 1.0
+    inner_radius: 256.0
+    outer_radius: 1280.0
+    follows_emitter: true
+- id: mm9:bugs
+  source_name: bugs
+  source_offset: 128677
+  source_phase_seconds: 5.0
+  duration_seconds: 5.014000415802002
+  compatibility_profile: mm9_native_60hz
+  support: supported
+  capabilities:
+  - sprite_system
+  components:
+  - type: sprite_system
+    id: 16
+    start_seconds: 0.02200000174343586
+    end_seconds: 5.014000415802002
+    repeat_count: 1
+    sprite_resource: mm9:effect-sprite/flies
+    sprites_per_emission: 1
+    emission_interval_seconds: 0.05000000074505806
+    particle_lifetime_seconds: 1.0
+    emission_shape: point
+    radius: 12.8
+    plane_direction:
+    - 0.0
+    - 0.0
+    - 1.0
+    velocity: 51.2
+    wind_direction:
+    - 0.0
+    - 0.0
+    - 0.0
+    wind_amount: 1.0
+    offset:
+    - 0.0
+    - 0.0
+    - 0.0
+    rotation_per_tick:
+    - -0.0
+    - -0.0
+    - -0.0
+    stretch_u: 2.0
+    stretch_v: 1.0
+    blend: alpha
+    particle_space: world
+    alignment: camera_facing
+    color_keys:
+    - time: 0.0
+      rgb:
+      - 255
+      - 255
+      - 0
+      transparency: 8
+    - time: 1.0
+      rgb:
+      - 128
+      - 0
+      - 64
+      transparency: 237
+    scale_keys:
+    - time: 0.0
+      value: 0.0
+    - time: 0.5008460283279419
+      value: 0.2909090995788574
+    - time: 1.0
+      value: 0.17454545974731445
+    motion_keys:
+    - time: 0.0
+      value:
+      - -6.876658325195312
+      - -0.32705665588378907
+      - 122.146865234375
+    - time: 0.09627408534288406
+      value:
+      - -45.8617236328125
+      - -4.31317626953125
+      - 127.5491796875
+    - time: 0.2029920220375061
+      value:
+      - -9.89636474609375
+      - 8.027467651367187
+      - 115.51162109375001
+    - time: 0.2944434881210327
+      value:
+      - -8.6885205078125
+      - -6.06270263671875
+      - 132.293408203125
+    - time: 0.39888298511505127
+      value:
+      - 31.9541259765625
+      - -4.405145568847656
+      - 119.7944921875
+    - time: 0.4965110123157501
+      value:
+      - -25.37780029296875
+      - 23.4064599609375
+      - 115.598203125
+    - time: 0.5914494395256042
+      value:
+      - 16.57933837890625
+      - -32.675576171875
+      - 133.30115234375
+    - time: 0.700239360332489
+      value:
+      - 11.813795166015625
+      - 21.925878906250002
+      - 112.30111328125
+    - time: 0.7907602190971375
+      value:
+      - -24.836259765625
+      - -32.60299560546875
+      - 136.59825195312501
+    - time: 1.0
+      value:
+      - -6.750101318359375
+      - -1.5066831970214845
+      - 123.083740234375
+  - type: sprite_system
+    id: 19
+    start_seconds: 0.014000000432133675
+    end_seconds: 5.00700044631958
+    repeat_count: 1
+    sprite_resource: mm9:effect-sprite/flies
+    sprites_per_emission: 1
+    emission_interval_seconds: 0.009999999776482582
+    particle_lifetime_seconds: 1.0
+    emission_shape: sphere
+    radius: 12.8
+    plane_direction:
+    - 0.0
+    - 0.0
+    - 1.0
+    velocity: 76.8
+    wind_direction:
+    - 0.0
+    - 0.0
+    - -25.6
+    wind_amount: 2.0
+    offset:
+    - 0.0
+    - 0.0
+    - 115.2
+    rotation_per_tick:
+    - -0.0
+    - -0.0
+    - -0.05000000074505806
+    stretch_u: 2.0
+    stretch_v: 1.0
+    blend: alpha
+    particle_space: world
+    alignment: camera_facing
+    color_keys:
+    - time: 0.0
+      rgb:
+      - 0
+      - 128
+      - 0
+      transparency: 8
+    - time: 0.3305785059928894
+      rgb:
+      - 0
+      - 64
+      - 64
+      transparency: 50
+    - time: 1.0
+      rgb:
+      - 128
+      - 64
+      - 0
+      transparency: 127
+    scale_keys:
+    - time: 0.0
+      value: 0.0
+    - time: 0.27072757482528687
+      value: 0.23272727966308593
+    - time: 1.0
+      value: 0.08727272987365722
+    motion_keys: []
+- id: mm9:poison_cloud
+  source_name: spell-poison cloud
+  source_offset: 143001
+  source_phase_seconds: 1.0
+  duration_seconds: 1.0
+  compatibility_profile: mm9_native_60hz
+  support: supported
+  capabilities:
+  - sprite_system
+  components:
+  - type: sprite_system
+    id: 14
+    start_seconds: 0.0
+    end_seconds: 1.0
+    repeat_count: 1
+    sprite_resource: mm9:effect-sprite/smoke/smokenoise
+    sprites_per_emission: 1
+    emission_interval_seconds: 0.20000000298023224
+    particle_lifetime_seconds: 2.0
+    emission_shape: plane_out
+    radius: 12.8
+    plane_direction:
+    - 0.0
+    - 0.0
+    - 1.0
+    velocity: 25.6
+    wind_direction:
+    - 0.0
+    - 0.0
+    - 2.56
+    wind_amount: 1.0
+    offset:
+    - 0.0
+    - 0.0
+    - 76.8
+    rotation_per_tick:
+    - -0.0
+    - -0.0
+    - -0.0
+    stretch_u: 3.0
+    stretch_v: 4.0
+    blend: alpha
+    particle_space: world
+    alignment: camera_facing
+    color_keys:
+    - time: 0.0
+      rgb:
+      - 0
+      - 128
+      - 0
+      transparency: 171
+    - time: 0.4628099203109741
+      rgb:
+      - 0
+      - 255
+      - 0
+      transparency: 103
+    - time: 1.0
+      rgb:
+      - 0
+      - 66
+      - 33
+      transparency: 255
+    scale_keys:
+    - time: 0.0
+      value: 0.2560000038146973
+    - time: 0.4788494110107422
+      value: 0.7854545593261719
+    - time: 1.0
+      value: 0.2560000038146973
+    motion_keys: []
+- id: mm9:transfusion
+  source_name: spell-transfusion
+  source_offset: 144722
+  source_phase_seconds: 2.0
+  duration_seconds: 2.0
+  compatibility_profile: mm9_native_60hz
+  support: supported
+  capabilities:
+  - sound
+  - sprite
+  - sprite_system
+  components:
+  - type: sprite_system
+    id: 1
+    start_seconds: 0.0
+    end_seconds: 0.7920000553131104
+    repeat_count: 1
+    sprite_resource: mm9:effect-sprite/weapons/blurredredstar
+    sprites_per_emission: 2
+    emission_interval_seconds: 0.009999999776482582
+    particle_lifetime_seconds: 1.0
+    emission_shape: plane_in
+    radius: 128.0
+    plane_direction:
+    - 0.0
+    - 1.0
+    - 0.0
+    velocity: 230.4
+    wind_direction:
+    - 0.0
+    - 2.56
+    - 0.0
+    wind_amount: 1.0
+    offset:
+    - 0.0
+    - 0.0
+    - 102.4
+    rotation_per_tick:
+    - -0.0
+    - -0.0
+    - -0.0
+    stretch_u: 1.0
+    stretch_v: 1.0
+    blend: alpha
+    particle_space: world
+    alignment: camera_facing
+    color_keys:
+    - time: 0.0
+      rgb:
+      - 0
+      - 128
+      - 128
+      transparency: 163
+    - time: 0.4628099203109741
+      rgb:
+      - 255
+      - 128
+      - 0
+      transparency: 80
+    - time: 1.0
+      rgb:
+      - 255
+      - 0
+      - 0
+      transparency: 255
+    scale_keys:
+    - time: 0.0
+      value: 1.105454559326172
+    - time: 0.41624364256858826
+      value: 0.11636363983154296
+    - time: 1.0
+      value: 0.0
+    motion_keys: []
+  - type: sprite
+    id: 2
+    start_seconds: 0.5120000243186951
+    end_seconds: 2.0
+    repeat_count: 1
+    sprite_resource: mm9:effect-sprite/weapons/blurredgreenyelstar
+    offset:
+    - 0.0
+    - 0.0
+    - 102.4
+    stretch_u: 1.0
+    stretch_v: 1.0
+    blend: additive
+    alignment: camera_facing
+    color_keys:
+    - time: 0.0
+      rgb:
+      - 255
+      - 0
+      - 0
+      transparency: 0
+    - time: 1.0
+      rgb:
+      - 128
+      - 0
+      - 64
+      transparency: 255
+    scale_keys:
+    - time: 0.0
+      value: 0.2560000038146973
+    - time: 0.475465327501297
+      value: 4.945454406738281
+    - time: 1.0
+      value: 0.2560000038146973
+    motion_keys: []
+  - type: sprite
+    id: 3
+    start_seconds: 0.38600000739097595
+    end_seconds: 1.7190001010894775
+    repeat_count: 1
+    sprite_resource: mm9:effect-sprite/flareparticle
+    offset:
+    - 0.0
+    - 0.0
+    - 102.4
+    stretch_u: 1.0
+    stretch_v: 1.0
+    blend: additive
+    alignment: camera_facing
+    color_keys:
+    - time: 0.0
+      rgb:
+      - 255
+      - 128
+      - 64
+      transparency: 255
+    - time: 0.45785123109817505
+      rgb:
+      - 255
+      - 255
+      - 0
+      transparency: 0
+    - time: 1.0
+      rgb:
+      - 64
+      - 0
+      - 64
+      transparency: 255
+    scale_keys:
+    - time: 0.0
+      value: 0.0
+    - time: 0.49238577485084534
+      value: 2.56
+    - time: 1.0
+      value: 2.56
+    motion_keys: []
+  - type: sound
+    id: 4
+    start_seconds: 0.0
+    end_seconds: 2.0
+    sound_resource: mm9:sound/spells/transfusion
+    spatial: true
+    loop: false
+    volume: 1.0
+    pitch: 1.0
+    inner_radius: 256.0
+    outer_radius: 1280.0
+    follows_emitter: true
+- id: mm9:fg_spell-shared_life
+  source_name: fg spell-shared life
+  source_offset: 164152
+  source_phase_seconds: 4.0
+  duration_seconds: 4.0
+  compatibility_profile: mm9_native_60hz
+  support: supported
+  capabilities:
+  - null_transform
+  - sound
+  - sprite_system
+  components:
+  - type: sprite_system
+    id: 2
+    start_seconds: 0.0
+    end_seconds: 3.000000238418579
+    repeat_count: 1
+    sprite_resource: mm9:effect-sprite/weapons/blurredyellowstar
+    sprites_per_emission: 1
+    emission_interval_seconds: 0.05000000074505806
+    particle_lifetime_seconds: 0.800000011920929
+    emission_shape: plane
+    radius: 51.2
+    plane_direction:
+    - 1.0
+    - 0.0
+    - 0.0
+    velocity: 38.4
+    wind_direction:
+    - 256.0
+    - 0.0
+    - 0.0
+    wind_amount: 2.0
+    offset:
+    - 0.0
+    - 0.0
+    - 0.0
+    rotation_per_tick:
+    - -0.0
+    - -0.0
+    - -0.0
+    stretch_u: 1.0
+    stretch_v: 0.5
+    blend: additive
+    particle_space: world
+    alignment: camera_facing
+    color_keys:
+    - time: 0.0
+      rgb:
+      - 255
+      - 255
+      - 0
+      transparency: 0
+    - time: 1.0
+      rgb:
+      - 255
+      - 128
+      - 64
+      transparency: 255
+    scale_keys:
+    - time: 0.0
+      value: 0.0
+    - time: 0.3130287528038025
+      value: 0.49454544067382816
+    - time: 1.0
+      value: 0.0
+    motion_keys:
+    - time: 0.0
+      value:
+      - 184.0879296875
+      - 0.0
+      - 99.25765625
+    - time: 1.0
+      value:
+      - -338.143359375
+      - 0.0
+      - 99.58608398437501
+    - time: 1.0
+      value:
+      - -338.143359375
+      - 0.0
+      - 99.58608398437501
+    - time: 1.0
+      value:
+      - -338.143359375
+      - 0.0
+      - 99.58608398437501
+    - time: 1.0
+      value:
+      - -338.143359375
+      - 0.0
+      - 99.58608398437501
+  - type: sprite_system
+    id: 1
+    start_seconds: 0.0
+    end_seconds: 1.8790000677108765
+    repeat_count: 1
+    sprite_resource: mm9:effect-sprite/spells/washright
+    sprites_per_emission: 1
+    emission_interval_seconds: 5.0
+    particle_lifetime_seconds: 7.0
+    emission_shape: plane
+    radius: 2.56
+    plane_direction:
+    - -1.0
+    - 0.0
+    - 0.0
+    velocity: 128.0
+    wind_direction:
+    - -25.6
+    - 0.0
+    - 0.0
+    wind_amount: 1.0
+    offset:
+    - 128.0
+    - 0.0
+    - 76.8
+    rotation_per_tick:
+    - -0.0
+    - -0.0
+    - -0.0
+    stretch_u: 1.0
+    stretch_v: 1.0
+    blend: alpha
+    particle_space: world
+    alignment: camera_facing
+    color_keys:
+    - time: 0.0
+      rgb:
+      - 0
+      - 255
+      - 255
+      transparency: 0
+    - time: 0.43305784463882446
+      rgb:
+      - 255
+      - 255
+      - 0
+      transparency: 2
+    - time: 1.0
+      rgb:
+      - 0
+      - 255
+      - 0
+      transparency: 0
+    scale_keys:
+    - time: 0.0
+      value: 2.56
+    - time: 1.0
+      value: 2.56
+    motion_keys: []
+  - type: sprite_system
+    id: 9
+    start_seconds: 0.005000000353902578
+    end_seconds: 3.000000238418579
+    repeat_count: 1
+    sprite_resource: mm9:effect-sprite/flareparticle
+    sprites_per_emission: 1
+    emission_interval_seconds: 0.019999999552965164
+    particle_lifetime_seconds: 0.8999999761581421
+    emission_shape: sphere
+    radius: 51.2
+    plane_direction:
+    - 1.0
+    - 0.0
+    - 0.0
+    velocity: 25.6
+    wind_direction:
+    - 256.0
+    - 0.0
+    - 0.0
+    wind_amount: 2.0
+    offset:
+    - 0.0
+    - 0.0
+    - 0.0
+    rotation_per_tick:
+    - -0.0
+    - -0.0
+    - -0.0
+    stretch_u: 1.0
+    stretch_v: 0.5
+    blend: additive
+    particle_space: world
+    alignment: camera_facing
+    color_keys:
+    - time: 0.0
+      rgb:
+      - 255
+      - 255
+      - 0
+      transparency: 0
+    - time: 1.0
+      rgb:
+      - 255
+      - 128
+      - 64
+      transparency: 255
+    scale_keys:
+    - time: 0.0
+      value: 0.0
+    - time: 0.3130287528038025
+      value: 0.49454544067382816
+    - time: 1.0
+      value: 0.0
+    motion_keys:
+    - time: 0.0
+      value:
+      - 184.0879296875
+      - 0.0
+      - 99.25765625
+    - time: 1.0
+      value:
+      - -338.143359375
+      - 0.0
+      - 99.58608398437501
+    - time: 1.0
+      value:
+      - -338.143359375
+      - 0.0
+      - 99.58608398437501
+    - time: 1.0
+      value:
+      - -338.143359375
+      - 0.0
+      - 99.58608398437501
+    - time: 1.0
+      value:
+      - -338.143359375
+      - 0.0
+      - 99.58608398437501
+  - type: null_transform
+    id: 8
+    start_seconds: 3.000000238418579
+    end_seconds: 4.0
+    repeat_count: 1
+    offset:
+    - 0.0
+    - 0.0
+    - 0.0
+    rotation_per_tick:
+    - -0.0
+    - -0.0
+    - -0.0
+    scale_keys:
+    - time: 0.0
+      value: 2.56
+    - time: 1.0
+      value: 2.56
+    motion_keys: []
+  - type: sound
+    id: 10
+    start_seconds: 0.0
+    end_seconds: 2.994000196456909
+    sound_resource: mm9:sound/spells/sharedlife
+    spatial: true
+    loop: false
+    volume: 1.0
+    pitch: 1.0
+    inner_radius: 256.0
+    outer_radius: 1280.0
+    follows_emitter: true
+- id: mm9:fg_spell-divine_intervention
+  source_name: fg spell-divine intervention
+  source_offset: 171798
+  source_phase_seconds: 4.0
+  duration_seconds: 4.0
+  compatibility_profile: mm9_native_60hz
+  support: supported
+  capabilities:
+  - null_transform
+  - sprite_system
+  components:
+  - type: sprite_system
+    id: 2
+    start_seconds: 0.0
+    end_seconds: 3.000000238418579
+    repeat_count: 1
+    sprite_resource: mm9:effect-sprite/spells/whiteflare
+    sprites_per_emission: 1
+    emission_interval_seconds: 0.019999999552965164
+    particle_lifetime_seconds: 1.0
+    emission_shape: plane
+    radius: 153.6
+    plane_direction:
+    - 0.0
+    - 0.0
+    - -1.0
+    velocity: 38.4
+    wind_direction:
+    - 0.0
+    - 0.0
+    - 256.0
+    wind_amount: 2.0
+    offset:
+    - 0.0
+    - 0.0
+    - 25.6
+    rotation_per_tick:
+    - -0.0
+    - -0.0
+    - -0.0
+    stretch_u: 1.0
+    stretch_v: 1.5
+    blend: additive
+    particle_space: world
+    alignment: camera_facing
+    color_keys:
+    - time: 0.0
+      rgb:
+      - 255
+      - 255
+      - 255
+      transparency: 0
+    - time: 1.0
+      rgb:
+      - 255
+      - 255
+      - 255
+      transparency: 255
+    scale_keys:
+    - time: 0.0
+      value: 0.0
+    - time: 0.3130287528038025
+      value: 0.49454544067382816
+    - time: 1.0
+      value: 0.0
+    motion_keys:
+    - time: 0.0
+      value:
+      - 0.0
+      - 0.0
+      - 294.40000000000003
+    - time: 1.0
+      value:
+      - 0.0
+      - 0.0
+      - -79.36
+    - time: 1.0
+      value:
+      - 0.0
+      - 0.0
+      - -79.36
+    - time: 1.0
+      value:
+      - 0.0
+      - 0.0
+      - -79.36
+    - time: 1.0
+      value:
+      - 0.0
+      - 0.0
+      - -79.36
+  - type: sprite_system
+    id: 1
+    start_seconds: 0.0
+    end_seconds: 1.8790000677108765
+    repeat_count: 1
+    sprite_resource: mm9:effect-sprite/spells/wash
+    sprites_per_emission: 1
+    emission_interval_seconds: 5.0
+    particle_lifetime_seconds: 7.0
+    emission_shape: plane
+    radius: 2.56
+    plane_direction:
+    - 0.0
+    - 0.0
+    - -1.0
+    velocity: 128.0
+    wind_direction:
+    - 0.0
+    - 0.0
+    - -2.56
+    wind_amount: 1.0
+    offset:
+    - 0.0
+    - 0.0
+    - 384.0
+    rotation_per_tick:
+    - -0.0
+    - -0.0
+    - -0.0
+    stretch_u: 2.0
+    stretch_v: 2.5
+    blend: alpha
+    particle_space: world
+    alignment: camera_facing
+    color_keys:
+    - time: 0.0
+      rgb:
+      - 255
+      - 255
+      - 255
+      transparency: 0
+    - time: 1.0
+      rgb:
+      - 255
+      - 255
+      - 255
+      transparency: 0
+    scale_keys:
+    - time: 0.0
+      value: 2.56
+    - time: 1.0
+      value: 2.56
+    motion_keys: []
+  - type: sprite_system
+    id: 9
+    start_seconds: 0.005000000353902578
+    end_seconds: 3.000000238418579
+    repeat_count: 1
+    sprite_resource: mm9:effect-sprite/spells/whiteflare
+    sprites_per_emission: 1
+    emission_interval_seconds: 0.05000000074505806
+    particle_lifetime_seconds: 1.0
+    emission_shape: plane
+    radius: 153.6
+    plane_direction:
+    - 0.0
+    - 0.0
+    - -1.0
+    velocity: 64.0
+    wind_direction:
+    - 0.0
+    - 0.0
+    - 256.0
+    wind_amount: 2.0
+    offset:
+    - 0.0
+    - 0.0
+    - 25.6
+    rotation_per_tick:
+    - -0.0
+    - -0.0
+    - -0.0
+    stretch_u: 1.0
+    stretch_v: 1.0
+    blend: additive
+    particle_space: world
+    alignment: camera_facing
+    color_keys:
+    - time: 0.0
+      rgb:
+      - 255
+      - 255
+      - 255
+      transparency: 0
+    - time: 1.0
+      rgb:
+      - 255
+      - 255
+      - 255
+      transparency: 255
+    scale_keys:
+    - time: 0.0
+      value: 0.3490909194946289
+    - time: 0.3113367259502411
+      value: 0.6690908813476563
+    - time: 1.0
+      value: 0.0
+    motion_keys:
+    - time: 0.0
+      value:
+      - 0.0
+      - 0.0
+      - 294.40000000000003
+    - time: 1.0
+      value:
+      - 0.0
+      - 0.0
+      - -115.2
+    - time: 1.0
+      value:
+      - 0.0
+      - 0.0
+      - -115.2
+    - time: 1.0
+      value:
+      - 0.0
+      - 0.0
+      - -115.2
+    - time: 1.0
+      value:
+      - 0.0
+      - 0.0
+      - -115.2
+  - type: null_transform
+    id: 8
+    start_seconds: 3.000000238418579
+    end_seconds: 4.0
+    repeat_count: 1
+    offset:
+    - 0.0
+    - 0.0
+    - 0.0
+    rotation_per_tick:
+    - -0.0
+    - -0.0
+    - -0.0
+    scale_keys:
+    - time: 0.0
+      value: 2.56
+    - time: 1.0
+      value: 2.56
+    motion_keys: []
+- id: mm9:fg_spell-resistance_to_death
+  source_name: fg spell-resistance to death
+  source_offset: 177880
+  source_phase_seconds: 3.0
+  duration_seconds: 3.000000238418579
+  compatibility_profile: mm9_native_60hz
+  support: supported
+  capabilities:
+  - sound
+  - sprite
+  - sprite_system
+  components:
+  - type: sprite_system
+    id: 7
+    start_seconds: 0.0
+    end_seconds: 1.880000114440918
+    repeat_count: 1
+    sprite_resource: mm9:effect-sprite/spells/whiteflare
+    sprites_per_emission: 1
+    emission_interval_seconds: 0.009999999776482582
+    particle_lifetime_seconds: 1.0
+    emission_shape: sphere
+    radius: 12.8
+    plane_direction:
+    - 0.0
+    - 0.0
+    - 1.0
+    velocity: 128.0
+    wind_direction:
+    - 0.0
+    - 0.0
+    - -25.6
+    wind_amount: 1.0
+    offset:
+    - 0.0
+    - 0.0
+    - 89.60000000000001
+    rotation_per_tick:
+    - -0.0
+    - -0.0
+    - -0.0
+    stretch_u: 1.0
+    stretch_v: 1.0
+    blend: additive
+    particle_space: world
+    alignment: camera_facing
+    color_keys:
+    - time: 0.0
+      rgb:
+      - 255
+      - 128
+      - 0
+      transparency: 11
+    - time: 1.0
+      rgb:
+      - 255
+      - 255
+      - 0
+      transparency: 255
+    scale_keys:
+    - time: 0.0
+      value: 0.05818181991577148
+    - time: 0.31641286611557007
+      value: 0.4072727203369141
+    - time: 1.0
+      value: 0.14545455932617188
+    motion_keys: []
+  - type: sprite
+    id: 11
+    start_seconds: 0.004000000189989805
+    end_seconds: 3.000000238418579
+    repeat_count: 1
+    sprite_resource: mm9:effect-sprite/weapons/blurredyellowstar
+    offset:
+    - 0.0
+    - 0.0
+    - 89.60000000000001
+    stretch_u: 1.0
+    stretch_v: 1.0
+    blend: additive
+    alignment: camera_facing
+    color_keys:
+    - time: 0.0
+      rgb:
+      - 251
+      - 187
+      - 68
+      transparency: 0
+    - time: 0.5586776733398438
+      rgb:
+      - 255
+      - 255
+      - 0
+      transparency: 246
+    - time: 0.7454545497894287
+      rgb:
+      - 255
+      - 255
+      - 255
+      transparency: 255
+    - time: 1.0
+      rgb:
+      - 0
+      - 0
+      - 0
+      transparency: 255
+    scale_keys:
+    - time: 0.0
+      value: 0.0
+    - time: 1.0
+      value: 9.4545458984375
+    motion_keys: []
+  - type: sprite_system
+    id: 10
+    start_seconds: 0.0
+    end_seconds: 1.1510000228881836
+    repeat_count: 1
+    sprite_resource: mm9:effect-sprite/spells/bwring
+    sprites_per_emission: 1
+    emission_interval_seconds: 0.20000000298023224
+    particle_lifetime_seconds: 3.0
+    emission_shape: point
+    radius: 2.56
+    plane_direction:
+    - 0.0
+    - 1.0
+    - 0.0
+    velocity: 0.0
+    wind_direction:
+    - 0.0
+    - 0.0
+    - 0.0
+    wind_amount: 0.0
+    offset:
+    - 0.0
+    - 0.0
+    - 89.60000000000001
+    rotation_per_tick:
+    - -0.0
+    - -0.0
+    - -0.0
+    stretch_u: 1.0
+    stretch_v: 1.0
+    blend: alpha
+    particle_space: world
+    alignment: world_plane
+    plane_right:
+    - 1.0
+    - 0.0
+    - 0.0
+    plane_up:
+    - 0.0
+    - 0.0
+    - 1.0
+    color_keys:
+    - time: 0.0
+      rgb:
+      - 0
+      - 64
+      - 128
+      transparency: 142
+    - time: 1.0
+      rgb:
+      - 0
+      - 64
+      - 0
+      transparency: 249
+    scale_keys:
+    - time: 0.0
+      value: 0.0
+    - time: 1.0
+      value: 4.538181762695313
+    motion_keys: []
+  - type: sound
+    id: 12
+    start_seconds: 0.0
+    end_seconds: 3.000000238418579
+    sound_resource: mm9:sound/spells/resistdeath
+    spatial: true
+    loop: false
+    volume: 1.0
+    pitch: 1.0
+    inner_radius: 256.0
+    outer_radius: 1280.0
+    follows_emitter: true
+- id: mm9:fg_spell-feather_fall
+  source_name: fg spell-feather fall
+  source_offset: 184326
+  source_phase_seconds: 3.0
+  duration_seconds: 3.000000238418579
+  compatibility_profile: mm9_native_60hz
+  support: supported
+  capabilities:
+  - null_transform
+  - sound
+  - sprite_system
+  components:
+  - type: sprite_system
+    id: 38
+    start_seconds: 0.0
+    end_seconds: 2.0
+    repeat_count: 1
+    sprite_resource: mm9:effect-sprite/spells/feather
+    sprites_per_emission: 1
+    emission_interval_seconds: 0.10000000149011612
+    particle_lifetime_seconds: 3.0
+    emission_shape: plane
+    radius: 76.8
+    plane_direction:
+    - 0.0
+    - 0.0
+    - -1.0
+    velocity: 51.2
+    wind_direction:
+    - 0.0
+    - 0.0
+    - -51.2
+    wind_amount: 1.0
+    offset:
+    - 0.0
+    - 0.0
+    - 179.20000000000002
+    rotation_per_tick:
+    - -0.0
+    - -0.0
+    - -0.0
+    stretch_u: 1.0
+    stretch_v: 1.0
+    blend: alpha
+    particle_space: world
+    alignment: camera_facing
+    color_keys:
+    - time: 0.0
+      rgb:
+      - 128
+      - 64
+      - 0
+      transparency: 127
+    - time: 1.0
+      rgb:
+      - 128
+      - 64
+      - 0
+      transparency: 127
+    scale_keys:
+    - time: 0.0
+      value: 0.0
+    - time: 0.46869713068008423
+      value: 0.4072727203369141
+    - time: 1.0
+      value: 0.0
+    motion_keys: []
+  - type: null_transform
+    id: 40
+    start_seconds: 1.9900001287460327
+    end_seconds: 3.000000238418579
+    repeat_count: 1
+    offset:
+    - 0.0
+    - 0.0
+    - 0.0
+    rotation_per_tick:
+    - -0.0
+    - -0.0
+    - -0.0
+    scale_keys:
+    - time: 0.0
+      value: 2.56
+    - time: 1.0
+      value: 2.56
+    motion_keys: []
+  - type: sound
+    id: 41
+    start_seconds: 0.0
+    end_seconds: 3.000000238418579
+    sound_resource: mm9:sound/spells/featherfall
+    spatial: true
+    loop: false
+    volume: 1.0
+    pitch: 1.0
+    inner_radius: 256.0
+    outer_radius: 1280.0
+    follows_emitter: true
+- id: mm9:spell_reaver
+  source_name: spell-spell reaver
+  source_offset: 188471
+  source_phase_seconds: 3.0
+  duration_seconds: 3.000000238418579
+  compatibility_profile: mm9_native_60hz
+  support: supported
+  capabilities:
+  - sound
+  - sprite
+  - sprite_system
+  components:
+  - type: sprite_system
+    id: 11
+    start_seconds: 0.25
+    end_seconds: 2.196000099182129
+    repeat_count: 1
+    sprite_resource: mm9:effect-sprite/spells/bluering
+    sprites_per_emission: 1
+    emission_interval_seconds: 0.20000000298023224
+    particle_lifetime_seconds: 1.0
+    emission_shape: point
+    radius: 2.56
+    plane_direction:
+    - 0.0
+    - 0.0
+    - 1.0
+    velocity: 25.6
+    wind_direction:
+    - 0.0
+    - 0.0
+    - -102.4
+    wind_amount: 1.0
+    offset:
+    - 0.0
+    - 0.0
+    - 38.4
+    rotation_per_tick:
+    - -0.0
+    - -0.0
+    - -0.0
+    stretch_u: 1.0
+    stretch_v: 1.0
+    blend: alpha
+    particle_space: world
+    alignment: world_plane
+    plane_right:
+    - 0.0
+    - 1.0
+    - 0.0
+    plane_up:
+    - 1.0
+    - 0.0
+    - 0.0
+    color_keys:
+    - time: 0.0
+      rgb:
+      - 128
+      - 0
+      - 128
+      transparency: 0
+    - time: 0.6892561912536621
+      rgb:
+      - 128
+      - 0
+      - 128
+      transparency: 145
+    - time: 1.0
+      rgb:
+      - 0
+      - 0
+      - 0
+      transparency: 255
+    scale_keys:
+    - time: 0.0
+      value: 1.7454545593261719
+    - time: 1.0
+      value: 18.909091796875
+    motion_keys: []
+  - type: sprite_system
+    id: 21
+    start_seconds: 0.023000001907348633
+    end_seconds: 1.415000081062317
+    repeat_count: 1
+    sprite_resource: mm9:effect-sprite/flareparticle
+    sprites_per_emission: 1
+    emission_interval_seconds: 0.009999999776482582
+    particle_lifetime_seconds: 1.5
+    emission_shape: point
+    radius: 51.2
+    plane_direction:
+    - 0.0
+    - 0.0
+    - 1.0
+    velocity: 512.0
+    wind_direction:
+    - 0.0
+    - 0.0
+    - 256.0
+    wind_amount: 2.0
+    offset:
+    - 0.0
+    - 0.0
+    - 25.6
+    rotation_per_tick:
+    - -0.0
+    - -0.0
+    - -0.0
+    stretch_u: 1.0
+    stretch_v: 2.0
+    blend: additive
+    particle_space: world
+    alignment: camera_facing
+    color_keys:
+    - time: 0.0
+      rgb:
+      - 0
+      - 255
+      - 0
+      transparency: 0
+    - time: 0.4595041275024414
+      rgb:
+      - 255
+      - 128
+      - 0
+      transparency: 8
+    - time: 1.0
+      rgb:
+      - 255
+      - 0
+      - 255
+      transparency: 169
+    scale_keys:
+    - time: 0.0
+      value: 0.5120000076293946
+    - time: 1.0
+      value: 0.5120000076293946
+    motion_keys: []
+  - type: sprite
+    id: 23
+    start_seconds: 0.023000001907348633
+    end_seconds: 3.000000238418579
+    repeat_count: 1
+    sprite_resource: mm9:effect-sprite/weapons/ringexplodeblue
+    offset:
+    - 0.0
+    - 0.0
+    - 38.4
+    stretch_u: 1.0
+    stretch_v: 1.0
+    blend: additive
+    alignment: world_plane
+    plane_right:
+    - 0.0
+    - 1.0
+    - 0.0
+    plane_up:
+    - 1.0
+    - 0.0
+    - 0.0
+    color_keys:
+    - time: 0.0
+      rgb:
+      - 0
+      - 0
+      - 160
+      transparency: 255
+    - time: 0.21157024800777435
+      rgb:
+      - 255
+      - 0
+      - 255
+      transparency: 100
+    - time: 0.7057850956916809
+      rgb:
+      - 128
+      - 0
+      - 128
+      transparency: 183
+    - time: 1.0
+      rgb:
+      - 0
+      - 0
+      - 0
+      transparency: 255
+    scale_keys:
+    - time: 0.0
+      value: 0.3490909576416016
+    - time: 0.3350253701210022
+      value: 13.2654541015625
+    - time: 1.0
+      value: 15.36
+    motion_keys: []
+  - type: sprite_system
+    id: 26
+    start_seconds: 0.0
+    end_seconds: 1.0890001058578491
+    repeat_count: 1
+    sprite_resource: mm9:effect-sprite/smoke/smokenoise
+    sprites_per_emission: 1
+    emission_interval_seconds: 0.20000000298023224
+    particle_lifetime_seconds: 2.5
+    emission_shape: plane_out
+    radius: 51.2
+    plane_direction:
+    - 0.0
+    - 0.0
+    - 1.0
+    velocity: 25.6
+    wind_direction:
+    - 0.0
+    - 0.0
+    - 2.56
+    wind_amount: 1.0
+    offset:
+    - 0.0
+    - 0.0
+    - 76.8
+    rotation_per_tick:
+    - -0.0
+    - -0.0
+    - -0.0
+    stretch_u: 4.0
+    stretch_v: 4.0
+    blend: alpha
+    particle_space: world
+    alignment: camera_facing
+    color_keys:
+    - time: 0.0
+      rgb:
+      - 128
+      - 0
+      - 255
+      transparency: 177
+    - time: 0.3107438087463379
+      rgb:
+      - 128
+      - 0
+      - 64
+      transparency: 145
+    - time: 0.5669421553611755
+      rgb:
+      - 128
+      - 0
+      - 128
+      transparency: 189
+    - time: 1.0
+      rgb:
+      - 64
+      - 0
+      - 64
+      transparency: 255
+    scale_keys:
+    - time: 0.0
+      value: 0.2560000038146973
+    - time: 0.4788494110107422
+      value: 0.7854545593261719
+    - time: 1.0
+      value: 0.2560000038146973
+    motion_keys: []
+  - type: sound
+    id: 27
+    start_seconds: 0.0
+    end_seconds: 2.997000217437744
+    sound_resource: mm9:sound/spells/spellreaver
+    spatial: true
+    loop: false
+    volume: 1.0
+    pitch: 1.0
+    inner_radius: 256.0
+    outer_radius: 1280.0
+    follows_emitter: true
+- id: mm9:elemental-old
+  source_name: elemental-old
+  source_offset: 198065
+  source_phase_seconds: 2.0
+  duration_seconds: 2.4590001106262207
+  compatibility_profile: mm9_native_60hz
+  support: supported
+  capabilities:
+  - null_transform
+  - sprite
+  - sprite_system
+  components:
+  - type: sprite_system
+    id: 0
+    start_seconds: 0.10900000482797623
+    end_seconds: 0.24400001764297485
+    repeat_count: 1
+    sprite_resource: mm9:effect-sprite/fire/torchflame3
+    sprites_per_emission: 10
+    emission_interval_seconds: 0.029999999329447746
+    particle_lifetime_seconds: 1.0
+    emission_shape: plane_out
+    radius: 256.0
+    plane_direction:
+    - 0.0
+    - 0.0
+    - 1.0
+    velocity: 25.6
+    wind_direction:
+    - 0.0
+    - 0.0
+    - 51.2
+    wind_amount: 2.0
+    offset:
+    - 0.0
+    - 0.0
+    - -25.6
+    rotation_per_tick:
+    - -0.0
+    - -0.0
+    - -20.0
+    stretch_u: 3.0
+    stretch_v: 5.0
+    blend: alpha
+    particle_space: world
+    alignment: camera_facing
+    color_keys:
+    - time: 0.0
+      rgb:
+      - 255
+      - 255
+      - 255
+      transparency: 127
+    - time: 1.0
+      rgb:
+      - 255
+      - 255
+      - 255
+      transparency: 255
+    scale_keys:
+    - time: 0.0
+      value: 0.20363636016845704
+    - time: 0.46869713068008423
+      value: 0.523636360168457
+    - time: 1.0
+      value: 0.8727272796630859
+    motion_keys: []
+  - type: sprite_system
+    id: 2
+    start_seconds: 0.25300002098083496
+    end_seconds: 0.40800002217292786
+    repeat_count: 1
+    sprite_resource: mm9:effect-sprite/fire/torchflame3
+    sprites_per_emission: 10
+    emission_interval_seconds: 0.029999999329447746
+    particle_lifetime_seconds: 1.0
+    emission_shape: plane_out
+    radius: 384.0
+    plane_direction:
+    - 0.0
+    - 0.0
+    - 1.0
+    velocity: 25.6
+    wind_direction:
+    - 0.0
+    - 0.0
+    - 51.2
+    wind_amount: 2.0
+    offset:
+    - 0.0
+    - 0.0
+    - -25.6
+    rotation_per_tick:
+    - -0.0
+    - -0.0
+    - -10.0
+    stretch_u: 3.0
+    stretch_v: 5.0
+    blend: alpha
+    particle_space: world
+    alignment: camera_facing
+    color_keys:
+    - time: 0.0
+      rgb:
+      - 255
+      - 255
+      - 255
+      transparency: 127
+    - time: 1.0
+      rgb:
+      - 255
+      - 255
+      - 255
+      transparency: 255
+    scale_keys:
+    - time: 0.0
+      value: 0.20363636016845704
+    - time: 0.46700507402420044
+      value: 0.7854545593261719
+    - time: 1.0
+      value: 1.1636367797851563
+    motion_keys: []
+  - type: sprite_system
+    id: 3
+    start_seconds: 0.43300002813339233
+    end_seconds: 0.6240000128746033
+    repeat_count: 1
+    sprite_resource: mm9:effect-sprite/fire/torchflame3
+    sprites_per_emission: 15
+    emission_interval_seconds: 0.029999999329447746
+    particle_lifetime_seconds: 1.2000000476837158
+    emission_shape: plane_out
+    radius: 512.0
+    plane_direction:
+    - 0.0
+    - 0.0
+    - 1.0
+    velocity: 25.6
+    wind_direction:
+    - 0.0
+    - 0.0
+    - 51.2
+    wind_amount: 2.0
+    offset:
+    - 0.0
+    - 0.0
+    - -25.6
+    rotation_per_tick:
+    - -0.0
+    - -0.0
+    - -0.0
+    stretch_u: 3.0
+    stretch_v: 5.0
+    blend: alpha
+    particle_space: world
+    alignment: camera_facing
+    color_keys:
+    - time: 0.0
+      rgb:
+      - 255
+      - 255
+      - 255
+      transparency: 127
+    - time: 1.0
+      rgb:
+      - 255
+      - 255
+      - 255
+      transparency: 255
+    scale_keys:
+    - time: 0.0
+      value: 0.20363636016845704
+    - time: 0.46700507402420044
+      value: 0.7854545593261719
+    - time: 1.0
+      value: 1.1636367797851563
+    motion_keys: []
+  - type: sprite_system
+    id: 4
+    start_seconds: 0.6370000243186951
+    end_seconds: 0.8720000386238098
+    repeat_count: 1
+    sprite_resource: mm9:effect-sprite/fire/torchflame4
+    sprites_per_emission: 10
+    emission_interval_seconds: 0.029999999329447746
+    particle_lifetime_seconds: 1.2000000476837158
+    emission_shape: plane_out
+    radius: 640.0
+    plane_direction:
+    - 0.0
+    - 0.0
+    - 1.0
+    velocity: 25.6
+    wind_direction:
+    - 0.0
+    - 0.0
+    - 51.2
+    wind_amount: 2.0
+    offset:
+    - 0.0
+    - 0.0
+    - -25.6
+    rotation_per_tick:
+    - -0.0
+    - -0.0
+    - -50.0
+    stretch_u: 3.0
+    stretch_v: 5.0
+    blend: alpha
+    particle_space: world
+    alignment: camera_facing
+    color_keys:
+    - time: 0.0
+      rgb:
+      - 255
+      - 255
+      - 255
+      transparency: 127
+    - time: 1.0
+      rgb:
+      - 255
+      - 255
+      - 255
+      transparency: 255
+    scale_keys:
+    - time: 0.0
+      value: 0.20363636016845704
+    - time: 0.46700507402420044
+      value: 0.7854545593261719
+    - time: 1.0
+      value: 1.1636367797851563
+    motion_keys: []
+  - type: sprite
+    id: 1
+    start_seconds: 0.0
+    end_seconds: 1.5510001182556152
+    repeat_count: 1
+    sprite_resource: mm9:effect-sprite/weapons/blurredredstar
+    offset:
+    - 0.0
+    - 0.0
+    - -51.2
+    stretch_u: 1.0
+    stretch_v: 1.0
+    blend: additive
+    alignment: world_plane
+    plane_right:
+    - 0.0
+    - 1.0
+    - 0.0
+    plane_up:
+    - 1.0
+    - 0.0
+    - 0.0
+    color_keys:
+    - time: 0.0
+      rgb:
+      - 255
+      - 0
+      - 0
+      transparency: 255
+    - time: 0.06776859611272812
+      rgb:
+      - 255
+      - 0
+      - 0
+      transparency: 85
+    - time: 0.6314049363136292
+      rgb:
+      - 191
+      - 0
+      - 0
+      transparency: 148
+    - time: 0.8214876055717468
+      rgb:
+      - 213
+      - 72
+      - 13
+      transparency: 255
+    - time: 1.0
+      rgb:
+      - 255
+      - 128
+      - 0
+      transparency: 255
+    scale_keys:
+    - time: 0.0
+      value: 18.32727294921875
+    - time: 0.4043993353843689
+      value: 34.909091796875
+    - time: 1.0
+      value: 37.52727294921875
+    motion_keys: []
+  - type: null_transform
+    id: 6
+    start_seconds: 1.5510001182556152
+    end_seconds: 2.4590001106262207
+    repeat_count: 1
+    offset:
+    - 0.0
+    - 0.0
+    - 0.0
+    rotation_per_tick:
+    - -0.0
+    - -0.0
+    - -0.0
+    scale_keys:
+    - time: 0.0
+      value: 2.56
+    - time: 1.0
+      value: 2.56
+    motion_keys: []
+- id: mm9:elemental_blast
+  source_name: elemental blast
+  source_offset: 206636
+  source_phase_seconds: 2.0
+  duration_seconds: 2.4590001106262207
+  compatibility_profile: mm9_native_60hz
+  support: supported
+  capabilities:
+  - null_transform
+  - sprite
+  - sprite_system
+  components:
+  - type: sprite_system
+    id: 0
+    start_seconds: 0.10900000482797623
+    end_seconds: 0.24400001764297485
+    repeat_count: 1
+    sprite_resource: mm9:effect-sprite/fire/torchflame3
+    sprites_per_emission: 4
+    emission_interval_seconds: 0.029999999329447746
+    particle_lifetime_seconds: 1.0
+    emission_shape: plane_out
+    radius: 256.0
+    plane_direction:
+    - 0.0
+    - 0.0
+    - 1.0
+    velocity: 25.6
+    wind_direction:
+    - 0.0
+    - 0.0
+    - 51.2
+    wind_amount: 2.0
+    offset:
+    - 0.0
+    - 0.0
+    - -25.6
+    rotation_per_tick:
+    - -0.0
+    - -0.0
+    - -20.0
+    stretch_u: 3.0
+    stretch_v: 5.0
+    blend: alpha
+    particle_space: world
+    alignment: camera_facing
+    color_keys:
+    - time: 0.0
+      rgb:
+      - 255
+      - 255
+      - 255
+      transparency: 127
+    - time: 1.0
+      rgb:
+      - 255
+      - 255
+      - 255
+      transparency: 255
+    scale_keys:
+    - time: 0.0
+      value: 0.20363636016845704
+    - time: 0.46869713068008423
+      value: 0.523636360168457
+    - time: 1.0
+      value: 0.8727272796630859
+    motion_keys: []
+  - type: sprite_system
+    id: 2
+    start_seconds: 0.25300002098083496
+    end_seconds: 0.40800002217292786
+    repeat_count: 1
+    sprite_resource: mm9:effect-sprite/fire/torchflame3
+    sprites_per_emission: 5
+    emission_interval_seconds: 0.029999999329447746
+    particle_lifetime_seconds: 1.0
+    emission_shape: plane_out
+    radius: 384.0
+    plane_direction:
+    - 0.0
+    - 0.0
+    - 1.0
+    velocity: 25.6
+    wind_direction:
+    - 0.0
+    - 0.0
+    - 51.2
+    wind_amount: 2.0
+    offset:
+    - 0.0
+    - 0.0
+    - -25.6
+    rotation_per_tick:
+    - -0.0
+    - -0.0
+    - -10.0
+    stretch_u: 3.0
+    stretch_v: 5.0
+    blend: alpha
+    particle_space: world
+    alignment: camera_facing
+    color_keys:
+    - time: 0.0
+      rgb:
+      - 255
+      - 255
+      - 255
+      transparency: 127
+    - time: 1.0
+      rgb:
+      - 255
+      - 255
+      - 255
+      transparency: 255
+    scale_keys:
+    - time: 0.0
+      value: 0.20363636016845704
+    - time: 0.46700507402420044
+      value: 0.7854545593261719
+    - time: 1.0
+      value: 1.1636367797851563
+    motion_keys: []
+  - type: sprite_system
+    id: 3
+    start_seconds: 0.43300002813339233
+    end_seconds: 0.6240000128746033
+    repeat_count: 1
+    sprite_resource: mm9:effect-sprite/fire/torchflame3
+    sprites_per_emission: 8
+    emission_interval_seconds: 0.029999999329447746
+    particle_lifetime_seconds: 1.2000000476837158
+    emission_shape: plane_out
+    radius: 512.0
+    plane_direction:
+    - 0.0
+    - 0.0
+    - 1.0
+    velocity: 25.6
+    wind_direction:
+    - 0.0
+    - 0.0
+    - 51.2
+    wind_amount: 2.0
+    offset:
+    - 0.0
+    - 0.0
+    - -25.6
+    rotation_per_tick:
+    - -0.0
+    - -0.0
+    - -0.0
+    stretch_u: 3.0
+    stretch_v: 5.0
+    blend: alpha
+    particle_space: world
+    alignment: camera_facing
+    color_keys:
+    - time: 0.0
+      rgb:
+      - 255
+      - 255
+      - 255
+      transparency: 127
+    - time: 1.0
+      rgb:
+      - 255
+      - 255
+      - 255
+      transparency: 255
+    scale_keys:
+    - time: 0.0
+      value: 0.20363636016845704
+    - time: 0.46700507402420044
+      value: 0.7854545593261719
+    - time: 1.0
+      value: 1.1636367797851563
+    motion_keys: []
+  - type: sprite_system
+    id: 4
+    start_seconds: 0.6370000243186951
+    end_seconds: 0.8720000386238098
+    repeat_count: 1
+    sprite_resource: mm9:effect-sprite/fire/torchflame4
+    sprites_per_emission: 8
+    emission_interval_seconds: 0.029999999329447746
+    particle_lifetime_seconds: 1.2000000476837158
+    emission_shape: plane_out
+    radius: 640.0
+    plane_direction:
+    - 0.0
+    - 0.0
+    - 1.0
+    velocity: 25.6
+    wind_direction:
+    - 0.0
+    - 0.0
+    - 51.2
+    wind_amount: 2.0
+    offset:
+    - 0.0
+    - 0.0
+    - -25.6
+    rotation_per_tick:
+    - -0.0
+    - -0.0
+    - -50.0
+    stretch_u: 3.0
+    stretch_v: 5.0
+    blend: alpha
+    particle_space: world
+    alignment: camera_facing
+    color_keys:
+    - time: 0.0
+      rgb:
+      - 255
+      - 255
+      - 255
+      transparency: 127
+    - time: 1.0
+      rgb:
+      - 255
+      - 255
+      - 255
+      transparency: 255
+    scale_keys:
+    - time: 0.0
+      value: 0.20363636016845704
+    - time: 0.46700507402420044
+      value: 0.7854545593261719
+    - time: 1.0
+      value: 1.1636367797851563
+    motion_keys: []
+  - type: sprite
+    id: 1
+    start_seconds: 0.0
+    end_seconds: 1.5510001182556152
+    repeat_count: 1
+    sprite_resource: mm9:effect-sprite/weapons/blurredredstar
+    offset:
+    - 0.0
+    - 0.0
+    - -51.2
+    stretch_u: 1.0
+    stretch_v: 1.0
+    blend: additive
+    alignment: world_plane
+    plane_right:
+    - 0.0
+    - 1.0
+    - 0.0
+    plane_up:
+    - 1.0
+    - 0.0
+    - 0.0
+    color_keys:
+    - time: 0.0
+      rgb:
+      - 255
+      - 0
+      - 0
+      transparency: 255
+    - time: 0.06776859611272812
+      rgb:
+      - 255
+      - 0
+      - 0
+      transparency: 85
+    - time: 0.6314049363136292
+      rgb:
+      - 191
+      - 0
+      - 0
+      transparency: 148
+    - time: 0.8214876055717468
+      rgb:
+      - 213
+      - 72
+      - 13
+      transparency: 255
+    - time: 1.0
+      rgb:
+      - 255
+      - 128
+      - 0
+      transparency: 255
+    scale_keys:
+    - time: 0.0
+      value: 18.32727294921875
+    - time: 0.4043993353843689
+      value: 34.909091796875
+    - time: 1.0
+      value: 37.52727294921875
+    motion_keys: []
+  - type: null_transform
+    id: 6
+    start_seconds: 1.5510001182556152
+    end_seconds: 2.4590001106262207
+    repeat_count: 1
+    offset:
+    - 0.0
+    - 0.0
+    - 0.0
+    rotation_per_tick:
+    - -0.0
+    - -0.0
+    - -0.0
+    scale_keys:
+    - time: 0.0
+      value: 2.56
+    - time: 1.0
+      value: 2.56
+    motion_keys: []
+- id: mm9:Njam_lightball_for_cutscene
+  source_name: Njam lightball for cutscene
+  source_offset: 225348
+  source_phase_seconds: 2.5
+  duration_seconds: 2.5
+  compatibility_profile: mm9_native_60hz
+  support: supported
+  capabilities:
+  - sprite
+  components:
+  - type: sprite
+    id: 3
+    start_seconds: 0.0
+    end_seconds: 2.5
+    repeat_count: 1
+    sprite_resource: mm9:effect-sprite/spells/lightball
+    offset:
+    - 0.0
+    - -25.6
+    - 64.0
+    stretch_u: 1.0
+    stretch_v: 1.0
+    blend: additive
+    alignment: camera_facing
+    color_keys:
+    - time: 0.0
+      rgb:
+      - 255
+      - 255
+      - 255
+      transparency: 255
+    - time: 0.1487603336572647
+      rgb:
+      - 255
+      - 255
+      - 255
+      transparency: 133
+    - time: 0.6396694183349609
+      rgb:
+      - 255
+      - 255
+      - 255
+      transparency: 47
+    - time: 1.0
+      rgb:
+      - 255
+      - 255
+      - 255
+      transparency: 255
+    scale_keys:
+    - time: 0.0
+      value: 0.0
+    - time: 0.3807106614112854
+      value: 0.9309091186523437
+    - time: 1.0
+      value: 1.2218181610107421
+    motion_keys: []
+  - type: sprite
+    id: 7
+    start_seconds: 0.0
+    end_seconds: 2.496000051498413
+    repeat_count: 1
+    sprite_resource: mm9:effect-sprite/weapons/blurredblueyelstar
+    offset:
+    - 0.0
+    - -25.6
+    - 64.0
+    stretch_u: 1.0
+    stretch_v: 1.0
+    blend: additive
+    alignment: camera_facing
+    color_keys:
+    - time: 0.0
+      rgb:
+      - 255
+      - 255
+      - 255
+      transparency: 255
+    - time: 0.6115702390670776
+      rgb:
+      - 255
+      - 255
+      - 255
+      transparency: 53
+    - time: 1.0
+      rgb:
+      - 255
+      - 255
+      - 255
+      transparency: 255
+    scale_keys:
+    - time: 0.0
+      value: 0.0
+    - time: 0.3807106614112854
+      value: 1.5127272033691406
+    - time: 1.0
+      value: 2.094545440673828
+    motion_keys: []
+- id: mm9:GreaterDemon
+  source_name: GreaterDemon
+  source_offset: 227969
+  source_phase_seconds: 3.0
+  duration_seconds: 3.000000238418579
+  compatibility_profile: mm9_native_60hz
+  support: supported
+  capabilities:
+  - sprite
+  - sprite_system
+  components:
+  - type: sprite_system
+    id: 15
+    start_seconds: 0.0
+    end_seconds: 1.7890000343322754
+    repeat_count: 1
+    sprite_resource: mm9:effect-sprite/smoke/smokenoise
+    sprites_per_emission: 1
+    emission_interval_seconds: 0.07999999821186066
+    particle_lifetime_seconds: 1.0
+    emission_shape: plane
+    radius: 128.0
+    plane_direction:
+    - 0.0
+    - 0.0
+    - -1.0
+    velocity: 76.8
+    wind_direction:
+    - 0.0
+    - 0.0
+    - 230.4
+    wind_amount: 3.0
+    offset:
+    - 0.0
+    - 0.0
+    - -25.6
+    rotation_per_tick:
+    - -0.0
+    - -0.0
+    - 0.05000000074505806
+    stretch_u: 3.0
+    stretch_v: 4.0
+    blend: alpha
+    particle_space: world
+    alignment: camera_facing
+    color_keys:
+    - time: 0.0
+      rgb:
+      - 64
+      - 0
+      - 0
+      transparency: 0
+    - time: 1.0
+      rgb:
+      - 0
+      - 0
+      - 0
+      transparency: 0
+    scale_keys:
+    - time: 0.0
+      value: 0.2560000038146973
+    - time: 1.0
+      value: 1.047272720336914
+    motion_keys: []
+  - type: sprite_system
+    id: 16
+    start_seconds: 0.0
+    end_seconds: 1.5120000839233398
+    repeat_count: 1
+    sprite_resource: mm9:effect-sprite/spells/skull
+    sprites_per_emission: 1
+    emission_interval_seconds: 0.07000000029802322
+    particle_lifetime_seconds: 1.0
+    emission_shape: plane_out
+    radius: 128.0
+    plane_direction:
+    - 0.0
+    - 0.0
+    - 1.0
+    velocity: 128.0
+    wind_direction:
+    - 0.0
+    - 0.0
+    - 128.0
+    wind_amount: 4.0
+    offset:
+    - 0.0
+    - 0.0
+    - -25.6
+    rotation_per_tick:
+    - -0.0
+    - -0.0
+    - -0.009999999776482582
+    stretch_u: 1.0
+    stretch_v: 2.0
+    blend: additive
+    particle_space: world
+    alignment: camera_facing
+    color_keys:
+    - time: 0.0
+      rgb:
+      - 64
+      - 0
+      - 0
+      transparency: 0
+    - time: 1.0
+      rgb:
+      - 0
+      - 0
+      - 0
+      transparency: 0
+    scale_keys:
+    - time: 0.0
+      value: 0.25599998474121094
+    - time: 0.5279187560081482
+      value: 0.64
+    - time: 1.0
+      value: 0.17454544067382813
+    motion_keys: []
+  - type: sprite
+    id: 19
+    start_seconds: 0.0
+    end_seconds: 3.000000238418579
+    repeat_count: 1
+    sprite_resource: mm9:effect-sprite/weapons/blurredgreenyelstar
+    offset:
+    - 0.0
+    - 0.0
+    - -25.6
+    stretch_u: 1.0
+    stretch_v: 1.0
+    blend: additive
+    alignment: camera_facing
+    color_keys:
+    - time: 0.0
+      rgb:
+      - 255
+      - 255
+      - 255
+      transparency: 91
+    - time: 0.5785123705863953
+      rgb:
+      - 255
+      - 255
+      - 255
+      transparency: 148
+    - time: 1.0
+      rgb:
+      - 255
+      - 255
+      - 255
+      transparency: 255
+    scale_keys:
+    - time: 0.0
+      value: 0.5818181991577148
+    - time: 0.1658206433057785
+      value: 10.181818237304688
+    - time: 0.8798646330833435
+      value: 12.363636474609375
+    - time: 1.0
+      value: 0.0
+    motion_keys: []
+- id: mm9:smoke
+  source_name: smoke
+  source_offset: 245816
+  source_phase_seconds: 1.0
+  duration_seconds: 1.0
+  compatibility_profile: mm9_native_60hz
+  support: supported
+  capabilities:
+  - sprite_system
+  components:
+  - type: sprite_system
+    id: 6
+    start_seconds: 0.0
+    end_seconds: 0.5
+    repeat_count: 1
+    sprite_resource: mm9:effect-sprite/smoke/smokenoise
+    sprites_per_emission: 1
+    emission_interval_seconds: 0.20000000298023224
+    particle_lifetime_seconds: 1.5
+    emission_shape: cone
+    radius: 256.0
+    plane_direction:
+    - 0.0
+    - 0.0
+    - 1.0
+    velocity: 76.8
+    wind_direction:
+    - 0.0
+    - -51.2
+    - 76.8
+    wind_amount: 3.0
+    offset:
+    - 0.0
+    - 0.0
+    - 0.0
+    rotation_per_tick:
+    - -0.0
+    - -0.0
+    - -0.0
+    stretch_u: 1.0
+    stretch_v: 1.0
+    blend: alpha
+    particle_space: world
+    alignment: camera_facing
+    color_keys:
+    - time: 0.0
+      rgb:
+      - 128
+      - 0
+      - 0
+      transparency: 20
+    - time: 1.0
+      rgb:
+      - 185
+      - 255
+      - 185
+      transparency: 255
+    scale_keys:
+    - time: 0.0
+      value: 0.0
+    - time: 0.44500845670700073
+      value: 2.0072727966308594
+    - time: 1.0
+      value: 2.0072727966308594
+    motion_keys: []
+- id: mm9:smokestack
+  source_name: smokestack
+  source_offset: 247522
+  source_phase_seconds: 3.0
+  duration_seconds: 3.0
+  compatibility_profile: mm9_native_60hz
+  support: supported
+  capabilities:
+  - sprite_system
+  components:
+  - type: sprite_system
+    id: 0
+    start_seconds: 0.0
+    end_seconds: 1.5000001192092896
+    repeat_count: 1
+    sprite_resource: mm9:effect-sprite/smoke/noisesmokeupwardphase
+    sprites_per_emission: 3
+    emission_interval_seconds: 0.6000000238418579
+    particle_lifetime_seconds: 4.0
+    emission_shape: plane
+    radius: 256.0
+    plane_direction:
+    - 0.0
+    - 0.0
+    - 1.0
+    velocity: 102.4
+    wind_direction:
+    - 0.0
+    - 0.0
+    - 128.0
+    wind_amount: 3.0
+    offset:
+    - 0.0
+    - 0.0
+    - 0.0
+    rotation_per_tick:
+    - -0.0
+    - -0.0
+    - -0.05000000074505806
+    stretch_u: 3.0
+    stretch_v: 3.0
+    blend: alpha
+    particle_space: world
+    alignment: camera_facing
+    color_keys:
+    - time: 0.0
+      rgb:
+      - 128
+      - 0
+      - 0
+      transparency: 20
+    - time: 1.0
+      rgb:
+      - 185
+      - 255
+      - 185
+      transparency: 255
+    scale_keys:
+    - time: 0.0
+      value: 0.0
+    - time: 0.44500845670700073
+      value: 2.0072727966308594
+    - time: 1.0
+      value: 2.0072727966308594
+    motion_keys: []
+- id: mm9:firefly
+  source_name: firefly
+  source_offset: 249228
+  source_phase_seconds: 8.0
+  duration_seconds: 8.0
+  compatibility_profile: mm9_native_60hz
+  support: supported
+  capabilities:
+  - model_path
+  - sprite
+  components:
+  - type: model_path
+    id: 15
+    start_seconds: 0.0
+    end_seconds: 8.0
+    repeat_count: 1
+    model_resource: mm9:model/spells/bugpath
+    animation_clip: bugpath
+    offset:
+    - 0.0
+    - 0.0
+    - -38.4
+    visible: false
+  - type: sprite
+    id: 14
+    start_seconds: 0.0
+    end_seconds: 8.0
+    repeat_count: 1
+    sprite_resource: mm9:effect-sprite/weapons/blurredwhitestar
+    offset:
+    - 0.0
+    - 0.0
+    - 25.6
+    stretch_u: 1.0
+    stretch_v: 1.0
+    blend: additive
+    alignment: camera_facing
+    color_keys:
+    - time: 0.0
+      rgb:
+      - 255
+      - 128
+      - 64
+      transparency: 127
+    - time: 0.5008264183998108
+      rgb:
+      - 254
+      - 197
+      - 1
+      transparency: 136
+    - time: 1.0
+      rgb:
+      - 255
+      - 128
+      - 0
+      transparency: 127
+    scale_keys:
+    - time: 0.0
+      value: 0.33279998779296877
+    - time: 1.0
+      value: 0.33279998779296877
+    motion_keys:
+    - time: 0.0
+      value:
+      - -69.72876953125
+      - 0.0
+      - 39.11423828125
+    - time: 0.03864168003201485
+      value:
+      - -54.7566064453125
+      - 0.0
+      - 42.312958984375
+    - time: 0.06682116538286209
+      value:
+      - -43.66591796875
+      - 0.0
+      - 41.028095703125004
+    - time: 0.10835085064172745
+      value:
+      - -30.8172802734375
+      - 0.0
+      - 30.7491796875
+    - time: 0.14327821135520935
+      value:
+      - -17.96864013671875
+      - 0.0
+      - 25.6097265625
+    - time: 0.20369182527065277
+      value:
+      - 5.933056640625
+      - 0.0
+      - 26.89458984375
+    - time: 0.23213504254817963
+      value:
+      - 14.152960205078125
+      - 0.0
+      - 34.603779296875004
+    - time: 0.2770828306674957
+      value:
+      - 29.27027099609375
+      - 0.0
+      - 44.0171484375
+    - time: 0.3126114308834076
+      value:
+      - 43.167236328125
+      - 0.0
+      - 46.2589453125
+    - time: 0.36217692494392395
+      value:
+      - 61.692929687500005
+      - 0.0
+      - 39.743232421875
+    - time: 0.40129554271698
+      value:
+      - 70.9880322265625
+      - 0.0
+      - 27.34080078125
+    - time: 0.4466279447078705
+      value:
+      - 76.6919677734375
+      - 0.0
+      - 10.30962890625
+    - time: 0.48200178146362305
+      value:
+      - 65.1281982421875
+      - 0.0
+      - 18.2284765625
+    - time: 0.5238139033317566
+      value:
+      - 52.58060546875
+      - 0.0
+      - 29.044990234375
+    - time: 0.5602899193763733
+      value:
+      - 38.7750390625
+      - 0.0
+      - 33.318916015625
+    - time: 0.5886073708534241
+      value:
+      - 29.152001953125
+      - 0.0
+      - 27.55046875
+    - time: 0.6220243573188782
+      value:
+      - 18.96447998046875
+      - 0.0
+      - 19.094013671875
+    - time: 0.6633682250976562
+      value:
+      - 2.5891839599609376
+      - 0.0
+      - 18.6746875
+    - time: 0.6873632073402405
+      value:
+      - -6.404864501953125
+      - 0.0
+      - 21.755136718750002
+    - time: 0.7172614932060242
+      value:
+      - -15.3989111328125
+      - 0.0
+      - 29.46431640625
+    - time: 0.7631233334541321
+      value:
+      - -28.24755126953125
+      - 0.0
+      - 42.312958984375
+    - time: 0.8020384311676025
+      value:
+      - -43.66591796875
+      - 0.0
+      - 42.312958984375
+    - time: 0.8456791043281555
+      value:
+      - -58.245634765625
+      - 0.0
+      - 33.0178515625
+    - time: 0.8800531625747681
+      value:
+      - -69.6911376953125
+      - 0.0
+      - 25.636611328125
+    - time: 0.9297806024551392
+      value:
+      - -88.426494140625
+      - 0.0
+      - 19.540224609375
+    - time: 0.9568819999694824
+      value:
+      - -83.5343359375
+      - 0.0
+      - 29.09875
+    - time: 0.9999999403953552
+      value:
+      - -69.648134765625
+      - 0.0
+      - 39.0497265625
+    linked_component_id: 15
+    linked_node: Xend
+- id: mm9:spellfx
+  source_name: spellfx
+  source_offset: 253120
+  source_phase_seconds: 8.0
+  duration_seconds: 8.0
+  compatibility_profile: mm9_native_60hz
+  support: supported
+  capabilities:
+  - model_path
+  - sprite
+  components:
+  - type: model_path
+    id: 15
+    start_seconds: 0.0
+    end_seconds: 8.0
+    repeat_count: 1
+    model_resource: mm9:model/spells/bugpath
+    animation_clip: bugpath
+    offset:
+    - 0.0
+    - 0.0
+    - -38.4
+    visible: false
+  - type: sprite
+    id: 14
+    start_seconds: 0.0
+    end_seconds: 8.0
+    repeat_count: 1
+    sprite_resource: mm9:effect-sprite/weapons/blurredwhitestar
+    offset:
+    - 0.0
+    - 0.0
+    - 25.6
+    stretch_u: 1.0
+    stretch_v: 1.0
+    blend: additive
+    alignment: camera_facing
+    color_keys:
+    - time: 0.0
+      rgb:
+      - 255
+      - 128
+      - 64
+      transparency: 127
+    - time: 0.5008264183998108
+      rgb:
+      - 254
+      - 197
+      - 1
+      transparency: 136
+    - time: 1.0
+      rgb:
+      - 255
+      - 128
+      - 0
+      transparency: 127
+    scale_keys:
+    - time: 0.0
+      value: 0.33279998779296877
+    - time: 1.0
+      value: 0.33279998779296877
+    motion_keys:
+    - time: 0.0
+      value:
+      - -69.72876953125
+      - 0.0
+      - 39.11423828125
+    - time: 0.03864168003201485
+      value:
+      - -54.7566064453125
+      - 0.0
+      - 42.312958984375
+    - time: 0.06682116538286209
+      value:
+      - -43.66591796875
+      - 0.0
+      - 41.028095703125004
+    - time: 0.10835085064172745
+      value:
+      - -30.8172802734375
+      - 0.0
+      - 30.7491796875
+    - time: 0.14327821135520935
+      value:
+      - -17.96864013671875
+      - 0.0
+      - 25.6097265625
+    - time: 0.20369182527065277
+      value:
+      - 5.933056640625
+      - 0.0
+      - 26.89458984375
+    - time: 0.23213504254817963
+      value:
+      - 14.152960205078125
+      - 0.0
+      - 34.603779296875004
+    - time: 0.2770828306674957
+      value:
+      - 29.27027099609375
+      - 0.0
+      - 44.0171484375
+    - time: 0.3126114308834076
+      value:
+      - 43.167236328125
+      - 0.0
+      - 46.2589453125
+    - time: 0.36217692494392395
+      value:
+      - 61.692929687500005
+      - 0.0
+      - 39.743232421875
+    - time: 0.40129554271698
+      value:
+      - 70.9880322265625
+      - 0.0
+      - 27.34080078125
+    - time: 0.4466279447078705
+      value:
+      - 76.6919677734375
+      - 0.0
+      - 10.30962890625
+    - time: 0.48200178146362305
+      value:
+      - 65.1281982421875
+      - 0.0
+      - 18.2284765625
+    - time: 0.5238139033317566
+      value:
+      - 52.58060546875
+      - 0.0
+      - 29.044990234375
+    - time: 0.5602899193763733
+      value:
+      - 38.7750390625
+      - 0.0
+      - 33.318916015625
+    - time: 0.5886073708534241
+      value:
+      - 29.152001953125
+      - 0.0
+      - 27.55046875
+    - time: 0.6220243573188782
+      value:
+      - 18.96447998046875
+      - 0.0
+      - 19.094013671875
+    - time: 0.6633682250976562
+      value:
+      - 2.5891839599609376
+      - 0.0
+      - 18.6746875
+    - time: 0.6873632073402405
+      value:
+      - -6.404864501953125
+      - 0.0
+      - 21.755136718750002
+    - time: 0.7172614932060242
+      value:
+      - -15.3989111328125
+      - 0.0
+      - 29.46431640625
+    - time: 0.7631233334541321
+      value:
+      - -28.24755126953125
+      - 0.0
+      - 42.312958984375
+    - time: 0.8020384311676025
+      value:
+      - -43.66591796875
+      - 0.0
+      - 42.312958984375
+    - time: 0.8456791043281555
+      value:
+      - -58.245634765625
+      - 0.0
+      - 33.0178515625
+    - time: 0.8800531625747681
+      value:
+      - -69.6911376953125
+      - 0.0
+      - 25.636611328125
+    - time: 0.9297806024551392
+      value:
+      - -88.426494140625
+      - 0.0
+      - 19.540224609375
+    - time: 0.9568819999694824
+      value:
+      - -83.5343359375
+      - 0.0
+      - 29.09875
+    - time: 0.9999999403953552
+      value:
+      - -69.648134765625
+      - 0.0
+      - 39.0497265625
+    linked_component_id: 15
+    linked_node: Xend
+- id: mm9:spirit
+  source_name: spirit
+  source_offset: 257012
+  source_phase_seconds: 3.0
+  duration_seconds: 3.000000238418579
+  compatibility_profile: mm9_native_60hz
+  support: supported
+  capabilities:
+  - sprite
+  components:
+  - type: sprite
+    id: 0
+    start_seconds: 0.0
+    end_seconds: 3.000000238418579
+    repeat_count: 1
+    sprite_resource: mm9:effect-sprite/spirit
+    offset:
+    - 0.0
+    - 0.0
+    - -25.6
+    stretch_u: 1.0
+    stretch_v: 1.0
+    blend: additive
+    alignment: camera_facing
+    color_keys:
+    - time: 0.0
+      rgb:
+      - 128
+      - 128
+      - 128
+      transparency: 255
+    - time: 0.19173553586006165
+      rgb:
+      - 170
+      - 255
+      - 255
+      transparency: 189
+    - time: 0.542148768901825
+      rgb:
+      - 255
+      - 255
+      - 255
+      transparency: 148
+    - time: 0.8826446533203125
+      rgb:
+      - 0
+      - 0
+      - 64
+      transparency: 204
+    - time: 1.0
+      rgb:
+      - 0
+      - 0
+      - 0
+      transparency: 255
+    scale_keys:
+    - time: 0.0
+      value: 0.7854545593261719
+    - time: 0.576988160610199
+      value: 0.7854545593261719
+    - time: 1.0
+      value: 0.17454545974731445
+    motion_keys:
+    - time: 0.0
+      value:
+      - 2.56
+      - 0.0
+      - -51.2
+    - time: 0.7499276995658875
+      value:
+      - 0.0
+      - 0.0
+      - 179.20000000000002
+    - time: 0.7762758731842041
+      value:
+      - -2.56
+      - 0.0
+      - 186.88
+    - time: 0.799842357635498
+      value:
+      - 2.56
+      - 0.0
+      - 192.0
+    - time: 0.8165063858032227
+      value:
+      - 2.56
+      - 0.0
+      - 197.12
+    - time: 1.0
+      value:
+      - 0.0
+      - 0.0
+      - 253.44
+- id: mm9:blacksmoke
+  source_name: blacksmoke
+  source_offset: 258551
+  source_phase_seconds: 2.0
+  duration_seconds: 2.0
+  compatibility_profile: mm9_native_60hz
+  support: supported
+  capabilities:
+  - sprite_system
+  components:
+  - type: sprite_system
+    id: 0
+    start_seconds: 0.0
+    end_seconds: 1.5000001192092896
+    repeat_count: 1
+    sprite_resource: mm9:effect-sprite/smoke/blacksmoke
+    sprites_per_emission: 1
+    emission_interval_seconds: 0.800000011920929
+    particle_lifetime_seconds: 4.0
+    emission_shape: circle
+    radius: 153.6
+    plane_direction:
+    - 0.0
+    - 0.0
+    - 1.0
+    velocity: 5.12
+    wind_direction:
+    - 0.0
+    - 0.0
+    - 12.8
+    wind_amount: 1.0
+    offset:
+    - 0.0
+    - 0.0
+    - -25.6
+    rotation_per_tick:
+    - -0.0
+    - -0.0
+    - -0.0
+    stretch_u: 2.0
+    stretch_v: 2.0
+    blend: alpha
+    particle_space: world
+    alignment: camera_facing
+    color_keys:
+    - time: 0.0
+      rgb:
+      - 0
+      - 0
+      - 0
+      transparency: 237
+    - time: 0.35537189245224
+      rgb:
+      - 0
+      - 0
+      - 0
+      transparency: 32
+    - time: 1.0
+      rgb:
+      - 192
+      - 192
+      - 192
+      transparency: 219
+    scale_keys:
+    - time: 0.0
+      value: 0.7563636016845703
+    - time: 0.4483925402164459
+      value: 0.9018181610107422
+    - time: 1.0
+      value: 1.4254545593261718
+    motion_keys: []
+- id: mm9:oval
+  source_name: oval
+  source_offset: 260272
+  source_phase_seconds: 3.0
+  duration_seconds: 3.0
+  compatibility_profile: mm9_native_60hz
+  support: supported
+  capabilities:
+  - sprite
+  components:
+  - type: sprite
+    id: 0
+    start_seconds: 0.0
+    end_seconds: 2.3000001907348633
+    repeat_count: 1
+    sprite_resource: mm9:effect-sprite/oval
+    offset:
+    - 0.0
+    - 0.0
+    - 128.0
+    stretch_u: 1.0
+    stretch_v: 1.0
+    blend: additive
+    alignment: camera_facing
+    color_keys:
+    - time: 0.0
+      rgb:
+      - 255
+      - 255
+      - 255
+      transparency: 127
+    - time: 0.32066115736961365
+      rgb:
+      - 255
+      - 255
+      - 255
+      transparency: 2
+    - time: 0.47438016533851624
+      rgb:
+      - 196
+      - 255
+      - 255
+      transparency: 5
+    - time: 0.6247934103012085
+      rgb:
+      - 255
+      - 255
+      - 255
+      transparency: 0
+    - time: 1.0
+      rgb:
+      - 255
+      - 255
+      - 255
+      transparency: 127
+    scale_keys:
+    - time: 0.0
+      value: 3.84
+    - time: 1.0
+      value: 3.84
+    motion_keys: []
+- id: mm9:mist
+  source_name: mist
+  source_offset: 261650
+  source_phase_seconds: 2.0
+  duration_seconds: 2.0
+  compatibility_profile: mm9_native_60hz
+  support: supported
+  capabilities:
+  - sprite_system
+  components:
+  - type: sprite_system
+    id: 16
+    start_seconds: 0.0
+    end_seconds: 2.0
+    repeat_count: 1
+    sprite_resource: mm9:effect-sprite/smoke/smokenoise
+    sprites_per_emission: 1
+    emission_interval_seconds: 0.6000000238418579
+    particle_lifetime_seconds: 2.0
+    emission_shape: circle
+    radius: 64.0
+    plane_direction:
+    - 0.0
+    - 0.0
+    - 1.0
+    velocity: 25.6
+    wind_direction:
+    - 0.0
+    - 0.0
+    - -2.56
+    wind_amount: 60.0
+    offset:
+    - 0.0
+    - 0.0
+    - 204.8
+    rotation_per_tick:
+    - -0.0
+    - -0.0
+    - -0.0
+    stretch_u: 3.0
+    stretch_v: 4.0
+    blend: alpha
+    particle_space: world
+    alignment: camera_facing
+    color_keys:
+    - time: 0.0
+      rgb:
+      - 255
+      - 255
+      - 255
+      transparency: 210
+    - time: 0.46942147612571716
+      rgb:
+      - 0
+      - 255
+      - 255
+      transparency: 50
+    - time: 0.9520661234855652
+      rgb:
+      - 192
+      - 192
+      - 192
+      transparency: 14
+    - time: 1.0
+      rgb:
+      - 0
+      - 128
+      - 128
+      transparency: 255
+    scale_keys:
+    - time: 0.0
+      value: 0.9309091186523437
+    - time: 0.4788494110107422
+      value: 0.7854545593261719
+    - time: 1.0
+      value: 0.25599998474121094
+    motion_keys: []
+- id: mm9:fireblue
+  source_name: fireblue
+  source_offset: 263386
+  source_phase_seconds: 2.0
+  duration_seconds: 2.0
+  compatibility_profile: mm9_native_60hz
+  support: supported
+  capabilities:
+  - sprite_system
+  components:
+  - type: sprite_system
+    id: 17
+    start_seconds: 0.0
+    end_seconds: 2.0
+    repeat_count: 1
+    sprite_resource: mm9:effect-sprite/fire/bluetorch
+    sprites_per_emission: 1
+    emission_interval_seconds: 0.07999999821186066
+    particle_lifetime_seconds: 1.0
+    emission_shape: sphere
+    radius: 76.8
+    plane_direction:
+    - 0.0
+    - 0.0
+    - -1.0
+    velocity: 25.6
+    wind_direction:
+    - 0.0
+    - 0.0
+    - 51.2
+    wind_amount: 2.0
+    offset:
+    - 0.0
+    - 0.0
+    - 25.6
+    rotation_per_tick:
+    - -0.0
+    - -0.0
+    - -0.019999999552965164
+    stretch_u: 2.0
+    stretch_v: 3.0
+    blend: alpha
+    particle_space: world
+    alignment: camera_facing
+    color_keys:
+    - time: 0.0
+      rgb:
+      - 0
+      - 0
+      - 160
+      transparency: 80
+    - time: 1.0
+      rgb:
+      - 255
+      - 255
+      - 255
+      transparency: 255
+    scale_keys:
+    - time: 0.0
+      value: 0.25599998474121094
+    - time: 1.0
+      value: 1.0472726440429687
+    motion_keys: []
+- id: mm9:redpops
+  source_name: redpops
+  source_offset: 266914
+  source_phase_seconds: 2.0
+  duration_seconds: 2.0
+  compatibility_profile: mm9_native_60hz
+  support: supported
+  capabilities:
+  - sprite_system
+  components:
+  - type: sprite_system
+    id: 0
+    start_seconds: 0.0
+    end_seconds: 2.0
+    repeat_count: 1
+    sprite_resource: mm9:effect-sprite/weapons/blurredredyelstar
+    sprites_per_emission: 1
+    emission_interval_seconds: 0.10000000149011612
+    particle_lifetime_seconds: 0.5
+    emission_shape: sphere
+    radius: 51.2
+    plane_direction:
+    - 0.0
+    - 0.0
+    - 5.0
+    velocity: 51.2
+    wind_direction:
+    - 0.0
+    - 0.0
+    - -25.6
+    wind_amount: 10.0
+    offset:
+    - 0.0
+    - 0.0
+    - 51.2
+    rotation_per_tick:
+    - -0.0
+    - -0.05000000074505806
+    - -0.009999999776482582
+    stretch_u: 1.0
+    stretch_v: 1.0
+    blend: additive
+    particle_space: world
+    alignment: camera_facing
+    color_keys:
+    - time: 0.0
+      rgb:
+      - 255
+      - 255
+      - 0
+      transparency: 8
+    - time: 1.0
+      rgb:
+      - 128
+      - 0
+      - 64
+      transparency: 237
+    scale_keys:
+    - time: 0.0
+      value: 0.0
+    - time: 0.23519457876682281
+      value: 0.727272720336914
+    - time: 0.4940778315067291
+      value: 0.20363636016845704
+    - time: 0.8544839024543762
+      value: 0.9309091186523437
+    - time: 1.0
+      value: 0.17454545974731445
+    motion_keys: []
+- id: mm9:greenpool
+  source_name: greenpool
+  source_offset: 268805
+  source_phase_seconds: 5.0
+  duration_seconds: 5.0
+  compatibility_profile: mm9_native_60hz
+  support: supported
+  capabilities:
+  - sprite_system
+  components:
+  - type: sprite_system
+    id: 2
+    start_seconds: 0.0
+    end_seconds: 5.0
+    repeat_count: 1
+    sprite_resource: mm9:effect-sprite/weapons/blurredgreenyelstar
+    sprites_per_emission: 1
+    emission_interval_seconds: 0.03999999910593033
+    particle_lifetime_seconds: 1.2999999523162842
+    emission_shape: plane
+    radius: 76.8
+    plane_direction:
+    - 0.0
+    - 0.0
+    - 1.0
+    velocity: 25.6
+    wind_direction:
+    - 0.0
+    - 0.0
+    - 76.8
+    wind_amount: 4.0
+    offset:
+    - 0.0
+    - 0.0
+    - 0.0
+    rotation_per_tick:
+    - -0.0
+    - -0.10000000149011612
+    - -0.009999999776482582
+    stretch_u: 1.0
+    stretch_v: 2.0
+    blend: additive
+    particle_space: world
+    alignment: camera_facing
+    color_keys:
+    - time: 0.0
+      rgb:
+      - 0
+      - 255
+      - 0
+      transparency: 47
+    - time: 1.0
+      rgb:
+      - 255
+      - 0
+      - 128
+      transparency: 255
+    scale_keys:
+    - time: 0.0
+      value: 0.0
+    - time: 0.20642977952957153
+      value: 0.6690908813476563
+    - time: 1.0
+      value: 0.14545455932617188
+    motion_keys: []
+  - type: sprite_system
+    id: 15
+    start_seconds: 0.0
+    end_seconds: 4.992000102996826
+    repeat_count: 1
+    sprite_resource: mm9:effect-sprite/weapons/blurredgreenorastar
+    sprites_per_emission: 1
+    emission_interval_seconds: 0.03999999910593033
+    particle_lifetime_seconds: 1.0
+    emission_shape: plane
+    radius: 102.4
+    plane_direction:
+    - 0.0
+    - 0.0
+    - 1.0
+    velocity: 25.6
+    wind_direction:
+    - 0.0
+    - 0.0
+    - 76.8
+    wind_amount: 5.0
+    offset:
+    - 0.0
+    - 0.0
+    - 0.0
+    rotation_per_tick:
+    - -0.0
+    - -0.019999999552965164
+    - -0.10000000149011612
+    stretch_u: 1.0
+    stretch_v: 1.0
+    blend: additive
+    particle_space: world
+    alignment: camera_facing
+    color_keys:
+    - time: 0.0
+      rgb:
+      - 255
+      - 128
+      - 0
+      transparency: 47
+    - time: 1.0
+      rgb:
+      - 0
+      - 128
+      - 0
+      transparency: 255
+    scale_keys:
+    - time: 0.0
+      value: 0.0
+    - time: 0.2385786771774292
+      value: 0.8145454406738282
+    - time: 0.4568527936935425
+      value: 0.0
+    - time: 0.5786802172660828
+      value: 0.6981818389892578
+    - time: 0.7292724251747131
+      value: 0.05818181991577148
+    - time: 0.8646361827850342
+      value: 0.6981818389892578
+    - time: 1.0
+      value: 0.0
+    motion_keys: []
+  - type: sprite_system
+    id: 17
+    start_seconds: 0.0
+    end_seconds: 5.0
+    repeat_count: 1
+    sprite_resource: mm9:effect-sprite/weapons/blurredgreenyelstar
+    sprites_per_emission: 1
+    emission_interval_seconds: 0.05000000074505806
+    particle_lifetime_seconds: 1.0
+    emission_shape: plane_in
+    radius: 153.6
+    plane_direction:
+    - 0.0
+    - 0.0
+    - 1.0
+    velocity: 102.4
+    wind_direction:
+    - 0.0
+    - 0.0
+    - 25.6
+    wind_amount: 2.0
+    offset:
+    - 0.0
+    - 0.0
+    - 2.56
+    rotation_per_tick:
+    - -0.0
+    - -0.0
+    - -0.0
+    stretch_u: 0.800000011920929
+    stretch_v: 1.0
+    blend: additive
+    particle_space: world
+    alignment: world_plane
+    plane_right:
+    - 0.0
+    - 1.0
+    - 0.0
+    plane_up:
+    - 1.0
+    - 0.0
+    - 0.0
+    color_keys:
+    - time: 0.0
+      rgb:
+      - 255
+      - 255
+      - 0
+      transparency: 255
+    - time: 0.1851239651441574
+      rgb:
+      - 0
+      - 128
+      - 0
+      transparency: 127
+    - time: 1.0
+      rgb:
+      - 128
+      - 0
+      - 128
+      transparency: 243
+    scale_keys:
+    - time: 0.0
+      value: 1.3381817626953125
+    - time: 1.0
+      value: 0.0
+    motion_keys: []
+- id: mm9:specks
+  source_name: specks
+  source_offset: 274152
+  source_phase_seconds: 3.0
+  duration_seconds: 3.000000238418579
+  compatibility_profile: mm9_native_60hz
+  support: supported
+  capabilities:
+  - model_path
+  - sprite_system
+  components:
+  - type: model_path
+    id: 15
+    start_seconds: 0.0
+    end_seconds: 3.000000238418579
+    repeat_count: 1
+    model_resource: mm9:model/spells/pathup
+    animation_clip: pathup
+    offset:
+    - 0.0
+    - 0.0
+    - -51.2
+    visible: false
+  - type: sprite_system
+    id: 17
+    start_seconds: 0.0
+    end_seconds: 3.000000238418579
+    repeat_count: 1
+    sprite_resource: mm9:effect-sprite/weapons/blurredpurplestar
+    sprites_per_emission: 1
+    emission_interval_seconds: 0.03999999910593033
+    particle_lifetime_seconds: 0.800000011920929
+    emission_shape: point
+    radius: 12.8
+    plane_direction:
+    - 0.0
+    - 1.0
+    - 0.0
+    velocity: 38.4
+    wind_direction:
+    - 0.0
+    - 0.0
+    - 0.0
+    wind_amount: 1.0
+    offset:
+    - 0.0
+    - 0.0
+    - 0.0
+    rotation_per_tick:
+    - -0.0
+    - -0.0
+    - -0.0
+    stretch_u: 0.5
+    stretch_v: 0.5
+    blend: alpha
+    particle_space: world
+    alignment: camera_facing
+    color_keys:
+    - time: 0.0
+      rgb:
+      - 255
+      - 0
+      - 0
+      transparency: 8
+    - time: 1.0
+      rgb:
+      - 0
+      - 128
+      - 64
+      transparency: 237
+    scale_keys:
+    - time: 0.0
+      value: 0.7563636016845703
+    - time: 0.2808798551559448
+      value: 1.28
+    - time: 0.49069374799728394
+      value: 0.43636363983154297
+    - time: 0.710659921169281
+      value: 1.454545440673828
+    - time: 1.0
+      value: 0.0
+    motion_keys: []
+    linked_component_id: 15
+    linked_node: Xmain
+  - type: model_path
+    id: 27
+    start_seconds: 0.0
+    end_seconds: 3.000000238418579
+    repeat_count: 1
+    model_resource: mm9:model/spells/pathup
+    animation_clip: pathup
+    offset:
+    - 0.0
+    - 0.0
+    - -51.2
+    visible: false
+  - type: sprite_system
+    id: 29
+    start_seconds: 0.0
+    end_seconds: 3.000000238418579
+    repeat_count: 1
+    sprite_resource: mm9:effect-sprite/weapons/blurredredyelstar
+    sprites_per_emission: 1
+    emission_interval_seconds: 0.03999999910593033
+    particle_lifetime_seconds: 0.800000011920929
+    emission_shape: point
+    radius: 12.8
+    plane_direction:
+    - 0.0
+    - 1.0
+    - 0.0
+    velocity: 38.4
+    wind_direction:
+    - 0.0
+    - 0.0
+    - 0.0
+    wind_amount: 1.0
+    offset:
+    - 0.0
+    - 0.0
+    - 0.0
+    rotation_per_tick:
+    - -0.0
+    - -0.0
+    - -0.0
+    stretch_u: 0.5
+    stretch_v: 0.5
+    blend: alpha
+    particle_space: world
+    alignment: camera_facing
+    color_keys:
+    - time: 0.0
+      rgb:
+      - 255
+      - 0
+      - 0
+      transparency: 8
+    - time: 1.0
+      rgb:
+      - 0
+      - 128
+      - 64
+      transparency: 237
+    scale_keys:
+    - time: 0.0
+      value: 0.7563636016845703
+    - time: 0.2808798551559448
+      value: 1.28
+    - time: 0.49069374799728394
+      value: 0.43636363983154297
+    - time: 0.710659921169281
+      value: 1.454545440673828
+    - time: 1.0
+      value: 0.0
+    motion_keys: []
+    linked_component_id: 27
+    linked_node: Xmain01
+  - type: model_path
+    id: 36
+    start_seconds: 0.0
+    end_seconds: 3.000000238418579
+    repeat_count: 1
+    model_resource: mm9:model/spells/pathup
+    animation_clip: pathup
+    offset:
+    - 0.0
+    - 0.0
+    - -51.2
+    visible: false
+  - type: sprite_system
+    id: 31
+    start_seconds: 0.0
+    end_seconds: 3.000000238418579
+    repeat_count: 1
+    sprite_resource: mm9:effect-sprite/weapons/blurredwhitestar
+    sprites_per_emission: 1
+    emission_interval_seconds: 0.03999999910593033
+    particle_lifetime_seconds: 0.800000011920929
+    emission_shape: point
+    radius: 12.8
+    plane_direction:
+    - 0.0
+    - 1.0
+    - 0.0
+    velocity: 38.4
+    wind_direction:
+    - 0.0
+    - 0.0
+    - 0.0
+    wind_amount: 1.0
+    offset:
+    - 0.0
+    - 0.0
+    - 0.0
+    rotation_per_tick:
+    - -0.0
+    - -0.0
+    - -0.0
+    stretch_u: 0.5
+    stretch_v: 0.5
+    blend: alpha
+    particle_space: world
+    alignment: camera_facing
+    color_keys:
+    - time: 0.0
+      rgb:
+      - 255
+      - 0
+      - 0
+      transparency: 8
+    - time: 1.0
+      rgb:
+      - 0
+      - 128
+      - 64
+      transparency: 237
+    scale_keys:
+    - time: 0.0
+      value: 0.7563636016845703
+    - time: 0.2808798551559448
+      value: 1.28
+    - time: 0.49069374799728394
+      value: 0.43636363983154297
+    - time: 0.710659921169281
+      value: 1.454545440673828
+    - time: 1.0
+      value: 0.0
+    motion_keys: []
+    linked_component_id: 36
+    linked_node: Xmain02
+  - type: model_path
+    id: 35
+    start_seconds: 0.0
+    end_seconds: 3.000000238418579
+    repeat_count: 1
+    model_resource: mm9:model/spells/pathup
+    animation_clip: pathup
+    offset:
+    - 0.0
+    - 0.0
+    - -51.2
+    visible: false
+  - type: sprite_system
+    id: 33
+    start_seconds: 0.0
+    end_seconds: 3.000000238418579
+    repeat_count: 1
+    sprite_resource: mm9:effect-sprite/weapons/blurredredstar
+    sprites_per_emission: 1
+    emission_interval_seconds: 0.03999999910593033
+    particle_lifetime_seconds: 0.800000011920929
+    emission_shape: point
+    radius: 12.8
+    plane_direction:
+    - 0.0
+    - 1.0
+    - 0.0
+    velocity: 38.4
+    wind_direction:
+    - 0.0
+    - 0.0
+    - 0.0
+    wind_amount: 1.0
+    offset:
+    - 0.0
+    - 0.0
+    - 0.0
+    rotation_per_tick:
+    - -0.0
+    - -0.0
+    - -0.0
+    stretch_u: 0.5
+    stretch_v: 0.5
+    blend: alpha
+    particle_space: world
+    alignment: camera_facing
+    color_keys:
+    - time: 0.0
+      rgb:
+      - 255
+      - 255
+      - 0
+      transparency: 8
+    - time: 1.0
+      rgb:
+      - 128
+      - 0
+      - 64
+      transparency: 237
+    scale_keys:
+    - time: 0.0
+      value: 0.0
+    - time: 1.0
+      value: 1.5127272033691406
+    motion_keys: []
+    linked_component_id: 35
+    linked_node: Xmain03
+- id: mm9:melee_blood
+  source_name: hardcoded melee-contact flesh selector
+  source_evidence: re_mm8/mm9_vfx/MELEE_HIT_EFFECTS.md
+  duration_seconds: 1.0
+  compatibility_profile: mm9_native_60hz
+  support: supported_approximation
+  capabilities:
+  - sprite
+  - sprite_system
+  components:
+  - type: sprite
+    id: 1001
+    start_seconds: 0.0
+    end_seconds: 0.1
+    repeat_count: 1
+    sprite_resource: mm9:effect-sprite/bloodhit1
+    offset:
+    - 0.0
+    - 0.0
+    - 10.24
+    stretch_u: 1.0
+    stretch_v: 1.0
+    blend: alpha
+    alignment: world_plane
+    plane_right:
+    - 1.0
+    - 0.0
+    - 0.0
+    plane_up:
+    - 0.0
+    - 1.0
+    - 0.0
+    color_keys:
+    - time: 0.0
+      rgb:
+      - 255
+      - 255
+      - 255
+      transparency: 0
+    - time: 1.0
+      rgb:
+      - 255
+      - 255
+      - 255
+      transparency: 0
+    scale_keys:
+    - time: 0.0
+      value: 2.56
+    - time: 1.0
+      value: 2.56
+    motion_keys: []
+  - type: sprite_system
+    id: 1002
+    start_seconds: 0.0
+    end_seconds: 0.034
+    repeat_count: 1
+    sprite_resource: mm9:effect-sprite/bloodspray1
+    sprites_per_emission: 10
+    emission_interval_seconds: 0.019
+    particle_lifetime_seconds: 1.0
+    emission_shape: cone
+    radius: 100.0
+    plane_direction:
+    - 0.0
+    - 0.0
+    - 1.0
+    velocity: 256.0
+    wind_direction:
+    - 0.0
+    - 0.0
+    - 0.0
+    wind_amount: 0.0
+    offset:
+    - 0.0
+    - 0.0
+    - 0.0
+    rotation_per_tick:
+    - 0.0
+    - 0.0
+    - 0.0
+    stretch_u: 1.0
+    stretch_v: 1.0
+    blend: alpha
+    particle_space: world
+    alignment: camera_facing
+    color_keys:
+    - time: 0.0
+      rgb:
+      - 255
+      - 255
+      - 255
+      transparency: 0
+    - time: 1.0
+      rgb:
+      - 255
+      - 255
+      - 255
+      transparency: 255
+    scale_keys:
+    - time: 0.0
+      value: 2.56
+    - time: 1.0
+      value: 2.56
+    motion_keys: []

@@ -136,6 +136,35 @@ OpenYAMM::Game::ClassSkillTable loadClassSkillTableWithRaceRules()
 }
 }
 
+TEST_CASE("merged bolster monster lookup preserves sparse IDs duplicates copies and reloads")
+{
+    using namespace OpenYAMM::Game;
+    const auto row = [](uint32_t id, const std::string &note)
+    {
+        std::vector<std::string> cells(17);
+        cells[0] = std::to_string(id);
+        cells[1] = note;
+        return cells;
+    };
+    MergedBolsterMonsterTable table;
+    REQUIRE(table.loadFromRows({{}, row(900, "first"), row(2, "second"),
+        row(UINT32_MAX, "sparse"), row(900, "duplicate")}));
+    REQUIRE_EQ(table.entries().size(), 4);
+    CHECK(table.findById(900) == &table.entries()[0]);
+    CHECK(table.findById(2) == &table.entries()[1]);
+    CHECK(table.findById(UINT32_MAX) == &table.entries()[2]);
+    CHECK(table.findById(3) == nullptr);
+
+    const MergedBolsterMonsterTable copy = table;
+    REQUIRE(table.loadFromRows({{}, row(7, "replacement")}));
+    CHECK(table.findById(900) == nullptr);
+    CHECK(table.findById(7) == &table.entries()[0]);
+    REQUIRE(copy.findById(900) == &copy.entries()[0]);
+    CHECK(copy.findById(900)->note == "first");
+    CHECK_FALSE(table.loadFromRows({}));
+    CHECK(table.findById(7) == nullptr);
+}
+
 TEST_CASE("merged base engine tables load without changing active MM8 runtime tables")
 {
     OpenYAMM::Game::MergedClassExtraTable classExtraTable;

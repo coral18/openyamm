@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import math
 import os
 import shutil
@@ -12,34 +13,37 @@ from pathlib import Path
 import numpy as np
 import yaml
 from PIL import Image as PillowImage
-from pygltflib import (
-    ARRAY_BUFFER,
-    ELEMENT_ARRAY_BUFFER,
-    FLOAT,
-    LINEAR,
-    REPEAT,
-    UNSIGNED_INT,
-    UNSIGNED_SHORT,
-    Accessor,
-    Animation,
-    AnimationChannel,
-    AnimationChannelTarget,
-    AnimationSampler,
-    Asset,
-    Buffer,
-    BufferView,
-    GLTF2,
-    Image,
-    Material,
-    Mesh,
-    Node,
-    PbrMetallicRoughness,
-    Primitive,
-    Sampler,
-    Scene,
-    Skin,
-    Texture,
-)
+try:
+    from pygltflib import (
+        ARRAY_BUFFER,
+        ELEMENT_ARRAY_BUFFER,
+        FLOAT,
+        LINEAR,
+        REPEAT,
+        UNSIGNED_INT,
+        UNSIGNED_SHORT,
+        Accessor,
+        Animation,
+        AnimationChannel,
+        AnimationChannelTarget,
+        AnimationSampler,
+        Asset,
+        Buffer,
+        BufferView,
+        GLTF2,
+        Image,
+        Material,
+        Mesh,
+        Node,
+        PbrMetallicRoughness,
+        Primitive,
+        Sampler,
+        Scene,
+        Skin,
+        Texture,
+    )
+except ModuleNotFoundError:
+    GLTF2 = None
 
 from mm9_units import MM9_TO_OPENYAMM_COORDINATE_SCALE
 
@@ -51,6 +55,8 @@ DTX_BPP_DXT1 = 4
 DTX_BPP_DXT3 = 5
 DTX_BPP_DXT5 = 6
 GL_TRIANGLES = 4
+EXPORT_MODES = ("full", "rigid", "animation-path")
+CONVERTER_VERSION = 3
 
 
 @dataclass
@@ -543,37 +549,91 @@ def decode_dxt5(data: bytes, offset: int, width: int, height: int) -> np.ndarray
     return pixels
 
 
-def decode_dtx(path: Path) -> PillowImage.Image:
+def decode_dtx_mips(
+    path: Path,
+    repair_opaque_alpha: bool = False,
+) -> tuple[list[PillowImage.Image], dict]:
     data = path.read_bytes()
     resource_type = struct.unpack_from("<I", data, 0)[0]
     if resource_type != DTX_RESOURCE_TYPE:
         raise ValueError(f"{path} is not a resource-wrapped DTX texture")
 
-    version, height, width = struct.unpack_from("<iHH", data, 4)
+    version, height, width, mip_count, section_count, internal_flags, user_flags = struct.unpack_from(
+        "<i4H2I", data, 4
+    )
     if version != -5:
         raise ValueError(f"{path} has unsupported DTX version {version}")
+    if mip_count == 0:
+        raise ValueError(f"{path} has no DTX mip levels")
 
-    bpp_identifier = struct.unpack_from("<12B", data, 24)[2]
+    extra = data[24:36]
+    bpp_identifier = extra[2]
     pixel_offset = 36 + 128
+    images: list[PillowImage.Image] = []
+    mip_records = []
+    for mip_index in range(mip_count):
+        mip_width = max(1, width >> mip_index)
+        mip_height = max(1, height >> mip_index)
+        if bpp_identifier in (DTX_BPP_8P, DTX_BPP_32):
+            byte_count = mip_width * mip_height * 4
+        elif bpp_identifier == DTX_BPP_DXT1:
+            byte_count = ((mip_width + 3) // 4) * ((mip_height + 3) // 4) * 8
+        elif bpp_identifier in (DTX_BPP_DXT3, DTX_BPP_DXT5):
+            byte_count = ((mip_width + 3) // 4) * ((mip_height + 3) // 4) * 16
+        else:
+            raise ValueError(f"{path} has unsupported DTX bpp {bpp_identifier}")
+        if pixel_offset + byte_count > len(data):
+            raise ValueError(
+                f"{path} mip {mip_index} is truncated: expected {byte_count} bytes at offset {pixel_offset}"
+            )
 
-    if bpp_identifier in (DTX_BPP_8P, DTX_BPP_32):
-        pixel_count = width * height
-        pixel_bytes = data[pixel_offset : pixel_offset + pixel_count * 4]
-        if len(pixel_bytes) != pixel_count * 4:
-            raise ValueError(f"{path} is truncated: expected {pixel_count * 4} pixel bytes")
-        bgra = np.frombuffer(pixel_bytes, dtype=np.uint8).reshape((height, width, 4)).copy()
-        rgba = bgra[:, :, [2, 1, 0, 3]]
-        if bpp_identifier == DTX_BPP_8P or (bpp_identifier == DTX_BPP_32 and not np.any(rgba[:, :, 3])):
-            rgba[:, :, 3] = 255
-    elif bpp_identifier == DTX_BPP_DXT1:
-        rgba = decode_dxt1(data, pixel_offset, width, height)
-    elif bpp_identifier == DTX_BPP_DXT3:
-        rgba = decode_dxt3(data, pixel_offset, width, height)
-    elif bpp_identifier == DTX_BPP_DXT5:
-        rgba = decode_dxt5(data, pixel_offset, width, height)
-    else:
-        raise ValueError(f"{path} has unsupported DTX bpp {bpp_identifier}")
-    return PillowImage.fromarray(rgba, "RGBA")
+        if bpp_identifier in (DTX_BPP_8P, DTX_BPP_32):
+            pixel_bytes = data[pixel_offset : pixel_offset + byte_count]
+            bgra = np.frombuffer(pixel_bytes, dtype=np.uint8).reshape((mip_height, mip_width, 4)).copy()
+            rgba = bgra[:, :, [2, 1, 0, 3]]
+            if repair_opaque_alpha and not np.any(rgba[:, :, 3]):
+                rgba[:, :, 3] = 255
+        elif bpp_identifier == DTX_BPP_DXT1:
+            rgba = decode_dxt1(data, pixel_offset, mip_width, mip_height)
+        elif bpp_identifier == DTX_BPP_DXT3:
+            rgba = decode_dxt3(data, pixel_offset, mip_width, mip_height)
+        else:
+            rgba = decode_dxt5(data, pixel_offset, mip_width, mip_height)
+
+        decoded_bytes = rgba.tobytes()
+        images.append(PillowImage.fromarray(rgba, "RGBA"))
+        mip_records.append(
+            {
+                "index": mip_index,
+                "width": mip_width,
+                "height": mip_height,
+                "sourceOffset": pixel_offset,
+                "sourceBytes": byte_count,
+                "decodedRgbaSha256": hashlib.sha256(decoded_bytes).hexdigest(),
+            }
+        )
+        pixel_offset += byte_count
+
+    return images, {
+        "version": version,
+        "width": width,
+        "height": height,
+        "mipCount": mip_count,
+        "sectionCount": section_count,
+        "internalFlags": internal_flags,
+        "userFlags": user_flags,
+        "extraHex": extra.hex(),
+        "bppIdentifier": bpp_identifier,
+        "command": data[36:164].split(b"\0", 1)[0].decode("ascii", errors="replace"),
+        "sourceSha256": hashlib.sha256(data).hexdigest(),
+        "repairOpaqueAlpha": repair_opaque_alpha,
+        "mips": mip_records,
+    }
+
+
+def decode_dtx(path: Path, repair_opaque_alpha: bool = True) -> PillowImage.Image:
+    images, _metadata = decode_dtx_mips(path, repair_opaque_alpha=repair_opaque_alpha)
+    return images[0]
 
 
 def decode_dtx_v5_bpp32(path: Path) -> PillowImage.Image:
@@ -593,6 +653,8 @@ def align_blob(blob: bytearray, alignment: int = 4) -> None:
 
 class GltfBuilder:
     def __init__(self):
+        if GLTF2 is None:
+            raise RuntimeError("ABC model export requires the pygltflib Python package")
         self.gltf = GLTF2(asset=Asset(version="2.0", generator="OpenYAMM MM9 ABC converter"))
         self.gltf.scenes = [Scene(nodes=[])]
         self.gltf.scene = 0
@@ -617,8 +679,8 @@ class GltfBuilder:
         target: int | None = None,
         include_min_max: bool = True,
     ) -> int:
-        if np.issubdtype(values.dtype, np.floating):
-            values = np.nan_to_num(values, nan=0.0, posinf=1.0e30, neginf=-1.0e30)
+        if np.issubdtype(values.dtype, np.floating) and not np.all(np.isfinite(values)):
+            raise ValueError("model accessor contains a non-finite value")
 
         align_blob(self.blob)
         byte_offset = len(self.blob)
@@ -666,7 +728,12 @@ def normalized_joint_weight_data(weights: list[Weight]) -> tuple[list[int], list
     return joints, biases
 
 
-def mesh_arrays_for_piece(piece: Piece, lod_index: int) -> dict[str, np.ndarray]:
+def mesh_arrays_for_piece(
+    piece: Piece,
+    lod_index: int,
+    inverse_bind_matrix: np.ndarray | None = None,
+    include_skin: bool = True,
+) -> dict[str, np.ndarray]:
     lod = piece.lods[lod_index]
     positions = []
     normals = []
@@ -678,22 +745,73 @@ def mesh_arrays_for_piece(piece: Piece, lod_index: int) -> dict[str, np.ndarray]
     for face in lod.faces:
         for face_vertex in face.vertices:
             source_vertex = lod.vertices[face_vertex.vertex_index]
-            positions.append(source_vertex.position)
-            normals.append(source_vertex.normal)
+            position = np.array([*source_vertex.position, 1.0], dtype=np.float32)
+            normal = np.array(source_vertex.normal, dtype=np.float32)
+            if inverse_bind_matrix is not None:
+                position = inverse_bind_matrix @ position
+                bind_matrix = np.linalg.inv(inverse_bind_matrix)
+                normal = bind_matrix[:3, :3].T @ normal
+                normal_length = np.linalg.norm(normal)
+                if normal_length > 0.0:
+                    normal /= normal_length
+            positions.append(position[:3])
+            normals.append(normal)
             texcoords.append(face_vertex.uv)
-            joint_values, weight_values = normalized_joint_weight_data(source_vertex.weights)
-            joints.append(joint_values)
-            weights.append(weight_values)
+            if include_skin:
+                joint_values, weight_values = normalized_joint_weight_data(source_vertex.weights)
+                joints.append(joint_values)
+                weights.append(weight_values)
             indices.append(len(indices))
 
     return {
         "positions": np.array(positions, dtype=np.float32),
         "normals": np.array(normals, dtype=np.float32),
         "texcoords": np.array(texcoords, dtype=np.float32),
-        "joints": np.array(joints, dtype=np.uint16),
-        "weights": np.array(weights, dtype=np.float32),
         "indices": np.array(indices, dtype=np.uint32),
+        **(
+            {
+                "joints": np.array(joints, dtype=np.uint16),
+                "weights": np.array(weights, dtype=np.float32),
+            }
+            if include_skin
+            else {}
+        ),
     }
+
+
+def rigid_piece_node_indices(model: AbcModel, lod_index: int) -> list[int | None]:
+    result: list[int | None] = []
+    for piece in model.pieces:
+        if not piece.lods:
+            result.append(None)
+            continue
+        attached_node: int | None = None
+        saw_unweighted = False
+        saw_weighted = False
+        for vertex in piece.lods[lod_index].vertices:
+            positive_weights = [weight for weight in vertex.weights if weight.bias > 1.0e-6]
+            if not positive_weights:
+                saw_unweighted = True
+                continue
+            saw_weighted = True
+            if len(positive_weights) != 1:
+                raise ValueError(
+                    f"piece {piece.name!r} is deforming: a vertex has {len(positive_weights)} positive weights"
+                )
+            node_index = positive_weights[0].node_index
+            if not 0 <= node_index < len(model.nodes):
+                raise ValueError(f"piece {piece.name!r} references missing node {node_index}")
+            if attached_node is None:
+                attached_node = node_index
+            elif attached_node != node_index:
+                raise ValueError(
+                    f"piece {piece.name!r} is deforming: vertices are attached to nodes "
+                    f"{attached_node} and {node_index}"
+                )
+        if saw_unweighted and saw_weighted:
+            raise ValueError(f"piece {piece.name!r} mixes weighted and unweighted vertices")
+        result.append(attached_node)
+    return result
 
 
 def matrix_from_transform(transform: Transform) -> np.ndarray:
@@ -873,7 +991,10 @@ def add_skin(builder: GltfBuilder, model: AbcModel, node_indices: list[int]) -> 
         return None
 
     bind_matrices = global_bind_matrices(model)
-    inverse_bind_matrices = np.array([np.linalg.inv(matrix).T.reshape(16) for matrix in bind_matrices], dtype=np.float32)
+    inverse_bind_matrices = np.array(
+        [np.linalg.inv(matrix).T.reshape(16) for matrix in bind_matrices],
+        dtype=np.float32,
+    )
     accessor = builder.add_accessor(inverse_bind_matrices, FLOAT, "MAT4", include_min_max=False)
     skin_index = len(builder.gltf.skins)
     builder.gltf.skins.append(Skin(inverseBindMatrices=accessor, joints=node_indices, skeleton=node_indices[0]))
@@ -886,30 +1007,47 @@ def add_meshes(
     material_indices: dict[int, int],
     skin_index: int | None,
     lod_index: int,
+    export_mode: str,
+    node_indices: list[int],
 ) -> None:
-    for piece in model.pieces:
+    rigid_nodes = rigid_piece_node_indices(model, lod_index) if export_mode == "rigid" else []
+    for piece_index, piece in enumerate(model.pieces):
         if not piece.lods:
             continue
 
-        arrays = mesh_arrays_for_piece(piece, lod_index)
+        rigid_node_index = rigid_nodes[piece_index] if export_mode == "rigid" else None
+        inverse_bind_matrix = (
+            np.linalg.inv(model.nodes[rigid_node_index].bind_matrix)
+            if rigid_node_index is not None
+            else None
+        )
+        arrays = mesh_arrays_for_piece(
+            piece,
+            lod_index,
+            inverse_bind_matrix=inverse_bind_matrix,
+            include_skin=export_mode == "full",
+        )
         if len(arrays["positions"]) == 0:
             continue
 
         position_accessor = builder.add_accessor(arrays["positions"], FLOAT, "VEC3", ARRAY_BUFFER)
         normal_accessor = builder.add_accessor(arrays["normals"], FLOAT, "VEC3", ARRAY_BUFFER)
         texcoord_accessor = builder.add_accessor(arrays["texcoords"], FLOAT, "VEC2", ARRAY_BUFFER)
-        joints_accessor = builder.add_accessor(arrays["joints"], UNSIGNED_SHORT, "VEC4", ARRAY_BUFFER)
-        weights_accessor = builder.add_accessor(arrays["weights"], FLOAT, "VEC4", ARRAY_BUFFER)
         index_accessor = builder.add_accessor(arrays["indices"], UNSIGNED_INT, "SCALAR", ELEMENT_ARRAY_BUFFER)
 
+        attributes = {
+            "POSITION": position_accessor,
+            "NORMAL": normal_accessor,
+            "TEXCOORD_0": texcoord_accessor,
+        }
+        if export_mode == "full":
+            attributes["JOINTS_0"] = builder.add_accessor(
+                arrays["joints"], UNSIGNED_SHORT, "VEC4", ARRAY_BUFFER
+            )
+            attributes["WEIGHTS_0"] = builder.add_accessor(arrays["weights"], FLOAT, "VEC4", ARRAY_BUFFER)
+
         primitive = Primitive(
-            attributes={
-                "POSITION": position_accessor,
-                "NORMAL": normal_accessor,
-                "TEXCOORD_0": texcoord_accessor,
-                "JOINTS_0": joints_accessor,
-                "WEIGHTS_0": weights_accessor,
-            },
+            attributes=attributes,
             indices=index_accessor,
             material=material_indices.get(piece.material_index, material_indices[0]),
             mode=GL_TRIANGLES,
@@ -917,10 +1055,17 @@ def add_meshes(
         mesh_index = len(builder.gltf.meshes)
         builder.gltf.meshes.append(Mesh(name=piece.name, primitives=[primitive]))
 
-        mesh_node = Node(name=f"{piece.name}.mesh", mesh=mesh_index, skin=skin_index)
+        mesh_node = Node(
+            name=f"{piece.name}.mesh",
+            mesh=mesh_index,
+            skin=skin_index if export_mode == "full" else None,
+        )
         mesh_node_index = len(builder.gltf.nodes)
         builder.gltf.nodes.append(mesh_node)
-        builder.gltf.scenes[0].nodes.append(mesh_node_index)
+        if rigid_node_index is not None:
+            builder.gltf.nodes[node_indices[rigid_node_index]].children.append(mesh_node_index)
+        else:
+            builder.gltf.scenes[0].nodes.append(mesh_node_index)
 
 
 def add_animations(builder: GltfBuilder, model: AbcModel, node_indices: list[int]) -> None:
@@ -960,12 +1105,264 @@ def add_animations(builder: GltfBuilder, model: AbcModel, node_indices: list[int
         builder.gltf.animations.append(gltf_animation)
 
 
+def normalized_quaternion(value: np.ndarray) -> np.ndarray:
+    length = float(np.linalg.norm(value))
+    if not math.isfinite(length) or length <= 1.0e-12:
+        raise ValueError("animation contains a zero-length or non-finite quaternion")
+    return value / length
+
+
+def interpolate_quaternion(left: np.ndarray, right: np.ndarray, amount: float) -> np.ndarray:
+    left = normalized_quaternion(left)
+    right = normalized_quaternion(right)
+    dot = float(np.dot(left, right))
+    if dot < 0.0:
+        right = -right
+        dot = -dot
+    dot = max(-1.0, min(1.0, dot))
+    if dot > 0.9995:
+        return normalized_quaternion(left + (right - left) * amount)
+    angle = math.acos(dot)
+    sine = math.sin(angle)
+    return normalized_quaternion(
+        left * (math.sin((1.0 - amount) * angle) / sine)
+        + right * (math.sin(amount * angle) / sine)
+    )
+
+
+def sample_values(times: np.ndarray, values: np.ndarray, time_seconds: float, rotation: bool) -> np.ndarray:
+    if len(times) == 0 or len(values) != len(times):
+        raise ValueError("animation sampler has inconsistent input/output counts")
+    if time_seconds <= float(times[0]):
+        return normalized_quaternion(values[0]) if rotation else values[0]
+    for index in range(1, len(times)):
+        if time_seconds < float(times[index]):
+            denominator = float(times[index] - times[index - 1])
+            amount = (time_seconds - float(times[index - 1])) / denominator
+            if rotation:
+                return interpolate_quaternion(values[index - 1], values[index], amount)
+            return values[index - 1] + (values[index] - values[index - 1]) * amount
+    return normalized_quaternion(values[-1]) if rotation else values[-1]
+
+
+def gltf_accessor_array(gltf: GLTF2, accessor_index: int) -> np.ndarray:
+    accessor = gltf.accessors[accessor_index]
+    view = gltf.bufferViews[accessor.bufferView]
+    if view.byteStride not in (None, 0):
+        raise ValueError("trajectory validation does not accept interleaved animation accessors")
+    component_types = {
+        5120: np.int8,
+        5121: np.uint8,
+        5122: np.int16,
+        5123: np.uint16,
+        5125: np.uint32,
+        5126: np.float32,
+    }
+    component_counts = {
+        "SCALAR": 1,
+        "VEC2": 2,
+        "VEC3": 3,
+        "VEC4": 4,
+        "MAT4": 16,
+    }
+    if accessor.componentType not in component_types or accessor.type not in component_counts:
+        raise ValueError("trajectory validation found an unsupported accessor type")
+    count = component_counts[accessor.type]
+    offset = (view.byteOffset or 0) + (accessor.byteOffset or 0)
+    values = np.frombuffer(
+        gltf.binary_blob(),
+        dtype=component_types[accessor.componentType],
+        count=accessor.count * count,
+        offset=offset,
+    ).copy()
+    return values.reshape((accessor.count, count))
+
+
+def animation_sample_times(animation: ModelAnimation) -> tuple[list[float], int, int]:
+    keys = sorted({key.time_ms / 1000.0 for key in animation.keyframes})
+    midpoints = [(keys[index - 1] + keys[index]) * 0.5 for index in range(1, len(keys))]
+    return sorted(set(keys + midpoints)), len(keys), len(midpoints)
+
+
+def source_animation_pose(model: AbcModel, animation: ModelAnimation, time_seconds: float) -> list[Transform]:
+    times = np.array([key.time_ms / 1000.0 for key in animation.keyframes], dtype=np.float64)
+    pose = []
+    for transforms in animation.node_transforms:
+        translations = np.array([value.translation for value in transforms], dtype=np.float64)
+        rotations = np.array([value.rotation for value in transforms], dtype=np.float64)
+        pose.append(
+            Transform(
+                translation=tuple(float(value) for value in sample_values(times, translations, time_seconds, False)),
+                rotation=tuple(float(value) for value in sample_values(times, rotations, time_seconds, True)),
+            )
+        )
+    if len(pose) != len(model.nodes):
+        raise ValueError(f"animation {animation.name!r} does not contain every source node")
+    return pose
+
+
+def gltf_animation_pose(gltf: GLTF2, animation: Animation, time_seconds: float) -> list[Transform]:
+    pose = []
+    for node in gltf.nodes:
+        translation = tuple(float(value) for value in (node.translation or [0.0, 0.0, 0.0]))
+        rotation = tuple(float(value) for value in (node.rotation or [0.0, 0.0, 0.0, 1.0]))
+        pose.append(Transform(translation=translation, rotation=rotation))
+    for channel in animation.channels:
+        sampler = animation.samplers[channel.sampler]
+        if sampler.interpolation not in (None, "LINEAR"):
+            raise ValueError(
+                f"trajectory validation found unsupported interpolation {sampler.interpolation!r}"
+            )
+        times = gltf_accessor_array(gltf, sampler.input).reshape(-1).astype(np.float64)
+        values = gltf_accessor_array(gltf, sampler.output).astype(np.float64)
+        node_index = channel.target.node
+        if channel.target.path == "translation":
+            pose[node_index].translation = tuple(
+                float(value) for value in sample_values(times, values, time_seconds, False)
+            )
+        elif channel.target.path == "rotation":
+            pose[node_index].rotation = tuple(
+                float(value) for value in sample_values(times, values, time_seconds, True)
+            )
+        else:
+            raise ValueError(f"trajectory validation found unsupported target {channel.target.path!r}")
+    return pose
+
+
+def global_pose_matrices(
+    pose: list[Transform],
+    parent_indices: list[int | None],
+) -> list[np.ndarray]:
+    matrices: list[np.ndarray | None] = [None] * len(pose)
+
+    def evaluate(index: int) -> np.ndarray:
+        if matrices[index] is not None:
+            return matrices[index]
+        local = matrix_from_transform(pose[index])
+        parent = parent_indices[index]
+        matrices[index] = local if parent is None else evaluate(parent) @ local
+        return matrices[index]
+
+    for node_index in range(len(pose)):
+        evaluate(node_index)
+    return [matrix for matrix in matrices if matrix is not None]
+
+
+def gltf_parent_indices(gltf: GLTF2) -> list[int | None]:
+    parents: list[int | None] = [None] * len(gltf.nodes)
+    for parent_index, node in enumerate(gltf.nodes):
+        for child_index in node.children or []:
+            if parents[child_index] is not None:
+                raise ValueError(f"glTF node {child_index} has multiple parents")
+            parents[child_index] = parent_index
+    return parents
+
+
+def normalized_rotation_matrix(matrix: np.ndarray) -> np.ndarray:
+    rotation = matrix[:3, :3].astype(np.float64).copy()
+    for column in range(3):
+        length = float(np.linalg.norm(rotation[:, column]))
+        if length <= 1.0e-12:
+            raise ValueError("trajectory validation found a degenerate rotation matrix")
+        rotation[:, column] /= length
+    return rotation
+
+
+def validate_animation_path_export(model: AbcModel, model_path: Path) -> dict:
+    gltf = GLTF2().load(str(model_path))
+    source_names = [node.name for node in model.nodes]
+    exported_names = [node.name for node in gltf.nodes]
+    if exported_names != source_names:
+        raise ValueError("animation-path export changed node names or hierarchy order")
+    source_parents = [node.parent_index for node in model.nodes]
+    exported_parents = gltf_parent_indices(gltf)
+    if exported_parents != source_parents:
+        raise ValueError("animation-path export changed node parent relationships")
+
+    exported_animations = {animation.name: animation for animation in gltf.animations}
+    if len(exported_animations) != len(gltf.animations):
+        raise ValueError("animation-path export contains duplicate clip names")
+    if set(exported_animations) != {animation.name for animation in model.animations}:
+        raise ValueError("animation-path export changed animation clip names")
+
+    placement = np.array(
+        [[1.0, 0.0, 0.0, 0.0],
+         [0.0, 0.0, 1.0, 0.0],
+         [0.0, 1.0, 0.0, 0.0],
+         [0.0, 0.0, 0.0, 1.0]],
+        dtype=np.float64,
+    )
+    maximum_position_error = 0.0
+    maximum_rotation_error = 0.0
+    key_samples = 0
+    midpoint_samples = 0
+    comparisons = 0
+    clip_reports = []
+    for source_animation in model.animations:
+        times, clip_keys, clip_midpoints = animation_sample_times(source_animation)
+        key_samples += clip_keys
+        midpoint_samples += clip_midpoints
+        clip_position_error = 0.0
+        clip_rotation_error = 0.0
+        exported_animation = exported_animations[source_animation.name]
+        for time_seconds in times:
+            source_pose = source_animation_pose(model, source_animation, time_seconds)
+            exported_pose = gltf_animation_pose(gltf, exported_animation, time_seconds)
+            source_globals = global_pose_matrices(source_pose, source_parents)
+            exported_globals = global_pose_matrices(exported_pose, exported_parents)
+            for node_index in range(len(model.nodes)):
+                source_matrix = placement @ source_globals[node_index]
+                exported_matrix = placement @ exported_globals[node_index]
+                position_error = float(np.linalg.norm(source_matrix[:3, 3] - exported_matrix[:3, 3]))
+                rotation_error = float(np.max(np.abs(
+                    normalized_rotation_matrix(source_matrix) - normalized_rotation_matrix(exported_matrix)
+                )))
+                clip_position_error = max(clip_position_error, position_error)
+                clip_rotation_error = max(clip_rotation_error, rotation_error)
+                comparisons += 1
+        maximum_position_error = max(maximum_position_error, clip_position_error)
+        maximum_rotation_error = max(maximum_rotation_error, clip_rotation_error)
+        clip_reports.append(
+            {
+                "name": source_animation.name,
+                "keySamples": clip_keys,
+                "midpointSamples": clip_midpoints,
+                "maxOpenyammPositionError": clip_position_error,
+                "maxRotationMatrixError": clip_rotation_error,
+            }
+        )
+
+    position_tolerance = 1.0e-4
+    rotation_tolerance = 1.0e-5
+    if maximum_position_error > position_tolerance or maximum_rotation_error > rotation_tolerance:
+        raise ValueError(
+            "animation-path trajectory validation failed: "
+            f"position error {maximum_position_error}, rotation error {maximum_rotation_error}"
+        )
+    return {
+        "status": "passed",
+        "coordinatePlacement": "glTF (x,y,z) -> OpenYAMM (x,z,y)",
+        "nodeNamesExact": True,
+        "hierarchyExact": True,
+        "nodes": len(model.nodes),
+        "clips": len(model.animations),
+        "keySamples": key_samples,
+        "midpointSamples": midpoint_samples,
+        "nodeComparisons": comparisons,
+        "positionTolerance": position_tolerance,
+        "rotationMatrixTolerance": rotation_tolerance,
+        "maxOpenyammPositionError": maximum_position_error,
+        "maxRotationMatrixError": maximum_rotation_error,
+        "clipResults": clip_reports,
+    }
+
+
 def write_glb(model: AbcModel, output_path: Path, texture_uri: str | None, lod_index: int) -> None:
     builder = GltfBuilder()
     material_index = add_material(builder, model.name, texture_uri)
     node_indices = add_gltf_nodes(builder, model)
     skin_index = add_skin(builder, model, node_indices)
-    add_meshes(builder, model, {0: material_index}, skin_index, lod_index)
+    add_meshes(builder, model, {0: material_index}, skin_index, lod_index, "full", node_indices)
     add_animations(builder, model, node_indices)
 
     align_blob(builder.blob)
@@ -980,10 +1377,13 @@ def write_glb_with_materials(
     material_texture_uris: dict[int, str | None],
     material_alpha_cutouts: dict[int, bool],
     lod_index: int,
+    export_mode: str,
 ) -> None:
     builder = GltfBuilder()
-    used_material_indices = sorted({piece.material_index for piece in model.pieces})
-    if 0 not in used_material_indices:
+    used_material_indices = (
+        [] if export_mode == "animation-path" else sorted({piece.material_index for piece in model.pieces})
+    )
+    if export_mode != "animation-path" and 0 not in used_material_indices:
         used_material_indices.insert(0, 0)
 
     gltf_material_indices = {}
@@ -997,8 +1397,17 @@ def write_glb_with_materials(
         )
 
     node_indices = add_gltf_nodes(builder, model)
-    skin_index = add_skin(builder, model, node_indices)
-    add_meshes(builder, model, gltf_material_indices, skin_index, lod_index)
+    skin_index = add_skin(builder, model, node_indices) if export_mode == "full" else None
+    if export_mode != "animation-path":
+        add_meshes(
+            builder,
+            model,
+            gltf_material_indices,
+            skin_index,
+            lod_index,
+            export_mode,
+            node_indices,
+        )
     add_animations(builder, model, node_indices)
 
     align_blob(builder.blob)
@@ -1032,15 +1441,22 @@ def write_sidecars(
     material_outputs: list[MaterialOutput],
     lod_index: int,
     coordinate_scale: float,
+    export_mode: str,
+    warnings: list[str],
+    trajectory_validation: dict | None,
 ) -> None:
+    source_hash = hashlib.sha256(source_model.read_bytes()).hexdigest()
     model_sidecar = {
-        "schema": "openyamm.model3d.v1",
+        "schema": "openyamm.model3d.v2",
         "id": model_path.stem,
         "model": model_path.name,
+        "exportMode": export_mode,
         "source": {
             "format": "LithTech ABC",
             "version": model.version,
             "path": str(source_model),
+            "sha256": source_hash,
+            "converterVersion": CONVERTER_VERSION,
             "commandString": model.command_string,
             "internalRadius": model.internal_radius,
             "coordinateScale": coordinate_scale,
@@ -1114,7 +1530,7 @@ def write_sidecars(
     }
     write_yaml(model_path.with_suffix(".model.yml"), model_sidecar)
 
-    import_dir = model_path.parent / "import"
+    import_dir = model_path.parent / "import" / model_path.stem
     import_dir.mkdir(parents=True, exist_ok=True)
     write_yaml(
         import_dir / "source.yml",
@@ -1131,8 +1547,17 @@ def write_sidecars(
                 for output in material_outputs
             ],
             "converter": "tools/mm9_import_discovery/convert_abc_model.py",
+            "converterVersion": CONVERTER_VERSION,
+            "sourceSha256": source_hash,
+            "exportMode": export_mode,
             "coordinateScale": coordinate_scale,
             "coordinateTransform": "LithTech ABC local axes preserved; scene placement converts Y-up to OpenYAMM Z-up",
+            "warnings": warnings,
+            **(
+                {"trajectoryValidation": trajectory_validation}
+                if trajectory_validation is not None
+                else {}
+            ),
         },
     )
     write_yaml(
@@ -1146,7 +1571,15 @@ def write_sidecars(
             "exportedLod": lod_index,
             "coordinateScale": coordinate_scale,
             "coordinateTransform": "LithTech ABC local axes preserved; scene placement converts Y-up to OpenYAMM Z-up",
-            "warnings": [],
+            "exportMode": export_mode,
+            "sourceSha256": source_hash,
+            "converterVersion": CONVERTER_VERSION,
+            "warnings": warnings,
+            **(
+                {"trajectoryValidation": trajectory_validation}
+                if trajectory_validation is not None
+                else {}
+            ),
         },
     )
 
@@ -1161,17 +1594,27 @@ def convert_model(
     preview_skins_dir: Path | None = None,
     source_skins_root: Path | None = None,
     coordinate_scale: float = MM9_TO_OPENYAMM_COORDINATE_SCALE,
+    export_mode: str = "full",
 ) -> None:
+    if export_mode not in EXPORT_MODES:
+        raise ValueError(f"unsupported export mode {export_mode!r}; expected one of {EXPORT_MODES}")
     model = read_abc(source_model)
     scale_abc_model(model, coordinate_scale)
-    if lod_index < 0 or any(lod_index >= len(piece.lods) for piece in model.pieces if piece.lods):
+    if export_mode != "animation-path" and (
+        lod_index < 0 or any(lod_index >= len(piece.lods) for piece in model.pieces if piece.lods)
+    ):
         raise ValueError(f"LOD index {lod_index} is not present in every non-empty piece")
+    warnings: list[str] = []
+    if export_mode == "rigid":
+        rigid_piece_node_indices(model, lod_index)
+    if export_mode == "animation-path" and textures:
+        warnings.append("animation-path export omitted supplied textures and all mesh geometry")
 
     output_dir.mkdir(parents=True, exist_ok=True)
     material_outputs = []
     material_texture_uris = {}
     material_alpha_cutouts = {}
-    for texture in textures:
+    for texture in textures if export_mode != "animation-path" else []:
         if shared_skins_dir is None:
             skins_dir = output_dir / "skins"
             runtime_texture_path = skins_dir / f"{texture.texture_id}.dtx"
@@ -1224,8 +1667,33 @@ def convert_model(
         )
 
     model_path = output_dir / f"{model_id}.glb"
-    write_glb_with_materials(model, model_path, material_texture_uris, material_alpha_cutouts, lod_index)
-    write_sidecars(model, model_path, source_model, material_outputs, lod_index, coordinate_scale)
+    temporary_model_path = output_dir / f".{model_id}.tmp.glb"
+    trajectory_validation = None
+    try:
+        write_glb_with_materials(
+            model,
+            temporary_model_path,
+            material_texture_uris,
+            material_alpha_cutouts,
+            lod_index,
+            export_mode,
+        )
+        if export_mode == "animation-path":
+            trajectory_validation = validate_animation_path_export(model, temporary_model_path)
+        os.replace(temporary_model_path, model_path)
+    finally:
+        temporary_model_path.unlink(missing_ok=True)
+    write_sidecars(
+        model,
+        model_path,
+        source_model,
+        material_outputs,
+        lod_index,
+        coordinate_scale,
+        export_mode,
+        warnings,
+        trajectory_validation,
+    )
 
 
 def parse_indexed_value(raw: str, default_index: int) -> tuple[int, str]:
@@ -1291,6 +1759,12 @@ def main() -> int:
     )
     parser.add_argument("--lod", type=int, default=0, help="LOD index to export")
     parser.add_argument(
+        "--export-mode",
+        choices=EXPORT_MODES,
+        default="full",
+        help="Full skinned reference, validated rigid/static, or animation-path-only GLB export.",
+    )
+    parser.add_argument(
         "--scale",
         type=float,
         default=MM9_TO_OPENYAMM_COORDINATE_SCALE,
@@ -1324,6 +1798,7 @@ def main() -> int:
         preview_skins_dir=args.preview_skins_dir,
         source_skins_root=args.source_skins_root,
         coordinate_scale=args.scale,
+        export_mode=args.export_mode,
     )
     return 0
 

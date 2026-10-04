@@ -1,3 +1,4 @@
+#include "game/ui/GameplayUiSkin.h"
 #include "game/ui/GameplayDialogueRenderer.h"
 #include "game/ui/GameplayHudCommon.h"
 #include "game/gameplay/GameplayInputFrame.h"
@@ -70,7 +71,7 @@ constexpr float EventNpcPortraitUvCropY = 2.0f;
 constexpr float DialogueTextTopInset = 2.0f;
 constexpr float DialogueTextBottomInset = 5.0f;
 constexpr float DialogueTextRightInset = 6.0f;
-constexpr float DialogueTextPrimaryFontMaxHeight = 344.0f;
+constexpr float DialogueTextPrimaryFontMaxHeight = 310.0f;
 constexpr const char *DialogueTextSmallFontName = "Create";
 constexpr float Mm9RudeCanvasWidth = 800.0f;
 constexpr float Mm9RudeCanvasHeight = 600.0f;
@@ -283,6 +284,7 @@ struct DialogueBodyTextMetrics
 {
     GameplayScreenRuntime::HudFontHandle font = {};
     float textHeight = 0.0f;
+    float fontScale = 1.0f;
 };
 
 float snappedHudFontScale(float scale);
@@ -792,57 +794,37 @@ std::optional<DialogueBodyTextMetrics> calculateDialogueBodyTextMetrics(
     const GameplayScreenRuntime::HudLayoutElement &layout,
     const std::vector<std::string> &dialogueBodyLines)
 {
-    const auto calculateForFont =
-        [&view, &layout, &dialogueBodyLines](const GameplayScreenRuntime::HudFontHandle &font)
+    const auto calculateForFont = [&](const GameplayScreenRuntime::HudFontHandle &font, float targetHeight)
+    {
+        DialogueBodyTextMetrics metrics;
+        metrics.font = font;
+        metrics.fontScale = targetHeight / std::max(1, font.fontHeight);
+        const float wrapWidth = (layout.width - 2 * std::abs(layout.textPadX) - DialogueTextRightInset)
+            / metrics.fontScale;
+        size_t lines = 0;
+        for (const std::string &line : dialogueBodyLines)
         {
-            DialogueBodyTextMetrics metrics = {};
-            metrics.font = font;
-
-            const float textPadY = std::abs(layout.textPadY);
-            const float textWrapWidth = std::max(
-                0.0f,
-                layout.width - std::abs(layout.textPadX) * 2.0f - DialogueTextRightInset);
-            size_t wrappedLineCount = 0;
-
-            for (const std::string &line : dialogueBodyLines)
-            {
-                const std::vector<std::string> wrappedLines = view.wrapHudTextToWidth(font, line, textWrapWidth);
-                wrappedLineCount += std::max<size_t>(1, wrappedLines.size());
-            }
-
-            const float contentHeight = wrappedLineCount > 0
-                ? static_cast<float>(font.fontHeight)
-                    + static_cast<float>(wrappedLineCount - 1) * dialogueTextLineAdvance(font)
-                : 0.0f;
-            metrics.textHeight = contentHeight
-                + textPadY * 2.0f
-                + DialogueTextTopInset
-                + DialogueTextBottomInset;
-            return metrics;
-        };
-
-    const std::optional<GameplayScreenRuntime::HudFontHandle> primaryFont = view.findHudFont(layout.fontName);
-
-    if (!primaryFont)
-    {
-        return std::nullopt;
-    }
-
-    DialogueBodyTextMetrics metrics = calculateForFont(*primaryFont);
-
-    if (metrics.textHeight <= DialogueTextPrimaryFontMaxHeight)
-    {
+            lines += std::max(size_t{1}, view.wrapHudTextToWidth(font, line, wrapWidth).size());
+        }
+        metrics.textHeight = lines * dialogueTextLineAdvance(font) * metrics.fontScale
+            + 2 * std::abs(layout.textPadY) + DialogueTextTopInset + DialogueTextBottomInset;
         return metrics;
-    }
-
-    const std::optional<GameplayScreenRuntime::HudFontHandle> smallFont =
-        view.findHudFont(DialogueTextSmallFontName);
-
-    if (smallFont && toLowerCopy(smallFont->fontName) != toLowerCopy(primaryFont->fontName))
+    };
+    DialogueBodyTextMetrics metrics;
+    for (const auto &[fontName, targetHeight] : std::array<std::pair<const char *, float>, 4>{{
+        {"Arrus", 19}, {"Arrus", 18}, {"Create", 18}, {"Create", 17}}})
     {
-        metrics = calculateForFont(*smallFont);
+        const std::optional<GameplayHudFontHandle> font = view.findHudFont(fontName);
+        if (!font)
+        {
+            return std::nullopt;
+        }
+        metrics = calculateForFont(*font, targetHeight);
+        if (metrics.textHeight <= DialogueTextPrimaryFontMaxHeight)
+        {
+            return metrics;
+        }
     }
-
     return metrics;
 }
 } // namespace
@@ -978,16 +960,14 @@ void GameplayDialogueRenderer::renderDialogueOverlay(
 
         if (textMetrics)
         {
-            const float authoritativeFrameHeight = pBasebarLayout->height + textMetrics->textHeight;
+            const float bodyHeight = std::min(DialogueTextPrimaryFontMaxHeight, textMetrics->textHeight);
+            const float authoritativeFrameHeight = pBasebarLayout->height + bodyHeight + 15.0f;
             view.setHudLayoutRuntimeHeightOverride("DialogueFrame", authoritativeFrameHeight);
-            view.setHudLayoutRuntimeHeightOverride("DialogueText", textMetrics->textHeight);
+            view.setHudLayoutRuntimeHeightOverride("DialogueText", bodyHeight);
         }
     }
 
-    std::string dialogueResponseHintText =
-        view.activeEventDialog().actions.empty()
-            ? "Enter/Space/E/Esc close"
-            : "Up/Down select  Enter/Space accept  E/Esc close";
+    std::string dialogueResponseHintText;
 
     if (view.houseBankState().inputActive())
     {
@@ -1139,6 +1119,7 @@ void GameplayDialogueRenderer::renderDialogueOverlay(
         dialogMouseY,
         dialogueResponseHintText,
         renderAboveHud);
+    view.interactionState().dialogueStatusHint = dialogueResponseHintText;
 
     if (view.activeEventDialog().presentation == EventDialogPresentation::Transition
         && !view.activeEventDialog().actions.empty())
@@ -1163,13 +1144,6 @@ void GameplayDialogueRenderer::renderDialogueOverlay(
         view,
         "DialogueFoodLabel",
         pParty != nullptr ? std::to_string(pParty->food()) : "",
-        width,
-        height,
-        renderAboveHud);
-    renderDialogueLabelById(
-        view,
-        "DialogueResponseHint",
-        dialogueResponseHintText,
         width,
         height,
         renderAboveHud);
@@ -1236,7 +1210,7 @@ void GameplayDialogueRenderer::renderBlackoutBackdrop(
 {
     (void)viewportX;
     (void)viewportWidth;
-    view.renderViewportSidePanels(screenWidth, screenHeight, "UI-Parch");
+    view.renderViewportSidePanels(screenWidth, screenHeight, "obsidian_reading_surface");
 }
 
 void GameplayDialogueRenderer::updateHouseShopHoverTopicText(
@@ -1421,8 +1395,7 @@ void GameplayDialogueRenderer::renderHouseShopOverlay(
             buildHouseShopVisualLayout(
                 *pHouseEntry,
                 view.houseShopOverlay().mode == GameplayUiController::HouseShopMode::BuySpellbooks);
-        const std::string backgroundAsset =
-            !overlayLayout.backgroundAsset.empty() ? overlayLayout.backgroundAsset : pFrameLayout->primaryAsset;
+        const std::string &backgroundAsset = overlayLayout.backgroundAsset;
 
         if (!backgroundAsset.empty())
         {
@@ -1640,6 +1613,17 @@ void GameplayDialogueRenderer::renderDialogueTextureElement(
         return;
     }
 
+    if (normalizedLayoutId == "dialogueframe")
+    {
+        GameplayResolvedHudLayoutElement panel = *resolved;
+        panel.height -= 114 * panel.scale;
+        GameplayUiSkin::renderPanel(view, panel, true);
+        return;
+    }
+    if (pLayout->primaryAsset.starts_with("obsidian_frame_"))
+    {
+        return;
+    }
     if (normalizedLayoutId == "dialoguevideoarea")
     {
         renderDialogueVideoArea(
@@ -1653,6 +1637,12 @@ void GameplayDialogueRenderer::renderDialogueTextureElement(
         return;
     }
 
+    if (pLayout->interactive && !pLayout->labelText.empty()
+        && pLayout->labelText.find('{') == std::string::npos)
+    {
+        GameplayUiSkin::renderButton(view, layoutId, width, height);
+        return;
+    }
     const PointerRenderInput pointerInput = pointerRenderInput(view);
     const std::string *pAssetName =
         view.resolveInteractiveAssetName(
@@ -1899,18 +1889,9 @@ void GameplayDialogueRenderer::renderDialogueEventPanel(
 
             if (!isMapIcon && pictureId > 0)
             {
-                const std::optional<GameplayScreenRuntime::HudTextureHandle> portraitBorder =
-                    view.gameplayUiRuntime().ensureHudTextureLoaded("evtnpc");
-
-                if (portraitBorder)
-                {
-                    view.submitHudTexturedQuad(
-                        *portraitBorder,
-                        portraitX,
-                        portraitBorderY,
-                        portraitBorderWidth,
-                        portraitBorderHeight);
-                }
+                // Keep the native portrait aperture; scale the shared carved frame to its four-unit rim.
+                GameplayUiSkin::renderPanel(view,
+                    {portraitX, portraitBorderY, portraitBorderWidth, portraitBorderHeight, panelScale}, false, 0.35f);
             }
 
             if (isMapIcon)
@@ -2138,8 +2119,8 @@ void GameplayDialogueRenderer::renderDialogueEventPanel(
         {
             const std::optional<GameplayScreenRuntime::HudFontHandle> topicFont =
                 view.findHudFont(pTopicRowLayout->fontName);
-            const float topicFontScale = snappedHudFontScale(
-                resolvedTopicRowTemplate ? resolvedTopicRowTemplate->scale : panelScale);
+            const float topicFontScale = (resolvedTopicRowTemplate ? resolvedTopicRowTemplate->scale : panelScale)
+                * pTopicRowLayout->textScale;
             const float topicLineHeight = topicFont
                 ? static_cast<float>(topicFont->fontHeight) * topicFontScale
                 : 20.0f * panelScale;
@@ -2151,7 +2132,7 @@ void GameplayDialogueRenderer::renderDialogueEventPanel(
                     topicWrapWidth)
                         - std::abs(pTopicRowLayout->textPadX * topicFontScale) * 2.0f
                         - 4.0f * topicFontScale);
-            const float topicTextWidth = std::max(0.0f, topicTextWidthScaled / std::max(1.0f, topicFontScale));
+            const float topicTextWidth = std::max(0.0f, topicTextWidthScaled / std::max(0.01f, topicFontScale));
             const float rowGap = 4.0f * panelScale;
             const bool showHoveredShopTopic = hoveredHouseServiceTopicText.has_value();
             const size_t visibleActionCount =
@@ -2331,53 +2312,43 @@ void GameplayDialogueRenderer::renderDialogueBodyText(
     }
 
     const GameplayScreenRuntime::HudFontHandle &font = textMetrics->font;
-    const float fontScale = snappedHudFontScale(resolvedText->scale);
-    bgfx::TextureHandle coloredMainTextureHandle =
-        view.ensureHudFontMainTextureColor(font, pDialogueTextLayout->textColorAbgr);
-
-    if (!bgfx::isValid(coloredMainTextureHandle))
-    {
-        coloredMainTextureHandle = font.mainTextureHandle;
-    }
-
+    const float fontScale = resolvedText->scale * textMetrics->fontScale;
     const float lineHeight = dialogueTextLineAdvance(font) * fontScale;
-    float textX = resolvedText->x + pDialogueTextLayout->textPadX * fontScale;
-    float textY = resolvedText->y + (pDialogueTextLayout->textPadY + DialogueTextTopInset) * fontScale;
-    textX = std::round(textX);
-    textY = std::round(textY);
-    const float textWrapWidth = std::max(
-        0.0f,
-        (resolvedText->width
-            - std::abs(pDialogueTextLayout->textPadX * fontScale) * 2.0f
-            - DialogueTextRightInset * fontScale)
-            / std::max(1.0f, fontScale));
-    const size_t maxVisibleLines = std::max<size_t>(
-        1,
-        static_cast<size_t>(resolvedText->height / std::max(1.0f, lineHeight)));
-    size_t visibleLineIndex = 0;
-
-    for (const std::string &sourceLine : dialogueBodyLines)
+    const float wrapWidth = (resolvedText->width - 2 * pDialogueTextLayout->textPadX * resolvedText->scale
+        - DialogueTextRightInset * resolvedText->scale) / fontScale;
+    std::vector<std::string> lines;
+    std::string content;
+    for (const std::string &source : dialogueBodyLines)
     {
-        const std::vector<std::string> wrappedLines = view.wrapHudTextToWidth(font, sourceLine, textWrapWidth);
-
-        for (const std::string &wrappedLine : wrappedLines)
-        {
-            if (visibleLineIndex >= maxVisibleLines)
-            {
-                break;
-            }
-
-            view.renderHudFontLayer(font, font.shadowTextureHandle, wrappedLine, textX, textY, fontScale);
-            view.renderHudFontLayer(font, coloredMainTextureHandle, wrappedLine, textX, textY, fontScale);
-            textY += lineHeight;
-            ++visibleLineIndex;
-        }
-
-        if (visibleLineIndex >= maxVisibleLines)
-        {
-            break;
-        }
+        content += source + "\n";
+        const std::vector<std::string> wrapped = view.wrapHudTextToWidth(font, source, wrapWidth);
+        lines.insert(lines.end(), wrapped.begin(), wrapped.end());
     }
+    GameplayOverlayInteractionState &interaction = view.interactionState();
+    if (interaction.dialogueBodyText != content)
+    {
+        interaction.dialogueBodyText = std::move(content);
+        interaction.dialogueBodyScrollLines = 0;
+    }
+    const GameplayInputFrame *pInput = view.currentGameplayInputFrame();
+    if (pInput != nullptr && GameplayHudCommon::isPointerInsideResolvedElement(
+        *resolvedText, pInput->pointerX, pInput->pointerY))
+    {
+        interaction.dialogueBodyScrollLines -= static_cast<int>(pInput->mouseWheelDelta * 3);
+    }
+    const int visible = std::max(1, static_cast<int>(resolvedText->height / lineHeight));
+    interaction.dialogueBodyScrollLines = std::clamp(interaction.dialogueBodyScrollLines,
+        0, std::max(0, static_cast<int>(lines.size()) - visible));
+    const bgfx::TextureHandle main = view.ensureHudFontMainTextureColor(font, pDialogueTextLayout->textColorAbgr);
+    const float x = resolvedText->x + pDialogueTextLayout->textPadX * resolvedText->scale;
+    for (int i = 0; i < visible && i + interaction.dialogueBodyScrollLines < lines.size(); ++i)
+    {
+        const float y = resolvedText->y + i * lineHeight;
+        const std::string &line = lines[i + interaction.dialogueBodyScrollLines];
+        view.renderHudFontLayer(font, font.shadowTextureHandle, line, x, y, fontScale, &*resolvedText);
+        view.renderHudFontLayer(font, main, line, x, y, fontScale, &*resolvedText);
+    }
+
 }
 
 void GameplayDialogueRenderer::submitTextureHandleQuad(

@@ -1,0 +1,64 @@
+schema: openyamm.effectTextureImport.v1
+source:
+  path: /home/pjasicek/github/OpenYAMM/mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/SPARKS/RINGEXPLODEBLUE.dtx
+  format: LithTech DTX
+  sha256: 6eca0aafaa52c274e1925431620248362a8634e4e4094738d30b90445f2393b3
+runtime:
+  texture: engine/effects/mm9/textures/sparks/ringexplodeblue.png
+  format: PNG RGBA8
+  colorSpace: srgb
+  alphaUsage: blend
+  premultipliedAlpha: false
+  mipPolicy: generate-at-runtime
+  minFilter: linear
+  magFilter: linear
+  wrapU: clamp
+  wrapV: clamp
+conversion:
+  decoder: tools/mm9_import_discovery/convert_abc_model.py:decode_dtx_mips
+  decodedRgbChanged: false
+  decodedAlphaChanged: false
+  opaqueAlphaRepair: false
+  zeroAlphaRgbPreserved: true
+  sourceMipArtifacts: mips/*.png
+dtx:
+  version: -5
+  width: 64
+  height: 64
+  mipCount: 4
+  sectionCount: 0
+  internalFlags: 136
+  userFlags: 0
+  extraHex: '000003000000000000000000'
+  bppIdentifier: 3
+  command: ''
+  repairOpaqueAlpha: false
+  mips:
+  - index: 0
+    width: 64
+    height: 64
+    sourceOffset: 164
+    sourceBytes: 16384
+    decodedRgbaSha256: f73d47b61ed845c5623c80621a63f0972d6907bf11a750f85d2d1390dd8b0682
+    artifact: mips/00.png
+  - index: 1
+    width: 32
+    height: 32
+    sourceOffset: 16548
+    sourceBytes: 4096
+    decodedRgbaSha256: 81260481b890aa6647b7eaca96aa7609eead91c56effaa1667a5a2f5e9f4a823
+    artifact: mips/01.png
+  - index: 2
+    width: 16
+    height: 16
+    sourceOffset: 20644
+    sourceBytes: 1024
+    decodedRgbaSha256: 613d64c2e5a3a93d2e98a421de4f6b2c7f7a81ac983fe8c9b1f76d3a193e915d
+    artifact: mips/02.png
+  - index: 3
+    width: 8
+    height: 8
+    sourceOffset: 21668
+    sourceBytes: 256
+    decodedRgbaSha256: e8becb2da371dc170c9b981bf70a032fd5df92dcbc1059ec0c86d8db5f302d6a
+    artifact: mips/03.png

@@ -14,19 +14,15 @@
 #include <string_view>
 #include <unordered_set>
 #include <utility>
+#include <chrono>
+#include <ctime>
+#include <iomanip>
+#include <sstream>
 
 namespace OpenYAMM::Game
 {
 namespace
 {
-constexpr float ReferenceWidth = 640.0f;
-constexpr float ReferenceHeight = 480.0f;
-constexpr float MaxUiScale = 8.0f;
-constexpr const char *LoadGameLayoutPath = "Data/ui/gameplay/load_game.yml";
-constexpr size_t VisibleSlotCount = 10;
-constexpr uint64_t SlotDoubleClickWindowMs = 500;
-constexpr uint32_t WhiteColorAbgr = 0xffffffffu;
-constexpr uint32_t SelectedRowColorAbgr = 0xff00ffffu;
 
 struct CivilTime
 {
@@ -38,15 +34,6 @@ struct CivilTime
     int hour12 = 9;
     int minute = 0;
     bool isPm = false;
-};
-
-struct ResolvedLayoutElement
-{
-    float x = 0.0f;
-    float y = 0.0f;
-    float width = 0.0f;
-    float height = 0.0f;
-    float scale = 1.0f;
 };
 
 std::string toLowerCopy(const std::string &value)
@@ -85,32 +72,24 @@ CivilTime civilTimeFromGameMinutes(float gameMinutes)
 
 std::string weekdayName(int dayOfWeek)
 {
-    static const std::array<const char *, 7> names = {
-        "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"
-    };
+    static const std::array<const char *, 7> names = {"Monday", "Tuesday",  "Wednesday", "Thursday",
+                                                      "Friday", "Saturday", "Sunday"};
     return names[std::clamp(dayOfWeek, 1, 7) - 1];
 }
 
 std::string monthName(int month)
 {
-    static const std::array<const char *, 12> names = {
-        "January", "February", "March", "April", "May", "June",
-        "July", "August", "September", "October", "November", "December"
-    };
+    static const std::array<const char *, 12> names = {"January",   "February", "March",    "April",
+                                                       "May",       "June",     "July",     "August",
+                                                       "September", "October",  "November", "December"};
     return names[std::clamp(month, 1, 12) - 1];
 }
 
 std::string formatClock(const CivilTime &time)
 {
     char buffer[32] = {};
-    std::snprintf(
-        buffer,
-        sizeof(buffer),
-        "%s %02d:%02d%s",
-        weekdayName(time.dayOfWeek).c_str(),
-        time.hour12,
-        time.minute,
-        time.isPm ? "PM" : "AM");
+    std::snprintf(buffer, sizeof(buffer), "%s %02d:%02d%s", weekdayName(time.dayOfWeek).c_str(), time.hour12,
+                  time.minute, time.isPm ? "PM" : "AM");
     return buffer;
 }
 
@@ -138,13 +117,8 @@ std::string friendlySaveFileLabel(const std::filesystem::path &path)
     if (stem.rfind("save", 0) == 0 && stem.size() > 4)
     {
         const std::string suffix = stem.substr(4);
-        const bool allDigits = std::all_of(
-            suffix.begin(),
-            suffix.end(),
-            [](char character)
-            {
-                return std::isdigit(static_cast<unsigned char>(character)) != 0;
-            });
+        const bool allDigits = std::all_of(suffix.begin(), suffix.end(), [](char character)
+                                           { return std::isdigit(static_cast<unsigned char>(character)) != 0; });
 
         if (allDigits)
         {
@@ -162,11 +136,7 @@ std::string friendlySaveFileLabel(const std::filesystem::path &path)
     return label;
 }
 
-bool decodeBmpBytesToBgra(
-    const std::vector<uint8_t> &bmpBytes,
-    int &width,
-    int &height,
-    std::vector<uint8_t> &pixels)
+bool decodeBmpBytesToBgra(const std::vector<uint8_t> &bmpBytes, int &width, int &height, std::vector<uint8_t> &pixels)
 {
     SDL_IOStream *pIoStream = SDL_IOFromConstMem(bmpBytes.data(), bmpBytes.size());
 
@@ -199,259 +169,13 @@ bool decodeBmpBytesToBgra(
     return true;
 }
 
-ResolvedLayoutElement resolveAttachedLayoutRect(
-    UiLayoutManager::LayoutAttachMode attachTo,
-    const ResolvedLayoutElement &parent,
-    float width,
-    float height,
-    float gapX,
-    float gapY,
-    float scale)
-{
-    ResolvedLayoutElement resolved = {};
-    resolved.width = width;
-    resolved.height = height;
-    resolved.scale = scale;
+} // namespace
 
-    switch (attachTo)
-    {
-        case UiLayoutManager::LayoutAttachMode::None:
-            resolved.x = parent.x + gapX * scale;
-            resolved.y = parent.y + gapY * scale;
-            break;
-
-        case UiLayoutManager::LayoutAttachMode::RightOf:
-            resolved.x = parent.x + parent.width + gapX * scale;
-            resolved.y = parent.y + gapY * scale;
-            break;
-
-        case UiLayoutManager::LayoutAttachMode::LeftOf:
-            resolved.x = parent.x - resolved.width + gapX * scale;
-            resolved.y = parent.y + gapY * scale;
-            break;
-
-        case UiLayoutManager::LayoutAttachMode::Above:
-            resolved.x = parent.x + gapX * scale;
-            resolved.y = parent.y - resolved.height + gapY * scale;
-            break;
-
-        case UiLayoutManager::LayoutAttachMode::Below:
-            resolved.x = parent.x + gapX * scale;
-            resolved.y = parent.y + parent.height + gapY * scale;
-            break;
-
-        case UiLayoutManager::LayoutAttachMode::CenterAbove:
-            resolved.x = parent.x + (parent.width - resolved.width) * 0.5f + gapX * scale;
-            resolved.y = parent.y - resolved.height + gapY * scale;
-            break;
-
-        case UiLayoutManager::LayoutAttachMode::CenterBelow:
-            resolved.x = parent.x + (parent.width - resolved.width) * 0.5f + gapX * scale;
-            resolved.y = parent.y + parent.height + gapY * scale;
-            break;
-
-        case UiLayoutManager::LayoutAttachMode::InsideLeft:
-            resolved.x = parent.x + gapX * scale;
-            resolved.y = parent.y + (parent.height - resolved.height) * 0.5f + gapY * scale;
-            break;
-
-        case UiLayoutManager::LayoutAttachMode::InsideRight:
-            resolved.x = parent.x + parent.width - resolved.width + gapX * scale;
-            resolved.y = parent.y + (parent.height - resolved.height) * 0.5f + gapY * scale;
-            break;
-
-        case UiLayoutManager::LayoutAttachMode::InsideTopCenter:
-            resolved.x = parent.x + (parent.width - resolved.width) * 0.5f + gapX * scale;
-            resolved.y = parent.y + gapY * scale;
-            break;
-
-        case UiLayoutManager::LayoutAttachMode::InsideTopLeft:
-            resolved.x = parent.x + gapX * scale;
-            resolved.y = parent.y + gapY * scale;
-            break;
-
-        case UiLayoutManager::LayoutAttachMode::InsideTopRight:
-            resolved.x = parent.x + parent.width - resolved.width + gapX * scale;
-            resolved.y = parent.y + gapY * scale;
-            break;
-
-        case UiLayoutManager::LayoutAttachMode::InsideBottomLeft:
-            resolved.x = parent.x + gapX * scale;
-            resolved.y = parent.y + parent.height - resolved.height + gapY * scale;
-            break;
-
-        case UiLayoutManager::LayoutAttachMode::InsideBottomCenter:
-            resolved.x = parent.x + (parent.width - resolved.width) * 0.5f + gapX * scale;
-            resolved.y = parent.y + parent.height - resolved.height + gapY * scale;
-            break;
-
-        case UiLayoutManager::LayoutAttachMode::InsideBottomRight:
-            resolved.x = parent.x + parent.width - resolved.width + gapX * scale;
-            resolved.y = parent.y + parent.height - resolved.height + gapY * scale;
-            break;
-
-        case UiLayoutManager::LayoutAttachMode::CenterIn:
-            resolved.x = parent.x + (parent.width - resolved.width) * 0.5f + gapX * scale;
-            resolved.y = parent.y + (parent.height - resolved.height) * 0.5f + gapY * scale;
-            break;
-    }
-
-    return resolved;
-}
-
-std::optional<ResolvedLayoutElement> resolveLayoutElementRecursive(
-    const UiLayoutManager &layoutManager,
-    const std::string &layoutId,
-    int screenWidth,
-    int screenHeight,
-    float fallbackWidth,
-    float fallbackHeight,
-    std::unordered_set<std::string> &visited)
-{
-    if (visited.contains(layoutId))
-    {
-        return std::nullopt;
-    }
-
-    visited.insert(layoutId);
-    const UiLayoutManager::LayoutElement *pElement = layoutManager.findElement(layoutId);
-
-    if (pElement == nullptr)
-    {
-        visited.erase(layoutId);
-        return std::nullopt;
-    }
-
-    const UiLayoutManager::LayoutElement &element = *pElement;
-    const float baseScale = std::min(
-        std::min(
-            static_cast<float>(screenWidth) / ReferenceWidth,
-            static_cast<float>(screenHeight) / ReferenceHeight),
-        MaxUiScale);
-    const float viewportWidth = ReferenceWidth * baseScale;
-    const float viewportHeight = ReferenceHeight * baseScale;
-    const float viewportX = (static_cast<float>(screenWidth) - viewportWidth) * 0.5f;
-    const float viewportY = (static_cast<float>(screenHeight) - viewportHeight) * 0.5f;
-    ResolvedLayoutElement resolved = {};
-
-    if (!element.parentId.empty())
-    {
-        const UiLayoutManager::LayoutElement *pParent = layoutManager.findElement(element.parentId);
-
-        if (pParent == nullptr)
-        {
-            visited.erase(layoutId);
-            return std::nullopt;
-        }
-
-        const std::optional<ResolvedLayoutElement> parent = resolveLayoutElementRecursive(
-            layoutManager,
-            element.parentId,
-            screenWidth,
-            screenHeight,
-            pParent->width,
-            pParent->height,
-            visited);
-
-        if (!parent.has_value())
-        {
-            visited.erase(layoutId);
-            return std::nullopt;
-        }
-
-        resolved.scale = element.hasExplicitScale
-            ? std::clamp(baseScale, element.minScale, element.maxScale)
-            : parent->scale;
-        resolved.width = (element.width > 0.0f ? element.width : fallbackWidth) * resolved.scale;
-        resolved.height = (element.height > 0.0f ? element.height : fallbackHeight) * resolved.scale;
-        resolved = resolveAttachedLayoutRect(
-            element.attachTo,
-            *parent,
-            resolved.width,
-            resolved.height,
-            element.gapX,
-            element.gapY,
-            resolved.scale);
-        visited.erase(layoutId);
-        return resolved;
-    }
-
-    resolved.scale = std::clamp(baseScale, element.minScale, element.maxScale);
-    resolved.width = (element.width > 0.0f ? element.width : fallbackWidth) * resolved.scale;
-    resolved.height = (element.height > 0.0f ? element.height : fallbackHeight) * resolved.scale;
-
-    switch (element.anchor)
-    {
-        case UiLayoutManager::LayoutAnchor::TopLeft:
-            resolved.x = viewportX + element.offsetX * resolved.scale;
-            resolved.y = viewportY + element.offsetY * resolved.scale;
-            break;
-
-        case UiLayoutManager::LayoutAnchor::TopCenter:
-            resolved.x = viewportX + viewportWidth * 0.5f - resolved.width * 0.5f + element.offsetX * resolved.scale;
-            resolved.y = viewportY + element.offsetY * resolved.scale;
-            break;
-
-        case UiLayoutManager::LayoutAnchor::TopRight:
-            resolved.x = viewportX + viewportWidth - resolved.width + element.offsetX * resolved.scale;
-            resolved.y = viewportY + element.offsetY * resolved.scale;
-            break;
-
-        case UiLayoutManager::LayoutAnchor::Left:
-            resolved.x = viewportX + element.offsetX * resolved.scale;
-            resolved.y = viewportY + viewportHeight * 0.5f - resolved.height * 0.5f + element.offsetY * resolved.scale;
-            break;
-
-        case UiLayoutManager::LayoutAnchor::Center:
-            resolved.x = viewportX + viewportWidth * 0.5f - resolved.width * 0.5f + element.offsetX * resolved.scale;
-            resolved.y = viewportY + viewportHeight * 0.5f - resolved.height * 0.5f + element.offsetY * resolved.scale;
-            break;
-
-        case UiLayoutManager::LayoutAnchor::Right:
-            resolved.x = viewportX + viewportWidth - resolved.width + element.offsetX * resolved.scale;
-            resolved.y = viewportY + viewportHeight * 0.5f - resolved.height * 0.5f + element.offsetY * resolved.scale;
-            break;
-
-        case UiLayoutManager::LayoutAnchor::BottomLeft:
-            resolved.x = viewportX + element.offsetX * resolved.scale;
-            resolved.y = viewportY + viewportHeight - resolved.height + element.offsetY * resolved.scale;
-            break;
-
-        case UiLayoutManager::LayoutAnchor::BottomCenter:
-            resolved.x = viewportX + viewportWidth * 0.5f - resolved.width * 0.5f + element.offsetX * resolved.scale;
-            resolved.y = viewportY + viewportHeight - resolved.height + element.offsetY * resolved.scale;
-            break;
-
-        case UiLayoutManager::LayoutAnchor::BottomRight:
-            resolved.x = viewportX + viewportWidth - resolved.width + element.offsetX * resolved.scale;
-            resolved.y = viewportY + viewportHeight - resolved.height + element.offsetY * resolved.scale;
-            break;
-    }
-
-    visited.erase(layoutId);
-    return resolved;
-}
-
-MenuScreenBase::Rect toRect(const ResolvedLayoutElement &resolved)
-{
-    return MenuScreenBase::Rect{
-        std::round(resolved.x),
-        std::round(resolved.y),
-        std::round(resolved.width),
-        std::round(resolved.height)
-    };
-}
-}
-
-LoadGameScreen::LoadGameScreen(
-    const Engine::AssetFileSystem &assetFileSystem,
-    const GameDataRepository &gameData,
-    LoadAction loadAction,
-    CancelAction cancelAction)
-    : MenuScreenBase(assetFileSystem)
-    , m_pGameData(&gameData)
-    , m_loadAction(std::move(loadAction))
-    , m_cancelAction(std::move(cancelAction))
+LoadGameScreen::LoadGameScreen(const Engine::AssetFileSystem &assetFileSystem, const GameDataRepository &gameData,
+                               LoadAction loadAction, CancelAction cancelAction, bool fromGameplay,
+                               GameAudioSystem *pAudio)
+    : MenuDesignScreen(assetFileSystem, fromGameplay, pAudio), m_pGameData(&gameData),
+      m_loadAction(std::move(loadAction)), m_cancelAction(std::move(cancelAction)), m_fromGameplay(fromGameplay)
 {
 }
 
@@ -471,10 +195,10 @@ AppMode LoadGameScreen::mode() const
 
 void LoadGameScreen::prepareForFirstFrame()
 {
-    ensureLayoutLoaded();
-    preloadLayoutAssets(m_layoutManager);
+    loadDesign("gameplay/load_game");
+    preloadLayoutAssets(m_designLayouts);
 
-    if (s_cachedSlotsValid)
+    if (s_cachedSlotsValid && !m_saveAction)
     {
         loadCachedSaveSlots();
     }
@@ -488,7 +212,7 @@ void LoadGameScreen::onEnter()
 {
     if (!m_slotsLoaded)
     {
-        if (s_cachedSlotsValid)
+        if (s_cachedSlotsValid && !m_saveAction)
         {
             loadCachedSaveSlots();
         }
@@ -499,201 +223,396 @@ void LoadGameScreen::onEnter()
     }
 }
 
+void LoadGameScreen::configureSave(SaveAction action, const std::string &location, float gameMinutes,
+                                   const std::vector<uint8_t> &previewBmp)
+{
+    m_saveAction = std::move(action);
+    m_currentLocation = location;
+    m_saveName = location;
+    const CivilTime time = civilTimeFromGameMinutes(gameMinutes);
+    m_currentDate = formatDate(time);
+    m_currentClock = formatClock(time);
+    if (!previewBmp.empty())
+    {
+        decodeBmpBytesToBgra(previewBmp, m_previewWidth, m_previewHeight, m_previewPixels);
+    }
+    setTextEditing(true);
+    m_nameEditing = true;
+}
+
+void LoadGameScreen::handleSdlEvent(const SDL_Event &event)
+{
+    if (!m_saveAction || !m_nameEditing || modalOpen())
+    {
+        return;
+    }
+    if (event.type == SDL_EVENT_TEXT_INPUT)
+    {
+        for (const unsigned char character : std::string(event.text.text))
+        {
+            if (character >= 32 && character < 127 && m_saveName.size() < 40)
+            {
+                m_saveName += char(character);
+            }
+        }
+    }
+    if (event.type == SDL_EVENT_KEY_DOWN && event.key.scancode == SDL_SCANCODE_BACKSPACE && !m_saveName.empty())
+    {
+        m_saveName.pop_back();
+    }
+    if (event.type == SDL_EVENT_KEY_DOWN && event.key.scancode == SDL_SCANCODE_RETURN && !event.key.repeat)
+    {
+        m_commitRequested = true;
+        m_nameEditing = false;
+        setTextEditing(false);
+    }
+}
+
+std::optional<std::filesystem::path> LoadGameScreen::mostRecentSave(std::string &mapFileName)
+{
+    mapFileName.clear();
+    std::error_code error;
+    std::vector<std::filesystem::directory_entry> entries;
+    for (const auto &entry : std::filesystem::directory_iterator("saves", error))
+    {
+        if (entry.is_regular_file(error) && toLowerCopy(entry.path().extension().string()) == ".oysav")
+        {
+            entries.push_back(entry);
+        }
+    }
+    std::sort(entries.begin(), entries.end(),
+              [](const auto &left, const auto &right)
+              {
+                  std::error_code firstError, secondError;
+                  return left.last_write_time(firstError) > right.last_write_time(secondError);
+              });
+    for (const auto &entry : entries)
+    {
+        std::string message;
+        if (const std::optional<GameSaveData> data = loadGameDataFromPath(entry.path(), message))
+        {
+            mapFileName = data->mapFileName;
+            return entry.path();
+        }
+    }
+    return std::nullopt;
+}
+
+void LoadGameScreen::requestLoad()
+{
+    if (m_slots.empty())
+    {
+        return;
+    }
+    const auto load = [this]()
+    {
+        if (!tryLoadSelectedSlot())
+        {
+            m_error = "Unable to load this save. Check its required content packages.";
+        }
+    };
+    if (m_fromGameplay)
+    {
+        confirm("Load Adventure?", "Unsaved progress in the current adventure will be lost.", {"Cancel", "Load"},
+                [load](int choice)
+                {
+                    if (choice == 1)
+                    {
+                        load();
+                    }
+                });
+    }
+    else
+    {
+        load();
+    }
+}
+
+void LoadGameScreen::commitSave()
+{
+    const size_t first = m_saveName.find_first_not_of(" \t");
+    const size_t last = m_saveName.find_last_not_of(" \t");
+    const std::string name = first == std::string::npos ? "" : m_saveName.substr(first, last - first + 1);
+    const std::string lower = toLowerCopy(name);
+    if (name.empty() || lower == "autosave" || lower == "quicksave")
+    {
+        m_error = "Choose a name other than Autosave or Quicksave.";
+        return;
+    }
+    std::filesystem::path path;
+    if (!m_newSave && m_selectedIndex < m_slots.size())
+    {
+        path = m_slots[m_selectedIndex].path;
+    }
+    else
+    {
+        for (size_t index = 1;; ++index)
+        {
+            path = std::filesystem::path("saves") / ("save" + std::to_string(index) + ".oysav");
+            if (!std::filesystem::exists(path))
+            {
+                break;
+            }
+        }
+    }
+    for (const SaveSlotSummary &slot : m_slots)
+    {
+        if (toLowerCopy(slot.fileLabel) == lower && slot.path != path)
+        {
+            m_error = "A save already uses that name. Select it to replace it.";
+            return;
+        }
+    }
+    const auto save = [this, path, name]()
+    {
+        if (m_saveAction(path, name))
+        {
+            invalidateCachedSaveSlots();
+        }
+        else
+        {
+            m_error = "Saving failed or is not allowed in this location.";
+        }
+    };
+    if (!m_newSave)
+    {
+        confirm("Replace Saved Adventure?", "Replace " + m_slots[m_selectedIndex].fileLabel + "?",
+                {"Cancel", "Replace"},
+                [save](int choice)
+                {
+                    if (choice == 1)
+                    {
+                        save();
+                    }
+                });
+    }
+    else
+    {
+        save();
+    }
+}
+
+void LoadGameScreen::requestDelete()
+{
+    if (m_newSave || m_selectedIndex >= m_slots.size())
+    {
+        return;
+    }
+
+    const SaveSlotSummary &slot = m_slots[m_selectedIndex];
+    const std::filesystem::path path = slot.path;
+    m_commitRequested = false;
+    m_nameEditing = false;
+    setTextEditing(false);
+    m_error.clear();
+    confirm("Delete Save?", "Permanently delete \"" + slot.fileLabel + "\"?", {"Cancel", "Delete"},
+            [this, path](int choice)
+            {
+                if (choice != 1)
+                {
+                    return;
+                }
+
+                std::error_code error;
+                if (!std::filesystem::remove(path, error))
+                {
+                    m_error = error ? "Unable to delete this save: " + error.message() : "This save no longer exists.";
+                    return;
+                }
+
+                invalidateCachedSaveSlots();
+                refreshSaveSlots();
+                if (m_saveAction)
+                {
+                    m_saveName = m_currentLocation;
+                }
+                m_revealSelection = true;
+            });
+}
+
 void LoadGameScreen::drawScreen(float deltaSeconds)
 {
     static_cast<void>(deltaSeconds);
-
-    ensureLayoutLoaded();
-    const bool escapePressed = isScancodeHeld(SDL_SCANCODE_ESCAPE);
-    const bool returnPressed = isScancodeHeld(SDL_SCANCODE_RETURN);
-
-    if (escapePressed)
-    {
-        if (!m_escapePressed)
-        {
-            cancel();
-            m_escapePressed = true;
-            return;
-        }
-    }
-    else
-    {
-        m_escapePressed = false;
-    }
-
-    if (returnPressed)
-    {
-        if (!m_returnPressed)
-        {
-            tryLoadSelectedSlot();
-            m_returnPressed = true;
-            return;
-        }
-    }
-    else
-    {
-        m_returnPressed = false;
-    }
-
-    if (mouseWheelDelta() > 0.0f && m_scrollOffset > 0)
-    {
-        --m_scrollOffset;
-    }
-    else if (mouseWheelDelta() < 0.0f && m_scrollOffset + VisibleSlotCount < m_slots.size())
-    {
-        ++m_scrollOffset;
-    }
-
-    const Rect rootRect = resolveLayoutRect("LoadGameRoot", ReferenceWidth, ReferenceHeight).value_or(
-        Rect{0.0f, 0.0f, ReferenceWidth, ReferenceHeight});
-
-    drawViewportSidePanels("UI-Parch", ReferenceWidth, ReferenceHeight);
-    drawTexture(resolveAssetName("LoadGameBackground", "Lsave640"), rootRect);
-
-    if (const std::optional<Rect> titleRect = resolveLayoutRect("LoadGameTitle"))
-    {
-        drawTexture(resolveAssetName("LoadGameTitle", "bt_loagU"), *titleRect);
-    }
-
-    const ButtonState confirmButton = drawButton(
-        resolveButtonVisuals("LoadGameConfirmButton", ButtonVisualSet{"bt_loadU", "bt_loadH", "bt_loadD"}),
-        resolveLayoutRect("LoadGameConfirmButton", 106.0f, 37.0f).value_or(Rect{}));
-    const ButtonState cancelButton = drawButton(
-        resolveButtonVisuals("LoadGameCancelButton", ButtonVisualSet{"bt_cnclU", "bt_cnclH", "bt_cnclD"}),
-        resolveLayoutRect("LoadGameCancelButton", 106.0f, 37.0f).value_or(Rect{}));
-
-    const std::optional<Rect> scrollUpRect = resolveLayoutRect("LoadGameScrollUpButton", 18.0f, 16.0f);
-    const std::optional<Rect> scrollDownRect = resolveLayoutRect("LoadGameScrollDownButton", 18.0f, 16.0f);
-    const std::optional<Rect> previewRect = resolveLayoutRect("LoadGamePreviewRect", 272.0f, 169.0f);
-    const std::optional<Rect> thumbRect = resolveLayoutRect("LoadGameScrollThumb", 17.0f, 17.0f);
-
-    if (scrollUpRect && hitTest(*scrollUpRect) && leftMouseJustReleased() && m_scrollOffset > 0)
-    {
-        --m_scrollOffset;
-    }
-
-    if (scrollDownRect
-        && hitTest(*scrollDownRect)
-        && leftMouseJustReleased()
-        && m_scrollOffset + VisibleSlotCount < m_slots.size())
-    {
-        ++m_scrollOffset;
-    }
-
-    if (previewRect)
-    {
-        static const std::vector<uint8_t> blackPixel = {0, 0, 0, 255};
-        drawPixelsBgra("__load_game_preview_backdrop__", 1, 1, blackPixel, *previewRect);
-
-        if (!m_slots.empty())
-        {
-            const SaveSlotSummary &slot = m_slots[std::min(m_selectedIndex, m_slots.size() - 1)];
-
-            if (slot.previewWidth > 0 && slot.previewHeight > 0 && !slot.previewPixelsBgra.empty())
-            {
-                const float previewScale = std::min(
-                    previewRect->width / static_cast<float>(slot.previewWidth),
-                    previewRect->height / static_cast<float>(slot.previewHeight));
-                const float drawWidth = static_cast<float>(slot.previewWidth) * previewScale;
-                const float drawHeight = static_cast<float>(slot.previewHeight) * previewScale;
-                const Rect drawRect = {
-                    std::round(previewRect->x + (previewRect->width - drawWidth) * 0.5f),
-                    std::round(previewRect->y + (previewRect->height - drawHeight) * 0.5f),
-                    std::round(drawWidth),
-                    std::round(drawHeight)
-                };
-                drawPixelsBgra(
-                    "__load_game_preview__",
-                    slot.previewWidth,
-                    slot.previewHeight,
-                    slot.previewPixelsBgra,
-                    drawRect);
-            }
-        }
-    }
-
-    if (thumbRect && scrollUpRect && scrollDownRect)
-    {
-        float thumbY = thumbRect->y;
-
-        if (m_slots.size() > VisibleSlotCount)
-        {
-            const float trackTop = scrollUpRect->y + scrollUpRect->height;
-            const float trackBottom = scrollDownRect->y;
-            const float travel = std::max(0.0f, trackBottom - trackTop - thumbRect->height);
-            const float maxOffset = static_cast<float>(m_slots.size() - VisibleSlotCount);
-            const float t = maxOffset > 0.0f ? static_cast<float>(m_scrollOffset) / maxOffset : 0.0f;
-            thumbY = std::round(trackTop + travel * t);
-        }
-
-        Rect drawRect = *thumbRect;
-        drawRect.y = thumbY;
-        drawTexture(resolveAssetName("LoadGameScrollThumb", "but_thum"), drawRect);
-    }
-
-    bool shouldLoadSelectedSlot = false;
-
-    for (size_t row = 0; row < VisibleSlotCount; ++row)
-    {
-        const size_t slotIndex = m_scrollOffset + row;
-        const std::string layoutId = "LoadGameSlotRow" + std::to_string(row);
-        const std::optional<Rect> rowRect = resolveLayoutRect(layoutId, 205.0f, 22.0f);
-
-        if (!rowRect)
-        {
-            continue;
-        }
-
-        if (hitTest(*rowRect) && leftMouseJustReleased() && slotIndex < m_slots.size())
-        {
-            m_selectedIndex = slotIndex;
-            const uint64_t nowTicks = SDL_GetTicks();
-
-            if (m_lastClickedSlotIndex == slotIndex
-                && nowTicks - m_lastClickedSlotTicks <= SlotDoubleClickWindowMs)
-            {
-                shouldLoadSelectedSlot = true;
-            }
-
-            m_lastClickedSlotIndex = slotIndex;
-            m_lastClickedSlotTicks = nowTicks;
-        }
-
-        if (slotIndex >= m_slots.size() || m_slots[slotIndex].fileLabel.empty())
-        {
-            continue;
-        }
-
-        const uint32_t rowColor = slotIndex == std::min(m_selectedIndex, m_slots.size() - 1)
-            ? SelectedRowColorAbgr
-            : WhiteColorAbgr;
-        drawLayoutText(layoutId, m_slots[slotIndex].fileLabel, rowColor);
-    }
-
-    if (!m_slots.empty())
-    {
-        const SaveSlotSummary &slot = m_slots[std::min(m_selectedIndex, m_slots.size() - 1)];
-        drawLayoutText("LoadGameSelectedName", slot.locationName);
-        drawLayoutText("LoadGamePreviewLine1", slot.weekdayClockText);
-        drawLayoutText("LoadGamePreviewLine2", slot.dateText);
-    }
-
-    if (confirmButton.clicked)
-    {
-        shouldLoadSelectedSlot = true;
-    }
-
-    if (cancelButton.clicked)
+    const bool saving = bool(m_saveAction);
+    const std::string prefix = saving ? "SaveGame" : "LoadGame";
+    loadDesign(saving ? "gameplay/save_game" : "gameplay/load_game");
+    beginDesign(prefix);
+    drawDesign();
+    if (!modalOpen() && keyPressed(SDL_SCANCODE_ESCAPE))
     {
         cancel();
         return;
     }
-
-    if (shouldLoadSelectedSlot)
+    const Rect viewport = designRect(prefix + "ListViewport");
+    const size_t total = m_slots.size() + (saving ? 1 : 0);
+    const float unit = designScale();
+    const Rect firstRow = designRect(prefix + "SlotRow0");
+    const float rowPitch = firstRow.height / unit + 3.2f;
+    const int visibleRows = std::max(1, int(viewport.height / (rowPitch * unit)));
+    const float contentHeight = total > 0 ? total * rowPitch - 3.2f : 0;
+    if (saving && m_nameEditing &&
+        (keyPressed(SDL_SCANCODE_TAB) || (leftMouseJustPressed() && !pointerInside(designRect(prefix + "NameField")))))
     {
-        tryLoadSelectedSlot();
+        m_nameEditing = false;
+        setTextEditing(false);
+    }
+    if (!modalOpen() && !m_nameEditing && total > 0)
+    {
+        const int delta = int(keyPressed(SDL_SCANCODE_DOWN)) - int(keyPressed(SDL_SCANCODE_UP)) +
+                          visibleRows * (int(keyPressed(SDL_SCANCODE_PAGEDOWN)) - int(keyPressed(SDL_SCANCODE_PAGEUP)));
+        if (delta != 0)
+        {
+            const int current = saving && m_newSave ? 0 : int(m_selectedIndex) + (saving ? 1 : 0);
+            const size_t selected = size_t(std::clamp(current + delta, 0, int(total) - 1));
+            m_newSave = saving && selected == 0;
+            m_selectedIndex = saving && selected > 0 ? selected - 1 : selected;
+            if (saving)
+            {
+                m_saveName = m_newSave ? m_currentLocation : m_slots[m_selectedIndex].fileLabel;
+            }
+            m_revealSelection = true;
+        }
+    }
+    if (m_revealSelection)
+    {
+        const size_t selected = saving && m_newSave ? 0 : m_selectedIndex + (saving ? 1 : 0);
+        const float top = selected * rowPitch;
+        m_scrollOffset = std::clamp(m_scrollOffset, top + firstRow.height / unit - viewport.height / unit, top);
+        m_revealSelection = false;
+    }
+    scrollViewport(viewport, contentHeight, m_scrollOffset, rowPitch);
+    setDesignClip(viewport);
+    const size_t firstIndex = size_t(m_scrollOffset / rowPitch);
+    for (size_t index = firstIndex; index < total; ++index)
+    {
+        const bool newRow = saving && index == 0;
+        const size_t slotIndex = saving && index > 0 ? index - 1 : index;
+        const SaveSlotSummary *pSlot = newRow ? nullptr : &m_slots[slotIndex];
+        const std::string id = prefix + "SlotRow" + std::to_string(index);
+        Rect rect = firstRow;
+        const float offset = index * rowPitch - m_scrollOffset;
+        rect.y += offset * unit;
+        if (rect.y >= viewport.y + viewport.height)
+        {
+            break;
+        }
+        if (button(id, rect, "", "save_row", true, newRow ? m_newSave : !m_newSave && slotIndex == m_selectedIndex))
+        {
+            m_newSave = newRow;
+            if (newRow)
+            {
+                m_saveName = m_currentLocation;
+            }
+            else
+            {
+                m_selectedIndex = slotIndex;
+                if (saving)
+                {
+                    m_saveName = pSlot->fileLabel;
+                }
+                if (!saving && m_lastClickedSlotIndex == slotIndex && SDL_GetTicks() - m_lastClickedSlotTicks < 500)
+                {
+                    requestLoad();
+                }
+                m_lastClickedSlotIndex = slotIndex;
+                m_lastClickedSlotTicks = SDL_GetTicks();
+            }
+        }
+        if (newRow)
+        {
+            textInRect({rect.x + 10 * unit, rect.y + 4 * unit, rect.width - 20 * unit, 22 * unit}, "Create a new save",
+                       "menu_arrus", 15.36f);
+        }
+        else
+        {
+            label(prefix + "SlotRow0Name", pSlot->fileLabel, 0, offset);
+            label(prefix + "SlotRow0Location", pSlot->locationName, 0, offset);
+        }
+    }
+    setDesignClip(std::nullopt);
+    const SaveSlotSummary *pSlot = !m_newSave && m_selectedIndex < m_slots.size() ? &m_slots[m_selectedIndex] : nullptr;
+    if (pSlot || saving)
+    {
+        const std::string kind = !pSlot                              ? "New save"
+                                 : pSlot->path.stem() == "autosave"  ? "Automatic"
+                                 : pSlot->path.stem() == "quicksave" ? "Quick"
+                                                                     : "Manual";
+        label(prefix + "SelectedWorldAndKind",
+              pSlot && !pSlot->worldName.empty() ? pSlot->worldName + " - " + kind : kind);
+        label(prefix + "SelectedName", pSlot ? pSlot->locationName : m_currentLocation);
+        const Rect preview = designRect(prefix + "PreviewRect");
+        const auto drawPreview =
+            [this, &preview](const std::string &key, int width, int height, const std::vector<uint8_t> &pixels)
+        {
+            const float scale = std::max(preview.width / width, preview.height / height);
+            const Rect imageRect = {preview.x + (preview.width - width * scale) / 2,
+                                    preview.y + (preview.height - height * scale) / 2, width * scale, height * scale};
+            setDesignClip(preview);
+            drawPixelsBgra(key, width, height, pixels, imageRect);
+            setDesignClip(std::nullopt);
+        };
+        if (saving && m_newSave && !m_previewPixels.empty())
+        {
+            drawPreview("menu_current_save", m_previewWidth, m_previewHeight, m_previewPixels);
+        }
+        else if (pSlot && !pSlot->previewPixelsBgra.empty())
+        {
+            drawPreview("menu_save:" + pSlot->path.string(), pSlot->previewWidth, pSlot->previewHeight,
+                        pSlot->previewPixelsBgra);
+        }
+        else
+        {
+            drawSolidRect(preview, 0xff121a14u);
+            textInRect(preview, "No screenshot available", "menu_lucida", 12, 0xff9bb6c2u, true);
+        }
+        label(prefix + "PreviewLine1", pSlot ? pSlot->dateText : m_currentDate);
+        label(prefix + "PreviewLine2", pSlot ? pSlot->weekdayClockText : m_currentClock);
+        if (saving)
+        {
+            const Rect field = designRect(prefix + "NameField");
+            if (button("save-name", field, "", "text_field") || (keyPressed(SDL_SCANCODE_TAB) && focused("save-name")))
+            {
+                m_nameEditing = true;
+                setTextEditing(true);
+            }
+            label(prefix + "NameField", m_saveName + (m_nameEditing ? "_" : ""));
+        }
+        else
+        {
+            label(prefix + "SelectedMetadata", pSlot->fileLabel + "\nSaved " + pSlot->savedAt);
+        }
+    }
+    else
+    {
+        textInRect(viewport, "No saved games\nStart a new game from the main menu.", "menu_arrus", 15, 0xffc6dfeau,
+                   true);
+    }
+    if (action(prefix + "CancelButton"))
+    {
+        cancel();
         return;
     }
+    if (action(prefix + "DeleteButton", pSlot != nullptr))
+    {
+        requestDelete();
+    }
+    if (action(prefix + "ConfirmButton", saving ? !m_saveName.empty() : pSlot != nullptr) || m_commitRequested)
+    {
+        m_commitRequested = false;
+        if (saving)
+        {
+            commitSave();
+        }
+        else
+        {
+            requestLoad();
+        }
+    }
+    if (!m_error.empty())
+    {
+        textInRect(canvasRect(438.4f, 372, 323.2f, 28), m_error, "menu_lucida", 10.5f);
+    }
+    drawConfirmation();
 }
 
 void LoadGameScreen::refreshSaveSlots()
@@ -709,6 +628,11 @@ void LoadGameScreen::refreshSaveSlots()
             continue;
         }
 
+        if (m_saveAction && (toLowerCopy(entry.path().stem().string()) == "autosave" ||
+                             toLowerCopy(entry.path().stem().string()) == "quicksave"))
+        {
+            continue;
+        }
         std::string error;
         const std::optional<GameSaveData> saveData = loadGameDataFromPath(entry.path(), error);
 
@@ -725,14 +649,40 @@ void LoadGameScreen::refreshSaveSlots()
         const CivilTime civilTime = civilTimeFromGameMinutes(saveData->savedGameMinutes);
         slot.weekdayClockText = formatClock(civilTime);
         slot.dateText = formatDate(civilTime);
+        std::error_code timestampError;
+        const std::filesystem::file_time_type modified = entry.last_write_time(timestampError);
+        if (!timestampError)
+        {
+            const std::time_t timestamp =
+                std::chrono::system_clock::to_time_t(
+                    std::chrono::time_point_cast<std::chrono::system_clock::duration>(
+                        std::chrono::file_clock::to_sys(modified)));
+            if (const std::tm *pLocal = std::localtime(&timestamp))
+            {
+                std::ostringstream formatted;
+                formatted << std::put_time(pLocal, "%Y-%m-%d %H:%M");
+                slot.savedAt = formatted.str();
+            }
+        }
 
         if (m_pGameData != nullptr)
         {
             for (const MapStatsEntry &entryMap : m_pGameData->mapEntries())
             {
-                if (toLowerCopy(entryMap.fileName) == toLowerCopy(saveData->mapFileName))
+                if (toLowerCopy(entryMap.canonicalId) == toLowerCopy(saveData->mapFileName) ||
+                    toLowerCopy(entryMap.fileName) == toLowerCopy(saveData->mapFileName))
                 {
                     slot.locationName = entryMap.name;
+                    slot.worldName = entryMap.worldId;
+                    for (const MergedCharacterSelectionContinent &continent :
+                         m_pGameData->mergedCharacterSelectionTable().continents())
+                    {
+                        if (continent.id == entryMap.mergedContinentId)
+                        {
+                            slot.worldName = continent.name;
+                            break;
+                        }
+                    }
                     break;
                 }
             }
@@ -740,23 +690,14 @@ void LoadGameScreen::refreshSaveSlots()
 
         if (!saveData->previewBmp.empty())
         {
-            decodeBmpBytesToBgra(
-                saveData->previewBmp,
-                slot.previewWidth,
-                slot.previewHeight,
-                slot.previewPixelsBgra);
+            decodeBmpBytesToBgra(saveData->previewBmp, slot.previewWidth, slot.previewHeight, slot.previewPixelsBgra);
         }
 
         m_slots.push_back(std::move(slot));
     }
 
-    std::sort(
-        m_slots.begin(),
-        m_slots.end(),
-        [](const SaveSlotSummary &left, const SaveSlotSummary &right)
-        {
-            return compareSavePathsForDisplay(left.path, right.path);
-        });
+    std::sort(m_slots.begin(), m_slots.end(), [](const SaveSlotSummary &left, const SaveSlotSummary &right)
+              { return compareSavePathsForDisplay(left.path, right.path); });
 
     if (m_selectedIndex >= m_slots.size())
     {
@@ -766,9 +707,13 @@ void LoadGameScreen::refreshSaveSlots()
     m_scrollOffset = 0;
     m_lastClickedSlotIndex = static_cast<size_t>(-1);
     m_lastClickedSlotTicks = 0;
+    m_newSave = bool(m_saveAction);
     m_slotsLoaded = true;
-    s_cachedSlots = m_slots;
-    s_cachedSlotsValid = true;
+    if (!m_saveAction)
+    {
+        s_cachedSlots = m_slots;
+        s_cachedSlotsValid = true;
+    }
 }
 
 void LoadGameScreen::loadCachedSaveSlots()
@@ -783,6 +728,7 @@ void LoadGameScreen::loadCachedSaveSlots()
     m_scrollOffset = 0;
     m_lastClickedSlotIndex = static_cast<size_t>(-1);
     m_lastClickedSlotTicks = 0;
+    m_newSave = bool(m_saveAction);
     m_slotsLoaded = true;
 }
 
@@ -803,161 +749,4 @@ void LoadGameScreen::cancel()
         m_cancelAction();
     }
 }
-
-bool LoadGameScreen::ensureLayoutLoaded()
-{
-    if (m_layoutLoaded)
-    {
-        return true;
-    }
-
-    m_layoutManager.clear();
-    m_layoutLoaded = m_layoutManager.loadLayoutFile(assetFileSystem(), LoadGameLayoutPath);
-    return m_layoutLoaded;
-}
-
-std::optional<MenuScreenBase::Rect> LoadGameScreen::resolveLayoutRect(
-    const std::string &layoutId,
-    float fallbackWidth,
-    float fallbackHeight) const
-{
-    if (!m_layoutLoaded)
-    {
-        return std::nullopt;
-    }
-
-    std::unordered_set<std::string> visited;
-    const std::optional<ResolvedLayoutElement> resolved = resolveLayoutElementRecursive(
-        m_layoutManager,
-        layoutId,
-        frameWidth(),
-        frameHeight(),
-        fallbackWidth,
-        fallbackHeight,
-        visited);
-
-    if (!resolved.has_value())
-    {
-        return std::nullopt;
-    }
-
-    return toRect(*resolved);
-}
-
-MenuScreenBase::ButtonVisualSet LoadGameScreen::resolveButtonVisuals(
-    const std::string &layoutId,
-    const ButtonVisualSet &fallbackVisuals) const
-{
-    if (!m_layoutLoaded)
-    {
-        return fallbackVisuals;
-    }
-
-    const UiLayoutManager::LayoutElement *pLayout = m_layoutManager.findElement(layoutId);
-
-    if (pLayout == nullptr)
-    {
-        return fallbackVisuals;
-    }
-
-    ButtonVisualSet visuals = fallbackVisuals;
-
-    if (!pLayout->primaryAsset.empty())
-    {
-        visuals.defaultTextureName = pLayout->primaryAsset;
-    }
-
-    if (!pLayout->hoverAsset.empty())
-    {
-        visuals.highlightedTextureName = pLayout->hoverAsset;
-    }
-
-    if (!pLayout->pressedAsset.empty())
-    {
-        visuals.pressedTextureName = pLayout->pressedAsset;
-    }
-
-    return visuals;
-}
-
-std::string LoadGameScreen::resolveAssetName(const std::string &layoutId, const std::string &fallbackAssetName) const
-{
-    if (!m_layoutLoaded)
-    {
-        return fallbackAssetName;
-    }
-
-    const UiLayoutManager::LayoutElement *pLayout = m_layoutManager.findElement(layoutId);
-
-    if (pLayout == nullptr || pLayout->primaryAsset.empty())
-    {
-        return fallbackAssetName;
-    }
-
-    return pLayout->primaryAsset;
-}
-
-void LoadGameScreen::drawLayoutText(
-    const std::string &layoutId,
-    const std::string &text,
-    uint32_t colorAbgrOverride) const
-{
-    if (!m_layoutLoaded || text.empty())
-    {
-        return;
-    }
-
-    const UiLayoutManager::LayoutElement *pLayout = m_layoutManager.findElement(layoutId);
-
-    if (pLayout == nullptr)
-    {
-        return;
-    }
-
-    std::unordered_set<std::string> visited;
-    const std::optional<ResolvedLayoutElement> resolved = resolveLayoutElementRecursive(
-        m_layoutManager,
-        layoutId,
-        frameWidth(),
-        frameHeight(),
-        0.0f,
-        0.0f,
-        visited);
-
-    if (!resolved.has_value())
-    {
-        return;
-    }
-
-    const std::string fontName = pLayout->fontName.empty() ? "Create" : pLayout->fontName;
-    const uint32_t color = colorAbgrOverride != 0 ? colorAbgrOverride : pLayout->textColorAbgr;
-    const float fontScale = resolved->scale * std::max(0.1f, pLayout->textScale);
-    const float padX = pLayout->textPadX * resolved->scale;
-    const float padY = pLayout->textPadY * resolved->scale;
-    float drawX = resolved->x + padX;
-    float drawY = resolved->y + padY;
-    LoadGameScreen *pMutableScreen = const_cast<LoadGameScreen *>(this);
-    const float textWidth = pMutableScreen->measureTextWidth(fontName, text, fontScale);
-    const float textHeight = static_cast<float>(pMutableScreen->fontHeight(fontName)) * fontScale;
-
-    if (pLayout->textAlignX == UiLayoutManager::TextAlignX::Center)
-    {
-        drawX = resolved->x + (resolved->width - textWidth) * 0.5f + padX;
-    }
-    else if (pLayout->textAlignX == UiLayoutManager::TextAlignX::Right)
-    {
-        drawX = resolved->x + resolved->width - textWidth - padX;
-    }
-
-    if (pLayout->textAlignY == UiLayoutManager::TextAlignY::Middle)
-    {
-        drawY = resolved->y + (resolved->height - textHeight) * 0.5f + padY;
-    }
-    else if (pLayout->textAlignY == UiLayoutManager::TextAlignY::Bottom)
-    {
-        drawY = resolved->y + resolved->height - textHeight - padY;
-    }
-
-    pMutableScreen->drawText(fontName, text, drawX, drawY, color, fontScale);
-}
-}
+} // namespace OpenYAMM::Game

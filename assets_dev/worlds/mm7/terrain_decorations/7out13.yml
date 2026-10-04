@@ -1,0 +1,130 @@
+minimum_normal_z: 0.88
+density_variation: 0.8
+patch_size: 768
+tall_grass_chance: 0.04
+tall_grass_scale: 1.5
+version: 2
+families_file: families_v2.yml
+seed: 3599277512
+distance: 4096
+rules:
+- texture: 7swdrte
+  family: marsh_reed
+  density: 0.8
+  tint:
+  - 0.64
+  - 0.78
+  - 0.48
+  mask: masks/7swdrte_swamp.png
+- texture: 7swdrtn
+  family: marsh_reed
+  density: 0.8
+  tint:
+  - 0.64
+  - 0.78
+  - 0.48
+  mask: masks/7swdrtn_swamp.png
+- texture: 7swdrtne
+  family: marsh_reed
+  density: 0.8
+  tint:
+  - 0.64
+  - 0.78
+  - 0.48
+  mask: masks/7swdrtne_swamp.png
+- texture: 7swdrtnw
+  family: marsh_reed
+  density: 0.8
+  tint:
+  - 0.64
+  - 0.78
+  - 0.48
+  mask: masks/7swdrtnw_swamp.png
+- texture: 7swdrts
+  family: marsh_reed
+  density: 0.8
+  tint:
+  - 0.64
+  - 0.78
+  - 0.48
+  mask: masks/7swdrts_swamp.png
+- texture: 7swdrtse
+  family: marsh_reed
+  density: 0.8
+  tint:
+  - 0.64
+  - 0.78
+  - 0.48
+  mask: masks/7swdrtse_swamp.png
+- texture: 7swdrtsw
+  family: marsh_reed
+  density: 0.8
+  tint:
+  - 0.64
+  - 0.78
+  - 0.48
+  mask: masks/7swdrtsw_swamp.png
+- texture: 7swdrtw
+  family: marsh_reed
+  density: 0.8
+  tint:
+  - 0.64
+  - 0.78
+  - 0.48
+  mask: masks/7swdrtw_swamp.png
+- texture: 7swdrtxne
+  family: marsh_reed
+  density: 0.8
+  tint:
+  - 0.64
+  - 0.78
+  - 0.48
+  mask: masks/7swdrtxne_swamp.png
+- texture: 7swdrtxnw
+  family: marsh_reed
+  density: 0.8
+  tint:
+  - 0.64
+  - 0.78
+  - 0.48
+  mask: masks/7swdrtxnw_swamp.png
+- texture: 7swdrtxse
+  family: marsh_reed
+  density: 0.8
+  tint:
+  - 0.64
+  - 0.78
+  - 0.48
+  mask: masks/7swdrtxse_swamp.png
+- texture: 7swdrtxsw
+  family: marsh_reed
+  density: 0.8
+  tint:
+  - 0.64
+  - 0.78
+  - 0.48
+  mask: masks/7swdrtxsw_swamp.png
+- texture: 7swtyl
+  family: marsh_reed
+  density: 0.8
+  tint:
+  - 0.64
+  - 0.78
+  - 0.48
+  mask: masks/7swtyl_swamp.png
+- texture: 7swtylv1
+  family: marsh_reed
+  density: 0.8
+  tint:
+  - 0.64
+  - 0.78
+  - 0.48
+  mask: masks/7swtylv1_swamp.png
+- texture: 7swtylv2
+  family: marsh_reed
+  density: 0.8
+  tint:
+  - 0.64
+  - 0.78
+  - 0.48
+  mask: masks/7swtylv2_swamp.png

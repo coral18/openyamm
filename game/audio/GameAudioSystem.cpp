@@ -1,4 +1,5 @@
 #include "game/audio/GameAudioSystem.h"
+#include "game/audio/ActorAudioRules.h"
 
 #include "engine/TextTable.h"
 
@@ -641,6 +642,8 @@ bool GameAudioSystem::initializeSoundCatalog(const Engine::AssetFileSystem &asse
 
 void GameAudioSystem::shutdown()
 {
+    m_actorVoices = {};
+    m_actorListenerFeet = {};
     m_activeGroupInstanceIds.clear();
     m_activeSpeechInstanceIds.clear();
     m_activeNonResettableSoundInstanceIds.clear();
@@ -668,7 +671,8 @@ void GameAudioSystem::shutdown()
     m_pAssetFileSystem = nullptr;
 }
 
-void GameAudioSystem::update(float listenerX, float listenerY, float listenerZ, float deltaSeconds)
+void GameAudioSystem::update(
+    float listenerX, float listenerY, float listenerZ, float deltaSeconds, float listenerYawRadians)
 {
     updatePendingBackgroundMusicDecode();
 
@@ -753,7 +757,129 @@ void GameAudioSystem::update(float listenerX, float listenerY, float listenerZ, 
     listenerState.x = listenerX;
     listenerState.y = listenerY;
     listenerState.z = listenerZ;
+    listenerState.yawRadians = listenerYawRadians;
     m_audioSystem.update(listenerState);
+}
+
+uint64_t GameAudioSystem::playActorSound(
+    size_t actorIndex, SoundRef sound, const WorldPosition &position, float pitch)
+{
+    if (sound.id == 0)
+    {
+        return 0;
+    }
+
+    ActorVoice *pSlot = nullptr;
+    for (ActorVoice &voice : m_actorVoices)
+    {
+        if (!m_audioSystem.isClipPlaying(voice.instanceId))
+        {
+            voice = {};
+        }
+        if (voice.instanceId != 0 && voice.actorIndex == actorIndex)
+        {
+            if (voice.sound.scope == sound.scope && voice.sound.id == sound.id)
+            {
+                return voice.instanceId;
+            }
+            m_audioSystem.stopClip(voice.instanceId);
+            voice = {};
+        }
+        if (voice.instanceId == 0 && pSlot == nullptr)
+        {
+            pSlot = &voice;
+        }
+    }
+
+    const int volume = actorVoiceVolume(
+        position.x - m_actorListenerFeet.x,
+        position.y - m_actorListenerFeet.y,
+        position.z - m_actorListenerFeet.z);
+    if (volume == 0 || m_soundVolume <= 0.0f)
+    {
+        return 0;
+    }
+
+    if (pSlot == nullptr)
+    {
+        for (ActorVoice &voice : m_actorVoices)
+        {
+            if (voice.volume < volume && (pSlot == nullptr || voice.volume < pSlot->volume))
+            {
+                pSlot = &voice;
+            }
+        }
+    }
+    if (pSlot == nullptr)
+    {
+        return 0;
+    }
+
+    const std::optional<std::string> virtualPath = m_soundCatalog.buildVirtualPath(sound);
+    if (!virtualPath)
+    {
+        return 0;
+    }
+
+    Engine::AudioSystem::PlaybackOptions options = {};
+    options.positional = true;
+    options.attenuate = false;
+    options.volume = m_soundVolume * float(volume) / 127.0f;
+    options.pitch = pitch;
+    options.x = position.x;
+    options.y = position.y;
+    options.z = position.z;
+    const uint64_t instanceId = m_audioSystem.playClip(*virtualPath, options);
+    if (instanceId == 0)
+    {
+        return 0;
+    }
+
+    m_audioSystem.stopClip(pSlot->instanceId);
+    *pSlot = {actorIndex, sound, instanceId, volume};
+    return instanceId;
+}
+
+void GameAudioSystem::updateActorVoices(
+    const WorldPosition &listenerFeet,
+    const std::function<std::optional<WorldPosition>(size_t)> &sourcePosition)
+{
+    m_actorListenerFeet = listenerFeet;
+    for (ActorVoice &voice : m_actorVoices)
+    {
+        if (!m_audioSystem.isClipPlaying(voice.instanceId))
+        {
+            voice = {};
+            continue;
+        }
+
+        const std::optional<WorldPosition> position = sourcePosition(voice.actorIndex);
+        voice.volume = position ? actorVoiceVolume(
+            position->x - listenerFeet.x, position->y - listenerFeet.y, position->z - listenerFeet.z) : 0;
+        if (voice.volume == 0)
+        {
+            m_audioSystem.stopClip(voice.instanceId);
+            voice = {};
+            continue;
+        }
+
+        m_audioSystem.setClipPosition(voice.instanceId, position->x, position->y, position->z);
+        m_audioSystem.setClipVolume(voice.instanceId, m_soundVolume * float(voice.volume) / 127.0f);
+    }
+}
+
+void GameAudioSystem::stopActorVoices()
+{
+    for (ActorVoice &voice : m_actorVoices)
+    {
+        m_audioSystem.stopClip(voice.instanceId);
+        voice = {};
+    }
+}
+
+bool GameAudioSystem::isSoundInstancePlaying(uint64_t instanceId) const
+{
+    return m_audioSystem.isClipPlaying(instanceId);
 }
 
 void GameAudioSystem::setSoundVolume(float volume)
@@ -829,6 +955,7 @@ bool GameAudioSystem::preloadCommonSound(SoundId soundId)
 
 void GameAudioSystem::beginMapSoundPreload()
 {
+    stopActorVoices();
     m_previousMapPreloadedClipKeys = std::move(m_mapPreloadedClipKeys);
     m_mapPreloadedClipKeys.clear();
     m_recordingMapSoundPreloads = true;
@@ -966,6 +1093,32 @@ uint64_t GameAudioSystem::playSoundInstanceByName(
     }
 
     return playResolvedSound(*virtualPath, group, position, loop, 0, "playSoundInstanceByName");
+}
+
+uint64_t GameAudioSystem::playAssetInstance(
+    const std::string &virtualPath,
+    PlaybackGroup group,
+    const std::optional<WorldPosition> &position,
+    bool loop,
+    float volume,
+    float pitch,
+    float innerRadius,
+    float outerRadius)
+{
+    Engine::AudioSystem::PlaybackOptions options = {};
+    options.volume = playbackGroupVolume(group) * volume;
+    options.positional = position.has_value();
+    options.loop = loop;
+    options.pitch = pitch;
+    options.innerRadius = innerRadius;
+    options.outerRadius = outerRadius;
+    if (position)
+    {
+        options.x = position->x;
+        options.y = position->y;
+        options.z = position->z;
+    }
+    return m_audioSystem.playClip(virtualPath, options);
 }
 
 bool GameAudioSystem::playLoopingSound(
@@ -1274,6 +1427,14 @@ void GameAudioSystem::stopSoundInstance(uint64_t instanceId)
     m_audioSystem.stopClip(instanceId);
 }
 
+void GameAudioSystem::setSoundInstancePosition(uint64_t instanceId, const WorldPosition &position)
+{
+    if (instanceId != 0)
+    {
+        m_audioSystem.setClipPosition(instanceId, position.x, position.y, position.z);
+    }
+}
+
 void GameAudioSystem::stopGroup(PlaybackGroup group)
 {
     const std::unordered_map<PlaybackGroup, uint64_t>::iterator activeIt = m_activeGroupInstanceIds.find(group);
@@ -1306,6 +1467,7 @@ void GameAudioSystem::stopAllPlayback()
     }
 
     m_audioSystem.stopAll();
+    m_actorVoices = {};
     m_activeGroupInstanceIds.clear();
     m_activeSpeechInstanceIds.clear();
     m_activeNonResettableSoundInstanceIds.clear();

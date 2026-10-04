@@ -1,0 +1,64 @@
+schema: openyamm.effectTextureImport.v1
+source:
+  path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/SKULL/SKULL7ANIM.dtx
+  format: LithTech DTX
+  sha256: 85d5eb776f79d280d3f58a0e2d8fa5530bea3155600a862caa82853a80cfff30
+runtime:
+  texture: engine/effects/mm9/textures/skull/skull7anim.png
+  format: PNG RGBA8
+  colorSpace: srgb
+  alphaUsage: blend
+  premultipliedAlpha: false
+  mipPolicy: generate-at-runtime
+  minFilter: linear
+  magFilter: linear
+  wrapU: clamp
+  wrapV: clamp
+conversion:
+  decoder: tools/mm9_import_discovery/convert_abc_model.py:decode_dtx_mips
+  decodedRgbChanged: false
+  decodedAlphaChanged: false
+  opaqueAlphaRepair: false
+  zeroAlphaRgbPreserved: true
+  sourceMipArtifacts: mips/*.png
+dtx:
+  version: -5
+  width: 64
+  height: 64
+  mipCount: 4
+  sectionCount: 0
+  internalFlags: 8
+  userFlags: 0
+  extraHex: '000003000000000000000000'
+  bppIdentifier: 3
+  command: ''
+  repairOpaqueAlpha: false
+  mips:
+  - index: 0
+    width: 64
+    height: 64
+    sourceOffset: 164
+    sourceBytes: 16384
+    decodedRgbaSha256: a17b5bf568d077899526ecb23cdab328b5b222790c53d2cf90e6bd1203f3df20
+    artifact: mips/00.png
+  - index: 1
+    width: 32
+    height: 32
+    sourceOffset: 16548
+    sourceBytes: 4096
+    decodedRgbaSha256: f6bcebf405716d8b1449c1e910a98622e5ec605cfd81cc7350c8b531b6229610
+    artifact: mips/01.png
+  - index: 2
+    width: 16
+    height: 16
+    sourceOffset: 20644
+    sourceBytes: 1024
+    decodedRgbaSha256: 1dbd55fc22033d5f1ada99e31ec03a64ff70f3eb6a1dd826ec2c3cbb7676be5e
+    artifact: mips/02.png
+  - index: 3
+    width: 8
+    height: 8
+    sourceOffset: 21668
+    sourceBytes: 256
+    decodedRgbaSha256: f4eb22e64cfbb4214cbc6b20649e21f2d2ec7041ccf4d8108c66fbf38c6a6b56
+    artifact: mips/03.png

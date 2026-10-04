@@ -11,6 +11,13 @@
 
 namespace OpenYAMM::Engine
 {
+struct AssetFileInfo
+{
+    uint64_t size = 0;
+    int64_t modified = 0;
+    bool archived = false;
+};
+
 class AssetReadStream
 {
 public:
@@ -70,6 +77,7 @@ public:
     bool exists(const std::string &virtualPath) const;
     // Returns the selected virtual file path, including its actual scale directory, also inside archives.
     std::optional<std::string> resolveExistingFilePath(const std::string &virtualPath) const;
+    std::optional<AssetFileInfo> fileInfo(const std::string &virtualPath) const;
     std::vector<std::string> enumerate(const std::string &virtualPath) const;
     std::unique_ptr<AssetReadStream> openReadStream(const std::string &virtualPath) const;
     std::optional<std::vector<uint8_t>> readBinaryFile(const std::string &virtualPath) const;
@@ -83,9 +91,14 @@ public:
     AssetScaleTier getAssetScaleTier(AssetScaleCategory assetScaleCategory) const;
     AssetScaleTier getAssetScaleTierForVirtualPath(const std::string &virtualPath) const;
     const AssetScaleProfile &getAssetScaleProfile() const;
+    // Call after editing mounted files, with asset readers stopped. Mount changes invalidate automatically.
+    void refreshLookupCache() const;
+    uint64_t contentGeneration() const;
     void shutdown();
 
 private:
+    struct LookupCache;
+    std::optional<std::string> findCaseInsensitiveVirtualPath(const std::string &virtualPath) const;
     struct SearchMount
     {
         std::filesystem::path root;
@@ -132,6 +145,7 @@ private:
         const std::string &activeWorldId,
         const char *pPackageDirectoryName
     );
+    bool loadIconPackagePolicy();
     std::string resolveVirtualPath(const std::string &virtualPath) const;
     std::vector<std::string> resolveVirtualPathCandidates(const std::string &virtualPath) const;
     std::vector<std::string> expandAndroidApkAssetCandidates(const std::string &virtualPath) const;
@@ -152,7 +166,11 @@ private:
     std::string m_activeWorldId;
     AssetScaleTier m_assetScaleTier;
     AssetScaleProfile m_assetScaleProfile;
+    // Package-owned icon roots override user scale preferences after a content migration.
+    std::vector<std::pair<std::string, AssetScaleTier>> m_iconPackages;
     std::vector<SearchMount> m_searchMounts;
     bool m_androidApkAssetRoot;
+    std::unique_ptr<LookupCache> m_pLookupCache;
+    mutable uint64_t m_contentGeneration = 0;
 };
 }

@@ -326,6 +326,20 @@ TEST_CASE("indoor portal visibility only traverses portals inside the camera fru
     addPortalFace(mapData, 0, 1, 100, -40, 40, -40, 40);
     addPortalFace(mapData, 0, 2, 100, 900, 980, -40, 40);
 
+    SUBCASE("procedural geometry")
+    {
+    }
+    SUBCASE("native export writes portal plane orientations")
+    {
+        const std::optional<std::vector<uint8_t>> bytes = IndoorMapDataWriter{}.buildBytes(mapData);
+        REQUIRE(bytes);
+        std::optional<IndoorMapData> loaded = IndoorMapDataLoader{}.loadFromBytes(*bytes);
+        REQUIRE(loaded);
+        mapData = std::move(*loaded);
+        REQUIRE(mapData.faces[0].planeNormal);
+        CHECK_EQ((*mapData.faces[0].planeNormal)[0], -65536);
+    }
+
     const IndoorPortalVisibilityResult result = buildIndoorPortalVisibility(makeVisibilityInput(mapData));
 
     REQUIRE_EQ(result.visibleSectorMask.size(), 3);
@@ -341,7 +355,7 @@ TEST_CASE("indoor portal visibility only traverses portals inside the camera fru
     CHECK_FALSE(sphereIntersectsAnyFrustum({150.0f, 900.0f, 0.0f}, 8.0f, result.frustumsBySector[1]));
 }
 
-TEST_CASE("indoor portal visibility uses shared sector boundary for portal clipping")
+TEST_CASE("indoor portal visibility clips the authored aperture without expanding to sector bounds")
 {
     IndoorMapData mapData = {};
     mapData.sectors.resize(2);
@@ -368,11 +382,12 @@ TEST_CASE("indoor portal visibility uses shared sector boundary for portal clipp
 
     REQUIRE_EQ(result.visibleSectorMask.size(), 2);
     CHECK_EQ(result.visibleSectorMask[0], 1);
-    CHECK_EQ(result.visibleSectorMask[1], 1);
-    CHECK(findPortalTraceForFace(result, faceId, "clipped_portal") == nullptr);
-    const IndoorPortalVisibilityTrace *pAcceptedTrace = findPortalTraceForFace(result, faceId, "accepted");
-    REQUIRE(pAcceptedTrace != nullptr);
-    CHECK_EQ(pAcceptedTrace->targetSectorId, 1);
+    CHECK_EQ(result.visibleSectorMask[1], 0);
+    CHECK(findPortalTraceForFace(result, faceId, "clipped_portal") != nullptr);
+
+    input.cameraPosition.y = 0.0f;
+    const IndoorPortalVisibilityResult facingOpening = buildIndoorPortalVisibility(input);
+    CHECK_EQ(facingOpening.visibleSectorMask[1], 1);
 }
 
 TEST_CASE("cd1 sector 101 sees sector 88 through diagonal floor-strip portal")
@@ -417,7 +432,6 @@ TEST_CASE("cd1 sector 101 sees sector 88 through diagonal floor-strip portal")
     input.pMapData = &*mapData;
     input.pPortalGraph = &portalGraph;
     input.pVertices = &mapData->vertices;
-    input.pPortalVertices = &mapData->vertices;
     input.cameraPosition = {
         portalCenter.x + pPortalGeometry->normal.x * 320.0f,
         portalCenter.y + pPortalGeometry->normal.y * 320.0f,
@@ -462,6 +476,17 @@ TEST_CASE("d19 necromancer guild side room stays visible through open sector 3 d
     std::optional<IndoorMapData> mapData = mapDataLoader.loadFromBytes(mapBytes);
     REQUIRE(mapData);
 
+    SUBCASE("original map")
+    {
+    }
+    SUBCASE("exported and reloaded map retains the collapsed portal plane")
+    {
+        const std::optional<std::vector<uint8_t>> exported = IndoorMapDataWriter{}.buildBytes(*mapData);
+        REQUIRE(exported);
+        mapData = mapDataLoader.loadFromBytes(*exported);
+        REQUIRE(mapData);
+    }
+
     std::string sceneError;
     const IndoorSceneYmlLoader sceneLoader = {};
     std::optional<IndoorSceneData> sceneData = sceneLoader.loadFromText(sceneText, sceneError);
@@ -482,6 +507,10 @@ TEST_CASE("d19 necromancer guild side room stays visible through open sector 3 d
     const IndoorFace &portalFace = mapData->faces[PortalFaceId];
     REQUIRE_EQ(portalFace.roomNumber, SourceSectorId);
     REQUIRE_EQ(portalFace.roomBehindNumber, TargetSectorId);
+    REQUIRE(portalFace.planeNormal);
+    CHECK_EQ((*portalFace.planeNormal)[0], 0);
+    CHECK_EQ((*portalFace.planeNormal)[1], -65536);
+    CHECK_EQ((*portalFace.planeNormal)[2], 0);
     REQUIRE_LT(LobbyPortalFaceId, mapData->faces.size());
     const IndoorFace &lobbyPortalFace = mapData->faces[LobbyPortalFaceId];
     REQUIRE_EQ(lobbyPortalFace.roomNumber, LobbySectorId);
@@ -529,7 +558,6 @@ TEST_CASE("d19 necromancer guild side room stays visible through open sector 3 d
         input.pMapData = &*mapData;
         input.pPortalGraph = &portalGraph;
         input.pVertices = &adjustedVertices;
-        input.pPortalVertices = &mapData->vertices;
         input.pMapDeltaData = &mapDeltaData;
         input.pEventRuntimeState = &eventRuntimeState;
         input.cameraPosition = cameraPosition;
@@ -550,6 +578,7 @@ TEST_CASE("d19 necromancer guild side room stays visible through open sector 3 d
         REQUIRE(pAcceptedTrace != nullptr);
         CHECK_EQ(pAcceptedTrace->sourceSectorId, SourceSectorId);
         CHECK_EQ(pAcceptedTrace->targetSectorId, TargetSectorId);
+
     }
 
     const bx::Vec3 lobbyPortalCenter = faceCenter(*mapData, LobbyPortalFaceId);
@@ -568,7 +597,6 @@ TEST_CASE("d19 necromancer guild side room stays visible through open sector 3 d
                 backInput.pMapData = &*mapData;
                 backInput.pPortalGraph = &portalGraph;
                 backInput.pVertices = &adjustedVertices;
-                backInput.pPortalVertices = &mapData->vertices;
                 backInput.pMapDeltaData = &mapDeltaData;
                 backInput.pEventRuntimeState = &eventRuntimeState;
                 backInput.cameraPosition = {
@@ -635,8 +663,8 @@ TEST_CASE("indoor portal visibility keeps portals with visible vertices in front
 
     IndoorFace face = {};
     face.attributes = faceAttributeBit(FaceAttribute::IsPortal);
-    face.roomNumber = 0;
-    face.roomBehindNumber = 1;
+    face.roomNumber = 1;
+    face.roomBehindNumber = 0;
     face.facetType = 1;
     face.isPortal = true;
     face.vertexIndices = {
@@ -696,7 +724,6 @@ TEST_CASE("cd3 diagonal arch sliver sector preserves room visibility")
     input.pMapData = &*mapData;
     input.pPortalGraph = &portalGraph;
     input.pVertices = &mapData->vertices;
-    input.pPortalVertices = &mapData->vertices;
     input.cameraPosition = {6371.0f, 3445.0f, 240.0f};
     const bx::Vec3 portalCenter = faceCenter(*mapData, FirstPortalFaceId);
     input.cameraForward = {
@@ -827,7 +854,86 @@ TEST_CASE("indoor portal visibility carries narrowed portal frustum into child s
     CHECK_EQ(result.visibleSectorMask[3], 0);
 }
 
-TEST_CASE("indoor portal visibility recurses through two-sided child portal geometry")
+TEST_CASE("indoor portal visibility limits the near portal exception to the initial node and MM8 distances")
+{
+    IndoorMapData mapData;
+    mapData.sectors.resize(2);
+    addPortalFace(mapData, 0, 1, 100, -40, 40, -40, 40);
+    IndoorPortalVisibilityInput input = makeVisibilityInput(mapData);
+    input.cameraForward = {-1.0f, 0.0f, 0.0f};
+    input.cameraPosition = {91.0f, 56.0f, 0.0f};
+    CHECK_EQ(buildIndoorPortalVisibility(input).visibleSectorMask[1], 1);
+
+    input.cameraPosition.x = 90.9f;
+    CHECK_EQ(buildIndoorPortalVisibility(input).visibleSectorMask[1], 0);
+    input.cameraPosition = {91.0f, 56.1f, 0.0f};
+    CHECK_EQ(buildIndoorPortalVisibility(input).visibleSectorMask[1], 0);
+
+    mapData.sectors.resize(3);
+    addPortalFace(mapData, 1, 2, 96, -40, 40, -40, 40);
+    input.cameraPosition = {92.0f, 0.0f, 0.0f};
+    input.cameraForward = {1.0f, 0.0f, 0.0f};
+    const IndoorPortalVisibilityResult result = buildIndoorPortalVisibility(input);
+    CHECK_EQ(result.visibleSectorMask[1], 1);
+    CHECK_EQ(result.visibleSectorMask[2], 0);
+}
+
+TEST_CASE("indoor portal visibility retains clipping through horizontal portals")
+{
+    IndoorMapData mapData;
+    mapData.sectors.resize(3);
+    addPortalFace(mapData, 0, 1, 100, -20, 20, -20, 20);
+    addPortalFace(mapData, 1, 2, 200, 70, 90, -10, 10);
+    for (IndoorVertex &vertex : mapData.vertices)
+    {
+        vertex = {vertex.y, vertex.z, vertex.x};
+    }
+    IndoorPortalVisibilityInput input = makeVisibilityInput(mapData);
+    input.cameraForward = {0.0f, 0.0f, 1.0f};
+    input.cameraUp = {0.0f, 1.0f, 0.0f};
+    const IndoorPortalVisibilityResult result = buildIndoorPortalVisibility(input);
+    CHECK_EQ(result.visibleSectorMask[1], 1);
+    CHECK_EQ(result.visibleSectorMask[2], 0);
+}
+
+TEST_CASE("indoor portal visibility rejects the wrong side of an authored portal plane")
+{
+    IndoorMapData mapData;
+    mapData.sectors.resize(2);
+    const uint16_t faceId = addPortalFace(mapData, 0, 1, 100, -40, 40, -40, 40);
+    IndoorPortalVisibilityInput input = makeVisibilityInput(mapData);
+    input.startSectorId = 1;
+    const IndoorPortalVisibilityResult result = buildIndoorPortalVisibility(input);
+    CHECK_EQ(result.visibleSectorMask[0], 0);
+    CHECK(findPortalTraceForFace(result, faceId, "portal_facing") != nullptr);
+
+    input.cameraPosition.x = 200.0f;
+    input.cameraForward.x = -1.0f;
+    CHECK_EQ(buildIndoorPortalVisibility(input).visibleSectorMask[0], 1);
+}
+
+TEST_CASE("indoor render portals need a nonzero projected screen row span")
+{
+    IndoorMapData mapData;
+    mapData.sectors.resize(2);
+    const uint16_t faceId = addPortalFace(mapData, 0, 1, 4096, -64, 64, 100, 101);
+    IndoorPortalVisibilityInput input = makeVisibilityInput(mapData);
+    input.viewportHeight = 480;
+    CHECK_EQ(buildIndoorPortalVisibility(input).visibleSectorMask[1], 0);
+
+    std::vector<IndoorVertex> openedVertices = mapData.vertices;
+    const IndoorFace &face = mapData.faces[faceId];
+    openedVertices[face.vertexIndices[1]].z = 500;
+    openedVertices[face.vertexIndices[2]].z = 500;
+    input.pVertices = &openedVertices;
+    CHECK_EQ(buildIndoorPortalVisibility(input).visibleSectorMask[1], 1);
+
+    input.pVertices = &mapData.vertices;
+    input.viewportHeight = 0;
+    CHECK_EQ(buildIndoorPortalVisibility(input).visibleSectorMask[1], 1);
+}
+
+TEST_CASE("indoor portal visibility respects front and back sectors with reversed child portal winding")
 {
     IndoorMapData mapData = {};
     mapData.sectors.resize(3);
@@ -836,8 +942,8 @@ TEST_CASE("indoor portal visibility recurses through two-sided child portal geom
 
     IndoorFace reversedPortal = {};
     reversedPortal.attributes = faceAttributeBit(FaceAttribute::IsPortal);
-    reversedPortal.roomNumber = 1;
-    reversedPortal.roomBehindNumber = 2;
+    reversedPortal.roomNumber = 2;
+    reversedPortal.roomBehindNumber = 1;
     reversedPortal.facetType = 1;
     reversedPortal.isPortal = true;
     reversedPortal.vertexIndices = {
@@ -1249,7 +1355,6 @@ TEST_CASE("d18 naga vault portal 318 traversal is independent of sliding door st
     input.pMapData = &*mapData;
     input.pPortalGraph = &portalGraph;
     input.pVertices = &mapData->vertices;
-    input.pPortalVertices = &mapData->vertices;
     input.pMapDeltaData = &*mapDeltaData;
     input.cameraPosition = {416.0f, 0.0f, 0.0f};
     input.cameraForward = {0.0f, -1.0f, 0.0f};
@@ -1369,7 +1474,6 @@ TEST_CASE("6d02 portal 3201 is not blocked by edge-adjacent closed door 2")
     input.pMapData = &*mapData;
     input.pPortalGraph = &portalGraph;
     input.pVertices = &adjustedVertices;
-    input.pPortalVertices = &mapData->vertices;
     input.pMapDeltaData = &*mapDeltaData;
     input.pEventRuntimeState = &eventRuntimeState;
     const bx::Vec3 portalCenter = faceCenter(*mapData, PortalFaceId);
@@ -1394,7 +1498,7 @@ TEST_CASE("6d02 portal 3201 is not blocked by edge-adjacent closed door 2")
     CHECK_EQ(pOpenTrace->targetSectorId, portalFace.roomBehindNumber);
 }
 
-TEST_CASE("6d02 portal 2665 uses sector boundary instead of thin portal marker")
+TEST_CASE("6d02 portal 2665 becomes visible when its authored door aperture opens")
 {
     const std::filesystem::path sourceRoot = OPENYAMM_SOURCE_DIR;
     const std::vector<uint8_t> mapBytes =
@@ -1418,15 +1522,26 @@ TEST_CASE("6d02 portal 2665 uses sector boundary instead of thin portal marker")
     CHECK_LE(mapData->sectors[SourceSectorId].minY, mapData->sectors[TargetSectorId].maxY);
     CHECK_GE(mapData->sectors[SourceSectorId].maxY, mapData->sectors[TargetSectorId].minY);
 
-    const IndoorPortalGraph portalGraph = buildIndoorPortalGraph(*mapData, nullptr);
+    const std::string sceneText = readTextFile(sourceRoot / "assets_dev" / "worlds" / "mm6"
+        / "maps" / "6d02.scene.yml");
+    std::string error;
+    const std::optional<IndoorSceneData> scene = IndoorSceneYmlLoader{}.loadFromText(sceneText, error);
+    REQUIRE_MESSAGE(scene, error);
+    MapDeltaData delta;
+    REQUIRE_MESSAGE(buildIndoorMapStateFromScene(*scene, *mapData, delta, error), error);
+    std::optional<EventRuntimeState> state = EventRuntimeState{};
+    EventRuntime{}.initializeMapRuntimeState(delta, *state);
+    const MapDeltaDoor *pDoor = findDoorById(delta, 3);
+    REQUIRE(pDoor != nullptr);
+    std::vector<IndoorVertex> vertices = buildIndoorMechanismAdjustedVertices(*mapData, &delta, &*state);
+    const IndoorPortalGraph portalGraph = buildIndoorPortalGraph(*mapData, &delta);
     const IndoorPortalLink *pPortalLink = findIndoorPortalLinkByFaceId(portalGraph, PortalFaceId);
     REQUIRE(pPortalLink != nullptr);
 
     IndoorPortalVisibilityInput input = {};
     input.pMapData = &*mapData;
     input.pPortalGraph = &portalGraph;
-    input.pVertices = &mapData->vertices;
-    input.pPortalVertices = &mapData->vertices;
+    input.pVertices = &vertices;
     input.cameraPosition = {16512.0f, -16200.0f, 352.0f};
     input.cameraForward = {1.0f, 0.0f, 0.0f};
     input.cameraUp = {0.0f, 0.0f, 1.0f};
@@ -1434,6 +1549,12 @@ TEST_CASE("6d02 portal 2665 uses sector boundary instead of thin portal marker")
     input.aspectRatio = 1.0f;
     input.startSectorId = SourceSectorId;
 
+    const IndoorPortalVisibilityResult closed = buildIndoorPortalVisibility(input);
+    CHECK_EQ(closed.visibleSectorMask[TargetSectorId], 0);
+    CHECK(findPortalTraceForFace(closed, PortalFaceId, "clipped_portal") != nullptr);
+
+    state->mechanisms[pDoor->doorId].currentDistance = pDoor->moveLength;
+    vertices = buildIndoorMechanismAdjustedVertices(*mapData, &delta, &*state);
     const IndoorPortalVisibilityResult result = buildIndoorPortalVisibility(input);
 
     REQUIRE_GT(result.visibleSectorMask.size(), TargetSectorId);
@@ -1489,7 +1610,6 @@ TEST_CASE("6d02 portal 3392 from sector 47 is not blocked by adjacent state-zero
     input.pMapData = &*mapData;
     input.pPortalGraph = &portalGraph;
     input.pVertices = &mapData->vertices;
-    input.pPortalVertices = &mapData->vertices;
     input.pMapDeltaData = &*mapDeltaData;
     const bx::Vec3 cameraPosition = sectorBoundsCenter(*mapData, SourceSectorId);
     const bx::Vec3 portalCenter = faceCenter(*mapData, PortalFaceId);
@@ -1578,7 +1698,6 @@ TEST_CASE("6d01 portal 116 is not blocked by unlinked closed door bounds")
     input.pMapData = &*mapData;
     input.pPortalGraph = &portalGraph;
     input.pVertices = &adjustedVertices;
-    input.pPortalVertices = &mapData->vertices;
     input.pMapDeltaData = &mapDeltaData;
     input.pEventRuntimeState = &eventRuntimeState;
     input.cameraPosition = {-192.0f, 3900.0f, 128.0f};
@@ -1663,7 +1782,6 @@ TEST_CASE("6d01 room 7 chest portal 1941 is visible after opening its chest door
     input.pMapData = &*mapData;
     input.pPortalGraph = &portalGraph;
     input.pVertices = &adjustedVertices;
-    input.pPortalVertices = &mapData->vertices;
     input.pMapDeltaData = &mapDeltaData;
     input.pEventRuntimeState = &eventRuntimeState;
     const bx::Vec3 cameraPosition = sectorBoundsCenter(*mapData, SourceSectorId);
@@ -1686,6 +1804,60 @@ TEST_CASE("6d01 room 7 chest portal 1941 is visible after opening its chest door
     const IndoorPortalVisibilityTrace *pAcceptedTrace = findPortalTraceForFace(result, PortalFaceId, "accepted");
     REQUIRE(pAcceptedTrace != nullptr);
     CHECK_EQ(pAcceptedTrace->targetSectorId, TargetSectorId);
+
+}
+
+TEST_CASE("Goblinwatch entrance discovery uses closed and moving door apertures")
+{
+    const std::filesystem::path mapRoot = std::filesystem::path(OPENYAMM_SOURCE_DIR)
+        / "assets_dev" / "worlds" / "mm6" / "maps";
+    std::optional<IndoorMapData> map = IndoorMapDataLoader{}.loadFromBytes(
+        readBinaryFile(mapRoot / "6d01.blv"));
+    REQUIRE(map);
+    std::string error;
+    const std::optional<IndoorSceneData> scene = IndoorSceneYmlLoader{}.loadFromText(
+        readTextFile(mapRoot / "6d01.scene.yml"), error);
+    REQUIRE_MESSAGE(scene, error);
+    MapDeltaData delta;
+    REQUIRE_MESSAGE(buildIndoorMapStateFromScene(*scene, *map, delta, error), error);
+    std::optional<EventRuntimeState> state = EventRuntimeState{};
+    EventRuntime{}.initializeMapRuntimeState(delta, *state);
+    std::vector<IndoorVertex> vertices = buildIndoorMechanismAdjustedVertices(*map, &delta, &*state);
+    const IndoorPortalGraph graph = buildIndoorPortalGraph(*map, &delta);
+    IndoorPortalVisibilityInput input = makeVisibilityInput(*map);
+    input.pVertices = &vertices;
+    input.pPortalGraph = &graph;
+    input.pMapDeltaData = &delta;
+    input.pEventRuntimeState = &state;
+    input.cameraPosition = {576.0f, 6912.0f, 352.0f};
+    const float yaw = 4.672f;
+    const float pitch = -0.250507f;
+    input.cameraForward = {std::cos(yaw) * std::cos(pitch), std::sin(yaw) * std::cos(pitch), std::sin(pitch)};
+    input.aspectRatio = 16.0f / 9.0f;
+    input.startSectorId = 1;
+
+    for (int height : {480, 900})
+    {
+        input.viewportHeight = height;
+        const IndoorPortalVisibilityResult closed = buildIndoorPortalVisibility(input);
+        REQUIRE_GT(closed.visibleSectorMask.size(), 53);
+        CHECK_EQ(closed.visibleSectorMask[1], 1);
+        for (int sectorId : {3, 4, 6, 21, 48, 53})
+        {
+            INFO("height=" << height << " sector=" << sectorId);
+            CHECK_EQ(closed.visibleSectorMask[sectorId], 0);
+        }
+    }
+
+    const MapDeltaDoor *pDoor = findDoorById(delta, 1);
+    REQUIRE(pDoor != nullptr);
+    state->mechanisms[pDoor->doorId].currentDistance = pDoor->moveLength;
+    vertices = buildIndoorMechanismAdjustedVertices(*map, &delta, &*state);
+    CHECK_EQ(buildIndoorPortalVisibility(input).visibleSectorMask[3], 1);
+
+    state->mechanisms[pDoor->doorId].currentDistance = 0.0f;
+    vertices = buildIndoorMechanismAdjustedVertices(*map, &delta, &*state);
+    CHECK_EQ(buildIndoorPortalVisibility(input).visibleSectorMask[3], 0);
 }
 
 TEST_CASE("hive start sector 76 portal traversal ignores entrance door endpoint naming")
@@ -1750,7 +1922,6 @@ TEST_CASE("hive start sector 76 portal traversal ignores entrance door endpoint 
     input.pMapData = &*mapData;
     input.pPortalGraph = &portalGraph;
     input.pVertices = &adjustedVertices;
-    input.pPortalVertices = &mapData->vertices;
     input.pMapDeltaData = &mapDeltaData;
     input.pEventRuntimeState = &eventRuntimeState;
     input.cameraPosition = cameraPosition;
@@ -1794,4 +1965,33 @@ TEST_CASE("hive start sector 76 portal traversal ignores entrance door endpoint 
     REQUIRE(pOpenedTrace != nullptr);
     REQUIRE_EQ(pOpenedTrace->sourceSectorId, StartSectorId);
     REQUIRE_EQ(pOpenedTrace->targetSectorId, EntranceSectorId);
+}
+
+TEST_CASE("indoor discovery portal traversal is independent of opaque door coverage")
+{
+    IndoorMapData mapData = {};
+    mapData.sectors.resize(3);
+    const uint16_t portalId = addPortalFace(mapData, 0, 1, 200, -40, 40, -40, 40);
+    addPortalFace(mapData, 1, 2, 400, -40, 40, -40, 40);
+    const uint16_t doorFaceId = addSolidDoorFace(mapData, 100, -40, 40, -40, 40);
+    MapDeltaData delta = {};
+    delta.doors.push_back(makeDoorBlockingFace(1, portalId, doorFaceId, 0));
+    IndoorPortalVisibilityInput input = makeVisibilityInput(mapData);
+    input.pMapDeltaData = &delta;
+
+    // MM8 uses the ordinary portal render traversal for discovery, without subtracting opaque doors.
+    for (uint16_t state = 0; state < 4; ++state)
+    {
+        CAPTURE(state);
+        delta.doors.front().state = state;
+        CHECK_EQ(buildIndoorPortalVisibility(input).visibleSectorMask, std::vector<uint8_t>{1, 1, 1});
+    }
+
+    std::vector<IndoorVertex> movedVertices = mapData.vertices;
+    translateFaceVertices(movedVertices, mapData.faces[doorFaceId], 0, 200, 0);
+    input.pVertices = &movedVertices;
+    CHECK_EQ(buildIndoorPortalVisibility(input).visibleSectorMask, std::vector<uint8_t>{1, 1, 1});
+
+    input.cameraForward = {-1.0f, 0.0f, 0.0f};
+    CHECK_EQ(buildIndoorPortalVisibility(input).visibleSectorMask, std::vector<uint8_t>{1, 0, 0});
 }

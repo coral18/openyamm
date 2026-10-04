@@ -1,9 +1,0 @@
-format_version: 1
-kind: "indoor_scene_overlay"
-source:
-  geometry_file: "6t2.blv"
-initial_state:
-  face_attribute_overrides:
-    - face_index: 216
-      legacy_attributes: 2181301248
-      texture_name: "t1swbd"

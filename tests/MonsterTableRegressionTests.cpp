@@ -2,10 +2,12 @@
 
 #include "engine/AssetFileSystem.h"
 #include "engine/ImageAssetLoader.h"
+#include "engine/TextTable.h"
 #include "game/maps/MapAssetLoader.h"
 #include "game/tables/MergedBaseTables.h"
 #include "game/tables/MonsterTable.h"
 #include "game/tables/SpriteTables.h"
+#include "game/gameplay/ActorInspectPreviewAnimation.h"
 
 #include <array>
 #include <filesystem>
@@ -83,6 +85,57 @@ TEST_CASE("monster stats parser preserves blood splat on death flag")
     REQUIRE(pWisp != nullptr);
     CHECK(pLizardman->bloodSplatOnDeath);
     CHECK_FALSE(pWisp->bloodSplatOnDeath);
+}
+
+TEST_CASE("MM6 merged monster data defines biological blood defaults")
+{
+    const std::filesystem::path sourceRoot = OPENYAMM_SOURCE_DIR;
+    OpenYAMM::Engine::AssetFileSystem assetFileSystem;
+    REQUIRE(assetFileSystem.initialize(
+        sourceRoot,
+        sourceRoot / "assets_dev",
+        OpenYAMM::Engine::AssetScaleTier::X1));
+
+    const std::optional<std::string> tableText =
+        assetFileSystem.readTextFile("engine/data_tables/monster_data.txt");
+    REQUIRE(tableText.has_value());
+    const std::optional<OpenYAMM::Engine::TextTable> parsedTable =
+        OpenYAMM::Engine::TextTable::parseTabSeparated(*tableText);
+    REQUIRE(parsedTable.has_value());
+
+    std::vector<std::vector<std::string>> rows;
+    rows.reserve(parsedTable->getRowCount());
+    for (size_t rowIndex = 0; rowIndex < parsedTable->getRowCount(); ++rowIndex)
+    {
+        rows.push_back(parsedTable->getRow(rowIndex));
+    }
+
+    OpenYAMM::Game::MonsterTable table;
+    REQUIRE(table.loadStatsFromRows(rows));
+
+    for (int monsterId = 475; monsterId <= 652; ++monsterId)
+    {
+        CAPTURE(monsterId);
+        const OpenYAMM::Game::MonsterTable::MonsterStatsEntry *pStats = table.findStatsById(monsterId);
+        REQUIRE(pStats != nullptr);
+        const bool bloodlessMaterial =
+            (monsterId >= 523 && monsterId <= 534)
+            || (monsterId >= 541 && monsterId <= 549)
+            || (monsterId >= 562 && monsterId <= 570)
+            || (monsterId >= 589 && monsterId <= 591)
+            || (monsterId >= 622 && monsterId <= 624)
+            || (monsterId >= 628 && monsterId <= 630)
+            || (monsterId >= 647 && monsterId <= 652);
+        CHECK_EQ(pStats->bloodSplatOnDeath, !bloodlessMaterial);
+    }
+
+    for (int monsterId = 901; monsterId <= 906; ++monsterId)
+    {
+        CAPTURE(monsterId);
+        const OpenYAMM::Game::MonsterTable::MonsterStatsEntry *pStats = table.findStatsById(monsterId);
+        REQUIRE(pStats != nullptr);
+        CHECK(pStats->bloodSplatOnDeath);
+    }
 }
 
 TEST_CASE("monster stats parser treats plain numeric damage like OE Nd1 damage")
@@ -323,4 +376,108 @@ TEST_CASE("dynamic bounty monsters load their sprite frame families")
         REQUIRE(spriteBytes.has_value());
         CHECK_FALSE(spriteBytes->empty());
     }
+}
+
+TEST_CASE("creature inspect metadata uses original families after merged ID mapping")
+{
+    using namespace OpenYAMM;
+    const std::filesystem::path root = OPENYAMM_SOURCE_DIR;
+    Engine::AssetFileSystem assets;
+    REQUIRE(assets.initialize(root, root / "assets_dev", Engine::AssetScaleTier::X1));
+    const std::optional<std::string> text = assets.readTextFile("engine/data_tables/monster_descriptors.txt");
+    REQUIRE(text);
+    const std::optional<Engine::TextTable> parsed = Engine::TextTable::parseTabSeparated(*text);
+    REQUIRE(parsed);
+    std::vector<std::vector<std::string>> rows;
+    for (size_t i = 0; i < parsed->getRowCount(); ++i)
+    {
+        rows.push_back(parsed->getRow(i));
+    }
+    Game::MonsterTable table;
+    REQUIRE(table.loadEntriesFromRows(rows));
+    REQUIRE(table.findById(1));
+    REQUIRE(table.findById(199));
+    REQUIRE(table.findById(475));
+    CHECK(table.findById(1)->inspectYOffset == -55); // MM8 lizardman peasant.
+    CHECK(table.findById(4)->inspectYOffset == -90); // MM8 warrior, different original family.
+    CHECK(table.findById(1)->inspectFidgetWhenMoving);
+    CHECK(table.findById(199)->inspectYOffset == -60); // MM7 angel, native ID 1.
+    CHECK(table.findById(313)->inspectAttackChance == 0); // MM7 peasant, native ID 115.
+    CHECK(table.findById(430)->inspectAttackChance == 0); // MM7 second peasant range.
+    CHECK_FALSE(table.findById(312)->inspectFidgetWhenMoving);
+    CHECK(table.findById(312)->inspectAttackChance == 100);
+    CHECK(table.findById(475)->inspectYOffset == -40); // MM6 goblin, native ID 1.
+    CHECK(table.findById(475)->inspectAttackChance == 30);
+    CHECK(table.findById(502)->inspectYOffset == 0); // MM6 cleric, native ID 28.
+}
+
+TEST_CASE("creature inspect animation snapshots AI and resets only for a different type")
+{
+    using namespace OpenYAMM::Game;
+    SpriteFrameTable frames;
+    std::string error;
+    REQUIRE(frames.loadFromYaml(R"(
+sprites:
+  - sprite_name: inspect_attack
+    sprite_id: 10
+    animation_length_raw: 4
+    frames:
+      - {texture_name: first, frame_length_raw: 2}
+      - {texture_name: second, frame_length_raw: 2}
+  - sprite_name: inspect_fidget
+    sprite_id: 20
+    animation_length_raw: 5
+    frames:
+      - {texture_name: fidget, frame_length_raw: 5}
+)", error));
+    MonsterEntry entry;
+    entry.inspectFidgetWhenMoving = true;
+    ActorInspectPreviewAnimation preview;
+    const std::array<uint16_t, 8> indices = {0, 0, 10, 0, 0, 0, 0, 20};
+    preview.advance(1, true, entry, indices, 0, frames, 1000);
+    CHECK(preview.animation == ActorAiAnimationState::Bored);
+    CHECK(preview.actionLengthTicks >= 128);
+    CHECK(preview.actionLengthTicks <= 383);
+    CHECK(preview.displayTimeTicks == 0);
+    preview.actionTimeTicks = preview.actionLengthTicks;
+    preview.advance(1, false, entry, indices, 0, frames, 1016);
+    CHECK(preview.animation == ActorAiAnimationState::Bored); // Equality does not expire.
+    preview.advance(1, false, entry, indices, 0, frames, 1032);
+    CHECK(preview.animation == ActorAiAnimationState::Standing);
+    CHECK(preview.displayTimeTicks == 0);
+    CHECK(preview.actionTimeTicks == 16); // Advance after drawing; discard previous overshoot.
+    CHECK(preview.actionLengthTicks >= 128);
+    CHECK(preview.actionLengthTicks <= 255);
+    preview.actionTimeTicks = preview.actionLengthTicks + 1;
+    preview.advance(1, false, entry, indices, 0, frames, 1048);
+    CHECK(preview.animation == ActorAiAnimationState::Bored); // Uses the original moving snapshot.
+    CHECK(preview.actionLengthTicks == 40);
+    preview.advance(2, false, entry, indices, 0, frames, 1064);
+    CHECK_FALSE(preview.movingAtFirstInspect);
+    CHECK(preview.displayTimeTicks == 0);
+    preview.animation = ActorAiAnimationState::Standing;
+    preview.actionTimeTicks = preview.actionLengthTicks + 1;
+    preview.advance(2, true, entry, indices, 0, frames, 1080);
+    CHECK(preview.animation == ActorAiAnimationState::AttackMelee);
+    CHECK(preview.actionLengthTicks == 32);
+    preview.displayTimeTicks = 16;
+    const SpriteFrameEntry *pAttack = frames.getFrame(10, 0);
+    REQUIRE(pAttack);
+    CHECK(frames.getFrame(10, preview.frameTimeTicks(*pAttack))->textureName == "first");
+    preview.displayTimeTicks = 24;
+    CHECK(frames.getFrame(10, preview.frameTimeTicks(*pAttack))->textureName == "second");
+    entry.inspectAttackChance = 0;
+    preview.animation = ActorAiAnimationState::Standing;
+    preview.actionTimeTicks = preview.actionLengthTicks + 1;
+    preview.advance(2, false, entry, indices, 0, frames, 1096);
+    CHECK(preview.animation == ActorAiAnimationState::Bored);
+
+    SpriteFrameEntry frame;
+    frame.animationLengthTicks = 32;
+    preview.displayTimeTicks = 15;
+    CHECK(preview.frameTimeTicks(frame) == 7);
+    preview.displayTimeTicks = 16;
+    CHECK(preview.frameTimeTicks(frame) == 15);
+    preview.displayTimeTicks = 32;
+    CHECK(preview.frameTimeTicks(frame) == 0);
 }

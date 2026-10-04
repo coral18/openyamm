@@ -18,7 +18,8 @@ bool profileUsesMipmaps(TextureFilterProfile profile)
 {
     return profile == TextureFilterProfile::Terrain
         || profile == TextureFilterProfile::BModel
-        || profile == TextureFilterProfile::Sky;
+        || profile == TextureFilterProfile::Sky
+        || profile == TextureFilterProfile::UiIllustration;
 }
 
 bool profileNeedsTransparentEdgeBleed(TextureFilterProfile profile)
@@ -27,6 +28,7 @@ bool profileNeedsTransparentEdgeBleed(TextureFilterProfile profile)
     {
         case TextureFilterProfile::Billboard:
         case TextureFilterProfile::Ui:
+        case TextureFilterProfile::UiIllustration:
             return true;
 
         case TextureFilterProfile::Terrain:
@@ -61,6 +63,7 @@ TextureFilterMode textureFilterModeForProfile(TextureFilterProfile profile)
             return g_textureFilteringConfig.billboard;
 
         case TextureFilterProfile::Ui:
+        case TextureFilterProfile::UiIllustration:
             return g_textureFilteringConfig.ui;
 
         case TextureFilterProfile::Text:

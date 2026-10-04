@@ -441,7 +441,15 @@ std::vector<uint32_t> OutdoorLightingRuntime::lightCandidatesForBounds(
         return candidates;
     }
 
-    if (!bounds.valid)
+    const int32_t minCellX = outdoorFxLightGridCell(bounds.min.x);
+    const int32_t maxCellX = outdoorFxLightGridCell(bounds.max.x);
+    const int32_t minCellY = outdoorFxLightGridCell(bounds.min.y);
+    const int32_t maxCellY = outdoorFxLightGridCell(bounds.max.y);
+    const int64_t cellCount = (int64_t(maxCellX) - minCellX + 1) * (int64_t(maxCellY) - minCellY + 1);
+
+    // Map-wide material groups can span thousands of empty cells. Examining the lights
+    // directly is cheaper for broad queries; selectForBounds still tests their actual radii.
+    if (!bounds.valid || cellCount >= int64_t(m_lights.size()))
     {
         candidates.reserve(m_lights.size());
 
@@ -460,11 +468,6 @@ std::vector<uint32_t> OutdoorLightingRuntime::lightCandidatesForBounds(
     {
         appendUniqueCandidate(candidates, seen, lightIndex);
     }
-
-    const int32_t minCellX = outdoorFxLightGridCell(bounds.min.x);
-    const int32_t maxCellX = outdoorFxLightGridCell(bounds.max.x);
-    const int32_t minCellY = outdoorFxLightGridCell(bounds.min.y);
-    const int32_t maxCellY = outdoorFxLightGridCell(bounds.max.y);
 
     for (int32_t cellY = minCellY; cellY <= maxCellY; ++cellY)
     {

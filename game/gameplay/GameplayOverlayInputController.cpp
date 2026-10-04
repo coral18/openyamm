@@ -3782,7 +3782,8 @@ void GameplayOverlayInputController::handleDialogueOverlayInput(
                     const std::optional<GameplayScreenRuntime::HudFontHandle> topicFont =
                         view.findHudFont(pTopicRowLayout->fontName);
                     const float topicFontScale =
-                        snappedHudFontScale(resolvedTopicRowTemplate ? resolvedTopicRowTemplate->scale : panelScale);
+                        (resolvedTopicRowTemplate ? resolvedTopicRowTemplate->scale : panelScale)
+                        * pTopicRowLayout->textScale;
                     const float topicLineHeight = topicFont
                         ? static_cast<float>(topicFont->fontHeight) * topicFontScale
                         : 20.0f * panelScale;
@@ -3796,7 +3797,7 @@ void GameplayOverlayInputController::handleDialogueOverlayInput(
                             - std::abs(pTopicRowLayout->textPadX * topicFontScale) * 2.0f
                             - 4.0f * topicFontScale);
                     const float topicTextWidth =
-                        std::max(0.0f, topicTextWidthScaled / std::max(1.0f, topicFontScale));
+                        std::max(0.0f, topicTextWidthScaled / std::max(0.01f, topicFontScale));
                     const float rowGap = 4.0f * panelScale;
                     const size_t visibleActionCount = std::min<size_t>(view.activeEventDialog().actions.size(), 5);
                     float contentY = panelInnerY;
@@ -4094,8 +4095,12 @@ void GameplayOverlayInputController::handleLootOverlayInput(
 
                         if (pItemTexture)
                         {
-                            const float itemWidth = static_cast<float>(pItemTexture->width) * gridMetrics.scale;
-                            const float itemHeight = static_cast<float>(pItemTexture->height) * gridMetrics.scale;
+                            const float itemWidth =
+                                static_cast<float>(pItemTexture->width) * gridMetrics.scale
+                                    * pItemDefinition->inventoryDrawScale;
+                            const float itemHeight =
+                                static_cast<float>(pItemTexture->height) * gridMetrics.scale
+                                    * pItemDefinition->inventoryDrawScale;
                             const float drawX = chestMouseX - view.heldInventoryItem().grabOffsetX;
                             const float drawY = chestMouseY - view.heldInventoryItem().grabOffsetY;
                             const std::optional<std::pair<int, int>> placement = computeHeldInventoryPlacement(
@@ -4164,8 +4169,12 @@ void GameplayOverlayInputController::handleLootOverlayInput(
 
                             if (pItemTexture)
                             {
-                                const float itemWidth = static_cast<float>(pItemTexture->width) * gridMetrics.scale;
-                                const float itemHeight = static_cast<float>(pItemTexture->height) * gridMetrics.scale;
+                                const float itemWidth =
+                                    static_cast<float>(pItemTexture->width) * gridMetrics.scale
+                                        * pItemDefinition->inventoryDrawScale;
+                                const float itemHeight =
+                                    static_cast<float>(pItemTexture->height) * gridMetrics.scale
+                                        * pItemDefinition->inventoryDrawScale;
                                 const InventoryItemScreenRect itemRect =
                                     computeInventoryItemScreenRect(gridMetrics, heldItem, itemWidth, itemHeight);
                                 view.heldInventoryItem().grabOffsetX = chestMouseX - itemRect.x;
@@ -4272,8 +4281,12 @@ void GameplayOverlayInputController::handleLootOverlayInput(
 
                     if (pItemTexture)
                     {
-                        const float itemWidth = static_cast<float>(pItemTexture->width) * chestGridMetrics.scale;
-                        const float itemHeight = static_cast<float>(pItemTexture->height) * chestGridMetrics.scale;
+                        const float itemWidth =
+                            static_cast<float>(pItemTexture->width) * chestGridMetrics.scale
+                                * pItemDefinition->inventoryDrawScale;
+                        const float itemHeight =
+                            static_cast<float>(pItemTexture->height) * chestGridMetrics.scale
+                                * pItemDefinition->inventoryDrawScale;
                         const float drawX = chestMouseX - view.heldInventoryItem().grabOffsetX;
                         const float drawY = chestMouseY - view.heldInventoryItem().grabOffsetY;
                         const std::optional<std::pair<int, int>> placement = computeHeldInventoryPlacement(
@@ -4353,9 +4366,11 @@ void GameplayOverlayInputController::handleLootOverlayInput(
                             if (pItemTexture)
                             {
                                 const float itemWidth =
-                                    static_cast<float>(pItemTexture->width) * chestGridMetrics.scale;
+                                    static_cast<float>(pItemTexture->width) * chestGridMetrics.scale
+                                        * pItemDefinition->inventoryDrawScale;
                                 const float itemHeight =
-                                    static_cast<float>(pItemTexture->height) * chestGridMetrics.scale;
+                                    static_cast<float>(pItemTexture->height) * chestGridMetrics.scale
+                                        * pItemDefinition->inventoryDrawScale;
                                 const InventoryItemScreenRect itemRect = computeInventoryItemScreenRect(
                                     chestGridMetrics,
                                     view.heldInventoryItem().item,

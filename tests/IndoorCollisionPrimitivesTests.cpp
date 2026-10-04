@@ -219,6 +219,30 @@ TEST_CASE("swept indoor sphere misses face outside polygon")
     CHECK_FALSE(hit.has_value());
 }
 
+TEST_CASE("swept indoor sphere can slide out of a touching cave triangle edge")
+{
+    // GW_2: the lower sphere of goblin 55 touches the edge of Goblinwatch face 1043.
+    IndoorMapData map = {};
+    map.vertices = {{9040, 2444, -768}, {10048, 2752, -768}, {9468, 2772, -588}};
+    IndoorFace face = {};
+    face.vertexIndices = {0, 1, 2};
+    face.facetType = 4;
+    map.faces = {face};
+    IndoorFaceGeometryCache cache(1);
+    const IndoorFaceGeometryData *pFace = cache.geometryForFace(map, map.vertices, 0);
+    REQUIRE(pFace != nullptr);
+    const IndoorSweptSphere sphere = makeSphere(9286.1796875f, 2637.93017578125f, -604.572021484375f, 56.0f);
+    const std::optional<IndoorSweptFaceHit> hit =
+        sweepIndoorSphereAgainstFace(sphere, {1.0f, 0.0f, 0.0f}, 2.0f, *pFace);
+    REQUIRE(hit.has_value());
+    REQUIRE(hit->boundaryHit);
+    CHECK_EQ(hit->moveDistance, 0.0f);
+    const bx::Vec3 slide = projectIndoorVelocityAlongPlane({1.0f, 0.0f, 0.0f}, hit->normal);
+    CHECK_FALSE(sweepIndoorSphereAgainstFace(sphere, slide, 2.0f, *pFace).has_value());
+    // A tangent response must not disable subsequent inward movement.
+    CHECK(sweepIndoorSphereAgainstFace(sphere, {1.0f, 0.0f, 0.0f}, 2.0f, *pFace).has_value());
+}
+
 TEST_CASE("initial indoor actor placement snaps to floor without moving clear actor")
 {
     IndoorMapData mapData = makeInitialPlacementRoom();
@@ -270,9 +294,46 @@ TEST_CASE("initial indoor actor placement clears wall-overlapping actor")
     CHECK(placement.movedHorizontally);
     CHECK(placement.wallOverlapResolved);
     CHECK_EQ(placement.sectorId, 1);
-    CHECK(placement.x > 16.0f);
+    CHECK_GE(placement.x, 16.0f);
     CHECK_EQ(placement.y, doctest::Approx(0.0f));
     CHECK_EQ(placement.z, doctest::Approx(0.0f));
+}
+
+TEST_CASE("swept indoor sphere touching a plane can pass its polygon edge without snagging")
+{
+    const IndoorFaceGeometryData wall = makeVerticalWall(100.0f);
+    // A near-edge horizontal offset can vanish when added to radius squared in float precision.
+    // Contact with the plane still leaves every point on its boundary outside the sphere.
+    for (const float x : {26.0f, 174.0f})
+    {
+        const IndoorSweptSphere sphere = makeSphere(x, 100.01f, 100.0f, 74.0f);
+        CHECK_FALSE(sweepIndoorSphereAgainstFace(sphere, {0.0f, -1.0f, 0.0f}, 5.0f, wall));
+    }
+
+    const IndoorSweptSphere clippingSphere = makeSphere(26.25f, 107.0f, 100.0f, 74.0f);
+    REQUIRE(sweepIndoorSphereAgainstFace(clippingSphere, {0.0f, -1.0f, 0.0f}, 5.0f, wall));
+    const IndoorSweptSphere touchingSphere = makeSphere(26.0f, 99.0f, 100.0f, 74.0f);
+    REQUIRE(sweepIndoorSphereAgainstFace(touchingSphere, {1.0f, 0.0f, 0.0f}, 5.0f, wall));
+}
+
+TEST_CASE("swept indoor sphere preserves small clearance beneath a doorway edge")
+{
+    const IndoorFaceGeometryData wall = makeVerticalWall(100.0f);
+    IndoorFaceSweepOptions options;
+    options.backoffDistance = 0.0f;
+    for (const float y : {0.0f, 100.0f})
+    {
+        // The squared horizontal clearance is lost when added to 127 squared in float precision.
+        const IndoorSweptSphere sphere = makeSphere(100.015625f, y, -127.0f, 127.0f);
+        const std::optional<IndoorSweptFaceHit> hit =
+            sweepIndoorSphereAgainstFace(sphere, {-1.0f, 0.0f, 0.0f}, 5.0f, wall, options);
+        REQUIRE(hit.has_value());
+        CHECK_EQ(hit->moveDistance, doctest::Approx(0.015625f));
+        CHECK_EQ(hit->normal.x, doctest::Approx(0.0f));
+        CHECK_EQ(hit->normal.z, doctest::Approx(-1.0f));
+        const IndoorSweptSphere clearSphere = makeSphere(100.015625f, y, -127.01f, 127.0f);
+        CHECK_FALSE(sweepIndoorSphereAgainstFace(clearSphere, {-1.0f, 0.0f, 0.0f}, 5.0f, wall, options));
+    }
 }
 
 TEST_CASE("swept indoor sphere hits wall at sphere radius")

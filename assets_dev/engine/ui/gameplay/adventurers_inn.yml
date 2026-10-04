@@ -1,3 +1,4 @@
+# Carved Obsidian guild; see level_generation/ui/obsidian_adventurers_guild_20260929/README.md
 screen: Character
 
 elements:
@@ -19,7 +20,16 @@ elements:
         height: 344
         z_index: 110
         asset:
-          default: rost_bg
+          default: obsidian_guild_panel
+
+      - id: AdventurersInnDetailsPanel
+        anchor: top_left
+        offset_x: 186
+        offset_y: 44
+        width: 258
+        height: 300
+        z_index: 115
+        notes: Calm reading surface; character stats and biography retain their native layout and SMALLNUM font.
 
       - id: AdventurersInnScrollUpButton
         anchor: top_left
@@ -30,9 +40,10 @@ elements:
         z_index: 300
         interactive: true
         asset:
-          default: AR_UP_UP
-          highlighted: AR_UP_HT
-          pressed: AR_UP_DN
+          default: obsidian_guild_up_normal
+          highlighted: obsidian_guild_up_hover
+          pressed: obsidian_guild_up_pressed
+          disabled: obsidian_guild_up_disabled
 
       - id: AdventurersInnScrollDownButton
         anchor: top_left
@@ -43,9 +54,10 @@ elements:
         z_index: 300
         interactive: true
         asset:
-          default: AR_DN_UP
-          highlighted: AR_DN_HT
-          pressed: AR_DN_DN
+          default: obsidian_guild_down_normal
+          highlighted: obsidian_guild_down_hover
+          pressed: obsidian_guild_down_pressed
+          disabled: obsidian_guild_down_disabled
 
       - id: AdventurersInnHireButton
         anchor: top_left
@@ -56,9 +68,17 @@ elements:
         z_index: 300
         interactive: true
         asset:
-          default: but25U
-          highlighted: but25H
-          pressed: but25D
+          default: obsidian_button_tab_normal
+          highlighted: obsidian_button_tab_hover
+          pressed: obsidian_button_tab_pressed
+          disabled: obsidian_button_tab_disabled
+        text:
+          value: Hire
+          font: Fondamento
+          color: '#e8d1a4'
+          align_x: center
+          align_y: middle
+          scale: 0.416667
 
       - id: AdventurersInnExitButton
         anchor: top_left
@@ -69,9 +89,16 @@ elements:
         z_index: 300
         interactive: true
         asset:
-          default: But24U
-          highlighted: But24H
-          pressed: But24D
+          default: obsidian_button_tab_normal
+          highlighted: obsidian_button_tab_hover
+          pressed: obsidian_button_tab_pressed
+        text:
+          value: Exit
+          font: Fondamento
+          color: '#e8d1a4'
+          align_x: center
+          align_y: middle
+          scale: 0.416667
 
       - id: AdventurersInnDollDividerBar
         anchor: top_left
@@ -82,4 +109,4 @@ elements:
         bottom_to: OutdoorBasebar
         z_index: 110
         asset:
-          default: IB-8pxbar
+          default: obsidian_left_edge

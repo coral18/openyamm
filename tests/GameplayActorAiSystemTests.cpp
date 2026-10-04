@@ -3,6 +3,7 @@
 #include "engine/TextTable.h"
 #include "game/StringUtils.h"
 #include "game/gameplay/GameplayActorAiSystem.h"
+#include "game/gameplay/ActorVocalizationRules.h"
 #include "game/gameplay/GameplayActorService.h"
 #include "game/gameplay/MonsterSpellSupport.h"
 #include "game/tables/MonsterTable.h"
@@ -602,6 +603,7 @@ TEST_CASE("shared actor AI pursues a remembered party target without attack line
     actor.stats.attack1Damage.diceSides = 4;
     actor.movement.movementAllowed = true;
     actor.movement.effectiveMoveSpeed = 200.0f;
+    actor.movement.inMeleeRange = true;
     actor.target.currentKind = ActorAiTargetKind::Party;
     actor.target.currentPosition = {132.0f, 200.0f, 64.0f};
     actor.target.currentDistance = 96.0f;
@@ -620,6 +622,7 @@ TEST_CASE("shared actor AI pursues a remembered party target without attack line
     CHECK(update.movementIntent.action == ActorAiMovementAction::Pursue);
     CHECK(update.movementIntent.applyMovement);
     CHECK(update.movementIntent.moveSpeed == doctest::Approx(300.0f));
+    CHECK_FALSE(update.movementIntent.inMeleeRange);
     CHECK_FALSE(update.attackRequest.has_value());
 }
 
@@ -1477,6 +1480,119 @@ TEST_CASE("shared actor AI stands briefly when actor movement is crowded after c
     CHECK(update.movementIntent.clearVelocity);
 }
 
+TEST_CASE("shared actor AI crowd steers after blocked movement without an actor contact")
+{
+    GameplayActorAiSystem system;
+    ActorAiFacts actor = makeActor(30, 130);
+    actor.runtime.motionState = ActorAiMotionState::Pursuing;
+    actor.runtime.actionSeconds = 5.0f;
+    actor.movement.position = {0.0f, 0.0f, 0.0f};
+    actor.movement.allowCrowdSteering = true;
+    actor.movement.meleePursuitActive = true;
+    actor.movement.movementBlocked = true;
+    actor.target.currentPosition = {400.0f, 0.0f, 0.0f};
+    actor.target.currentEdgeDistance = 400.0f;
+
+    SUBCASE("direct approach")
+    {
+        const OpenYAMM::Game::ActorAiUpdate update = system.updateActorAfterWorldMovement(actor);
+        CHECK(update.movementIntent.crowdSteeringActive);
+        CHECK(update.movementIntent.desiredMoveX > 0.5f);
+        CHECK(std::abs(update.movementIntent.desiredMoveY) > 0.5f);
+        REQUIRE(update.state.actionSeconds.has_value());
+        CHECK(*update.state.actionSeconds < 0.3f);
+    }
+
+    SUBCASE("navigation supplies the approach direction around a wall")
+    {
+        actor.target.hasCurrentMovementPosition = true;
+        actor.target.currentMovementPosition = {0.0f, 200.0f, 0.0f};
+        const OpenYAMM::Game::ActorAiUpdate update = system.updateActorAfterWorldMovement(actor);
+        CHECK(update.movementIntent.crowdSteeringActive);
+        CHECK(update.movementIntent.desiredMoveY > 0.5f);
+        CHECK(std::abs(update.movementIntent.desiredMoveX) > 0.5f);
+    }
+
+    SUBCASE("an unobstructed approach does not start crowd steering")
+    {
+        actor.movement.movementBlocked = false;
+        CHECK_FALSE(system.updateActorAfterWorldMovement(actor).movementIntent.crowdSteeringActive);
+    }
+
+    SUBCASE("a monster already within melee range does not sidestep")
+    {
+        actor.movement.inMeleeRange = true;
+        CHECK_FALSE(system.updateActorAfterWorldMovement(actor).movementIntent.crowdSteeringActive);
+    }
+}
+
+TEST_CASE("shared actor AI keeps a crowd detour until its lock expires and attacks when in reach")
+{
+    GameplayActorAiSystem system;
+    ActorAiFrameFacts frame = makeFrame();
+    ActorAiFacts actor = makeActor(31, 131);
+    actor.world.active = true;
+    actor.identity.hostilityType = 4;
+    actor.status.hostileToParty = true;
+    actor.status.hasDetectedParty = true;
+    actor.stats.moveSpeed = 160;
+    actor.stats.attack1Damage.diceRolls = 1;
+    actor.stats.attack1Damage.diceSides = 4;
+    actor.runtime.motionState = ActorAiMotionState::Pursuing;
+    actor.runtime.animationState = ActorAiAnimationState::Walking;
+    actor.runtime.actionSeconds = 0.2f;
+    actor.runtime.crowdSideLockRemainingSeconds = 0.2f;
+    actor.movement.movementAllowed = true;
+    actor.movement.effectiveMoveSpeed = 160.0f;
+    actor.movement.moveDirectionX = -0.6f;
+    actor.movement.moveDirectionY = 0.8f;
+    actor.movement.position = {400.0f, 0.0f, 0.0f};
+    actor.movement.distanceToParty = 400.0f;
+    actor.movement.edgeDistanceToParty = 336.0f;
+    actor.target.currentKind = ActorAiTargetKind::Party;
+    actor.target.currentPosition = {0.0f, 0.0f, 64.0f};
+    actor.target.currentDistance = 400.0f;
+    actor.target.currentEdgeDistance = 336.0f;
+    actor.target.currentCanSense = true;
+    actor.target.partyCanSenseActor = true;
+    bool expectDetour = true;
+    bool expectAttack = false;
+
+    SUBCASE("active sidestep") {}
+    SUBCASE("expired sidestep yields to navigation")
+    {
+        actor.runtime.crowdSideLockRemainingSeconds = 0.0f;
+        expectDetour = false;
+    }
+    SUBCASE("melee range ends the detour and the crowd wait")
+    {
+        actor.runtime.crowdStandRemainingSeconds = 1.0f;
+        actor.movement.position.x = 300.0f;
+        actor.movement.distanceToParty = 300.0f;
+        actor.movement.edgeDistanceToParty = 236.0f;
+        actor.movement.inMeleeRange = true;
+        actor.target.currentDistance = 300.0f;
+        actor.target.currentEdgeDistance = 236.0f;
+        expectDetour = false;
+        expectAttack = true;
+    }
+    frame.activeActors.push_back(actor);
+    const OpenYAMM::Game::ActorAiFrameResult result = system.updateActors(frame);
+    REQUIRE(result.actorUpdates.size() == 1);
+    const OpenYAMM::Game::ActorAiUpdate &update = result.actorUpdates.front();
+    CHECK(update.movementIntent.crowdSteeringActive == expectDetour);
+    if (expectAttack)
+    {
+        REQUIRE(update.state.motionState.has_value());
+        CHECK(*update.state.motionState == ActorAiMotionState::Attacking);
+    }
+    else
+    {
+        CHECK(update.movementIntent.desiredMoveX == doctest::Approx(-0.6f));
+        CHECK(update.movementIntent.desiredMoveY == doctest::Approx(0.8f));
+    }
+}
+
 TEST_CASE("shared actor AI stands when pursuing movement is suppressed by navigation")
 {
     GameplayActorAiSystem system;
@@ -1729,4 +1845,221 @@ TEST_CASE("shared actor hit reaction gate blocks terminal and active attack stat
     CHECK_FALSE(service.canActorEnterHitReaction(false, false, false, false, true, false, false));
     CHECK_FALSE(service.canActorEnterHitReaction(false, false, false, false, false, true, false));
     CHECK_FALSE(service.canActorEnterHitReaction(false, false, false, false, false, false, true));
+}
+
+TEST_CASE("shared actor AI leaves victim audio to resolved melee combat")
+{
+    GameplayActorAiSystem system;
+    ActorAiFrameFacts frame = makeFrame();
+    ActorAiFacts actor = makeActor(0, 100);
+    actor.world.active = true;
+    actor.runtime.motionState = ActorAiMotionState::Attacking;
+    actor.runtime.animationState = ActorAiAnimationState::AttackMelee;
+    actor.runtime.actionSeconds = 0.001f;
+    actor.runtime.attackCooldownSeconds = 1.0f;
+    actor.stats.attack1Damage.bonus = 100;
+    actor.target.currentKind = ActorAiTargetKind::Actor;
+    actor.target.currentActorIndex = 1;
+    actor.target.currentHp = 1;
+    actor.target.currentPosition = {132, 200, 64};
+    actor.target.currentDistance = 32;
+    actor.target.currentEdgeDistance = 0;
+    actor.target.currentCanSense = true;
+    frame.activeActors = {actor};
+    const OpenYAMM::Game::ActorAiFrameResult result = system.updateActors(frame);
+    REQUIRE(result.actorUpdates.front().attackRequest);
+    CHECK(result.actorUpdates.front().attackRequest->kind == OpenYAMM::Game::ActorAiAttackRequestKind::ActorMelee);
+    CHECK(result.audioRequests.empty());
+}
+
+TEST_CASE("shared actor AI fidgets and vocalizes on decisions in active and background paths")
+{
+    GameplayActorAiSystem system;
+    ActorAiFrameFacts frame = makeFrame();
+    ActorAiFacts actor = makeActor(0, 100);
+    actor.runtime.yawRadians = std::atan2(-200.0f, -100.0f);
+    actor.runtime.boredAnimationSeconds = 0.75f;
+    uint32_t decision = 0;
+    for (; decision < 10000; ++decision)
+    {
+        if (OpenYAMM::Game::actorChoosesBored(actor.actorId, decision)
+            && OpenYAMM::Game::actorBoredSoundRoll(actor.actorId, decision))
+        {
+            break;
+        }
+    }
+    REQUIRE(decision < 10000);
+    actor.runtime.idleDecisionCount = decision;
+
+    for (const bool active : {false, true})
+    {
+        actor.world.active = active;
+        frame.activeActors = active ? std::vector<ActorAiFacts>{actor} : std::vector<ActorAiFacts>{};
+        frame.backgroundActors = active ? std::vector<ActorAiFacts>{} : std::vector<ActorAiFacts>{actor};
+        const OpenYAMM::Game::ActorAiFrameResult result = system.updateActors(frame);
+        REQUIRE_EQ(result.actorUpdates.size(), 1);
+        CHECK(result.actorUpdates[0].animation.animationState == ActorAiAnimationState::Bored);
+        CHECK(result.actorUpdates[0].state.actionSeconds == 0.75f);
+        REQUIRE_EQ(result.audioRequests.size(), 1);
+        CHECK(result.audioRequests[0].kind == OpenYAMM::Game::ActorAiAudioRequestKind::Bored);
+        CHECK_EQ(result.audioRequests[0].position.z, actor.movement.position.z);
+
+        ActorAiFacts continued = actor;
+        continued.runtime.animationState = ActorAiAnimationState::Bored;
+        continued.runtime.actionSeconds = 0.75f;
+        continued.runtime.idleDecisionCount = decision + 1;
+        if (active)
+        {
+            frame.activeActors = {continued};
+        }
+        else
+        {
+            frame.backgroundActors = {continued};
+        }
+        const OpenYAMM::Game::ActorAiFrameResult next = system.updateActors(frame);
+        CHECK(next.audioRequests.empty());
+        CHECK_FALSE(next.actorUpdates[0].state.idleDecisionCount);
+        CHECK(next.actorUpdates[0].animation.animationState == ActorAiAnimationState::Bored);
+    }
+
+    actor.runtime.yawRadians += 3.14159265f;
+    frame.activeActors.clear();
+    frame.backgroundActors = {actor};
+    const OpenYAMM::Game::ActorAiFrameResult backgroundTurn = system.updateActors(frame);
+    REQUIRE_EQ(backgroundTurn.audioRequests.size(), 1);
+    CHECK(backgroundTurn.actorUpdates[0].movementIntent.updateYaw);
+
+    actor.world.active = true;
+    actor.movement.distanceToParty = 1000;
+    actor.movement.edgeDistanceToParty = 1000;
+    frame.activeActors = {actor};
+    frame.backgroundActors.clear();
+    const OpenYAMM::Game::ActorAiFrameResult away = system.updateActors(frame);
+    CHECK(away.audioRequests.empty());
+    CHECK(away.actorUpdates[0].animation.animationState == ActorAiAnimationState::Standing);
+
+    actor.status.spellEffects.paralyzeRemainingSeconds = 10.0f;
+    frame.activeActors.clear();
+    frame.backgroundActors = {actor};
+    CHECK(system.updateActors(frame).audioRequests.empty());
+
+    actor.status.spellEffects.paralyzeRemainingSeconds = 0.0f;
+    actor.status.invisible = true;
+    frame.backgroundActors = {actor};
+    const OpenYAMM::Game::ActorAiFrameResult removed = system.updateActors(frame);
+    CHECK(removed.audioRequests.empty());
+    CHECK_FALSE(removed.actorUpdates[0].state.idleDecisionCount);
+}
+
+TEST_CASE("shared actor AI wander sound is independent and only rolls for new walks")
+{
+    GameplayActorAiSystem system;
+    ActorAiFrameFacts frame = makeFrame();
+    ActorAiFacts actor = makeActor(0, 77);
+    actor.world.active = true;
+    actor.movement.distanceToParty = 1000;
+    actor.movement.edgeDistanceToParty = 1000;
+    actor.movement.movementAllowed = true;
+    actor.movement.allowIdleWander = true;
+    actor.movement.wanderRadius = 1024;
+    actor.movement.homePosition = actor.movement.position;
+    actor.movement.effectiveMoveSpeed = 200;
+    bool found = false;
+    for (uint32_t decision = 0; decision < 10000; ++decision)
+    {
+        actor.runtime.idleDecisionCount = decision;
+        frame.activeActors = {actor};
+        const OpenYAMM::Game::ActorAiFrameResult result = system.updateActors(frame);
+        if (result.actorUpdates[0].movementIntent.action != ActorAiMovementAction::Wander
+            || result.audioRequests.empty())
+        {
+            continue;
+        }
+        found = true;
+        CHECK(result.audioRequests[0].kind == OpenYAMM::Game::ActorAiAudioRequestKind::Bored);
+        actor.runtime.motionState = ActorAiMotionState::Wandering;
+        actor.runtime.animationState = ActorAiAnimationState::Walking;
+        actor.runtime.actionSeconds = 1;
+        actor.movement.moveDirectionX = result.actorUpdates[0].movementIntent.moveDirectionX;
+        actor.movement.moveDirectionY = result.actorUpdates[0].movementIntent.moveDirectionY;
+        frame.activeActors = {actor};
+        CHECK(system.updateActors(frame).audioRequests.empty());
+        break;
+    }
+    CHECK(found);
+}
+
+TEST_CASE("shared actor service permits forced hit reactions without reviving dead actors")
+{
+    GameplayActorService service;
+    CHECK(service.canActorEnterHitReaction(false, false, false, false, false, false, true, true));
+    CHECK(service.canActorEnterHitReaction(false, false, false, false, false, true, false, true));
+    CHECK_FALSE(service.canActorEnterHitReaction(false, true, true, true, true, false, false, true));
+}
+
+TEST_CASE("actor fidget facing uses the requested yaw and a front octant")
+{
+    using OpenYAMM::Game::actorFidgetFacesListener;
+    constexpr float pi = 3.14159265f;
+    CHECK(actorFidgetFacesListener(0, 100, 0));
+    CHECK(actorFidgetFacesListener(pi, -100, 0));
+    CHECK_FALSE(actorFidgetFacesListener(0, -100, 0));
+    CHECK(actorFidgetFacesListener(pi / 8 - 0.001f, 100, 0));
+    CHECK_FALSE(actorFidgetFacesListener(pi / 8 + 0.001f, 100, 0));
+    CHECK(actorFidgetFacesListener(-pi / 8 + 0.001f, 100, 0));
+    CHECK_FALSE(actorFidgetFacesListener(-pi / 8 - 0.001f, 100, 0));
+    CHECK(actorFidgetFacesListener(2 * pi, 100, 0));
+}
+
+TEST_CASE("shared actor AI special pursuit alone can vocalize on entry")
+{
+    GameplayActorAiSystem system;
+    ActorAiFrameFacts frame = makeFrame();
+    ActorAiFacts actor = makeActor(0, 100);
+    actor.world.active = true;
+    actor.identity.hostilityType = 4;
+    actor.status.hostileToParty = true;
+    actor.status.hasDetectedParty = true;
+    actor.movement.movementAllowed = true;
+    actor.movement.effectiveMoveSpeed = 200;
+    actor.movement.distanceToParty = 2048;
+    actor.movement.edgeDistanceToParty = 2048;
+    actor.target.currentKind = ActorAiTargetKind::Party;
+    actor.target.currentPosition = {2148, 200, 0};
+    actor.target.currentDistance = 2048;
+    actor.target.currentEdgeDistance = 2048;
+    actor.target.currentCanSense = true;
+    actor.target.currentHasAttackLineOfSight = true;
+    actor.target.partyCanSenseActor = true;
+    uint32_t decision = 0;
+    for (; decision < 10000; ++decision)
+    {
+        if (OpenYAMM::Game::actorVocalizationRoll(actor.actorId, decision, 0x281da370u) < 2u)
+        {
+            break;
+        }
+    }
+    REQUIRE(decision < 10000);
+    actor.runtime.pursueDecisionCount = decision;
+    frame.activeActors = {actor};
+    const OpenYAMM::Game::ActorAiFrameResult started = system.updateActors(frame);
+    REQUIRE_EQ(started.audioRequests.size(), 1);
+    CHECK(started.audioRequests.front().kind == OpenYAMM::Game::ActorAiAudioRequestKind::Hit);
+
+    ActorAiFacts continuing = actor;
+    continuing.runtime.motionState = ActorAiMotionState::Pursuing;
+    continuing.runtime.actionSeconds = 1;
+    continuing.movement.moveDirectionX = 1;
+    frame.activeActors = {continuing};
+    CHECK(system.updateActors(frame).audioRequests.empty());
+
+    actor.movement.distanceToParty = 512;
+    actor.movement.edgeDistanceToParty = 512;
+    actor.target.currentDistance = 512;
+    actor.target.currentEdgeDistance = 512;
+    actor.target.currentPosition = {612, 200, 0};
+    frame.activeActors = {actor};
+    const OpenYAMM::Game::ActorAiFrameResult direct = system.updateActors(frame);
+    CHECK(direct.actorUpdates.front().movementIntent.action == ActorAiMovementAction::Pursue);
+    CHECK(direct.audioRequests.empty());
 }

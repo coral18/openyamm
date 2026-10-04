@@ -1,0 +1,64 @@
+schema: openyamm.effectTextureImport.v1
+source:
+  path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/ELECTRICITY/LBALL_013.dtx
+  format: LithTech DTX
+  sha256: ae02f4325791d85fe80da3eb8a2cc36bc02e997825f979124d655767dfabbaf2
+runtime:
+  texture: engine/effects/mm9/textures/electricity/lball_013.png
+  format: PNG RGBA8
+  colorSpace: srgb
+  alphaUsage: blend
+  premultipliedAlpha: false
+  mipPolicy: generate-at-runtime
+  minFilter: linear
+  magFilter: linear
+  wrapU: clamp
+  wrapV: clamp
+conversion:
+  decoder: tools/mm9_import_discovery/convert_abc_model.py:decode_dtx_mips
+  decodedRgbChanged: false
+  decodedAlphaChanged: false
+  opaqueAlphaRepair: false
+  zeroAlphaRgbPreserved: true
+  sourceMipArtifacts: mips/*.png
+dtx:
+  version: -5
+  width: 64
+  height: 64
+  mipCount: 4
+  sectionCount: 0
+  internalFlags: 136
+  userFlags: 0
+  extraHex: '000003000000000000000000'
+  bppIdentifier: 3
+  command: ''
+  repairOpaqueAlpha: false
+  mips:
+  - index: 0
+    width: 64
+    height: 64
+    sourceOffset: 164
+    sourceBytes: 16384
+    decodedRgbaSha256: a83d2a75d7ee4140ef57474bc1f6a45f2cf62b1339be2a3914d1fe296b2e70c6
+    artifact: mips/00.png
+  - index: 1
+    width: 32
+    height: 32
+    sourceOffset: 16548
+    sourceBytes: 4096
+    decodedRgbaSha256: 6406fa5f83dcb39baabd0c70ec0e491c7cfab20e09c213b0b229aec635cf26b5
+    artifact: mips/01.png
+  - index: 2
+    width: 16
+    height: 16
+    sourceOffset: 20644
+    sourceBytes: 1024
+    decodedRgbaSha256: d0e228b826c4ac76d89365992e915e4a9eada966657355fec521b875280f15e5
+    artifact: mips/02.png
+  - index: 3
+    width: 8
+    height: 8
+    sourceOffset: 21668
+    sourceBytes: 256
+    decodedRgbaSha256: b923a2d5c43addee4ba8c32e88123c2f3b5260813748b22f0df9bb431d4e8832
+    artifact: mips/03.png

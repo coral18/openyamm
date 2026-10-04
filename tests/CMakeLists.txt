@@ -1,10 +1,15 @@
 add_executable(openyamm_unit_tests
     AssetFileSystemTests.cpp
+    ItemVisualTests.cpp
     ActorPathRuntimeTests.cpp
+    ActorCrowdingTests.cpp
     AudioRegressionTests.cpp
     ArcomageRegressionTests.cpp
+    ArenaRuntimeTests.cpp
     ChestRegressionTests.cpp
     ContentManifestTests.cpp
+    EffectSystemTests.cpp
+    EffectDefinitionLoaderTests.cpp
     HouseDialogueRegressionTests.cpp
     ScriptedMapRegressionTests.cpp
     UnitTestMain.cpp
@@ -19,11 +24,17 @@ add_executable(openyamm_unit_tests
     AwardRuntimeTests.cpp
     GameplayProjectileServiceTests.cpp
     FontAssetTests.cpp
+    MenuSettingsTests.cpp
+    ../game/ui/MenuSettingsModel.cpp
     ImageAssetLoaderTests.cpp
     SpriteAtlasTests.cpp
+    ../tools/SpriteAtlasEncode.cpp
+    NativeSpriteTextureCacheTests.cpp
     IndoorCollisionPrimitivesTests.cpp
     IndoorActorActivationTests.cpp
+    IndoorActorPlacementTests.cpp
     IndoorLightingRuntimeTests.cpp
+    IndoorMovementRecoveryTests.cpp
     IndoorPathfindingBuilderTests.cpp
     IndoorPortalGraphTests.cpp
     IndoorPortalVisibilityTests.cpp
@@ -44,6 +55,7 @@ add_executable(openyamm_unit_tests
     MapItemSourceTests.cpp
     MapDecorationTexturesTests.cpp
     MapPresentationTests.cpp
+    ModelAnimationTests.cpp
     MonsterTableRegressionTests.cpp
     MobileJumpDoubleTapGestureTests.cpp
     MobileJoystickDirectionTests.cpp
@@ -56,11 +68,14 @@ add_executable(openyamm_unit_tests
     OutdoorRenderDataTests.cpp
     BillboardGeometryTests.cpp
     ViewFrustumTests.cpp
+    WaterRenderingTests.cpp
     PartyRegressionTests.cpp
     PathMapTests.cpp
     PathPlannerTests.cpp
     RegressionMapLoader.cpp
     ScreenManagerTests.cpp
+    ScreenshotTourTests.cpp
+    ../game/debug/ScreenshotTour.cpp
     ScriptedEventTimerTests.cpp
     SpellRegressionTests.cpp
     RegressionGameData.cpp
@@ -74,6 +89,7 @@ add_executable(openyamm_unit_tests
     TurnBasedCombatRuntimeTests.cpp
     UiLayoutManagerTests.cpp
     GameplayHudLayoutCacheTests.cpp
+    GameplayHudGeometryTests.cpp
     GameplayScreenRuntimeTestStubs.cpp
     ../game/app/GameSettings.cpp
     ../game/app/GameInputSystem.cpp
@@ -84,8 +100,15 @@ add_executable(openyamm_unit_tests
     ../engine/AssetScaleTier.cpp
     ../engine/FontAsset.cpp
     ../engine/ImageAssetLoader.cpp
+    ../engine/models/CgltfImplementation.cpp
+    ../engine/models/GltfModelLoader.cpp
+    ../engine/models/ModelAnimation.cpp
+    ../engine/models/ModelAsset.cpp
+    ../engine/models/ModelInstance.cpp
     ../engine/SpriteAtlas.cpp
     ../game/render/SpriteAtlasMipmaps.cpp
+    ../game/render/SpriteAtlasCook.cpp
+    ../game/render/NativeSpriteTextureCache.cpp
     ../engine/TextTable.cpp
     ../game/render/TextureFiltering.cpp
     ../game/arcomage/ArcomageAi.cpp
@@ -116,6 +139,7 @@ add_executable(openyamm_unit_tests
     ../game/gameplay/GameplayWorldItemInteraction.cpp
     ../game/gameplay/InteractiveDecorationRules.cpp
     ../game/gameplay/BountyHuntRuntime.cpp
+    ../game/gameplay/ArenaRuntime.cpp
     ../game/gameplay/AwardRuntime.cpp
     ../game/gameplay/MonsterSpellSupport.cpp
     ../game/gameplay/MercenaryRecruitmentRuntime.cpp
@@ -156,6 +180,9 @@ add_executable(openyamm_unit_tests
     ../game/indoor/IndoorPortalGraph.cpp
     ../game/indoor/IndoorPortalVisibility.cpp
     ../game/fx/ParticleRecipes.cpp
+    ../game/fx/EffectSystem.cpp
+    ../game/fx/import/EffectDefinitionLoader.cpp
+    ../game/fx/import/EffectResourceLibrary.cpp
     ../game/fx/ParticleSystem.cpp
     ../game/items/InventoryItemMixingRuntime.cpp
     ../game/items/InventoryItemUseRuntime.cpp
@@ -242,6 +269,7 @@ target_include_directories(openyamm_unit_tests
         ${OPENYAMM_BGFX_SOURCE_DIR}/include
         ${OPENYAMM_BIMG_SOURCE_DIR}/include
         ${OPENYAMM_BX_SOURCE_DIR}/include
+        ${OPENYAMM_BGFX_SOURCE_DIR}/3rdparty
 )
 
 target_compile_features(openyamm_unit_tests PRIVATE cxx_std_20)
@@ -256,6 +284,8 @@ target_link_libraries(openyamm_unit_tests
         openyamm_bgfx
         SDL3::SDL3
         physfs-static
+        libzstd_static
+        openyamm_atlas_encoders
         ${OPENYAMM_LUA_TARGET}
         yaml-cpp::yaml-cpp
         freetype
@@ -285,6 +315,25 @@ if (UNIX AND NOT APPLE)
 endif()
 
 add_test(NAME openyamm_unit_tests COMMAND openyamm_unit_tests)
+
+add_executable(openyamm_runtime_tests
+    UnitTestMain.cpp
+    RegressionGameData.cpp
+    IndoorActorDetectionRuntimeTests.cpp
+    IndoorActorFlyingRuntimeTests.cpp
+    IndoorActorFactionRuntimeTests.cpp
+)
+
+target_include_directories(openyamm_runtime_tests PRIVATE
+    ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/third_party/doctest
+    ${OPENYAMM_BX_SOURCE_DIR}/include
+    ${OPENYAMM_BGFX_SOURCE_DIR}/include
+)
+target_compile_features(openyamm_runtime_tests PRIVATE cxx_std_20)
+target_compile_definitions(openyamm_runtime_tests PRIVATE OPENYAMM_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+target_link_libraries(openyamm_runtime_tests PRIVATE openyamm_game openyamm_bgfx SDL3::SDL3 yaml-cpp::yaml-cpp)
+add_test(NAME openyamm_runtime_tests COMMAND openyamm_runtime_tests)
 
 add_executable(openyamm_video_streaming_tests
     VideoStreamingTests.cpp

@@ -15,6 +15,7 @@ add_executable(openyamm-editor
     document/OutdoorTerrainMetadata.cpp
     document/EditorSession.cpp
     import/IndoorSourceGeometryCompiler.cpp
+    import/IndoorDerivedGeometry.cpp
     import/IndoorSourceGeometryImport.cpp
     import/ObjModelImport.cpp
     headless/EditorHeadlessDiagnostics.cpp
@@ -30,9 +31,11 @@ add_executable(openyamm-editor
     ${CMAKE_SOURCE_DIR}/game/maps/IndoorSceneYml.cpp
     ${CMAKE_SOURCE_DIR}/game/maps/MapDeltaData.cpp
     ${CMAKE_SOURCE_DIR}/game/maps/MapIdentity.cpp
+    ${CMAKE_SOURCE_DIR}/game/maps/MapItemSourceYml.cpp
     ${CMAKE_SOURCE_DIR}/game/maps/OutdoorSceneYml.cpp
     ${CMAKE_SOURCE_DIR}/game/maps/TerrainTileData.cpp
     ${CMAKE_SOURCE_DIR}/game/party/SkillData.cpp
+    ${CMAKE_SOURCE_DIR}/game/items/ItemEnchantTables.cpp
     ${CMAKE_SOURCE_DIR}/tools/legacy_events/EvtProgram.cpp
     ${CMAKE_SOURCE_DIR}/game/tables/ChestTable.cpp
     ${CMAKE_SOURCE_DIR}/game/tables/HouseTable.cpp

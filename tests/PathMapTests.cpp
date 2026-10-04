@@ -2,8 +2,10 @@
 
 #include "game/pathfinding/PathMap.h"
 
+#include <array>
 #include <cmath>
 #include <limits>
+#include <utility>
 #include <vector>
 
 using OpenYAMM::Game::PathFacet;
@@ -115,6 +117,83 @@ TEST_CASE("path map walking rejects segments through void")
     CHECK_FALSE(map.traceWalkSegment({10.0f, 50.0f, 0.0f}, {150.0f, 50.0f, 0.0f}, object));
 }
 
+TEST_CASE("path map walking checks full height beneath ceilings")
+{
+    PathFacet ceiling = makeFloor(50.0f, 200.0f, -100.0f, 100.0f, 120.0f);
+    ceiling.kind = PathFacetKind::Ceiling;
+    ceiling.blocking = true;
+    ceiling.walkableFloor = false;
+    PathMap map;
+    map.setFacets({makeFloor(-100.0f, 300.0f, -200.0f, 200.0f, 0.0f), ceiling});
+    PathObject object = {};
+    object.radius = 20.0f;
+    object.height = 80.0f;
+    CHECK(map.canReachDirectly({0.0f, 0.0f, 0.0f}, {150.0f, 0.0f, 0.0f}, object));
+    object.height = 120.0f;
+    CHECK(map.canReachDirectly({0.0f, 0.0f, 0.0f}, {150.0f, 0.0f, 0.0f}, object));
+    CHECK(map.traceWalkSegment({80.0f, 0.0f, 0.0f}, {90.0f, 0.0f, 0.0f}, object));
+    object.height = 121.0f;
+    CHECK_FALSE(map.canReachDirectly({0.0f, 0.0f, 0.0f}, {150.0f, 0.0f, 0.0f}, object));
+    object.height = 145.0f;
+    CHECK_FALSE(map.canReachDirectly({0.0f, 0.0f, 0.0f}, {150.0f, 0.0f, 0.0f}, object));
+    CHECK(map.canReachDirectly({0.0f, -150.0f, 0.0f}, {150.0f, -150.0f, 0.0f}, object));
+    // The check must also reject standing entirely underneath the low ceiling.
+    CHECK_FALSE(map.traceWalkSegment({80.0f, 0.0f, 0.0f}, {90.0f, 0.0f, 0.0f}, object));
+    object.height = std::numeric_limits<float>::quiet_NaN();
+    CHECK_FALSE(map.traceWalkSegment({0.0f, 0.0f, 0.0f}, {150.0f, 0.0f, 0.0f}, object));
+}
+
+TEST_CASE("path map full body clearance respects climbable risers")
+{
+    for (const float radius : {90.0f, 110.0f})
+    {
+        CAPTURE(radius);
+        PathObject object = {};
+        object.radius = radius;
+        object.height = radius * 2.0f + 2.0f;
+        object.stepHeight = 40.0f;
+        for (const float rise : {16.0f, 40.0f, 41.0f})
+        {
+            CAPTURE(rise);
+            PathMap map;
+            map.setFacets({makeFloor(-300.0f, 0.0f, -200.0f, 200.0f, 0.0f),
+                makeFloor(0.0f, 300.0f, -200.0f, 200.0f, rise),
+                makeWall(0.0f, -200.0f, 200.0f, 0.0f, rise)});
+            CHECK_EQ(map.traceWalkSegment({-180.0f, 0.0f, 0.0f}, {180.0f, 0.0f, rise}, object), rise <= 40.0f);
+        }
+    }
+}
+
+TEST_CASE("path map walking allows leaving a sloped ceiling contact but rejects entering it")
+{
+    PathFacet ceiling = {};
+    ceiling.kind = PathFacetKind::Ceiling;
+    ceiling.blocking = true;
+    ceiling.vertices = {{-200.0f, -200.0f, 400.0f}, {-200.0f, 200.0f, 400.0f},
+        {200.0f, 200.0f, 0.0f}, {200.0f, -200.0f, 0.0f}};
+    PathMap map;
+    map.setFacets({makeFloor(-200.0f, 200.0f, -200.0f, 200.0f, 0.0f), ceiling});
+    PathObject object = {};
+    object.radius = 56.0f;
+    object.height = 145.0f;
+    // At x=50 the head fits, but the upper sphere already touches the overhang.
+    CHECK(map.traceWalkSegment({50.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}, object));
+    CHECK_FALSE(map.traceWalkSegment({0.0f, 0.0f, 0.0f}, {50.0f, 0.0f, 0.0f}, object));
+}
+
+TEST_CASE("path map walking checks obstacles between the lower and upper body probes")
+{
+    PathMap map;
+    map.setFacets({makeFloor(-100.0f, 100.0f, -100.0f, 100.0f, 0.0f),
+        makeWall(0.0f, -5.0f, 5.0f, 80.0f, 120.0f)});
+    PathObject object = {};
+    object.radius = 20.0f;
+    object.height = 200.0f;
+    CHECK_FALSE(map.traceWalkSegment({-60.0f, 0.0f, 0.0f}, {60.0f, 0.0f, 0.0f}, object));
+    CHECK_FALSE(map.traceWalkSegment({-60.0f, 15.0f, 0.0f}, {60.0f, 15.0f, 0.0f}, object));
+    CHECK(map.traceWalkSegment({-60.0f, 30.0f, 0.0f}, {60.0f, 30.0f, 0.0f}, object));
+}
+
 TEST_CASE("path map walking samples below long path step length near void edge")
 {
     PathMap map;
@@ -192,6 +271,44 @@ TEST_CASE("path map walking rejects floor height deltas above the actor step hei
 
     object.stepHeight = 90.0f;
     CHECK(map.traceWalkSegment({25.0f, 50.0f, 0.0f}, {75.0f, 50.0f, 80.0f}, object));
+}
+
+TEST_CASE("path map walking uses independent rise and drop limits")
+{
+    PathObject object = {};
+    object.radius = 8.0f;
+    object.stepHeight = 40.0f;
+    object.dropHeight = 100.0f;
+    for (const float drop : {96.0f, 100.0f, 101.0f})
+    {
+        CAPTURE(drop);
+        PathMap map;
+        map.setFacets({
+            makeFloor(0.0f, 100.0f, 0.0f, 100.0f, drop),
+            makeFloor(100.0f, 200.0f, 0.0f, 100.0f, 0.0f)
+        });
+        CHECK_EQ(map.traceWalkSegment({50.0f, 50.0f, drop}, {150.0f, 50.0f, 0.0f}, object), drop <= 100.0f);
+        CHECK_FALSE(map.traceWalkSegment({150.0f, 50.0f, 0.0f}, {50.0f, 50.0f, drop}, object));
+    }
+}
+
+TEST_CASE("path map walking leaves a step before descending beside its vertical face")
+{
+    const std::vector<PathFacet> facets = {
+        makeFloor(0.0f, 100.0f, 0.0f, 200.0f, 96.0f),
+        makeFloor(100.0f, 300.0f, 0.0f, 200.0f, 0.0f),
+        makeWall(100.0f, 0.0f, 200.0f, 0.0f, 96.0f)
+    };
+    PathMap map;
+    map.setFacets(facets);
+    PathObject object = {};
+    object.radius = 56.0f;
+    object.dropHeight = 100.0f;
+    CHECK(map.traceWalkSegment({80.0f, 100.0f, 96.0f}, {200.0f, 100.0f, 0.0f}, object));
+    CHECK_FALSE(map.traceWalkSegment({200.0f, 100.0f, 0.0f}, {80.0f, 100.0f, 96.0f}, object));
+
+    map.addFacet(makeWall(140.0f, 0.0f, 200.0f, 0.0f, 256.0f));
+    CHECK_FALSE(map.traceWalkSegment({80.0f, 100.0f, 96.0f}, {200.0f, 100.0f, 0.0f}, object));
 }
 
 TEST_CASE("path map walking rejects a higher overlapping target when trace stays on lower floor")
@@ -286,6 +403,53 @@ TEST_CASE("path map body-radius trace rejects parallel movement into a wall")
     CHECK_EQ(blocked.facetIndex, 0u);
 }
 
+TEST_CASE("path map body touching a wall can move away without crossing it")
+{
+    PathMap map;
+    map.setFacets({makeWall(0.0f, -100.0f, 100.0f, 0.0f, 100.0f)});
+
+    for (const float side : {-1.0f, 1.0f})
+    {
+        INFO("wall side=" << side);
+        CHECK_FALSE(map.traceLine({side * 104.0f, 0.0f, 50.0f},
+            {side * 40.0f, 0.0f, 50.0f}, 40.0f, true).blocked);
+        for (const float distance : {40.0f, 39.0f, 10.0f})
+        {
+            INFO("wall distance=" << distance);
+            const PathPoint from = {side * distance, 0.0f, 50.0f};
+            CHECK_FALSE(map.traceLine(from, {side * 104.0f, 0.0f, 50.0f}, 40.0f, true).blocked);
+            CHECK_FALSE(map.traceLine(from, {side * 104.0f, 64.0f, 50.0f}, 40.0f, true).blocked);
+            CHECK(map.traceLine(from, {side * 5.0f, 0.0f, 50.0f}, 40.0f, true).blocked);
+            CHECK(map.traceLine(from, {-side * 104.0f, 0.0f, 50.0f}, 40.0f, true).blocked);
+        }
+    }
+}
+
+TEST_CASE("path map leaving wall contact still blocks new obstacles")
+{
+    PathMap map;
+    map.setFacets({
+        makeWall(0.0f, -100.0f, 100.0f, 0.0f, 100.0f),
+        makeWall(120.0f, -100.0f, 100.0f, 0.0f, 100.0f)
+    });
+    CHECK(map.traceLine({40.0f, 0.0f, 50.0f}, {104.0f, 0.0f, 50.0f}, 40.0f, true).blocked);
+
+    map.setFacets({makeWall(0.0f, 0.0f, 100.0f, 0.0f, 100.0f)});
+    CHECK(map.traceLine({20.0f, -40.0f, 50.0f}, {30.0f, 40.0f, 50.0f}, 40.0f, true).blocked);
+}
+
+TEST_CASE("path map body may graze a doorway edge but cannot clip through it")
+{
+    PathMap map;
+    map.setFacets({makeHorizontalWall(0.0f, 0.0f, 100.0f, 0.0f, 100.0f)});
+    CHECK_FALSE(map.traceLine({-40.0f, -64.0f, 50.0f}, {-40.0f, 64.0f, 50.0f}, 40.0f, true).blocked);
+    CHECK(map.traceLine({-39.0f, -64.0f, 50.0f}, {-39.0f, 64.0f, 50.0f}, 40.0f, true).blocked);
+
+    // A diagonal probe hitting an edge can still penetrate the wall with the rest of the body.
+    map.setFacets({makeWall(0.0f, 40.0f * 0.70710678f, 29.0f, 0.0f, 100.0f)});
+    CHECK(map.traceLine({-64.0f, 0.0f, 50.0f}, {64.0f, 0.0f, 50.0f}, 40.0f, true).blocked);
+}
+
 TEST_CASE("path map spatial grid preserves floor and trace queries")
 {
     PathMap map;
@@ -303,4 +467,187 @@ TEST_CASE("path map spatial grid preserves floor and trace queries")
     const PathTraceResult blocked = map.traceLine({0.0f, 0.0f, 50.0f}, {100.0f, 0.0f, 50.0f});
     CHECK(blocked.blocked);
     CHECK_EQ(blocked.facetIndex, 1u);
+}
+
+TEST_CASE("path map open-space walking retains floor gaps and surrounding obstacles")
+{
+    PathObject object = {};
+    object.radius = 20.0f;
+    object.height = 200.0f;
+    object.stepLength = 64.0f;
+    PathFacet floor = makeFloor(0.0f, 512.0f, 0.0f, 512.0f, 0.0f);
+    floor.blocking = true;
+    const PathPoint from = {100.0f, 100.0f, 0.0f};
+    const PathPoint to = {200.0f, 100.0f, 0.0f};
+    for (const float cellSize : {0.0f, 128.0f, 512.0f})
+    {
+        INFO("cell size=" << cellSize);
+        PathMap map;
+        map.setFacets({floor});
+        map.buildSpatialGrid(cellSize);
+        CHECK(map.traceWalkSegment(from, to, object));
+
+        PathFacet portal = makeWall(150.0f, 0.0f, 200.0f, 0.0f, 256.0f);
+        portal.attributes.portal = true;
+        map.setFacets({floor, portal});
+        CHECK(map.traceWalkSegment(from, to, object));
+
+        for (const PathFacet &obstacle : {
+            makeWall(150.0f, 114.0f, 132.0f, 0.0f, 256.0f),
+            makeWall(150.0f, 90.0f, 110.0f, 80.0f, 120.0f)})
+        {
+            map.setFacets({floor, obstacle});
+            const PathWalkSegmentDebug blocked = map.debugTraceWalkSegment(from, to, object);
+            CHECK_FALSE(blocked.success);
+            CHECK_EQ(blocked.rejectReason, PathWalkRejectReason::Blocked);
+            CHECK_EQ(blocked.blockedFacet, 1u);
+        }
+
+        PathFacet ceiling = makeFloor(0.0f, 512.0f, 0.0f, 512.0f, 150.0f);
+        ceiling.kind = PathFacetKind::Ceiling;
+        ceiling.walkableFloor = false;
+        ceiling.blocking = true;
+        map.setFacets({floor, ceiling});
+        CHECK_FALSE(map.traceWalkSegment(from, to, object));
+
+        PathFacet gapLeft = makeFloor(0.0f, 10.0f, 0.0f, 512.0f, 0.0f);
+        PathFacet gapRight = makeFloor(14.0f, 512.0f, 0.0f, 512.0f, 0.0f);
+        gapLeft.blocking = true;
+        gapRight.blocking = true;
+        map.setFacets({gapLeft, gapRight});
+        const PathWalkSegmentDebug gap = map.debugTraceWalkSegment({8.0f, 100.0f, 0.0f}, to, object);
+        CHECK_FALSE(gap.success);
+        CHECK_EQ(gap.rejectReason, PathWalkRejectReason::SampleNoFloor);
+        CHECK_EQ(gap.sampleIndex, 2u);
+    }
+}
+
+TEST_CASE("path map broad bounds scans preserve grid first-hit order and body traces")
+{
+    std::vector<PathFacet> facets = {
+        makeWall(256.0f, -2048.0f, 2048.0f, -2048.0f, 2048.0f),
+        makeWall(-256.0f, -2048.0f, 2048.0f, -2048.0f, 2048.0f),
+        makeFloor(-2048.0f, 2048.0f, -2048.0f, 2048.0f, -2048.0f)
+    };
+    PathMap scanMap;
+    scanMap.setFacets(facets);
+    scanMap.buildSpatialGrid(256.0f);
+
+    // Invalid padding leaves indexed geometry unchanged but makes the reference
+    // choose grid traversal for the same queries (at most 18 cubed cells).
+    facets.resize(8000);
+    PathMap gridMap;
+    gridMap.setFacets(facets);
+    gridMap.buildSpatialGrid(256.0f);
+    const std::array<std::pair<PathPoint, PathPoint>, 5> segments = {{{
+        {-2048.0f, -2048.0f, -2048.0f}, {2048.0f, 2048.0f, 2048.0f}
+    }, {
+        {2048.0f, 2048.0f, 2048.0f}, {-2048.0f, -2048.0f, -2048.0f}
+    }, {
+        {-2048.0f, -2048.0f, 64.0f}, {2048.0f, 2048.0f, 64.0f}
+    }, {
+        {-2048.0f, 2500.0f, -2048.0f}, {2048.0f, 2500.0f, 2048.0f}
+    }, {
+        {-2048.0f, -2048.0f, 2500.0f}, {2048.0f, 2048.0f, 2500.0f}
+    }}};
+    for (const std::pair<PathPoint, PathPoint> &segment : segments)
+    {
+        for (float radius : {0.0f, 8.0f})
+        {
+            const PathTraceResult scanned = scanMap.traceLine(segment.first, segment.second, radius, true);
+            const PathTraceResult indexed = gridMap.traceLine(segment.first, segment.second, radius, true);
+            CHECK_EQ(scanned.blocked, indexed.blocked);
+            if (indexed.blocked)
+            {
+                CHECK_EQ(scanned.facetIndex, indexed.facetIndex);
+                CHECK(scanned.point.x == doctest::Approx(indexed.point.x));
+                CHECK(scanned.point.y == doctest::Approx(indexed.point.y));
+                CHECK(scanned.point.z == doctest::Approx(indexed.point.z));
+            }
+        }
+    }
+    // Cell order, rather than insertion order or ray direction, chooses the first hit.
+    CHECK_EQ(scanMap.traceLine(segments[0].first, segments[0].second).facetIndex, 1u);
+    CHECK_EQ(scanMap.traceLine(segments[1].first, segments[1].second).facetIndex, 1u);
+    CHECK_FALSE(scanMap.traceLine(segments[3].first, segments[3].second).blocked);
+}
+
+TEST_CASE("path map bounds scans preserve walk clearance and floor snapping")
+{
+    std::vector<PathFacet> facets = {
+        makeFloor(-128.0f, 128.0f, -128.0f, 128.0f, 0.0f),
+        makeWall(0.0f, -48.0f, 48.0f, 0.0f, 128.0f)
+    };
+    PathMap scanMap;
+    scanMap.setFacets(facets);
+    scanMap.buildSpatialGrid(32.0f);
+    facets.resize(8000);
+    PathMap gridMap;
+    gridMap.setFacets(facets);
+    gridMap.buildSpatialGrid(32.0f);
+    PathObject object = {};
+    object.radius = 8.0f;
+    object.height = 64.0f;
+    object.stepLength = 24.0f;
+    for (float y : {-64.0f, -48.0f, 0.0f, 48.0f, 64.0f})
+    {
+        const PathPoint from = {-16.0f, y, 0.0f};
+        PathPoint scanned = {8.0f, y, 0.0f};
+        PathPoint indexed = scanned;
+        CHECK_EQ(scanMap.traceWalkSegment(from, scanned, object), gridMap.traceWalkSegment(from, indexed, object));
+        CHECK_EQ(scanMap.resolveWalkStep(from, scanned, object), gridMap.resolveWalkStep(from, indexed, object));
+        CHECK(scanned.x == doctest::Approx(indexed.x));
+        CHECK(scanned.y == doctest::Approx(indexed.y));
+        CHECK(scanned.z == doctest::Approx(indexed.z));
+    }
+    bool scanValid = false;
+    bool gridValid = false;
+    const PathPoint source = {160.0f, 160.0f, 16.0f};
+    const PathPoint scanned = scanMap.snapToNearestWalkableFloor(source, 512.0f, scanValid);
+    const PathPoint indexed = gridMap.snapToNearestWalkableFloor(source, 512.0f, gridValid);
+    CHECK_EQ(scanValid, gridValid);
+    CHECK(scanned.x == doctest::Approx(indexed.x));
+    CHECK(scanned.y == doctest::Approx(indexed.y));
+    CHECK(scanned.z == doctest::Approx(indexed.z));
+}
+
+TEST_CASE("path map long grid walks retain thin obstacles and gaps after repeated cell queries")
+{
+    PathObject object = {};
+    object.radius = 8.0f;
+    object.height = 64.0f;
+    object.stepHeight = 40.0f;
+    object.dropHeight = 100.0f;
+    const PathPoint from = {8.0f, 24.0f, 0.0f};
+    const PathPoint to = {1016.0f, 24.0f, 0.0f};
+    PathMap map;
+    std::vector<PathFacet> facets = {makeFloor(0.0f, 1024.0f, 0.0f, 128.0f, 0.0f)};
+    facets.resize(256);
+    map.setFacets(facets);
+    map.buildSpatialGrid(32.0f);
+    REQUIRE(map.traceWalkSegment(from, to, object));
+    facets[1] = makeWall(700.0f, 0.0f, 128.0f, 0.0f, 128.0f);
+    map.setFacets(facets);
+    const PathWalkSegmentDebug wall = map.debugTraceWalkSegment(from, to, object);
+    CHECK_FALSE(wall.success);
+    CHECK_EQ(wall.rejectReason, PathWalkRejectReason::Blocked);
+    CHECK_EQ(wall.blockedFacet, 1u);
+    facets[0] = makeFloor(0.0f, 700.0f, 0.0f, 128.0f, 0.0f);
+    facets[1] = makeFloor(704.0f, 1024.0f, 0.0f, 128.0f, 0.0f);
+    map.setFacets(facets);
+    const PathWalkSegmentDebug gap = map.debugTraceWalkSegment(from, to, object);
+    CHECK_FALSE(gap.success);
+    CHECK_EQ(gap.rejectReason, PathWalkRejectReason::SampleNoFloor);
+    CHECK(gap.probe.x > 700.0f);
+    CHECK(gap.probe.x < 704.0f);
+    facets[0] = makeFloor(0.0f, 1024.0f, 0.0f, 128.0f, 0.0f);
+    facets[1] = makeFloor(700.0f, 704.0f, 0.0f, 128.0f, 48.0f);
+    facets[1].kind = PathFacetKind::Ceiling;
+    facets[1].blocking = true;
+    facets[1].walkableFloor = false;
+    map.setFacets(facets);
+    CHECK_FALSE(map.traceWalkSegment(from, to, object));
+    facets[1] = {};
+    map.setFacets(facets);
+    CHECK(map.traceWalkSegment(from, to, object));
 }

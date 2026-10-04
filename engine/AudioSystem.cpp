@@ -1,4 +1,5 @@
 #include "engine/AudioSystem.h"
+#include "engine/AudioSpatialization.h"
 
 #include <algorithm>
 #include <cmath>
@@ -170,10 +171,14 @@ uint64_t AudioSystem::playClip(const std::string &virtualPath, const PlaybackOpt
     instance.pClip = std::move(pClip);
     instance.volume = std::clamp(options.volume * GlobalSoundGain, 0.0f, 2.0f);
     instance.positional = options.positional;
+    instance.attenuate = options.attenuate;
     instance.loop = options.loop;
     instance.x = options.x;
     instance.y = options.y;
     instance.z = options.z;
+    instance.pitch = std::clamp(options.pitch, 0.125f, 8.0f);
+    instance.innerRadius = options.innerRadius;
+    instance.outerRadius = options.outerRadius;
     m_playingInstances.push_back(std::move(instance));
     return m_playingInstances.back().instanceId;
 }
@@ -226,6 +231,20 @@ void AudioSystem::setClipVolume(uint64_t instanceId, float volume)
 
         instance.volume = std::clamp(volume * GlobalSoundGain, 0.0f, 2.0f);
         return;
+    }
+}
+
+void AudioSystem::setClipPosition(uint64_t instanceId, float x, float y, float z)
+{
+    for (PlayingInstance &instance : m_playingInstances)
+    {
+        if (instance.instanceId == instanceId)
+        {
+            instance.x = x;
+            instance.y = y;
+            instance.z = z;
+            return;
+        }
     }
 }
 
@@ -388,21 +407,33 @@ void AudioSystem::mixNextChunk(const ListenerState &listenerState)
 
         for (int frameIndex = 0; frameIndex < MixChunkFrames; ++frameIndex)
         {
-            if (instance.frameOffset >= instance.pClip->frameCount)
+            if (instance.frameOffset >= static_cast<double>(instance.pClip->frameCount))
             {
                 if (!instance.loop)
                 {
                     break;
                 }
 
-                instance.frameOffset = 0;
+                instance.frameOffset = std::fmod(
+                    instance.frameOffset,
+                    static_cast<double>(instance.pClip->frameCount));
             }
 
-            const size_t sourceIndex = static_cast<size_t>(instance.frameOffset) * OutputChannels;
+            const uint32_t sourceFrame = static_cast<uint32_t>(instance.frameOffset);
+            const uint32_t nextFrame = sourceFrame + 1 < instance.pClip->frameCount
+                ? sourceFrame + 1 : (instance.loop ? 0 : sourceFrame);
+            const float interpolation = static_cast<float>(instance.frameOffset - sourceFrame);
+            const size_t sourceIndex = static_cast<size_t>(sourceFrame) * OutputChannels;
+            const size_t nextSourceIndex = static_cast<size_t>(nextFrame) * OutputChannels;
             const size_t destinationIndex = static_cast<size_t>(frameIndex) * OutputChannels;
-            mixedSamples[destinationIndex] += instance.pClip->samples[sourceIndex] * leftGain;
-            mixedSamples[destinationIndex + 1] += instance.pClip->samples[sourceIndex + 1] * rightGain;
-            ++instance.frameOffset;
+            const float leftSample = instance.pClip->samples[sourceIndex] +
+                (instance.pClip->samples[nextSourceIndex] - instance.pClip->samples[sourceIndex]) * interpolation;
+            const float rightSample = instance.pClip->samples[sourceIndex + 1] +
+                (instance.pClip->samples[nextSourceIndex + 1] - instance.pClip->samples[sourceIndex + 1]) *
+                    interpolation;
+            mixedSamples[destinationIndex] += leftSample * leftGain;
+            mixedSamples[destinationIndex + 1] += rightSample * rightGain;
+            instance.frameOffset += instance.pitch;
         }
     }
 
@@ -418,7 +449,7 @@ void AudioSystem::mixNextChunk(const ListenerState &listenerState)
             [](const PlayingInstance &instance)
             {
                 return instance.pClip == nullptr
-                    || (!instance.loop && instance.frameOffset >= instance.pClip->frameCount);
+                    || (!instance.loop && instance.frameOffset >= static_cast<double>(instance.pClip->frameCount));
             }),
         m_playingInstances.end());
 
@@ -448,18 +479,33 @@ void AudioSystem::calculateStereoGains(
     const float deltaY = instance.y - listenerState.y;
     const float deltaZ = instance.z - listenerState.z;
     const float distance = std::sqrt(deltaX * deltaX + deltaY * deltaY + deltaZ * deltaZ);
-    constexpr float MaxAudibleDistance = 12000.0f;
+    const bool usesExplicitRadii = instance.innerRadius >= 0.0f && instance.outerRadius > instance.innerRadius;
+    const float maxAudibleDistance = usesExplicitRadii ? instance.outerRadius : 12000.0f;
 
-    if (distance >= MaxAudibleDistance)
+    if (instance.attenuate && distance >= maxAudibleDistance)
     {
         leftGain = 0.0f;
         rightGain = 0.0f;
         return;
     }
 
-    const float normalizedDistance = distance / 768.0f;
-    const float attenuation = 1.0f / (1.0f + normalizedDistance * normalizedDistance);
-    const float pan = std::clamp(deltaX / 2048.0f, -1.0f, 1.0f);
+    float attenuation = 1.0f;
+    if (!instance.attenuate)
+    {
+        attenuation = 1.0f;
+    }
+    else if (usesExplicitRadii)
+    {
+        attenuation = distance <= instance.innerRadius
+            ? 1.0f
+            : 1.0f - (distance - instance.innerRadius) / (instance.outerRadius - instance.innerRadius);
+    }
+    else
+    {
+        const float normalizedDistance = distance / 768.0f;
+        attenuation = 1.0f / (1.0f + normalizedDistance * normalizedDistance);
+    }
+    const float pan = positionalAudioPan(deltaX, deltaY, listenerState.yawRadians);
     leftGain = instance.volume * attenuation * (pan <= 0.0f ? 1.0f : (1.0f - pan));
     rightGain = instance.volume * attenuation * (pan >= 0.0f ? 1.0f : (1.0f + pan));
 }

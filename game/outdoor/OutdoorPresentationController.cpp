@@ -98,6 +98,15 @@ void OutdoorPresentationController::consumePendingWorldAudioEvents(OutdoorGameVi
 
     for (const OutdoorWorldRuntime::AudioEvent &event : events)
     {
+        if (event.actorIndex)
+        {
+            view.m_pGameAudioSystem->playActorSound(
+                *event.actorIndex,
+                SoundRef{event.soundScope, event.soundId},
+                {event.x, event.y, event.z},
+                event.pitch);
+            continue;
+        }
         const uint64_t currentTicks = SDL_GetTicks();
 
         if (event.reason == "meteor_shower_impact")

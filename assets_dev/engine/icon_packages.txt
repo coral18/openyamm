@@ -1,0 +1,8 @@
+# Authoritative icon roots after the reviewed 2026-09-26 restoration migration.
+# Shared items, dolls and PC portraits are engine-owned; NPC portraits retain their world namespace.
+# No native fallback is allowed within a declared package. MM9 remains its separate native scope.
+engine x2
+worlds/mm6 x2
+worlds/mm7 x2
+worlds/mm8 x2
+worlds/mm9 x1

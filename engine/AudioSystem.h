@@ -29,16 +29,21 @@ public:
         float x = 0.0f;
         float y = 0.0f;
         float z = 0.0f;
+        float yawRadians = 0.0f;
     };
 
     struct PlaybackOptions
     {
         float volume = 1.0f;
         bool positional = false;
+        bool attenuate = true;
         bool loop = false;
         float x = 0.0f;
         float y = 0.0f;
         float z = 0.0f;
+        float pitch = 1.0f;
+        float innerRadius = -1.0f;
+        float outerRadius = -1.0f;
     };
 
     AudioSystem();
@@ -59,6 +64,7 @@ public:
     void pauseClip(uint64_t instanceId);
     void resumeClip(uint64_t instanceId);
     void setClipVolume(uint64_t instanceId, float volume);
+    void setClipPosition(uint64_t instanceId, float x, float y, float z);
     bool isClipPlaying(uint64_t instanceId) const;
     void clearQueuedAudio();
     void stopAll();
@@ -76,13 +82,17 @@ private:
     {
         uint64_t instanceId = 0;
         std::shared_ptr<AudioClip> pClip;
-        uint32_t frameOffset = 0;
+        double frameOffset = 0.0;
         float volume = 1.0f;
         bool positional = false;
+        bool attenuate = true;
         bool loop = false;
         float x = 0.0f;
         float y = 0.0f;
         float z = 0.0f;
+        float pitch = 1.0f;
+        float innerRadius = -1.0f;
+        float outerRadius = -1.0f;
         bool paused = false;
     };
 

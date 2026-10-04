@@ -1,0 +1,121 @@
+minimum_normal_z: 0.88
+density_variation: 0.8
+patch_size: 768
+tall_grass_chance: 0.04
+tall_grass_scale: 1.5
+version: 2
+families_file: families_v2.yml
+seed: 1701531899
+distance: 4096
+rules:
+- texture: grastyl
+  family: tropical_low
+  density: 0.55
+  tint:
+  - 0.65
+  - 0.8
+  - 0.52
+- texture: grastyl2
+  family: tropical_low
+  density: 0.55
+  tint:
+  - 0.65
+  - 0.8
+  - 0.52
+  mask: masks/grastyl2_foreground.png
+- texture: grdrte
+  family: tropical_low
+  density: 0.55
+  tint:
+  - 0.65
+  - 0.8
+  - 0.52
+  mask: masks/grdrte_foreground.png
+- texture: grdrtn
+  family: tropical_low
+  density: 0.55
+  tint:
+  - 0.65
+  - 0.8
+  - 0.52
+  mask: masks/grdrtn_foreground.png
+- texture: grdrtne
+  family: tropical_low
+  density: 0.55
+  tint:
+  - 0.65
+  - 0.8
+  - 0.52
+  mask: masks/grdrtne_foreground.png
+- texture: grdrtnw
+  family: tropical_low
+  density: 0.55
+  tint:
+  - 0.65
+  - 0.8
+  - 0.52
+  mask: masks/grdrtnw_foreground.png
+- texture: grdrts
+  family: tropical_low
+  density: 0.55
+  tint:
+  - 0.65
+  - 0.8
+  - 0.52
+  mask: masks/grdrts_foreground.png
+- texture: grdrtse
+  family: tropical_low
+  density: 0.55
+  tint:
+  - 0.65
+  - 0.8
+  - 0.52
+  mask: masks/grdrtse_foreground.png
+- texture: grdrtsw
+  family: tropical_low
+  density: 0.55
+  tint:
+  - 0.65
+  - 0.8
+  - 0.52
+  mask: masks/grdrtsw_foreground.png
+- texture: grdrtw
+  family: tropical_low
+  density: 0.55
+  tint:
+  - 0.65
+  - 0.8
+  - 0.52
+  mask: masks/grdrtw_foreground.png
+- texture: grdrtxne
+  family: tropical_low
+  density: 0.55
+  tint:
+  - 0.65
+  - 0.8
+  - 0.52
+  mask: masks/grdrtxne_foreground.png
+- texture: grdrtxnw
+  family: tropical_low
+  density: 0.55
+  tint:
+  - 0.65
+  - 0.8
+  - 0.52
+  mask: masks/grdrtxnw_foreground.png
+- texture: grdrtxse
+  family: tropical_low
+  density: 0.55
+  tint:
+  - 0.65
+  - 0.8
+  - 0.52
+  mask: masks/grdrtxse_foreground.png
+- texture: grdrtxsw
+  family: tropical_low
+  density: 0.55
+  tint:
+  - 0.65
+  - 0.8
+  - 0.52
+  mask: masks/grdrtxsw_foreground.png

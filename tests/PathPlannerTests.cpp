@@ -192,6 +192,69 @@ TEST_CASE("path planner can recover source from nearby no-floor position when re
     REQUIRE_FALSE(recoveredResult.waypoints.empty());
 }
 
+TEST_CASE("path planner aligns ground steps with narrow passage clearance")
+{
+    for (const float halfWidth : {128.0f, 126.0f})
+    {
+        CAPTURE(halfWidth);
+        PathMap map;
+        map.setFacets({
+            makePlannerFloor(-400.0f, 400.0f, -200.0f, 1000.0f, 0.0f),
+            makePlannerWall(-halfWidth, 200.0f, 1000.0f, 0.0f, 300.0f),
+            makePlannerWall(halfWidth, 200.0f, 1000.0f, 0.0f, 300.0f)
+        });
+        for (const float offset : {2.645f, 7.9f, -7.9f})
+        {
+            CAPTURE(offset);
+            PathPlanRequest request = makeRequest();
+            request.source = {offset, 0.0f, 0.0f};
+            request.target = {0.0f, 800.0f, 0.0f};
+            request.object.radius = 127.0f;
+            request.object.stepLength = 40.0f;
+            request.allowDirect = false;
+            PathPlanner planner;
+            const PathPlanResult result = planner.plan(map, request);
+            if (halfWidth < request.object.radius)
+            {
+                CHECK_EQ(result.status, PathPlanStatus::NoRoute);
+                continue;
+            }
+            REQUIRE_EQ(result.status, PathPlanStatus::Success);
+            REQUIRE_FALSE(result.waypoints.empty());
+            for (const OpenYAMM::Game::PathPoint &waypoint : result.waypoints)
+            {
+                if (waypoint.y > 300.0f && waypoint.y < 900.0f)
+                {
+                    CHECK_LE(std::fabs(waypoint.x) + request.object.radius, halfWidth + 0.001f);
+                }
+            }
+        }
+    }
+}
+
+TEST_CASE("path planner respects independent rise and drop limits")
+{
+    PathPlanRequest request = makeRequest();
+    request.object.dropHeight = 100.0f;
+    request.allowDirect = false;
+    for (const float drop : {96.0f, 100.0f, 101.0f})
+    {
+        CAPTURE(drop);
+        PathMap map;
+        map.setFacets({
+            makePlannerFloor(-48.0f, 48.0f, -48.0f, 48.0f, drop),
+            makePlannerFloor(48.0f, 192.0f, -48.0f, 48.0f, 0.0f)
+        });
+        request.source = {0.0f, 0.0f, drop};
+        request.target = {144.0f, 0.0f, 0.0f};
+        PathPlanner planner;
+        CHECK_EQ(planner.plan(map, request).status, drop <= 100.0f ? PathPlanStatus::Success : PathPlanStatus::NoRoute);
+        request.source = {144.0f, 0.0f, 0.0f};
+        request.target = {0.0f, 0.0f, drop};
+        CHECK_EQ(planner.plan(map, request).status, PathPlanStatus::NoRoute);
+    }
+}
+
 TEST_CASE("path planner accepts stairs within step height")
 {
     PathMap map;

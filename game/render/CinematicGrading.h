@@ -9,7 +9,8 @@ class CinematicGrading
 {
 public:
     bool begin(int width, int height, bool enabled, int strength);
-    void submit();
+    void submit(bgfx::FrameBufferHandle target = BGFX_INVALID_HANDLE);
+    void setOutputFrameBuffer(bgfx::FrameBufferHandle target);
     void resetViews();
     void shutdown();
 

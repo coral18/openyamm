@@ -8,6 +8,7 @@
 
 #include <bgfx/bgfx.h>
 
+#include <algorithm>
 #include <array>
 #include <cstdint>
 #include <functional>
@@ -19,6 +20,24 @@
 
 namespace OpenYAMM::Game
 {
+struct GameplayActorInspectClock
+{
+    uint32_t ticks = 1;
+    uint32_t lastUpdateTicks = 0;
+    bool wasVisible = false;
+
+    uint32_t update(bool visible, uint32_t nowTicks)
+    {
+        if (visible && wasVisible)
+        {
+            ticks += std::min(nowTicks - lastUpdateTicks, 32u);
+        }
+        wasVisible = visible;
+        lastUpdateTicks = nowTicks;
+        return ticks;
+    }
+};
+
 struct GameplayAssetLoadCache
 {
     std::unordered_map<std::string, std::unordered_map<std::string, std::string>> directoryAssetPathsByPath;
@@ -43,6 +62,7 @@ using GameplayHudFontGlyphMetricsData = Engine::FontGlyphMetrics;
 
 struct GameplayHudFontData : Engine::FontAtlas
 {
+    bool smooth = false;
     std::string fontName;
     bgfx::TextureHandle mainTextureHandle = BGFX_INVALID_HANDLE;
     bgfx::TextureHandle shadowTextureHandle = BGFX_INVALID_HANDLE;
@@ -86,6 +106,10 @@ struct GameplayUiViewportRect
 class GameplayHudCommon
 {
 public:
+    // Shared logical viewport for portrait rendering and pointer hit tests.
+    static constexpr float PartyPortraitNativeWidth = 60.0f;
+    static constexpr float PartyPortraitNativeHeight = 80.0f;
+
     using SubmitTexturedQuadFn = std::function<void(
         bgfx::TextureHandle,
         float,
@@ -113,6 +137,17 @@ public:
         int screenWidth,
         int screenHeight);
     static float snappedHudFontScale(float scale);
+    static float touchPanelVerticalOffset(
+        const GameplayResolvedHudLayoutElement &panel, const GameplayResolvedHudLayoutElement &basebar)
+    {
+        const float ornamentMargin = 22.0f * basebar.scale;
+        if (panel.x + panel.width <= basebar.x - ornamentMargin
+            || panel.x >= basebar.x + basebar.width + ornamentMargin)
+        {
+            return 0.0f;
+        }
+        return std::min(0.0f, basebar.y - 12.0f * panel.scale - panel.y - panel.height);
+    }
     static GameplayResolvedHudLayoutElement resolveAttachedHudLayoutRect(
         UiLayoutManager::LayoutAttachMode attachTo,
         const GameplayResolvedHudLayoutElement &parent,
@@ -170,7 +205,8 @@ public:
         int16_t paletteId,
         int &width,
         int &height,
-        const std::string &worldId = {});
+        const std::string &worldId = {},
+        Engine::AssetScaleTier *pLoadedTier = nullptr);
     static const GameplayHudTextureData *findHudTexture(
         const std::vector<GameplayHudTextureData> &textures,
         const std::unordered_map<std::string, size_t> &textureIndexByName,

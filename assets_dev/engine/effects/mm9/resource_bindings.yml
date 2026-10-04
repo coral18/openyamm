@@ -1,0 +1,3452 @@
+schema: openyamm.effectResourceBindings.v1
+namespace: mm9
+source:
+  path: mm9/extracted/CLIENTFX/CLIENTFX/SPELLS.fxf
+  bytes: 288375
+  sha256: 468cbe2265fac31539b30c09f203517cca2900f4be6ad9dcea548019d02879bf
+supplementalSources:
+  hardcodedMeleeContact:
+    evidence: re_mm8/mm9_vfx/MELEE_HIT_EFFECTS.md
+    sprites:
+    - sprites/bloodhit1.spr
+    - sprites/bloodspray1.spr
+rules:
+  lookup: exact normalized legacy reference
+  case: ASCII lowercase
+  extensionGuessing: false
+  externalFallback: false
+summary:
+  effectGroups: 48
+  effectKeys: 176
+  bindings: 252
+  missingSources: 2
+missingSources:
+- models/spells/armortube.abc
+- skins/ghost.dtx
+bindings:
+- legacy: models/ghost.abc
+  kind: model
+  resource: mm9:model/ghost
+  asset: engine/effects/mm9/models/ghost.glb
+  status: bound
+  source:
+    path: mm9/extracted/MODELS/MODELS/GHOST.abc
+    bytes: 345658
+    sha256: 07754b3f8ccac88137c586592bf37529d5a5dd87f36edb34397bc5527b6d7b00
+  origin: spells_fxf
+- legacy: models/jajarb.abc
+  kind: model
+  resource: mm9:model/jajarb
+  asset: engine/effects/mm9/models/jajarb.glb
+  status: bound
+  source:
+    path: mm9/extracted/MODELS/MODELS/JAJARB.abc
+    bytes: 95453
+    sha256: 5874a40f481f90687f90b064322280248cb8cfb53c59d0d3b78de67e75cc4ad4
+  origin: spells_fxf
+- legacy: models/monk.abc
+  kind: model
+  resource: mm9:model/monk
+  asset: engine/effects/mm9/models/monk.glb
+  status: bound
+  source:
+    path: mm9/extracted/MODELS/MODELS/MONK.abc
+    bytes: 1189538
+    sha256: 7a13f4314f4662940fcef789bc16140375c90e7e50e7761a8f949d26917b261a
+  origin: spells_fxf
+- legacy: models/spells/armortube.abc
+  kind: model
+  resource: mm9:model/spells/armortube
+  asset: engine/effects/mm9/models/spells/armortube.glb
+  status: missing-source
+  origin: spells_fxf
+- legacy: models/spells/bugpath.abc
+  kind: model
+  resource: mm9:model/spells/bugpath
+  asset: engine/effects/mm9/models/spells/bugpath.glb
+  status: bound
+  source:
+    path: mm9/extracted/MODELS/MODELS/SPELLS/BUGPATH.abc
+    bytes: 3083
+    sha256: 167a7557b3b0608f3250d0caaaaf24b8b48559e5f5ed244ea3d2ec714387e342
+  origin: spells_fxf
+- legacy: models/spells/centerdrop.abc
+  kind: model
+  resource: mm9:model/spells/centerdrop
+  asset: engine/effects/mm9/models/spells/centerdrop.glb
+  status: bound
+  source:
+    path: mm9/extracted/MODELS/MODELS/SPELLS/CENTERDROP.abc
+    bytes: 3430
+    sha256: 9c0ad1555ee14677cf7ecb2453c46a63830e8109b4383111fbf2a27a6c5a62c6
+  origin: spells_fxf
+- legacy: models/spells/headtwirl.abc
+  kind: model
+  resource: mm9:model/spells/headtwirl
+  asset: engine/effects/mm9/models/spells/headtwirl.glb
+  status: bound
+  source:
+    path: mm9/extracted/MODELS/MODELS/SPELLS/HEADTWIRL.abc
+    bytes: 6258
+    sha256: 3d0b78a4b6a83c80b358619734077ef831b1fd8dddc93b982479a3bf1a520d76
+  origin: spells_fxf
+- legacy: models/spells/pathup.abc
+  kind: model
+  resource: mm9:model/spells/pathup
+  asset: engine/effects/mm9/models/spells/pathup.glb
+  status: bound
+  source:
+    path: mm9/extracted/MODELS/MODELS/SPELLS/PATHUP.abc
+    bytes: 9136
+    sha256: 20dc4f7fb5fc9980600ea6dcb1f8ac1f007a47e8bc029c640e1740cea984b317
+  origin: spells_fxf
+- legacy: models/spells/storm.abc
+  kind: model
+  resource: mm9:model/spells/storm
+  asset: engine/effects/mm9/models/spells/storm.glb
+  status: bound
+  source:
+    path: mm9/extracted/MODELS/MODELS/SPELLS/STORM.abc
+    bytes: 8423
+    sha256: 3d0b9f8fc23fa8476aef166733481f9b3ae4d41503265877be6b026e4b505d5d
+  origin: spells_fxf
+- legacy: models/spells/tube.abc
+  kind: model
+  resource: mm9:model/spells/tube
+  asset: engine/effects/mm9/models/spells/tube.glb
+  status: bound
+  source:
+    path: mm9/extracted/MODELS/MODELS/SPELLS/TUBE.abc
+    bytes: 18165
+    sha256: 6ed13905d25c7fa109acfc9b9b5a37316e5824edd3bfe3c9dbbef852c0c94c06
+  origin: spells_fxf
+- legacy: models/spells/wormpath.abc
+  kind: model
+  resource: mm9:model/spells/wormpath
+  asset: engine/effects/mm9/models/spells/wormpath.glb
+  status: bound
+  source:
+    path: mm9/extracted/MODELS/MODELS/SPELLS/WORMPATH.abc
+    bytes: 10600
+    sha256: 52f5c1fad7e6020fd7dbf2dccdf14271e433050b3156321d2be4e81db9c3ccab
+  origin: spells_fxf
+- legacy: skins/clansoldier1.dtx
+  kind: texture
+  resource: mm9:effect-texture/skins/clansoldier1
+  asset: engine/effects/mm9/textures/skins/clansoldier1.png
+  status: bound
+  source:
+    path: mm9/extracted/SKINS/SKINS/CLANSOLDIER1.dtx
+    bytes: 348324
+    sha256: 681584ac03cb3e1843bb6f092ebbdb5eeedf245cad325c959799647a9ba9c8f3
+  origin: spells_fxf
+- legacy: skins/colloidal1.dtx
+  kind: texture
+  resource: mm9:effect-texture/skins/colloidal1
+  asset: engine/effects/mm9/textures/skins/colloidal1.png
+  status: bound
+  source:
+    path: mm9/extracted/SKINS/SKINS/COLLOIDAL1.dtx
+    bytes: 348324
+    sha256: 1de0987871bdfa356b1e3db2929a8191a194fe47a0330a3423da142a64c8956b
+  origin: spells_fxf
+- legacy: skins/ghost.dtx
+  kind: texture
+  resource: mm9:effect-texture/skins/ghost
+  asset: engine/effects/mm9/textures/skins/ghost.png
+  status: missing-source
+  origin: spells_fxf
+- legacy: skins/monk1.dtx
+  kind: texture
+  resource: mm9:effect-texture/skins/monk1
+  asset: engine/effects/mm9/textures/skins/monk1.png
+  status: bound
+  source:
+    path: mm9/extracted/SKINS/SKINS/MONK1.dtx
+    bytes: 348324
+    sha256: 5133347af87ad22013b6ca148bc19d5bcea683c7730cf493131961ec94b91259
+  origin: spells_fxf
+- legacy: skins/props/plantsandtrees/treebark3.dtx
+  kind: texture
+  resource: mm9:effect-texture/skins/props/plantsandtrees/treebark3
+  asset: engine/effects/mm9/textures/skins/props/plantsandtrees/treebark3.png
+  status: bound
+  source:
+    path: mm9/extracted/SKINS/SKINS/PROPS/PLANTSANDTREES/TREEBARK3.dtx
+    bytes: 87204
+    sha256: b8d7daa11cafdde075a8dd73c8a40608ce684578b01b442a3f348ac1d03e8644
+  origin: spells_fxf
+- legacy: sounds/spells/column03.wav
+  kind: sound
+  resource: mm9:sound/spells/column03
+  asset: engine/effects/mm9/audio/spells/column03.wav
+  status: bound
+  source:
+    path: mm9/extracted/SOUNDS/SOUNDS/SPELLS/COLUMN03.wav
+    bytes: 104994
+    sha256: 7e225d8f1f6a0032cfd20225a5af5436eee7fc6433258a4f56438c94904487f8
+  origin: spells_fxf
+- legacy: sounds/spells/curse.wav
+  kind: sound
+  resource: mm9:sound/spells/curse
+  asset: engine/effects/mm9/audio/spells/curse.wav
+  status: bound
+  source:
+    path: mm9/extracted/SOUNDS/SOUNDS/SPELLS/CURSE.wav
+    bytes: 105990
+    sha256: 99edb633ae5ef5e18d9c578cb87abb5413aeade7cf2a5ede4a63f08a48ec6dc3
+  origin: spells_fxf
+- legacy: sounds/spells/darkgrasp.wav
+  kind: sound
+  resource: mm9:sound/spells/darkgrasp
+  asset: engine/effects/mm9/audio/spells/darkgrasp.wav
+  status: bound
+  source:
+    path: mm9/extracted/SOUNDS/SOUNDS/SPELLS/DARKGRASP.wav
+    bytes: 142358
+    sha256: 7fdeeba2ab464e71f99cd031b6850f956426267ef26d81d9554e573c9883987d
+  origin: spells_fxf
+- legacy: sounds/spells/deathstouch.wav
+  kind: sound
+  resource: mm9:sound/spells/deathstouch
+  asset: engine/effects/mm9/audio/spells/deathstouch.wav
+  status: bound
+  source:
+    path: mm9/extracted/SOUNDS/SOUNDS/SPELLS/DEATHSTOUCH.wav
+    bytes: 120326
+    sha256: 9ef7f504204b0eb0a7072a84eb064829d731c986f737e1a8c835d2dbab4f2899
+  origin: spells_fxf
+- legacy: sounds/spells/disease.wav
+  kind: sound
+  resource: mm9:sound/spells/disease
+  asset: engine/effects/mm9/audio/spells/disease.wav
+  status: bound
+  source:
+    path: mm9/extracted/SOUNDS/SOUNDS/SPELLS/DISEASE.wav
+    bytes: 58806
+    sha256: 9aabd9fd76eb440210c06527d5cbcfd4e36a20d1fcb092cb8a49622333502696
+  origin: spells_fxf
+- legacy: sounds/spells/enrage.wav
+  kind: sound
+  resource: mm9:sound/spells/enrage
+  asset: engine/effects/mm9/audio/spells/enrage.wav
+  status: bound
+  source:
+    path: mm9/extracted/SOUNDS/SOUNDS/SPELLS/ENRAGE.wav
+    bytes: 111622
+    sha256: c3d5cdf38e31419d65dfe46ffe9996bcdddcb9ab24f9d6b6eb2b455c527d914d
+  origin: spells_fxf
+- legacy: sounds/spells/eprotection.wav
+  kind: sound
+  resource: mm9:sound/spells/eprotection
+  asset: engine/effects/mm9/audio/spells/eprotection.wav
+  status: bound
+  source:
+    path: mm9/extracted/SOUNDS/SOUNDS/SPELLS/EPROTECTION.wav
+    bytes: 128262
+    sha256: d26c2f3eb6adaacd123d6a2ae3bf563b341029db1d6fe1a4c39d568d487fa737
+  origin: spells_fxf
+- legacy: sounds/spells/featherfall.wav
+  kind: sound
+  resource: mm9:sound/spells/featherfall
+  asset: engine/effects/mm9/audio/spells/featherfall.wav
+  status: bound
+  source:
+    path: mm9/extracted/SOUNDS/SOUNDS/SPELLS/FEATHERFALL.wav
+    bytes: 141318
+    sha256: 3e354ee87dbe41fd68e0a41336e81ae2996fb893d2ab6f9720923c2d9f8db1dc
+  origin: spells_fxf
+- legacy: sounds/spells/meteorshower03.wav
+  kind: sound
+  resource: mm9:sound/spells/meteorshower03
+  asset: engine/effects/mm9/audio/spells/meteorshower03.wav
+  status: bound
+  source:
+    path: mm9/extracted/SOUNDS/SOUNDS/SPELLS/METEORSHOWER03.wav
+    bytes: 364638
+    sha256: 5a6077da664c0f0c0ec9bd1da0a99566ae454a78f234c0360eb9e19e50fd5b4e
+  origin: spells_fxf
+- legacy: sounds/spells/natarmor.wav
+  kind: sound
+  resource: mm9:sound/spells/natarmor
+  asset: engine/effects/mm9/audio/spells/natarmor.wav
+  status: bound
+  source:
+    path: mm9/extracted/SOUNDS/SOUNDS/SPELLS/NATARMOR.wav
+    bytes: 168748
+    sha256: b2dd407634ab85a67802ffe5040964746e87fd7f779ca1d7d8096527e34a606f
+  origin: spells_fxf
+- legacy: sounds/spells/paralyze.wav
+  kind: sound
+  resource: mm9:sound/spells/paralyze
+  asset: engine/effects/mm9/audio/spells/paralyze.wav
+  status: bound
+  source:
+    path: mm9/extracted/SOUNDS/SOUNDS/SPELLS/PARALYZE.wav
+    bytes: 92602
+    sha256: 5a7afe720d72b2feeb0cd3023b47f96cf53da7acdb26b1303f5da4d6fdf1e5c9
+  origin: spells_fxf
+- legacy: sounds/spells/poison03.wav
+  kind: sound
+  resource: mm9:sound/spells/poison03
+  asset: engine/effects/mm9/audio/spells/poison03.wav
+  status: bound
+  source:
+    path: mm9/extracted/SOUNDS/SOUNDS/SPELLS/POISON03.wav
+    bytes: 41462
+    sha256: b1c8272ed40881d3991d26286bdc447963f929864747c3a31bc22a087f524e0b
+  origin: spells_fxf
+- legacy: sounds/spells/resistdeath.wav
+  kind: sound
+  resource: mm9:sound/spells/resistdeath
+  asset: engine/effects/mm9/audio/spells/resistdeath.wav
+  status: bound
+  source:
+    path: mm9/extracted/SOUNDS/SOUNDS/SPELLS/RESISTDEATH.wav
+    bytes: 101382
+    sha256: 73054561eb256ae1dcc9cb6e0659a48e350f0a325bd03a7162d1c78f7acd0c83
+  origin: spells_fxf
+- legacy: sounds/spells/sharedlife.wav
+  kind: sound
+  resource: mm9:sound/spells/sharedlife
+  asset: engine/effects/mm9/audio/spells/sharedlife.wav
+  status: bound
+  source:
+    path: mm9/extracted/SOUNDS/SOUNDS/SPELLS/SHAREDLIFE.wav
+    bytes: 106846
+    sha256: 305281a6fae1b147a09168615b32114dad3f1648388e113b85a5e2820a82a600
+  origin: spells_fxf
+- legacy: sounds/spells/souldrinker.wav
+  kind: sound
+  resource: mm9:sound/spells/souldrinker
+  asset: engine/effects/mm9/audio/spells/souldrinker.wav
+  status: bound
+  source:
+    path: mm9/extracted/SOUNDS/SOUNDS/SPELLS/SOULDRINKER.wav
+    bytes: 112734
+    sha256: 83b2240c0f500b3cee74472b239f78978d724b5b9ca996239e42ba0c262a02c2
+  origin: spells_fxf
+- legacy: sounds/spells/spellreaver.wav
+  kind: sound
+  resource: mm9:sound/spells/spellreaver
+  asset: engine/effects/mm9/audio/spells/spellreaver.wav
+  status: bound
+  source:
+    path: mm9/extracted/SOUNDS/SOUNDS/SPELLS/SPELLREAVER.wav
+    bytes: 85922
+    sha256: 6892ca1d4bdc9f164cd83d54da781b8ad20eaa3608807ef0b12de64d3a994c1b
+  origin: spells_fxf
+- legacy: sounds/spells/storm.wav
+  kind: sound
+  resource: mm9:sound/spells/storm
+  asset: engine/effects/mm9/audio/spells/storm.wav
+  status: bound
+  source:
+    path: mm9/extracted/SOUNDS/SOUNDS/SPELLS/STORM.wav
+    bytes: 364638
+    sha256: 9110f659d5638df53141f81002f02626d41c085610bc3c931bcb53dd334f42d4
+  origin: spells_fxf
+- legacy: sounds/spells/transfusion.wav
+  kind: sound
+  resource: mm9:sound/spells/transfusion
+  asset: engine/effects/mm9/audio/spells/transfusion.wav
+  status: bound
+  source:
+    path: mm9/extracted/SOUNDS/SOUNDS/SPELLS/TRANSFUSION.wav
+    bytes: 84062
+    sha256: 0085bfe7f9e5bd90a984bf96a845b54eaf37d1185b4e2eecb0600f5356a1ac4d
+  origin: spells_fxf
+- legacy: sounds/spells/turnundead.wav
+  kind: sound
+  resource: mm9:sound/spells/turnundead
+  asset: engine/effects/mm9/audio/spells/turnundead.wav
+  status: bound
+  source:
+    path: mm9/extracted/SOUNDS/SOUNDS/SPELLS/TURNUNDEAD.wav
+    bytes: 88414
+    sha256: 70f838ce4c1c2b9596db102db01e675bd9df7ccf15cff1ef237f5fdadca8cf50
+  origin: spells_fxf
+- legacy: sprites/bloodhit1.spr
+  kind: sprite
+  resource: mm9:effect-sprite/bloodhit1
+  asset: engine/effects/mm9/sprites/bloodhit1.yml
+  status: bound
+  source:
+    path: mm9/extracted/SPRITES/SPRITES/BLOODHIT1.spr
+    bytes: 50
+    sha256: 82eac7958928b52124fc81c58a6c403a38cd43bac6ab5d2ad600e04ecf130467
+  origin: hardcoded_melee_contact
+  sprite:
+    framesPerSecond: 15
+    logicalWidth: 32
+    logicalHeight: 32
+    keyed: false
+    translucent: false
+    colorKey: 0
+    frames:
+    - index: 0
+      legacy: spritetextures/bloodhit1.dtx
+      resource: mm9:effect-texture/bloodhit1
+- legacy: sprites/bloodspray1.spr
+  kind: sprite
+  resource: mm9:effect-sprite/bloodspray1
+  asset: engine/effects/mm9/sprites/bloodspray1.yml
+  status: bound
+  source:
+    path: mm9/extracted/SPRITES/SPRITES/BLOODSPRAY1.spr
+    bytes: 52
+    sha256: 976aee27ec9ebd229b71796c5a7ddec0a3e6fa300c4e23bcc642dad9a64e770f
+  origin: hardcoded_melee_contact
+  sprite:
+    framesPerSecond: 15
+    logicalWidth: 16
+    logicalHeight: 16
+    keyed: false
+    translucent: false
+    colorKey: 0
+    frames:
+    - index: 0
+      legacy: spritetextures/bloodspray1.dtx
+      resource: mm9:effect-texture/bloodspray1
+- legacy: sprites/dragonbreath.spr
+  kind: sprite
+  resource: mm9:effect-sprite/dragonbreath
+  asset: engine/effects/mm9/sprites/dragonbreath.yml
+  status: bound
+  source:
+    path: mm9/extracted/SPRITES/SPRITES/DRAGONBREATH.spr
+    bytes: 380
+    sha256: 81dae0aeb962e1f86fbb047648f97fbf215a73652d65003785ce9fca73d06778
+  origin: spells_fxf
+  sprite:
+    framesPerSecond: 15
+    logicalWidth: 32
+    logicalHeight: 32
+    keyed: false
+    translucent: false
+    colorKey: 0
+    frames:
+    - index: 0
+      legacy: spritetextures/dragonbreath/firebreath1.dtx
+      resource: mm9:effect-texture/dragonbreath/firebreath1
+    - index: 1
+      legacy: spritetextures/dragonbreath/firebreath2.dtx
+      resource: mm9:effect-texture/dragonbreath/firebreath2
+    - index: 2
+      legacy: spritetextures/dragonbreath/firebreath3.dtx
+      resource: mm9:effect-texture/dragonbreath/firebreath3
+    - index: 3
+      legacy: spritetextures/dragonbreath/firebreath4.dtx
+      resource: mm9:effect-texture/dragonbreath/firebreath4
+    - index: 4
+      legacy: spritetextures/dragonbreath/firebreath5.dtx
+      resource: mm9:effect-texture/dragonbreath/firebreath5
+    - index: 5
+      legacy: spritetextures/dragonbreath/firebreath6.dtx
+      resource: mm9:effect-texture/dragonbreath/firebreath6
+    - index: 6
+      legacy: spritetextures/dragonbreath/firebreath7.dtx
+      resource: mm9:effect-texture/dragonbreath/firebreath7
+    - index: 7
+      legacy: spritetextures/dragonbreath/firebreath8.dtx
+      resource: mm9:effect-texture/dragonbreath/firebreath8
+- legacy: sprites/fire/bluetorch.spr
+  kind: sprite
+  resource: mm9:effect-sprite/fire/bluetorch
+  asset: engine/effects/mm9/sprites/fire/bluetorch.yml
+  status: bound
+  source:
+    path: mm9/extracted/SPRITES/SPRITES/FIRE/BLUETORCH.spr
+    bytes: 845
+    sha256: 341189126f54037ab44510e6ef3231d7cb128b89d9cf5869cf2679f9a1105bd6
+  origin: spells_fxf
+  sprite:
+    framesPerSecond: 15
+    logicalWidth: 64
+    logicalHeight: 64
+    keyed: false
+    translucent: false
+    colorKey: 0
+    frames:
+    - index: 0
+      legacy: spritetextures/flameeffects/bluetorch/blueflame01.dtx
+      resource: mm9:effect-texture/flameeffects/bluetorch/blueflame01
+    - index: 1
+      legacy: spritetextures/flameeffects/bluetorch/blueflame02.dtx
+      resource: mm9:effect-texture/flameeffects/bluetorch/blueflame02
+    - index: 2
+      legacy: spritetextures/flameeffects/bluetorch/blueflame03.dtx
+      resource: mm9:effect-texture/flameeffects/bluetorch/blueflame03
+    - index: 3
+      legacy: spritetextures/flameeffects/bluetorch/blueflame04.dtx
+      resource: mm9:effect-texture/flameeffects/bluetorch/blueflame04
+    - index: 4
+      legacy: spritetextures/flameeffects/bluetorch/blueflame05.dtx
+      resource: mm9:effect-texture/flameeffects/bluetorch/blueflame05
+    - index: 5
+      legacy: spritetextures/flameeffects/bluetorch/blueflame06.dtx
+      resource: mm9:effect-texture/flameeffects/bluetorch/blueflame06
+    - index: 6
+      legacy: spritetextures/flameeffects/bluetorch/blueflame07.dtx
+      resource: mm9:effect-texture/flameeffects/bluetorch/blueflame07
+    - index: 7
+      legacy: spritetextures/flameeffects/bluetorch/blueflame08.dtx
+      resource: mm9:effect-texture/flameeffects/bluetorch/blueflame08
+    - index: 8
+      legacy: spritetextures/flameeffects/bluetorch/blueflame09.dtx
+      resource: mm9:effect-texture/flameeffects/bluetorch/blueflame09
+    - index: 9
+      legacy: spritetextures/flameeffects/bluetorch/blueflame10.dtx
+      resource: mm9:effect-texture/flameeffects/bluetorch/blueflame10
+    - index: 10
+      legacy: spritetextures/flameeffects/bluetorch/blueflame11.dtx
+      resource: mm9:effect-texture/flameeffects/bluetorch/blueflame11
+    - index: 11
+      legacy: spritetextures/flameeffects/bluetorch/blueflame12.dtx
+      resource: mm9:effect-texture/flameeffects/bluetorch/blueflame12
+    - index: 12
+      legacy: spritetextures/flameeffects/bluetorch/blueflame13.dtx
+      resource: mm9:effect-texture/flameeffects/bluetorch/blueflame13
+    - index: 13
+      legacy: spritetextures/flameeffects/bluetorch/blueflame14.dtx
+      resource: mm9:effect-texture/flameeffects/bluetorch/blueflame14
+    - index: 14
+      legacy: spritetextures/flameeffects/bluetorch/blueflame15.dtx
+      resource: mm9:effect-texture/flameeffects/bluetorch/blueflame15
+- legacy: sprites/fire/torchflame3.spr
+  kind: sprite
+  resource: mm9:effect-sprite/fire/torchflame3
+  asset: engine/effects/mm9/sprites/fire/torchflame3.yml
+  status: bound
+  source:
+    path: mm9/extracted/SPRITES/SPRITES/FIRE/TORCHFLAME3.spr
+    bytes: 1040
+    sha256: 8d5ef4c064e5947f188b4890486cc4e66dc2966f5c7aa4e9af84bf153846c978
+  origin: spells_fxf
+  sprite:
+    framesPerSecond: 15
+    logicalWidth: 64
+    logicalHeight: 64
+    keyed: false
+    translucent: false
+    colorKey: 0
+    frames:
+    - index: 0
+      legacy: spritetextures/flameeffects/torchflame/torchflame_additive0030.dtx
+      resource: mm9:effect-texture/flameeffects/torchflame/torchflame_additive0030
+    - index: 1
+      legacy: spritetextures/flameeffects/torchflame/torchflame_additive0031.dtx
+      resource: mm9:effect-texture/flameeffects/torchflame/torchflame_additive0031
+    - index: 2
+      legacy: spritetextures/flameeffects/torchflame/torchflame_additive0032.dtx
+      resource: mm9:effect-texture/flameeffects/torchflame/torchflame_additive0032
+    - index: 3
+      legacy: spritetextures/flameeffects/torchflame/torchflame_additive0033.dtx
+      resource: mm9:effect-texture/flameeffects/torchflame/torchflame_additive0033
+    - index: 4
+      legacy: spritetextures/flameeffects/torchflame/torchflame_additive0034.dtx
+      resource: mm9:effect-texture/flameeffects/torchflame/torchflame_additive0034
+    - index: 5
+      legacy: spritetextures/flameeffects/torchflame/torchflame_additive0035.dtx
+      resource: mm9:effect-texture/flameeffects/torchflame/torchflame_additive0035
+    - index: 6
+      legacy: spritetextures/flameeffects/torchflame/torchflame_additive0036.dtx
+      resource: mm9:effect-texture/flameeffects/torchflame/torchflame_additive0036
+    - index: 7
+      legacy: spritetextures/flameeffects/torchflame/torchflame_additive0037.dtx
+      resource: mm9:effect-texture/flameeffects/torchflame/torchflame_additive0037
+    - index: 8
+      legacy: spritetextures/flameeffects/torchflame/torchflame_additive0038.dtx
+      resource: mm9:effect-texture/flameeffects/torchflame/torchflame_additive0038
+    - index: 9
+      legacy: spritetextures/flameeffects/torchflame/torchflame_additive0039.dtx
+      resource: mm9:effect-texture/flameeffects/torchflame/torchflame_additive0039
+    - index: 10
+      legacy: spritetextures/flameeffects/torchflame/torchflame_additive0040.dtx
+      resource: mm9:effect-texture/flameeffects/torchflame/torchflame_additive0040
+    - index: 11
+      legacy: spritetextures/flameeffects/torchflame/torchflame_additive0041.dtx
+      resource: mm9:effect-texture/flameeffects/torchflame/torchflame_additive0041
+    - index: 12
+      legacy: spritetextures/flameeffects/torchflame/torchflame_additive0042.dtx
+      resource: mm9:effect-texture/flameeffects/torchflame/torchflame_additive0042
+    - index: 13
+      legacy: spritetextures/flameeffects/torchflame/torchflame_additive0043.dtx
+      resource: mm9:effect-texture/flameeffects/torchflame/torchflame_additive0043
+    - index: 14
+      legacy: spritetextures/flameeffects/torchflame/torchflame_additive0044.dtx
+      resource: mm9:effect-texture/flameeffects/torchflame/torchflame_additive0044
+- legacy: sprites/fire/torchflame4.spr
+  kind: sprite
+  resource: mm9:effect-sprite/fire/torchflame4
+  asset: engine/effects/mm9/sprites/fire/torchflame4.yml
+  status: bound
+  source:
+    path: mm9/extracted/SPRITES/SPRITES/FIRE/TORCHFLAME4.spr
+    bytes: 1040
+    sha256: 6640d853683b111ba61021903df854c01db9216b852c6b164fd6e03f3e7f19d9
+  origin: spells_fxf
+  sprite:
+    framesPerSecond: 15
+    logicalWidth: 64
+    logicalHeight: 64
+    keyed: false
+    translucent: false
+    colorKey: 0
+    frames:
+    - index: 0
+      legacy: spritetextures/flameeffects/torchflame/torchflame_additive0045.dtx
+      resource: mm9:effect-texture/flameeffects/torchflame/torchflame_additive0045
+    - index: 1
+      legacy: spritetextures/flameeffects/torchflame/torchflame_additive0046.dtx
+      resource: mm9:effect-texture/flameeffects/torchflame/torchflame_additive0046
+    - index: 2
+      legacy: spritetextures/flameeffects/torchflame/torchflame_additive0047.dtx
+      resource: mm9:effect-texture/flameeffects/torchflame/torchflame_additive0047
+    - index: 3
+      legacy: spritetextures/flameeffects/torchflame/torchflame_additive0048.dtx
+      resource: mm9:effect-texture/flameeffects/torchflame/torchflame_additive0048
+    - index: 4
+      legacy: spritetextures/flameeffects/torchflame/torchflame_additive0049.dtx
+      resource: mm9:effect-texture/flameeffects/torchflame/torchflame_additive0049
+    - index: 5
+      legacy: spritetextures/flameeffects/torchflame/torchflame_additive0050.dtx
+      resource: mm9:effect-texture/flameeffects/torchflame/torchflame_additive0050
+    - index: 6
+      legacy: spritetextures/flameeffects/torchflame/torchflame_additive0051.dtx
+      resource: mm9:effect-texture/flameeffects/torchflame/torchflame_additive0051
+    - index: 7
+      legacy: spritetextures/flameeffects/torchflame/torchflame_additive0052.dtx
+      resource: mm9:effect-texture/flameeffects/torchflame/torchflame_additive0052
+    - index: 8
+      legacy: spritetextures/flameeffects/torchflame/torchflame_additive0053.dtx
+      resource: mm9:effect-texture/flameeffects/torchflame/torchflame_additive0053
+    - index: 9
+      legacy: spritetextures/flameeffects/torchflame/torchflame_additive0054.dtx
+      resource: mm9:effect-texture/flameeffects/torchflame/torchflame_additive0054
+    - index: 10
+      legacy: spritetextures/flameeffects/torchflame/torchflame_additive0055.dtx
+      resource: mm9:effect-texture/flameeffects/torchflame/torchflame_additive0055
+    - index: 11
+      legacy: spritetextures/flameeffects/torchflame/torchflame_additive0056.dtx
+      resource: mm9:effect-texture/flameeffects/torchflame/torchflame_additive0056
+    - index: 12
+      legacy: spritetextures/flameeffects/torchflame/torchflame_additive0057.dtx
+      resource: mm9:effect-texture/flameeffects/torchflame/torchflame_additive0057
+    - index: 13
+      legacy: spritetextures/flameeffects/torchflame/torchflame_additive0058.dtx
+      resource: mm9:effect-texture/flameeffects/torchflame/torchflame_additive0058
+    - index: 14
+      legacy: spritetextures/flameeffects/torchflame/torchflame_additive0059.dtx
+      resource: mm9:effect-texture/flameeffects/torchflame/torchflame_additive0059
+- legacy: sprites/firebreath.spr
+  kind: sprite
+  resource: mm9:effect-sprite/firebreath
+  asset: engine/effects/mm9/sprites/firebreath.yml
+  status: bound
+  source:
+    path: mm9/extracted/SPRITES/SPRITES/FIREBREATH.spr
+    bytes: 380
+    sha256: b4b6515fed07cec10446ec6b9585fbcf8bca904e9aa5137a35c47fd8595821a2
+  origin: spells_fxf
+  sprite:
+    framesPerSecond: 15
+    logicalWidth: 32
+    logicalHeight: 32
+    keyed: false
+    translucent: false
+    colorKey: 0
+    frames:
+    - index: 0
+      legacy: spritetextures/dragonbreath/firebreath6.dtx
+      resource: mm9:effect-texture/dragonbreath/firebreath6
+    - index: 1
+      legacy: spritetextures/dragonbreath/firebreath7.dtx
+      resource: mm9:effect-texture/dragonbreath/firebreath7
+    - index: 2
+      legacy: spritetextures/dragonbreath/firebreath8.dtx
+      resource: mm9:effect-texture/dragonbreath/firebreath8
+    - index: 3
+      legacy: spritetextures/dragonbreath/firebreath1.dtx
+      resource: mm9:effect-texture/dragonbreath/firebreath1
+    - index: 4
+      legacy: spritetextures/dragonbreath/firebreath2.dtx
+      resource: mm9:effect-texture/dragonbreath/firebreath2
+    - index: 5
+      legacy: spritetextures/dragonbreath/firebreath3.dtx
+      resource: mm9:effect-texture/dragonbreath/firebreath3
+    - index: 6
+      legacy: spritetextures/dragonbreath/firebreath4.dtx
+      resource: mm9:effect-texture/dragonbreath/firebreath4
+    - index: 7
+      legacy: spritetextures/dragonbreath/firebreath5.dtx
+      resource: mm9:effect-texture/dragonbreath/firebreath5
+- legacy: sprites/flareparticle.spr
+  kind: sprite
+  resource: mm9:effect-sprite/flareparticle
+  asset: engine/effects/mm9/sprites/flareparticle.yml
+  status: bound
+  source:
+    path: mm9/extracted/SPRITES/SPRITES/FLAREPARTICLE.spr
+    bytes: 420
+    sha256: ff0c62eef19aefc9c65f1ff8c60d0f18398ab1fb347566bba7a7b5cf56ad78db
+  origin: spells_fxf
+  sprite:
+    framesPerSecond: 15
+    logicalWidth: 32
+    logicalHeight: 32
+    keyed: false
+    translucent: false
+    colorKey: 0
+    frames:
+    - index: 0
+      legacy: spritetextures/particles/flare0000.dtx
+      resource: mm9:effect-texture/particles/flare0000
+    - index: 1
+      legacy: spritetextures/particles/flare0003.dtx
+      resource: mm9:effect-texture/particles/flare0003
+    - index: 2
+      legacy: spritetextures/particles/flare0006.dtx
+      resource: mm9:effect-texture/particles/flare0006
+    - index: 3
+      legacy: spritetextures/particles/flare0009.dtx
+      resource: mm9:effect-texture/particles/flare0009
+    - index: 4
+      legacy: spritetextures/particles/flare0012.dtx
+      resource: mm9:effect-texture/particles/flare0012
+    - index: 5
+      legacy: spritetextures/particles/flare0015.dtx
+      resource: mm9:effect-texture/particles/flare0015
+    - index: 6
+      legacy: spritetextures/particles/flare0018.dtx
+      resource: mm9:effect-texture/particles/flare0018
+    - index: 7
+      legacy: spritetextures/particles/flare0021.dtx
+      resource: mm9:effect-texture/particles/flare0021
+    - index: 8
+      legacy: spritetextures/particles/flare0024.dtx
+      resource: mm9:effect-texture/particles/flare0024
+    - index: 9
+      legacy: spritetextures/particles/flare0027.dtx
+      resource: mm9:effect-texture/particles/flare0027
+- legacy: sprites/flies.spr
+  kind: sprite
+  resource: mm9:effect-sprite/flies
+  asset: engine/effects/mm9/sprites/flies.yml
+  status: bound
+  source:
+    path: mm9/extracted/SPRITES/SPRITES/FLIES.spr
+    bytes: 84
+    sha256: 13e460a6d548a486e15d3629d5e22adc9ecc16958170569d625c48ba991c4b32
+  origin: spells_fxf
+  sprite:
+    framesPerSecond: 15
+    logicalWidth: 16
+    logicalHeight: 16
+    keyed: false
+    translucent: false
+    colorKey: 0
+    frames:
+    - index: 0
+      legacy: spritetextures/flies/fly01.dtx
+      resource: mm9:effect-texture/flies/fly01
+    - index: 1
+      legacy: spritetextures/flies/fly02.dtx
+      resource: mm9:effect-texture/flies/fly02
+- legacy: sprites/oval.spr
+  kind: sprite
+  resource: mm9:effect-sprite/oval
+  asset: engine/effects/mm9/sprites/oval.yml
+  status: bound
+  source:
+    path: mm9/extracted/SPRITES/SPRITES/OVAL.spr
+    bytes: 722
+    sha256: 2ade155d0d722c7144a0b20c28cb5739d5e387449429ab0ce478ac5451ef559f
+  origin: spells_fxf
+  sprite:
+    framesPerSecond: 12
+    logicalWidth: 64
+    logicalHeight: 64
+    keyed: false
+    translucent: false
+    colorKey: 0
+    frames:
+    - index: 0
+      legacy: spritetextures/oval01.dtx
+      resource: mm9:effect-texture/oval01
+    - index: 1
+      legacy: spritetextures/oval02.dtx
+      resource: mm9:effect-texture/oval02
+    - index: 2
+      legacy: spritetextures/oval03.dtx
+      resource: mm9:effect-texture/oval03
+    - index: 3
+      legacy: spritetextures/oval04.dtx
+      resource: mm9:effect-texture/oval04
+    - index: 4
+      legacy: spritetextures/oval05.dtx
+      resource: mm9:effect-texture/oval05
+    - index: 5
+      legacy: spritetextures/oval06.dtx
+      resource: mm9:effect-texture/oval06
+    - index: 6
+      legacy: spritetextures/oval07.dtx
+      resource: mm9:effect-texture/oval07
+    - index: 7
+      legacy: spritetextures/oval08.dtx
+      resource: mm9:effect-texture/oval08
+    - index: 8
+      legacy: spritetextures/oval09.dtx
+      resource: mm9:effect-texture/oval09
+    - index: 9
+      legacy: spritetextures/oval10.dtx
+      resource: mm9:effect-texture/oval10
+    - index: 10
+      legacy: spritetextures/oval08.dtx
+      resource: mm9:effect-texture/oval08
+    - index: 11
+      legacy: spritetextures/oval09.dtx
+      resource: mm9:effect-texture/oval09
+    - index: 12
+      legacy: spritetextures/oval10.dtx
+      resource: mm9:effect-texture/oval10
+    - index: 13
+      legacy: spritetextures/oval11.dtx
+      resource: mm9:effect-texture/oval11
+    - index: 14
+      legacy: spritetextures/oval07.dtx
+      resource: mm9:effect-texture/oval07
+    - index: 15
+      legacy: spritetextures/oval08.dtx
+      resource: mm9:effect-texture/oval08
+    - index: 16
+      legacy: spritetextures/oval09.dtx
+      resource: mm9:effect-texture/oval09
+    - index: 17
+      legacy: spritetextures/oval10.dtx
+      resource: mm9:effect-texture/oval10
+    - index: 18
+      legacy: spritetextures/oval11.dtx
+      resource: mm9:effect-texture/oval11
+    - index: 19
+      legacy: spritetextures/oval07.dtx
+      resource: mm9:effect-texture/oval07
+    - index: 20
+      legacy: spritetextures/oval06.dtx
+      resource: mm9:effect-texture/oval06
+    - index: 21
+      legacy: spritetextures/oval05.dtx
+      resource: mm9:effect-texture/oval05
+    - index: 22
+      legacy: spritetextures/oval04.dtx
+      resource: mm9:effect-texture/oval04
+    - index: 23
+      legacy: spritetextures/oval03.dtx
+      resource: mm9:effect-texture/oval03
+    - index: 24
+      legacy: spritetextures/oval02.dtx
+      resource: mm9:effect-texture/oval02
+    - index: 25
+      legacy: spritetextures/oval01.dtx
+      resource: mm9:effect-texture/oval01
+- legacy: sprites/smoke/blacksmoke.spr
+  kind: sprite
+  resource: mm9:effect-sprite/smoke/blacksmoke
+  asset: engine/effects/mm9/sprites/smoke/blacksmoke.yml
+  status: bound
+  source:
+    path: mm9/extracted/SPRITES/SPRITES/SMOKE/BLACKSMOKE.spr
+    bytes: 533
+    sha256: 13e372e5ff466cf048f89f1bf45adb64541f10db9df709bc4af444a1306c2ea3
+  origin: spells_fxf
+  sprite:
+    framesPerSecond: 9
+    logicalWidth: 128
+    logicalHeight: 128
+    keyed: false
+    translucent: false
+    colorKey: 0
+    frames:
+    - index: 0
+      legacy: spritetextures/smokeeffects/blacksmoke/blacksmoke_1.dtx
+      resource: mm9:effect-texture/smokeeffects/blacksmoke/blacksmoke_1
+    - index: 1
+      legacy: spritetextures/smokeeffects/blacksmoke/blacksmoke_2.dtx
+      resource: mm9:effect-texture/smokeeffects/blacksmoke/blacksmoke_2
+    - index: 2
+      legacy: spritetextures/smokeeffects/blacksmoke/blacksmoke_3.dtx
+      resource: mm9:effect-texture/smokeeffects/blacksmoke/blacksmoke_3
+    - index: 3
+      legacy: spritetextures/smokeeffects/blacksmoke/blacksmoke_4.dtx
+      resource: mm9:effect-texture/smokeeffects/blacksmoke/blacksmoke_4
+    - index: 4
+      legacy: spritetextures/smokeeffects/blacksmoke/blacksmoke_5.dtx
+      resource: mm9:effect-texture/smokeeffects/blacksmoke/blacksmoke_5
+    - index: 5
+      legacy: spritetextures/smokeeffects/blacksmoke/blacksmoke_6.dtx
+      resource: mm9:effect-texture/smokeeffects/blacksmoke/blacksmoke_6
+    - index: 6
+      legacy: spritetextures/smokeeffects/blacksmoke/blacksmoke_7.dtx
+      resource: mm9:effect-texture/smokeeffects/blacksmoke/blacksmoke_7
+    - index: 7
+      legacy: spritetextures/smokeeffects/blacksmoke/blacksmoke_8.dtx
+      resource: mm9:effect-texture/smokeeffects/blacksmoke/blacksmoke_8
+    - index: 8
+      legacy: spritetextures/smokeeffects/blacksmoke/blacksmoke_9.dtx
+      resource: mm9:effect-texture/smokeeffects/blacksmoke/blacksmoke_9
+- legacy: sprites/smoke/noisesmokeupwardphase.spr
+  kind: sprite
+  resource: mm9:effect-sprite/smoke/noisesmokeupwardphase
+  asset: engine/effects/mm9/sprites/smoke/noisesmokeupwardphase.yml
+  status: bound
+  source:
+    path: mm9/extracted/SPRITES/SPRITES/SMOKE/NOISESMOKEUPWARDPHASE.spr
+    bytes: 860
+    sha256: 53c96b2b5b5937e89a3a3f4c6c45d8417d12f8551dbecac7125a4cf7fd4079c2
+  origin: spells_fxf
+  sprite:
+    framesPerSecond: 15
+    logicalWidth: 128
+    logicalHeight: 128
+    keyed: false
+    translucent: false
+    colorKey: 0
+    frames:
+    - index: 0
+      legacy: spritetextures/smokeeffects/noisesmokeupwardphase/noise_smoke_upwardphase_0000.dtx
+      resource: mm9:effect-texture/smokeeffects/noisesmokeupwardphase/noise_smoke_upwardphase_0000
+    - index: 1
+      legacy: spritetextures/smokeeffects/noisesmokeupwardphase/noise_smoke_upwardphase_0001.dtx
+      resource: mm9:effect-texture/smokeeffects/noisesmokeupwardphase/noise_smoke_upwardphase_0001
+    - index: 2
+      legacy: spritetextures/smokeeffects/noisesmokeupwardphase/noise_smoke_upwardphase_0002.dtx
+      resource: mm9:effect-texture/smokeeffects/noisesmokeupwardphase/noise_smoke_upwardphase_0002
+    - index: 3
+      legacy: spritetextures/smokeeffects/noisesmokeupwardphase/noise_smoke_upwardphase_0003.dtx
+      resource: mm9:effect-texture/smokeeffects/noisesmokeupwardphase/noise_smoke_upwardphase_0003
+    - index: 4
+      legacy: spritetextures/smokeeffects/noisesmokeupwardphase/noise_smoke_upwardphase_0004.dtx
+      resource: mm9:effect-texture/smokeeffects/noisesmokeupwardphase/noise_smoke_upwardphase_0004
+    - index: 5
+      legacy: spritetextures/smokeeffects/noisesmokeupwardphase/noise_smoke_upwardphase_0005.dtx
+      resource: mm9:effect-texture/smokeeffects/noisesmokeupwardphase/noise_smoke_upwardphase_0005
+    - index: 6
+      legacy: spritetextures/smokeeffects/noisesmokeupwardphase/noise_smoke_upwardphase_0006.dtx
+      resource: mm9:effect-texture/smokeeffects/noisesmokeupwardphase/noise_smoke_upwardphase_0006
+    - index: 7
+      legacy: spritetextures/smokeeffects/noisesmokeupwardphase/noise_smoke_upwardphase_0007.dtx
+      resource: mm9:effect-texture/smokeeffects/noisesmokeupwardphase/noise_smoke_upwardphase_0007
+    - index: 8
+      legacy: spritetextures/smokeeffects/noisesmokeupwardphase/noise_smoke_upwardphase_0008.dtx
+      resource: mm9:effect-texture/smokeeffects/noisesmokeupwardphase/noise_smoke_upwardphase_0008
+    - index: 9
+      legacy: spritetextures/smokeeffects/noisesmokeupwardphase/noise_smoke_upwardphase_0009.dtx
+      resource: mm9:effect-texture/smokeeffects/noisesmokeupwardphase/noise_smoke_upwardphase_0009
+- legacy: sprites/smoke/smokenoise.spr
+  kind: sprite
+  resource: mm9:effect-sprite/smoke/smokenoise
+  asset: engine/effects/mm9/sprites/smoke/smokenoise.yml
+  status: bound
+  source:
+    path: mm9/extracted/SPRITES/SPRITES/SMOKE/SMOKENOISE.spr
+    bytes: 620
+    sha256: 759a1f83208bebf3b0ebd1b18cd8717f2eaf5f972ddc2307e07f190835a069c7
+  origin: spells_fxf
+  sprite:
+    framesPerSecond: 15
+    logicalWidth: 64
+    logicalHeight: 64
+    keyed: false
+    translucent: false
+    colorKey: 0
+    frames:
+    - index: 0
+      legacy: spritetextures/smokeeffects/smokenoise/smoke_noise0000.dtx
+      resource: mm9:effect-texture/smokeeffects/smokenoise/smoke_noise0000
+    - index: 1
+      legacy: spritetextures/smokeeffects/smokenoise/smoke_noise0001.dtx
+      resource: mm9:effect-texture/smokeeffects/smokenoise/smoke_noise0001
+    - index: 2
+      legacy: spritetextures/smokeeffects/smokenoise/smoke_noise0002.dtx
+      resource: mm9:effect-texture/smokeeffects/smokenoise/smoke_noise0002
+    - index: 3
+      legacy: spritetextures/smokeeffects/smokenoise/smoke_noise0003.dtx
+      resource: mm9:effect-texture/smokeeffects/smokenoise/smoke_noise0003
+    - index: 4
+      legacy: spritetextures/smokeeffects/smokenoise/smoke_noise0004.dtx
+      resource: mm9:effect-texture/smokeeffects/smokenoise/smoke_noise0004
+    - index: 5
+      legacy: spritetextures/smokeeffects/smokenoise/smoke_noise0005.dtx
+      resource: mm9:effect-texture/smokeeffects/smokenoise/smoke_noise0005
+    - index: 6
+      legacy: spritetextures/smokeeffects/smokenoise/smoke_noise0006.dtx
+      resource: mm9:effect-texture/smokeeffects/smokenoise/smoke_noise0006
+    - index: 7
+      legacy: spritetextures/smokeeffects/smokenoise/smoke_noise0007.dtx
+      resource: mm9:effect-texture/smokeeffects/smokenoise/smoke_noise0007
+    - index: 8
+      legacy: spritetextures/smokeeffects/smokenoise/smoke_noise0008.dtx
+      resource: mm9:effect-texture/smokeeffects/smokenoise/smoke_noise0008
+    - index: 9
+      legacy: spritetextures/smokeeffects/smokenoise/smoke_noise0009.dtx
+      resource: mm9:effect-texture/smokeeffects/smokenoise/smoke_noise0009
+- legacy: sprites/spells/bluering.spr
+  kind: sprite
+  resource: mm9:effect-sprite/spells/bluering
+  asset: engine/effects/mm9/sprites/spells/bluering.yml
+  status: bound
+  source:
+    path: mm9/extracted/SPRITES/SPRITES/SPELLS/BLUERING.spr
+    bytes: 49
+    sha256: 848325b8bbbe6d2b92c257c6c3784c94f4baac061a46a2a9ecde9452ba553260
+  origin: spells_fxf
+  sprite:
+    framesPerSecond: 15
+    logicalWidth: 64
+    logicalHeight: 64
+    keyed: false
+    translucent: false
+    colorKey: 0
+    frames:
+    - index: 0
+      legacy: spritetextures/bluering.dtx
+      resource: mm9:effect-texture/bluering
+- legacy: sprites/spells/bwring.spr
+  kind: sprite
+  resource: mm9:effect-sprite/spells/bwring
+  asset: engine/effects/mm9/sprites/spells/bwring.yml
+  status: bound
+  source:
+    path: mm9/extracted/SPRITES/SPRITES/SPELLS/BWRING.spr
+    bytes: 55
+    sha256: 92012161a01a1e695ed9786f1e9bf7d2171533c09df2cff63c08f311428fe3b0
+  origin: spells_fxf
+  sprite:
+    framesPerSecond: 15
+    logicalWidth: 64
+    logicalHeight: 64
+    keyed: false
+    translucent: false
+    colorKey: 0
+    frames:
+    - index: 0
+      legacy: spritetextures/blackwhitering.dtx
+      resource: mm9:effect-texture/blackwhitering
+- legacy: sprites/spells/feather.spr
+  kind: sprite
+  resource: mm9:effect-sprite/spells/feather
+  asset: engine/effects/mm9/sprites/spells/feather.yml
+  status: bound
+  source:
+    path: mm9/extracted/SPRITES/SPRITES/SPELLS/FEATHER.spr
+    bytes: 252
+    sha256: 60b0b823cc2df317c79f252331f360b784f9ff70890d1daa7b490177c7c072f5
+  origin: spells_fxf
+  sprite:
+    framesPerSecond: 12
+    logicalWidth: 32
+    logicalHeight: 32
+    keyed: false
+    translucent: false
+    colorKey: 0
+    frames:
+    - index: 0
+      legacy: spritetextures/feather1.dtx
+      resource: mm9:effect-texture/feather1
+    - index: 1
+      legacy: spritetextures/feather2.dtx
+      resource: mm9:effect-texture/feather2
+    - index: 2
+      legacy: spritetextures/feather3.dtx
+      resource: mm9:effect-texture/feather3
+    - index: 3
+      legacy: spritetextures/feather4.dtx
+      resource: mm9:effect-texture/feather4
+    - index: 4
+      legacy: spritetextures/feather4.dtx
+      resource: mm9:effect-texture/feather4
+    - index: 5
+      legacy: spritetextures/feather3.dtx
+      resource: mm9:effect-texture/feather3
+    - index: 6
+      legacy: spritetextures/feather2.dtx
+      resource: mm9:effect-texture/feather2
+    - index: 7
+      legacy: spritetextures/feather1.dtx
+      resource: mm9:effect-texture/feather1
+- legacy: sprites/spells/greendot.spr
+  kind: sprite
+  resource: mm9:effect-sprite/spells/greendot
+  asset: engine/effects/mm9/sprites/spells/greendot.yml
+  status: bound
+  source:
+    path: mm9/extracted/SPRITES/SPRITES/SPELLS/GREENDOT.spr
+    bytes: 49
+    sha256: 26f2bb67faa443b947462c46940805fcedacc1417e92e654d2b85e1265b99839
+  origin: spells_fxf
+  sprite:
+    framesPerSecond: 15
+    logicalWidth: 32
+    logicalHeight: 32
+    keyed: false
+    translucent: false
+    colorKey: 0
+    frames:
+    - index: 0
+      legacy: spritetextures/greendot.dtx
+      resource: mm9:effect-texture/greendot
+- legacy: sprites/spells/leaf.spr
+  kind: sprite
+  resource: mm9:effect-sprite/spells/leaf
+  asset: engine/effects/mm9/sprites/spells/leaf.yml
+  status: bound
+  source:
+    path: mm9/extracted/SPRITES/SPRITES/SPELLS/LEAF.spr
+    bytes: 155
+    sha256: f5d95129f17591d267ded50d5503e1bef45aa16adefce1823a6e00f9f42d29e7
+  origin: spells_fxf
+  sprite:
+    framesPerSecond: 10
+    logicalWidth: 32
+    logicalHeight: 32
+    keyed: false
+    translucent: false
+    colorKey: 0
+    frames:
+    - index: 0
+      legacy: spritetextures/leaf01.dtx
+      resource: mm9:effect-texture/leaf01
+    - index: 1
+      legacy: spritetextures/leaf02.dtx
+      resource: mm9:effect-texture/leaf02
+    - index: 2
+      legacy: spritetextures/leaf03.dtx
+      resource: mm9:effect-texture/leaf03
+    - index: 3
+      legacy: spritetextures/leaf04.dtx
+      resource: mm9:effect-texture/leaf04
+    - index: 4
+      legacy: spritetextures/leaf05.dtx
+      resource: mm9:effect-texture/leaf05
+- legacy: sprites/spells/lightball.spr
+  kind: sprite
+  resource: mm9:effect-sprite/spells/lightball
+  asset: engine/effects/mm9/sprites/spells/lightball.yml
+  status: bound
+  source:
+    path: mm9/extracted/SPRITES/SPRITES/SPELLS/LIGHTBALL.spr
+    bytes: 608
+    sha256: a2c8dea6a3618e3cd7c3e870fe06f3116cf001744d540e004eb017cc4bd66f6d
+  origin: spells_fxf
+  sprite:
+    framesPerSecond: 15
+    logicalWidth: 64
+    logicalHeight: 64
+    keyed: false
+    translucent: false
+    colorKey: 0
+    frames:
+    - index: 0
+      legacy: spritetextures/electricity/lball_000.dtx
+      resource: mm9:effect-texture/electricity/lball_000
+    - index: 1
+      legacy: spritetextures/electricity/lball_001.dtx
+      resource: mm9:effect-texture/electricity/lball_001
+    - index: 2
+      legacy: spritetextures/electricity/lball_002.dtx
+      resource: mm9:effect-texture/electricity/lball_002
+    - index: 3
+      legacy: spritetextures/electricity/lball_003.dtx
+      resource: mm9:effect-texture/electricity/lball_003
+    - index: 4
+      legacy: spritetextures/electricity/lball_004.dtx
+      resource: mm9:effect-texture/electricity/lball_004
+    - index: 5
+      legacy: spritetextures/electricity/lball_005.dtx
+      resource: mm9:effect-texture/electricity/lball_005
+    - index: 6
+      legacy: spritetextures/electricity/lball_006.dtx
+      resource: mm9:effect-texture/electricity/lball_006
+    - index: 7
+      legacy: spritetextures/electricity/lball_007.dtx
+      resource: mm9:effect-texture/electricity/lball_007
+    - index: 8
+      legacy: spritetextures/electricity/lball_008.dtx
+      resource: mm9:effect-texture/electricity/lball_008
+    - index: 9
+      legacy: spritetextures/electricity/lball_009.dtx
+      resource: mm9:effect-texture/electricity/lball_009
+    - index: 10
+      legacy: spritetextures/electricity/lball_010.dtx
+      resource: mm9:effect-texture/electricity/lball_010
+    - index: 11
+      legacy: spritetextures/electricity/lball_011.dtx
+      resource: mm9:effect-texture/electricity/lball_011
+    - index: 12
+      legacy: spritetextures/electricity/lball_012.dtx
+      resource: mm9:effect-texture/electricity/lball_012
+    - index: 13
+      legacy: spritetextures/electricity/lball_013.dtx
+      resource: mm9:effect-texture/electricity/lball_013
+- legacy: sprites/spells/redflare.spr
+  kind: sprite
+  resource: mm9:effect-sprite/spells/redflare
+  asset: engine/effects/mm9/sprites/spells/redflare.yml
+  status: bound
+  source:
+    path: mm9/extracted/SPRITES/SPRITES/SPELLS/REDFLARE.spr
+    bytes: 450
+    sha256: 13845c40204f38d0e79c054deb5ca43b20b99b0c67828344a12460ac5446c02e
+  origin: spells_fxf
+  sprite:
+    framesPerSecond: 15
+    logicalWidth: 64
+    logicalHeight: 64
+    keyed: false
+    translucent: false
+    colorKey: 0
+    frames:
+    - index: 0
+      legacy: spritetextures/redflare/redflare_0001.dtx
+      resource: mm9:effect-texture/redflare/redflare_0001
+    - index: 1
+      legacy: spritetextures/redflare/redflare_0002.dtx
+      resource: mm9:effect-texture/redflare/redflare_0002
+    - index: 2
+      legacy: spritetextures/redflare/redflare_0003.dtx
+      resource: mm9:effect-texture/redflare/redflare_0003
+    - index: 3
+      legacy: spritetextures/redflare/redflare_0004.dtx
+      resource: mm9:effect-texture/redflare/redflare_0004
+    - index: 4
+      legacy: spritetextures/redflare/redflare_0005.dtx
+      resource: mm9:effect-texture/redflare/redflare_0005
+    - index: 5
+      legacy: spritetextures/redflare/redflare_0006.dtx
+      resource: mm9:effect-texture/redflare/redflare_0006
+    - index: 6
+      legacy: spritetextures/redflare/redflare_0007.dtx
+      resource: mm9:effect-texture/redflare/redflare_0007
+    - index: 7
+      legacy: spritetextures/redflare/redflare_0008.dtx
+      resource: mm9:effect-texture/redflare/redflare_0008
+    - index: 8
+      legacy: spritetextures/redflare/redflare_0009.dtx
+      resource: mm9:effect-texture/redflare/redflare_0009
+    - index: 9
+      legacy: spritetextures/redflare/redflare_0010.dtx
+      resource: mm9:effect-texture/redflare/redflare_0010
+- legacy: sprites/spells/skull.spr
+  kind: sprite
+  resource: mm9:effect-sprite/spells/skull
+  asset: engine/effects/mm9/sprites/spells/skull.yml
+  status: bound
+  source:
+    path: mm9/extracted/SPRITES/SPRITES/SPELLS/SKULL.spr
+    bytes: 390
+    sha256: a697ebf95b4c6e9ab3328e3be121a0848b9c7f896da086ffcd236fa75fe5a7b4
+  origin: spells_fxf
+  sprite:
+    framesPerSecond: 15
+    logicalWidth: 64
+    logicalHeight: 64
+    keyed: false
+    translucent: false
+    colorKey: 0
+    frames:
+    - index: 0
+      legacy: spritetextures/skull/skul1anim.dtx
+      resource: mm9:effect-texture/skull/skul1anim
+    - index: 1
+      legacy: spritetextures/skull/skull2anim.dtx
+      resource: mm9:effect-texture/skull/skull2anim
+    - index: 2
+      legacy: spritetextures/skull/skull3anim.dtx
+      resource: mm9:effect-texture/skull/skull3anim
+    - index: 3
+      legacy: spritetextures/skull/skull4anim.dtx
+      resource: mm9:effect-texture/skull/skull4anim
+    - index: 4
+      legacy: spritetextures/skull/skull5anim.dtx
+      resource: mm9:effect-texture/skull/skull5anim
+    - index: 5
+      legacy: spritetextures/skull/skull6anim.dtx
+      resource: mm9:effect-texture/skull/skull6anim
+    - index: 6
+      legacy: spritetextures/skull/skull7anim.dtx
+      resource: mm9:effect-texture/skull/skull7anim
+    - index: 7
+      legacy: spritetextures/skull/skull8anim.dtx
+      resource: mm9:effect-texture/skull/skull8anim
+    - index: 8
+      legacy: spritetextures/skull/skull9anim.dtx
+      resource: mm9:effect-texture/skull/skull9anim
+    - index: 9
+      legacy: spritetextures/skull/skull10anim.dtx
+      resource: mm9:effect-texture/skull/skull10anim
+- legacy: sprites/spells/wash.spr
+  kind: sprite
+  resource: mm9:effect-sprite/spells/wash
+  asset: engine/effects/mm9/sprites/spells/wash.yml
+  status: bound
+  source:
+    path: mm9/extracted/SPRITES/SPRITES/SPELLS/WASH.spr
+    bytes: 72
+    sha256: 757517c9c56bbf5190a2cd8c3ef4dbba1ee7a440909c8515f08535e63a7a9557
+  origin: spells_fxf
+  sprite:
+    framesPerSecond: 15
+    logicalWidth: 32
+    logicalHeight: 32
+    keyed: false
+    translucent: false
+    colorKey: 0
+    frames:
+    - index: 0
+      legacy: spritetextures/wash1.dtx
+      resource: mm9:effect-texture/wash1
+    - index: 1
+      legacy: spritetextures/wash2.dtx
+      resource: mm9:effect-texture/wash2
+- legacy: sprites/spells/washright.spr
+  kind: sprite
+  resource: mm9:effect-sprite/spells/washright
+  asset: engine/effects/mm9/sprites/spells/washright.yml
+  status: bound
+  source:
+    path: mm9/extracted/SPRITES/SPRITES/SPELLS/WASHRIGHT.spr
+    bytes: 82
+    sha256: c90b6b6cdd682c7832621d8098ad19f852f4ea82a9f4d2691ec5e4c0c255741d
+  origin: spells_fxf
+  sprite:
+    framesPerSecond: 15
+    logicalWidth: 32
+    logicalHeight: 32
+    keyed: false
+    translucent: false
+    colorKey: 0
+    frames:
+    - index: 0
+      legacy: spritetextures/washright1.dtx
+      resource: mm9:effect-texture/washright1
+    - index: 1
+      legacy: spritetextures/washright2.dtx
+      resource: mm9:effect-texture/washright2
+- legacy: sprites/spells/whiteflare.spr
+  kind: sprite
+  resource: mm9:effect-sprite/spells/whiteflare
+  asset: engine/effects/mm9/sprites/spells/whiteflare.yml
+  status: bound
+  source:
+    path: mm9/extracted/SPRITES/SPRITES/SPELLS/WHITEFLARE.spr
+    bytes: 84
+    sha256: 208ffaa45d44eed87b2a862f760a2757d532671f04a8b9ab0377d788d88a1d82
+  origin: spells_fxf
+  sprite:
+    framesPerSecond: 15
+    logicalWidth: 32
+    logicalHeight: 32
+    keyed: false
+    translucent: false
+    colorKey: 0
+    frames:
+    - index: 0
+      legacy: spritetextures/whiteflare1.dtx
+      resource: mm9:effect-texture/whiteflare1
+    - index: 1
+      legacy: spritetextures/whiteflare2.dtx
+      resource: mm9:effect-texture/whiteflare2
+- legacy: sprites/spirit.spr
+  kind: sprite
+  resource: mm9:effect-sprite/spirit
+  asset: engine/effects/mm9/sprites/spirit.yml
+  status: bound
+  source:
+    path: mm9/extracted/SPRITES/SPRITES/SPIRIT.spr
+    bytes: 244
+    sha256: e4e46cc24bf9daf6cd0cab4af186ac81e4289a6a24ecef876e3620c659d6fcf4
+  origin: spells_fxf
+  sprite:
+    framesPerSecond: 10
+    logicalWidth: 64
+    logicalHeight: 64
+    keyed: false
+    translucent: false
+    colorKey: 0
+    frames:
+    - index: 0
+      legacy: spritetextures/spirit1.dtx
+      resource: mm9:effect-texture/spirit1
+    - index: 1
+      legacy: spritetextures/spirit2.dtx
+      resource: mm9:effect-texture/spirit2
+    - index: 2
+      legacy: spritetextures/spirit3.dtx
+      resource: mm9:effect-texture/spirit3
+    - index: 3
+      legacy: spritetextures/spirit4.dtx
+      resource: mm9:effect-texture/spirit4
+    - index: 4
+      legacy: spritetextures/spirit5.dtx
+      resource: mm9:effect-texture/spirit5
+    - index: 5
+      legacy: spritetextures/spirit6.dtx
+      resource: mm9:effect-texture/spirit6
+    - index: 6
+      legacy: spritetextures/spirit7.dtx
+      resource: mm9:effect-texture/spirit7
+    - index: 7
+      legacy: spritetextures/spirit8.dtx
+      resource: mm9:effect-texture/spirit8
+- legacy: sprites/weapons/blurredbluestar.spr
+  kind: sprite
+  resource: mm9:effect-sprite/weapons/blurredbluestar
+  asset: engine/effects/mm9/sprites/weapons/blurredbluestar.yml
+  status: bound
+  source:
+    path: mm9/extracted/SPRITES/SPRITES/WEAPONS/BLURREDBLUESTAR.spr
+    bytes: 63
+    sha256: 5118eb090b7b7bee0efe4f04bb97837f8c03c08714e77694d04f320e76dd40b7
+  origin: spells_fxf
+  sprite:
+    framesPerSecond: 15
+    logicalWidth: 32
+    logicalHeight: 32
+    keyed: false
+    translucent: false
+    colorKey: 0
+    frames:
+    - index: 0
+      legacy: spritetextures/sparks/blurredbluestar.dtx
+      resource: mm9:effect-texture/sparks/blurredbluestar
+- legacy: sprites/weapons/blurredblueyelstar.spr
+  kind: sprite
+  resource: mm9:effect-sprite/weapons/blurredblueyelstar
+  asset: engine/effects/mm9/sprites/weapons/blurredblueyelstar.yml
+  status: bound
+  source:
+    path: mm9/extracted/SPRITES/SPRITES/WEAPONS/BLURREDBLUEYELSTAR.spr
+    bytes: 76
+    sha256: a944c015aa9b9afd830f56d6f7bc58f776948077e15c872246979e2e35caaac4
+  origin: spells_fxf
+  sprite:
+    framesPerSecond: 15
+    logicalWidth: 32
+    logicalHeight: 32
+    keyed: false
+    translucent: false
+    colorKey: 0
+    frames:
+    - index: 0
+      legacy: spritetextures/blueyellowthingy/blurredblueyelstar.dtx
+      resource: mm9:effect-texture/blueyellowthingy/blurredblueyelstar
+- legacy: sprites/weapons/blurredgreenorastar.spr
+  kind: sprite
+  resource: mm9:effect-sprite/weapons/blurredgreenorastar
+  asset: engine/effects/mm9/sprites/weapons/blurredgreenorastar.yml
+  status: bound
+  source:
+    path: mm9/extracted/SPRITES/SPRITES/WEAPONS/BLURREDGREENORASTAR.spr
+    bytes: 78
+    sha256: 0c3a0b921ed664305cf4ba17c8f5a7fe8234ac5c77166c405e74727fc15f3512
+  origin: spells_fxf
+  sprite:
+    framesPerSecond: 15
+    logicalWidth: 32
+    logicalHeight: 32
+    keyed: false
+    translucent: false
+    colorKey: 0
+    frames:
+    - index: 0
+      legacy: spritetextures/greenorangethingy/blurredgreenorastar.dtx
+      resource: mm9:effect-texture/greenorangethingy/blurredgreenorastar
+- legacy: sprites/weapons/blurredgreenyelstar.spr
+  kind: sprite
+  resource: mm9:effect-sprite/weapons/blurredgreenyelstar
+  asset: engine/effects/mm9/sprites/weapons/blurredgreenyelstar.yml
+  status: bound
+  source:
+    path: mm9/extracted/SPRITES/SPRITES/WEAPONS/BLURREDGREENYELSTAR.spr
+    bytes: 78
+    sha256: 020e8a6575ab2370284c8387fb417656b59edca44087d81c59f893bbe8f0c1ff
+  origin: spells_fxf
+  sprite:
+    framesPerSecond: 15
+    logicalWidth: 32
+    logicalHeight: 32
+    keyed: false
+    translucent: false
+    colorKey: 0
+    frames:
+    - index: 0
+      legacy: spritetextures/greenyellowthingy/blurredgreenyelstar.dtx
+      resource: mm9:effect-texture/greenyellowthingy/blurredgreenyelstar
+- legacy: sprites/weapons/blurredpurplestar.spr
+  kind: sprite
+  resource: mm9:effect-sprite/weapons/blurredpurplestar
+  asset: engine/effects/mm9/sprites/weapons/blurredpurplestar.yml
+  status: bound
+  source:
+    path: mm9/extracted/SPRITES/SPRITES/WEAPONS/BLURREDPURPLESTAR.spr
+    bytes: 71
+    sha256: ed55adee21615a310c266abf69db665f15f9d869b100f576c2eecdf5f813e0c9
+  origin: spells_fxf
+  sprite:
+    framesPerSecond: 15
+    logicalWidth: 32
+    logicalHeight: 32
+    keyed: false
+    translucent: false
+    colorKey: 0
+    frames:
+    - index: 0
+      legacy: spritetextures/purplethingy/blurredpurplestar.dtx
+      resource: mm9:effect-texture/purplethingy/blurredpurplestar
+- legacy: sprites/weapons/blurredredstar.spr
+  kind: sprite
+  resource: mm9:effect-sprite/weapons/blurredredstar
+  asset: engine/effects/mm9/sprites/weapons/blurredredstar.yml
+  status: bound
+  source:
+    path: mm9/extracted/SPRITES/SPRITES/WEAPONS/BLURREDREDSTAR.spr
+    bytes: 65
+    sha256: fdcc9f901632b6512ff389dfc9a2320e811f6f4149d6c08221ade0ab82b9ab53
+  origin: spells_fxf
+  sprite:
+    framesPerSecond: 15
+    logicalWidth: 32
+    logicalHeight: 32
+    keyed: false
+    translucent: false
+    colorKey: 0
+    frames:
+    - index: 0
+      legacy: spritetextures/redthingy/blurredredstar.dtx
+      resource: mm9:effect-texture/redthingy/blurredredstar
+- legacy: sprites/weapons/blurredredyelstar.spr
+  kind: sprite
+  resource: mm9:effect-sprite/weapons/blurredredyelstar
+  asset: engine/effects/mm9/sprites/weapons/blurredredyelstar.yml
+  status: bound
+  source:
+    path: mm9/extracted/SPRITES/SPRITES/WEAPONS/BLURREDREDYELSTAR.spr
+    bytes: 74
+    sha256: babf38ba07f53c50b60f816a2795753e43eceebcfda1ac834b70d4e81170eff8
+  origin: spells_fxf
+  sprite:
+    framesPerSecond: 15
+    logicalWidth: 32
+    logicalHeight: 32
+    keyed: false
+    translucent: false
+    colorKey: 0
+    frames:
+    - index: 0
+      legacy: spritetextures/redyellowthingy/blurredredyelstar.dtx
+      resource: mm9:effect-texture/redyellowthingy/blurredredyelstar
+- legacy: sprites/weapons/blurredwhitestar.spr
+  kind: sprite
+  resource: mm9:effect-sprite/weapons/blurredwhitestar
+  asset: engine/effects/mm9/sprites/weapons/blurredwhitestar.yml
+  status: bound
+  source:
+    path: mm9/extracted/SPRITES/SPRITES/WEAPONS/BLURREDWHITESTAR.spr
+    bytes: 63
+    sha256: 349665dcd612d7897e04287afc93b7175d2561116e1858cd2386935dd9d3f045
+  origin: spells_fxf
+  sprite:
+    framesPerSecond: 15
+    logicalWidth: 32
+    logicalHeight: 32
+    keyed: false
+    translucent: false
+    colorKey: 0
+    frames:
+    - index: 0
+      legacy: spritetextures/flare/blurredwhitestar.dtx
+      resource: mm9:effect-texture/flare/blurredwhitestar
+- legacy: sprites/weapons/blurredyellowstar.spr
+  kind: sprite
+  resource: mm9:effect-sprite/weapons/blurredyellowstar
+  asset: engine/effects/mm9/sprites/weapons/blurredyellowstar.yml
+  status: bound
+  source:
+    path: mm9/extracted/SPRITES/SPRITES/WEAPONS/BLURREDYELLOWSTAR.spr
+    bytes: 69
+    sha256: 4206f9aa412ab8d1c666e4acfa7272ab7c6c893b1d5307b5e3266eba3ce6091e
+  origin: spells_fxf
+  sprite:
+    framesPerSecond: 15
+    logicalWidth: 32
+    logicalHeight: 32
+    keyed: false
+    translucent: false
+    colorKey: 0
+    frames:
+    - index: 0
+      legacy: spritetextures/yellowline/blurredyellowstar.dtx
+      resource: mm9:effect-texture/yellowline/blurredyellowstar
+- legacy: sprites/weapons/firebolt.spr
+  kind: sprite
+  resource: mm9:effect-sprite/weapons/firebolt
+  asset: engine/effects/mm9/sprites/weapons/firebolt.yml
+  status: bound
+  source:
+    path: mm9/extracted/SPRITES/SPRITES/WEAPONS/FIREBOLT.spr
+    bytes: 62
+    sha256: 192b62ce5087082b241a920890b66b7a33a3c0a5163634586456456cea64f890
+  origin: spells_fxf
+  sprite:
+    framesPerSecond: 15
+    logicalWidth: 32
+    logicalHeight: 32
+    keyed: false
+    translucent: false
+    colorKey: 0
+    frames:
+    - index: 0
+      legacy: spritetextures/fire bolt/newfirebolt.dtx
+      resource: mm9:effect-texture/fire bolt/newfirebolt
+- legacy: sprites/weapons/greenoraringexplode.spr
+  kind: sprite
+  resource: mm9:effect-sprite/weapons/greenoraringexplode
+  asset: engine/effects/mm9/sprites/weapons/greenoraringexplode.yml
+  status: bound
+  source:
+    path: mm9/extracted/SPRITES/SPRITES/WEAPONS/GREENORARINGEXPLODE.spr
+    bytes: 78
+    sha256: 5b7e862ce88f88afabeaff88bb54733f6f859bc9ea4e5aea178a62054c627c78
+  origin: spells_fxf
+  sprite:
+    framesPerSecond: 15
+    logicalWidth: 32
+    logicalHeight: 32
+    keyed: false
+    translucent: false
+    colorKey: 0
+    frames:
+    - index: 0
+      legacy: spritetextures/greenorangethingy/greenoraringexplode.dtx
+      resource: mm9:effect-texture/greenorangethingy/greenoraringexplode
+- legacy: sprites/weapons/ringexplodeblue.spr
+  kind: sprite
+  resource: mm9:effect-sprite/weapons/ringexplodeblue
+  asset: engine/effects/mm9/sprites/weapons/ringexplodeblue.yml
+  status: bound
+  source:
+    path: mm9/extracted/SPRITES/SPRITES/WEAPONS/RINGEXPLODEBLUE.spr
+    bytes: 63
+    sha256: 0b8f785d2236faf49bc493b865a66a57384fe79eed9f4a959cf5816e35c2cc0e
+  origin: spells_fxf
+  sprite:
+    framesPerSecond: 15
+    logicalWidth: 64
+    logicalHeight: 64
+    keyed: false
+    translucent: false
+    colorKey: 0
+    frames:
+    - index: 0
+      legacy: spritetextures/sparks/ringexplodeblue.dtx
+      resource: mm9:effect-texture/sparks/ringexplodeblue
+- legacy: spritetextures/blackwhitering.dtx
+  kind: texture
+  resource: mm9:effect-texture/blackwhitering
+  asset: engine/effects/mm9/textures/blackwhitering.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/BLACKWHITERING.dtx
+    bytes: 21924
+    sha256: 38f839b0b3eb033ad35222431747a84cabdf3b16ce5e3e25cf81bd56a40e9251
+  origin: spells_fxf
+- legacy: spritetextures/bloodhit1.dtx
+  kind: texture
+  resource: mm9:effect-texture/bloodhit1
+  asset: engine/effects/mm9/textures/bloodhit1.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/BLOODHIT1.dtx
+    bytes: 5604
+    sha256: b3e954b4645c16b7c778bd69694e105b70a1801776078700a7edbd6240200557
+  origin: hardcoded_melee_contact
+- legacy: spritetextures/bloodspray1.dtx
+  kind: texture
+  resource: mm9:effect-texture/bloodspray1
+  asset: engine/effects/mm9/textures/bloodspray1.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/BLOODSPRAY1.dtx
+    bytes: 1524
+    sha256: ff7c3616d41fdbb8c219b05651a46d83b5679e8d36df5fb3976b71226b2d536e
+  origin: hardcoded_melee_contact
+- legacy: spritetextures/bluering.dtx
+  kind: texture
+  resource: mm9:effect-texture/bluering
+  asset: engine/effects/mm9/textures/bluering.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/BLUERING.dtx
+    bytes: 21924
+    sha256: 82d5f6cb552cd8cc6590ab933874f6b623b77abc76972b084c415f21d07cb969
+  origin: spells_fxf
+- legacy: spritetextures/blueyellowthingy/blurredblueyelstar.dtx
+  kind: texture
+  resource: mm9:effect-texture/blueyellowthingy/blurredblueyelstar
+  asset: engine/effects/mm9/textures/blueyellowthingy/blurredblueyelstar.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/BLUEYELLOWTHINGY/BLURREDBLUEYELSTAR.dtx
+    bytes: 5604
+    sha256: 115f0bc34f7bf8d63fdbd6642aad0567f97cd2392cfc4cfca6d6e5397a25b5cc
+  origin: spells_fxf
+- legacy: spritetextures/dragonbreath/firebreath1.dtx
+  kind: texture
+  resource: mm9:effect-texture/dragonbreath/firebreath1
+  asset: engine/effects/mm9/textures/dragonbreath/firebreath1.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/DRAGONBREATH/FIREBREATH1.dtx
+    bytes: 5604
+    sha256: b7a3e3a67be1c63fb2c6de075b507f11a33eb607af132a98bd253973eef32d1d
+  origin: spells_fxf
+- legacy: spritetextures/dragonbreath/firebreath2.dtx
+  kind: texture
+  resource: mm9:effect-texture/dragonbreath/firebreath2
+  asset: engine/effects/mm9/textures/dragonbreath/firebreath2.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/DRAGONBREATH/FIREBREATH2.dtx
+    bytes: 5604
+    sha256: bdc1a73b529587af5b14ad2d387519551f448b869cd810ac48117f45a38b4876
+  origin: spells_fxf
+- legacy: spritetextures/dragonbreath/firebreath3.dtx
+  kind: texture
+  resource: mm9:effect-texture/dragonbreath/firebreath3
+  asset: engine/effects/mm9/textures/dragonbreath/firebreath3.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/DRAGONBREATH/FIREBREATH3.dtx
+    bytes: 5604
+    sha256: b41a5626f71e5988ec623399e90af0fd9d63fa9447aafec403c07ed5ae749405
+  origin: spells_fxf
+- legacy: spritetextures/dragonbreath/firebreath4.dtx
+  kind: texture
+  resource: mm9:effect-texture/dragonbreath/firebreath4
+  asset: engine/effects/mm9/textures/dragonbreath/firebreath4.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/DRAGONBREATH/FIREBREATH4.dtx
+    bytes: 5604
+    sha256: f5263f3122c9417e02c2e2e66777fe5ee9727ebbf8682944e0b078afeefddc65
+  origin: spells_fxf
+- legacy: spritetextures/dragonbreath/firebreath5.dtx
+  kind: texture
+  resource: mm9:effect-texture/dragonbreath/firebreath5
+  asset: engine/effects/mm9/textures/dragonbreath/firebreath5.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/DRAGONBREATH/FIREBREATH5.dtx
+    bytes: 5604
+    sha256: 6c18f308157dc4fa758fcbebaa83a624a3891e5e9d429faeb2fe59dd5a6c86fc
+  origin: spells_fxf
+- legacy: spritetextures/dragonbreath/firebreath6.dtx
+  kind: texture
+  resource: mm9:effect-texture/dragonbreath/firebreath6
+  asset: engine/effects/mm9/textures/dragonbreath/firebreath6.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/DRAGONBREATH/FIREBREATH6.dtx
+    bytes: 5604
+    sha256: f3dec2f75c21ea7f21dc3b83a4c0b6766de1c9adbe3a764c82282a5c015af975
+  origin: spells_fxf
+- legacy: spritetextures/dragonbreath/firebreath7.dtx
+  kind: texture
+  resource: mm9:effect-texture/dragonbreath/firebreath7
+  asset: engine/effects/mm9/textures/dragonbreath/firebreath7.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/DRAGONBREATH/FIREBREATH7.dtx
+    bytes: 5604
+    sha256: b743e3af5f6a525561aca8f2d9d4bb74c3f7b200d62f989212725ea7556d9816
+  origin: spells_fxf
+- legacy: spritetextures/dragonbreath/firebreath8.dtx
+  kind: texture
+  resource: mm9:effect-texture/dragonbreath/firebreath8
+  asset: engine/effects/mm9/textures/dragonbreath/firebreath8.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/DRAGONBREATH/FIREBREATH8.dtx
+    bytes: 5604
+    sha256: c8955f7eb3b3eac4d83ad7082ba4dba5e49187112a1d3fdd89f73ef850c3c57e
+  origin: spells_fxf
+- legacy: spritetextures/electricity/lball_000.dtx
+  kind: texture
+  resource: mm9:effect-texture/electricity/lball_000
+  asset: engine/effects/mm9/textures/electricity/lball_000.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/ELECTRICITY/LBALL_000.dtx
+    bytes: 21924
+    sha256: 87c598fc5629ae0c4557a04bf312562b0d0c95d97eec8b7cd55cd91ffc1d21b0
+  origin: spells_fxf
+- legacy: spritetextures/electricity/lball_001.dtx
+  kind: texture
+  resource: mm9:effect-texture/electricity/lball_001
+  asset: engine/effects/mm9/textures/electricity/lball_001.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/ELECTRICITY/LBALL_001.dtx
+    bytes: 21924
+    sha256: 2dac621aee920f79790716a0e87ba00f51271efa95043f2f2b93229fa77fa427
+  origin: spells_fxf
+- legacy: spritetextures/electricity/lball_002.dtx
+  kind: texture
+  resource: mm9:effect-texture/electricity/lball_002
+  asset: engine/effects/mm9/textures/electricity/lball_002.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/ELECTRICITY/LBALL_002.dtx
+    bytes: 21924
+    sha256: 0fc097a157f190e02c2c31030f19d84a16b9fc3646acf78e59395ab6291575a7
+  origin: spells_fxf
+- legacy: spritetextures/electricity/lball_003.dtx
+  kind: texture
+  resource: mm9:effect-texture/electricity/lball_003
+  asset: engine/effects/mm9/textures/electricity/lball_003.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/ELECTRICITY/LBALL_003.dtx
+    bytes: 21924
+    sha256: d4867a1236e0e6f48808d7f90c0c0ac8438db8d1fd3ed0a15f456da48497f604
+  origin: spells_fxf
+- legacy: spritetextures/electricity/lball_004.dtx
+  kind: texture
+  resource: mm9:effect-texture/electricity/lball_004
+  asset: engine/effects/mm9/textures/electricity/lball_004.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/ELECTRICITY/LBALL_004.dtx
+    bytes: 21924
+    sha256: d3d7583cf41152b7d84b761903342d4febffa780ee331f33d2ed307b3d1668ee
+  origin: spells_fxf
+- legacy: spritetextures/electricity/lball_005.dtx
+  kind: texture
+  resource: mm9:effect-texture/electricity/lball_005
+  asset: engine/effects/mm9/textures/electricity/lball_005.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/ELECTRICITY/LBALL_005.dtx
+    bytes: 21924
+    sha256: 2754e950ebfe620147ad3db64dab450bd63ad71e6bf1f216edc72619f80acb38
+  origin: spells_fxf
+- legacy: spritetextures/electricity/lball_006.dtx
+  kind: texture
+  resource: mm9:effect-texture/electricity/lball_006
+  asset: engine/effects/mm9/textures/electricity/lball_006.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/ELECTRICITY/LBALL_006.dtx
+    bytes: 21924
+    sha256: b7dc90e7970c5da88cb2111e3a8c60fcc4f162a8823dbc74190e9420b0a30f58
+  origin: spells_fxf
+- legacy: spritetextures/electricity/lball_007.dtx
+  kind: texture
+  resource: mm9:effect-texture/electricity/lball_007
+  asset: engine/effects/mm9/textures/electricity/lball_007.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/ELECTRICITY/LBALL_007.dtx
+    bytes: 21924
+    sha256: decc4954715e27d72c6fd24a4762a9cd4428da112e652be98c21751aa30bddde
+  origin: spells_fxf
+- legacy: spritetextures/electricity/lball_008.dtx
+  kind: texture
+  resource: mm9:effect-texture/electricity/lball_008
+  asset: engine/effects/mm9/textures/electricity/lball_008.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/ELECTRICITY/LBALL_008.dtx
+    bytes: 21924
+    sha256: 927919dc2cac13e4fc8a04a09fe8068777c744abce0b49219ae30c02b27a1577
+  origin: spells_fxf
+- legacy: spritetextures/electricity/lball_009.dtx
+  kind: texture
+  resource: mm9:effect-texture/electricity/lball_009
+  asset: engine/effects/mm9/textures/electricity/lball_009.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/ELECTRICITY/LBALL_009.dtx
+    bytes: 21924
+    sha256: 2dd16b3e554280af6ceb841e934e640434b0a1a65b906452bf6e1a1e36320336
+  origin: spells_fxf
+- legacy: spritetextures/electricity/lball_010.dtx
+  kind: texture
+  resource: mm9:effect-texture/electricity/lball_010
+  asset: engine/effects/mm9/textures/electricity/lball_010.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/ELECTRICITY/LBALL_010.dtx
+    bytes: 21924
+    sha256: 829073ac03d9f0559d3187207c06ba0e82f38a0e6ef422419fae59f19f0924cd
+  origin: spells_fxf
+- legacy: spritetextures/electricity/lball_011.dtx
+  kind: texture
+  resource: mm9:effect-texture/electricity/lball_011
+  asset: engine/effects/mm9/textures/electricity/lball_011.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/ELECTRICITY/LBALL_011.dtx
+    bytes: 21924
+    sha256: e9b089c5ae0a1ae82776f2e09a4024defa62a80dfed1b1b1bac020e098b3d9f4
+  origin: spells_fxf
+- legacy: spritetextures/electricity/lball_012.dtx
+  kind: texture
+  resource: mm9:effect-texture/electricity/lball_012
+  asset: engine/effects/mm9/textures/electricity/lball_012.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/ELECTRICITY/LBALL_012.dtx
+    bytes: 21924
+    sha256: 934adced9fc77bba664882b32555ce7c1c9c96281b678e4bc5eada3cd6f9f972
+  origin: spells_fxf
+- legacy: spritetextures/electricity/lball_013.dtx
+  kind: texture
+  resource: mm9:effect-texture/electricity/lball_013
+  asset: engine/effects/mm9/textures/electricity/lball_013.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/ELECTRICITY/LBALL_013.dtx
+    bytes: 21924
+    sha256: ae02f4325791d85fe80da3eb8a2cc36bc02e997825f979124d655767dfabbaf2
+  origin: spells_fxf
+- legacy: spritetextures/feather1.dtx
+  kind: texture
+  resource: mm9:effect-texture/feather1
+  asset: engine/effects/mm9/textures/feather1.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/FEATHER1.dtx
+    bytes: 5604
+    sha256: aa25fa819d19be07ceba0bd65b2af8db9bf33a8b95a680c864ce12313a0b45f7
+  origin: spells_fxf
+- legacy: spritetextures/feather2.dtx
+  kind: texture
+  resource: mm9:effect-texture/feather2
+  asset: engine/effects/mm9/textures/feather2.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/FEATHER2.dtx
+    bytes: 5604
+    sha256: 7404cd24b8c6c287dc10ee010b14243998424aa3aeb2d0fb8653ac7688a7cc78
+  origin: spells_fxf
+- legacy: spritetextures/feather3.dtx
+  kind: texture
+  resource: mm9:effect-texture/feather3
+  asset: engine/effects/mm9/textures/feather3.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/FEATHER3.dtx
+    bytes: 5604
+    sha256: 2df702d665f1123580676e7215a23fca1f63c5ad7cbf11972ae399838943861e
+  origin: spells_fxf
+- legacy: spritetextures/feather4.dtx
+  kind: texture
+  resource: mm9:effect-texture/feather4
+  asset: engine/effects/mm9/textures/feather4.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/FEATHER4.dtx
+    bytes: 5604
+    sha256: 069015d39cd057108b94967493627f56d8d70c6e95abea191236a6b8c2ac6368
+  origin: spells_fxf
+- legacy: spritetextures/fire bolt/newfirebolt.dtx
+  kind: texture
+  resource: mm9:effect-texture/fire bolt/newfirebolt
+  asset: engine/effects/mm9/textures/fire bolt/newfirebolt.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/FIRE BOLT/NEWFIREBOLT.dtx
+    bytes: 5604
+    sha256: 2585c41432f5a0109c972d98d6fc0c1cb4b1482d117e18b5832dd550d54683e1
+  origin: spells_fxf
+- legacy: spritetextures/flameeffects/bluetorch/blueflame01.dtx
+  kind: texture
+  resource: mm9:effect-texture/flameeffects/bluetorch/blueflame01
+  asset: engine/effects/mm9/textures/flameeffects/bluetorch/blueflame01.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/FLAMEEFFECTS/BLUETORCH/BLUEFLAME01.dtx
+    bytes: 21924
+    sha256: 665cb05656ea059f9f3d503fc809a20ba7ee274a7752e5e892aaaeaf86d22984
+  origin: spells_fxf
+- legacy: spritetextures/flameeffects/bluetorch/blueflame02.dtx
+  kind: texture
+  resource: mm9:effect-texture/flameeffects/bluetorch/blueflame02
+  asset: engine/effects/mm9/textures/flameeffects/bluetorch/blueflame02.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/FLAMEEFFECTS/BLUETORCH/BLUEFLAME02.dtx
+    bytes: 21924
+    sha256: 628e842b548589872f9440d14cf198b1c507887dc5a7fe75d13f5eee2b2d5386
+  origin: spells_fxf
+- legacy: spritetextures/flameeffects/bluetorch/blueflame03.dtx
+  kind: texture
+  resource: mm9:effect-texture/flameeffects/bluetorch/blueflame03
+  asset: engine/effects/mm9/textures/flameeffects/bluetorch/blueflame03.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/FLAMEEFFECTS/BLUETORCH/BLUEFLAME03.dtx
+    bytes: 21924
+    sha256: a15393eed583e58e4cb85db55a94aa2bc8ce9d876efaf30ce1620fa1cdf57049
+  origin: spells_fxf
+- legacy: spritetextures/flameeffects/bluetorch/blueflame04.dtx
+  kind: texture
+  resource: mm9:effect-texture/flameeffects/bluetorch/blueflame04
+  asset: engine/effects/mm9/textures/flameeffects/bluetorch/blueflame04.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/FLAMEEFFECTS/BLUETORCH/BLUEFLAME04.dtx
+    bytes: 21924
+    sha256: ba60e18856f9078998fe6df1c83de0a065bb9239570d0bd2b929e19958baa42c
+  origin: spells_fxf
+- legacy: spritetextures/flameeffects/bluetorch/blueflame05.dtx
+  kind: texture
+  resource: mm9:effect-texture/flameeffects/bluetorch/blueflame05
+  asset: engine/effects/mm9/textures/flameeffects/bluetorch/blueflame05.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/FLAMEEFFECTS/BLUETORCH/BLUEFLAME05.dtx
+    bytes: 21924
+    sha256: e36d3e635daba2a6770c71d58937c130a196b3d3482d1bf1cf93acd200d75dfd
+  origin: spells_fxf
+- legacy: spritetextures/flameeffects/bluetorch/blueflame06.dtx
+  kind: texture
+  resource: mm9:effect-texture/flameeffects/bluetorch/blueflame06
+  asset: engine/effects/mm9/textures/flameeffects/bluetorch/blueflame06.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/FLAMEEFFECTS/BLUETORCH/BLUEFLAME06.dtx
+    bytes: 21924
+    sha256: 0a28817b67fd71885e5c3c1a76b3abec27b35712b4b0ceecae2ac930c5a0d7ea
+  origin: spells_fxf
+- legacy: spritetextures/flameeffects/bluetorch/blueflame07.dtx
+  kind: texture
+  resource: mm9:effect-texture/flameeffects/bluetorch/blueflame07
+  asset: engine/effects/mm9/textures/flameeffects/bluetorch/blueflame07.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/FLAMEEFFECTS/BLUETORCH/BLUEFLAME07.dtx
+    bytes: 21924
+    sha256: 24c6cd41b3a540600bf0f4757a9f73061cb84d3119b97ae3cfc8968cbe9bf7ed
+  origin: spells_fxf
+- legacy: spritetextures/flameeffects/bluetorch/blueflame08.dtx
+  kind: texture
+  resource: mm9:effect-texture/flameeffects/bluetorch/blueflame08
+  asset: engine/effects/mm9/textures/flameeffects/bluetorch/blueflame08.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/FLAMEEFFECTS/BLUETORCH/BLUEFLAME08.dtx
+    bytes: 21924
+    sha256: 6dde9bc5272eff0907be7ff2352abbf50862ed38c9f96d087e13508a6b69b31b
+  origin: spells_fxf
+- legacy: spritetextures/flameeffects/bluetorch/blueflame09.dtx
+  kind: texture
+  resource: mm9:effect-texture/flameeffects/bluetorch/blueflame09
+  asset: engine/effects/mm9/textures/flameeffects/bluetorch/blueflame09.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/FLAMEEFFECTS/BLUETORCH/BLUEFLAME09.dtx
+    bytes: 21924
+    sha256: 37fecb910daa031b0129c629918ffea5782ad381caa98dc3b27b745ba1df0447
+  origin: spells_fxf
+- legacy: spritetextures/flameeffects/bluetorch/blueflame10.dtx
+  kind: texture
+  resource: mm9:effect-texture/flameeffects/bluetorch/blueflame10
+  asset: engine/effects/mm9/textures/flameeffects/bluetorch/blueflame10.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/FLAMEEFFECTS/BLUETORCH/BLUEFLAME10.dtx
+    bytes: 21924
+    sha256: b777f673602c8d1d0097a0c5b189287d1b1c45a11fa2e5935b5b22ea51d4124e
+  origin: spells_fxf
+- legacy: spritetextures/flameeffects/bluetorch/blueflame11.dtx
+  kind: texture
+  resource: mm9:effect-texture/flameeffects/bluetorch/blueflame11
+  asset: engine/effects/mm9/textures/flameeffects/bluetorch/blueflame11.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/FLAMEEFFECTS/BLUETORCH/BLUEFLAME11.dtx
+    bytes: 21924
+    sha256: eb44012f7071385210236206cb8ac1f9cbd6650b787b8fc84396a72a6ac7db2e
+  origin: spells_fxf
+- legacy: spritetextures/flameeffects/bluetorch/blueflame12.dtx
+  kind: texture
+  resource: mm9:effect-texture/flameeffects/bluetorch/blueflame12
+  asset: engine/effects/mm9/textures/flameeffects/bluetorch/blueflame12.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/FLAMEEFFECTS/BLUETORCH/BLUEFLAME12.dtx
+    bytes: 21924
+    sha256: 8f6938622e4c3e30cf586416f012a7ff02f624865594e8e18d1bd8bf08fc3e5f
+  origin: spells_fxf
+- legacy: spritetextures/flameeffects/bluetorch/blueflame13.dtx
+  kind: texture
+  resource: mm9:effect-texture/flameeffects/bluetorch/blueflame13
+  asset: engine/effects/mm9/textures/flameeffects/bluetorch/blueflame13.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/FLAMEEFFECTS/BLUETORCH/BLUEFLAME13.dtx
+    bytes: 21924
+    sha256: 6d8ad7d2a0b3a49f37fb7d10de3529b497324665a6151e8541ca61d118cb549a
+  origin: spells_fxf
+- legacy: spritetextures/flameeffects/bluetorch/blueflame14.dtx
+  kind: texture
+  resource: mm9:effect-texture/flameeffects/bluetorch/blueflame14
+  asset: engine/effects/mm9/textures/flameeffects/bluetorch/blueflame14.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/FLAMEEFFECTS/BLUETORCH/BLUEFLAME14.dtx
+    bytes: 21924
+    sha256: ad037cf5f1c456ab53f84d9b9c3cfc3e844ec862ca9a7a677440e183ca4de24b
+  origin: spells_fxf
+- legacy: spritetextures/flameeffects/bluetorch/blueflame15.dtx
+  kind: texture
+  resource: mm9:effect-texture/flameeffects/bluetorch/blueflame15
+  asset: engine/effects/mm9/textures/flameeffects/bluetorch/blueflame15.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/FLAMEEFFECTS/BLUETORCH/BLUEFLAME15.dtx
+    bytes: 21924
+    sha256: 8d77f71d14fdce1da9d73c8eebdbcd29bf64fb853f85aabb9c20acdcc0357373
+  origin: spells_fxf
+- legacy: spritetextures/flameeffects/torchflame/torchflame_additive0030.dtx
+  kind: texture
+  resource: mm9:effect-texture/flameeffects/torchflame/torchflame_additive0030
+  asset: engine/effects/mm9/textures/flameeffects/torchflame/torchflame_additive0030.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/FLAMEEFFECTS/TORCHFLAME/TORCHFLAME_ADDITIVE0030.dtx
+    bytes: 5604
+    sha256: 97ab01af49ffda2c7f0794041657def7e90df86996ccee88a67994df8b091b41
+  origin: spells_fxf
+- legacy: spritetextures/flameeffects/torchflame/torchflame_additive0031.dtx
+  kind: texture
+  resource: mm9:effect-texture/flameeffects/torchflame/torchflame_additive0031
+  asset: engine/effects/mm9/textures/flameeffects/torchflame/torchflame_additive0031.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/FLAMEEFFECTS/TORCHFLAME/TORCHFLAME_ADDITIVE0031.dtx
+    bytes: 5604
+    sha256: 1f0cfbb3ef4cf476c45ee8806bc2edb9650890b83fb5279c1518dcbdb385fbf4
+  origin: spells_fxf
+- legacy: spritetextures/flameeffects/torchflame/torchflame_additive0032.dtx
+  kind: texture
+  resource: mm9:effect-texture/flameeffects/torchflame/torchflame_additive0032
+  asset: engine/effects/mm9/textures/flameeffects/torchflame/torchflame_additive0032.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/FLAMEEFFECTS/TORCHFLAME/TORCHFLAME_ADDITIVE0032.dtx
+    bytes: 5604
+    sha256: 12cd9a9cb3df47cd88c7cee5762ad168bf3e20493992641731c23b81aec19a4f
+  origin: spells_fxf
+- legacy: spritetextures/flameeffects/torchflame/torchflame_additive0033.dtx
+  kind: texture
+  resource: mm9:effect-texture/flameeffects/torchflame/torchflame_additive0033
+  asset: engine/effects/mm9/textures/flameeffects/torchflame/torchflame_additive0033.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/FLAMEEFFECTS/TORCHFLAME/TORCHFLAME_ADDITIVE0033.dtx
+    bytes: 5604
+    sha256: b36c972bcf2cebb4886c3a8ca66f7a5b1315d3ec4983a0b56fe991d49bda6433
+  origin: spells_fxf
+- legacy: spritetextures/flameeffects/torchflame/torchflame_additive0034.dtx
+  kind: texture
+  resource: mm9:effect-texture/flameeffects/torchflame/torchflame_additive0034
+  asset: engine/effects/mm9/textures/flameeffects/torchflame/torchflame_additive0034.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/FLAMEEFFECTS/TORCHFLAME/TORCHFLAME_ADDITIVE0034.dtx
+    bytes: 5604
+    sha256: 19c3073a827a195e3fdb8a2fddc0d2e90ad95f6ff9ff2bc1e456b8239c0a3fb2
+  origin: spells_fxf
+- legacy: spritetextures/flameeffects/torchflame/torchflame_additive0035.dtx
+  kind: texture
+  resource: mm9:effect-texture/flameeffects/torchflame/torchflame_additive0035
+  asset: engine/effects/mm9/textures/flameeffects/torchflame/torchflame_additive0035.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/FLAMEEFFECTS/TORCHFLAME/TORCHFLAME_ADDITIVE0035.dtx
+    bytes: 5604
+    sha256: 3747daef82792aa68b73cbe9344eb5f6885fed63eb18fc0c7c0975df153d00c1
+  origin: spells_fxf
+- legacy: spritetextures/flameeffects/torchflame/torchflame_additive0036.dtx
+  kind: texture
+  resource: mm9:effect-texture/flameeffects/torchflame/torchflame_additive0036
+  asset: engine/effects/mm9/textures/flameeffects/torchflame/torchflame_additive0036.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/FLAMEEFFECTS/TORCHFLAME/TORCHFLAME_ADDITIVE0036.dtx
+    bytes: 5604
+    sha256: 822b12451f1454a5f5a9535f856b9f8f2fcc1c59d1620e61c3901addfafadd00
+  origin: spells_fxf
+- legacy: spritetextures/flameeffects/torchflame/torchflame_additive0037.dtx
+  kind: texture
+  resource: mm9:effect-texture/flameeffects/torchflame/torchflame_additive0037
+  asset: engine/effects/mm9/textures/flameeffects/torchflame/torchflame_additive0037.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/FLAMEEFFECTS/TORCHFLAME/TORCHFLAME_ADDITIVE0037.dtx
+    bytes: 5604
+    sha256: 9fee8db28c8f77d9be1004dc753a390d284ec5fc91e5d014d2b766fbf2694eb3
+  origin: spells_fxf
+- legacy: spritetextures/flameeffects/torchflame/torchflame_additive0038.dtx
+  kind: texture
+  resource: mm9:effect-texture/flameeffects/torchflame/torchflame_additive0038
+  asset: engine/effects/mm9/textures/flameeffects/torchflame/torchflame_additive0038.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/FLAMEEFFECTS/TORCHFLAME/TORCHFLAME_ADDITIVE0038.dtx
+    bytes: 5604
+    sha256: 89c3ad0f652c3b56ef2aedacaaa7b08c6829f5cfac86cd419ba45c8ccb5ffe35
+  origin: spells_fxf
+- legacy: spritetextures/flameeffects/torchflame/torchflame_additive0039.dtx
+  kind: texture
+  resource: mm9:effect-texture/flameeffects/torchflame/torchflame_additive0039
+  asset: engine/effects/mm9/textures/flameeffects/torchflame/torchflame_additive0039.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/FLAMEEFFECTS/TORCHFLAME/TORCHFLAME_ADDITIVE0039.dtx
+    bytes: 5604
+    sha256: f7db845258cac1864d2b00a4da4881f4948129833dc85939f966c78573fe5412
+  origin: spells_fxf
+- legacy: spritetextures/flameeffects/torchflame/torchflame_additive0040.dtx
+  kind: texture
+  resource: mm9:effect-texture/flameeffects/torchflame/torchflame_additive0040
+  asset: engine/effects/mm9/textures/flameeffects/torchflame/torchflame_additive0040.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/FLAMEEFFECTS/TORCHFLAME/TORCHFLAME_ADDITIVE0040.dtx
+    bytes: 5604
+    sha256: 02606a1e0a5d26b9ffc5fd70b45079a8d318b1041097d886c5eac84c92f26e19
+  origin: spells_fxf
+- legacy: spritetextures/flameeffects/torchflame/torchflame_additive0041.dtx
+  kind: texture
+  resource: mm9:effect-texture/flameeffects/torchflame/torchflame_additive0041
+  asset: engine/effects/mm9/textures/flameeffects/torchflame/torchflame_additive0041.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/FLAMEEFFECTS/TORCHFLAME/TORCHFLAME_ADDITIVE0041.dtx
+    bytes: 5604
+    sha256: 15ec63862688fd7eed94d764d4fb37e730960b0c268f6580f9f5ca790c8f7de0
+  origin: spells_fxf
+- legacy: spritetextures/flameeffects/torchflame/torchflame_additive0042.dtx
+  kind: texture
+  resource: mm9:effect-texture/flameeffects/torchflame/torchflame_additive0042
+  asset: engine/effects/mm9/textures/flameeffects/torchflame/torchflame_additive0042.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/FLAMEEFFECTS/TORCHFLAME/TORCHFLAME_ADDITIVE0042.dtx
+    bytes: 5604
+    sha256: f82829b4ccaf3e71f67466116e200088f13a0541929037404777ba1ccc53e4b7
+  origin: spells_fxf
+- legacy: spritetextures/flameeffects/torchflame/torchflame_additive0043.dtx
+  kind: texture
+  resource: mm9:effect-texture/flameeffects/torchflame/torchflame_additive0043
+  asset: engine/effects/mm9/textures/flameeffects/torchflame/torchflame_additive0043.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/FLAMEEFFECTS/TORCHFLAME/TORCHFLAME_ADDITIVE0043.dtx
+    bytes: 5604
+    sha256: a555434124f8a536fdc9a434895fe6f4924604827da0770385e7504c74ca36d8
+  origin: spells_fxf
+- legacy: spritetextures/flameeffects/torchflame/torchflame_additive0044.dtx
+  kind: texture
+  resource: mm9:effect-texture/flameeffects/torchflame/torchflame_additive0044
+  asset: engine/effects/mm9/textures/flameeffects/torchflame/torchflame_additive0044.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/FLAMEEFFECTS/TORCHFLAME/TORCHFLAME_ADDITIVE0044.dtx
+    bytes: 5604
+    sha256: 68bc739003ef5c6d9595a9a0bcefd9375c989ee7a21ab7ab2436ca399e878a4d
+  origin: spells_fxf
+- legacy: spritetextures/flameeffects/torchflame/torchflame_additive0045.dtx
+  kind: texture
+  resource: mm9:effect-texture/flameeffects/torchflame/torchflame_additive0045
+  asset: engine/effects/mm9/textures/flameeffects/torchflame/torchflame_additive0045.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/FLAMEEFFECTS/TORCHFLAME/TORCHFLAME_ADDITIVE0045.dtx
+    bytes: 5604
+    sha256: d128add353eeff302572f2c404fa3b3923b2f0a33d660897c3f054c7f9717ae5
+  origin: spells_fxf
+- legacy: spritetextures/flameeffects/torchflame/torchflame_additive0046.dtx
+  kind: texture
+  resource: mm9:effect-texture/flameeffects/torchflame/torchflame_additive0046
+  asset: engine/effects/mm9/textures/flameeffects/torchflame/torchflame_additive0046.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/FLAMEEFFECTS/TORCHFLAME/TORCHFLAME_ADDITIVE0046.dtx
+    bytes: 5604
+    sha256: 596a482f0010093b9d8f26ba681970d93b834ad8e42490f746d3c2b356b6b8b2
+  origin: spells_fxf
+- legacy: spritetextures/flameeffects/torchflame/torchflame_additive0047.dtx
+  kind: texture
+  resource: mm9:effect-texture/flameeffects/torchflame/torchflame_additive0047
+  asset: engine/effects/mm9/textures/flameeffects/torchflame/torchflame_additive0047.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/FLAMEEFFECTS/TORCHFLAME/TORCHFLAME_ADDITIVE0047.dtx
+    bytes: 5604
+    sha256: 1ad07c58fe3d37b15fc94a6acfe3ce834f8b2ce94b3a403fa2466e9c2de8a255
+  origin: spells_fxf
+- legacy: spritetextures/flameeffects/torchflame/torchflame_additive0048.dtx
+  kind: texture
+  resource: mm9:effect-texture/flameeffects/torchflame/torchflame_additive0048
+  asset: engine/effects/mm9/textures/flameeffects/torchflame/torchflame_additive0048.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/FLAMEEFFECTS/TORCHFLAME/TORCHFLAME_ADDITIVE0048.dtx
+    bytes: 5604
+    sha256: 83c0f21d2d69215117c22fd29fa5c25670ea549e4a27cb91b337fb9f34d3af1b
+  origin: spells_fxf
+- legacy: spritetextures/flameeffects/torchflame/torchflame_additive0049.dtx
+  kind: texture
+  resource: mm9:effect-texture/flameeffects/torchflame/torchflame_additive0049
+  asset: engine/effects/mm9/textures/flameeffects/torchflame/torchflame_additive0049.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/FLAMEEFFECTS/TORCHFLAME/TORCHFLAME_ADDITIVE0049.dtx
+    bytes: 5604
+    sha256: 092df10d859f61f85dff0dbc462aa2874cac3d3c41a966918c200079ac1dd23e
+  origin: spells_fxf
+- legacy: spritetextures/flameeffects/torchflame/torchflame_additive0050.dtx
+  kind: texture
+  resource: mm9:effect-texture/flameeffects/torchflame/torchflame_additive0050
+  asset: engine/effects/mm9/textures/flameeffects/torchflame/torchflame_additive0050.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/FLAMEEFFECTS/TORCHFLAME/TORCHFLAME_ADDITIVE0050.dtx
+    bytes: 5604
+    sha256: 991cc125edc71d738b0d0a5ae2fc36e0c1053ebb7d41658b0e134a2599df01fa
+  origin: spells_fxf
+- legacy: spritetextures/flameeffects/torchflame/torchflame_additive0051.dtx
+  kind: texture
+  resource: mm9:effect-texture/flameeffects/torchflame/torchflame_additive0051
+  asset: engine/effects/mm9/textures/flameeffects/torchflame/torchflame_additive0051.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/FLAMEEFFECTS/TORCHFLAME/TORCHFLAME_ADDITIVE0051.dtx
+    bytes: 5604
+    sha256: 269c6b01138a085898dcf9eb70ce015243b014cda3efa7c168852ed7297521ee
+  origin: spells_fxf
+- legacy: spritetextures/flameeffects/torchflame/torchflame_additive0052.dtx
+  kind: texture
+  resource: mm9:effect-texture/flameeffects/torchflame/torchflame_additive0052
+  asset: engine/effects/mm9/textures/flameeffects/torchflame/torchflame_additive0052.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/FLAMEEFFECTS/TORCHFLAME/TORCHFLAME_ADDITIVE0052.dtx
+    bytes: 5604
+    sha256: 101f890a54f77389984907135f5a82ccec8d26be42bb09afb3cb60f52ec676ae
+  origin: spells_fxf
+- legacy: spritetextures/flameeffects/torchflame/torchflame_additive0053.dtx
+  kind: texture
+  resource: mm9:effect-texture/flameeffects/torchflame/torchflame_additive0053
+  asset: engine/effects/mm9/textures/flameeffects/torchflame/torchflame_additive0053.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/FLAMEEFFECTS/TORCHFLAME/TORCHFLAME_ADDITIVE0053.dtx
+    bytes: 5604
+    sha256: c069715357775085be432ef198a3f38b14edb9b7ac75ad9095950924984f5b33
+  origin: spells_fxf
+- legacy: spritetextures/flameeffects/torchflame/torchflame_additive0054.dtx
+  kind: texture
+  resource: mm9:effect-texture/flameeffects/torchflame/torchflame_additive0054
+  asset: engine/effects/mm9/textures/flameeffects/torchflame/torchflame_additive0054.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/FLAMEEFFECTS/TORCHFLAME/TORCHFLAME_ADDITIVE0054.dtx
+    bytes: 5604
+    sha256: daca55e7de874253b2b1a9c28a64bfa68f16075c607e39822b4c419b2bccb5c5
+  origin: spells_fxf
+- legacy: spritetextures/flameeffects/torchflame/torchflame_additive0055.dtx
+  kind: texture
+  resource: mm9:effect-texture/flameeffects/torchflame/torchflame_additive0055
+  asset: engine/effects/mm9/textures/flameeffects/torchflame/torchflame_additive0055.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/FLAMEEFFECTS/TORCHFLAME/TORCHFLAME_ADDITIVE0055.dtx
+    bytes: 5604
+    sha256: ce35e62c49e3c1bf38a7f81b132fa2a015da88d89ce90a0f1c901f8b7e3665d5
+  origin: spells_fxf
+- legacy: spritetextures/flameeffects/torchflame/torchflame_additive0056.dtx
+  kind: texture
+  resource: mm9:effect-texture/flameeffects/torchflame/torchflame_additive0056
+  asset: engine/effects/mm9/textures/flameeffects/torchflame/torchflame_additive0056.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/FLAMEEFFECTS/TORCHFLAME/TORCHFLAME_ADDITIVE0056.dtx
+    bytes: 5604
+    sha256: 3d6c81608bd149b509a4a00e6379ddb87b63fbb424538a894349553228cd69ed
+  origin: spells_fxf
+- legacy: spritetextures/flameeffects/torchflame/torchflame_additive0057.dtx
+  kind: texture
+  resource: mm9:effect-texture/flameeffects/torchflame/torchflame_additive0057
+  asset: engine/effects/mm9/textures/flameeffects/torchflame/torchflame_additive0057.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/FLAMEEFFECTS/TORCHFLAME/TORCHFLAME_ADDITIVE0057.dtx
+    bytes: 5604
+    sha256: 49f126338d1967561e4c4d21f5901ddf3dcda3168ed944cb43d8e715f1da1549
+  origin: spells_fxf
+- legacy: spritetextures/flameeffects/torchflame/torchflame_additive0058.dtx
+  kind: texture
+  resource: mm9:effect-texture/flameeffects/torchflame/torchflame_additive0058
+  asset: engine/effects/mm9/textures/flameeffects/torchflame/torchflame_additive0058.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/FLAMEEFFECTS/TORCHFLAME/TORCHFLAME_ADDITIVE0058.dtx
+    bytes: 5604
+    sha256: a140d3a3922abd55bf38eb2f919995154b61b011362e8d1dbd369023cf963d75
+  origin: spells_fxf
+- legacy: spritetextures/flameeffects/torchflame/torchflame_additive0059.dtx
+  kind: texture
+  resource: mm9:effect-texture/flameeffects/torchflame/torchflame_additive0059
+  asset: engine/effects/mm9/textures/flameeffects/torchflame/torchflame_additive0059.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/FLAMEEFFECTS/TORCHFLAME/TORCHFLAME_ADDITIVE0059.dtx
+    bytes: 5604
+    sha256: 3433dbf7e1af3b30d5ec77d65b30375bc1abb76b618ab3742ebbc36b17858b5c
+  origin: spells_fxf
+- legacy: spritetextures/flare/blurredwhitestar.dtx
+  kind: texture
+  resource: mm9:effect-texture/flare/blurredwhitestar
+  asset: engine/effects/mm9/textures/flare/blurredwhitestar.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/FLARE/BLURREDWHITESTAR.dtx
+    bytes: 5604
+    sha256: ad8a4f8fad0e3a66e203ddbf0eefc9824414dd54c3a07693ff7acc47485bbfda
+  origin: spells_fxf
+- legacy: spritetextures/flies/fly01.dtx
+  kind: texture
+  resource: mm9:effect-texture/flies/fly01
+  asset: engine/effects/mm9/textures/flies/fly01.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/FLIES/FLY01.dtx
+    bytes: 1524
+    sha256: 98a14729fa76ce46640fb33f2745b01ba120a16de068f308bcf8ecce3553851e
+  origin: spells_fxf
+- legacy: spritetextures/flies/fly02.dtx
+  kind: texture
+  resource: mm9:effect-texture/flies/fly02
+  asset: engine/effects/mm9/textures/flies/fly02.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/FLIES/FLY02.dtx
+    bytes: 1524
+    sha256: 779fa4cbda4da40603e650198c753babecdae26a5c5a6a4674387322e9a01c54
+  origin: spells_fxf
+- legacy: spritetextures/greendot.dtx
+  kind: texture
+  resource: mm9:effect-texture/greendot
+  asset: engine/effects/mm9/textures/greendot.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/GREENDOT.dtx
+    bytes: 5604
+    sha256: df313b93be7e3e61cdb5d637248f71b3b5b8c9ac1861f565a10e8e42b407b6de
+  origin: spells_fxf
+- legacy: spritetextures/greenorangethingy/blurredgreenorastar.dtx
+  kind: texture
+  resource: mm9:effect-texture/greenorangethingy/blurredgreenorastar
+  asset: engine/effects/mm9/textures/greenorangethingy/blurredgreenorastar.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/GREENORANGETHINGY/BLURREDGREENORASTAR.dtx
+    bytes: 5604
+    sha256: 9bc86c78c761e4c48c06adc32f81830c9e36ce0ed1a00850c0f54c0ebcd3d79a
+  origin: spells_fxf
+- legacy: spritetextures/greenorangethingy/greenoraringexplode.dtx
+  kind: texture
+  resource: mm9:effect-texture/greenorangethingy/greenoraringexplode
+  asset: engine/effects/mm9/textures/greenorangethingy/greenoraringexplode.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/GREENORANGETHINGY/GREENORARINGEXPLODE.dtx
+    bytes: 5604
+    sha256: 31a19503e03a8b686a0134442cf3332bf6840f88cb29028564e0b930dcb3f788
+  origin: spells_fxf
+- legacy: spritetextures/greenyellowthingy/blurredgreenyelstar.dtx
+  kind: texture
+  resource: mm9:effect-texture/greenyellowthingy/blurredgreenyelstar
+  asset: engine/effects/mm9/textures/greenyellowthingy/blurredgreenyelstar.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/GREENYELLOWTHINGY/BLURREDGREENYELSTAR.dtx
+    bytes: 5604
+    sha256: c192cab38601e64ef1d9211302c683fd4d6a4bc227c00fdcf1d3e5d6450ee2e6
+  origin: spells_fxf
+- legacy: spritetextures/leaf01.dtx
+  kind: texture
+  resource: mm9:effect-texture/leaf01
+  asset: engine/effects/mm9/textures/leaf01.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/LEAF01.dtx
+    bytes: 5604
+    sha256: bf3d66a39c371290346bd7f90d942478769ff729c1c7235761a3c76b403ccfd2
+  origin: spells_fxf
+- legacy: spritetextures/leaf02.dtx
+  kind: texture
+  resource: mm9:effect-texture/leaf02
+  asset: engine/effects/mm9/textures/leaf02.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/LEAF02.dtx
+    bytes: 5604
+    sha256: be598de58656f045250fab2dff063df75a8afc4102e378eaa0f6a4507ca6ad90
+  origin: spells_fxf
+- legacy: spritetextures/leaf03.dtx
+  kind: texture
+  resource: mm9:effect-texture/leaf03
+  asset: engine/effects/mm9/textures/leaf03.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/LEAF03.dtx
+    bytes: 5604
+    sha256: 6df5563cc88efa1ec2ee8ddd924ff8557f9c198fcfe7fe03d1eed9c59cfb7490
+  origin: spells_fxf
+- legacy: spritetextures/leaf04.dtx
+  kind: texture
+  resource: mm9:effect-texture/leaf04
+  asset: engine/effects/mm9/textures/leaf04.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/LEAF04.dtx
+    bytes: 5604
+    sha256: 1b26354983cee6b0624b0677f5b6f2abc8102326a03f4b7dd85b048e66dcc6db
+  origin: spells_fxf
+- legacy: spritetextures/leaf05.dtx
+  kind: texture
+  resource: mm9:effect-texture/leaf05
+  asset: engine/effects/mm9/textures/leaf05.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/LEAF05.dtx
+    bytes: 5604
+    sha256: e5143f9b3df4d6855b33cae03e32fe124d3ddac312a47e53991ebc2950cbf8d0
+  origin: spells_fxf
+- legacy: spritetextures/oval01.dtx
+  kind: texture
+  resource: mm9:effect-texture/oval01
+  asset: engine/effects/mm9/textures/oval01.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/OVAL01.dtx
+    bytes: 21924
+    sha256: 12be5e278ff33e55cd72db35cc5137944e7a1616f2bbc6b5d9854cf402b0ff23
+  origin: spells_fxf
+- legacy: spritetextures/oval02.dtx
+  kind: texture
+  resource: mm9:effect-texture/oval02
+  asset: engine/effects/mm9/textures/oval02.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/OVAL02.dtx
+    bytes: 21924
+    sha256: cfdb2f856847dbfdc32a3779eda74474e4c2b7d2dde7b7241b2f7e1cca97cff2
+  origin: spells_fxf
+- legacy: spritetextures/oval03.dtx
+  kind: texture
+  resource: mm9:effect-texture/oval03
+  asset: engine/effects/mm9/textures/oval03.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/OVAL03.dtx
+    bytes: 21924
+    sha256: 54404c19892f6eb03d63a3cdd8e7f9aff3e1a71afd03d8dd67d408271cf2ca92
+  origin: spells_fxf
+- legacy: spritetextures/oval04.dtx
+  kind: texture
+  resource: mm9:effect-texture/oval04
+  asset: engine/effects/mm9/textures/oval04.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/OVAL04.dtx
+    bytes: 21924
+    sha256: 5ae597732c1af19226140232403c518a036c1d1a6978b20b8b3ff86ca5750a08
+  origin: spells_fxf
+- legacy: spritetextures/oval05.dtx
+  kind: texture
+  resource: mm9:effect-texture/oval05
+  asset: engine/effects/mm9/textures/oval05.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/OVAL05.dtx
+    bytes: 21924
+    sha256: 215124751bd7cd03e018201c17106abca19ec72476e9b197a56f96dfe9d0fe87
+  origin: spells_fxf
+- legacy: spritetextures/oval06.dtx
+  kind: texture
+  resource: mm9:effect-texture/oval06
+  asset: engine/effects/mm9/textures/oval06.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/OVAL06.dtx
+    bytes: 21924
+    sha256: 699004a1afa12a6d754563cf8037e3eca8e5ded7ba7429cff294f6260146e4ce
+  origin: spells_fxf
+- legacy: spritetextures/oval07.dtx
+  kind: texture
+  resource: mm9:effect-texture/oval07
+  asset: engine/effects/mm9/textures/oval07.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/OVAL07.dtx
+    bytes: 21924
+    sha256: e0316579ab82d04cc26d95c7ad0c54024cc7b0b09ddec623bff64de56bd6750b
+  origin: spells_fxf
+- legacy: spritetextures/oval08.dtx
+  kind: texture
+  resource: mm9:effect-texture/oval08
+  asset: engine/effects/mm9/textures/oval08.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/OVAL08.dtx
+    bytes: 21924
+    sha256: cc6f194cb75289cb1a993ffb394d9deaab2a0ea34c3cbeb6c888066be55aac73
+  origin: spells_fxf
+- legacy: spritetextures/oval09.dtx
+  kind: texture
+  resource: mm9:effect-texture/oval09
+  asset: engine/effects/mm9/textures/oval09.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/OVAL09.dtx
+    bytes: 21924
+    sha256: 7dcf33cfde955c8055b92ab59d6185b4f0a7fec32abb0775a7b682b8fd223111
+  origin: spells_fxf
+- legacy: spritetextures/oval10.dtx
+  kind: texture
+  resource: mm9:effect-texture/oval10
+  asset: engine/effects/mm9/textures/oval10.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/OVAL10.dtx
+    bytes: 21924
+    sha256: 7bbbb393bf90137469be442682a820c1dbb1757fe8b603baedca7edb7e0f7519
+  origin: spells_fxf
+- legacy: spritetextures/oval11.dtx
+  kind: texture
+  resource: mm9:effect-texture/oval11
+  asset: engine/effects/mm9/textures/oval11.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/OVAL11.dtx
+    bytes: 21924
+    sha256: 4026631d8fe9b8051493119e42c3e45f6e0c4b01c7bf44a29ca4d0048d22ef00
+  origin: spells_fxf
+- legacy: spritetextures/particles/flare0000.dtx
+  kind: texture
+  resource: mm9:effect-texture/particles/flare0000
+  asset: engine/effects/mm9/textures/particles/flare0000.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/PARTICLES/FLARE0000.dtx
+    bytes: 5604
+    sha256: d6984105c915fdbac0e566a98b48dc4804c7d09008d2e7005b9b8a0953a8b737
+  origin: spells_fxf
+- legacy: spritetextures/particles/flare0003.dtx
+  kind: texture
+  resource: mm9:effect-texture/particles/flare0003
+  asset: engine/effects/mm9/textures/particles/flare0003.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/PARTICLES/FLARE0003.dtx
+    bytes: 5604
+    sha256: 729a6d4ea8c868e1a88a887694573575cdf67da2ca006a07030269f7c53fd19a
+  origin: spells_fxf
+- legacy: spritetextures/particles/flare0006.dtx
+  kind: texture
+  resource: mm9:effect-texture/particles/flare0006
+  asset: engine/effects/mm9/textures/particles/flare0006.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/PARTICLES/FLARE0006.dtx
+    bytes: 5604
+    sha256: 1ddb053050432623818fd38b46775681c49389df07e64f584acf6ffd135d2afb
+  origin: spells_fxf
+- legacy: spritetextures/particles/flare0009.dtx
+  kind: texture
+  resource: mm9:effect-texture/particles/flare0009
+  asset: engine/effects/mm9/textures/particles/flare0009.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/PARTICLES/FLARE0009.dtx
+    bytes: 5604
+    sha256: ff4f8f22064224586ca49938047359d2983ed52787816115ac923f9822dea15c
+  origin: spells_fxf
+- legacy: spritetextures/particles/flare0012.dtx
+  kind: texture
+  resource: mm9:effect-texture/particles/flare0012
+  asset: engine/effects/mm9/textures/particles/flare0012.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/PARTICLES/FLARE0012.dtx
+    bytes: 5604
+    sha256: f4df6b1514fa43d7781fd33ef82bc736494ecd8af5e42667c0b1bb7614614513
+  origin: spells_fxf
+- legacy: spritetextures/particles/flare0015.dtx
+  kind: texture
+  resource: mm9:effect-texture/particles/flare0015
+  asset: engine/effects/mm9/textures/particles/flare0015.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/PARTICLES/FLARE0015.dtx
+    bytes: 5604
+    sha256: b3c9d692cffa522ba4f8470a373e7e06dff4875966fc42f7183dcdcacdf1223b
+  origin: spells_fxf
+- legacy: spritetextures/particles/flare0018.dtx
+  kind: texture
+  resource: mm9:effect-texture/particles/flare0018
+  asset: engine/effects/mm9/textures/particles/flare0018.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/PARTICLES/FLARE0018.dtx
+    bytes: 5604
+    sha256: dc5b81c18c338ae845ac4312381eca69339f83b40fa75b49e56782a695d9f7e1
+  origin: spells_fxf
+- legacy: spritetextures/particles/flare0021.dtx
+  kind: texture
+  resource: mm9:effect-texture/particles/flare0021
+  asset: engine/effects/mm9/textures/particles/flare0021.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/PARTICLES/FLARE0021.dtx
+    bytes: 5604
+    sha256: 7ba85b1bcd5bd6d3c3f10072518098556772a264e9e57e3d77e2779a6492f276
+  origin: spells_fxf
+- legacy: spritetextures/particles/flare0024.dtx
+  kind: texture
+  resource: mm9:effect-texture/particles/flare0024
+  asset: engine/effects/mm9/textures/particles/flare0024.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/PARTICLES/FLARE0024.dtx
+    bytes: 5604
+    sha256: aa263e45ed7615ffc0f3998ced620ae6e1391d5efbfff3ad0c54d651579a1e1d
+  origin: spells_fxf
+- legacy: spritetextures/particles/flare0027.dtx
+  kind: texture
+  resource: mm9:effect-texture/particles/flare0027
+  asset: engine/effects/mm9/textures/particles/flare0027.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/PARTICLES/FLARE0027.dtx
+    bytes: 5604
+    sha256: 08ffc038efea908106863783d90bdd769a6a997dfc5069070543184e68385ac6
+  origin: spells_fxf
+- legacy: spritetextures/purplethingy/blurredpurplestar.dtx
+  kind: texture
+  resource: mm9:effect-texture/purplethingy/blurredpurplestar
+  asset: engine/effects/mm9/textures/purplethingy/blurredpurplestar.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/PURPLETHINGY/BLURREDPURPLESTAR.dtx
+    bytes: 5604
+    sha256: 04c4c185f0e4da2e8f4fe9ccd2c48806f34bb90dd6a6194387018c17dbf2c75e
+  origin: spells_fxf
+- legacy: spritetextures/redflare/redflare_0001.dtx
+  kind: texture
+  resource: mm9:effect-texture/redflare/redflare_0001
+  asset: engine/effects/mm9/textures/redflare/redflare_0001.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/REDFLARE/REDFLARE_0001.dtx
+    bytes: 21924
+    sha256: 7de82e0bd555f4a8681cf81be2c3617d3b5e6fee0a6b3f3be9b0ab2474d20f26
+  origin: spells_fxf
+- legacy: spritetextures/redflare/redflare_0002.dtx
+  kind: texture
+  resource: mm9:effect-texture/redflare/redflare_0002
+  asset: engine/effects/mm9/textures/redflare/redflare_0002.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/REDFLARE/REDFLARE_0002.dtx
+    bytes: 21924
+    sha256: 79cb47513b417df0df2ccb62cf7005bfced8c7d913d85e0cc6dec76a556eee0b
+  origin: spells_fxf
+- legacy: spritetextures/redflare/redflare_0003.dtx
+  kind: texture
+  resource: mm9:effect-texture/redflare/redflare_0003
+  asset: engine/effects/mm9/textures/redflare/redflare_0003.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/REDFLARE/REDFLARE_0003.dtx
+    bytes: 21924
+    sha256: 9db1f61485d45b7f4fc2b9c492f0b276bdba99493c718d07e96de9802ba17e74
+  origin: spells_fxf
+- legacy: spritetextures/redflare/redflare_0004.dtx
+  kind: texture
+  resource: mm9:effect-texture/redflare/redflare_0004
+  asset: engine/effects/mm9/textures/redflare/redflare_0004.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/REDFLARE/REDFLARE_0004.dtx
+    bytes: 21924
+    sha256: 3c771d1ca717040a04cb859c7e37ce3454506d3a8494fd14966fa31f1bc74361
+  origin: spells_fxf
+- legacy: spritetextures/redflare/redflare_0005.dtx
+  kind: texture
+  resource: mm9:effect-texture/redflare/redflare_0005
+  asset: engine/effects/mm9/textures/redflare/redflare_0005.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/REDFLARE/REDFLARE_0005.dtx
+    bytes: 21924
+    sha256: e0c6ac8d89df20ebfa24bd33be56f507cb235ae0f93bca826586fc8b354d5606
+  origin: spells_fxf
+- legacy: spritetextures/redflare/redflare_0006.dtx
+  kind: texture
+  resource: mm9:effect-texture/redflare/redflare_0006
+  asset: engine/effects/mm9/textures/redflare/redflare_0006.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/REDFLARE/REDFLARE_0006.dtx
+    bytes: 21924
+    sha256: cea2067b21fa6f4e210ca44b8e22b350c5302371c59d8ae0d7d1dca60208852a
+  origin: spells_fxf
+- legacy: spritetextures/redflare/redflare_0007.dtx
+  kind: texture
+  resource: mm9:effect-texture/redflare/redflare_0007
+  asset: engine/effects/mm9/textures/redflare/redflare_0007.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/REDFLARE/REDFLARE_0007.dtx
+    bytes: 21924
+    sha256: d2406f7f3bb4030d5e85983b6a541232548246d2363536b2c186e357796727bc
+  origin: spells_fxf
+- legacy: spritetextures/redflare/redflare_0008.dtx
+  kind: texture
+  resource: mm9:effect-texture/redflare/redflare_0008
+  asset: engine/effects/mm9/textures/redflare/redflare_0008.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/REDFLARE/REDFLARE_0008.dtx
+    bytes: 21924
+    sha256: aa817cc5f4f0b4182d0b3ee14226c5908a290db93142557cea98b5e8f8473f7e
+  origin: spells_fxf
+- legacy: spritetextures/redflare/redflare_0009.dtx
+  kind: texture
+  resource: mm9:effect-texture/redflare/redflare_0009
+  asset: engine/effects/mm9/textures/redflare/redflare_0009.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/REDFLARE/REDFLARE_0009.dtx
+    bytes: 21924
+    sha256: 2ea5beb879f14cd9e3af4a111cd5da7429b7c5b271dee6a8bfe87482fbb4c3a1
+  origin: spells_fxf
+- legacy: spritetextures/redflare/redflare_0010.dtx
+  kind: texture
+  resource: mm9:effect-texture/redflare/redflare_0010
+  asset: engine/effects/mm9/textures/redflare/redflare_0010.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/REDFLARE/REDFLARE_0010.dtx
+    bytes: 21924
+    sha256: 91715531f58462cf0e96ba94bdf2fff0ef82e6866ef420ea9496f8dfe6282c52
+  origin: spells_fxf
+- legacy: spritetextures/redthingy/blurredredstar.dtx
+  kind: texture
+  resource: mm9:effect-texture/redthingy/blurredredstar
+  asset: engine/effects/mm9/textures/redthingy/blurredredstar.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/REDTHINGY/BLURREDREDSTAR.dtx
+    bytes: 5604
+    sha256: 1465bf32ed1b00abc7e193351454e05c6fc2156916c7c3b0ac47ac7d924ec514
+  origin: spells_fxf
+- legacy: spritetextures/redyellowthingy/blurredredyelstar.dtx
+  kind: texture
+  resource: mm9:effect-texture/redyellowthingy/blurredredyelstar
+  asset: engine/effects/mm9/textures/redyellowthingy/blurredredyelstar.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/REDYELLOWTHINGY/BLURREDREDYELSTAR.dtx
+    bytes: 5604
+    sha256: 3984758cb95b64943f1d146c7ba7a6f3128fd4f3ca9b72d825a6bc8e0687199d
+  origin: spells_fxf
+- legacy: spritetextures/skull/skul1anim.dtx
+  kind: texture
+  resource: mm9:effect-texture/skull/skul1anim
+  asset: engine/effects/mm9/textures/skull/skul1anim.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/SKULL/SKUL1ANIM.dtx
+    bytes: 21924
+    sha256: 379b663373c83ca980bf0e26ab68d93fa72ad1b23f4743447883bbf2897fe5ca
+  origin: spells_fxf
+- legacy: spritetextures/skull/skull10anim.dtx
+  kind: texture
+  resource: mm9:effect-texture/skull/skull10anim
+  asset: engine/effects/mm9/textures/skull/skull10anim.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/SKULL/SKULL10ANIM.dtx
+    bytes: 21924
+    sha256: 11c7edf1e2eacc799c8421e23923d52f17d4d0ce7321b6081b972f53a6eac8c3
+  origin: spells_fxf
+- legacy: spritetextures/skull/skull2anim.dtx
+  kind: texture
+  resource: mm9:effect-texture/skull/skull2anim
+  asset: engine/effects/mm9/textures/skull/skull2anim.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/SKULL/SKULL2ANIM.dtx
+    bytes: 21924
+    sha256: db84605fe0c305570979efb46e3f826097f0fb77cf08c7c739bb1cc319282ed8
+  origin: spells_fxf
+- legacy: spritetextures/skull/skull3anim.dtx
+  kind: texture
+  resource: mm9:effect-texture/skull/skull3anim
+  asset: engine/effects/mm9/textures/skull/skull3anim.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/SKULL/SKULL3ANIM.dtx
+    bytes: 21924
+    sha256: 40eb5987271cfe1af8aabec19d97aa7cb2d9511316cb39443febe84e3dd697f3
+  origin: spells_fxf
+- legacy: spritetextures/skull/skull4anim.dtx
+  kind: texture
+  resource: mm9:effect-texture/skull/skull4anim
+  asset: engine/effects/mm9/textures/skull/skull4anim.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/SKULL/SKULL4ANIM.dtx
+    bytes: 21924
+    sha256: 618242ac02e236c9926b41fc00719d774f54521f91c8605b6b5a954ff3cec995
+  origin: spells_fxf
+- legacy: spritetextures/skull/skull5anim.dtx
+  kind: texture
+  resource: mm9:effect-texture/skull/skull5anim
+  asset: engine/effects/mm9/textures/skull/skull5anim.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/SKULL/SKULL5ANIM.dtx
+    bytes: 21924
+    sha256: e2789d1d4e564e6d077b6647aff3e6271ffe2ecb3c9b1895a1dc9dc0ac9f9861
+  origin: spells_fxf
+- legacy: spritetextures/skull/skull6anim.dtx
+  kind: texture
+  resource: mm9:effect-texture/skull/skull6anim
+  asset: engine/effects/mm9/textures/skull/skull6anim.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/SKULL/SKULL6ANIM.dtx
+    bytes: 21924
+    sha256: 868f8be977443d2095cddec6f518ad84f67e59dffe6da60faf3bad71f4cba78c
+  origin: spells_fxf
+- legacy: spritetextures/skull/skull7anim.dtx
+  kind: texture
+  resource: mm9:effect-texture/skull/skull7anim
+  asset: engine/effects/mm9/textures/skull/skull7anim.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/SKULL/SKULL7ANIM.dtx
+    bytes: 21924
+    sha256: 85d5eb776f79d280d3f58a0e2d8fa5530bea3155600a862caa82853a80cfff30
+  origin: spells_fxf
+- legacy: spritetextures/skull/skull8anim.dtx
+  kind: texture
+  resource: mm9:effect-texture/skull/skull8anim
+  asset: engine/effects/mm9/textures/skull/skull8anim.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/SKULL/SKULL8ANIM.dtx
+    bytes: 21924
+    sha256: 48d9fb6d6763cc699c646e118c0b194f52929c5b3ce5147a51a8fb7dfd20ee43
+  origin: spells_fxf
+- legacy: spritetextures/skull/skull9anim.dtx
+  kind: texture
+  resource: mm9:effect-texture/skull/skull9anim
+  asset: engine/effects/mm9/textures/skull/skull9anim.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/SKULL/SKULL9ANIM.dtx
+    bytes: 21924
+    sha256: 11aea7c954f33984b0918dbb41b82b7d8a9a572098b6aeafd6f3266ee4fd2d14
+  origin: spells_fxf
+- legacy: spritetextures/smokeeffects/blacksmoke/blacksmoke_1.dtx
+  kind: texture
+  resource: mm9:effect-texture/smokeeffects/blacksmoke/blacksmoke_1
+  asset: engine/effects/mm9/textures/smokeeffects/blacksmoke/blacksmoke_1.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/SMOKEEFFECTS/BLACKSMOKE/BLACKSMOKE_1.dtx
+    bytes: 87204
+    sha256: b887555605a02c5cdb95f3a0fa9ee05c8fc2cd22fba561e8de6fff15e76602b6
+  origin: spells_fxf
+- legacy: spritetextures/smokeeffects/blacksmoke/blacksmoke_2.dtx
+  kind: texture
+  resource: mm9:effect-texture/smokeeffects/blacksmoke/blacksmoke_2
+  asset: engine/effects/mm9/textures/smokeeffects/blacksmoke/blacksmoke_2.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/SMOKEEFFECTS/BLACKSMOKE/BLACKSMOKE_2.dtx
+    bytes: 87204
+    sha256: dd18ea42cd6ec066260b22980b5e371bef81383af21b6523594eacb5fd0b770e
+  origin: spells_fxf
+- legacy: spritetextures/smokeeffects/blacksmoke/blacksmoke_3.dtx
+  kind: texture
+  resource: mm9:effect-texture/smokeeffects/blacksmoke/blacksmoke_3
+  asset: engine/effects/mm9/textures/smokeeffects/blacksmoke/blacksmoke_3.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/SMOKEEFFECTS/BLACKSMOKE/BLACKSMOKE_3.dtx
+    bytes: 87204
+    sha256: 1b9be464df5dc2768da6f4b600c0aeddbeb794d4e2138a7645e648a61db6292f
+  origin: spells_fxf
+- legacy: spritetextures/smokeeffects/blacksmoke/blacksmoke_4.dtx
+  kind: texture
+  resource: mm9:effect-texture/smokeeffects/blacksmoke/blacksmoke_4
+  asset: engine/effects/mm9/textures/smokeeffects/blacksmoke/blacksmoke_4.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/SMOKEEFFECTS/BLACKSMOKE/BLACKSMOKE_4.dtx
+    bytes: 87204
+    sha256: 01d7a607b03fa35195e18491ab7c753bbb40d277c2d8b8bab0dbc5d6d3750392
+  origin: spells_fxf
+- legacy: spritetextures/smokeeffects/blacksmoke/blacksmoke_5.dtx
+  kind: texture
+  resource: mm9:effect-texture/smokeeffects/blacksmoke/blacksmoke_5
+  asset: engine/effects/mm9/textures/smokeeffects/blacksmoke/blacksmoke_5.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/SMOKEEFFECTS/BLACKSMOKE/BLACKSMOKE_5.dtx
+    bytes: 87204
+    sha256: 7b527fb0a18ffacb556178787e83fa544bc0218cb70330c6128cd283e08d2c9d
+  origin: spells_fxf
+- legacy: spritetextures/smokeeffects/blacksmoke/blacksmoke_6.dtx
+  kind: texture
+  resource: mm9:effect-texture/smokeeffects/blacksmoke/blacksmoke_6
+  asset: engine/effects/mm9/textures/smokeeffects/blacksmoke/blacksmoke_6.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/SMOKEEFFECTS/BLACKSMOKE/BLACKSMOKE_6.dtx
+    bytes: 87204
+    sha256: df3face37146637cbbc450e9b132746ca2eb78bc6ed183f8d2aa4876c0f97f2a
+  origin: spells_fxf
+- legacy: spritetextures/smokeeffects/blacksmoke/blacksmoke_7.dtx
+  kind: texture
+  resource: mm9:effect-texture/smokeeffects/blacksmoke/blacksmoke_7
+  asset: engine/effects/mm9/textures/smokeeffects/blacksmoke/blacksmoke_7.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/SMOKEEFFECTS/BLACKSMOKE/BLACKSMOKE_7.dtx
+    bytes: 87204
+    sha256: 83099aede77b6dd505eb1bd7dd7542cea41b2a106955651055ac3126b82441a3
+  origin: spells_fxf
+- legacy: spritetextures/smokeeffects/blacksmoke/blacksmoke_8.dtx
+  kind: texture
+  resource: mm9:effect-texture/smokeeffects/blacksmoke/blacksmoke_8
+  asset: engine/effects/mm9/textures/smokeeffects/blacksmoke/blacksmoke_8.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/SMOKEEFFECTS/BLACKSMOKE/BLACKSMOKE_8.dtx
+    bytes: 87204
+    sha256: a990761e3099a5fba2d5ab65293e69267009e0664c06cecc8a9ce1189d35ee0a
+  origin: spells_fxf
+- legacy: spritetextures/smokeeffects/blacksmoke/blacksmoke_9.dtx
+  kind: texture
+  resource: mm9:effect-texture/smokeeffects/blacksmoke/blacksmoke_9
+  asset: engine/effects/mm9/textures/smokeeffects/blacksmoke/blacksmoke_9.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/SMOKEEFFECTS/BLACKSMOKE/BLACKSMOKE_9.dtx
+    bytes: 87204
+    sha256: b90a5571e7d89c483e87d463d3065875b1ff1c8afc496a79542e5146aed06d13
+  origin: spells_fxf
+- legacy: spritetextures/smokeeffects/noisesmokeupwardphase/noise_smoke_upwardphase_0000.dtx
+  kind: texture
+  resource: mm9:effect-texture/smokeeffects/noisesmokeupwardphase/noise_smoke_upwardphase_0000
+  asset: engine/effects/mm9/textures/smokeeffects/noisesmokeupwardphase/noise_smoke_upwardphase_0000.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/SMOKEEFFECTS/NOISESMOKEUPWARDPHASE/NOISE_SMOKE_UPWARDPHASE_0000.dtx
+    bytes: 87204
+    sha256: f7062a025a8dce43aa06c7a656c2c5392b445a6d4807f8f8ff663f4cd29a25a4
+  origin: spells_fxf
+- legacy: spritetextures/smokeeffects/noisesmokeupwardphase/noise_smoke_upwardphase_0001.dtx
+  kind: texture
+  resource: mm9:effect-texture/smokeeffects/noisesmokeupwardphase/noise_smoke_upwardphase_0001
+  asset: engine/effects/mm9/textures/smokeeffects/noisesmokeupwardphase/noise_smoke_upwardphase_0001.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/SMOKEEFFECTS/NOISESMOKEUPWARDPHASE/NOISE_SMOKE_UPWARDPHASE_0001.dtx
+    bytes: 87204
+    sha256: dfdbd3d4f119411b7572cb923311adaff95368cdc9f9d8ae7f892e42d3b4f6c5
+  origin: spells_fxf
+- legacy: spritetextures/smokeeffects/noisesmokeupwardphase/noise_smoke_upwardphase_0002.dtx
+  kind: texture
+  resource: mm9:effect-texture/smokeeffects/noisesmokeupwardphase/noise_smoke_upwardphase_0002
+  asset: engine/effects/mm9/textures/smokeeffects/noisesmokeupwardphase/noise_smoke_upwardphase_0002.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/SMOKEEFFECTS/NOISESMOKEUPWARDPHASE/NOISE_SMOKE_UPWARDPHASE_0002.dtx
+    bytes: 87204
+    sha256: d72241cd94b40d1ae63eb0d665b822761fad49af5a208aa34813c9b4d182c104
+  origin: spells_fxf
+- legacy: spritetextures/smokeeffects/noisesmokeupwardphase/noise_smoke_upwardphase_0003.dtx
+  kind: texture
+  resource: mm9:effect-texture/smokeeffects/noisesmokeupwardphase/noise_smoke_upwardphase_0003
+  asset: engine/effects/mm9/textures/smokeeffects/noisesmokeupwardphase/noise_smoke_upwardphase_0003.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/SMOKEEFFECTS/NOISESMOKEUPWARDPHASE/NOISE_SMOKE_UPWARDPHASE_0003.dtx
+    bytes: 87204
+    sha256: aee95fe0cd99067f041379f1d3306f88aaf7e569609f1bf4e2c1d8970098407d
+  origin: spells_fxf
+- legacy: spritetextures/smokeeffects/noisesmokeupwardphase/noise_smoke_upwardphase_0004.dtx
+  kind: texture
+  resource: mm9:effect-texture/smokeeffects/noisesmokeupwardphase/noise_smoke_upwardphase_0004
+  asset: engine/effects/mm9/textures/smokeeffects/noisesmokeupwardphase/noise_smoke_upwardphase_0004.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/SMOKEEFFECTS/NOISESMOKEUPWARDPHASE/NOISE_SMOKE_UPWARDPHASE_0004.dtx
+    bytes: 87204
+    sha256: 1b3f90ce0a6a86d93ea1db86e6066a460e8d48fc721f2df03346f3699ef16c9c
+  origin: spells_fxf
+- legacy: spritetextures/smokeeffects/noisesmokeupwardphase/noise_smoke_upwardphase_0005.dtx
+  kind: texture
+  resource: mm9:effect-texture/smokeeffects/noisesmokeupwardphase/noise_smoke_upwardphase_0005
+  asset: engine/effects/mm9/textures/smokeeffects/noisesmokeupwardphase/noise_smoke_upwardphase_0005.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/SMOKEEFFECTS/NOISESMOKEUPWARDPHASE/NOISE_SMOKE_UPWARDPHASE_0005.dtx
+    bytes: 87204
+    sha256: e5723c4b3c3b450bf9c58106ab2c07159d2fb85f4226f9f78ae1db8f7ce94db4
+  origin: spells_fxf
+- legacy: spritetextures/smokeeffects/noisesmokeupwardphase/noise_smoke_upwardphase_0006.dtx
+  kind: texture
+  resource: mm9:effect-texture/smokeeffects/noisesmokeupwardphase/noise_smoke_upwardphase_0006
+  asset: engine/effects/mm9/textures/smokeeffects/noisesmokeupwardphase/noise_smoke_upwardphase_0006.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/SMOKEEFFECTS/NOISESMOKEUPWARDPHASE/NOISE_SMOKE_UPWARDPHASE_0006.dtx
+    bytes: 87204
+    sha256: dbd51cc161bc7f6867f000b772290f537df851602c1b9f33d8b5665a7141e848
+  origin: spells_fxf
+- legacy: spritetextures/smokeeffects/noisesmokeupwardphase/noise_smoke_upwardphase_0007.dtx
+  kind: texture
+  resource: mm9:effect-texture/smokeeffects/noisesmokeupwardphase/noise_smoke_upwardphase_0007
+  asset: engine/effects/mm9/textures/smokeeffects/noisesmokeupwardphase/noise_smoke_upwardphase_0007.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/SMOKEEFFECTS/NOISESMOKEUPWARDPHASE/NOISE_SMOKE_UPWARDPHASE_0007.dtx
+    bytes: 87204
+    sha256: f6f4eff98433631483f83b5274cdb8c6d67203a378045b6a4213146e67c160fd
+  origin: spells_fxf
+- legacy: spritetextures/smokeeffects/noisesmokeupwardphase/noise_smoke_upwardphase_0008.dtx
+  kind: texture
+  resource: mm9:effect-texture/smokeeffects/noisesmokeupwardphase/noise_smoke_upwardphase_0008
+  asset: engine/effects/mm9/textures/smokeeffects/noisesmokeupwardphase/noise_smoke_upwardphase_0008.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/SMOKEEFFECTS/NOISESMOKEUPWARDPHASE/NOISE_SMOKE_UPWARDPHASE_0008.dtx
+    bytes: 87204
+    sha256: 6db521c39b6bc630425d3e69518cf4a8f3f1a0e282773a61c1ed55ce8ceb8567
+  origin: spells_fxf
+- legacy: spritetextures/smokeeffects/noisesmokeupwardphase/noise_smoke_upwardphase_0009.dtx
+  kind: texture
+  resource: mm9:effect-texture/smokeeffects/noisesmokeupwardphase/noise_smoke_upwardphase_0009
+  asset: engine/effects/mm9/textures/smokeeffects/noisesmokeupwardphase/noise_smoke_upwardphase_0009.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/SMOKEEFFECTS/NOISESMOKEUPWARDPHASE/NOISE_SMOKE_UPWARDPHASE_0009.dtx
+    bytes: 87204
+    sha256: dd2fd8e038a99e0ef627499a1bea53522f2bb61768785d7c8872d053884ec7c3
+  origin: spells_fxf
+- legacy: spritetextures/smokeeffects/smokenoise/smoke_noise0000.dtx
+  kind: texture
+  resource: mm9:effect-texture/smokeeffects/smokenoise/smoke_noise0000
+  asset: engine/effects/mm9/textures/smokeeffects/smokenoise/smoke_noise0000.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/SMOKEEFFECTS/SMOKENOISE/SMOKE_NOISE0000.dtx
+    bytes: 21924
+    sha256: 372a5a18a3fde7130f3cbba1607d37499d137f33ca6be48ab256f7d0586fbca6
+  origin: spells_fxf
+- legacy: spritetextures/smokeeffects/smokenoise/smoke_noise0001.dtx
+  kind: texture
+  resource: mm9:effect-texture/smokeeffects/smokenoise/smoke_noise0001
+  asset: engine/effects/mm9/textures/smokeeffects/smokenoise/smoke_noise0001.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/SMOKEEFFECTS/SMOKENOISE/SMOKE_NOISE0001.dtx
+    bytes: 21924
+    sha256: 76e73649f1b06bd8357af07ed8e39aee8dfb1dda4f24bff2047750958aa6b07d
+  origin: spells_fxf
+- legacy: spritetextures/smokeeffects/smokenoise/smoke_noise0002.dtx
+  kind: texture
+  resource: mm9:effect-texture/smokeeffects/smokenoise/smoke_noise0002
+  asset: engine/effects/mm9/textures/smokeeffects/smokenoise/smoke_noise0002.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/SMOKEEFFECTS/SMOKENOISE/SMOKE_NOISE0002.dtx
+    bytes: 21924
+    sha256: 780ce0eb9361620cec09f55cc86f64a814f1ca3d8da7d74247c56c3ab900a8a6
+  origin: spells_fxf
+- legacy: spritetextures/smokeeffects/smokenoise/smoke_noise0003.dtx
+  kind: texture
+  resource: mm9:effect-texture/smokeeffects/smokenoise/smoke_noise0003
+  asset: engine/effects/mm9/textures/smokeeffects/smokenoise/smoke_noise0003.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/SMOKEEFFECTS/SMOKENOISE/SMOKE_NOISE0003.dtx
+    bytes: 21924
+    sha256: aa80eff914d20371687f7bd7018899a4ca6f6ce28a4bdf8916fd0e9a48795105
+  origin: spells_fxf
+- legacy: spritetextures/smokeeffects/smokenoise/smoke_noise0004.dtx
+  kind: texture
+  resource: mm9:effect-texture/smokeeffects/smokenoise/smoke_noise0004
+  asset: engine/effects/mm9/textures/smokeeffects/smokenoise/smoke_noise0004.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/SMOKEEFFECTS/SMOKENOISE/SMOKE_NOISE0004.dtx
+    bytes: 21924
+    sha256: 98087466f13ac2bf24a9d48e34770b27184cb968e56030652bff1a01af81a95b
+  origin: spells_fxf
+- legacy: spritetextures/smokeeffects/smokenoise/smoke_noise0005.dtx
+  kind: texture
+  resource: mm9:effect-texture/smokeeffects/smokenoise/smoke_noise0005
+  asset: engine/effects/mm9/textures/smokeeffects/smokenoise/smoke_noise0005.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/SMOKEEFFECTS/SMOKENOISE/SMOKE_NOISE0005.dtx
+    bytes: 21924
+    sha256: 4846db2626fe2d5cdb5c8af01abd258a893cfd9a4d5bd84c6a4adff884127dbf
+  origin: spells_fxf
+- legacy: spritetextures/smokeeffects/smokenoise/smoke_noise0006.dtx
+  kind: texture
+  resource: mm9:effect-texture/smokeeffects/smokenoise/smoke_noise0006
+  asset: engine/effects/mm9/textures/smokeeffects/smokenoise/smoke_noise0006.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/SMOKEEFFECTS/SMOKENOISE/SMOKE_NOISE0006.dtx
+    bytes: 21924
+    sha256: cddd049c458bba34ca8a19bc143ee206399ba56f047a981fbb288cd9ad44c293
+  origin: spells_fxf
+- legacy: spritetextures/smokeeffects/smokenoise/smoke_noise0007.dtx
+  kind: texture
+  resource: mm9:effect-texture/smokeeffects/smokenoise/smoke_noise0007
+  asset: engine/effects/mm9/textures/smokeeffects/smokenoise/smoke_noise0007.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/SMOKEEFFECTS/SMOKENOISE/SMOKE_NOISE0007.dtx
+    bytes: 21924
+    sha256: 796645e980239bf808fc27b20d915005a3909d7fb994caec56333b9c3401ce85
+  origin: spells_fxf
+- legacy: spritetextures/smokeeffects/smokenoise/smoke_noise0008.dtx
+  kind: texture
+  resource: mm9:effect-texture/smokeeffects/smokenoise/smoke_noise0008
+  asset: engine/effects/mm9/textures/smokeeffects/smokenoise/smoke_noise0008.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/SMOKEEFFECTS/SMOKENOISE/SMOKE_NOISE0008.dtx
+    bytes: 21924
+    sha256: 5a5e021bbdefd0b6109e60f7c187a328902b856dfba7f0190a733cc5e7f40bb9
+  origin: spells_fxf
+- legacy: spritetextures/smokeeffects/smokenoise/smoke_noise0009.dtx
+  kind: texture
+  resource: mm9:effect-texture/smokeeffects/smokenoise/smoke_noise0009
+  asset: engine/effects/mm9/textures/smokeeffects/smokenoise/smoke_noise0009.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/SMOKEEFFECTS/SMOKENOISE/SMOKE_NOISE0009.dtx
+    bytes: 21924
+    sha256: 104c4980278880de89ee87c39008f5a108baefb16398cd74ea915ad350988baa
+  origin: spells_fxf
+- legacy: spritetextures/sparks/blurredbluestar.dtx
+  kind: texture
+  resource: mm9:effect-texture/sparks/blurredbluestar
+  asset: engine/effects/mm9/textures/sparks/blurredbluestar.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/SPARKS/BLURREDBLUESTAR.dtx
+    bytes: 5604
+    sha256: 5ac14450362fbb7046b395ba17c21834aa2a0b6948edbe43d531753b4b4e91ff
+  origin: spells_fxf
+- legacy: spritetextures/sparks/ringexplodeblue.dtx
+  kind: texture
+  resource: mm9:effect-texture/sparks/ringexplodeblue
+  asset: engine/effects/mm9/textures/sparks/ringexplodeblue.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/SPARKS/RINGEXPLODEBLUE.dtx
+    bytes: 21924
+    sha256: 6eca0aafaa52c274e1925431620248362a8634e4e4094738d30b90445f2393b3
+  origin: spells_fxf
+- legacy: spritetextures/spirit1.dtx
+  kind: texture
+  resource: mm9:effect-texture/spirit1
+  asset: engine/effects/mm9/textures/spirit1.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/SPIRIT1.dtx
+    bytes: 21924
+    sha256: ff98eece03d53b1a22aa08ffe80998594b860863a9f0f9715dfa6a45e68fb8eb
+  origin: spells_fxf
+- legacy: spritetextures/spirit2.dtx
+  kind: texture
+  resource: mm9:effect-texture/spirit2
+  asset: engine/effects/mm9/textures/spirit2.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/SPIRIT2.dtx
+    bytes: 21924
+    sha256: 935835ae81d032beb2061525419bf2ce326a6359d73b097629b5c9c7b2b85d7c
+  origin: spells_fxf
+- legacy: spritetextures/spirit3.dtx
+  kind: texture
+  resource: mm9:effect-texture/spirit3
+  asset: engine/effects/mm9/textures/spirit3.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/SPIRIT3.dtx
+    bytes: 21924
+    sha256: 7df1e36c0328489f87c1f1adfd3a81a2551e6b28e0b55dc116407d620c59310d
+  origin: spells_fxf
+- legacy: spritetextures/spirit4.dtx
+  kind: texture
+  resource: mm9:effect-texture/spirit4
+  asset: engine/effects/mm9/textures/spirit4.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/SPIRIT4.dtx
+    bytes: 21924
+    sha256: 2fd6bfe585926d11d7fc8610edaf38d7bd987d9add03a2513b4f50bc971c0ca8
+  origin: spells_fxf
+- legacy: spritetextures/spirit5.dtx
+  kind: texture
+  resource: mm9:effect-texture/spirit5
+  asset: engine/effects/mm9/textures/spirit5.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/SPIRIT5.dtx
+    bytes: 21924
+    sha256: 79e352472809be54ef88f446c354767448879e1e20940eef58abad1d851941e7
+  origin: spells_fxf
+- legacy: spritetextures/spirit6.dtx
+  kind: texture
+  resource: mm9:effect-texture/spirit6
+  asset: engine/effects/mm9/textures/spirit6.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/SPIRIT6.dtx
+    bytes: 21924
+    sha256: cf526711d452ada81fca1353ac1436ee018e0a098ebb9369d5f31de607c424f1
+  origin: spells_fxf
+- legacy: spritetextures/spirit7.dtx
+  kind: texture
+  resource: mm9:effect-texture/spirit7
+  asset: engine/effects/mm9/textures/spirit7.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/SPIRIT7.dtx
+    bytes: 21924
+    sha256: 6ef584c82014ca90a94f11bcd70b3373f39446712dd3a6b23423cdccdfa0b620
+  origin: spells_fxf
+- legacy: spritetextures/spirit8.dtx
+  kind: texture
+  resource: mm9:effect-texture/spirit8
+  asset: engine/effects/mm9/textures/spirit8.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/SPIRIT8.dtx
+    bytes: 21924
+    sha256: da5593c8cd4327eb95a1ad0517dacd7c87a73da8709616ed4d90fe9ae32c018c
+  origin: spells_fxf
+- legacy: spritetextures/wash1.dtx
+  kind: texture
+  resource: mm9:effect-texture/wash1
+  asset: engine/effects/mm9/textures/wash1.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/WASH1.dtx
+    bytes: 5604
+    sha256: 5bd7b048b399d16fe309f0cb3bc661bfa5b41742ae5ff90c9656652c783fd419
+  origin: spells_fxf
+- legacy: spritetextures/wash2.dtx
+  kind: texture
+  resource: mm9:effect-texture/wash2
+  asset: engine/effects/mm9/textures/wash2.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/WASH2.dtx
+    bytes: 5604
+    sha256: 46a182d7940bbcc9db234a287b18e2831aa77a9419a5ca787b62047da0494f32
+  origin: spells_fxf
+- legacy: spritetextures/washright1.dtx
+  kind: texture
+  resource: mm9:effect-texture/washright1
+  asset: engine/effects/mm9/textures/washright1.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/WASHRIGHT1.dtx
+    bytes: 5604
+    sha256: dc85bdff54c54c79df3898fc89fc2ffbc77ff0a344403079563820bce692dd68
+  origin: spells_fxf
+- legacy: spritetextures/washright2.dtx
+  kind: texture
+  resource: mm9:effect-texture/washright2
+  asset: engine/effects/mm9/textures/washright2.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/WASHRIGHT2.dtx
+    bytes: 5604
+    sha256: c04f52b7502f63cde7a795cb177132c21703041da988aba5eef60bb31637e91c
+  origin: spells_fxf
+- legacy: spritetextures/whiteflare1.dtx
+  kind: texture
+  resource: mm9:effect-texture/whiteflare1
+  asset: engine/effects/mm9/textures/whiteflare1.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/WHITEFLARE1.dtx
+    bytes: 5604
+    sha256: eeeef47803120faf21e5cc64d32e26bd10ce4295052d757263840f7b41947449
+  origin: spells_fxf
+- legacy: spritetextures/whiteflare2.dtx
+  kind: texture
+  resource: mm9:effect-texture/whiteflare2
+  asset: engine/effects/mm9/textures/whiteflare2.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/WHITEFLARE2.dtx
+    bytes: 5604
+    sha256: 44b1b55f18e177c25d030f1c01c4a15b5d900354726646b9e3a26e9d7b239d38
+  origin: spells_fxf
+- legacy: spritetextures/wind.dtx
+  kind: texture
+  resource: mm9:effect-texture/wind
+  asset: engine/effects/mm9/textures/wind.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/WIND.dtx
+    bytes: 5604
+    sha256: 256890463da5d979c3ce34a71eb6a77da074da9f0f12d1b8a5497d6abc86fe63
+  origin: spells_fxf
+- legacy: spritetextures/yellowline/blurredyellowstar.dtx
+  kind: texture
+  resource: mm9:effect-texture/yellowline/blurredyellowstar
+  asset: engine/effects/mm9/textures/yellowline/blurredyellowstar.png
+  status: bound
+  source:
+    path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/YELLOWLINE/BLURREDYELLOWSTAR.dtx
+    bytes: 5604
+    sha256: 7900d355e114dfe23f9871f9e958833ab04c975329ee3504eaf209f5dfe87839
+  origin: spells_fxf

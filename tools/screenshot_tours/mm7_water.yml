@@ -1,0 +1,8 @@
+output_dir: ../../output/screenshots/water_review/mm7
+settle_seconds: 2
+exit: true
+shots:
+  - name: emerald-island-water
+    position: [13670.097, 1821.473, 2295.133]
+    yaw: 4.273
+    pitch: -0.685495517

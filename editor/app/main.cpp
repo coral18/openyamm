@@ -20,10 +20,24 @@ bool parseCommonArguments(
 {
     bool hasAssetScaleArgument = false;
     bool hasWorldArgument = false;
+    bool hasAssetRootArgument = false;
 
     for (int argumentIndex = 1; argumentIndex < argc; ++argumentIndex)
     {
         const std::string argument = argv[argumentIndex];
+
+        if (argument == "--asset-root")
+        {
+            if (hasAssetRootArgument || argumentIndex + 1 >= argc)
+            {
+                std::cerr << "Usage: --asset-root <directory-or-package>\n";
+                return false;
+            }
+
+            config.assetRoot = argv[++argumentIndex];
+            hasAssetRootArgument = true;
+            continue;
+        }
 
         if (argument == "--world")
         {
@@ -92,6 +106,18 @@ int runApplication(int argc, char **argv)
     {
         OpenYAMM::Editor::EditorHeadlessDiagnostics diagnostics(config);
         return diagnostics.runCompareOutdoorScene(argv[0], arguments[1]);
+    }
+
+    if (!arguments.empty() && arguments[0] == "--headless-build-map")
+    {
+        if (arguments.size() != 2)
+        {
+            std::cerr << "Usage: --headless-build-map <map.yml-or-scene.yml>\n";
+            return 2;
+        }
+
+        OpenYAMM::Editor::EditorHeadlessDiagnostics diagnostics(config);
+        return diagnostics.runBuildMap(argv[0], arguments[1]);
     }
 
     OpenYAMM::Editor::EditorApplication editorApplication(config);

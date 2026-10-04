@@ -9,6 +9,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
+#include <future>
 #include <optional>
 #include <string>
 #include <utility>
@@ -1091,4 +1092,141 @@ TEST_CASE("AssetFileSystem restored icons resolve archive tiers and original fal
         CHECK_FALSE(fs.resolveExistingFilePath("Data/icons/missing.bmp"));
     }
     std::filesystem::remove_all(temporaryRoot);
+}
+
+TEST_CASE("AssetFileSystem authoritative icon packages isolate restored and retained native roots")
+{
+    using namespace OpenYAMM::Engine;
+    const std::filesystem::path temporaryRoot = makeTemporaryRoot();
+    const std::filesystem::path assets = temporaryRoot / "assets";
+    writeZipFile(assets / "engine.zip", {
+        {"icon_packages.txt", "engine x2\nworlds/mm6 x2\nworlds/mm7 x2\nworlds/mm9 x1\n"},
+        {"icons/retired.bmp", "must not load"},
+        {"icons/same.png", "native"},
+        {"icons_x2/same.bmp", "restored"}
+    });
+    writeZipFile(assets / "worlds/mm6.zip", {{"icons_x2/npc1.png", "mm6 portrait"}});
+    writeZipFile(assets / "worlds/mm7.zip", {{"icons_x2/npc1.png", "mm7 portrait"}});
+    writeZipFile(assets / "worlds/mm9.zip", {{"icons/mm9_item.png", "retained native"}});
+    {
+        AssetFileSystem fs;
+        // Content ownership applies even when an old settings file still selects x1.
+        REQUIRE(fs.initialize(temporaryRoot, assets, AssetScaleTier::X1, AssetScaleProfile{}, "mm6"));
+        for (const std::string &prefix : {"Data/icons/", "icons/", "engine/icons/", "engine/icons_x2/"})
+        {
+            CHECK_FALSE(fs.readTextFile(prefix + "retired.bmp"));
+            CHECK_FALSE(fs.readTextFile(prefix + "same.png"));
+            CHECK(fs.readTextFile(prefix + "same.bmp") == std::optional<std::string>("restored"));
+        }
+        CHECK(fs.readTextFile("Data/icons/npc1.png") == std::optional<std::string>("mm6 portrait"));
+        CHECK(fs.readTextFile("worlds/mm7/icons/npc1.png") == std::optional<std::string>("mm7 portrait"));
+        CHECK_FALSE(fs.readTextFile("engine/icons/npc1.png"));
+        CHECK(fs.getAssetScaleTierForVirtualPath("engine/icons/same.bmp") == AssetScaleTier::X2);
+        CHECK(fs.getAssetScaleTierForVirtualPath("worlds/mm9/icons/mm9_item.png") == AssetScaleTier::X1);
+        CHECK(fs.readTextFile("Data/icons/mm9_item.png") == std::optional<std::string>("retained native"));
+        REQUIRE(fs.switchActiveWorld("mm7"));
+        CHECK(fs.readTextFile("Data/icons/npc1.png") == std::optional<std::string>("mm7 portrait"));
+    }
+    std::filesystem::remove_all(temporaryRoot);
+}
+
+TEST_CASE("AssetFileSystem cached lookups refresh and follow changed mounts")
+{
+    using namespace OpenYAMM::Engine;
+    const std::filesystem::path temporaryRoot = makeTemporaryRoot();
+    const std::filesystem::path assetRoot = temporaryRoot / "assets_dev";
+    writeTextFile(assetRoot / "engine/ui/Mixed.txt", "original");
+    writeTextFile(assetRoot / "worlds/mm6/maps/shared.txt", "six");
+    writeTextFile(assetRoot / "worlds/mm8/maps/shared.txt", "eight");
+    {
+        AssetFileSystem assets;
+        REQUIRE(assets.initialize(temporaryRoot, assetRoot, AssetScaleTier::X1, "mm6"));
+        CHECK(assets.readTextFile("Data/ui/mixed.txt") == "original");
+        CHECK_FALSE(assets.resolveExistingFilePath("Data/ui/new.txt"));
+        writeTextFile(assetRoot / "engine/ui/New.txt", "new");
+        const uint64_t generation = assets.contentGeneration();
+        assets.refreshLookupCache();
+        CHECK(assets.contentGeneration() > generation);
+        CHECK(assets.readTextFile("Data/ui/new.txt") == "new");
+        CHECK(assets.readTextFile("Data/games/shared.txt") == "six");
+        REQUIRE(assets.switchActiveWorld("mm8"));
+        CHECK(assets.readTextFile("Data/games/shared.txt") == "eight");
+        CHECK(assets.readTextFile("Data/ui/mixed.txt") == "original");
+    }
+    std::filesystem::remove_all(temporaryRoot);
+}
+
+TEST_CASE("AssetFileSystem rejects ambiguous case fallback while preserving exact names")
+{
+    using namespace OpenYAMM::Engine;
+    const std::filesystem::path temporaryRoot = makeTemporaryRoot();
+    const std::filesystem::path assetRoot = temporaryRoot / "assets_dev";
+    writeTextFile(assetRoot / "engine/ui/Icon.txt", "first");
+    writeTextFile(assetRoot / "engine/ui/iCon.txt", "second");
+    {
+        AssetFileSystem assets;
+        REQUIRE(assets.initialize(temporaryRoot, assetRoot, AssetScaleTier::X1));
+        CHECK_FALSE(assets.resolveExistingFilePath("engine/ui/ICON.txt"));
+        CHECK(assets.readTextFile("engine/ui/Icon.txt") == "first");
+        CHECK(assets.readTextFile("engine/ui/iCon.txt") == "second");
+    }
+    std::filesystem::remove_all(temporaryRoot);
+}
+
+TEST_CASE("AssetFileSystem case index preserves world precedence across differently cased packages")
+{
+    using namespace OpenYAMM::Engine;
+    const std::filesystem::path temporaryRoot = makeTemporaryRoot();
+    const std::filesystem::path assetRoot = temporaryRoot / "assets_dev";
+    writeTextFile(assetRoot / "worlds/mm6/textures/Mixed.bmp", "six");
+    writeTextFile(assetRoot / "worlds/mm7/textures/mixed.bmp", "seven");
+    {
+        AssetFileSystem assets;
+        REQUIRE(assets.initialize(temporaryRoot, assetRoot, AssetScaleTier::X1, "mm6"));
+        CHECK(assets.readTextFile("textures/MIXED.bmp") == "six");
+        REQUIRE(assets.switchActiveWorld("mm7"));
+        CHECK(assets.readTextFile("textures/MIXED.bmp") == "seven");
+    }
+    std::filesystem::remove_all(temporaryRoot);
+}
+
+TEST_CASE("AssetFileSystem shares indexed and missing lookups safely between preparation workers")
+{
+    using namespace OpenYAMM::Engine;
+    const std::filesystem::path temporaryRoot = makeTemporaryRoot();
+    const std::filesystem::path assetRoot = temporaryRoot / "assets_dev";
+    writeTextFile(assetRoot / "engine/ui/Mixed.txt", "payload");
+    {
+        AssetFileSystem assets;
+        REQUIRE(assets.initialize(temporaryRoot, assetRoot, AssetScaleTier::X1));
+        std::vector<std::future<bool>> workers;
+        for (int worker = 0; worker < 4; ++worker)
+        {
+            workers.push_back(std::async(std::launch::async, [&assets]()
+            {
+                for (int i = 0; i < 100; ++i)
+                {
+                    if (assets.readTextFile("Data/ui/mIXed.txt") != "payload"
+                        || assets.resolveExistingFilePath("Data/ui/missing.txt"))
+                    {
+                        return false;
+                    }
+                }
+                return true;
+            }));
+        }
+        for (std::future<bool> &worker : workers)
+        {
+            CHECK(worker.get());
+        }
+    }
+    std::filesystem::remove_all(temporaryRoot);
+}
+TEST_CASE("menu HUD textures retain physical x2 resolution and logical half size")
+{
+    using namespace OpenYAMM::Engine;
+    const AssetScaleTier tier = assetScaleTierFromResolvedPath("engine/hud_x2/menus/omenu_button_default.png");
+    CHECK(tier == AssetScaleTier::X2);
+    CHECK(scalePhysicalPixelsToLogical(256, tier) == 128);
+    CHECK(assetScaleTierFromResolvedPath("engine/hud/menus/button.png") == AssetScaleTier::X1);
 }

@@ -376,6 +376,10 @@ public:
         CharacterScreenSource source = CharacterScreenSource::Party;
         size_t sourceIndex = 0;
         size_t awardScrollOffset = 0;
+        size_t awardMaximumScrollOffset = 0;
+        float awardVisibleFraction = 1;
+        float skillScrollOffset = 0;
+        std::optional<float> scrollDragOffset;
         size_t adventurersInnScrollOffset = 0;
     };
 

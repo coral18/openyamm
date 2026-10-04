@@ -1,0 +1,20 @@
+schema: openyamm.effectSprite.v2
+id: mm9:effect-sprite/flareparticle
+source: sprites/flareparticle.spr
+framesPerSecond: 15
+logicalWidth: 32
+logicalHeight: 32
+keyed: false
+translucent: false
+colorKey: 0
+frames:
+- mm9:effect-texture/particles/flare0000
+- mm9:effect-texture/particles/flare0003
+- mm9:effect-texture/particles/flare0006
+- mm9:effect-texture/particles/flare0009
+- mm9:effect-texture/particles/flare0012
+- mm9:effect-texture/particles/flare0015
+- mm9:effect-texture/particles/flare0018
+- mm9:effect-texture/particles/flare0021
+- mm9:effect-texture/particles/flare0024
+- mm9:effect-texture/particles/flare0027

@@ -100,6 +100,7 @@ public:
         float lifetimeTickAccumulator = 0.0f;
         uint32_t lifetimeTicks = 0;
         int16_t sectorId = -1;
+        size_t targetActorIndex = static_cast<size_t>(-1);
         bool freezeAnimation = false;
         bool isExpired = false;
     };
@@ -634,7 +635,8 @@ public:
         float x,
         float y,
         float z,
-        bool centerVertically);
+        bool centerVertically,
+        size_t targetActorIndex = static_cast<size_t>(-1));
     ProjectileImpactSpawnResult spawnWaterSplashImpactVisual(
         const ProjectileImpactVisualDefinition &definition,
         float x,

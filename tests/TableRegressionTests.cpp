@@ -928,6 +928,32 @@ TEST_CASE("already resolved directional texture names are preserved")
     CHECK_EQ(texture.textureName, "m528aa0");
 }
 
+TEST_CASE("directional atlas palette stems retain a trailing zero before the view suffix")
+{
+    using namespace OpenYAMM::Game;
+    SpriteFrameEntry frame;
+    frame.flags = static_cast<uint32_t>(SpriteFrameFlag::Mirror5)
+        | static_cast<uint32_t>(SpriteFrameFlag::Mirror6)
+        | static_cast<uint32_t>(SpriteFrameFlag::Mirror7);
+    for (const int palette : {829, 830})
+    {
+        frame.textureName = "atlas:mm6_ttn1/ttn1waa__palette_" + std::to_string(palette);
+        for (int view = 0; view < 8; ++view)
+        {
+            const ResolvedSpriteTexture resolved = SpriteFrameTable::resolveTexture(frame, view);
+            const int storedView = view > 4 ? 8 - view : view;
+            CHECK_EQ(resolved.textureName, frame.textureName + std::to_string(storedView));
+            CHECK_EQ(resolved.mirrored, view > 4);
+        }
+    }
+    frame.textureName = "atlas:mm6_ttn1/ttn1ata__palette_8300";
+    frame.flags = static_cast<uint32_t>(SpriteFrameFlag::Image1);
+    for (int view = 0; view < 8; ++view)
+    {
+        CHECK_EQ(SpriteFrameTable::resolveTexture(frame, view).textureName, frame.textureName);
+    }
+}
+
 TEST_CASE("roster join offer mapping samples")
 {
     const OpenYAMM::Tests::RegressionGameData &gameData = requireRegressionGameData();

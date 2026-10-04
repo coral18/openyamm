@@ -13,13 +13,16 @@ struct SpriteAtlasPage
     std::string base;
     std::string mask;
     std::array<int, 2> size = {};
+    std::string texture;
 };
 
 struct SpriteAtlasFrame
 {
     int page = 0;
     std::array<int, 4> rectangle = {};
-    std::array<int, 2> cropOrigin = {};
+    std::array<float, 2> cropOrigin = {};
+    std::array<float, 2> drawSize = {};
+    std::unordered_map<int, int> paletteOverrides;
 };
 
 struct SpriteAtlasVariant
@@ -35,7 +38,10 @@ struct SpriteAtlasVariant
 
 struct SpriteAtlas
 {
+    int schemaVersion = 1;
+    std::string textureProfile;
     float pixelsPerLogicalPixel = 1.0f;
+    float brightnessMultiplier = 1.0f;
     int maskChannels = 1;
     std::array<int, 2> logicalCanvas = {};
     std::array<float, 2> logicalPivot = {};

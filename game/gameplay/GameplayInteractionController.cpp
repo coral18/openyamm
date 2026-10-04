@@ -915,6 +915,15 @@ void executePartyAttack(
         : 0.0f;
     const std::optional<GameplayActionController::WorldPoint> hitRangedTarget =
         partyRangedTargetFromWorldHit(currentHit);
+    const std::optional<GameplayActionController::WorldPoint> directTargetHitPoint =
+        currentHit.kind == GameplayWorldHitKind::Actor && currentHit.actor
+            ? std::optional<GameplayActionController::WorldPoint>(
+                GameplayActionController::WorldPoint{
+                    currentHit.actor->hitPoint.x,
+                    currentHit.actor->hitPoint.y,
+                    currentHit.actor->hitPoint.z,
+                })
+            : std::nullopt;
 
     const GameplayActionController::PartyAttackExecutionResult attackResult =
         GameplayActionController::executePartyAttack(
@@ -928,6 +937,7 @@ void executePartyAttack(
             .pMonsterTable = runtime.monsterTable(),
             .pSpecialItemEnchantTable = runtime.specialItemEnchantTable(),
             .directTargetActorIndex = directActorIndex,
+            .directTargetHitPoint = directTargetHitPoint,
             .directTargetBModelIndex = directTargetBModelIndex,
             .directWorldTargetDistance = directWorldTargetDistance,
             .directTargetName = directTargetName,

@@ -38,9 +38,9 @@ struct OutdoorActorCollision
     OutdoorActorCollisionSource source = OutdoorActorCollisionSource::Spawn;
     uint16_t radius = 0;
     uint16_t height = 0;
-    int worldX = 0;
-    int worldY = 0;
-    int worldZ = 0;
+    float worldX = 0.0f;
+    float worldY = 0.0f;
+    float worldZ = 0.0f;
     uint32_t attributes = 0;
     uint32_t group = 0;
     std::string name;

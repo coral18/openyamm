@@ -1,0 +1,64 @@
+schema: openyamm.effectTextureImport.v1
+source:
+  path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/FLAMEEFFECTS/BLUETORCH/BLUEFLAME09.dtx
+  format: LithTech DTX
+  sha256: 37fecb910daa031b0129c629918ffea5782ad381caa98dc3b27b745ba1df0447
+runtime:
+  texture: engine/effects/mm9/textures/flameeffects/bluetorch/blueflame09.png
+  format: PNG RGBA8
+  colorSpace: srgb
+  alphaUsage: blend
+  premultipliedAlpha: false
+  mipPolicy: generate-at-runtime
+  minFilter: linear
+  magFilter: linear
+  wrapU: clamp
+  wrapV: clamp
+conversion:
+  decoder: tools/mm9_import_discovery/convert_abc_model.py:decode_dtx_mips
+  decodedRgbChanged: false
+  decodedAlphaChanged: false
+  opaqueAlphaRepair: false
+  zeroAlphaRgbPreserved: true
+  sourceMipArtifacts: mips/*.png
+dtx:
+  version: -5
+  width: 64
+  height: 64
+  mipCount: 4
+  sectionCount: 0
+  internalFlags: 136
+  userFlags: 0
+  extraHex: '000003000000000000000000'
+  bppIdentifier: 3
+  command: ''
+  repairOpaqueAlpha: false
+  mips:
+  - index: 0
+    width: 64
+    height: 64
+    sourceOffset: 164
+    sourceBytes: 16384
+    decodedRgbaSha256: f328f8c0099deb6f18429d5e01f54dc1f8221c761e0e33cf7454e154e8699a9c
+    artifact: mips/00.png
+  - index: 1
+    width: 32
+    height: 32
+    sourceOffset: 16548
+    sourceBytes: 4096
+    decodedRgbaSha256: 0c8f1546c472e6d71aa5c7c2faaa7d63ff54deeaadcc04c3b53ebc75858dc0ee
+    artifact: mips/01.png
+  - index: 2
+    width: 16
+    height: 16
+    sourceOffset: 20644
+    sourceBytes: 1024
+    decodedRgbaSha256: 82ffb03380c80533a6ea216a8d27411ec93f165189febb5d24daf63e0954e64e
+    artifact: mips/02.png
+  - index: 3
+    width: 8
+    height: 8
+    sourceOffset: 21668
+    sourceBytes: 256
+    decodedRgbaSha256: 90451a8d141948ff755f43e39e44f5d2a85f689f988b22c5c597da2936e14ca0
+    artifact: mips/03.png

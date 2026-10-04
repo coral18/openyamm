@@ -40,9 +40,9 @@ std::vector<OutdoorActorCollision> buildRuntimeActorColliders(const OutdoorWorld
         collider.source = OutdoorActorCollisionSource::MapDelta;
         collider.radius = pActor->radius;
         collider.height = pActor->height;
-        collider.worldX = pActor->x;
-        collider.worldY = pActor->y;
-        collider.worldZ = pActor->z;
+        collider.worldX = pActor->preciseX;
+        collider.worldY = pActor->preciseY;
+        collider.worldZ = pActor->preciseZ;
         collider.group = pActor->group;
         collider.name = pActor->displayName;
         colliders.push_back(std::move(collider));

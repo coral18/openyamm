@@ -1,3 +1,5 @@
+#include "game/gameplay/TurnBasedCombatRuntime.h"
+#include "game/ui/GameplayBuffHud.h"
 #include "game/gameplay/GameplayHudInputController.h"
 
 #include "game/gameplay/GameplayItemService.h"
@@ -66,13 +68,7 @@ const char *activeGameplayButtonLayoutId(
     const char *pWideId,
     const char *pStandardId)
 {
-#if defined(__ANDROID__)
-    (void)context;
-    (void)pStandardId;
     return pWideId;
-#else
-    return context.settingsSnapshot().gameplayUiLayout == GameplayUiLayout::Standard ? pStandardId : pWideId;
-#endif
 }
 
 void openDimensionDoorOverlay(GameplayScreenRuntime &context)
@@ -224,6 +220,8 @@ void GameplayHudInputController::handlePartyPortraitInput(
         context.interactionState().partyPortraitClickLatch = false;
         context.interactionState().partyPortraitRightClickItemUseLatch = false;
         context.interactionState().partyPortraitPressedIndex = std::nullopt;
+        context.interactionState().overlayPersonalBuffClickLatch = false;
+        context.interactionState().overlayPersonalBuffPressedIndex.reset();
         return;
     }
 
@@ -266,6 +264,29 @@ void GameplayHudInputController::handlePartyPortraitInput(
         config.leftButtonPressed
     };
 
+    if (context.currentHudScreenState() != GameplayHudScreenState::Gameplay)
+    {
+        handlePointerClickRelease(pointerState,
+            context.interactionState().overlayPersonalBuffClickLatch,
+            context.interactionState().overlayPersonalBuffPressedIndex, std::optional<size_t>{},
+            [&context, &config](float x, float y) -> std::optional<size_t>
+            {
+                const GameplayHudPointerTarget target =
+                    gameplayBuffHudTarget(context, config.screenWidth, config.screenHeight, x, y);
+                return target.type == GameplayHudPointerTargetType::PersonalBuffs
+                    ? std::optional<size_t>(target.index) : std::nullopt;
+            },
+            [&context](const std::optional<size_t> &member)
+            {
+                if (member)
+                {
+                    std::optional<size_t> &selected = context.interactionState().personalBuffPopupMember;
+                    selected = selected == member ? std::nullopt : member;
+                    context.interactionState().partyBuffPopupOpen = false;
+                }
+            });
+    }
+
     handlePointerClickRelease(
         pointerState,
         context.interactionState().partyPortraitClickLatch,
@@ -273,6 +294,11 @@ void GameplayHudInputController::handlePartyPortraitInput(
         std::optional<size_t>{},
         [&context, &config](float x, float y) -> std::optional<size_t>
         {
+            if (gameplayBuffHudTarget(context, config.screenWidth, config.screenHeight, x, y).type
+                == GameplayHudPointerTargetType::PersonalBuffs)
+            {
+                return std::nullopt;
+            }
             return context.resolvePartyPortraitIndexAtPoint(config.screenWidth, config.screenHeight, x, y);
         },
         [&context, &config](const std::optional<size_t> &memberIndex)
@@ -312,6 +338,21 @@ void GameplayHudInputController::handleGameplayHudButtonInput(
         GameplayHudPointerTarget{},
         [&context, &config, &pointerState](float pointerX, float pointerY) -> GameplayHudPointerTarget
         {
+            const GameplayHudPointerTarget buffTarget = gameplayBuffHudTarget(
+                context, config.screenWidth, config.screenHeight, pointerX, pointerY);
+            if (buffTarget.type != GameplayHudPointerTargetType::None)
+            {
+                return buffTarget;
+            }
+            if (context.interactionState().partyBuffPopupOpen || context.interactionState().personalBuffPopupMember)
+            {
+                return {GameplayHudPointerTargetType::DismissBuffs};
+            }
+            if (context.turnBasedCombatRuntime().active()
+                && pointerInsideHudElement(context, config, "ObsidianTurnDock", pointerX, pointerY))
+            {
+                return {GameplayHudPointerTargetType::TurnBasedToggleButton};
+            }
             const GameplayContextActionState &contextActionState = context.contextActionStateReadOnly();
             const bool hasDropHeldItemAction =
                 contextActionState.visible
@@ -491,12 +532,42 @@ void GameplayHudInputController::handleGameplayHudButtonInput(
                 }
             }
 
+            if (pointerInsideHudElement(context, config, "OutdoorMinimap", pointerX, pointerY))
+            {
+                return {GameplayHudPointerTargetType::MinimapOpen};
+            }
             return {};
         },
         [&context](const GameplayHudPointerTarget &target)
         {
             switch (target.type)
             {
+            case GameplayHudPointerTargetType::BuffOverflow:
+                context.interactionState().partyBuffPopupOpen = !context.interactionState().partyBuffPopupOpen;
+                context.interactionState().personalBuffPopupMember.reset();
+                break;
+            case GameplayHudPointerTargetType::PersonalBuffs:
+                if (context.interactionState().personalBuffPopupMember == target.index)
+                {
+                    context.interactionState().personalBuffPopupMember.reset();
+                }
+                else
+                {
+                    context.interactionState().personalBuffPopupMember = target.index;
+                }
+                context.interactionState().partyBuffPopupOpen = false;
+                break;
+            case GameplayHudPointerTargetType::PartyBuff:
+            case GameplayHudPointerTargetType::PartyBuffPanel:
+                break;
+            case GameplayHudPointerTargetType::DismissBuffs:
+                context.interactionState().partyBuffPopupOpen = false;
+                context.interactionState().personalBuffPopupMember.reset();
+                break;
+            case GameplayHudPointerTargetType::MinimapOpen:
+                context.openJournalOverlay();
+                context.journalScreenState().view = GameplayUiController::JournalView::Map;
+                break;
             case GameplayHudPointerTargetType::MenuButton:
                 if (context.pendingSpellTargetActive())
                 {

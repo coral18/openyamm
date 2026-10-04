@@ -65,6 +65,7 @@ include(Dependencies)
 include(BgfxRuntime)
 
 openyamm_configure_lua()
+include(SpriteAtlasCodecs)
 
 set(OPENYAMM_RUNTIME_SHADER_DIR "${CMAKE_BINARY_DIR}/runtime/shaders")
 set(OPENYAMM_BGFX_SOURCE_DIR "${CMAKE_BINARY_DIR}/_deps/bgfx-src")
@@ -112,6 +113,8 @@ if (OPENYAMM_BUILD_DESKTOP_EXECUTABLE)
             "-DOPENYAMM_RELEASE_RUNTIME_SEARCH_DIRS=${OPENYAMM_RELEASE_RUNTIME_SEARCH_DIRS}"
             "-DOPENYAMM_RELEASE_SHADER_DIR=${OPENYAMM_RUNTIME_SHADER_DIR}"
             "-DOPENYAMM_RELEASE_ASSET_DEV_DIR=${OPENYAMM_DEV_ASSETS_DIR}"
+            "-DOPENYAMM_RELEASE_PYTHON=${Python3_EXECUTABLE}"
+            "-DOPENYAMM_RELEASE_COOKER=$<TARGET_FILE:openyamm_sprite_atlas_cook>"
             "-DOPENYAMM_RELEASE_SETTINGS_TEMPLATE=${CMAKE_SOURCE_DIR}/settings_release.ini"
             -P "${CMAKE_SOURCE_DIR}/cmake/CreateOpenYammReleasePackage.cmake"
         DEPENDS openyamm openyamm_runtime_shaders

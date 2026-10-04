@@ -1,0 +1,18 @@
+schema: openyamm.effectSprite.v2
+id: mm9:effect-sprite/spells/feather
+source: sprites/spells/feather.spr
+framesPerSecond: 12
+logicalWidth: 32
+logicalHeight: 32
+keyed: false
+translucent: false
+colorKey: 0
+frames:
+- mm9:effect-texture/feather1
+- mm9:effect-texture/feather2
+- mm9:effect-texture/feather3
+- mm9:effect-texture/feather4
+- mm9:effect-texture/feather4
+- mm9:effect-texture/feather3
+- mm9:effect-texture/feather2
+- mm9:effect-texture/feather1

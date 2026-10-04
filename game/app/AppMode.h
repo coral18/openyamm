@@ -5,6 +5,7 @@ namespace OpenYAMM::Game
 enum class AppMode
 {
     MainMenu,
+    PauseMenu,
     LoadMenu,
     NewGame,
     Arcomage,

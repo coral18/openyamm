@@ -10,6 +10,7 @@
 #include "game/party/SpellIds.h"
 #include "game/render/lighting/FxLightClustering.h"
 #include "game/render/lighting/LightingStats.h"
+#include "game/render/IndoorStaticLighting.h"
 
 #include <vector>
 
@@ -74,6 +75,85 @@ IndoorMapData makeMapWithOneSector()
 TEST_CASE("indoor lighting keeps shader draw light budget local to each draw")
 {
     CHECK_EQ(MaxIndoorDrawLights, 12u);
+}
+
+TEST_CASE("indoor baked lighting finds a small light inside a triangle with unlit corners")
+{
+    const std::array<bx::Vec3, 3> positions = {
+        bx::Vec3{-1024.0f, -1024.0f, 0.0f}, bx::Vec3{1024.0f, -1024.0f, 0.0f}, bx::Vec3{0.0f, 1024.0f, 0.0f}
+    };
+    OpenYAMM::Game::BakedStaticLightSource light = {};
+    light.radius = 64.0f;
+    const std::array lights = {light};
+    CHECK(OpenYAMM::Game::indoorBakedStaticLightNeedsSubdivision(lights, positions));
+}
+
+TEST_CASE("indoor baked lighting refines torch curvature below the legacy mesh spacing")
+{
+    const std::array<bx::Vec3, 3> positions = {
+        bx::Vec3{-64.0f, -64.0f, 0.0f}, bx::Vec3{64.0f, -64.0f, 0.0f}, bx::Vec3{0.0f, 64.0f, 0.0f}
+    };
+    OpenYAMM::Game::BakedStaticLightSource light = {};
+    light.radius = 256.0f;
+    const std::array lights = {light};
+    CHECK(OpenYAMM::Game::indoorBakedStaticLightNeedsSubdivision(lights, positions));
+}
+
+TEST_CASE("indoor baked lighting keeps unlit and nearly flat triangles coarse")
+{
+    const std::array<bx::Vec3, 3> positions = {
+        bx::Vec3{0.0f, 0.0f, 0.0f}, bx::Vec3{64.0f, 0.0f, 0.0f}, bx::Vec3{0.0f, 64.0f, 0.0f}
+    };
+    OpenYAMM::Game::BakedStaticLightSource light = {};
+    light.position = {0.0f, 0.0f, 1024.0f};
+    light.radius = 128.0f;
+    std::array lights = {light};
+    CHECK_FALSE(OpenYAMM::Game::indoorBakedStaticLightNeedsSubdivision(lights, positions));
+
+    lights[0].position = {0.0f, 0.0f, 0.0f};
+    lights[0].radius = 1024.0f;
+    CHECK_FALSE(OpenYAMM::Game::indoorBakedStaticLightNeedsSubdivision(lights, positions));
+}
+
+TEST_CASE("indoor baked lighting budgets the combined curvature of overlapping lights")
+{
+    const std::array<bx::Vec3, 3> positions = {
+        bx::Vec3{-64.0f, -64.0f, 0.0f}, bx::Vec3{64.0f, -64.0f, 0.0f}, bx::Vec3{0.0f, 64.0f, 0.0f}
+    };
+    OpenYAMM::Game::BakedStaticLightSource light = {};
+    light.radius = 400.0f;
+    light.alpha = 0.1f;
+    std::vector lights = {light};
+    CHECK_FALSE(OpenYAMM::Game::indoorBakedStaticLightNeedsSubdivision(lights, positions));
+    lights.resize(10, light);
+    CHECK(OpenYAMM::Game::indoorBakedStaticLightNeedsSubdivision(lights, positions));
+}
+
+TEST_CASE("indoor baked lighting avoids refining large triangles for a dim light skirt")
+{
+    const std::array<bx::Vec3, 3> positions = {
+        bx::Vec3{-1024.0f, -1024.0f, 0.0f}, bx::Vec3{1024.0f, -1024.0f, 0.0f}, bx::Vec3{0.0f, 1024.0f, 0.0f}
+    };
+    OpenYAMM::Game::BakedStaticLightSource light = {};
+    light.radius = 256.0f;
+    light.position = {0.0f, 0.0f, 246.0f};
+    const std::array lights = {light};
+    CHECK_FALSE(OpenYAMM::Game::indoorBakedStaticLightNeedsSubdivision(lights, positions));
+}
+
+TEST_CASE("indoor baked lighting does not combine curvature peaks at different probe positions")
+{
+    const std::array<bx::Vec3, 3> positions = {
+        bx::Vec3{-64.0f, -64.0f, 0.0f}, bx::Vec3{64.0f, -64.0f, 0.0f}, bx::Vec3{0.0f, 64.0f, 0.0f}
+    };
+    OpenYAMM::Game::BakedStaticLightSource first = {};
+    first.position = {0.0f, -64.0f, 0.0f};
+    first.radius = 64.0f;
+    first.alpha = 0.03f;
+    OpenYAMM::Game::BakedStaticLightSource second = first;
+    second.position = {32.0f, 0.0f, 0.0f};
+    const std::array lights = {first, second};
+    CHECK_FALSE(OpenYAMM::Game::indoorBakedStaticLightNeedsSubdivision(lights, positions));
 }
 
 TEST_CASE("lighting stats accumulate and reset instrumentation counters")

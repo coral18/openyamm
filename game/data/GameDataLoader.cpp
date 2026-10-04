@@ -8,6 +8,7 @@
 #include "game/content/ContentTableComposer.h"
 #include "game/events/EventRuntime.h"
 #include "game/maps/MapIdentity.h"
+#include "game/maps/MapDecorationTextures.h"
 #include "game/StringUtils.h"
 
 #include <algorithm>
@@ -1255,6 +1256,18 @@ void appendDecorationScriptBillboardTextures(
             if (alreadyPresent)
             {
                 continue;
+            }
+
+            const SpriteFrameEntry *pFrame = billboardSet->spriteFrameTable.getFrame(spriteId, 0);
+            if (pFrame != nullptr)
+            {
+                std::optional<OutdoorBitmapTexture> restored = loadRestoredDecorationTexture(
+                    assetFileSystem, textureName, pFrame->paletteId);
+                if (restored)
+                {
+                    billboardSet->textures.push_back(std::move(*restored));
+                    continue;
+                }
             }
 
             int textureWidth = 0;
@@ -4147,6 +4160,19 @@ bool GameDataLoader::loadItemTable(const Engine::AssetFileSystem &assetFileSyste
         return false;
     }
 
+    const std::string itemVisualsPath = engineDataTablePath("item_visuals.txt");
+    if (assetFileSystem.exists(itemVisualsPath))
+    {
+        std::vector<std::vector<std::string>> visualRows;
+        std::string error;
+        if (!loadTextTableRows(assetFileSystem, itemVisualsPath, visualRows)
+            || !m_itemTable.loadVisualRows(visualRows, error))
+        {
+            std::cerr << "Failed to load item visuals: " << itemVisualsPath << ": " << error << '\n';
+            return false;
+        }
+    }
+
     std::vector<KeyedTableContributionRows> itemEffectContributions;
     std::vector<std::vector<std::string>> itemSetRows;
     std::vector<std::vector<std::string>> itemAliasRows;
@@ -4363,7 +4389,7 @@ bool GameDataLoader::loadSelectedMap(
     m_selectedMap.reset();
     m_selectedMapRenderSourcePixelsReleased = false;
     m_lastReleasedMapRenderSourcePixelBytes = 0;
-    m_mapAssetLoadSharedCache.clearTransientBitmapData();
+    m_mapAssetLoadSharedCache.beginLoad(assetFileSystem.contentGeneration());
     const std::optional<MapStatsEntry> selectedMap = m_mapRegistry.findById(mapId);
 
     if (!selectedMap)
@@ -4383,7 +4409,7 @@ bool GameDataLoader::loadSelectedMap(
         {},
         progressPump,
         &m_mapAssetLoadSharedCache);
-    m_mapAssetLoadSharedCache.clearTransientBitmapData();
+    m_mapAssetLoadSharedCache.trimBitmapData();
 
     if (!loadedMap)
     {

@@ -1,0 +1,8 @@
+output_dir: ../../output/screenshots/water_review/mm8
+settle_seconds: 2
+exit: true
+shots:
+  - name: ravenshore-water
+    position: [10256.120, -16018.912, 2461.032]
+    yaw: 4.540
+    pitch: -0.719826144

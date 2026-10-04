@@ -1,8 +1,0 @@
-format_version: 1
-kind: "indoor_scene_overlay"
-source:
-  geometry_file: "7d05.blv"
-runtime_restrictions:
-  allow_save_game: false
-  allow_lloyds_beacon: false
-  arena: true

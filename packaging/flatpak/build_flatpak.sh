@@ -249,38 +249,18 @@ copy_source_entry()
     cp -a "$source_path" "$destination_path"
 }
 
-package_asset_dir()
-{
-    local source_path="$repo_root/$1"
-    local destination_path="$source_dir/$2"
-
-    if [ ! -d "$source_path" ]; then
-        printf 'Required asset package source is missing: %s\n' "$1" >&2
-        exit 1
-    fi
-
-    mkdir -p "$(dirname "$destination_path")"
-    printf 'Packaging %s -> %s\n' "$1" "$2"
-    (cd "$source_path" && cmake -E tar cf "$destination_path" --format=zip -- .) >/dev/null
-}
-
 stage_flatpak_assets()
 {
-    local world_source_root="$repo_root/assets_dev/worlds"
-    local world_path=""
-    local world_package_name=""
-
-    mkdir -p "$source_dir/assets/worlds"
-    package_asset_dir assets_dev/engine assets/engine.zip
-
-    for world_path in "$world_source_root"/*; do
-        if [ ! -d "$world_path" ]; then
-            continue
-        fi
-
-        world_package_name="$(basename "$world_path")"
-        package_asset_dir "assets_dev/worlds/$world_package_name" "assets/worlds/$world_package_name.zip"
-    done
+    local host_build_dir="${OPENYAMM_HOST_BUILD_DIR:-$repo_root/build}"
+    if [ ! -f "$host_build_dir/CMakeCache.txt" ]; then
+        cmake -S "$repo_root" -B "$host_build_dir" -DCMAKE_BUILD_TYPE=Release \
+            -DOPENYAMM_BUILD_TESTS=OFF -DOPENYAMM_BUILD_EDITOR=OFF -DOPENYAMM_BUILD_TOOLS=OFF \
+            -DOPENYAMM_BUILD_DESKTOP_EXECUTABLE=OFF
+    fi
+    cmake --build "$host_build_dir" --target openyamm_sprite_atlas_cook -j25
+    python3 "$repo_root/tools/package_runtime_assets.py" \
+        --assets-root "$repo_root/assets_dev" --output "$source_dir/assets" \
+        --profile desktop --cooker "$host_build_dir/game/openyamm_sprite_atlas_cook"
 }
 
 prepare_source_tree()
@@ -290,13 +270,21 @@ prepare_source_tree()
     mkdir -p "$source_dir"
 
     copy_source_entry CMakeLists.txt
+    copy_source_entry LICENSE
+    copy_source_entry COPYRIGHT
     copy_source_entry settings_release.ini
     copy_source_entry cmake
     copy_source_entry engine
     copy_source_entry game
     copy_source_entry packaging/flatpak
     copy_source_entry packaging/icons
+    copy_source_entry packaging/licenses
     copy_source_entry tools/openyamm_shaderc_stubs.cpp
+    copy_source_entry tools/cook_sprite_atlases_main.cpp
+    copy_source_entry tools/SpriteAtlasEncode.cpp
+    copy_source_entry tools/SpriteAtlasEncode.h
+    copy_source_entry tools/cook_sprite_atlases.py
+    copy_source_entry tools/package_runtime_assets.py
     stage_flatpak_assets
 
     mkdir -p "$(dirname "$generated_manifest")"

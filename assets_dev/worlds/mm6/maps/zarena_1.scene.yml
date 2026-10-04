@@ -6,3 +6,31 @@ runtime_restrictions:
   allow_save_game: false
   allow_lloyds_beacon: false
   arena: true
+
+# Merged-base monster IDs from this world only. Arena positions are map-owned.
+arena:
+  minimum_monster_id: 475
+  maximum_monster_id: 652
+  party_position: [3849, 5770, 1]
+  party_direction_degrees: 90
+  monster_positions:
+    - [1524, 8332, 257]
+    - [2186, 8844, 257]
+    - [3219, 9339, 257]
+    - [4500, 9339, 257]
+    - [5323, 9004, 257]
+    - [6013, 8344, 257]
+    - [1291, 7701, 257]
+    - [6399, 7701, 257]
+    - [1291, 3433, 257]
+    - [6399, 6933, 257]
+    - [1291, 4129, 257]
+    - [6399, 6216, 257]
+    - [1291, 4823, 257]
+    - [6399, 5539, 257]
+    - [1291, 5339, 257]
+    - [6399, 4823, 257]
+    - [1291, 6216, 257]
+    - [6399, 4129, 257]
+    - [1291, 6933, 257]
+    - [6399, 3433, 257]

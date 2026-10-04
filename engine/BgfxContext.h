@@ -30,6 +30,10 @@ public:
 
     bool initialize(SDL_Window *pWindow, int windowWidth, int windowHeight, bool verticalSync);
     void resize(SDL_Window *pWindow, int windowWidth, int windowHeight) const;
+    void setVerticalSync(bool enabled)
+    {
+        m_verticalSync = enabled;
+    }
     void shutdown();
 
     bool isInitialized() const;

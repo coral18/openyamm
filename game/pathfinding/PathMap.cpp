@@ -4,6 +4,7 @@
 #include <array>
 #include <cmath>
 #include <limits>
+#include <tuple>
 #include <utility>
 
 namespace OpenYAMM::Game
@@ -12,6 +13,7 @@ namespace
 {
 constexpr float PathEpsilon = 0.0001f;
 constexpr int32_t MaxPathGridCellSpan = 4096;
+constexpr uint64_t PathGridScanCostRatio = 8;
 
 PathPoint pointAdd(const PathPoint &left, const PathPoint &right)
 {
@@ -71,9 +73,52 @@ float xyDistance(const PathPoint &from, const PathPoint &to)
     return std::sqrt(dx * dx + dy * dy);
 }
 
-float maxWalkDropHeight(const PathObject &object)
+float pointSegmentDistanceSquared(const PathPoint &point, const PathPoint &from, const PathPoint &to)
 {
-    return std::max(object.stepHeight, std::min(object.radius, object.stepHeight * 2.0f));
+    const PathPoint direction = pointSubtract(to, from);
+    const float lengthSquared = pointLengthSquared(direction);
+    const float progress = lengthSquared > PathEpsilon
+        ? std::clamp(pointDot(pointSubtract(point, from), direction) / lengthSquared, 0.0f, 1.0f)
+        : 0.0f;
+    return pointLengthSquared(pointSubtract(pointSubtract(point, from), pointScale(direction, progress)));
+}
+
+float segmentDistanceSquared(
+    const PathPoint &from,
+    const PathPoint &to,
+    const PathPoint &edgeFrom,
+    const PathPoint &edgeTo)
+{
+    float distanceSquared = std::min({
+        pointSegmentDistanceSquared(from, edgeFrom, edgeTo),
+        pointSegmentDistanceSquared(to, edgeFrom, edgeTo),
+        pointSegmentDistanceSquared(edgeFrom, from, to),
+        pointSegmentDistanceSquared(edgeTo, from, to)
+    });
+    const PathPoint direction = pointSubtract(to, from);
+    const PathPoint edge = pointSubtract(edgeTo, edgeFrom);
+    const PathPoint offset = pointSubtract(from, edgeFrom);
+    const float lengthSquared = pointLengthSquared(direction);
+    const float edgeLengthSquared = pointLengthSquared(edge);
+    const float alignment = pointDot(direction, edge);
+    const float determinant = lengthSquared * edgeLengthSquared - alignment * alignment;
+
+    if (determinant > PathEpsilon * lengthSquared * edgeLengthSquared)
+    {
+        const float alongDirection = pointDot(offset, direction);
+        const float alongEdge = pointDot(offset, edge);
+        const float progress = (alignment * alongEdge - edgeLengthSquared * alongDirection) / determinant;
+        const float edgeProgress = (lengthSquared * alongEdge - alignment * alongDirection) / determinant;
+
+        if (progress >= 0.0f && progress <= 1.0f && edgeProgress >= 0.0f && edgeProgress <= 1.0f)
+        {
+            const PathPoint separation = pointSubtract(
+                pointAdd(offset, pointScale(direction, progress)), pointScale(edge, edgeProgress));
+            distanceSquared = std::min(distanceSquared, pointLengthSquared(separation));
+        }
+    }
+
+    return distanceSquared;
 }
 
 bool walkStepDeltaAllowed(float fromZ, float toZ, const PathObject &object)
@@ -85,7 +130,7 @@ bool walkStepDeltaAllowed(float fromZ, float toZ, const PathObject &object)
         return false;
     }
 
-    if (-deltaZ > maxWalkDropHeight(object) + PathEpsilon)
+    if (-deltaZ > object.dropHeight + PathEpsilon)
     {
         return false;
     }
@@ -315,6 +360,23 @@ bool pointInsideFacet(const PathPoint &point, const PathFacet &facet, const Path
     return inside;
 }
 
+float pointFacetDistanceSquared(const PathPoint &point, const PathFacet &facet, const PathPoint &normal)
+{
+    const float distance = pointDot(normal, pointSubtract(point, facet.vertices.front()));
+    const PathPoint projected = pointSubtract(point, pointScale(normal, distance));
+    if (pointInsideFacet(projected, facet, normal))
+    {
+        return distance * distance;
+    }
+    float nearest = std::numeric_limits<float>::max();
+    for (size_t edge = 0; edge < facet.vertices.size(); ++edge)
+    {
+        nearest = std::min(nearest, pointSegmentDistanceSquared(point, facet.vertices[edge],
+            facet.vertices[(edge + 1) % facet.vertices.size()]));
+    }
+    return nearest;
+}
+
 bool segmentIntersectsFacet(
     const PathPoint &from,
     const PathPoint &to,
@@ -384,7 +446,7 @@ bool segmentMovesIntoFacetBodyOverlap(
     const float fromDistance = std::fabs(fromSignedDistance);
     const float toDistance = std::fabs(toSignedDistance);
 
-    if (toDistance > radius + PathEpsilon)
+    if (toDistance >= radius - PathEpsilon)
     {
         return false;
     }
@@ -410,6 +472,62 @@ bool segmentMovesIntoFacetBodyOverlap(
 
     outPoint = projectedPoint;
     return true;
+}
+
+bool bodyTraceIsNonBlockingContact(
+    const PathPoint &from,
+    const PathPoint &to,
+    const PathFacet &facet,
+    const PathPoint &normal,
+    const PathPoint &hitPoint,
+    float radius
+)
+{
+    if (!facetBlocksBodyOverlap(facet, normal))
+    {
+        return false;
+    }
+
+    const float fromDistance = pointDot(normal, pointSubtract(from, facet.vertices.front()));
+    const float toDistance = pointDot(normal, pointSubtract(to, facet.vertices.front()));
+    const bool sameSide = fromDistance * toDistance > 0.0f;
+
+    if (sameSide && std::min(std::fabs(fromDistance), std::fabs(toDistance)) >= radius - PathEpsilon)
+    {
+        return true;
+    }
+
+    if (sameSide
+        && std::fabs(fromDistance) <= radius + PathEpsilon
+        && std::fabs(toDistance) > std::fabs(fromDistance) + PathEpsilon)
+    {
+        const PathPoint projectedFrom = pointSubtract(from, pointScale(normal, fromDistance));
+
+        if (pointInsideFacet(projectedFrom, facet, normal))
+        {
+            return true;
+        }
+    }
+
+    bool touchesEdge = false;
+
+    for (size_t index = 0; index < facet.vertices.size(); ++index)
+    {
+        const PathPoint &edgeFrom = facet.vertices[index];
+        const PathPoint &edgeTo = facet.vertices[(index + 1) % facet.vertices.size()];
+
+        if (pointSegmentDistanceSquared(hitPoint, edgeFrom, edgeTo) <= PathEpsilon * PathEpsilon)
+        {
+            if (segmentDistanceSquared(from, to, edgeFrom, edgeTo) < radius * radius - PathEpsilon)
+            {
+                return false;
+            }
+
+            touchesEdge = true;
+        }
+    }
+
+    return touchesEdge;
 }
 
 bool facetIsNonBlocking(const PathFacet &facet)
@@ -761,7 +879,7 @@ PathFloorQueryDebug PathMap::debugFloorQuery(const PathPoint &position) const
     float bestBelowDistance = std::numeric_limits<float>::max();
     float bestAboveDistance = std::numeric_limits<float>::max();
 
-    const std::vector<size_t> candidates = candidateFloorFacetsForPoint(position.x, position.y);
+    const std::span<const size_t> candidates = candidateFloorFacetsForPoint(position.x, position.y);
     debug.candidateCount = candidates.size();
 
     for (size_t index : candidates)
@@ -857,6 +975,17 @@ PathTraceResult PathMap::traceLine(
     bool checkBody
 ) const
 {
+    TraceCandidateCache cache;
+    return traceLineInternal(from, to, radius, checkBody, &cache);
+}
+
+PathTraceResult PathMap::traceLineInternal(
+    const PathPoint &from,
+    const PathPoint &to,
+    float radius,
+    bool checkBody,
+    TraceCandidateCache *pCache) const
+{
     if (!pointIsFinite(from) || !pointIsFinite(to) || !std::isfinite(radius))
     {
         PathTraceResult result = {};
@@ -909,7 +1038,7 @@ PathTraceResult PathMap::traceLine(
     {
         const std::pair<PathPoint, PathPoint> &trace = traces[traceIndex];
         const PathBounds bounds = segmentBounds(trace.first, trace.second, radius);
-        candidateFacetsForBounds(bounds, candidates);
+        candidateFacetsForBounds(bounds, candidates, pCache);
 
         for (size_t facetIndex : candidates)
         {
@@ -930,6 +1059,14 @@ PathTraceResult PathMap::traceLine(
 
             if (segmentIntersectsFacet(trace.first, trace.second, facet, geometry.normal, hitPoint))
             {
+                // Radius probes may touch a wall or doorway edge without penetrating it,
+                // including when leaving an existing contact. Center crossings still block.
+                if (traceIndex > 0
+                    && bodyTraceIsNonBlockingContact(from, to, facet, geometry.normal, hitPoint, radius))
+                {
+                    continue;
+                }
+
                 result.blocked = true;
                 result.facetIndex = facetIndex;
                 result.point = hitPoint;
@@ -962,6 +1099,144 @@ bool PathMap::traceWalkSegment(const PathPoint &from, const PathPoint &to, const
     return traceWalkSegmentInternal(from, to, object, nullptr);
 }
 
+bool PathMap::resolveWalkStep(const PathPoint &from, PathPoint &to, const PathObject &object) const
+{
+    if (!pointIsFinite(from) || !pointIsFinite(to) || !std::isfinite(object.radius)
+        || !std::isfinite(object.height) || object.height < 0.0f
+        || !std::isfinite(object.stepLength) || !std::isfinite(object.stepHeight) || !std::isfinite(object.dropHeight))
+    {
+        return false;
+    }
+    // A descending body leaves its upper support before falling; its floor
+    // endpoint may temporarily overlap the side of that support.
+    if (to.z < from.z - PathEpsilon && traceWalkSegment(from, to, object))
+    {
+        return true;
+    }
+
+    const PathPoint requestedTarget = to;
+    PathPoint candidate = to;
+    const float maxAdjustment = object.stepLength * 0.5f;
+    const float nearbyRadius = object.radius + maxAdjustment;
+    std::vector<size_t> nearbyFacets;
+    candidateFacetsForBounds(segmentBounds(to, to, nearbyRadius), nearbyFacets);
+
+    for (int attempt = 0; attempt < 4; ++attempt)
+    {
+        const PathPoint center = {candidate.x, candidate.y, candidate.z + object.radius};
+        float nearestAdjustment = std::numeric_limits<float>::max();
+        PathPoint adjustmentNormal = {};
+        bool hasUnresolvedOverlap = false;
+        for (size_t facetIndex : nearbyFacets)
+        {
+            const PathFacet &facet = m_facets[facetIndex];
+            const FacetGeometry &geometry = m_geometry[facetIndex];
+            const PathPoint &normal = geometry.normal;
+            if (!geometry.valid || geometry.nonBlocking || !facetBlocksBodyOverlap(facet, normal)
+                || std::fabs(normal.z) > PathEpsilon
+                || geometry.bounds.maxZ <= candidate.z + object.stepHeight + PathEpsilon)
+            {
+                continue;
+            }
+            const float distance = pointDot(normal, pointSubtract(center, facet.vertices.front()));
+            if (std::fabs(distance) >= object.radius - PathEpsilon)
+            {
+                continue;
+            }
+            const float distanceSquared = pointFacetDistanceSquared(center, facet, normal);
+            if (distanceSquared > nearbyRadius * nearbyRadius)
+            {
+                continue;
+            }
+
+            const float sourceDistance = pointDot(normal, pointSubtract(from, facet.vertices.front()));
+            const float side = sourceDistance < 0.0f ? -1.0f : 1.0f;
+            const PathPoint awayNormal = pointScale(normal, side);
+            float adjustment = object.radius + PathEpsilon - distance * side;
+            const bool overlapsBody = distanceSquared < object.radius * object.radius - PathEpsilon;
+
+            float oppositeAllowance = std::numeric_limits<float>::max();
+            for (size_t oppositeIndex : nearbyFacets)
+            {
+                const PathFacet &oppositeFacet = m_facets[oppositeIndex];
+                const FacetGeometry &oppositeGeometry = m_geometry[oppositeIndex];
+                const float alignment = pointDot(oppositeGeometry.normal, awayNormal);
+                if (!oppositeGeometry.valid || oppositeGeometry.nonBlocking
+                    || !facetBlocksBodyOverlap(oppositeFacet, oppositeGeometry.normal)
+                    || std::fabs(alignment) < 1.0f - PathEpsilon
+                    || oppositeGeometry.bounds.maxZ <= candidate.z + object.stepHeight + PathEpsilon)
+                {
+                    continue;
+                }
+                const float oppositeDistance = pointDot(
+                    oppositeGeometry.normal, pointSubtract(center, oppositeFacet.vertices.front()));
+                if (oppositeDistance * alignment >= 0.0f
+                    || pointFacetDistanceSquared(center, oppositeFacet, oppositeGeometry.normal)
+                        > nearbyRadius * nearbyRadius)
+                {
+                    continue;
+                }
+                oppositeAllowance = std::min(
+                    oppositeAllowance, std::fabs(oppositeDistance) - object.radius - PathEpsilon);
+            }
+            if (!overlapsBody && oppositeAllowance == std::numeric_limits<float>::max())
+            {
+                continue;
+            }
+            if (oppositeAllowance < adjustment)
+            {
+                // A different wall adjustment may clear this corner. Reject the
+                // direction, then validate the final move against every face.
+                hasUnresolvedOverlap = hasUnresolvedOverlap || overlapsBody;
+                continue;
+            }
+            if (oppositeAllowance < std::numeric_limits<float>::max())
+            {
+                // Align before entering the rounded doorway corners, not only
+                // once the endpoint overlaps them. Late alignment can clip the jamb.
+                adjustment = (adjustment + oppositeAllowance) * 0.5f;
+            }
+            if (!overlapsBody && adjustment > maxAdjustment)
+            {
+                continue;
+            }
+            if (adjustment < nearestAdjustment)
+            {
+                nearestAdjustment = adjustment;
+                adjustmentNormal = awayNormal;
+            }
+        }
+
+        if (nearestAdjustment == std::numeric_limits<float>::max())
+        {
+            if (hasUnresolvedOverlap || !traceWalkSegment(from, candidate, object))
+            {
+                return false;
+            }
+            to = candidate;
+            return true;
+        }
+
+        // A fixed search lattice can miss the entire usable width of a narrow
+        // passage. Align this neighbor to wall clearance, within half a step,
+        // while retaining the actor's radius and validating the complete move.
+        candidate.x += adjustmentNormal.x * nearestAdjustment;
+        candidate.y += adjustmentNormal.y * nearestAdjustment;
+        if (xyDistance(candidate, requestedTarget) > maxAdjustment)
+        {
+            return false;
+        }
+        const PathFloorSample floor = floorAt({candidate.x, candidate.y, requestedTarget.z + object.stepHeight});
+        if (!floor.hasFloor || floor.inVoid || !walkStepDeltaAllowed(from.z, floor.z, object))
+        {
+            return false;
+        }
+        candidate.z = floor.z;
+    }
+
+    return false;
+}
+
 PathWalkSegmentDebug PathMap::debugTraceWalkSegment(
     const PathPoint &from,
     const PathPoint &to,
@@ -976,6 +1251,129 @@ PathWalkSegmentDebug PathMap::debugTraceWalkSegment(
     return debug;
 }
 
+PathTraceResult PathMap::traceWalkBody(
+    const PathPoint &from,
+    const PathPoint &to,
+    const PathObject &object,
+    TraceCandidateCache &cache) const
+{
+    if (object.radius > PathEpsilon)
+    {
+        // Most floor samples are in open space. Enclose all radius probes and the
+        // upper-body checks before generating their individual collision queries.
+        PathBounds bodyBounds = segmentBounds(from, to, object.radius * 2.0f);
+        bodyBounds.minZ = std::min(from.z, to.z);
+        bodyBounds.maxZ = std::max(from.z, to.z) + std::max(object.height, object.radius * 2.0f);
+        if (boundsAreFinite(bodyBounds))
+        {
+            std::vector<size_t> nearbyFacets;
+            candidateFacetsForBounds(bodyBounds, nearbyFacets, &cache);
+            const float lowestProbeZ = std::min(from.z, to.z) + object.radius;
+            const bool hasObstacle = std::any_of(nearbyFacets.begin(), nearbyFacets.end(),
+                [this, lowestProbeZ](size_t facetIndex)
+                {
+                    const FacetGeometry &geometry = m_geometry[facetIndex];
+                    return geometry.valid && !geometry.nonBlocking
+                        && (!m_facets[facetIndex].walkableFloor
+                            || geometry.bounds.maxZ >= lowestProbeZ - PathEpsilon);
+                });
+            if (!hasObstacle)
+            {
+                return {};
+            }
+        }
+    }
+
+    const PathPoint lowFrom = {from.x, from.y, from.z + object.radius};
+    const PathPoint lowTo = {to.x, to.y, to.z + object.radius};
+    PathTraceResult result = traceLineInternal(lowFrom, lowTo, object.radius, true, &cache);
+    if (result.blocked || object.height <= 0.0f)
+    {
+        return result;
+    }
+
+    const float highOffset = std::max(object.radius, object.height - object.radius);
+    const PathPoint highFrom = {from.x, from.y, from.z + highOffset};
+    const PathPoint highTo = {to.x, to.y, to.z + highOffset};
+    if (highOffset > object.radius + PathEpsilon)
+    {
+        result = traceLineInternal(highFrom, highTo, object.radius, true, &cache);
+        if (result.blocked)
+        {
+            return result;
+        }
+    }
+
+    // Horizontal radius probes alone miss low ceilings and sloped overhangs.
+    // Include obstacle-height probes between the end spheres, as movement does.
+    PathBounds bounds = segmentBounds(highFrom, highTo, object.radius);
+    bounds.minZ = std::min({bounds.minZ, from.z, to.z});
+    bounds.maxZ = std::max(bounds.maxZ, to.z + object.height);
+    std::vector<size_t> candidates;
+    candidateFacetsForBounds(bounds, candidates, &cache);
+    for (size_t facetIndex : candidates)
+    {
+        const PathFacet &facet = m_facets[facetIndex];
+        const FacetGeometry &geometry = m_geometry[facetIndex];
+        if (!geometry.valid || geometry.nonBlocking || !boundsOverlap(bounds, geometry.bounds)
+            || facet.walkableFloor)
+        {
+            continue;
+        }
+
+        // Movement steps over low wall faces before resolving body contacts.
+        // Floor sampling enforces the rise limit; upper probes must not reject
+        // that same riser while the feet are still on the lower floor.
+        if (facet.kind == PathFacetKind::Wall
+            && geometry.bounds.maxZ <= from.z + std::max(0.0f, object.stepHeight) + PathEpsilon)
+        {
+            continue;
+        }
+
+        PathPoint hitPoint = {};
+        const PathPoint head = {to.x, to.y, to.z + object.height};
+        const float faceHeightOffset =
+            std::clamp((geometry.bounds.minZ + geometry.bounds.maxZ) * 0.5f - from.z, object.radius, highOffset);
+        const PathPoint faceFrom = {from.x, from.y, from.z + faceHeightOffset};
+        const PathPoint faceTo = {to.x, to.y, to.z + faceHeightOffset};
+        const bool checkFaceHeight = faceHeightOffset > object.radius + PathEpsilon
+            && faceHeightOffset < highOffset - PathEpsilon;
+        const bool bodyAxisBlocked = segmentIntersectsFacet(to, head, facet, geometry.normal, hitPoint)
+            && hitPoint.z > to.z + PathEpsilon && hitPoint.z < head.z - PathEpsilon;
+        bool blocked = bodyAxisBlocked
+            || (checkFaceHeight && segmentIntersectsFacet(faceFrom, faceTo, facet, geometry.normal, hitPoint));
+        // Descending from a tread temporarily overlaps its side while falling.
+        // The lower trace already validates that step; upper-body clearance must
+        // not turn the support being left into an overhead obstruction.
+        if (!blocked && geometry.bounds.maxZ > from.z + PathEpsilon)
+        {
+            const std::array<std::pair<PathPoint, PathPoint>, 2> probes = {{{highFrom, highTo}, {faceFrom, faceTo}}};
+            const size_t probeCount = checkFaceHeight ? 2 : 1;
+            for (size_t probeIndex = 0; probeIndex < probeCount && !blocked; ++probeIndex)
+            {
+                const std::pair<PathPoint, PathPoint> &probe = probes[probeIndex];
+                const float endDistanceSquared = pointFacetDistanceSquared(probe.second, facet, geometry.normal);
+                if (endDistanceSquared < object.radius * object.radius - PathEpsilon)
+                {
+                    const float startDistanceSquared = pointFacetDistanceSquared(probe.first, facet, geometry.normal);
+                    // Existing contact may slide along or out of a surface, but
+                    // a route must not push the body farther into it.
+                    blocked = endDistanceSquared < startDistanceSquared - PathEpsilon;
+                    hitPoint = probe.second;
+                }
+            }
+        }
+        if (blocked)
+        {
+            result.blocked = true;
+            result.facetIndex = facetIndex;
+            result.point = hitPoint;
+            return result;
+        }
+    }
+    return result;
+}
+
 bool PathMap::traceWalkSegmentInternal(
     const PathPoint &from,
     const PathPoint &to,
@@ -986,8 +1384,11 @@ bool PathMap::traceWalkSegmentInternal(
     if (!pointIsFinite(from)
         || !pointIsFinite(to)
         || !std::isfinite(object.radius)
+        || !std::isfinite(object.height)
+        || object.height < 0.0f
         || !std::isfinite(object.stepLength)
-        || !std::isfinite(object.stepHeight))
+        || !std::isfinite(object.stepHeight)
+        || !std::isfinite(object.dropHeight))
     {
         if (pDebug != nullptr)
         {
@@ -1008,6 +1409,8 @@ bool PathMap::traceWalkSegmentInternal(
     }
 
     PathPoint previousPoint = from;
+    // Each check owns its cache, so worker snapshots and geometry changes cannot share stale candidates.
+    TraceCandidateCache cache;
     PathFloorSample previousFloor = floorAt({from.x, from.y, from.z + stepHeight});
 
     if (pDebug != nullptr)
@@ -1081,9 +1484,25 @@ bool PathMap::traceWalkSegmentInternal(
             return false;
         }
 
-        const PathPoint segmentFrom = {previousPoint.x, previousPoint.y, previousFloor.z + object.radius};
-        const PathPoint segmentTo = {probe.x, probe.y, floor.z + object.radius};
-        const PathTraceResult traceResult = traceLine(segmentFrom, segmentTo, object.radius, true);
+        const PathPoint segmentFrom = {previousPoint.x, previousPoint.y, previousFloor.z};
+        const PathPoint segmentTo = {probe.x, probe.y, floor.z};
+        PathTraceResult traceResult;
+
+        if (floor.facetIndex != previousFloor.facetIndex && floor.z < previousFloor.z - PathEpsilon)
+        {
+            // Leave the upper support before descending. A diagonal trace through
+            // an abrupt floor-height change cuts through the step's vertical face.
+            const PathPoint stepEdge = {probe.x, probe.y, segmentFrom.z};
+            traceResult = traceWalkBody(segmentFrom, stepEdge, object, cache);
+            if (!traceResult.blocked)
+            {
+                traceResult = traceWalkBody(stepEdge, segmentTo, object, cache);
+            }
+        }
+        else
+        {
+            traceResult = traceWalkBody(segmentFrom, segmentTo, object, cache);
+        }
 
         if (traceResult.blocked)
         {
@@ -1133,7 +1552,10 @@ bool PathMap::canReachDirectly(const PathPoint &from, const PathPoint &to, const
     return traceWalkSegment(from, to, object);
 }
 
-void PathMap::candidateFacetsForBounds(const PathBounds &bounds, std::vector<size_t> &candidates) const
+void PathMap::candidateFacetsForBounds(
+    const PathBounds &bounds,
+    std::vector<size_t> &candidates,
+    TraceCandidateCache *pCache) const
 {
     candidates.clear();
 
@@ -1142,10 +1564,12 @@ void PathMap::candidateFacetsForBounds(const PathBounds &bounds, std::vector<siz
         return;
     }
 
+    using OrderedFacet = std::tuple<int32_t, int32_t, int32_t, size_t>;
     struct CandidateScratch
     {
         std::vector<uint32_t> marks;
         uint32_t markId = 0;
+        std::vector<OrderedFacet> orderedFacets;
     };
 
     thread_local CandidateScratch scratch;
@@ -1163,20 +1587,6 @@ void PathMap::candidateFacetsForBounds(const PathBounds &bounds, std::vector<siz
         }
 
         return;
-    }
-
-    if (scratch.marks.size() != m_geometry.size())
-    {
-        scratch.marks.assign(m_geometry.size(), 0u);
-        scratch.markId = 0;
-    }
-
-    ++scratch.markId;
-
-    if (scratch.markId == 0)
-    {
-        std::fill(scratch.marks.begin(), scratch.marks.end(), 0u);
-        ++scratch.markId;
     }
 
     const int32_t minCellX = gridCoordinate(bounds.minX);
@@ -1203,6 +1613,98 @@ void PathMap::candidateFacetsForBounds(const PathBounds &bounds, std::vector<siz
         return;
     }
 
+    const uint64_t cellCountX = static_cast<int64_t>(maxCellX) - minCellX + 1;
+    const uint64_t cellCountY = static_cast<int64_t>(maxCellY) - minCellY + 1;
+    const uint64_t cellCountZ = static_cast<int64_t>(maxCellZ) - minCellZ + 1;
+    // Long diagonal queries can cover thousands of empty cells in their bounding box.
+    // The span checks above keep this multiplication bounded, including extreme coordinates.
+    // Allow for candidate ordering, which also costs more than a single bounds check.
+    if (cellCountX * cellCountY * cellCountZ / PathGridScanCostRatio > m_geometry.size())
+    {
+        scratch.orderedFacets.clear();
+        for (size_t index = 0; index < m_geometry.size(); ++index)
+        {
+            const FacetGeometry &geometry = m_geometry[index];
+            if (!geometry.valid || !boundsAreFinite(geometry.bounds) || !boundsOverlap(bounds, geometry.bounds))
+            {
+                continue;
+            }
+            // Match the set of faces actually inserted by rebuildSpatialGrid().
+            if (static_cast<int64_t>(gridCoordinate(geometry.bounds.maxX))
+                    - gridCoordinate(geometry.bounds.minX) > MaxPathGridCellSpan
+                || static_cast<int64_t>(gridCoordinate(geometry.bounds.maxY))
+                    - gridCoordinate(geometry.bounds.minY) > MaxPathGridCellSpan
+                || static_cast<int64_t>(gridCoordinate(geometry.bounds.maxZ))
+                    - gridCoordinate(geometry.bounds.minZ) > MaxPathGridCellSpan)
+            {
+                continue;
+            }
+            scratch.orderedFacets.emplace_back(
+                std::max(minCellX, gridCoordinate(geometry.bounds.minX)),
+                std::max(minCellY, gridCoordinate(geometry.bounds.minY)),
+                std::max(minCellZ, gridCoordinate(geometry.bounds.minZ)), index);
+        }
+        // A face first appears in the earliest overlapping cell; faces within a cell
+        // were inserted by index. Keep that order for first-hit traces and equal-clearance moves.
+        std::sort(scratch.orderedFacets.begin(), scratch.orderedFacets.end());
+        candidates.reserve(scratch.orderedFacets.size());
+        for (const OrderedFacet &facet : scratch.orderedFacets)
+        {
+            candidates.push_back(std::get<3>(facet));
+        }
+        return;
+    }
+
+    TraceCandidateCache::Entry *pEntry = nullptr;
+    if (pCache != nullptr)
+    {
+        const GridCellKey minCell = {minCellX, minCellY, minCellZ};
+        const GridCellKey maxCell = {maxCellX, maxCellY, maxCellZ};
+        for (const TraceCandidateCache::Entry &entry : pCache->entries)
+        {
+            if (entry.minCell == minCell && entry.maxCell == maxCell)
+            {
+                for (size_t facetIndex : entry.facets)
+                {
+                    if (boundsOverlap(bounds, m_geometry[facetIndex].bounds))
+                    {
+                        candidates.push_back(facetIndex);
+                    }
+                }
+                return;
+            }
+        }
+
+        constexpr size_t MaxTraceCandidateCacheEntries = 16;
+        if (pCache->entries.size() < MaxTraceCandidateCacheEntries)
+        {
+            pCache->entries.emplace_back();
+            pEntry = &pCache->entries.back();
+        }
+        else
+        {
+            pEntry = &pCache->entries[pCache->nextEntry];
+            pCache->nextEntry = (pCache->nextEntry + 1) % MaxTraceCandidateCacheEntries;
+        }
+        pEntry->minCell = minCell;
+        pEntry->maxCell = maxCell;
+        pEntry->facets.clear();
+    }
+
+    if (scratch.marks.size() != m_geometry.size())
+    {
+        scratch.marks.assign(m_geometry.size(), 0u);
+        scratch.markId = 0;
+    }
+
+    ++scratch.markId;
+
+    if (scratch.markId == 0)
+    {
+        std::fill(scratch.marks.begin(), scratch.marks.end(), 0u);
+        ++scratch.markId;
+    }
+
     for (int32_t cellX = minCellX; cellX <= maxCellX; ++cellX)
     {
         for (int32_t cellY = minCellY; cellY <= maxCellY; ++cellY)
@@ -1223,11 +1725,16 @@ void PathMap::candidateFacetsForBounds(const PathBounds &bounds, std::vector<siz
                         continue;
                     }
 
-                    if (boundsOverlap(bounds, m_geometry[facetIndex].bounds))
+                    if (scratch.marks[facetIndex] != scratch.markId
+                        && (pEntry != nullptr || boundsOverlap(bounds, m_geometry[facetIndex].bounds)))
                     {
-                        if (facetIndex < scratch.marks.size() && scratch.marks[facetIndex] != scratch.markId)
+                        scratch.marks[facetIndex] = scratch.markId;
+                        if (pEntry != nullptr)
                         {
-                            scratch.marks[facetIndex] = scratch.markId;
+                            pEntry->facets.push_back(facetIndex);
+                        }
+                        if (boundsOverlap(bounds, m_geometry[facetIndex].bounds))
+                        {
                             candidates.push_back(facetIndex);
                         }
                     }
@@ -1237,7 +1744,7 @@ void PathMap::candidateFacetsForBounds(const PathBounds &bounds, std::vector<siz
     }
 }
 
-std::vector<size_t> PathMap::candidateFloorFacetsForPoint(float x, float y) const
+std::span<const size_t> PathMap::candidateFloorFacetsForPoint(float x, float y) const
 {
     if (!std::isfinite(x) || !std::isfinite(y))
     {

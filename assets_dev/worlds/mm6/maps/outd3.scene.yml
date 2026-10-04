@@ -19091,6 +19091,3354 @@ bmodel_faces:
       cog_number: 0
       cog_triggered_number: 0
       cog_trigger: 0
+    - bmodel_index: 69
+      face_index: 0
+      legacy_attributes: 4352
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 69
+      face_index: 1
+      legacy_attributes: 5120
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 69
+      face_index: 2
+      legacy_attributes: 4352
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 69
+      face_index: 3
+      legacy_attributes: 5120
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 69
+      face_index: 4
+      legacy_attributes: 4352
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 69
+      face_index: 5
+      legacy_attributes: 4616
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 69
+      face_index: 6
+      legacy_attributes: 4616
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 69
+      face_index: 7
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 69
+      face_index: 8
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 69
+      face_index: 9
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 69
+      face_index: 10
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 69
+      face_index: 11
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 69
+      face_index: 12
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 69
+      face_index: 13
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 69
+      face_index: 14
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 69
+      face_index: 15
+      legacy_attributes: 256
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 69
+      face_index: 16
+      legacy_attributes: 256
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 69
+      face_index: 17
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 69
+      face_index: 18
+      legacy_attributes: 5120
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 69
+      face_index: 19
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 69
+      face_index: 20
+      legacy_attributes: 5120
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 69
+      face_index: 21
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 69
+      face_index: 22
+      legacy_attributes: 536884224
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 69
+      face_index: 23
+      legacy_attributes: 5120
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 69
+      face_index: 24
+      legacy_attributes: 12544
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 69
+      face_index: 25
+      legacy_attributes: 4352
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 69
+      face_index: 26
+      legacy_attributes: 4352
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 69
+      face_index: 27
+      legacy_attributes: 5120
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 69
+      face_index: 28
+      legacy_attributes: 4608
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 69
+      face_index: 29
+      legacy_attributes: 1024
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 69
+      face_index: 30
+      legacy_attributes: 1024
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 69
+      face_index: 31
+      legacy_attributes: 4608
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 69
+      face_index: 32
+      legacy_attributes: 512
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 69
+      face_index: 33
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 69
+      face_index: 34
+      legacy_attributes: 4616
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 69
+      face_index: 35
+      legacy_attributes: 4616
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 69
+      face_index: 36
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 69
+      face_index: 37
+      legacy_attributes: 4616
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 69
+      face_index: 38
+      legacy_attributes: 4616
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 69
+      face_index: 39
+      legacy_attributes: 5128
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 69
+      face_index: 40
+      legacy_attributes: 1024
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 69
+      face_index: 41
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 69
+      face_index: 42
+      legacy_attributes: 5128
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 69
+      face_index: 43
+      legacy_attributes: 1024
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 69
+      face_index: 44
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 69
+      face_index: 45
+      legacy_attributes: 4608
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 69
+      face_index: 46
+      legacy_attributes: 1024
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 69
+      face_index: 47
+      legacy_attributes: 1024
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 69
+      face_index: 48
+      legacy_attributes: 4608
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 69
+      face_index: 49
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 69
+      face_index: 50
+      legacy_attributes: 4616
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 69
+      face_index: 51
+      legacy_attributes: 4616
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 69
+      face_index: 52
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 69
+      face_index: 53
+      legacy_attributes: 4616
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 69
+      face_index: 54
+      legacy_attributes: 4616
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 69
+      face_index: 55
+      legacy_attributes: 5128
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 69
+      face_index: 56
+      legacy_attributes: 1024
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 69
+      face_index: 57
+      legacy_attributes: 5128
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 69
+      face_index: 58
+      legacy_attributes: 1024
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 69
+      face_index: 59
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 69
+      face_index: 60
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 69
+      face_index: 61
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 69
+      face_index: 62
+      legacy_attributes: 536879616
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 69
+      face_index: 63
+      legacy_attributes: 512
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 70
+      face_index: 0
+      legacy_attributes: 5120
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 70
+      face_index: 1
+      legacy_attributes: 4352
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 70
+      face_index: 2
+      legacy_attributes: 5120
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 70
+      face_index: 3
+      legacy_attributes: 4352
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 70
+      face_index: 4
+      legacy_attributes: 5128
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 70
+      face_index: 5
+      legacy_attributes: 5120
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 70
+      face_index: 6
+      legacy_attributes: 1024
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 70
+      face_index: 7
+      legacy_attributes: 256
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 70
+      face_index: 8
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 70
+      face_index: 9
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 70
+      face_index: 10
+      legacy_attributes: 5120
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 70
+      face_index: 11
+      legacy_attributes: 5120
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 70
+      face_index: 12
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 70
+      face_index: 13
+      legacy_attributes: 4616
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 70
+      face_index: 14
+      legacy_attributes: 264
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 70
+      face_index: 15
+      legacy_attributes: 520
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 70
+      face_index: 16
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 70
+      face_index: 17
+      legacy_attributes: 536875520
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 70
+      face_index: 18
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 70
+      face_index: 19
+      legacy_attributes: 536875520
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 70
+      face_index: 20
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 70
+      face_index: 21
+      legacy_attributes: 536875520
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 70
+      face_index: 22
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 70
+      face_index: 23
+      legacy_attributes: 536875520
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 70
+      face_index: 24
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 70
+      face_index: 25
+      legacy_attributes: 536875520
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 70
+      face_index: 26
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 70
+      face_index: 27
+      legacy_attributes: 536875520
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 70
+      face_index: 28
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 70
+      face_index: 29
+      legacy_attributes: 536875520
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 70
+      face_index: 30
+      legacy_attributes: 536875520
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 70
+      face_index: 31
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 70
+      face_index: 32
+      legacy_attributes: 536875520
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 70
+      face_index: 33
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 70
+      face_index: 34
+      legacy_attributes: 536875520
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 70
+      face_index: 35
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 70
+      face_index: 36
+      legacy_attributes: 536875520
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 70
+      face_index: 37
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 70
+      face_index: 38
+      legacy_attributes: 536875520
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 70
+      face_index: 39
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 70
+      face_index: 40
+      legacy_attributes: 536875520
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 70
+      face_index: 41
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 70
+      face_index: 42
+      legacy_attributes: 536875520
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 70
+      face_index: 43
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 70
+      face_index: 44
+      legacy_attributes: 5128
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 70
+      face_index: 45
+      legacy_attributes: 5128
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 70
+      face_index: 46
+      legacy_attributes: 5128
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 70
+      face_index: 47
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 70
+      face_index: 48
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 70
+      face_index: 49
+      legacy_attributes: 5128
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 70
+      face_index: 50
+      legacy_attributes: 5128
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 70
+      face_index: 51
+      legacy_attributes: 5128
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 70
+      face_index: 52
+      legacy_attributes: 12552
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 70
+      face_index: 53
+      legacy_attributes: 12552
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 70
+      face_index: 54
+      legacy_attributes: 4352
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 70
+      face_index: 55
+      legacy_attributes: 5120
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 70
+      face_index: 56
+      legacy_attributes: 1024
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 70
+      face_index: 57
+      legacy_attributes: 5128
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 70
+      face_index: 58
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 70
+      face_index: 59
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 70
+      face_index: 60
+      legacy_attributes: 536875520
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 70
+      face_index: 61
+      legacy_attributes: 536875520
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 70
+      face_index: 62
+      legacy_attributes: 5128
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 70
+      face_index: 63
+      legacy_attributes: 5128
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 71
+      face_index: 0
+      legacy_attributes: 4608
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 71
+      face_index: 1
+      legacy_attributes: 4616
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 71
+      face_index: 2
+      legacy_attributes: 1032
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 71
+      face_index: 3
+      legacy_attributes: 1032
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 71
+      face_index: 4
+      legacy_attributes: 5128
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 71
+      face_index: 5
+      legacy_attributes: 5128
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 71
+      face_index: 6
+      legacy_attributes: 4352
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 71
+      face_index: 7
+      legacy_attributes: 4352
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 71
+      face_index: 8
+      legacy_attributes: 4352
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 71
+      face_index: 9
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 71
+      face_index: 10
+      legacy_attributes: 4608
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 71
+      face_index: 11
+      legacy_attributes: 4608
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 71
+      face_index: 12
+      legacy_attributes: 5120
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 71
+      face_index: 13
+      legacy_attributes: 5120
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 71
+      face_index: 14
+      legacy_attributes: 5120
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 71
+      face_index: 15
+      legacy_attributes: 5120
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 71
+      face_index: 16
+      legacy_attributes: 1024
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 71
+      face_index: 17
+      legacy_attributes: 5120
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 71
+      face_index: 18
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 71
+      face_index: 19
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 71
+      face_index: 20
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 71
+      face_index: 21
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 71
+      face_index: 22
+      legacy_attributes: 1024
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 71
+      face_index: 23
+      legacy_attributes: 5120
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 71
+      face_index: 24
+      legacy_attributes: 536875520
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 71
+      face_index: 25
+      legacy_attributes: 536875520
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 71
+      face_index: 26
+      legacy_attributes: 4608
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 71
+      face_index: 27
+      legacy_attributes: 5120
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 71
+      face_index: 28
+      legacy_attributes: 5120
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 71
+      face_index: 29
+      legacy_attributes: 520
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 71
+      face_index: 30
+      legacy_attributes: 4616
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 71
+      face_index: 31
+      legacy_attributes: 5120
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 71
+      face_index: 32
+      legacy_attributes: 4608
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 71
+      face_index: 33
+      legacy_attributes: 5120
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 71
+      face_index: 34
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 71
+      face_index: 35
+      legacy_attributes: 4352
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 71
+      face_index: 36
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 71
+      face_index: 37
+      legacy_attributes: 264
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 71
+      face_index: 38
+      legacy_attributes: 256
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 71
+      face_index: 39
+      legacy_attributes: 264
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 71
+      face_index: 40
+      legacy_attributes: 264
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 71
+      face_index: 41
+      legacy_attributes: 512
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 71
+      face_index: 42
+      legacy_attributes: 33559040
+      cog_number: 0
+      cog_triggered_number: 44
+      cog_trigger: 0
+    - bmodel_index: 71
+      face_index: 43
+      legacy_attributes: 4608
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 71
+      face_index: 44
+      legacy_attributes: 256
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 72
+      face_index: 0
+      legacy_attributes: 1032
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 72
+      face_index: 1
+      legacy_attributes: 1032
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 72
+      face_index: 2
+      legacy_attributes: 1032
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 72
+      face_index: 3
+      legacy_attributes: 5128
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 72
+      face_index: 4
+      legacy_attributes: 5128
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 72
+      face_index: 5
+      legacy_attributes: 5128
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 72
+      face_index: 6
+      legacy_attributes: 1032
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 72
+      face_index: 7
+      legacy_attributes: 5128
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 72
+      face_index: 8
+      legacy_attributes: 4352
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 72
+      face_index: 9
+      legacy_attributes: 4352
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 72
+      face_index: 10
+      legacy_attributes: 4352
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 72
+      face_index: 11
+      legacy_attributes: 4352
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 72
+      face_index: 12
+      legacy_attributes: 5120
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 72
+      face_index: 13
+      legacy_attributes: 5120
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 72
+      face_index: 14
+      legacy_attributes: 5120
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 72
+      face_index: 15
+      legacy_attributes: 5120
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 72
+      face_index: 16
+      legacy_attributes: 5120
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 72
+      face_index: 17
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 72
+      face_index: 18
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 72
+      face_index: 19
+      legacy_attributes: 5120
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 72
+      face_index: 20
+      legacy_attributes: 5120
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 72
+      face_index: 21
+      legacy_attributes: 256
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 72
+      face_index: 22
+      legacy_attributes: 256
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 72
+      face_index: 23
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 72
+      face_index: 24
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 72
+      face_index: 25
+      legacy_attributes: 5120
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 72
+      face_index: 26
+      legacy_attributes: 5120
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 72
+      face_index: 27
+      legacy_attributes: 4616
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 72
+      face_index: 28
+      legacy_attributes: 1032
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 72
+      face_index: 29
+      legacy_attributes: 5128
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 72
+      face_index: 30
+      legacy_attributes: 256
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 72
+      face_index: 31
+      legacy_attributes: 256
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 72
+      face_index: 32
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 72
+      face_index: 33
+      legacy_attributes: 4352
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 72
+      face_index: 34
+      legacy_attributes: 536884224
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 72
+      face_index: 35
+      legacy_attributes: 536884224
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 72
+      face_index: 36
+      legacy_attributes: 536884224
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 72
+      face_index: 37
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 72
+      face_index: 38
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 72
+      face_index: 39
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 72
+      face_index: 40
+      legacy_attributes: 4616
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 72
+      face_index: 41
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 72
+      face_index: 42
+      legacy_attributes: 5128
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 72
+      face_index: 43
+      legacy_attributes: 5128
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 72
+      face_index: 44
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 73
+      face_index: 0
+      legacy_attributes: 520
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 73
+      face_index: 1
+      legacy_attributes: 4616
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 73
+      face_index: 2
+      legacy_attributes: 4352
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 73
+      face_index: 3
+      legacy_attributes: 4352
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 73
+      face_index: 4
+      legacy_attributes: 4608
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 73
+      face_index: 5
+      legacy_attributes: 5120
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 73
+      face_index: 6
+      legacy_attributes: 5120
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 73
+      face_index: 7
+      legacy_attributes: 4608
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 73
+      face_index: 8
+      legacy_attributes: 5120
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 73
+      face_index: 9
+      legacy_attributes: 5120
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 73
+      face_index: 10
+      legacy_attributes: 5120
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 73
+      face_index: 11
+      legacy_attributes: 5120
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 73
+      face_index: 12
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 73
+      face_index: 13
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 73
+      face_index: 14
+      legacy_attributes: 5120
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 73
+      face_index: 15
+      legacy_attributes: 5120
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 73
+      face_index: 16
+      legacy_attributes: 4616
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 73
+      face_index: 17
+      legacy_attributes: 4608
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 73
+      face_index: 18
+      legacy_attributes: 5120
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 73
+      face_index: 19
+      legacy_attributes: 4608
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 73
+      face_index: 20
+      legacy_attributes: 5120
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 73
+      face_index: 21
+      legacy_attributes: 256
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 73
+      face_index: 22
+      legacy_attributes: 5120
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 73
+      face_index: 23
+      legacy_attributes: 4608
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 73
+      face_index: 24
+      legacy_attributes: 5120
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 73
+      face_index: 25
+      legacy_attributes: 5128
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 73
+      face_index: 26
+      legacy_attributes: 5128
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 73
+      face_index: 27
+      legacy_attributes: 5120
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 73
+      face_index: 28
+      legacy_attributes: 5120
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 73
+      face_index: 29
+      legacy_attributes: 4352
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 73
+      face_index: 30
+      legacy_attributes: 4352
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 73
+      face_index: 31
+      legacy_attributes: 4352
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 73
+      face_index: 32
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 73
+      face_index: 33
+      legacy_attributes: 4352
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 73
+      face_index: 34
+      legacy_attributes: 4352
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 73
+      face_index: 35
+      legacy_attributes: 4352
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 73
+      face_index: 36
+      legacy_attributes: 4352
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 73
+      face_index: 37
+      legacy_attributes: 5128
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 73
+      face_index: 38
+      legacy_attributes: 5128
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 73
+      face_index: 39
+      legacy_attributes: 5128
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 73
+      face_index: 40
+      legacy_attributes: 5128
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 73
+      face_index: 41
+      legacy_attributes: 5128
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 73
+      face_index: 42
+      legacy_attributes: 5128
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 73
+      face_index: 43
+      legacy_attributes: 5128
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 73
+      face_index: 44
+      legacy_attributes: 5128
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 73
+      face_index: 45
+      legacy_attributes: 5128
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 73
+      face_index: 46
+      legacy_attributes: 5128
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 73
+      face_index: 47
+      legacy_attributes: 5128
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 73
+      face_index: 48
+      legacy_attributes: 5128
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 73
+      face_index: 49
+      legacy_attributes: 5128
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 73
+      face_index: 50
+      legacy_attributes: 5128
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 73
+      face_index: 51
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 73
+      face_index: 52
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 73
+      face_index: 53
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 73
+      face_index: 54
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 73
+      face_index: 55
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 73
+      face_index: 56
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 73
+      face_index: 57
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 73
+      face_index: 58
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 73
+      face_index: 59
+      legacy_attributes: 5128
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 73
+      face_index: 60
+      legacy_attributes: 5128
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 74
+      face_index: 0
+      legacy_attributes: 4352
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 74
+      face_index: 1
+      legacy_attributes: 5120
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 74
+      face_index: 2
+      legacy_attributes: 4352
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 74
+      face_index: 3
+      legacy_attributes: 5120
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 74
+      face_index: 4
+      legacy_attributes: 4352
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 74
+      face_index: 5
+      legacy_attributes: 4616
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 74
+      face_index: 6
+      legacy_attributes: 4616
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 74
+      face_index: 7
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 74
+      face_index: 8
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 74
+      face_index: 9
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 74
+      face_index: 10
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 74
+      face_index: 11
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 74
+      face_index: 12
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 74
+      face_index: 13
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 74
+      face_index: 14
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 74
+      face_index: 15
+      legacy_attributes: 256
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 74
+      face_index: 16
+      legacy_attributes: 256
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 74
+      face_index: 17
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 74
+      face_index: 18
+      legacy_attributes: 5120
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 74
+      face_index: 19
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 74
+      face_index: 20
+      legacy_attributes: 5120
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 74
+      face_index: 21
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 74
+      face_index: 22
+      legacy_attributes: 536884224
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 74
+      face_index: 23
+      legacy_attributes: 5120
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 74
+      face_index: 24
+      legacy_attributes: 12544
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 74
+      face_index: 25
+      legacy_attributes: 4352
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 74
+      face_index: 26
+      legacy_attributes: 4352
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 74
+      face_index: 27
+      legacy_attributes: 5120
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 74
+      face_index: 28
+      legacy_attributes: 4608
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 74
+      face_index: 29
+      legacy_attributes: 1024
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 74
+      face_index: 30
+      legacy_attributes: 1024
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 74
+      face_index: 31
+      legacy_attributes: 4608
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 74
+      face_index: 32
+      legacy_attributes: 512
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 74
+      face_index: 33
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 74
+      face_index: 34
+      legacy_attributes: 4616
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 74
+      face_index: 35
+      legacy_attributes: 4616
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 74
+      face_index: 36
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 74
+      face_index: 37
+      legacy_attributes: 4616
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 74
+      face_index: 38
+      legacy_attributes: 4616
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 74
+      face_index: 39
+      legacy_attributes: 5128
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 74
+      face_index: 40
+      legacy_attributes: 1024
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 74
+      face_index: 41
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 74
+      face_index: 42
+      legacy_attributes: 5128
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 74
+      face_index: 43
+      legacy_attributes: 1024
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 74
+      face_index: 44
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 74
+      face_index: 45
+      legacy_attributes: 4608
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 74
+      face_index: 46
+      legacy_attributes: 1024
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 74
+      face_index: 47
+      legacy_attributes: 1024
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 74
+      face_index: 48
+      legacy_attributes: 4608
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 74
+      face_index: 49
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 74
+      face_index: 50
+      legacy_attributes: 4616
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 74
+      face_index: 51
+      legacy_attributes: 4616
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 74
+      face_index: 52
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 74
+      face_index: 53
+      legacy_attributes: 4616
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 74
+      face_index: 54
+      legacy_attributes: 4616
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 74
+      face_index: 55
+      legacy_attributes: 5128
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 74
+      face_index: 56
+      legacy_attributes: 1024
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 74
+      face_index: 57
+      legacy_attributes: 5128
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 74
+      face_index: 58
+      legacy_attributes: 1024
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 74
+      face_index: 59
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 74
+      face_index: 60
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 74
+      face_index: 61
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 74
+      face_index: 62
+      legacy_attributes: 536879616
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 74
+      face_index: 63
+      legacy_attributes: 512
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 75
+      face_index: 0
+      legacy_attributes: 5120
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 75
+      face_index: 1
+      legacy_attributes: 4352
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 75
+      face_index: 2
+      legacy_attributes: 5120
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 75
+      face_index: 3
+      legacy_attributes: 4352
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 75
+      face_index: 4
+      legacy_attributes: 5128
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 75
+      face_index: 5
+      legacy_attributes: 5120
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 75
+      face_index: 6
+      legacy_attributes: 1024
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 75
+      face_index: 7
+      legacy_attributes: 256
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 75
+      face_index: 8
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 75
+      face_index: 9
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 75
+      face_index: 10
+      legacy_attributes: 5120
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 75
+      face_index: 11
+      legacy_attributes: 5120
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 75
+      face_index: 12
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 75
+      face_index: 13
+      legacy_attributes: 4616
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 75
+      face_index: 14
+      legacy_attributes: 264
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 75
+      face_index: 15
+      legacy_attributes: 520
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 75
+      face_index: 16
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 75
+      face_index: 17
+      legacy_attributes: 536875520
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 75
+      face_index: 18
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 75
+      face_index: 19
+      legacy_attributes: 536875520
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 75
+      face_index: 20
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 75
+      face_index: 21
+      legacy_attributes: 536875520
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 75
+      face_index: 22
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 75
+      face_index: 23
+      legacy_attributes: 536875520
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 75
+      face_index: 24
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 75
+      face_index: 25
+      legacy_attributes: 536875520
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 75
+      face_index: 26
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 75
+      face_index: 27
+      legacy_attributes: 536875520
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 75
+      face_index: 28
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 75
+      face_index: 29
+      legacy_attributes: 536875520
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 75
+      face_index: 30
+      legacy_attributes: 536875520
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 75
+      face_index: 31
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 75
+      face_index: 32
+      legacy_attributes: 536875520
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 75
+      face_index: 33
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 75
+      face_index: 34
+      legacy_attributes: 536875520
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 75
+      face_index: 35
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 75
+      face_index: 36
+      legacy_attributes: 536875520
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 75
+      face_index: 37
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 75
+      face_index: 38
+      legacy_attributes: 536875520
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 75
+      face_index: 39
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 75
+      face_index: 40
+      legacy_attributes: 536875520
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 75
+      face_index: 41
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 75
+      face_index: 42
+      legacy_attributes: 536875520
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 75
+      face_index: 43
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 75
+      face_index: 44
+      legacy_attributes: 5128
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 75
+      face_index: 45
+      legacy_attributes: 5128
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 75
+      face_index: 46
+      legacy_attributes: 5128
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 75
+      face_index: 47
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 75
+      face_index: 48
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 75
+      face_index: 49
+      legacy_attributes: 5128
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 75
+      face_index: 50
+      legacy_attributes: 5128
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 75
+      face_index: 51
+      legacy_attributes: 5128
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 75
+      face_index: 52
+      legacy_attributes: 12552
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 75
+      face_index: 53
+      legacy_attributes: 12552
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 75
+      face_index: 54
+      legacy_attributes: 4352
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 75
+      face_index: 55
+      legacy_attributes: 5120
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 75
+      face_index: 56
+      legacy_attributes: 1024
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 75
+      face_index: 57
+      legacy_attributes: 5128
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 75
+      face_index: 58
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 75
+      face_index: 59
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 75
+      face_index: 60
+      legacy_attributes: 536875520
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 75
+      face_index: 61
+      legacy_attributes: 536875520
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 75
+      face_index: 62
+      legacy_attributes: 5128
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 75
+      face_index: 63
+      legacy_attributes: 5128
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 76
+      face_index: 0
+      legacy_attributes: 4608
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 76
+      face_index: 1
+      legacy_attributes: 4616
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 76
+      face_index: 2
+      legacy_attributes: 1032
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 76
+      face_index: 3
+      legacy_attributes: 1032
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 76
+      face_index: 4
+      legacy_attributes: 5128
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 76
+      face_index: 5
+      legacy_attributes: 5128
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 76
+      face_index: 6
+      legacy_attributes: 4352
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 76
+      face_index: 7
+      legacy_attributes: 4352
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 76
+      face_index: 8
+      legacy_attributes: 4352
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 76
+      face_index: 9
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 76
+      face_index: 10
+      legacy_attributes: 4608
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 76
+      face_index: 11
+      legacy_attributes: 4608
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 76
+      face_index: 12
+      legacy_attributes: 5120
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 76
+      face_index: 13
+      legacy_attributes: 5120
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 76
+      face_index: 14
+      legacy_attributes: 5120
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 76
+      face_index: 15
+      legacy_attributes: 5120
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 76
+      face_index: 16
+      legacy_attributes: 1024
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 76
+      face_index: 17
+      legacy_attributes: 5120
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 76
+      face_index: 18
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 76
+      face_index: 19
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 76
+      face_index: 20
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 76
+      face_index: 21
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 76
+      face_index: 22
+      legacy_attributes: 1024
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 76
+      face_index: 23
+      legacy_attributes: 5120
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 76
+      face_index: 24
+      legacy_attributes: 536875520
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 76
+      face_index: 25
+      legacy_attributes: 536875520
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 76
+      face_index: 26
+      legacy_attributes: 4608
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 76
+      face_index: 27
+      legacy_attributes: 5120
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 76
+      face_index: 28
+      legacy_attributes: 5120
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 76
+      face_index: 29
+      legacy_attributes: 520
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 76
+      face_index: 30
+      legacy_attributes: 4616
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 76
+      face_index: 31
+      legacy_attributes: 5120
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 76
+      face_index: 32
+      legacy_attributes: 4608
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 76
+      face_index: 33
+      legacy_attributes: 5120
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 76
+      face_index: 34
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 76
+      face_index: 35
+      legacy_attributes: 4352
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 76
+      face_index: 36
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 76
+      face_index: 37
+      legacy_attributes: 264
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 76
+      face_index: 38
+      legacy_attributes: 256
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 76
+      face_index: 39
+      legacy_attributes: 264
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 76
+      face_index: 40
+      legacy_attributes: 264
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 76
+      face_index: 41
+      legacy_attributes: 512
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 76
+      face_index: 42
+      legacy_attributes: 33559040
+      cog_number: 0
+      cog_triggered_number: 45
+      cog_trigger: 0
+    - bmodel_index: 76
+      face_index: 43
+      legacy_attributes: 4608
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 76
+      face_index: 44
+      legacy_attributes: 256
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 77
+      face_index: 0
+      legacy_attributes: 1032
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 77
+      face_index: 1
+      legacy_attributes: 1032
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 77
+      face_index: 2
+      legacy_attributes: 1032
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 77
+      face_index: 3
+      legacy_attributes: 5128
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 77
+      face_index: 4
+      legacy_attributes: 5128
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 77
+      face_index: 5
+      legacy_attributes: 5128
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 77
+      face_index: 6
+      legacy_attributes: 1032
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 77
+      face_index: 7
+      legacy_attributes: 5128
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 77
+      face_index: 8
+      legacy_attributes: 4352
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 77
+      face_index: 9
+      legacy_attributes: 4352
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 77
+      face_index: 10
+      legacy_attributes: 4352
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 77
+      face_index: 11
+      legacy_attributes: 4352
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 77
+      face_index: 12
+      legacy_attributes: 5120
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 77
+      face_index: 13
+      legacy_attributes: 5120
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 77
+      face_index: 14
+      legacy_attributes: 5120
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 77
+      face_index: 15
+      legacy_attributes: 5120
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 77
+      face_index: 16
+      legacy_attributes: 5120
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 77
+      face_index: 17
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 77
+      face_index: 18
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 77
+      face_index: 19
+      legacy_attributes: 5120
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 77
+      face_index: 20
+      legacy_attributes: 5120
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 77
+      face_index: 21
+      legacy_attributes: 256
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 77
+      face_index: 22
+      legacy_attributes: 256
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 77
+      face_index: 23
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 77
+      face_index: 24
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 77
+      face_index: 25
+      legacy_attributes: 5120
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 77
+      face_index: 26
+      legacy_attributes: 5120
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 77
+      face_index: 27
+      legacy_attributes: 4616
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 77
+      face_index: 28
+      legacy_attributes: 1032
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 77
+      face_index: 29
+      legacy_attributes: 5128
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 77
+      face_index: 30
+      legacy_attributes: 256
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 77
+      face_index: 31
+      legacy_attributes: 256
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 77
+      face_index: 32
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 77
+      face_index: 33
+      legacy_attributes: 4352
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 77
+      face_index: 34
+      legacy_attributes: 536884224
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 77
+      face_index: 35
+      legacy_attributes: 536884224
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 77
+      face_index: 36
+      legacy_attributes: 536884224
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 77
+      face_index: 37
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 77
+      face_index: 38
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 77
+      face_index: 39
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 77
+      face_index: 40
+      legacy_attributes: 4616
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 77
+      face_index: 41
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 77
+      face_index: 42
+      legacy_attributes: 5128
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 77
+      face_index: 43
+      legacy_attributes: 5128
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 77
+      face_index: 44
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 78
+      face_index: 0
+      legacy_attributes: 520
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 78
+      face_index: 1
+      legacy_attributes: 4616
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 78
+      face_index: 2
+      legacy_attributes: 4352
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 78
+      face_index: 3
+      legacy_attributes: 4352
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 78
+      face_index: 4
+      legacy_attributes: 4608
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 78
+      face_index: 5
+      legacy_attributes: 5120
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 78
+      face_index: 6
+      legacy_attributes: 5120
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 78
+      face_index: 7
+      legacy_attributes: 4608
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 78
+      face_index: 8
+      legacy_attributes: 5120
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 78
+      face_index: 9
+      legacy_attributes: 5120
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 78
+      face_index: 10
+      legacy_attributes: 5120
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 78
+      face_index: 11
+      legacy_attributes: 5120
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 78
+      face_index: 12
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 78
+      face_index: 13
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 78
+      face_index: 14
+      legacy_attributes: 5120
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 78
+      face_index: 15
+      legacy_attributes: 5120
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 78
+      face_index: 16
+      legacy_attributes: 4616
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 78
+      face_index: 17
+      legacy_attributes: 4608
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 78
+      face_index: 18
+      legacy_attributes: 5120
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 78
+      face_index: 19
+      legacy_attributes: 4608
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 78
+      face_index: 20
+      legacy_attributes: 5120
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 78
+      face_index: 21
+      legacy_attributes: 256
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 78
+      face_index: 22
+      legacy_attributes: 5120
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 78
+      face_index: 23
+      legacy_attributes: 4608
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 78
+      face_index: 24
+      legacy_attributes: 5120
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 78
+      face_index: 25
+      legacy_attributes: 5128
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 78
+      face_index: 26
+      legacy_attributes: 5128
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 78
+      face_index: 27
+      legacy_attributes: 5120
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 78
+      face_index: 28
+      legacy_attributes: 5120
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 78
+      face_index: 29
+      legacy_attributes: 4352
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 78
+      face_index: 30
+      legacy_attributes: 4352
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 78
+      face_index: 31
+      legacy_attributes: 4352
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 78
+      face_index: 32
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 78
+      face_index: 33
+      legacy_attributes: 4352
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 78
+      face_index: 34
+      legacy_attributes: 4352
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 78
+      face_index: 35
+      legacy_attributes: 4352
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 78
+      face_index: 36
+      legacy_attributes: 4352
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 78
+      face_index: 37
+      legacy_attributes: 5128
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 78
+      face_index: 38
+      legacy_attributes: 5128
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 78
+      face_index: 39
+      legacy_attributes: 5128
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 78
+      face_index: 40
+      legacy_attributes: 5128
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 78
+      face_index: 41
+      legacy_attributes: 5128
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 78
+      face_index: 42
+      legacy_attributes: 5128
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 78
+      face_index: 43
+      legacy_attributes: 5128
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 78
+      face_index: 44
+      legacy_attributes: 5128
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 78
+      face_index: 45
+      legacy_attributes: 5128
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 78
+      face_index: 46
+      legacy_attributes: 5128
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 78
+      face_index: 47
+      legacy_attributes: 5128
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 78
+      face_index: 48
+      legacy_attributes: 5128
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 78
+      face_index: 49
+      legacy_attributes: 5128
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 78
+      face_index: 50
+      legacy_attributes: 5128
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 78
+      face_index: 51
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 78
+      face_index: 52
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 78
+      face_index: 53
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 78
+      face_index: 54
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 78
+      face_index: 55
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 78
+      face_index: 56
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 78
+      face_index: 57
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 78
+      face_index: 58
+      legacy_attributes: 4360
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 78
+      face_index: 59
+      legacy_attributes: 5128
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
+    - bmodel_index: 78
+      face_index: 60
+      legacy_attributes: 5128
+      cog_number: 0
+      cog_triggered_number: 0
+      cog_trigger: 0
 entities:
   - entity_index: 0
     name: "6tree04"
@@ -20968,35 +24316,35 @@ entities:
     special_trigger: 0
     initial_decoration_flag: 0
   - entity_index: 125
-    name: "SHP"
-    decoration_list_id: 153
-    ai_attributes: 64
+    name: ""
+    decoration_list_id: 0
+    ai_attributes: 0
     position:
       x: 21750
       y: 8180
       z: 0
     facing: 512
     event_id_primary: 0
-    event_id_secondary: 44
+    event_id_secondary: 0
     variable_primary: 0
     variable_secondary: 0
     special_trigger: 0
-    initial_decoration_flag: 64
+    initial_decoration_flag: 0
   - entity_index: 126
-    name: "SHP"
-    decoration_list_id: 153
-    ai_attributes: 64
+    name: ""
+    decoration_list_id: 0
+    ai_attributes: 0
     position:
       x: 21750
       y: 4570
       z: 0
     facing: 512
     event_id_primary: 0
-    event_id_secondary: 45
+    event_id_secondary: 0
     variable_primary: 0
     variable_secondary: 0
     special_trigger: 0
-    initial_decoration_flag: 64
+    initial_decoration_flag: 0
   - entity_index: 127
     name: "6tree01"
     decoration_list_id: 428

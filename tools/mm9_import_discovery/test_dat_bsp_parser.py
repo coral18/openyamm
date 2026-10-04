@@ -18,14 +18,22 @@ from convert_abc_model import (
     Face,
     FaceVertex,
     Lod,
+    Keyframe,
     ModelAnimation,
     NodeInfo,
     Piece,
     SocketInfo,
     Transform,
     Vertex,
+    Weight,
+    rigid_piece_node_indices,
     scale_abc_model,
+    write_glb_with_materials,
 )
+try:
+    from pygltflib import GLTF2
+except ModuleNotFoundError:
+    GLTF2 = None
 from transcode_mm9_dat_to_blv import (
     build_blv_mechanisms,
     build_indoor_item_source_face_override_lines,
@@ -1316,6 +1324,98 @@ class DatBspParserTests(unittest.TestCase):
         self.assertEqual(model.anim_bindings[0].extents, (20.0, 22.0, 24.0))
         self.assertEqual(model.anim_bindings[0].origin, (26.0, 28.0, 30.0))
         np.testing.assert_array_equal(model.nodes[0].bind_matrix[:3, 3], np.array([32.0, 34.0, 36.0]))
+
+    @unittest.skipIf(GLTF2 is None, "pygltflib is not installed")
+    def test_abc_animation_path_export_omits_mesh_and_skin_payload(self) -> None:
+        model = AbcModel(
+            name="path",
+            version=13,
+            command_string="",
+            internal_radius=1.0,
+            lod_distances=[100.0],
+            pieces=[
+                Piece(
+                    name="helper",
+                    material_index=0,
+                    specular_power=0.0,
+                    specular_scale=0.0,
+                    lod_weight=1.0,
+                    lods=[
+                        Lod(
+                            faces=[Face(vertices=[
+                                FaceVertex(uv=(0.0, 0.0), vertex_index=0),
+                                FaceVertex(uv=(1.0, 0.0), vertex_index=1),
+                                FaceVertex(uv=(0.0, 1.0), vertex_index=2),
+                            ])],
+                            vertices=[
+                                Vertex((0.0, 0.0, 0.0), (0.0, 0.0, 1.0), [Weight(0, 1.0)]),
+                                Vertex((1.0, 0.0, 0.0), (0.0, 0.0, 1.0), [Weight(0, 1.0)]),
+                                Vertex((0.0, 1.0, 0.0), (0.0, 0.0, 1.0), [Weight(0, 1.0)]),
+                            ],
+                        )
+                    ],
+                )
+            ],
+            nodes=[NodeInfo("path-node", 0, 0, 0, np.identity(4, dtype=np.float32))],
+            animations=[
+                ModelAnimation(
+                    name="travel",
+                    interpolation_time_ms=0,
+                    keyframes=[Keyframe(0, ""), Keyframe(1000, "")],
+                    node_transforms=[[
+                        Transform((0.0, 0.0, 0.0), (0.0, 0.0, 0.0, 1.0)),
+                        Transform((2.0, 0.0, 0.0), (0.0, 0.0, 0.0, 1.0)),
+                    ]],
+                )
+            ],
+            sockets=[],
+            anim_bindings=[],
+        )
+
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            output = Path(temporary_directory) / "path.glb"
+            write_glb_with_materials(model, output, {}, {}, 0, "animation-path")
+            gltf = GLTF2().load_binary(str(output))
+
+        self.assertEqual(len(gltf.nodes), 1)
+        self.assertEqual(len(gltf.animations), 1)
+        self.assertEqual(len(gltf.meshes), 0)
+        self.assertEqual(len(gltf.materials), 0)
+        self.assertEqual(len(gltf.skins), 0)
+
+    def test_abc_rigid_export_rejects_deforming_piece(self) -> None:
+        model = AbcModel(
+            name="deforming",
+            version=13,
+            command_string="",
+            internal_radius=1.0,
+            lod_distances=[100.0],
+            pieces=[Piece(
+                name="body",
+                material_index=0,
+                specular_power=0.0,
+                specular_scale=0.0,
+                lod_weight=1.0,
+                lods=[Lod(
+                    faces=[],
+                    vertices=[Vertex(
+                        (0.0, 0.0, 0.0),
+                        (0.0, 0.0, 1.0),
+                        [Weight(0, 0.5), Weight(1, 0.5)],
+                    )],
+                )],
+            )],
+            nodes=[
+                NodeInfo("root", 0, 0, 1, np.identity(4, dtype=np.float32), children=[1]),
+                NodeInfo("child", 1, 0, 0, np.identity(4, dtype=np.float32), parent_index=0),
+            ],
+            animations=[],
+            sockets=[],
+            anim_bindings=[],
+        )
+
+        with self.assertRaisesRegex(ValueError, "deforming"):
+            rigid_piece_node_indices(model, 0)
 
     def test_baked_model_transform_applies_abc_anim_binding_origin(self) -> None:
         vertex = transform_model_vertex_to_odm(

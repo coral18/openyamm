@@ -4,7 +4,16 @@
 #include "game/render/SpriteAtlasMipmaps.h"
 #include "engine/ImageAssetLoader.h"
 #include "game/render/SpriteAtlasCache.h"
+#include "game/tables/SpriteTables.h"
 
+#include "tools/SpriteAtlasEncode.h"
+
+#include <Decode.hpp>
+#include <bcdec.h>
+#include <zstd.h>
+
+#include <cstring>
+#include <algorithm>
 #include <fstream>
 #include <sstream>
 
@@ -24,6 +33,19 @@ variants:
   54: {exact_base_bypass: true}
   55: {chroma_vector: [0.2, 0.18, 1]}
 )";
+}
+
+TEST_CASE("sprite atlas outline geometry stays constant in screen pixels without moving its pivot")
+{
+    using namespace OpenYAMM::Game;
+    SpriteBillboardTexture texture;
+    texture.atlas = true;
+    const float nearPadding = spriteOutlineWorldPadding(texture, 0.9f, 100, 1.732f, 900);
+    CHECK(spriteOutlineWorldPadding(texture, 3.0f, 200, 1.732f, 900) == doctest::Approx(nearPadding * 2));
+    CHECK(spriteOutlineWorldPadding(texture, 0.9f, 100, 1.732f, 1800) == doctest::Approx(nearPadding / 2));
+    CHECK(nearPadding * 1.732f * 900 / 200 == doctest::Approx(2.75));
+    texture.atlas = false;
+    CHECK(spriteOutlineWorldPadding(texture, 0.9f, 100, 1.732f, 900) == doctest::Approx(1.8));
 }
 
 TEST_CASE("sprite atlas parses explicit references and rejects path traversal")
@@ -62,6 +84,31 @@ TEST_CASE("sprite atlas validates manifest and preserves crop origins and varian
     }
 }
 
+TEST_CASE("sprite atlas runtime manifest has one explicit profile and no source image references")
+{
+    std::string fixture = Fixture;
+    fixture.replace(fixture.find("schema_version: 1"), std::string("schema_version: 1").size(),
+        "schema_version: 2\ntexture_profile: desktop");
+    const std::string paths = "base: atlas/base_0.png, mask: atlas/mask_0.png";
+    fixture.replace(fixture.find(paths), paths.size(), "texture: runtime/page-0.oyatlas");
+    std::string error;
+    const auto atlas = OpenYAMM::Engine::SpriteAtlas::parse(fixture, error);
+    REQUIRE_MESSAGE(atlas, error);
+    CHECK(atlas->pages[0].base.empty());
+    CHECK(atlas->pages[0].mask.empty());
+    CHECK(atlas->pages[0].texture == "runtime/page-0.oyatlas");
+    for (const std::pair<std::string, std::string> &replacement : {
+        std::pair{"desktop", "combined"},
+        std::pair{"runtime/page-0.oyatlas", "../page-0.oyatlas"},
+        std::pair{"runtime/page-0.oyatlas", "runtime/page-1.oyatlas"},
+        std::pair{"texture: runtime", "base: atlas/base_0.png, texture: runtime"}})
+    {
+        std::string malformed = fixture;
+        malformed.replace(malformed.find(replacement.first), replacement.first.size(), replacement.second);
+        CHECK_FALSE(OpenYAMM::Engine::SpriteAtlas::parse(malformed, error));
+    }
+}
+
 TEST_CASE("sprite atlas cropped billboard maintains native pivot when mirrored and camera tilted")
 {
     using namespace OpenYAMM::Game;
@@ -82,20 +129,71 @@ TEST_CASE("sprite atlas cropped billboard maintains native pivot when mirrored a
     CHECK(normal.z == mirror.z);
 }
 
-TEST_CASE("sprite atlas custom crusader package covers every native pose without variant page duplication")
+TEST_CASE("sprite atlas reviewed goblin package retains native poses and palettes on shared pages")
 {
-    std::ifstream input(std::string(OPENYAMM_SOURCE_DIR) + "/assets_dev/engine/sprites_new/crusader/manifest.json");
+    std::ifstream input(std::string(OPENYAMM_SOURCE_DIR) + "/assets_dev/engine/sprites_new/mm6_gob/manifest.json");
     REQUIRE(input.good());
     std::stringstream text;
     text << input.rdbuf();
     std::string error;
     const auto atlas = OpenYAMM::Engine::SpriteAtlas::parse(text.str(), error);
     REQUIRE_MESSAGE(atlas, error);
-    CHECK(atlas->frames.size() == 114);
+    CHECK(atlas->frames.size() == 59);
     CHECK(atlas->pages.size() == 4);
     CHECK(atlas->variants.size() == 3);
-    CHECK(atlas->logicalCanvas == std::array<int, 2>{256, 256});
+    CHECK(atlas->logicalCanvas == std::array<int, 2>{355, 289});
     CHECK(atlas->pixelsPerLogicalPixel == 2);
+    CHECK(atlas->maskChannels == 2);
+    CHECK(atlas->variants.at(745).chroma[3] == 0);
+    CHECK(atlas->variants.at(746).chroma[3] == 3);
+    CHECK(atlas->variants.at(747).chroma[3] == 3);
+}
+
+TEST_CASE("sprite atlas MM6 Titan variants resolve every animation frame and view")
+{
+    const std::string root = OPENYAMM_SOURCE_DIR;
+    std::ifstream input(root + "/assets_dev/engine/sprites_new/mm6_ttn1/manifest.json");
+    REQUIRE(input.good());
+    std::stringstream text;
+    text << input.rdbuf();
+    std::string error;
+    const std::optional<OpenYAMM::Engine::SpriteAtlas> atlas = OpenYAMM::Engine::SpriteAtlas::parse(text.str(), error);
+    REQUIRE_MESSAGE(atlas, error);
+    input.close();
+    input.open(root + "/assets_dev/engine/rendering/sprite_frame_data_common.yml");
+    REQUIRE(input.good());
+    std::stringstream tableText;
+    tableText << input.rdbuf();
+    OpenYAMM::Game::SpriteFrameTable frames;
+    REQUIRE_MESSAGE(frames.loadFromYaml(tableText.str(), error), error);
+    const std::array<std::pair<std::string, int>, 7> actions = {{
+        {"sta", 1}, {"waa", 6}, {"ata0", 6}, {"wia0", 6}, {"dea0", 5}, {"def0", 1}, {"fia", 5}}};
+    for (int rank = 1; rank <= 3; ++rank)
+    {
+        for (const auto &[action, count] : actions)
+        {
+            const std::string group = "ttn" + std::to_string(rank) + action;
+            const std::optional<uint16_t> first = frames.findFrameIndexBySpriteName(group);
+            REQUIRE_MESSAGE(first, group);
+            for (int step = 0; step < count; ++step)
+            {
+                const OpenYAMM::Game::SpriteFrameEntry *pFrame = frames.getFrame(uint16_t(*first + step), 0);
+                REQUIRE(pFrame);
+                CHECK_EQ(pFrame->paletteId, 827 + rank);
+                CHECK(atlas->variants.contains(pFrame->paletteId));
+                for (int view = 0; view < 8; ++view)
+                {
+                    const std::string name =
+                        OpenYAMM::Game::SpriteFrameTable::resolveTexture(*pFrame, view).textureName;
+                    const std::optional<OpenYAMM::Engine::SpriteAtlasReference> reference =
+                        OpenYAMM::Engine::parseSpriteAtlasReference(name);
+                    REQUIRE_MESSAGE(reference, name);
+                    CHECK_EQ(reference->package, "mm6_ttn1");
+                    CHECK_MESSAGE(atlas->frames.contains(reference->frame), name);
+                }
+            }
+        }
+    }
 }
 
 TEST_CASE("sprite atlas grayscale mask decode retains coverage in BGRA red")
@@ -162,7 +260,7 @@ TEST_CASE("sprite atlas palette lookups validate dimensions and retain exact bas
 
 TEST_CASE("sprite atlas mage package preserves variable crops and three shared palette variants")
 {
-    std::ifstream input(std::string(OPENYAMM_SOURCE_DIR) + "/assets_dev/engine/sprites_new/pmn2/manifest.json");
+    std::ifstream input(std::string(OPENYAMM_SOURCE_DIR) + "/assets_dev/engine/sprites_new/mm6_pmn2/manifest.json");
     REQUIRE(input.good());
     std::stringstream text;
     text << input.rdbuf();
@@ -170,7 +268,7 @@ TEST_CASE("sprite atlas mage package preserves variable crops and three shared p
     const auto atlas = OpenYAMM::Engine::SpriteAtlas::parse(text.str(), error);
     REQUIRE_MESSAGE(atlas, error);
     CHECK(atlas->frames.size() == 59);
-    CHECK(atlas->pages.size() == 3);
+    CHECK(atlas->pages.size() == 4);
     CHECK(atlas->logicalCanvas == std::array<int, 2>{331, 272});
     CHECK(atlas->logicalPivot == std::array<float, 2>{165.5f, 272});
     CHECK(atlas->variants.at(801).chroma[3] == 2);
@@ -228,7 +326,7 @@ TEST_CASE("sprite atlas RGB masks decode red and green independently of opacity"
 TEST_CASE("sprite atlas guard package supports four material ramps on shared pages")
 {
     std::ifstream input(std::string(OPENYAMM_SOURCE_DIR)
-        + "/level_generation/creatures/mm6_gua/manifest.json");
+        + "/assets_dev/engine/sprites_new/mm6_gua/manifest.json");
     REQUIRE(input.good());
     std::stringstream text;
     text << input.rdbuf();
@@ -237,7 +335,7 @@ TEST_CASE("sprite atlas guard package supports four material ramps on shared pag
     REQUIRE_MESSAGE(atlas, error);
     CHECK(atlas->maskChannels == 4);
     CHECK(atlas->frames.size() == 59);
-    CHECK(atlas->pages.size() == 4);
+    CHECK(atlas->pages.size() == 3);
     CHECK(atlas->variants.size() == 3);
     CHECK(atlas->logicalCanvas == std::array<int, 2>{350, 296});
     CHECK(atlas->logicalPivot == std::array<float, 2>{175, 296});
@@ -320,7 +418,7 @@ TEST_CASE("sprite atlas mipmaps isolate odd-sized neighboring frames and preserv
     const SpriteAtlasMipPage page = buildSpriteAtlasMipPage(atlas, 0, base, mask, 2048);
     REQUIRE(page.levels.size() == SpriteAtlasMaxMip + 1);
     CHECK(page.rectangles.at("red") == page.rectangles.at("alias"));
-    CHECK(atlas.frames.at("red").cropOrigin == std::array<int, 2>{-5, 12});
+    CHECK(atlas.frames.at("red").cropOrigin == std::array<float, 2>{-5, 12});
     const auto &rect = page.rectangles.at("red");
     CHECK(rect[2] == 19);
     CHECK(rect[3] == 21);
@@ -390,4 +488,183 @@ TEST_CASE("sprite atlas mipmaps weight color and all material channels by sprite
         CHECK(mip.baseBgra[(pixel + 1) * 4 + 3] == 0);
         CHECK(mip.mask[(pixel + 1) * channels] == 20);
     }
+}
+
+TEST_CASE("sprite atlas cooked profiles preserve placement picking and GPU blocks without source files")
+{
+    using namespace OpenYAMM;
+    Engine::SpriteAtlas atlas;
+    atlas.schemaVersion = 2;
+    atlas.maskChannels = 2;
+    atlas.pages.push_back({"", "", {32, 32}, "runtime/page-0.oyatlas"});
+    atlas.frames["frame"] = {0, {2, 3, 7, 9}, {-4, 12}};
+    atlas.frames["alias"] = atlas.frames.at("frame");
+    Engine::ImagePixelsBgra base{32, 32, std::vector<uint8_t>(32 * 32 * 4)};
+    Engine::ImagePixelsBgra mask = base;
+    for (size_t i = 0; i < base.pixels.size(); ++i)
+    {
+        base.pixels[i] = uint8_t(i * 17);
+        mask.pixels[i] = uint8_t(i * 13);
+    }
+    const Game::SpriteAtlasSourcePage source = Game::prepareSpriteAtlasPage(atlas, 0, base, mask, 512);
+    for (const std::string profile : {"desktop", "android"})
+    {
+        atlas.textureProfile = profile;
+        const Game::PreparedSpriteAtlasPage prepared = Game::compressSpriteAtlasPage(source, 2, profile);
+        const std::vector<uint8_t> bytes = Game::encodeCookedSpriteAtlasPage(atlas, 0, 42, prepared);
+        const Game::PreparedSpriteAtlasPage decoded = Game::decodeCookedSpriteAtlasPage(bytes, atlas, 0, 42, 512);
+        CHECK(decoded.rectangles == source.mips.rectangles);
+        REQUIRE(decoded.levels.size() == source.mips.levels.size());
+        for (size_t i = 0; i < decoded.levels.size(); ++i)
+        {
+            CHECK(decoded.levels[i].baseBlocks == prepared.levels[i].baseBlocks);
+            CHECK(decoded.levels[i].maskBlocks == prepared.levels[i].maskBlocks);
+        }
+        CHECK(decoded.opacity.at("frame").bits() == source.opacity.at("frame").bits());
+        CHECK(decoded.opacity.at("alias").bits() == source.opacity.at("alias").bits());
+        CHECK(atlas.frames.at("frame").cropOrigin == std::array<float, 2>{-4, 12});
+        std::vector<uint8_t> corrupt = bytes;
+        corrupt.back() ^= 1;
+        CHECK_THROWS(Game::decodeCookedSpriteAtlasPage(corrupt, atlas, 0, 42, 512));
+        CHECK_THROWS(Game::decodeCookedSpriteAtlasPage(std::span(bytes.data(), 70), atlas, 0, 42, 512));
+        CHECK_THROWS(Game::decodeCookedSpriteAtlasPage(bytes, atlas, 0, 42, 32));
+        CHECK_THROWS(Game::decodeCookedSpriteAtlasPage(bytes, atlas, 0, 43, 512));
+        CHECK_THROWS(Game::decodeCookedSpriteAtlasPage(bytes, atlas, 1, 42, 512));
+        corrupt = bytes;
+        corrupt.push_back(0);
+        CHECK_THROWS(Game::decodeCookedSpriteAtlasPage(corrupt, atlas, 0, 42, 512));
+        corrupt = bytes;
+        std::fill(corrupt.begin() + 56, corrupt.begin() + 64, 255);
+        CHECK_THROWS(Game::cookedSpriteAtlasPreparationBytes(corrupt, corrupt.size()));
+        atlas.textureProfile = profile == "desktop" ? "android" : "desktop";
+        CHECK_THROWS(Game::decodeCookedSpriteAtlasPage(bytes, atlas, 0, 42, 512));
+    }
+}
+
+TEST_CASE("sprite atlas GPU encoders retain color alpha and each independent mask channel")
+{
+    using namespace OpenYAMM;
+    for (const std::string profile : {"desktop", "android"})
+    {
+        for (int channels : {1, 2, 4})
+        {
+            Game::SpriteAtlasSourcePage source;
+            Game::SpriteAtlasMipLevel level;
+            level.width = 8;
+            level.height = 4;
+            level.baseBgra.resize(8 * 4 * 4);
+            level.mask.resize(8 * 4 * channels);
+            const std::array<uint8_t, 4> weights = {30, 90, 10, 120};
+            for (int y = 0; y < 4; ++y)
+            {
+                for (int x = 0; x < 8; ++x)
+                {
+                    const int pixel = y * 8 + x;
+                    const std::array<uint8_t, 4> bgra = {15, 100, 210, x < 4 ? uint8_t(255) : uint8_t(0)};
+                    std::copy(bgra.begin(), bgra.end(), level.baseBgra.begin() + pixel * 4);
+                    const std::array<uint8_t, 4> material = x < 4 ? weights : std::array<uint8_t, 4>{255, 0, 0, 0};
+                    std::copy_n(material.begin(), channels, level.mask.begin() + pixel * channels);
+                }
+            }
+            source.mips.levels.push_back(level);
+            const Game::PreparedSpriteAtlasPage encoded = Game::compressSpriteAtlasPage(source, channels, profile);
+            std::vector<uint8_t> decoded(8 * 4 * 4);
+            const auto decode = [&](Game::SpriteAtlasCodec codec, const std::vector<uint8_t> &blocks)
+            {
+                std::vector<uint64_t> input(blocks.size() / 8);
+                std::memcpy(input.data(), blocks.data(), blocks.size());
+                std::vector<uint32_t> output(8 * 4);
+                switch (codec)
+                {
+                case Game::SpriteAtlasCodec::Bc7: DecodeBc7(input.data(), output.data(), 8, 4); break;
+                case Game::SpriteAtlasCodec::Bc4: DecodeBc4(input.data(), output.data(), 8, 4); break;
+                case Game::SpriteAtlasCodec::Bc5:
+                {
+                    std::array<uint8_t, 8 * 4 * 2> rg;
+                    for (int x = 0; x < 8; x += 4)
+                    {
+                        bcdec_bc5(input.data() + x / 2, rg.data() + x * 2, 8 * 2);
+                    }
+                    for (size_t i = 0; i < output.size(); ++i)
+                    {
+                        output[i] = uint32_t(rg[i * 2]) | (uint32_t(rg[i * 2 + 1]) << 8);
+                    }
+                    break;
+                }
+                case Game::SpriteAtlasCodec::Etc2Rgba: DecodeRGBA(input.data(), output.data(), 8, 4); break;
+                case Game::SpriteAtlasCodec::EacR: DecodeR(input.data(), output.data(), 8, 4); break;
+                case Game::SpriteAtlasCodec::EacRg: DecodeRG(input.data(), output.data(), 8, 4); break;
+                }
+                std::memcpy(decoded.data(), output.data(), decoded.size());
+            };
+            decode(encoded.baseCodec, encoded.levels[0].baseBlocks);
+            for (int channel = 0; channel < 4; ++channel)
+            {
+                const std::array<int, 4> rgba = {210, 100, 15, 255};
+                CHECK(std::abs(int(decoded[channel]) - rgba[channel]) <= 8);
+            }
+            CHECK(decoded[4 * 4 + 3] <= 2);
+            decode(encoded.maskCodec, encoded.levels[0].maskBlocks);
+            for (int pixel = 0; pixel < 8 * 4; ++pixel)
+            {
+                for (int channel = 0; channel < channels; ++channel)
+                {
+                    INFO(profile, " channels=", channels, " channel=", channel, " pixel=", pixel);
+                    // Mask alpha=0 must not discard material weights in RGB.
+                    const std::array<uint8_t, 4> expected = pixel % 8 < 4 ? weights
+                        : std::array<uint8_t, 4>{255, 0, 0, 0};
+                    // ETC2 RGB endpoints are quantized; tolerate one 5-bit endpoint step.
+                    CHECK(std::abs(int(decoded[pixel * 4 + channel]) - expected[channel]) <= 8);
+                }
+            }
+        }
+    }
+}
+
+TEST_CASE("sprite atlas preserves fractional reviewed geometry and post-palette tone")
+{
+    std::string fixture = Fixture;
+    fixture += "brightness_multiplier: 0.92\n";
+    const std::string origin = "crop_origin_px: [-20, 40]";
+    fixture.replace(fixture.find(origin), origin.size(),
+        "crop_origin_px: [-20.125, 40.375], draw_size_px: [103.375, 206.75], palette_overrides: {55: 54}");
+    std::string error;
+    const auto atlas = OpenYAMM::Engine::SpriteAtlas::parse(fixture, error);
+    REQUIRE_MESSAGE(atlas, error);
+    CHECK(atlas->brightnessMultiplier == doctest::Approx(0.92));
+    CHECK(atlas->frames.at("pose0").cropOrigin == std::array<float, 2>{-20.125f, 40.375f});
+    CHECK(atlas->frames.at("pose0").drawSize == std::array<float, 2>{103.375f, 206.75f});
+    CHECK(atlas->frames.at("pose0").paletteOverrides.at(55) == 54);
+    for (const std::pair<std::string, std::string> &replacement : {
+        std::pair{"[-20.125, 40.375]", "[.nan, 40.375]"},
+        std::pair{"[103.375, 206.75]", "[0, 206.75]"},
+        std::pair{"0.92", ".nan"},
+        std::pair{"{55: 54}", "{55: 123}"}})
+    {
+        std::string malformed = fixture;
+        malformed.replace(malformed.find(replacement.first), replacement.first.size(), replacement.second);
+        CHECK_FALSE(OpenYAMM::Engine::SpriteAtlas::parse(malformed, error));
+    }
+    const auto original = OpenYAMM::Engine::SpriteAtlas::parse(Fixture, error);
+    REQUIRE(original);
+    CHECK(original->brightnessMultiplier == 1);
+    CHECK(original->frames.at("pose0").drawSize == std::array<float, 2>{100, 200});
+}
+
+TEST_CASE("sprite atlas allows a linear fidget palette fit beside the family luminance lookup")
+{
+    std::string fixture = Fixture;
+    const std::string originalModel = "green_chroma_srgb_v1";
+    fixture.replace(fixture.find(originalModel), originalModel.size(), "masked_luminance_lut_v1");
+    const std::string ramp = "chroma_vector: [0.2, 0.18, 1]";
+    fixture.replace(fixture.find(ramp), ramp.size(),
+        "recolor_model: masked_luminance_rgb_v1, luminance_vector: [0.2, 0.18, 1]");
+    std::string error;
+    const auto atlas = OpenYAMM::Engine::SpriteAtlas::parse(fixture, error);
+    REQUIRE_MESSAGE(atlas, error);
+    CHECK(atlas->variants.at(55).chroma[3] == 2);
+    CHECK(atlas->variants.at(55).lookup.empty());
+    const std::string compatible = "recolor_model: masked_luminance_rgb_v1";
+    fixture.replace(fixture.find(compatible), compatible.size(), "recolor_model: unknown");
+    CHECK_FALSE(OpenYAMM::Engine::SpriteAtlas::parse(fixture, error));
 }

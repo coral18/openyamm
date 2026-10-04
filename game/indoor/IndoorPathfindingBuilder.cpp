@@ -34,7 +34,8 @@ PathFacet buildPathFacet(const IndoorFaceGeometryData &geometry)
     facet.attributes.portal = geometry.isPortal;
     facet.attributes.invisible = hasFaceAttribute(geometry.attributes, FaceAttribute::Invisible);
     facet.attributes.untouchable = hasFaceAttribute(geometry.attributes, FaceAttribute::Untouchable);
-    facet.walkableFloor = geometry.isWalkable;
+    // Horizontal portals connect sectors; they provide no physical floor or overhead support.
+    facet.walkableFloor = geometry.isWalkable && !geometry.isPortal;
     facet.blocking = !geometry.isPortal && !facet.attributes.untouchable;
     facet.sourceId = static_cast<int32_t>(geometry.faceIndex);
     facet.vertices.reserve(geometry.vertices.size());

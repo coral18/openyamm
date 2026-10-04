@@ -15,6 +15,7 @@
 #include "game/fx/ParticleRecipes.h"
 #include "game/fx/ParticleSystem.h"
 #include "game/gameplay/GameMechanics.h"
+#include "game/gameplay/ActorVocalizationRules.h"
 #include "game/gameplay/GameplayActorService.h"
 #include "game/gameplay/GameplayCombatController.h"
 #include "game/gameplay/GameplayDialogController.h"
@@ -22,11 +23,13 @@
 #include "game/gameplay/GameplayScreenRuntime.h"
 #include "game/gameplay/GenericActorDialog.h"
 #include "game/app/GameApplication.h"
+#include "game/app/GameSession.h"
 #include "game/app/ProfilingControl.h"
 #include "game/outdoor/OutdoorInteractionController.h"
 #include "game/outdoor/OutdoorMechanismRuntime.h"
 #include "game/gameplay/HouseInteraction.h"
 #include "game/gameplay/HouseServiceRuntime.h"
+#include "game/indoor/IndoorGameView.h"
 #include "game/indoor/IndoorGeometryUtils.h"
 #include "game/indoor/IndoorMovementController.h"
 #include "game/indoor/IndoorPartyRuntime.h"
@@ -2950,6 +2953,232 @@ bool initializeIndoorRegressionScenario(
         &*selectedMap.indoorMapData
     );
     return scenario.world.eventRuntimeState() != nullptr;
+}
+
+bool runActorCrowdingRegression(
+    const GameDataLoader &gameDataLoader, bool indoors, bool doorway, std::string &failure)
+{
+    constexpr int DoorHalfWidth = 64;
+    constexpr int WallExtent = 10000;
+    const MonsterTable::MonsterStatsEntry *pStats = nullptr;
+    for (const auto &[id, stats] : gameDataLoader.getMonsterTable().statsEntries())
+    {
+        if (stats.hostility >= 3 && stats.speed > 0 && !stats.canFly
+            && stats.movementType != MonsterTable::MonsterMovementType::Stationary
+            && stats.aiType != MonsterTable::MonsterAiType::Wimp
+            && !stats.attack1HasMissile && !stats.attack2HasMissile && !stats.hasSpell1 && !stats.hasSpell2
+            && (pStats == nullptr || id < pStats->id))
+        {
+            pStats = &stats;
+        }
+    }
+    if (pStats == nullptr)
+    {
+        failure = "no walking melee monster available";
+        return false;
+    }
+
+    MapAssetInfo map = {};
+    map.map.fileName = indoors ? "crowding.blv" : "crowding.odm";
+    map.eventRuntimeState = EventRuntimeState{};
+    MapDeltaData delta = {};
+    for (int row = 0; row < 3; ++row)
+    {
+        for (int column = 0; column < 2; ++column)
+        {
+            MapDeltaActor actor = {};
+            actor.monsterId = pStats->id;
+            actor.monsterInfoId = pStats->id;
+            actor.hp = 1000;
+            actor.hostilityType = 4;
+            actor.attributes = static_cast<uint32_t>(EvtActorAttribute::Aggressor)
+                | static_cast<uint32_t>(EvtActorAttribute::Nearby);
+            actor.radius = 40;
+            actor.height = 128;
+            actor.moveSpeed = 160;
+            actor.x = -100 - row * 100;
+            actor.y = column == 0 ? -45 : 45;
+            actor.z = 1;
+            actor.sectorId = 1;
+            delta.actors.push_back(actor);
+        }
+    }
+
+    IndoorMapData room = {};
+    room.vertices = {{-1200, -1000, 0}, {1200, -1000, 0}, {1200, 1000, 0}, {-1200, 1000, 0}};
+    IndoorFace floor = {};
+    floor.vertexIndices = {0, 1, 2, 3};
+    floor.facetType = 3;
+    floor.roomNumber = 1;
+    room.faces.push_back(floor);
+    room.sectors.resize(2);
+    IndoorSector &sector = room.sectors[1];
+    sector.minX = -1200;
+    sector.maxX = 1200;
+    sector.minY = -1000;
+    sector.maxY = 1000;
+    sector.maxZ = 500;
+    sector.floorFaceIds = {0};
+    sector.faceIds = {0};
+    OutdoorMapData ground = {};
+    ground.heightMap.resize(OutdoorMapData::TerrainWidth * OutdoorMapData::TerrainHeight, 0);
+    ground.attributeMap.resize(ground.heightMap.size(), 0);
+    if (doorway)
+    {
+        OutdoorBModel walls = {};
+        walls.name = "crowding_doorway";
+        for (const std::array<int, 2> span : {
+            std::array<int, 2>{-WallExtent, -DoorHalfWidth}, {DoorHalfWidth, WallExtent}})
+        {
+            const uint16_t offset = room.vertices.size();
+            room.vertices.insert(room.vertices.end(), {
+                {0, span[0], 0}, {0, span[1], 0}, {0, span[1], 500}, {0, span[0], 500}});
+            IndoorFace wall = {};
+            wall.vertexIndices = {offset, uint16_t(offset + 3), uint16_t(offset + 2), uint16_t(offset + 1)};
+            wall.facetType = 1;
+            wall.roomNumber = 1;
+            sector.wallFaceIds.push_back(room.faces.size());
+            sector.faceIds.push_back(room.faces.size());
+            room.faces.push_back(wall);
+            const uint16_t outdoorOffset = walls.vertices.size();
+            walls.vertices.insert(walls.vertices.end(), {
+                {0, span[0], 0}, {0, span[1], 0}, {0, span[1], 500}, {0, span[0], 500}});
+            OutdoorBModelFace outdoorWall = {};
+            outdoorWall.vertexIndices = {
+                outdoorOffset, uint16_t(outdoorOffset + 3), uint16_t(outdoorOffset + 2), uint16_t(outdoorOffset + 1)};
+            outdoorWall.polygonType = 1;
+            walls.faces.push_back(outdoorWall);
+            std::reverse(outdoorWall.vertexIndices.begin(), outdoorWall.vertexIndices.end());
+            walls.faces.push_back(outdoorWall);
+        }
+        ground.bmodels.push_back(std::move(walls));
+    }
+    sector.nonBspFaceIds = sector.faceIds;
+    sector.floorCount = sector.floorFaceIds.size();
+    sector.wallCount = sector.wallFaceIds.size();
+    sector.faceCount = sector.faceIds.size();
+    sector.nonBspFaceCount = sector.faceIds.size();
+    map.outdoorMapData = std::move(ground);
+    map.outdoorMapDeltaData = delta;
+    map.indoorMapData = room;
+    map.indoorMapDeltaData = delta;
+
+    RegressionScenario outdoor = {};
+    if (!initializeRegressionScenario(gameDataLoader, map, outdoor))
+    {
+        failure = "outdoor crowd scenario initialization failed";
+        return false;
+    }
+    PartySeed crowdParty = createRegressionPartySeed();
+    for (Character &member : crowdParty.members)
+    {
+        member.health = member.maxHealth = 30000;
+    }
+    outdoor.party.seed(crowdParty);
+    outdoor.world.setOutdoorPathfindingSettings(true, false);
+    GameSession session;
+    IndoorGameView indoorView(session);
+    GameSettings settings = GameSettings::createDefault();
+    settings.indoorPathfinding = true;
+    indoorView.setSettingsSnapshot(settings);
+    Party party;
+    party.seed(crowdParty);
+    GameplayActorService actorService = buildBoundGameplayActorService(gameDataLoader);
+    IndoorSceneRuntime indoor(
+        "crowding.blv", map.map, room, gameDataLoader.getMonsterTable(), gameDataLoader.getObjectTable(),
+        gameDataLoader.getItemTable(), gameDataLoader.getChestTable(), party, map.indoorMapDeltaData,
+        map.eventRuntimeState, std::nullopt, std::nullopt, &actorService);
+    indoor.worldRuntime().bindGameplayView(&indoorView);
+    indoor.partyRuntime().teleportPartyPosition(700.0f, 0.0f, 1.0f);
+    IGameplayWorldRuntime &world = indoors
+        ? static_cast<IGameplayWorldRuntime &>(indoor.worldRuntime())
+        : static_cast<IGameplayWorldRuntime &>(outdoor.world);
+    bool sawDetour = false;
+    std::vector<bool> reachedMelee(delta.actors.size(), false);
+    std::vector<bool> clearedDoorway(delta.actors.size(), false);
+    const float minimumSeparation = indoors ? 64.0f : 80.0f;
+    for (int tick = 0; tick < 7680; ++tick)
+    {
+        if (indoors)
+        {
+            indoor.worldRuntime().updateActorAi(1.0f / 128.0f);
+        }
+        else
+        {
+            outdoor.world.updateMapActors(1.0f / 128.0f, 700.0f, 0.0f, 1.0f);
+        }
+        for (size_t index = 0; index < delta.actors.size(); ++index)
+        {
+            GameplayRuntimeActorState actor = {};
+            if (!world.actorRuntimeState(index, actor))
+            {
+                failure = "crowd actor disappeared";
+                return false;
+            }
+            const bool attacking = indoors
+                ? indoor.worldRuntime().mapActorAiState(index)->motionState == ActorAiMotionState::Attacking
+                : outdoor.world.mapActorState(index)->aiState == OutdoorWorldRuntime::ActorAiState::Attacking;
+            reachedMelee[index] = reachedMelee[index] || attacking;
+            clearedDoorway[index] = clearedDoorway[index] || actor.preciseX > 40.0f;
+            sawDetour = sawDetour || (indoors
+                ? indoor.worldRuntime().mapActorAiState(index)->crowdSideLockRemainingSeconds > 0.0f
+                : outdoor.world.mapActorState(index)->crowdSideLockRemainingSeconds > 0.0f);
+            for (size_t peer = 0; peer < index; ++peer)
+            {
+                GameplayRuntimeActorState other = {};
+                world.actorRuntimeState(peer, other);
+                const float separation = std::hypot(actor.preciseX - other.preciseX, actor.preciseY - other.preciseY);
+                if (separation < minimumSeparation - 0.1f)
+                {
+                    failure = "crowd overlap: separation=" + std::to_string(separation)
+                        + " actor=" + std::to_string(index) + " peer=" + std::to_string(peer)
+                        + " tick=" + std::to_string(tick);
+                    return false;
+                }
+            }
+            const float wallEdgeY = std::max({
+                0.0f, DoorHalfWidth - std::abs(actor.preciseY), std::abs(actor.preciseY) - WallExtent});
+            if (doorway && std::hypot(actor.preciseX, wallEdgeY) < 39.9f)
+            {
+                failure = "crowd crossed doorway wall at (" + std::to_string(actor.preciseX)
+                    + "," + std::to_string(actor.preciseY) + ") actor=" + std::to_string(index)
+                    + " tick=" + std::to_string(tick);
+                return false;
+            }
+        }
+        // Doorways exercise queuing through an opening; open ground exercises the final melee surround.
+        const size_t arrivedCount = doorway
+            ? std::count(clearedDoorway.begin(), clearedDoorway.end(), true)
+            : std::count(reachedMelee.begin(), reachedMelee.end(), true);
+        if (tick >= 1535 && sawDetour && arrivedCount == delta.actors.size()
+            && std::count(reachedMelee.begin(), reachedMelee.end(), true) > 0)
+        {
+            break;
+        }
+        if ((tick % 16) == 0)
+        {
+            SDL_Delay(1); // Give the asynchronous path planner time to finish requests.
+        }
+    }
+    const size_t reachedCount = std::count(reachedMelee.begin(), reachedMelee.end(), true);
+    const size_t clearedCount = std::count(clearedDoorway.begin(), clearedDoorway.end(), true);
+    if (!sawDetour || (doorway ? clearedCount != clearedDoorway.size() || reachedCount == 0
+                              : reachedCount != reachedMelee.size()))
+    {
+        failure = "crowd reached=" + std::to_string(reachedCount) + "/" + std::to_string(reachedMelee.size())
+            + " cleared_doorway=" + std::to_string(clearedCount) + " detour=" + std::to_string(sawDetour)
+            + " monster=" + pStats->name;
+        for (size_t index = 0; index < delta.actors.size(); ++index)
+        {
+            GameplayRuntimeActorState actor = {};
+            world.actorRuntimeState(index, actor);
+            failure += " actor=" + std::to_string(index) + " pos=(" + std::to_string(actor.preciseX)
+                + "," + std::to_string(actor.preciseY) + ") hostile=" + std::to_string(actor.hostileToParty)
+                + " target=" + std::to_string(actor.combatTargetingParty);
+        }
+        return false;
+    }
+    return true;
 }
 
 std::string describeIndoorFaceMembership(const IndoorMapData &indoorMapData, size_t faceIndex)
@@ -7233,6 +7462,19 @@ int HeadlessGameplayDiagnostics::runRegressionSuite(
             }
         };
 
+    for (bool indoors : {false, true})
+    {
+        for (bool doorway : {false, true})
+        {
+            const std::string caseName = std::string("actor_crowding_")
+                + (indoors ? "indoor_" : "outdoor_") + (doorway ? "doorway" : "open_ground");
+            runCase(caseName, [&](std::string &failure)
+            {
+                return runActorCrowdingRegression(gameDataLoader, indoors, doorway, failure);
+            });
+        }
+    }
+
     if (suiteName == "indoor")
     {
         runCase(
@@ -9801,6 +10043,133 @@ int HeadlessGameplayDiagnostics::runRegressionSuite(
                 return true;
             }
         );
+
+        runCase(
+            "indoor_actor_audio_follows_damage_hooks_and_state_transitions",
+            [&](std::string &failure)
+            {
+                if (!gameDataLoader.loadMapByFileNameForHeadlessGameplay(assetFileSystem, "d18.blv"))
+                {
+                    failure = "could not load d18.blv";
+                    return false;
+                }
+                IndoorRegressionScenario scenario = {};
+                if (!initializeIndoorRegressionScenario(gameDataLoader, *gameDataLoader.getSelectedMap(), scenario))
+                {
+                    failure = "indoor audio scenario initialization failed";
+                    return false;
+                }
+                size_t index = 0;
+                const MonsterTable::MonsterStatsEntry *pStats = nullptr;
+                for (; index < scenario.world.mapActorCount(); ++index)
+                {
+                    GameplayRuntimeActorState actor = {};
+                    scenario.world.actorRuntimeState(index, actor);
+                    pStats = gameDataLoader.getMonsterTable().findStatsById(actor.monsterId);
+                    if (!actor.isDead && !actor.isInvisible && pStats != nullptr
+                        && pStats->winceSoundId != 0 && pStats->deathSoundId != 0 && pStats->boredSoundId != 0)
+                    {
+                        break;
+                    }
+                }
+                if (index == scenario.world.mapActorCount())
+                {
+                    failure = "no voiced indoor actor";
+                    return false;
+                }
+                const auto resetActor = [&](ActorAiMotionState motion)
+                {
+                    scenario.mapDeltaData->actors[index].hp = 100;
+                    IndoorWorldRuntime::Snapshot snapshot = scenario.world.snapshot();
+                    snapshot.mapActorAiStates[index].motionState = motion;
+                    snapshot.mapActorAiStates[index].animationState = motion == ActorAiMotionState::Attacking
+                        ? ActorAiAnimationState::AttackMelee : ActorAiAnimationState::Standing;
+                    snapshot.mapActorAiStates[index].actionSeconds = 1;
+                    scenario.world.restoreSnapshot(snapshot);
+                    scenario.eventRuntimeState->pendingSounds.clear();
+                };
+                const auto voiceCount = [&](uint32_t soundId)
+                {
+                    return std::count_if(scenario.eventRuntimeState->pendingSounds.begin(),
+                        scenario.eventRuntimeState->pendingSounds.end(),
+                        [&](const EventRuntimeState::PendingSound &sound)
+                        {
+                            return sound.actorIndex == index && sound.soundId == soundId;
+                        });
+                };
+                resetActor(ActorAiMotionState::Standing);
+                IndoorWorldRuntime::Snapshot idleSnapshot = scenario.world.snapshot();
+                IndoorWorldRuntime::MapActorAiState &idle = idleSnapshot.mapActorAiStates[index];
+                for (idle.idleDecisionCount = 0; idle.idleDecisionCount < 10000; ++idle.idleDecisionCount)
+                {
+                    if (actorChoosesBored(idle.actorId, idle.idleDecisionCount)
+                        && actorBoredSoundRoll(idle.actorId, idle.idleDecisionCount))
+                    {
+                        break;
+                    }
+                }
+                idle.actionSeconds = 0.001f;
+                idle.idleDecisionSeconds = 0.001f;
+                scenario.world.restoreSnapshot(idleSnapshot);
+                scenario.world.updateTurnBasedPausedActorAnimations(0.01f);
+                scenario.world.updateTurnBasedPausedActorAnimations(0.01f);
+                if (voiceCount(pStats->boredSoundId) != 1)
+                {
+                    failure = "indoor turn-based fidget did not emit one voice on entry";
+                    return false;
+                }
+                resetActor(ActorAiMotionState::Standing);
+                scenario.world.applyPartyAttackMeleeDamage(index, 1, {});
+                scenario.world.applyPartyAttackMeleeDamage(index, 1, {});
+                if (voiceCount(pStats->winceSoundId) != 1 || voiceCount(pStats->deathSoundId) != 0)
+                {
+                    failure = "indoor repeated hit did not share reaction eligibility";
+                    return false;
+                }
+                resetActor(ActorAiMotionState::Attacking);
+                scenario.world.applyPartyAttackMeleeDamage(index, 1, {});
+                if (voiceCount(pStats->winceSoundId) != 0)
+                {
+                    failure = "attacking indoor actor cried on ordinary damage";
+                    return false;
+                }
+
+                std::optional<ScriptedEventProgram> hook;
+                const std::optional<ScriptedEventProgram> noGlobal;
+                for (int damageOverride : {0, 1})
+                {
+                    resetActor(ActorAiMotionState::Standing);
+                    hook = ScriptedEventProgram::loadFromLuaText(
+                        "evt.meta.map.monsterDamageHooks = {65000}\n"
+                        "evt.map[65000] = function() evt.SetHookDamage("
+                            + std::to_string(damageOverride) + ") end",
+                        "actor_audio_test.lua", ScriptedEventScope::Map, failure);
+                    if (!hook)
+                    {
+                        return false;
+                    }
+                    scenario.world.bindEventExecution(&scenario.eventRuntime, &hook, &noGlobal);
+                    scenario.world.applyPartyAttackMeleeDamage(index, 10000, {});
+                    if (scenario.mapDeltaData->actors[index].hp != 100 - damageOverride
+                        || voiceCount(pStats->deathSoundId) != 0
+                        || voiceCount(pStats->winceSoundId) != damageOverride)
+                    {
+                        failure = "indoor audio predicted damage before the event hook";
+                        return false;
+                    }
+                }
+                hook.reset();
+                resetActor(ActorAiMotionState::Standing);
+                scenario.world.applyPartyAttackMeleeDamage(index, 10000, {});
+                scenario.world.applyPartyAttackMeleeDamage(index, 10000, {});
+                scenario.world.updateTurnBasedPausedActorAnimations(0.01f);
+                if (voiceCount(pStats->deathSoundId) != 1 || voiceCount(pStats->winceSoundId) != 0)
+                {
+                    failure = "indoor lethal transition did not emit exactly one death voice";
+                    return false;
+                }
+                return true;
+            });
 
         runCase(
             "indoor_world_runtime_exposes_actor_queries_and_direct_damage",
@@ -12873,7 +13242,7 @@ int HeadlessGameplayDiagnostics::runRegressionSuite(
             {
                 scenario.world.updateMapActors(
                     1.0f / 60.0f,
-                    static_cast<float>(startX + 6000),
+                    static_cast<float>(startX + 3000),
                     static_cast<float>(startY),
                     static_cast<float>(pBefore->z));
 
@@ -12944,13 +13313,12 @@ int HeadlessGameplayDiagnostics::runRegressionSuite(
             bool sawStanding = pBefore->aiState == OutdoorWorldRuntime::ActorAiState::Standing;
             bool sawWandering = pBefore->aiState == OutdoorWorldRuntime::ActorAiState::Wandering;
             bool sawWalkingAnimation = pBefore->animation == OutdoorWorldRuntime::ActorAnimation::Walking;
-            bool sawBoredAnimation = pBefore->animation == OutdoorWorldRuntime::ActorAnimation::Bored;
 
             for (int step = 0; step < 360; ++step)
             {
                 scenario.world.updateMapActors(
                     1.0f / 60.0f,
-                    static_cast<float>(startX + 6000),
+                    static_cast<float>(startX + 3000),
                     static_cast<float>(startY),
                     static_cast<float>(pBefore->z));
 
@@ -12964,8 +13332,6 @@ int HeadlessGameplayDiagnostics::runRegressionSuite(
                         || pStepActor->aiState == OutdoorWorldRuntime::ActorAiState::Wandering;
                     sawWalkingAnimation = sawWalkingAnimation
                         || pStepActor->animation == OutdoorWorldRuntime::ActorAnimation::Walking;
-                    sawBoredAnimation = sawBoredAnimation
-                        || pStepActor->animation == OutdoorWorldRuntime::ActorAnimation::Bored;
                 }
             }
 
@@ -12986,12 +13352,6 @@ int HeadlessGameplayDiagnostics::runRegressionSuite(
             if (!sawStanding || !sawWandering || !sawWalkingAnimation)
             {
                 failure = "actor 3 did not cycle through idle/walk states";
-                return false;
-            }
-
-            if (sawBoredAnimation)
-            {
-                failure = "actor 3 unexpectedly entered bored animation during ordinary idle wander";
                 return false;
             }
 
@@ -13024,7 +13384,7 @@ int HeadlessGameplayDiagnostics::runRegressionSuite(
 
             const int startX = pBefore->x;
             const int startY = pBefore->y;
-            const float partyX = static_cast<float>(startX + 6000);
+            const float partyX = static_cast<float>(startX + 3000);
             const float partyY = static_cast<float>(startY);
             const float partyZ = static_cast<float>(pBefore->z);
             bool sawWandering = false;
@@ -13565,9 +13925,10 @@ int HeadlessGameplayDiagnostics::runRegressionSuite(
                 return false;
             }
 
-            if (pAfter->animation != OutdoorWorldRuntime::ActorAnimation::Standing)
+            if (pAfter->animation != OutdoorWorldRuntime::ActorAnimation::Standing
+                && pAfter->animation != OutdoorWorldRuntime::ActorAnimation::Bored)
             {
-                failure = "actor 3 did not use standing animation when party was near";
+                failure = "actor 3 did not use an idle animation when party was near";
                 return false;
             }
 
@@ -13771,6 +14132,114 @@ int HeadlessGameplayDiagnostics::runRegressionSuite(
             return true;
         }
     );
+
+    runCase(
+        "outdoor_actor_audio_follows_resolved_state_transitions",
+        [&](std::string &failure)
+        {
+            RegressionScenario scenario = {};
+            if (!initializeRegressionScenario(gameDataLoader, *selectedMap, scenario))
+            {
+                failure = "outdoor audio scenario initialization failed";
+                return false;
+            }
+            const size_t index = 3;
+            OutdoorWorldRuntime::Snapshot initial = scenario.world.snapshot();
+            if (initial.mapActors.size() <= index)
+            {
+                failure = "outdoor voiced actor missing";
+                return false;
+            }
+            initial.mapActors[index].currentHp = 100;
+            initial.mapActors[index].maxHp = 100;
+            initial.mapActors[index].isDead = false;
+            initial.mapActors[index].isInvisible = false;
+            initial.mapActors[index].aiState = OutdoorWorldRuntime::ActorAiState::Standing;
+            initial.mapActors[index].animation = OutdoorWorldRuntime::ActorAnimation::Standing;
+            const auto resetActor = [&]()
+            {
+                scenario.world.restoreSnapshot(initial);
+                scenario.world.clearPendingAudioEvents();
+            };
+            const auto voiceCount = [&](const std::string &reason)
+            {
+                return std::count_if(scenario.world.pendingAudioEvents().begin(),
+                    scenario.world.pendingAudioEvents().end(),
+                    [&](const OutdoorWorldRuntime::AudioEvent &event)
+                    {
+                        return event.actorIndex == index && event.reason == reason;
+                    });
+            };
+            resetActor();
+            scenario.world.applyPartyAttackToMapActor(index, 1, 0, 0, 0);
+            scenario.world.applyPartyAttackToMapActor(index, 1, 0, 0, 0);
+            if (voiceCount("monster_hit") != 1 || voiceCount("monster_death") != 0)
+            {
+                failure = "outdoor repeated hit did not share reaction eligibility";
+                return false;
+            }
+            initial.mapActors[index].aiState = OutdoorWorldRuntime::ActorAiState::Attacking;
+            initial.mapActors[index].animation = OutdoorWorldRuntime::ActorAnimation::AttackMelee;
+            resetActor();
+            scenario.world.applyPartyAttackToMapActor(index, 1, 0, 0, 0);
+            if (voiceCount("monster_hit") != 0)
+            {
+                failure = "attacking outdoor actor cried on ordinary damage";
+                return false;
+            }
+            scenario.world.applyPartyAttackToMapActor(index, 10000, 0, 0, 0);
+            scenario.world.applyPartyAttackToMapActor(index, 10000, 0, 0, 0);
+            scenario.world.updateTurnBasedPausedActorAnimations(0.01f);
+            if (voiceCount("monster_death") != 1)
+            {
+                failure = "outdoor lethal transition did not emit exactly one death voice";
+                return false;
+            }
+            const OutdoorWorldRuntime::AudioEvent &death = scenario.world.pendingAudioEvents().front();
+            if (std::abs(death.z - initial.mapActors[index].preciseZ) > 0.01f)
+            {
+                failure = "outdoor voice did not originate at actor feet";
+                return false;
+            }
+            scenario.world.clearPendingAudioEvents();
+            if (!scenario.world.resurrectMapActor(index, 100, true) || voiceCount("monster_resurrect") != 1)
+            {
+                failure = "outdoor resurrection voice missing";
+                return false;
+            }
+            OutdoorWorldRuntime::MapActorState &idle = initial.mapActors[index];
+            idle.aiState = OutdoorWorldRuntime::ActorAiState::Standing;
+            idle.animation = OutdoorWorldRuntime::ActorAnimation::Standing;
+            idle.actionSeconds = 0.001f;
+            idle.idleDecisionSeconds = 0.001f;
+            idle.yawRadians = 0.0f;
+            for (idle.idleDecisionCount = 0; idle.idleDecisionCount < 10000; ++idle.idleDecisionCount)
+            {
+                if (actorChoosesBored(idle.actorId, idle.idleDecisionCount)
+                    && actorBoredSoundRoll(idle.actorId, idle.idleDecisionCount))
+                {
+                    break;
+                }
+            }
+            resetActor();
+            // Outside full AI (5632), but within the ordinary actor mixer range (8192).
+            scenario.world.updateMapActors(1.0f / 128.0f, idle.preciseX + 6000, idle.preciseY, idle.preciseZ);
+            scenario.world.updateMapActors(1.0f / 128.0f, idle.preciseX + 6000, idle.preciseY, idle.preciseZ);
+            if (voiceCount("monster_bored") != 1)
+            {
+                failure = "background actor did not emit one fidget voice outside full-AI range";
+                return false;
+            }
+            resetActor();
+            scenario.world.updateTurnBasedPausedActorAnimations(0.01f);
+            scenario.world.updateTurnBasedPausedActorAnimations(0.01f);
+            if (voiceCount("monster_bored") != 1)
+            {
+                failure = "outdoor turn-based fidget did not emit one voice on entry";
+                return false;
+            }
+            return true;
+        });
 
     runCase(
         "party_attack_on_actor_3_causes_damage_and_hostility",
@@ -14127,11 +14596,11 @@ int HeadlessGameplayDiagnostics::runRegressionSuite(
                         return false;
                     }
 
-                    if (std::abs(pAfterUpdate->velocityX) > 0.01f
-                        || std::abs(pAfterUpdate->velocityY) > 0.01f
-                        || std::abs(pAfterUpdate->velocityZ) > 0.01f)
+                    // Corpse knockback and gravity continue; inactive death must not resume AI walking.
+                    if (std::abs(pAfterUpdate->moveDirectionX) > 0.01f
+                        || std::abs(pAfterUpdate->moveDirectionY) > 0.01f)
                     {
-                        failure = "inactive lethal actor kept moving";
+                        failure = "inactive dying actor resumed directed movement";
                         return false;
                     }
 
@@ -15483,6 +15952,8 @@ int HeadlessGameplayDiagnostics::runRegressionSuite(
             pathObject.radius = static_cast<float>(pathActor.radius);
             pathObject.stepLength = 64.0f;
             pathObject.stepHeight = 128.0f;
+            pathObject.dropHeight =
+                std::max(pathObject.stepHeight, std::min(pathObject.radius, pathObject.stepHeight * 2.0f));
             const PathPoint pathSource = {startX, startY, startZ};
             const PathPoint pathTarget = {partyX, partyY, partyZ};
             const PathWalkSegmentDebug directDebug =
@@ -17300,7 +17771,7 @@ int HeadlessGameplayDiagnostics::runRegressionSuite(
 
             const int leftInitialHp = pLeftActorBefore->currentHp;
             const int rightInitialHp = pRightActorBefore->currentHp;
-            const float partyX = pRightActorBefore->preciseX + 6000.0f;
+            const float partyX = pRightActorBefore->preciseX + 3000.0f;
             const float partyY = pRightActorBefore->preciseY;
             const float partyZ = pRightActorBefore->preciseZ;
             bool sawEngagement = false;

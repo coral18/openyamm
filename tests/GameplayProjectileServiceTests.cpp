@@ -452,7 +452,7 @@ TEST_CASE("FX-only projectile presentation still spawns dedicated impact state")
     definition.hasVisual = false;
 
     const GameplayProjectileService::ProjectileImpactSpawnResult impact =
-        service.spawnProjectileImpactVisual(projectile, definition, 10.0f, 20.0f, 30.0f, false);
+        service.spawnProjectileImpactVisual(projectile, definition, 10.0f, 20.0f, 30.0f, false, 7);
 
     REQUIRE(impact.spawned);
     REQUIRE(impact.pImpact != nullptr);
@@ -460,6 +460,11 @@ TEST_CASE("FX-only projectile presentation still spawns dedicated impact state")
     CHECK_EQ(impact.pImpact->sourceObjectName, "Lightning Bolt");
     CHECK_EQ(impact.pImpact->sourceObjectSpriteName, "spell18");
     CHECK_EQ(impact.pImpact->sectorId, 4);
+    CHECK_EQ(impact.pImpact->targetActorIndex, 7u);
+
+    service.collectProjectilePresentationState(projectiles, impacts);
+    REQUIRE_EQ(impacts.size(), 1u);
+    CHECK_EQ(impacts.front().targetActorIndex, 7u);
 }
 
 TEST_CASE("Special impact primitives emit expected particle counts")
@@ -569,6 +574,19 @@ TEST_CASE("fireball and spell dragon breath keep dedicated impact particles and 
     CHECK_FALSE(OpenYAMM::Game::FxRecipes::projectileRecipeShowsImpactBillboard(ProjectileRecipe::FireBolt));
     CHECK(OpenYAMM::Game::FxRecipes::projectileRecipeUsesDedicatedImpactFx(ProjectileRecipe::Sparks));
     CHECK_FALSE(OpenYAMM::Game::FxRecipes::projectileRecipeShowsImpactBillboard(ProjectileRecipe::Sparks));
+}
+
+TEST_CASE("projectile recipe debug names round trip and ignore separators")
+{
+    using OpenYAMM::Game::FxRecipes::projectileRecipeFromName;
+    using OpenYAMM::Game::FxRecipes::projectileRecipeName;
+
+    CHECK_EQ(projectileRecipeName(ProjectileRecipe::Implosion), "implosion");
+    CHECK_EQ(projectileRecipeFromName("implosion"), ProjectileRecipe::Implosion);
+    CHECK_EQ(projectileRecipeFromName("Dragon Breath"), ProjectileRecipe::DragonBreath);
+    CHECK_EQ(projectileRecipeFromName("dragon-breath"), ProjectileRecipe::DragonBreath);
+    CHECK_EQ(projectileRecipeFromName("ICE_BLAST_FALLOUT"), ProjectileRecipe::IceBlastFallout);
+    CHECK_FALSE(projectileRecipeFromName("not-a-projectile"));
 }
 
 TEST_CASE("fireball and spell dragon breath travel particles are scaled without changing fire bolt")

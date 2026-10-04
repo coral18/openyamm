@@ -11,6 +11,16 @@
 
 namespace OpenYAMM::Game
 {
+enum class EquipmentSlot : uint8_t;
+
+struct ItemEquipmentPlacement
+{
+    uint32_t dollType = 0;
+    EquipmentSlot slot = {};
+    int x = 0;
+    int y = 0;
+};
+
 enum class ItemRarity : uint8_t
 {
     Common = 0,
@@ -96,6 +106,9 @@ struct ItemDefinition
     int requiredAccuracy = 0;
     std::string visualStatus;
     ItemContentEffect contentEffect;
+    float inventoryDrawScale = 1.0f;
+    float jewelryDrawScale = 1.0f;
+    std::vector<ItemEquipmentPlacement> equipmentPlacements;
     uint8_t inventoryWidth = 1;
     uint8_t inventoryHeight = 1;
     std::array<int, 6> randomTreasureWeights = {};
@@ -116,6 +129,7 @@ public:
         const std::vector<std::vector<std::string>> &itemRows,
         const std::vector<std::vector<std::string>> &randomItemRows
     );
+    bool loadVisualRows(const std::vector<std::vector<std::string>> &rows, std::string &errorMessage);
     bool loadContentEffectRows(const std::vector<std::vector<std::string>> &rows, std::string &errorMessage);
     bool loadItemSetRows(const std::vector<std::vector<std::string>> &rows, std::string &errorMessage);
     bool loadSourceAliasRows(const std::vector<std::vector<std::string>> &rows, std::string &errorMessage);

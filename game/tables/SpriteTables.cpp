@@ -1017,7 +1017,9 @@ uint32_t SpriteFrameTable::mirrorFlagForOctant(int octant)
 
 std::string SpriteFrameTable::buildTextureName(const std::string &baseName, int suffixIndex)
 {
-    if (!baseName.empty() && baseName.back() == '0')
+    // Atlas directions are declared by Image1/Images3 and mirror flags. A trailing
+    // zero can belong to the frame stem (for example palette 830), not its view.
+    if (!baseName.starts_with("atlas:") && !baseName.empty() && baseName.back() == '0')
     {
         return baseName;
     }

@@ -72,6 +72,43 @@ TEST_CASE("outdoor lighting runtime point sampling falls off with distance")
     CHECK(farSample[0] == doctest::Approx(0.0f));
 }
 
+TEST_CASE("outdoor lighting broad material bounds preserve radius filtering and the strongest eight lights")
+{
+    std::vector<WorldFxLightEmitter> lights;
+    for (uint32_t index = 0; index < 12; ++index)
+    {
+        WorldFxLightEmitter light = makeLight(-22000.0f + index * 4000.0f, 0.0f, 64.0f,
+            128.0f + index * 16.0f, makeAbgr(255, 128, 64));
+        light.kind = RenderLightKind::Static;
+        lights.push_back(light);
+    }
+    lights.push_back(makeLight(100000.0f, 0.0f, 64.0f, 8000.0f, makeAbgr(0, 0, 255)));
+    // A light's center outside the bounds can still illuminate their edge.
+    lights.push_back(makeLight(0.0f, 30100.0f, 64.0f, 320.0f, makeAbgr(0, 255, 0)));
+
+    OutdoorLightingRuntime runtime;
+    runtime.build(lights);
+    const OutdoorLightSelectionBounds bounds = {{-30000.0f, -30000.0f, 0.0f},
+        {30000.0f, 30000.0f, 128.0f}, true};
+    const OutdoorSelectedFxLights selected = runtime.selectForBounds({0.0f, 0.0f, 0.0f}, bounds);
+
+    REQUIRE(selected.lightCount == OutdoorSelectedFxLights::MaxLights);
+    CHECK(selected.rankedCandidateCount == 13);
+    CHECK(selected.filteredEmitterCount == 1);
+    for (size_t index = 0; index + 1 < selected.lightCount; ++index)
+    {
+        CHECK(selected.positions[index * 4] == doctest::Approx(-22000.0f + (11 - index) * 4000.0f));
+    }
+    CHECK(selected.positions[28] == doctest::Approx(0.0f));
+    CHECK(selected.positions[29] == doctest::Approx(30100.0f));
+
+    // This tiny query continues using the spatial grid and rejects the same distant lights.
+    const OutdoorLightSelectionBounds local = {{1990.0f, 0.0f, 0.0f}, {2010.0f, 10.0f, 128.0f}, true};
+    const OutdoorSelectedFxLights nearby = runtime.selectForBounds({0.0f, 0.0f, 0.0f}, local);
+    REQUIRE(nearby.lightCount == 1);
+    CHECK(nearby.positions[0] == doctest::Approx(2000.0f));
+}
+
 TEST_CASE("outdoor lighting runtime clusters dense sectorless projectile lights")
 {
     std::vector<WorldFxLightEmitter> lights;

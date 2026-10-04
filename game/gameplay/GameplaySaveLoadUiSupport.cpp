@@ -138,9 +138,14 @@ void clampJournalMapState(GameplayUiController::JournalScreenState &journalScree
 
 std::string resolveSaveLocationName(const std::vector<MapStatsEntry> &mapEntries, const std::string &mapFileName)
 {
+    const std::string mapId = toLowerCopy(mapFileName);
+    if (mapId.empty())
+    {
+        return {};
+    }
     for (const MapStatsEntry &entry : mapEntries)
     {
-        if (toLowerCopy(entry.fileName) == toLowerCopy(mapFileName))
+        if (toLowerCopy(entry.fileName) == mapId || toLowerCopy(entry.canonicalId) == mapId)
         {
             return entry.name;
         }

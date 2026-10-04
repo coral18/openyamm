@@ -417,7 +417,6 @@ GameplayCorpseAutoLootResult autoLootActiveCorpseView(
                 static_cast<int>(removedItem.goldAmount),
                 worldRuntime.eventRuntimeState());
             party.addGold(goldAmount);
-            party.requestSound(SoundId::Gold);
             result.goldAmount += goldAmount;
             result.lootedAny = result.lootedAny || goldAmount > 0;
             GAMEPLAY_DEBUG_TRACE(
@@ -487,6 +486,12 @@ GameplayCorpseAutoLootResult autoLootActiveCorpseView(
 
         result.blockedByInventory = true;
         break;
+    }
+
+    // Gold pickups already queue this sound through Party::addGold.
+    if (result.lootedAny && result.goldAmount == 0)
+    {
+        party.requestSound(SoundId::Gold);
     }
 
     if (!result.firstItemName.empty())

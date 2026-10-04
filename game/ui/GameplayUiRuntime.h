@@ -8,6 +8,7 @@
 #include "game/party/PartySpellSystem.h"
 #include "game/tables/FaceAnimationTable.h"
 #include "game/tables/PortraitFxEventTable.h"
+#include "game/ui/GameplayHudArcMesh.h"
 #include "game/ui/GameplayHudCommon.h"
 #include "game/ui/GameplayHudLayoutCache.h"
 #include "game/ui/GameplayUiController.h"
@@ -23,6 +24,8 @@
 
 namespace OpenYAMM::Game
 {
+class SpriteAtlasCache;
+
 struct GameplayHudRenderBackend
 {
     bgfx::ProgramHandle texturedProgramHandle = BGFX_INVALID_HANDLE;
@@ -37,8 +40,17 @@ struct GameplayPortraitFxState
     uint32_t startedTicks = 0;
 };
 
+struct GameplayPortraitMeterState
+{
+    float health = -1.0f;
+    float damageFrom = 0.0f;
+    float recoveryMaximum = 0.0f;
+    uint32_t damagedTicks = 0;
+};
+
 struct GameplayPortraitPresentationState
 {
+    std::array<GameplayPortraitMeterState, 5> meters;
     uint32_t lastAnimationUpdateTicks = 0;
     std::vector<uint32_t> memberSpeechCooldownUntilTicks;
     std::vector<uint32_t> memberCombatSpeechCooldownUntilTicks;
@@ -131,6 +143,7 @@ public:
     void bindDataRepository(const GameDataRepository *pDataRepository);
     void setFontSettings(const Engine::FontSettings &settings);
     void bindAssetFileSystem(const Engine::AssetFileSystem *pAssetFileSystem);
+    void bindSpriteAtlasCache(SpriteAtlasCache &cache);
     const Engine::AssetFileSystem *assetFileSystem() const;
 
     bool ensureGameplayLayoutsLoaded(const GameplayUiController &uiController);
@@ -188,7 +201,8 @@ public:
         const std::string &textureName,
         int16_t paletteId,
         int &width,
-        int &height);
+        int &height,
+        Engine::AssetScaleTier *pLoadedTier = nullptr);
     void clearHudLayoutRuntimeHeightOverrides();
     void setHudLayoutRuntimeWidthOverride(const std::string &layoutId, float width);
     void setHudLayoutRuntimeHeightOverride(const std::string &layoutId, float height);
@@ -212,7 +226,7 @@ public:
     std::optional<GameplayHudTextureHandle> ensureItemIconTextureLoaded(const std::string &textureName);
     std::optional<std::string> iconAnimationFrameTextureName(
         const std::string &animationName,
-        uint32_t elapsedTicks) const;
+        std::optional<uint32_t> elapsedTicks = std::nullopt) const;
     std::optional<std::string> flyBuffIconAnimationFrameTextureName(bool active, uint32_t tickDivisor);
     std::optional<GameplayHudTextureHandle> ensureSolidHudTextureLoaded(
         const std::string &textureName,
@@ -228,6 +242,7 @@ public:
     void setDynamicHudTextureContentSignature(
         const std::string &textureName,
         const std::string &contentSignature);
+    // Returns physical pixel dimensions matching the BGRA buffer, independent of the logical HUD size.
     const std::vector<uint8_t> *hudTexturePixels(const std::string &textureName, int &width, int &height);
     bool ensureHudTextureDimensions(const std::string &textureName, int &width, int &height);
     bool ensureItemIconTextureDimensions(const std::string &textureName, int &width, int &height);
@@ -267,7 +282,17 @@ public:
         float v0 = 0.0f,
         float u1 = 1.0f,
         float v1 = 1.0f,
-        TextureFilterProfile filterProfile = TextureFilterProfile::Ui) const;
+        TextureFilterProfile filterProfile = TextureFilterProfile::Ui,
+        float rotationRadians = 0.0f) const;
+    void submitHudTexturedEllipse(
+        bgfx::TextureHandle textureHandle, float x, float y, float width, float height,
+        float u0 = 0.0f, float v0 = 0.0f, float u1 = 1.0f, float v1 = 1.0f) const;
+    void submitHudTexturedArc(bgfx::TextureHandle textureHandle,
+        const GameplayResolvedHudLayoutElement &rect, float strokeWidth, float startDegrees, float sweepDegrees,
+        float begin = 0, float end = 1) const;
+    uint32_t actorInspectAnimationTicks(bool visible, uint32_t nowTicks);
+    void renderActorInspectPreview(const std::string &name, int16_t paletteId,
+        const GameplayResolvedHudLayoutElement &rect, float scale, int yOffset);
     void submitHudTexturedQuadRotatedCounterClockwise(
         bgfx::TextureHandle textureHandle,
         float x,
@@ -280,13 +305,17 @@ public:
         int screenWidth,
         int screenHeight,
         TextureFilterProfile filterProfile = TextureFilterProfile::Ui) const;
+    void submitWorldHudQuadBatch(std::span<const GameplayHudBatchQuad> quads,
+        uint16_t viewId, const bx::Vec3 &origin, const bx::Vec3 &right, const bx::Vec3 &up,
+        TextureFilterProfile filterProfile = TextureFilterProfile::UiIllustration) const;
     void renderHudFontLayer(
         const GameplayHudFontHandle &font,
         bgfx::TextureHandle textureHandle,
         const std::string &text,
         float textX,
         float textY,
-        float fontScale) const;
+        float fontScale,
+        const GameplayResolvedHudLayoutElement *pClip = nullptr) const;
     bool ensurePortraitRuntimeLoaded();
     void resetPortraitFxStates(size_t memberCount);
     void resetPortraitPresentationState(size_t memberCount);
@@ -392,6 +421,12 @@ private:
     std::vector<GameplayTownPortalDestination> m_townPortalDestinations;
     bool m_townPortalDestinationsLoaded = false;
     GameplayHudRenderBackend m_hudRenderBackend;
+    mutable HudArcMeshCache m_hudArcMeshCache;
+    SpriteAtlasCache *m_pSpriteAtlasCache = nullptr;
+    GameplayActorInspectClock m_actorInspectClock;
+    std::array<bgfx::UniformHandle, 6> m_previewUniforms = {{
+        BGFX_INVALID_HANDLE, BGFX_INVALID_HANDLE, BGFX_INVALID_HANDLE,
+        BGFX_INVALID_HANDLE, BGFX_INVALID_HANDLE, BGFX_INVALID_HANDLE}};
     std::vector<GameplayPortraitFxState> m_portraitFxStates;
     GameplayPortraitPresentationState m_portraitPresentationState;
     GameplayHudLoopingAnimationState m_flyBuffIconAnimationState;

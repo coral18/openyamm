@@ -1,0 +1,64 @@
+schema: openyamm.effectTextureImport.v1
+source:
+  path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/REDFLARE/REDFLARE_0006.dtx
+  format: LithTech DTX
+  sha256: cea2067b21fa6f4e210ca44b8e22b350c5302371c59d8ae0d7d1dca60208852a
+runtime:
+  texture: engine/effects/mm9/textures/redflare/redflare_0006.png
+  format: PNG RGBA8
+  colorSpace: srgb
+  alphaUsage: blend
+  premultipliedAlpha: false
+  mipPolicy: generate-at-runtime
+  minFilter: linear
+  magFilter: linear
+  wrapU: clamp
+  wrapV: clamp
+conversion:
+  decoder: tools/mm9_import_discovery/convert_abc_model.py:decode_dtx_mips
+  decodedRgbChanged: false
+  decodedAlphaChanged: false
+  opaqueAlphaRepair: false
+  zeroAlphaRgbPreserved: true
+  sourceMipArtifacts: mips/*.png
+dtx:
+  version: -5
+  width: 64
+  height: 64
+  mipCount: 4
+  sectionCount: 0
+  internalFlags: 136
+  userFlags: 0
+  extraHex: '000000000000000000000000'
+  bppIdentifier: 0
+  command: ''
+  repairOpaqueAlpha: false
+  mips:
+  - index: 0
+    width: 64
+    height: 64
+    sourceOffset: 164
+    sourceBytes: 16384
+    decodedRgbaSha256: 3cc04b7952fcfca680812ec0114be6a92fee5b4902d213cc6f32e96aaa4b1590
+    artifact: mips/00.png
+  - index: 1
+    width: 32
+    height: 32
+    sourceOffset: 16548
+    sourceBytes: 4096
+    decodedRgbaSha256: e06df21df1e91498a0934650532f18be4e4ea0e676ec5d68cedebeb7a44937a8
+    artifact: mips/01.png
+  - index: 2
+    width: 16
+    height: 16
+    sourceOffset: 20644
+    sourceBytes: 1024
+    decodedRgbaSha256: d37612312ee0342aff392ca00a868fd572d4111157f4095e0adb289de388c4ef
+    artifact: mips/02.png
+  - index: 3
+    width: 8
+    height: 8
+    sourceOffset: 21668
+    sourceBytes: 256
+    decodedRgbaSha256: 11d1ffc560e6c0b1a01a18d5fce98ecceed14d3e0b79ff1a4128c3e5c18d22fb
+    artifact: mips/03.png

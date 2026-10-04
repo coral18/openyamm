@@ -7,6 +7,12 @@ add_library(openyamm_engine
     AssetPaths.cpp
     FontAsset.cpp
     ImageAssetLoader.cpp
+    models/CgltfImplementation.cpp
+    models/GltfModelLoader.cpp
+    models/ModelAnimation.cpp
+    models/ModelAsset.cpp
+    models/ModelInstance.cpp
+    render/ModelRenderer.cpp
     SpriteAtlas.cpp
     EngineApplication.cpp
     scripting/LuaStateOwner.cpp
@@ -16,6 +22,8 @@ add_library(openyamm_engine
 target_include_directories(openyamm_engine
     PUBLIC
         ${CMAKE_SOURCE_DIR}
+    PRIVATE
+        ${OPENYAMM_BGFX_SOURCE_DIR}/3rdparty
 )
 
 target_compile_features(openyamm_engine PUBLIC cxx_std_20)

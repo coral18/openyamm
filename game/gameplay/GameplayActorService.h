@@ -124,7 +124,8 @@ public:
         bool dyingState,
         bool deadState,
         bool stunnedState,
-        bool attackingState) const;
+        bool attackingState,
+        bool force = false) const;
     bool partyIsVeryNearActor(
         float horizontalDistanceToParty,
         float verticalDistanceToParty,

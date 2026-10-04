@@ -20,16 +20,6 @@ constexpr float MobileMovementZoneY = 160.0f;
 constexpr float MobileMovementZoneWidth = 300.0f;
 constexpr float MobileMovementZoneHeight = 320.0f;
 constexpr float MobileCameraZoneX = 300.0f;
-constexpr float MobileFlightControlRightInset = 0.0f;
-constexpr float MobileFlightControlTop = 160.0f;
-constexpr float MobileFlightControlHeight = 64.0f;
-constexpr float MobileFlightControlTouchWidth = 40.0f;
-constexpr float MobileFlightControlTouchInset = 16.0f;
-constexpr float MobileFlightControlTouchPanelWidth = 96.0f;
-constexpr float MobileInspectButtonLeft = 20.0f;
-constexpr float MobileInspectButtonTop = 296.0f;
-constexpr float MobileInspectButtonWidth = 80.0f;
-constexpr float MobileInspectButtonHeight = 80.0f;
 constexpr float MobileJoystickRadius = 64.0f;
 constexpr float MobileJoystickDeadZone = 10.0f;
 constexpr float MobileJoystickFullSpeedRadius = MobileJoystickRadius * 0.7f;
@@ -268,7 +258,8 @@ void GameInputSystem::updateFromEngineInput(
     bool mobileGameplayTouchControlsEnabled,
     bool mobileJumpGestureEnabled,
     bool mobileFlightControlsEnabled,
-    bool mobileInspectControlEnabled)
+    bool mobileInspectControlEnabled,
+    std::span<const GameplayTouchControl> touchControls)
 {
     m_frame = {};
     m_frame.screenWidth = screenWidth;
@@ -406,7 +397,6 @@ void GameInputSystem::updateFromEngineInput(
     }
 
     const float touchScale = mobileLogicalScale(screenHeight);
-    const float logicalWidth = touchScale > 0.0f ? static_cast<float>(screenWidth) / touchScale : 0.0f;
     const auto touchLogicalX =
         [screenWidth, touchScale](float normalizedX) -> float
         {
@@ -417,71 +407,37 @@ void GameInputSystem::updateFromEngineInput(
         {
             return touchScale > 0.0f ? normalizedY * static_cast<float>(screenHeight) / touchScale : 0.0f;
         };
+    // Drawing and touch capture use the same resolved YAML rectangles, including runtime party width.
+    const auto controlAt = [touchControls, touchScale](float logicalX, float logicalY, GameplayTouchRole role)
+    {
+        return std::any_of(touchControls.begin(), touchControls.end(), [&](const GameplayTouchControl &control)
+        {
+            return control.role == role && control.contains(logicalX * touchScale, logicalY * touchScale);
+        });
+    };
     const auto touchStartsInHudZone =
-        [logicalWidth, &touchLogicalX, &touchLogicalY](float normalizedX, float normalizedY) -> bool
+        [&controlAt, &touchLogicalX, &touchLogicalY](float normalizedX, float normalizedY)
         {
-            const float startLogicalX = touchLogicalX(normalizedX);
-            const float startLogicalY = touchLogicalY(normalizedY);
-            return pointInsideRect(startLogicalX, startLogicalY, 0.0f, 0.0f, 562.0f, 120.0f)
-                || pointInsideRect(startLogicalX, startLogicalY, logicalWidth - 180.0f, 0.0f, 180.0f, 170.0f)
-                || pointInsideRect(startLogicalX, startLogicalY, 0.0f, 376.0f, 210.0f, 104.0f)
-                || pointInsideRect(
-                    startLogicalX,
-                    startLogicalY,
-                    logicalWidth - 268.0f,
-                    416.0f,
-                    260.0f,
-                    56.0f)
-                || pointInsideRect(startLogicalX, startLogicalY, logicalWidth - 236.0f, 284.0f, 236.0f, 128.0f)
-                || pointInsideRect(startLogicalX, startLogicalY, 320.0f, 360.0f, 420.0f, 120.0f);
+            return controlAt(touchLogicalX(normalizedX), touchLogicalY(normalizedY), GameplayTouchRole::Hud);
         };
-    const auto mobileInspectButtonAt =
-        [](float logicalX, float logicalY) -> bool
-        {
-            return pointInsideRect(
-                logicalX,
-                logicalY,
-                MobileInspectButtonLeft,
-                MobileInspectButtonTop,
-                MobileInspectButtonWidth,
-                MobileInspectButtonHeight);
-        };
+    const auto mobileInspectButtonAt = [&controlAt](float logicalX, float logicalY)
+    {
+        return controlAt(logicalX, logicalY, GameplayTouchRole::Inspect);
+    };
     const auto mobileFlightControlAt =
-        [logicalWidth, mobileFlightControlsEnabled](float logicalX, float logicalY) -> MobileTouchRole
+        [&controlAt, mobileFlightControlsEnabled](float logicalX, float logicalY) -> MobileTouchRole
         {
-            if (!mobileFlightControlsEnabled)
+            if (mobileFlightControlsEnabled)
             {
-                return MobileTouchRole::None;
+                if (controlAt(logicalX, logicalY, GameplayTouchRole::FlyUp))
+                {
+                    return MobileTouchRole::FlyUp;
+                }
+                if (controlAt(logicalX, logicalY, GameplayTouchRole::FlyDown))
+                {
+                    return MobileTouchRole::FlyDown;
+                }
             }
-
-            const float panelX =
-                logicalWidth - MobileFlightControlRightInset - MobileFlightControlTouchPanelWidth;
-
-            if (pointInsideRect(
-                    logicalX,
-                    logicalY,
-                    panelX + MobileFlightControlTouchInset,
-                    MobileFlightControlTop,
-                    MobileFlightControlTouchWidth,
-                    MobileFlightControlHeight))
-            {
-                return MobileTouchRole::FlyUp;
-            }
-
-            const float flyDownX =
-                panelX + MobileFlightControlTouchInset + MobileFlightControlTouchWidth;
-
-            if (pointInsideRect(
-                    logicalX,
-                    logicalY,
-                    flyDownX,
-                    MobileFlightControlTop,
-                    MobileFlightControlTouchWidth,
-                    MobileFlightControlHeight))
-            {
-                return MobileTouchRole::FlyDown;
-            }
-
             return MobileTouchRole::None;
         };
 
@@ -830,6 +786,7 @@ void GameInputSystem::updateFromEngineInput(
     static_cast<void>(mobileJumpGestureEnabled);
     static_cast<void>(mobileFlightControlsEnabled);
     static_cast<void>(mobileInspectControlEnabled);
+    static_cast<void>(touchControls);
 #endif
 
     m_frame.leftMouseButton = buildButtonState(leftMouseButtonHeld, m_previousLeftMouseButtonHeld);
@@ -849,6 +806,11 @@ void GameInputSystem::updateFromEngineInput(
 }
 
 const GameplayInputFrame &GameInputSystem::frame() const
+{
+    return m_frame;
+}
+
+GameplayInputFrame &GameInputSystem::frame()
 {
     return m_frame;
 }

@@ -100,6 +100,8 @@ struct IndoorCeilingSample
 struct IndoorInitialActorPlacement
 {
     bool hasFloor = false;
+    // Report body-size/room mismatches separately from missing support.
+    bool hasClearance = false;
     bool movedHorizontally = false;
     bool wallOverlapResolved = false;
     bool verticalOverlapResolved = false;
@@ -125,7 +127,9 @@ void applyIndoorMechanismDoorToVertices(
     float distance,
     std::vector<IndoorVertex> &vertices
 );
-std::vector<std::vector<uint16_t>> buildNeighboringIndoorSectorIds(const IndoorMapData &indoorMapData);
+std::vector<std::vector<uint16_t>> buildNeighboringIndoorSectorIds(
+    const IndoorMapData &indoorMapData,
+    const MapDeltaData *pMapDeltaData = nullptr);
 float fixedIndoorDoorDirectionComponentToFloat(int value);
 bool indoorDoorCarriesPartySupport(const MapDeltaDoor &door);
 bx::Vec3 indoorVertexToWorld(const IndoorVertex &vertex);
@@ -172,7 +176,30 @@ IndoorInitialActorPlacement resolveIndoorInitialActorPlacement(
     float height,
     bool canFly,
     float maxRise,
-    float maxDrop
+    float maxDrop,
+    std::optional<int16_t> preferredSectorId = std::nullopt
+);
+// Placement only: unlike movement queries, search the requested vertical interval for misplaced markers.
+IndoorFloorSample sampleIndoorPlacementFloor(
+    const IndoorMapData &indoorMapData,
+    const std::vector<IndoorVertex> &vertices,
+    IndoorFaceGeometryCache &geometryCache,
+    float x,
+    float y,
+    float z,
+    float maxRise,
+    float maxDrop,
+    std::optional<int16_t> preferredSectorId = std::nullopt
+);
+IndoorInitialActorPlacement resolveIndoorEncounterPlacement(
+    const IndoorMapData &indoorMapData,
+    const std::vector<IndoorVertex> &vertices,
+    IndoorFaceGeometryCache &geometryCache,
+    const IndoorSpawn &spawn,
+    uint32_t spawnOrdinal,
+    float radius,
+    float height,
+    bool canFly
 );
 IndoorFloorSample sampleIndoorFloor(
     const IndoorMapData &indoorMapData,

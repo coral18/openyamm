@@ -576,6 +576,7 @@ public:
 
 private:
     std::vector<MergedBolsterMonsterEntry> m_entries;
+    std::unordered_map<uint32_t, size_t> m_entryIndexById;
 };
 
 class MergedCharacterVoiceTable

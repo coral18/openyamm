@@ -122,7 +122,7 @@ AssetScaleTier assetScaleTierFromResolvedPath(const std::string &path)
         {
             return static_cast<char>(std::tolower(character));
         });
-        for (const char *pDirectory : {"icons", "ui", "textures", "bitmaps", "terrain", "sky",
+        for (const char *pDirectory : {"icons", "ui", "hud", "textures", "bitmaps", "terrain", "sky",
                                       "sprites", "decorations", "effects", "fonts"})
         {
             if (component == std::string(pDirectory) + "_x2")

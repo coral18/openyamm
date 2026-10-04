@@ -1,0 +1,121 @@
+minimum_normal_z: 0.88
+density_variation: 0.8
+patch_size: 768
+tall_grass_chance: 0.04
+tall_grass_scale: 1.5
+version: 2
+families_file: families_v2.yml
+seed: 2908646979
+distance: 4096
+rules:
+- texture: grastyl
+  family: meadow
+  density: 0.35
+  tint:
+  - 0.72
+  - 0.85
+  - 0.64
+- texture: grastyl2
+  family: meadow
+  density: 0.35
+  tint:
+  - 0.72
+  - 0.85
+  - 0.64
+  mask: masks/grastyl2_foreground.png
+- texture: grdrte
+  family: meadow
+  density: 0.35
+  tint:
+  - 0.72
+  - 0.85
+  - 0.64
+  mask: masks/grdrte_foreground.png
+- texture: grdrtn
+  family: meadow
+  density: 0.35
+  tint:
+  - 0.72
+  - 0.85
+  - 0.64
+  mask: masks/grdrtn_foreground.png
+- texture: grdrtne
+  family: meadow
+  density: 0.35
+  tint:
+  - 0.72
+  - 0.85
+  - 0.64
+  mask: masks/grdrtne_foreground.png
+- texture: grdrtnw
+  family: meadow
+  density: 0.35
+  tint:
+  - 0.72
+  - 0.85
+  - 0.64
+  mask: masks/grdrtnw_foreground.png
+- texture: grdrts
+  family: meadow
+  density: 0.35
+  tint:
+  - 0.72
+  - 0.85
+  - 0.64
+  mask: masks/grdrts_foreground.png
+- texture: grdrtse
+  family: meadow
+  density: 0.35
+  tint:
+  - 0.72
+  - 0.85
+  - 0.64
+  mask: masks/grdrtse_foreground.png
+- texture: grdrtsw
+  family: meadow
+  density: 0.35
+  tint:
+  - 0.72
+  - 0.85
+  - 0.64
+  mask: masks/grdrtsw_foreground.png
+- texture: grdrtw
+  family: meadow
+  density: 0.35
+  tint:
+  - 0.72
+  - 0.85
+  - 0.64
+  mask: masks/grdrtw_foreground.png
+- texture: grdrtxne
+  family: meadow
+  density: 0.35
+  tint:
+  - 0.72
+  - 0.85
+  - 0.64
+  mask: masks/grdrtxne_foreground.png
+- texture: grdrtxnw
+  family: meadow
+  density: 0.35
+  tint:
+  - 0.72
+  - 0.85
+  - 0.64
+  mask: masks/grdrtxnw_foreground.png
+- texture: grdrtxse
+  family: meadow
+  density: 0.35
+  tint:
+  - 0.72
+  - 0.85
+  - 0.64
+  mask: masks/grdrtxse_foreground.png
+- texture: grdrtxsw
+  family: meadow
+  density: 0.35
+  tint:
+  - 0.72
+  - 0.85
+  - 0.64
+  mask: masks/grdrtxsw_foreground.png

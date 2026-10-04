@@ -4,6 +4,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <span>
 #include <unordered_map>
 #include <vector>
 
@@ -49,6 +50,7 @@ public:
         bool checkBody = false
     ) const;
     bool traceWalkSegment(const PathPoint &from, const PathPoint &to, const PathObject &object) const;
+    bool resolveWalkStep(const PathPoint &from, PathPoint &to, const PathObject &object) const;
     PathWalkSegmentDebug debugTraceWalkSegment(
         const PathPoint &from,
         const PathPoint &to,
@@ -92,14 +94,41 @@ private:
         size_t operator()(const FloorCellKey &key) const;
     };
 
-    void candidateFacetsForBounds(const PathBounds &bounds, std::vector<size_t> &candidates) const;
-    std::vector<size_t> candidateFloorFacetsForPoint(float x, float y) const;
+    struct TraceCandidateCache
+    {
+        struct Entry
+        {
+            GridCellKey minCell;
+            GridCellKey maxCell;
+            std::vector<size_t> facets;
+        };
+
+        std::vector<Entry> entries;
+        size_t nextEntry = 0;
+    };
+
+    void candidateFacetsForBounds(
+        const PathBounds &bounds,
+        std::vector<size_t> &candidates,
+        TraceCandidateCache *pCache = nullptr) const;
+    std::span<const size_t> candidateFloorFacetsForPoint(float x, float y) const;
+    PathTraceResult traceLineInternal(
+        const PathPoint &from,
+        const PathPoint &to,
+        float radius,
+        bool checkBody,
+        TraceCandidateCache *pCache) const;
     bool traceWalkSegmentInternal(
         const PathPoint &from,
         const PathPoint &to,
         const PathObject &object,
         PathWalkSegmentDebug *pDebug
     ) const;
+    PathTraceResult traceWalkBody(
+        const PathPoint &from,
+        const PathPoint &to,
+        const PathObject &object,
+        TraceCandidateCache &cache) const;
     void rebuildGeometry();
     void rebuildSpatialGrid();
     int32_t gridCoordinate(float value) const;

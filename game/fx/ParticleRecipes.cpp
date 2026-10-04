@@ -7,6 +7,8 @@
 #include "game/fx/ParticleSystem.h"
 
 #include <algorithm>
+#include <array>
+#include <cctype>
 #include <cmath>
 #include <cstdint>
 #include <functional>
@@ -50,6 +52,71 @@ constexpr uint32_t ProjectileFxGreenishBrown = 0xff0f6464u;
 constexpr uint32_t ProjectileFxBloodRed = 0xff0000f0u;
 constexpr uint32_t ProjectileFxRed = 0xff0000ffu;
 constexpr uint32_t ProjectileFxWhite = 0xffffffffu;
+
+constexpr std::array<std::string_view, 43> ProjectileRecipeNames = {
+    "none",
+    "fire_bolt",
+    "fireball",
+    "fire_spike",
+    "immolation",
+    "meteor_shower",
+    "inferno",
+    "incinerate",
+    "starburst",
+    "implosion",
+    "cannonball",
+    "blaster",
+    "sparks",
+    "lightning_bolt",
+    "ice_bolt",
+    "ice_blast_fallout",
+    "poison_spray",
+    "acid_burst",
+    "light_bolt",
+    "sunray",
+    "stun",
+    "rock_blast",
+    "blades",
+    "death_blossom",
+    "harm",
+    "flying_fist",
+    "destroy_undead",
+    "sharpmetal",
+    "dragon_breath",
+    "dark_fire_bolt",
+    "toxic_cloud",
+    "monster_air_bolt",
+    "monster_earth_bolt",
+    "monster_fire_bolt",
+    "monster_water_bolt",
+    "monster_body_bolt",
+    "monster_mind_bolt",
+    "monster_spirit_bolt",
+    "monster_light_bolt",
+    "monster_dark_bolt",
+    "generic_particle_trail",
+    "generic_fire_trail",
+    "generic_line_trail",
+};
+
+static_assert(ProjectileRecipeNames.size() == static_cast<size_t>(ProjectileRecipe::GenericLineTrail) + 1);
+
+std::string normalizeRecipeName(std::string_view name)
+{
+    std::string normalized;
+    normalized.reserve(name.size());
+
+    for (char character : name)
+    {
+        const unsigned char unsignedCharacter = static_cast<unsigned char>(character);
+        if (std::isalnum(unsignedCharacter))
+        {
+            normalized.push_back(static_cast<char>(std::tolower(unsignedCharacter)));
+        }
+    }
+
+    return normalized;
+}
 
 struct LayerRecipe
 {
@@ -861,6 +928,27 @@ ProjectileRecipe classifyProjectileRecipe(
     }
 
     return ProjectileRecipe::None;
+}
+
+std::string_view projectileRecipeName(ProjectileRecipe recipe)
+{
+    const size_t index = static_cast<size_t>(recipe);
+    return index < ProjectileRecipeNames.size() ? ProjectileRecipeNames[index] : ProjectileRecipeNames[0];
+}
+
+std::optional<ProjectileRecipe> projectileRecipeFromName(std::string_view name)
+{
+    const std::string normalizedName = normalizeRecipeName(name);
+
+    for (size_t index = 0; index < ProjectileRecipeNames.size(); ++index)
+    {
+        if (normalizeRecipeName(ProjectileRecipeNames[index]) == normalizedName)
+        {
+            return static_cast<ProjectileRecipe>(index);
+        }
+    }
+
+    return std::nullopt;
 }
 
 const ProjectileFxRecipe &projectileFxRecipe(ProjectileRecipe recipe)

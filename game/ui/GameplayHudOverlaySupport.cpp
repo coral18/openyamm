@@ -1,3 +1,4 @@
+#include "game/ui/GameplayBuffHud.h"
 #include "game/ui/GameplayHudOverlaySupport.h"
 
 #include "game/gameplay/GameMechanics.h"
@@ -72,14 +73,6 @@ SkillMastery spellInspectCasterMasteryForSpell(const Character *pCaster, uint32_
     }
 
     return pSkill->mastery;
-}
-
-const char *activeBuffLayoutId(
-    const GameplayScreenRuntime &context,
-    const char *pWideId,
-    const char *pStandardId)
-{
-    return context.settingsSnapshot().gameplayUiLayout == GameplayUiLayout::Standard ? pStandardId : pWideId;
 }
 
 void appendPopupBodyLine(std::string &body, const std::string &line)
@@ -685,12 +678,15 @@ void GameplayHudOverlaySupport::updateCharacterInspectOverlay(
     {
         return;
     }
+    const std::optional<GameplayResolvedHudLayoutElement> viewport =
+        context.resolveHudLayoutElement("CharacterSkillsViewport", width, height, 0, 0);
+    if (!viewport || !GameplayHudCommon::isPointerInsideResolvedElement(*viewport, mouseX, mouseY))
+    {
+        return;
+    }
 
     const CharacterSkillUiData skillUiData = buildCharacterSkillUiData(pCharacter);
-    const std::optional<GameplayScreenRuntime::HudFontHandle> skillRowFont = context.findHudFont("Lucida");
-    const float skillRowHeight = skillRowFont.has_value()
-        ? float(std::max(1, skillRowFont->fontHeight - 3))
-        : 11.0f;
+    const float skillRowHeight = context.characterSkillRowHeight();
 
     const auto tryShowSkillPopup =
         [&context, &overlay, width, height, mouseX, mouseY, pCharacter, skillRowHeight](
@@ -839,261 +835,104 @@ void GameplayHudOverlaySupport::updateCharacterInspectOverlay(
 }
 
 void GameplayHudOverlaySupport::updateBuffInspectOverlay(
-    GameplayScreenRuntime &context,
-    int width,
-    int height,
-    bool showGameplayHud)
+    GameplayScreenRuntime &context, int width, int height, bool showGameplayHud)
 {
     GameplayUiController::BuffInspectOverlayState &overlay = context.buffInspectOverlay();
     overlay = {};
-
-    if (width <= 0
-        || height <= 0
-        || context.partyReadOnly() == nullptr
-        || !showGameplayHud
-        || context.currentHudScreenState() != GameplayHudScreenState::Gameplay
-        || context.characterScreenReadOnly().open
-        || context.activeEventDialog().isActive
-        || context.spellbookReadOnly().active
-        || context.controlsScreenState().active
-        || context.keyboardScreenState().active
-        || context.menuScreenState().active
-        || context.saveGameScreenState().active
-        || context.loadGameScreenState().active
-        || context.interactionState().partyPortraitRightClickItemUseLatch)
-    {
-        return;
-    }
-
+    const Party *pParty = context.partyReadOnly();
     const GameplayInputFrame *pInput = context.currentGameplayInputFrame();
-
-    if (pInput == nullptr
-        || (!pInput->rightMouseButton.held && !pInput->leftMouseButton.held)
+    if (width <= 0 || height <= 0 || pParty == nullptr || pInput == nullptr || !showGameplayHud
         || context.itemInspectOverlayReadOnly().active)
     {
         return;
     }
-
-    const float mouseX = pInput->pointerX;
-    const float mouseY = pInput->pointerY;
-
-    const Party &party = *context.partyReadOnly();
-
-    struct PartyBuffInspectTarget
+    const auto anchor = [&](const GameplayResolvedHudLayoutElement &rect)
     {
-        const char *pWideLayoutId;
-        const char *pStandardLayoutId;
-        const char *pLabel;
-        PartyBuffId buffId;
-        bool skullPanel;
+        overlay.active = true;
+        overlay.sourceX = rect.x;
+        overlay.sourceY = rect.y;
+        overlay.sourceWidth = rect.width;
+        overlay.sourceHeight = rect.height;
     };
-
-    static constexpr PartyBuffInspectTarget BuffTargets[] = {
-        {"OutdoorFlyBuffIcon", "OutdoorStandardFlyBuffIcon", "Fly", PartyBuffId::Fly, true},
-        {
-            "OutdoorBuffSkull_Torchlight",
-            "OutdoorStandardBuffSkull_Torchlight",
-            "Torch Light",
-            PartyBuffId::TorchLight,
-            true
-        },
-        {
-            "OutdoorBuffSkull_WizardEye",
-            "OutdoorStandardBuffSkull_WizardEye",
-            "Wizard Eye",
-            PartyBuffId::WizardEye,
-            true
-        },
-        {
-            "OutdoorBuffSkull_FeatherFall",
-            "OutdoorStandardBuffSkull_FeatherFall",
-            "Feather Fall",
-            PartyBuffId::FeatherFall,
-            true
-        },
-        {
-            "OutdoorBuffSkull_Stoneskin",
-            "OutdoorStandardBuffSkull_Stoneskin",
-            "Stoneskin",
-            PartyBuffId::Stoneskin,
-            true
-        },
-        {
-            "OutdoorBuffSkull_DayOfGods",
-            "OutdoorStandardBuffSkull_DayOfGods",
-            "Day of the Gods",
-            PartyBuffId::DayOfGods,
-            true
-        },
-        {
-            "OutdoorBuffSkull_ProtectionFromGods",
-            "OutdoorStandardBuffSkull_ProtectionFromGods",
-            "Protection from Magic",
-            PartyBuffId::ProtectionFromMagic,
-            true
-        },
-        {
-            "OutdoorBuffBody_FireResistance",
-            "OutdoorStandardBuffBody_FireResistance",
-            "Fire Resistance",
-            PartyBuffId::FireResistance,
-            false
-        },
-        {
-            "OutdoorBuffBody_WaterResistance",
-            "OutdoorStandardBuffBody_WaterResistance",
-            "Water Resistance",
-            PartyBuffId::WaterResistance,
-            false
-        },
-        {
-            "OutdoorBuffBody_AirResistance",
-            "OutdoorStandardBuffBody_AirResistance",
-            "Air Resistance",
-            PartyBuffId::AirResistance,
-            false
-        },
-        {
-            "OutdoorBuffBody_EarthResistance",
-            "OutdoorStandardBuffBody_EarthResistance",
-            "Earth Resistance",
-            PartyBuffId::EarthResistance,
-            false
-        },
-        {
-            "OutdoorBuffBody_MindResistance",
-            "OutdoorStandardBuffBody_MindResistance",
-            "Mind Resistance",
-            PartyBuffId::MindResistance,
-            false
-        },
-        {
-            "OutdoorBuffBody_BodyResistance",
-            "OutdoorStandardBuffBody_BodyResistance",
-            "Body Resistance",
-            PartyBuffId::BodyResistance,
-            false
-        },
-        {"OutdoorBuffBody_Shield", "OutdoorStandardBuffBody_Shield", "Shield", PartyBuffId::Shield, false},
-        {"OutdoorBuffBody_Heroism", "OutdoorStandardBuffBody_Heroism", "Heroism", PartyBuffId::Heroism, false},
-        {"OutdoorBuffBody_Haste", "OutdoorStandardBuffBody_Haste", "Haste", PartyBuffId::Haste, false},
-        {
-            "OutdoorBuffBody_Immolation",
-            "OutdoorStandardBuffBody_Immolation",
-            "Immolation",
-            PartyBuffId::Immolation,
-            false
-        },
-    };
-
-    const auto populateBuffPanelOverlay =
-        [&overlay, &party](bool skullPanel, const GameplayScreenRuntime::ResolvedHudLayoutElement &rect)
-        {
-            std::string body;
-
-            for (const PartyBuffInspectTarget &target : BuffTargets)
-            {
-                if (target.skullPanel != skullPanel)
-                {
-                    continue;
-                }
-
-                const PartyBuffState *pBuff = party.partyBuff(target.buffId);
-
-                if (pBuff == nullptr)
-                {
-                    continue;
-                }
-
-                appendPopupBodyLine(
-                    body,
-                    std::string(target.pLabel) + " - " + formatRemainingDuration(pBuff->remainingSeconds));
-            }
-
-            if (body.empty())
-            {
-                body = "No active buffs";
-            }
-
-            overlay.active = true;
-            overlay.title = "Active Buffs";
-            overlay.body = body;
-            overlay.sourceX = rect.x;
-            overlay.sourceY = rect.y;
-            overlay.sourceWidth = rect.width;
-            overlay.sourceHeight = rect.height;
-        };
-
-    for (const PartyBuffInspectTarget &target : BuffTargets)
+    if (context.interactionState().personalBuffPopupMember)
     {
-        const PartyBuffState *pBuff = party.partyBuff(target.buffId);
-
-        if (pBuff == nullptr)
+        const size_t member = *context.interactionState().personalBuffPopupMember;
+        const Character *pCharacter = pParty->member(member);
+        const std::optional<GameplayResolvedHudLayoutElement> rect =
+            context.resolvePartyPortraitRect(width, height, member);
+        if (pCharacter != nullptr && rect)
         {
-            continue;
+            overlay.title = pCharacter->name;
+            for (size_t b = 0; b < CharacterBuffCount; ++b)
+            {
+                const CharacterBuffState *pBuff = pParty->characterBuff(member, static_cast<CharacterBuffId>(b));
+                if (pBuff != nullptr)
+                {
+                    appendPopupBodyLine(overlay.body, std::string(GameplayPersonalBuffNames[b]) + " - "
+                        + formatRemainingDuration(pBuff->remainingSeconds));
+                }
+            }
+            if (!overlay.body.empty())
+            {
+                anchor(*rect);
+            }
+            else
+            {
+                context.interactionState().personalBuffPopupMember.reset();
+            }
         }
-
-        const char *pLayoutId = activeBuffLayoutId(context, target.pWideLayoutId, target.pStandardLayoutId);
-        const GameplayScreenRuntime::HudLayoutElement *pLayout = context.findHudLayoutElement(pLayoutId);
-
-        if (pLayout == nullptr)
-        {
-            continue;
-        }
-
-        const std::optional<GameplayScreenRuntime::ResolvedHudLayoutElement> resolved = context.resolveHudLayoutElement(
-            pLayoutId,
-            width,
-            height,
-            pLayout->width,
-            pLayout->height);
-
-        if (!resolved || !GameplayHudCommon::isPointerInsideResolvedElement(*resolved, mouseX, mouseY))
-        {
-            continue;
-        }
-
-        populateBuffPanelOverlay(target.skullPanel, *resolved);
+    }
+    if (!pInput->rightMouseButton.held || context.currentHudScreenState() != GameplayHudScreenState::Gameplay)
+    {
         return;
     }
-
-    struct BuffPanelTarget
+    for (GameplayBuffPresentation panel : {GameplayBuffPresentation::Hero, GameplayBuffPresentation::Skull})
     {
-        const char *pWideLayoutId;
-        const char *pStandardLayoutId;
-        bool skullPanel;
-    };
-
-    static constexpr BuffPanelTarget PanelTargets[] = {
-        {"OutdoorBuffSkullPanel", "OutdoorStandardBuffSkullPanel", true},
-        {"OutdoorBuffBodyPanel", "OutdoorStandardBuffBodyPanel", false},
-    };
-
-    for (const BuffPanelTarget &panelTarget : PanelTargets)
-    {
-        const char *pLayoutId = activeBuffLayoutId(context, panelTarget.pWideLayoutId, panelTarget.pStandardLayoutId);
-        const GameplayScreenRuntime::HudLayoutElement *pPanelLayout = context.findHudLayoutElement(pLayoutId);
-
-        if (pPanelLayout == nullptr)
+        const std::optional<GameplayResolvedHudLayoutElement> rect =
+            context.resolveHudLayoutElement(gameplayBuffPanelLayoutId(panel), width, height, 0, 0);
+        if (!rect || !GameplayHudCommon::isPointerInsideResolvedElement(*rect, pInput->pointerX, pInput->pointerY))
         {
             continue;
         }
-
-        const std::optional<GameplayScreenRuntime::ResolvedHudLayoutElement> resolvedPanel =
-            context.resolveHudLayoutElement(
-                pLayoutId,
-                width,
-                height,
-                pPanelLayout->width,
-                pPanelLayout->height);
-
-        if (!resolvedPanel || !GameplayHudCommon::isPointerInsideResolvedElement(*resolvedPanel, mouseX, mouseY))
+        overlay.title = "Active Party Buffs";
+        overlay.body.clear();
+        for (PartyBuffId id : sortedGameplayBuffs(*pParty))
         {
-            continue;
+            const GameplayBuffHudDefinition &definition = GameplayBuffHudDefinitions[size_t(id)];
+            if (definition.presentation == panel)
+            {
+                appendPopupBodyLine(overlay.body, std::string(definition.pName) + " - "
+                    + formatRemainingDuration(pParty->partyBuff(id)->remainingSeconds));
+            }
         }
-
-        populateBuffPanelOverlay(panelTarget.skullPanel, *resolvedPanel);
+        if (overlay.body.empty())
+        {
+            overlay.body = "No active buffs";
+        }
+        anchor(*rect);
         return;
+    }
+    std::optional<GameplayBuffHudEntry> inspected =
+        gameplayMovementBuffAtPoint(context, width, height, pInput->pointerX, pInput->pointerY);
+    for (const GameplayBuffHudEntry &entry : gameplayBuffHudEntries(context, width, height))
+    {
+        if (!GameplayHudCommon::isPointerInsideResolvedElement(entry.rect, pInput->pointerX, pInput->pointerY))
+        {
+            continue;
+        }
+        inspected = entry;
+        break;
+    }
+    if (inspected)
+    {
+        const PartyBuffState *pBuff = pParty->partyBuff(inspected->id);
+        overlay.title = GameplayBuffHudDefinitions[size_t(inspected->id)].pName;
+        overlay.body = formatRemainingDuration(pBuff->remainingSeconds);
+        if (pBuff->power > 0)
+        {
+            appendPopupBodyLine(overlay.body, "Power: " + std::to_string(pBuff->power));
+        }
+        anchor(inspected->rect);
     }
 }
 
@@ -1351,16 +1190,17 @@ void GameplayHudOverlaySupport::renderGameplayMouseLookOverlay(
     const float centerX = std::round(static_cast<float>(width) * 0.5f);
     const float centerY = std::round(static_cast<float>(height) * 0.5f);
     const float armLength = std::round(3.0f * overlayScale);
-    const float armGap = std::round(1.0f * overlayScale);
+    const float outlineWidth = 1.0f;
+    const float armGap = std::max(outlineWidth + 1.0f, std::round(1.0f * overlayScale));
     const float stroke = std::max(1.0f, std::round(1.0f * overlayScale));
-    const uint32_t dotColor = packHudColorAbgr(255, 255, 180);
-    const uint32_t shadowColor = 0xc0000000u;
+    const uint32_t dotColor = packHudColorAbgr(255, 250, 224);
+    const uint32_t outlineColor = packHudColorAbgr(16, 20, 17);
     const std::optional<GameplayScreenRuntime::HudTextureHandle> dotTexture =
         context.gameplayUiRuntime().ensureSolidHudTextureLoaded("__gameplay_mouse_look_marker__", dotColor);
-    const std::optional<GameplayScreenRuntime::HudTextureHandle> shadowTexture =
-        context.gameplayUiRuntime().ensureSolidHudTextureLoaded("__gameplay_mouse_look_marker_shadow__", shadowColor);
+    const std::optional<GameplayScreenRuntime::HudTextureHandle> outlineTexture =
+        context.gameplayUiRuntime().ensureSolidHudTextureLoaded("__gameplay_mouse_look_marker_outline__", outlineColor);
 
-    if (!dotTexture || !shadowTexture)
+    if (!dotTexture || !outlineTexture)
     {
         return;
     }
@@ -1371,10 +1211,31 @@ void GameplayHudOverlaySupport::renderGameplayMouseLookOverlay(
             context.submitHudTexturedQuad(texture, x, y, quadWidth, quadHeight);
         };
 
-    submitQuad(*shadowTexture, centerX - stroke * 0.5f + 1.0f, centerY - armGap - armLength + 1.0f, stroke, armLength);
-    submitQuad(*shadowTexture, centerX - stroke * 0.5f + 1.0f, centerY + armGap + 1.0f, stroke, armLength);
-    submitQuad(*shadowTexture, centerX - armGap - armLength + 1.0f, centerY - stroke * 0.5f + 1.0f, armLength, stroke);
-    submitQuad(*shadowTexture, centerX + armGap + 1.0f, centerY - stroke * 0.5f + 1.0f, armLength, stroke);
+    // Keep the aiming center open, with a complete dark contour on every ivory arm.
+    submitQuad(
+        *outlineTexture,
+        centerX - stroke * 0.5f - outlineWidth,
+        centerY - armGap - armLength - outlineWidth,
+        stroke + outlineWidth * 2.0f,
+        armLength + outlineWidth * 2.0f);
+    submitQuad(
+        *outlineTexture,
+        centerX - stroke * 0.5f - outlineWidth,
+        centerY + armGap - outlineWidth,
+        stroke + outlineWidth * 2.0f,
+        armLength + outlineWidth * 2.0f);
+    submitQuad(
+        *outlineTexture,
+        centerX - armGap - armLength - outlineWidth,
+        centerY - stroke * 0.5f - outlineWidth,
+        armLength + outlineWidth * 2.0f,
+        stroke + outlineWidth * 2.0f);
+    submitQuad(
+        *outlineTexture,
+        centerX + armGap - outlineWidth,
+        centerY - stroke * 0.5f - outlineWidth,
+        armLength + outlineWidth * 2.0f,
+        stroke + outlineWidth * 2.0f);
 
     submitQuad(*dotTexture, centerX - stroke * 0.5f, centerY - armGap - armLength, stroke, armLength);
     submitQuad(*dotTexture, centerX - stroke * 0.5f, centerY + armGap, stroke, armLength);

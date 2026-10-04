@@ -72,10 +72,11 @@ public:
             entry.standard = descendantOfAny(manager, *pLayout, {"outdoorstandardbasebar", "outdoorstandardtopbar"});
             entry.followerPanel = descendantOfAny(manager, *pLayout, {"outdoorfollowerpanel"});
             entry.widescreen = entry.followerPanel || descendantOfAny(manager, *pLayout, {
-                "outdoorfollowertoggle", "outdoorgameplaybasebar", "outdooroptionsbar", "outdoorgoldbar",
-                "outdoorfoodrestbar", "outdoorflybufficon", "outdoorbuffbodypanel", "outdoorbuffskullpanel",
+                "outdoorfollowertoggle", "outdoorgameplaybasebar", "outdoortopbar", "outdooroptionsbar", "outdoorgoldbar",
+                "outdoorfoodrestbar", "outdoorflybufficon", "outdoorwaterwalkbufficon",
+                "outdoorbuffbodypanel", "outdoorbuffskullpanel",
                 "outdoorminimapframe", "outdoormobileactionpanel", "outdoormobileflightpanel",
-                "outdoormobilesystempanel",
+                "outdoormobilesystempanel", "outdoormobilebuttonquickcast",
                 "outdoormobilemovementzone"});
             if (entry.overlay || entry.standard || entry.widescreen)
             {
@@ -110,7 +111,9 @@ private:
 
     static bool manuallyRendered(const std::string &normalizedLayoutId)
     {
-        return normalizedLayoutId == "outdoorbasebar"
+        return normalizedLayoutId.starts_with("obsidianpc")
+            || normalizedLayoutId.starts_with("obsidianoverlaypc")
+            || normalizedLayoutId == "outdoorbasebar"
             || normalizedLayoutId == "outdoorpartystrip"
             || normalizedLayoutId == "outdoorstandardbasebar"
             || normalizedLayoutId == "outdoorstandardpartystrip"
@@ -123,6 +126,7 @@ private:
             || normalizedLayoutId == "outdoorgameplaybasebar_ornright1"
             || normalizedLayoutId == "outdoorgameplaybasebar_ornright2"
             || normalizedLayoutId == "outdoormobileinspectbutton"
+            || normalizedLayoutId == "outdoormobileoverlayinspectbutton"
             || normalizedLayoutId == "outdoormobileinspectbuttonicon"
             || normalizedLayoutId.rfind("charshield_", 0) == 0
             || normalizedLayoutId.rfind("outdoorstandardcharshield_", 0) == 0;

@@ -746,11 +746,11 @@ bool GameplayActorService::canActorEnterHitReaction(
     bool dyingState,
     bool deadState,
     bool stunnedState,
-    bool attackingState) const
+    bool attackingState,
+    bool force) const
 {
     return !isActorUnavailableForCombat(invisible, dead, hpDepleted, dyingState, deadState)
-        && !stunnedState
-        && !attackingState;
+        && (force || (!stunnedState && !attackingState));
 }
 
 bool GameplayActorService::partyIsVeryNearActor(

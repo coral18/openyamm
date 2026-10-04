@@ -1,0 +1,64 @@
+schema: openyamm.effectTextureImport.v1
+source:
+  path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/GREENYELLOWTHINGY/BLURREDGREENYELSTAR.dtx
+  format: LithTech DTX
+  sha256: c192cab38601e64ef1d9211302c683fd4d6a4bc227c00fdcf1d3e5d6450ee2e6
+runtime:
+  texture: engine/effects/mm9/textures/greenyellowthingy/blurredgreenyelstar.png
+  format: PNG RGBA8
+  colorSpace: srgb
+  alphaUsage: blend
+  premultipliedAlpha: false
+  mipPolicy: generate-at-runtime
+  minFilter: linear
+  magFilter: linear
+  wrapU: clamp
+  wrapV: clamp
+conversion:
+  decoder: tools/mm9_import_discovery/convert_abc_model.py:decode_dtx_mips
+  decodedRgbChanged: false
+  decodedAlphaChanged: false
+  opaqueAlphaRepair: false
+  zeroAlphaRgbPreserved: true
+  sourceMipArtifacts: mips/*.png
+dtx:
+  version: -5
+  width: 32
+  height: 32
+  mipCount: 4
+  sectionCount: 0
+  internalFlags: 136
+  userFlags: 0
+  extraHex: '000003000000000000000000'
+  bppIdentifier: 3
+  command: ''
+  repairOpaqueAlpha: false
+  mips:
+  - index: 0
+    width: 32
+    height: 32
+    sourceOffset: 164
+    sourceBytes: 4096
+    decodedRgbaSha256: ac6607d890e520fec92b1022e5ebf78ae0db5e42f316c661f25548dd52d404c4
+    artifact: mips/00.png
+  - index: 1
+    width: 16
+    height: 16
+    sourceOffset: 4260
+    sourceBytes: 1024
+    decodedRgbaSha256: 8186c827849e9752a48106f7ce9814a8d11a59dfaff1ca8f96910f134139ef84
+    artifact: mips/01.png
+  - index: 2
+    width: 8
+    height: 8
+    sourceOffset: 5284
+    sourceBytes: 256
+    decodedRgbaSha256: cc452fd82776d2d9a2480e3683b3de425dd5ec27cced2c8ed4d75e9c21c80fbe
+    artifact: mips/02.png
+  - index: 3
+    width: 4
+    height: 4
+    sourceOffset: 5540
+    sourceBytes: 64
+    decodedRgbaSha256: 27c224b1539372abd99508734ca8f55a11cf10582a017272f304635b8662925a
+    artifact: mips/03.png

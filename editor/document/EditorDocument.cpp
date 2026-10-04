@@ -15,6 +15,7 @@
 #include <iomanip>
 #include <sstream>
 #include <string_view>
+#include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
@@ -923,6 +924,38 @@ void orientImportedFaceWinding(
     }
 }
 
+uint8_t classifyAuthoredFacePolygonType(
+    const std::vector<Game::OutdoorBModelVertex> &vertices,
+    const Game::OutdoorBModelFace &face)
+{
+    if (face.vertexIndices.size() < 3)
+    {
+        return 0;
+    }
+
+    const Game::OutdoorBModelVertex &a = vertices[face.vertexIndices[0]];
+    const Game::OutdoorBModelVertex &b = vertices[face.vertexIndices[1]];
+    const Game::OutdoorBModelVertex &c = vertices[face.vertexIndices[2]];
+    const float abX = b.x - a.x;
+    const float abY = b.y - a.y;
+    const float abZ = b.z - a.z;
+    const float acX = c.x - a.x;
+    const float acY = c.y - a.y;
+    const float acZ = c.z - a.z;
+    const float normalX = abY * acZ - abZ * acY;
+    const float normalY = abZ * acX - abX * acZ;
+    const float normalZ = abX * acY - abY * acX;
+    const float length = std::sqrt(normalX * normalX + normalY * normalY + normalZ * normalZ);
+
+    if (length <= 0.0001f || std::fabs(normalZ) <= 0.0001f)
+    {
+        return 1;
+    }
+
+    const bool horizontal = std::fabs(normalX) <= 0.0001f && std::fabs(normalY) <= 0.0001f;
+    return normalZ > 0.0f ? (horizontal ? 3 : 4) : (horizontal ? 5 : 6);
+}
+
 void generateFallbackFaceTextureCoordinates(
     const std::vector<Game::OutdoorBModelVertex> &vertices,
     Game::OutdoorBModelFace &face)
@@ -1149,6 +1182,7 @@ Game::OutdoorBModel buildImportedBModel(
     }
 
     bmodel.vertices = std::move(importedVertices);
+    std::unordered_map<std::string, std::array<int, 2>> textureSizes;
     for (const ImportedModelFace &importedFace : importedModel.faces)
     {
         Game::OutdoorBModelFace face = {};
@@ -1168,9 +1202,16 @@ Game::OutdoorBModel buildImportedBModel(
             &importSource,
             importedFace.materialName);
 
-        int textureWidth = 256;
-        int textureHeight = 256;
-        loadBitmapTextureSize(assetFileSystem, bitmapTextureNames, face.textureName, textureWidth, textureHeight);
+        const auto [textureSize, inserted] = textureSizes.try_emplace(face.textureName, std::array<int, 2>{256, 256});
+
+        if (inserted)
+        {
+            loadBitmapTextureSize(
+                assetFileSystem, bitmapTextureNames, face.textureName, textureSize->second[0], textureSize->second[1]);
+        }
+
+        const int textureWidth = textureSize->second[0];
+        const int textureHeight = textureSize->second[1];
         bool allVerticesHaveUv = true;
         bool hasVaryingUv = false;
         float firstU = 0.0f;
@@ -1214,12 +1255,19 @@ Game::OutdoorBModel buildImportedBModel(
             }
         }
 
-        orientImportedFaceWinding(
-            bmodel.vertices,
-            face,
-            resolvedTransform.originX,
-            resolvedTransform.originY,
-            resolvedTransform.originZ);
+        if (importSource.preserveSourceWinding)
+        {
+            face.polygonType = classifyAuthoredFacePolygonType(bmodel.vertices, face);
+        }
+        else
+        {
+            orientImportedFaceWinding(
+                bmodel.vertices,
+                face,
+                resolvedTransform.originX,
+                resolvedTransform.originY,
+                resolvedTransform.originZ);
+        }
 
         if (!allVerticesHaveUv || !hasVaryingUv)
         {
@@ -2082,6 +2130,7 @@ bool EditorDocument::loadOutdoorSceneVirtualPath(
     const std::string &sceneVirtualPath,
     std::string &errorMessage)
 {
+    assetFileSystem.refreshLookupCache();
     const std::optional<std::string> sceneText = assetFileSystem.readTextFile(sceneVirtualPath);
 
     if (!sceneText)
@@ -2114,6 +2163,7 @@ bool EditorDocument::loadIndoorSceneVirtualPath(
     const std::string &sceneVirtualPath,
     std::string &errorMessage)
 {
+    assetFileSystem.refreshLookupCache();
     const std::optional<std::string> sceneText = assetFileSystem.readTextFile(sceneVirtualPath);
 
     if (!sceneText)
@@ -2130,6 +2180,7 @@ bool EditorDocument::loadMapPhysicalPath(
     const std::filesystem::path &path,
     std::string &errorMessage)
 {
+    assetFileSystem.refreshLookupCache();
     const std::filesystem::path normalizedPath = std::filesystem::absolute(path);
     const std::string fileNameLower = toLowerCopy(normalizedPath.filename().string());
     const std::string extensionLower = toLowerCopy(normalizedPath.extension().string());
@@ -2788,8 +2839,18 @@ bool EditorDocument::buildRuntimeAs(const std::filesystem::path &scenePhysicalPa
         scenePhysicalPath,
         m_outdoorSceneData.geometryFile);
     const std::filesystem::path targetGeometryPath = scenePhysicalPath.parent_path() / targetGeometryFileName;
+    Game::OutdoorMapData compiledOutdoorGeometry = m_outdoorGeometry;
+    Game::MapDeltaData compiledInitialState = {};
+
+    // Bake authored native face bindings, decorations and spawns through the same scene assembly as runtime.
+    if (!Game::buildOutdoorMapStateFromScene(
+            m_outdoorSceneData, compiledOutdoorGeometry, compiledInitialState, errorMessage))
+    {
+        return false;
+    }
+
     const std::optional<std::vector<uint8_t>> geometryBytes =
-        compileOutdoorGeometryBytes(m_outdoorGeometry, m_outdoorGeometrySourceBytes);
+        compileOutdoorGeometryBytes(compiledOutdoorGeometry, m_outdoorGeometrySourceBytes);
 
     if (!geometryBytes)
     {

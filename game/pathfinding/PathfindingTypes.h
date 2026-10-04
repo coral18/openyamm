@@ -78,8 +78,11 @@ struct PathObject
 {
     bool canFly = false;
     float radius = 0.0f;
+    // Walking height above the feet; zero uses only the lower radius probe.
+    float height = 0.0f;
     float stepLength = 24.0f;
     float stepHeight = 40.0f;
+    float dropHeight = 40.0f;
 };
 
 enum class PathWalkRejectReason
@@ -185,11 +188,15 @@ struct ActorPathState
     bool inProgress = false;
     bool directCheckValid = false;
     bool lastDirectReachable = false;
+    PathPoint directCheckSource;
+    PathPoint directCheckTarget;
+    PathObject directCheckObject;
     bool recoverySourceWaypointActive = false;
     bool recoveryBestWaypointActive = false;
     PathPlanStatus planStatus = PathPlanStatus::NotRequested;
     double failedUntilSeconds = 0.0;
     double nextDirectCheckSeconds = 0.0;
+    double lastDirectCheckSeconds = 0.0;
     double nextPlanSeconds = 0.0;
     double nextShortcutCheckSeconds = 0.0;
     double lastWaypointProgressSeconds = 0.0;

@@ -835,6 +835,9 @@ bool MonsterTable::loadEntriesFromRows(const std::vector<std::vector<std::string
     static constexpr size_t ColumnWinceSoundId = 9;
     static constexpr size_t ColumnAwareSoundId = 10;
     static constexpr size_t ColumnSpriteStanding = 11;
+    static constexpr size_t ColumnInspectYOffset = 19;
+    static constexpr size_t ColumnInspectAttackChance = 20;
+    static constexpr size_t ColumnInspectFidgetWhenMoving = 21;
 
     size_t maxId = 0;
 
@@ -892,6 +895,13 @@ bool MonsterTable::loadEntriesFromRows(const std::vector<std::vector<std::string
         entry.soundSampleIds[3] = row.size() > ColumnAwareSoundId && !trimCopy(row[ColumnAwareSoundId]).empty()
             ? static_cast<uint16_t>(std::stoi(trimCopy(row[ColumnAwareSoundId])))
             : 0;
+        entry.inspectYOffset = row.size() > ColumnInspectYOffset && !trimCopy(row[ColumnInspectYOffset]).empty()
+            ? std::stoi(row[ColumnInspectYOffset]) : 0;
+        entry.inspectAttackChance = row.size() > ColumnInspectAttackChance
+            && !trimCopy(row[ColumnInspectAttackChance]).empty()
+            ? std::clamp(std::stoi(row[ColumnInspectAttackChance]), 0, 100) : 100;
+        entry.inspectFidgetWhenMoving = row.size() > ColumnInspectFidgetWhenMoving
+            && trimCopy(row[ColumnInspectFidgetWhenMoving]) == "1";
 
         for (size_t spriteIndex = 0; spriteIndex < entry.spriteNames.size(); ++spriteIndex)
         {

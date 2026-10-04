@@ -1,3 +1,7 @@
+#include "game/ui/GameplayHudGeometry.h"
+#include "game/ui/GameplayUiSkin.h"
+#include "game/ui/GameplayBuffHud.h"
+#include "game/ui/GameplayClock.h"
 #include "game/ui/GameplayUiRenderer.h"
 
 #include "game/gameplay/GameMechanics.h"
@@ -30,8 +34,6 @@ constexpr int EventNpcPortraitNativeWidth = 63;
 constexpr int EventNpcPortraitNativeHeight = 73;
 constexpr float EventNpcPortraitUvCropX = 2.0f;
 constexpr float EventNpcPortraitUvCropY = 2.0f;
-constexpr float TurnBasedIndicatorX = 394.0f;
-constexpr float TurnBasedIndicatorY = 288.0f;
 constexpr uint32_t MistformPortraitModulationAbgr = 0x80ffffffu;
 
 enum class PortraitAggroIndicator
@@ -65,51 +67,6 @@ PointerRenderInput pointerRenderInput(const GameplayScreenRuntime &context)
     input.mouseY = pInputFrame->pointerY;
     input.isLeftMousePressed = pInputFrame->leftMouseButton.held;
     return input;
-}
-
-std::string turnBasedIndicatorAnimationName(const TurnBasedCombatRuntime &turnBasedRuntime)
-{
-    if (!turnBasedRuntime.active())
-    {
-        return {};
-    }
-
-    switch (turnBasedRuntime.stage())
-    {
-        case TurnBasedCombatStage::Attack:
-            return "turnstop";
-        case TurnBasedCombatStage::Movement:
-        {
-            const int spentMovementSteps = std::clamp((130 - turnBasedRuntime.movementActionPoints()) / 26, 0, 4);
-            return "turn" + std::to_string(spentMovementSteps);
-        }
-        case TurnBasedCombatStage::Wait:
-            return "turnhour";
-        case TurnBasedCombatStage::None:
-        default:
-            return {};
-    }
-}
-
-std::string normalizeGameplayLayoutRoleIdFromNormalized(const std::string &normalizedId);
-
-std::string normalizeGameplayLayoutRoleId(const std::string &layoutId)
-{
-    std::string normalizedLayoutId = toLowerCopy(layoutId);
-    return normalizeGameplayLayoutRoleIdFromNormalized(normalizedLayoutId);
-}
-
-std::string normalizeGameplayLayoutRoleIdFromNormalized(const std::string &normalizedId)
-{
-    std::string normalizedLayoutId = normalizedId;
-    constexpr std::string_view standardPrefix = "outdoorstandard";
-
-    if (normalizedLayoutId.rfind(standardPrefix, 0) == 0)
-    {
-        normalizedLayoutId = "outdoor" + normalizedLayoutId.substr(standardPrefix.size());
-    }
-
-    return normalizedLayoutId;
 }
 
 std::string npcPortraitTextureName(uint32_t pictureId)
@@ -157,40 +114,6 @@ bool isOverlayHudState(GameplayHudScreenState hudScreenState)
         || hudScreenState == GameplayHudScreenState::LoadGame
         || hudScreenState == GameplayHudScreenState::Journal
         || hudScreenState == GameplayHudScreenState::QuickReference;
-}
-
-const char *basebarLayoutIdForHudLayout(GameplayHudLayoutMode layout)
-{
-    switch (layout)
-    {
-    case GameplayHudLayoutMode::Overlay:
-        return "OutdoorBasebar";
-
-    case GameplayHudLayoutMode::Standard:
-        return "OutdoorStandardBasebar";
-
-    case GameplayHudLayoutMode::Widescreen:
-        return "OutdoorGameplayBasebar";
-    }
-
-    return "OutdoorGameplayBasebar";
-}
-
-const char *partyStripLayoutIdForHudLayout(GameplayHudLayoutMode layout)
-{
-    switch (layout)
-    {
-    case GameplayHudLayoutMode::Overlay:
-        return "OutdoorPartyStrip";
-
-    case GameplayHudLayoutMode::Standard:
-        return "OutdoorStandardPartyStrip";
-
-    case GameplayHudLayoutMode::Widescreen:
-        return "OutdoorGameplayPartyStrip";
-    }
-
-    return "OutdoorGameplayPartyStrip";
 }
 
 int outdoorMinimapArrowIndex(float yawRadians)
@@ -403,623 +326,300 @@ void submitLineClipped(
     queuedHudQuads.push_back(quad);
 }
 
-bool isBuffLayoutVisible(
-    const GameplayScreenRuntime &context,
-    const Party &party,
-    const std::string &layoutId)
-{
-    const std::string normalizedLayoutId = normalizeGameplayLayoutRoleId(layoutId);
-
-    if (normalizedLayoutId == "outdoormobileflightpanel"
-        || normalizedLayoutId == "outdoormobilebuttonflyup"
-        || normalizedLayoutId == "outdoormobilebuttonflydown")
-    {
-        return context.mobileFlightControlsAvailable();
-    }
-
-    if (normalizedLayoutId == "outdoorbuffskullpanel" || normalizedLayoutId == "outdoorbuffbodypanel")
-    {
-        return true;
-    }
-
-    if (normalizedLayoutId == "outdoorbuffskull_torchlight")
-    {
-        return party.hasPartyBuff(PartyBuffId::TorchLight);
-    }
-
-    if (normalizedLayoutId == "outdoorbuffskull_wizardeye")
-    {
-        return party.hasPartyBuff(PartyBuffId::WizardEye);
-    }
-
-    if (normalizedLayoutId == "outdoorbuffskull_featherfall")
-    {
-        return party.hasPartyBuff(PartyBuffId::FeatherFall);
-    }
-
-    if (normalizedLayoutId == "outdoorbuffskull_detectlife")
-    {
-        return party.hasPartyBuff(PartyBuffId::DetectLife);
-    }
-
-    if (normalizedLayoutId == "outdoorbuffskull_waterwalk")
-    {
-        return party.hasPartyBuff(PartyBuffId::WaterWalk);
-    }
-
-    if (normalizedLayoutId == "outdoorbuffskull_fly")
-    {
-        return party.hasPartyBuff(PartyBuffId::Fly);
-    }
-
-    if (normalizedLayoutId == "outdoorbuffskull_invisibility")
-    {
-        return party.hasPartyBuff(PartyBuffId::Invisibility);
-    }
-
-    if (normalizedLayoutId == "outdoorbuffskull_immolation")
-    {
-        return party.hasPartyBuff(PartyBuffId::Immolation);
-    }
-
-    if (normalizedLayoutId == "outdoorflybufficon")
-    {
-        return party.hasPartyBuff(PartyBuffId::Fly);
-    }
-
-    if (normalizedLayoutId == "outdoorbuffskull_stoneskin")
-    {
-        return party.hasPartyBuff(PartyBuffId::Stoneskin);
-    }
-
-    if (normalizedLayoutId == "outdoorbuffskull_dayofgods")
-    {
-        return party.hasPartyBuff(PartyBuffId::DayOfGods);
-    }
-
-    if (normalizedLayoutId == "outdoorbuffskull_protectionfromgods")
-    {
-        return party.hasPartyBuff(PartyBuffId::ProtectionFromMagic);
-    }
-
-    if (normalizedLayoutId == "outdoorbuffbody_fireresistance")
-    {
-        return party.hasPartyBuff(PartyBuffId::FireResistance);
-    }
-
-    if (normalizedLayoutId == "outdoorbuffbody_waterresistance")
-    {
-        return party.hasPartyBuff(PartyBuffId::WaterResistance);
-    }
-
-    if (normalizedLayoutId == "outdoorbuffbody_airresistance")
-    {
-        return party.hasPartyBuff(PartyBuffId::AirResistance);
-    }
-
-    if (normalizedLayoutId == "outdoorbuffbody_earthresistance")
-    {
-        return party.hasPartyBuff(PartyBuffId::EarthResistance);
-    }
-
-    if (normalizedLayoutId == "outdoorbuffbody_mindresistance")
-    {
-        return party.hasPartyBuff(PartyBuffId::MindResistance);
-    }
-
-    if (normalizedLayoutId == "outdoorbuffbody_bodyresistance")
-    {
-        return party.hasPartyBuff(PartyBuffId::BodyResistance);
-    }
-
-    if (normalizedLayoutId == "outdoorbuffbody_shield")
-    {
-        return party.hasPartyBuff(PartyBuffId::Shield);
-    }
-
-    if (normalizedLayoutId == "outdoorbuffbody_heroism")
-    {
-        return party.hasPartyBuff(PartyBuffId::Heroism);
-    }
-
-    if (normalizedLayoutId == "outdoorbuffbody_haste")
-    {
-        return party.hasPartyBuff(PartyBuffId::Haste);
-    }
-
-    if (normalizedLayoutId == "outdoorbuffbody_immolation")
-    {
-        return party.hasPartyBuff(PartyBuffId::Immolation);
-    }
-
-    if (normalizedLayoutId == "outdoorbuffskull_frame" || normalizedLayoutId == "outdoorbuffbody_frame")
-    {
-        return true;
-    }
-
-    if (normalizedLayoutId.rfind("outdoorbuffskull_", 0) == 0
-        || normalizedLayoutId.rfind("outdoorbuffbody_", 0) == 0)
-    {
-        return false;
-    }
-
-    return true;
-}
-
 } // namespace
 
 void GameplayUiRenderer::renderGameplayHudArt(GameplayScreenRuntime &context, int width, int height)
 {
     Party *pParty = context.party();
-
     if (pParty == nullptr || !context.hasHudRenderResources() || width <= 0 || height <= 0)
     {
         return;
     }
-
+    context.prepareHudView(width, height);
     const GameplayHudScreenState hudScreenState = context.currentHudScreenState();
     const bool isLimitedOverlayHud = isOverlayHudState(hudScreenState)
         && !activeEventDialogPreservesGameplayHud(context.activeEventDialog());
     const GameplayHudLayoutMode gameplayHudLayout = isLimitedOverlayHud
-        ? GameplayHudLayoutMode::Overlay
-#if defined(__ANDROID__)
-        : GameplayHudLayoutMode::Widescreen;
-#else
-        : (context.settingsSnapshot().gameplayUiLayout == GameplayUiLayout::Standard
-            ? GameplayHudLayoutMode::Standard
-            : GameplayHudLayoutMode::Widescreen);
-#endif
-    const bool useGameplayWideHud = gameplayHudLayout == GameplayHudLayoutMode::Widescreen;
-    const std::string basebarLayoutId = basebarLayoutIdForHudLayout(gameplayHudLayout);
-    const std::string partyStripLayoutId = partyStripLayoutIdForHudLayout(gameplayHudLayout);
-    const UiLayoutManager::LayoutElement *pBasebarLayout = context.findHudLayoutElement(basebarLayoutId);
-    const UiLayoutManager::LayoutElement *pPartyStripLayout = context.findHudLayoutElement(partyStripLayoutId);
-
-    if (pBasebarLayout == nullptr || pPartyStripLayout == nullptr)
-    {
-        return;
-    }
-
-    const std::optional<GameplayHudTextureHandle> basebar =
-        context.gameplayUiRuntime().ensureHudTextureLoaded(pBasebarLayout->primaryAsset);
-    const std::optional<GameplayHudTextureHandle> gameplayBasebarEnder =
-        useGameplayWideHud ? context.gameplayUiRuntime().ensureHudTextureLoaded("Basebar_ender") : std::nullopt;
-    const std::optional<GameplayHudTextureHandle> faceMask =
-        context.gameplayUiRuntime().ensureHudTextureLoaded(pPartyStripLayout->primaryAsset);
-    const std::optional<GameplayHudTextureHandle> selectionRing =
-        context.gameplayUiRuntime().ensureHudTextureLoaded(pPartyStripLayout->secondaryAsset);
-    const std::optional<GameplayHudTextureHandle> manaFrame =
-        context.gameplayUiRuntime().ensureHudTextureLoaded(pPartyStripLayout->tertiaryAsset);
-    const std::optional<GameplayHudTextureHandle> healthBar =
-        context.gameplayUiRuntime().ensureHudTextureLoaded(pPartyStripLayout->quaternaryAsset);
-    const std::optional<GameplayHudTextureHandle> healthBarYellow =
-        context.gameplayUiRuntime().ensureHudTextureLoaded("manaY");
-    const std::optional<GameplayHudTextureHandle> healthBarRed =
-        context.gameplayUiRuntime().ensureHudTextureLoaded("manar");
-    const std::optional<GameplayHudTextureHandle> manaBar =
-        context.gameplayUiRuntime().ensureHudTextureLoaded(pPartyStripLayout->quinaryAsset);
-    const std::optional<GameplayHudTextureHandle> aggroBlack =
-        context.gameplayUiRuntime().ensureHudTextureLoaded("statBL");
-    const std::optional<GameplayHudTextureHandle> aggroRed =
-        context.gameplayUiRuntime().ensureHudTextureLoaded("statR");
-    const std::optional<GameplayHudTextureHandle> aggroYellow =
-        context.gameplayUiRuntime().ensureHudTextureLoaded("statY");
-    const std::optional<GameplayHudTextureHandle> aggroGreen =
-        context.gameplayUiRuntime().ensureHudTextureLoaded("statG");
-    const std::optional<GameplayHudTextureHandle> blessIcon =
-        context.gameplayUiRuntime().ensureHudTextureLoaded("IB_spelico");
-    const Party *pPartyReadOnly = context.partyReadOnly();
-
-    if (!basebar || !faceMask || pPartyReadOnly == nullptr)
-    {
-        return;
-    }
-
-    const Party &party = *pPartyReadOnly;
+        ? GameplayHudLayoutMode::Overlay : GameplayHudLayoutMode::Widescreen;
+    const Party &party = *pParty;
     const std::vector<Character> &members = party.members();
-
-    if (members.empty())
-    {
-        return;
-    }
-
     context.fxService().consumePendingEventFxRequests(context);
-
-    const std::optional<GameplayResolvedHudLayoutElement> resolvedBasebar = resolveLayout(
-        context,
-        basebarLayoutId,
-        static_cast<float>(basebar->width),
-        static_cast<float>(basebar->height),
-        width,
-        height);
-    const std::optional<GameplayResolvedHudLayoutElement> resolvedPartyStrip = resolveLayout(
-        context,
-        partyStripLayoutId,
-        static_cast<float>(basebar->width),
-        static_cast<float>(basebar->height),
-        width,
-        height);
-
-    if (!resolvedBasebar || !resolvedPartyStrip)
-    {
-        return;
-    }
-
-    const float uiScale = resolvedBasebar->scale;
-    const float basebarWidth = resolvedBasebar->width;
-    const float basebarHeight = resolvedBasebar->height;
-    const float basebarX = resolvedBasebar->x;
-    const float basebarY = resolvedBasebar->y;
-    float partyStripX = resolvedPartyStrip->x;
-    const float partyStripY = resolvedPartyStrip->y;
-    const float partyStripWidth = resolvedPartyStrip->width;
-    const float partyStripHeight = resolvedPartyStrip->height;
-    const float portraitWidth = faceMask->width * uiScale;
-    const float portraitHeight = faceMask->height * uiScale;
-    const size_t displayedMemberCount = members.size();
-    float renderedBasebarX = basebarX;
-    float renderedBasebarWidth = basebarWidth;
-    float portraitStartX = partyStripX + partyStripWidth * (20.0f / 471.0f);
-    float portraitY = partyStripY + partyStripHeight * (23.0f / 92.0f);
-    const float portraitDeltaX = partyStripWidth * (94.0f / 471.0f);
-    thread_local std::vector<GameplayHudBatchQuad> queuedHudQuads;
-    queuedHudQuads.clear();
-    queuedHudQuads.reserve(256);
-    const auto flushQueuedHudQuads =
-        [&context, width, height]()
-        {
-            if (queuedHudQuads.empty())
-            {
-                return;
-            }
-
-            context.prepareHudView(width, height);
-            context.submitHudQuadBatch(queuedHudQuads, width, height);
-            queuedHudQuads.clear();
-        };
-
-    if (useGameplayWideHud)
-    {
-        const float partyFraction = std::clamp(static_cast<float>(displayedMemberCount) / 5.0f, 0.2f, 1.0f);
-        const float basebarCenterX = basebarX + basebarWidth * 0.5f;
-        renderedBasebarWidth = basebarWidth * partyFraction;
-        renderedBasebarX = basebarCenterX - renderedBasebarWidth * 0.5f;
-        partyStripX = renderedBasebarX;
-        const float portraitGroupWidth =
-            portraitWidth + static_cast<float>(displayedMemberCount - 1) * portraitDeltaX;
-        portraitStartX = basebarCenterX - portraitGroupWidth * 0.5f;
-        portraitY -= 15.0f * uiScale;
-    }
-
+    const float uiScale = static_cast<float>(height) / 480.0f;
     const PointerRenderInput pointerInput = pointerRenderInput(context);
     const float characterMouseX = pointerInput.mouseX;
     const float characterMouseY = pointerInput.mouseY;
     const bool isLeftMousePressed = pointerInput.isLeftMousePressed;
-
-    const auto renderGameplayBasebarLeftAttachment =
-        [&](const std::string &layoutId)
-        {
-            if (!useGameplayWideHud)
-            {
-                return;
-            }
-
-            const UiLayoutManager::LayoutElement *pLayout = context.findHudLayoutElement(layoutId);
-
-            if (pLayout == nullptr || pLayout->primaryAsset.empty() || !pLayout->visible)
-            {
-                return;
-            }
-
-            const std::optional<GameplayHudTextureHandle> texture =
-                context.gameplayUiRuntime().ensureHudTextureLoaded(pLayout->primaryAsset);
-
-            if (!texture)
-            {
-                return;
-            }
-
-            const float ornamentWidth =
-                (pLayout->width > 0.0f ? pLayout->width : static_cast<float>(texture->width)) * uiScale;
-            const float ornamentHeight =
-                (pLayout->height > 0.0f ? pLayout->height : static_cast<float>(texture->height)) * uiScale;
-            const float ornamentX = renderedBasebarX - pLayout->gapX * uiScale;
-            const float ornamentY = basebarY + basebarHeight + pLayout->gapY * uiScale;
-            submitQuad(queuedHudQuads, *texture, ornamentX, ornamentY, ornamentWidth, ornamentHeight);
-        };
-
-    const auto renderGameplayBasebarRightAttachment =
-        [&](const std::string &layoutId)
-        {
-            if (!useGameplayWideHud)
-            {
-                return;
-            }
-
-            const UiLayoutManager::LayoutElement *pLayout = context.findHudLayoutElement(layoutId);
-
-            if (pLayout == nullptr || pLayout->primaryAsset.empty() || !pLayout->visible)
-            {
-                return;
-            }
-
-            const std::optional<GameplayHudTextureHandle> texture =
-                context.gameplayUiRuntime().ensureHudTextureLoaded(pLayout->primaryAsset);
-
-            if (!texture)
-            {
-                return;
-            }
-
-            const float ornamentWidth =
-                (pLayout->width > 0.0f ? pLayout->width : static_cast<float>(texture->width)) * uiScale;
-            const float ornamentHeight =
-                (pLayout->height > 0.0f ? pLayout->height : static_cast<float>(texture->height)) * uiScale;
-            const float ornamentX =
-                renderedBasebarX + renderedBasebarWidth - ornamentWidth + pLayout->gapX * uiScale;
-            const float ornamentY = basebarY + basebarHeight + pLayout->gapY * uiScale;
-            submitQuad(queuedHudQuads, *texture, ornamentX, ornamentY, ornamentWidth, ornamentHeight);
-        };
-
-    renderGameplayBasebarLeftAttachment("OutdoorGameplayBasebar_OrnLeft1");
-    renderGameplayBasebarLeftAttachment("OutdoorGameplayBasebar_OrnLeft2");
-    renderGameplayBasebarRightAttachment("OutdoorGameplayBasebar_OrnRight1");
-    renderGameplayBasebarRightAttachment("OutdoorGameplayBasebar_OrnRight2");
-
-    if (useGameplayWideHud)
+    std::vector<HiredNpcFollowerView> followerViews;
+    if (!isLimitedOverlayHud && context.interactionState().followerPanelOpen && context.worldRuntime() != nullptr
+        && context.worldRuntime()->eventRuntimeState() != nullptr && context.npcDialogTable() != nullptr
+        && context.mergedNpcProfessionTable() != nullptr)
     {
-        const float uSpan = std::clamp(renderedBasebarWidth / basebarWidth, 0.0f, 1.0f);
-        submitQuadUv(
-            queuedHudQuads,
-            *basebar,
-            renderedBasebarX,
-            basebarY,
-            renderedBasebarWidth,
-            basebarHeight,
-            0.0f,
-            0.0f,
-            uSpan,
-            1.0f);
-
-        if (gameplayBasebarEnder)
+        followerViews = buildHiredNpcFollowerViews(*context.worldRuntime()->eventRuntimeState(), &party,
+            *context.npcDialogTable(), *context.mergedNpcProfessionTable());
+        const size_t maximumOffset = followerViews.size() > 3 ? followerViews.size() - 3 : 0;
+        context.interactionState().followerPanelScrollOffset =
+            std::min(context.interactionState().followerPanelScrollOffset, maximumOffset);
+    }
+    thread_local std::vector<GameplayHudBatchQuad> queuedHudQuads;
+    queuedHudQuads.clear();
+    const auto flushQueuedHudQuads = [&context, width, height]()
+    {
+        context.submitHudQuadBatch(queuedHudQuads, width, height);
+        queuedHudQuads.clear();
+    };
+    const auto draw = [&](const std::string &id, const std::string &asset = std::string{})
+    {
+        const UiLayoutManager::LayoutElement *pLayout = context.findHudLayoutElement(id);
+        const std::optional<GameplayResolvedHudLayoutElement> rect =
+            context.resolveHudLayoutElement(id, width, height, 0.0f, 0.0f);
+        if (pLayout == nullptr || !rect)
         {
-            const float enderWidth = static_cast<float>(gameplayBasebarEnder->width) * uiScale;
-            const float enderHeight = static_cast<float>(gameplayBasebarEnder->height) * uiScale;
-            const float enderX =
-                basebarX + basebarWidth * 0.5f + renderedBasebarWidth * 0.5f - 20.0f * uiScale;
-            submitQuad(queuedHudQuads, *gameplayBasebarEnder, enderX, basebarY, enderWidth, enderHeight);
+            return;
         }
+        const std::optional<GameplayHudTextureHandle> texture = context.gameplayUiRuntime().ensureHudTextureLoaded(
+            asset.empty() ? pLayout->primaryAsset : asset);
+        if (texture)
+        {
+            context.submitHudTexturedQuad(*texture, rect->x, rect->y, rect->width, rect->height);
+        }
+    };
+    const auto label = [&](const std::string &id, const std::string &text)
+    {
+        const UiLayoutManager::LayoutElement *pLayout = context.findHudLayoutElement(id);
+        const std::optional<GameplayResolvedHudLayoutElement> rect =
+            context.resolveHudLayoutElement(id, width, height, 0.0f, 0.0f);
+        if (pLayout != nullptr && rect)
+        {
+            context.renderLayoutLabel(*pLayout, *rect, text);
+        }
+    };
+    if (isLimitedOverlayHud)
+    {
+        draw("OutdoorBasebar");
     }
     else
     {
-        submitQuad(queuedHudQuads, *basebar, basebarX, basebarY, basebarWidth, basebarHeight);
-    }
-
-    const size_t activeMemberIndex = party.activeMemberIndex();
-    size_t selectedMemberRingIndex = activeMemberIndex;
-
-    if (hudScreenState == GameplayHudScreenState::Character)
-    {
-        const GameplayUiController::CharacterScreenState &characterScreen = context.characterScreenReadOnly();
-
-        if (characterScreen.open && characterScreen.source == GameplayUiController::CharacterScreenSource::Party)
+        const std::optional<GameplayResolvedHudLayoutElement> basebar =
+            context.resolveHudLayoutElement("OutdoorGameplayBasebar", width, height, 0, 0);
+        if (basebar)
         {
-            selectedMemberRingIndex = characterScreen.sourceIndex;
+            GameplayUiSkin::renderPartyBasebar(context, *basebar);
         }
     }
-
-    const Character *pSelectedMember = party.member(selectedMemberRingIndex);
-    const bool showSelectedMemberRing = hudScreenState == GameplayHudScreenState::Gameplay
-        ? (pSelectedMember != nullptr && GameMechanics::canTakeGameplayAction(*pSelectedMember))
-        : pSelectedMember != nullptr;
-    const IGameplayWorldRuntime *pWorldRuntime = context.worldRuntime();
-    const float nearestHostileDistance =
-        manaFrame ? nearestHostileActorDistanceToParty(pWorldRuntime) : std::numeric_limits<float>::max();
-
-    for (size_t memberIndex = 0; memberIndex < displayedMemberCount; ++memberIndex)
+    size_t selected = party.activeMemberIndex();
+    const GameplayUiController::CharacterScreenState &characterScreen = context.characterScreenReadOnly();
+    if (characterScreen.open && characterScreen.source == GameplayUiController::CharacterScreenSource::Party)
     {
-        const Character &member = members[memberIndex];
-        const float portraitX = portraitStartX + static_cast<float>(memberIndex) * portraitDeltaX;
-        const float portraitInset = 2.0f * uiScale;
+        selected = characterScreen.sourceIndex;
+    }
+    const bool hasReadyMember = std::any_of(members.begin(), members.end(), [](const Character &member)
+    {
+        return GameMechanics::canAct(member) && member.recoverySecondsRemaining <= 0;
+    });
+    const bool showSelection = isLimitedOverlayHud || hasReadyMember;
+    const float nearestHostile = nearestHostileActorDistanceToParty(context.worldRuntime());
+    const float engagementRange = context.worldRuntime() != nullptr ? context.worldRuntime()->partyEngagementRange()
+        : 10240.0f;
+    for (size_t i = 0; i < std::min(size_t{5}, members.size()); ++i)
+    {
+        const Character &member = members[i];
+        const std::string id = std::string(isLimitedOverlayHud ? "ObsidianOverlayPc" : "ObsidianPc")
+            + std::to_string(i + 1);
+        const std::optional<GameplayResolvedHudLayoutElement> face = context.resolvePartyPortraitRect(width, height, i);
         const std::optional<GameplayHudTextureHandle> portrait =
             context.gameplayUiRuntime().ensureHudTextureLoaded(context.resolvePortraitTextureName(member));
-
-        if (portrait)
+        if (portrait && face)
         {
-            GameplayHudTextureHandle renderedPortrait = *portrait;
-
-            if (party.hasCharacterBuff(memberIndex, CharacterBuffId::Mistform))
+            bgfx::TextureHandle texture = portrait->textureHandle;
+            if (party.hasCharacterBuff(i, CharacterBuffId::Mistform))
             {
-                const bgfx::TextureHandle mistformTexture =
-                    context.gameplayUiRuntime().ensureHudTextureColorModulated(
-                        *portrait,
-                        MistformPortraitModulationAbgr);
-
-                if (bgfx::isValid(mistformTexture))
+                texture = context.gameplayUiRuntime().ensureHudTextureColorModulated(
+                    *portrait, MistformPortraitModulationAbgr);
+            }
+            if (!GameMechanics::canAct(member))
+            {
+                texture = context.gameplayUiRuntime().ensureHudTextureColorModulated(*portrait, 0xff888888u);
+            }
+            context.gameplayUiRuntime().submitHudTexturedEllipse(texture, face->x, face->y, face->width, face->height);
+            context.renderPortraitFx(i, face->x, face->y, face->width, face->height);
+        }
+        const UiLayoutManager::LayoutElement *pRimLayout = context.findHudLayoutElement(id + "Rim");
+        const std::optional<GameplayResolvedHudLayoutElement> rim =
+            context.resolveHudLayoutElement(id + "Rim", width, height, 0, 0);
+        if (pRimLayout != nullptr && pRimLayout->meterArc && rim)
+        {
+            const UiLayoutManager::MeterArc &arc = *pRimLayout->meterArc;
+            GameplayUiSkin::renderArc(context, *rim, 2.8f, arc.startDegrees, arc.sweepDegrees,
+                GameplayUiSkin::ArcMaterial::Track);
+            const bool selectedRim = showSelection && i == selected;
+            GameplayUiSkin::renderArc(context, *rim, selectedRim ? 1.5f : arc.strokeWidth,
+                arc.startDegrees, arc.sweepDegrees, selectedRim ? GameplayUiSkin::ArcMaterial::SelectedRim
+                    : GameplayUiSkin::ArcMaterial::NormalRim);
+        }
+        else
+        {
+            draw(id + "Rim", std::string(isLimitedOverlayHud ? "obsidian_hud_fullscreen_rim_"
+                : "obsidian_hud_portrait_rim_") + (showSelection && i == selected ? "selected" : "normal"));
+        }
+        if (showSelection && i == selected)
+        {
+            draw(id + "Selection");
+        }
+        const bool canAct = GameMechanics::canAct(member);
+        const PortraitAggroIndicator readiness = classifyPortraitAggroIndicator(member, nearestHostile, engagementRange);
+        const char *pReadinessArt = readiness == PortraitAggroIndicator::Red ? "obsidian_aggro_combat"
+            : readiness == PortraitAggroIndicator::Yellow ? "obsidian_aggro_nearby"
+            : readiness == PortraitAggroIndicator::Green ? "obsidian_aggro_explore" : "obsidian_aggro_unlit";
+        const std::optional<GameplayResolvedHudLayoutElement> readinessRect =
+            context.resolveHudLayoutElement(id + "Readiness", width, height, 0, 0);
+        const std::optional<GameplayHudTextureHandle> readinessArt =
+            context.gameplayUiRuntime().ensureHudTextureLoaded(pReadinessArt);
+        if (readinessRect && readinessArt)
+        {
+            const float unit = readinessRect->width / 22.0f;
+            context.submitHudTexturedQuad(*readinessArt, readinessRect->x - 8 * unit,
+                readinessRect->y - 8 * unit, 38 * unit, 41 * unit);
+        }
+        GameplayPortraitMeterState &meter = context.gameplayUiRuntime().portraitPresentationState().meters[i];
+        if (member.recoverySecondsRemaining <= 0)
+        {
+            meter.recoveryMaximum = 0;
+        }
+        else
+        {
+            meter.recoveryMaximum = std::max(meter.recoveryMaximum, member.recoverySecondsRemaining);
+            if (readinessRect && canAct)
+            {
+                const float fraction = 1 - member.recoverySecondsRemaining / meter.recoveryMaximum;
+                const std::optional<GameplayHudTextureHandle> arc =
+                    context.gameplayUiRuntime().ensureSolidHudTextureLoaded("__obsidian_recovery__", 0xffc7dce5u);
+                if (arc)
                 {
-                    renderedPortrait.textureHandle = mistformTexture;
+                    const float cx = readinessRect->x + readinessRect->width * 0.5f;
+                    const float cy = readinessRect->y + readinessRect->height * 0.5f;
+                    const float radius = readinessRect->width * 0.65f;
+                    std::vector<GameplayHudBatchQuad> ring;
+                    for (int segment = 0; segment < 32 * fraction; ++segment)
+                    {
+                        const float angle = -Pi * 0.5f + segment * 2 * Pi / 32;
+                        const float next = -Pi * 0.5f + std::min(float(segment + 1) / 32, fraction) * 2 * Pi;
+                        GameplayHudBatchQuad line;
+                        line.textureHandle = arc->textureHandle;
+                        line.line = true;
+                        line.width = std::max(1.0f, readinessRect->scale * 1.3f);
+                        line.x = cx + std::cos(angle) * radius;
+                        line.y = cy + std::sin(angle) * radius;
+                        line.x2 = cx + std::cos(next) * radius;
+                        line.y2 = cy + std::sin(next) * radius;
+                        ring.push_back(line);
+                    }
+                    context.submitHudQuadBatch(ring, width, height);
                 }
             }
-
-            submitQuad(
-                queuedHudQuads,
-                renderedPortrait,
-                portraitX + portraitInset,
-                portraitY + portraitInset,
-                portraitWidth - portraitInset * 2.0f,
-                portraitHeight - portraitInset * 2.0f);
         }
-
-        flushQueuedHudQuads();
-        context.renderPortraitFx(memberIndex, portraitX, portraitY, portraitWidth, portraitHeight);
-        submitQuad(queuedHudQuads, *faceMask, portraitX, portraitY, portraitWidth, portraitHeight);
-
-        if (showSelectedMemberRing && memberIndex == selectedMemberRingIndex && selectionRing)
+        bool hasPersonalBuff = false;
+        for (size_t b = 0; b < CharacterBuffCount; ++b)
         {
-            submitQuad(queuedHudQuads, *selectionRing, portraitX - uiScale, portraitY, portraitWidth, portraitHeight);
+            hasPersonalBuff |= party.hasCharacterBuff(i, static_cast<CharacterBuffId>(b));
         }
-
-        if (manaFrame)
+        if (hasPersonalBuff)
         {
-            const float partyEngagementRange = pWorldRuntime != nullptr
-                ? pWorldRuntime->partyEngagementRange()
-                : 10240.0f;
-            const PortraitAggroIndicator aggroIndicator = classifyPortraitAggroIndicator(
-                member,
-                nearestHostileDistance,
-                partyEngagementRange);
-            const std::optional<GameplayHudTextureHandle> *pAggroTexture = nullptr;
-
-            switch (aggroIndicator)
-            {
-            case PortraitAggroIndicator::Black:
-                pAggroTexture = &aggroBlack;
-                break;
-            case PortraitAggroIndicator::Green:
-                pAggroTexture = &aggroGreen;
-                break;
-            case PortraitAggroIndicator::Yellow:
-                pAggroTexture = &aggroYellow;
-                break;
-            case PortraitAggroIndicator::Red:
-                pAggroTexture = &aggroRed;
-                break;
-            case PortraitAggroIndicator::Hidden:
-                break;
-            }
-
-            if (pAggroTexture != nullptr && *pAggroTexture)
-            {
-                const float barFrameHeight = manaFrame->height * uiScale;
-                const float barFrameY = basebarY + basebarHeight - barFrameHeight - partyStripHeight * (1.0f / 92.0f);
-                const float aggroWidth = static_cast<float>((*pAggroTexture)->width) * uiScale;
-                const float aggroHeight = static_cast<float>((*pAggroTexture)->height) * uiScale;
-                const float aggroX = portraitX - aggroWidth * 0.35f - 8.0f * uiScale;
-                const float aggroY = barFrameY + barFrameHeight - aggroHeight;
-                submitQuad(queuedHudQuads, **pAggroTexture, aggroX, aggroY, aggroWidth, aggroHeight);
-            }
+            draw(id + "PersonalBuffs");
         }
-
-        if (manaFrame)
+        const int maximumHealth = GameMechanics::calculateEffectiveCharacterMaxHealth(member);
+        const int maximumMana = GameMechanics::calculateEffectiveCharacterMaxSpellPoints(member);
+        const float health = std::clamp(float(member.health) / std::max(1, maximumHealth), 0.0f, 1.0f);
+        const float mana = std::clamp(float(member.spellPoints) / std::max(1, maximumMana), 0.0f, 1.0f);
+        const uint32_t nowTicks = context.animationTicks();
+        if (meter.health >= 0 && health < meter.health)
         {
-            const float barFrameX = portraitX + partyStripWidth * (63.0f / 471.0f);
-            const float barFrameWidth = manaFrame->width * uiScale;
-            const float barFrameHeight = manaFrame->height * uiScale;
-            const float barFrameY = basebarY + basebarHeight - barFrameHeight - partyStripHeight * (1.0f / 92.0f);
-
-            if (blessIcon && party.hasCharacterBuff(memberIndex, CharacterBuffId::Bless))
+            meter.damageFrom = meter.health;
+            meter.damagedTicks = nowTicks;
+        }
+        meter.health = health;
+        const float trail = health + std::max(0.0f, meter.damageFrom - health)
+            * std::max(0.0f, 1.0f - (nowTicks - meter.damagedTicks) / 96.0f);
+        for (bool isHealth : {true, false})
+        {
+            if (!isHealth && maximumMana <= 0)
             {
-                const float blessIconWidth = static_cast<float>(blessIcon->width) * uiScale;
-                const float blessIconHeight = static_cast<float>(blessIcon->height) * uiScale;
-                const float blessIconX = barFrameX - blessIconWidth - uiScale;
-                const float blessIconY = portraitY + portraitHeight - blessIconHeight + 3.0f * uiScale;
-                submitQuad(queuedHudQuads, *blessIcon, blessIconX, blessIconY, blessIconWidth, blessIconHeight);
+                continue;
             }
-
-            submitQuad(queuedHudQuads, *manaFrame, barFrameX, barFrameY, barFrameWidth, barFrameHeight);
-
-            const float fillHeight = 49.0f * uiScale;
-            const float fillY = barFrameY + 1.0f * uiScale;
-            const float leftFillX = barFrameX + 1.0f * uiScale;
-            const float rightFillX = barFrameX + 5.0f * uiScale;
-            const float fillWidth = 3.0f * uiScale;
-            const int maxHealth = GameMechanics::calculateEffectiveCharacterMaxHealth(member);
-            const int maxSpellPoints = GameMechanics::calculateEffectiveCharacterMaxSpellPoints(member);
-            const float healthPercent = (maxHealth > 0)
-                ? std::clamp(static_cast<float>(member.health) / static_cast<float>(maxHealth), 0.0f, 1.0f)
-                : 0.0f;
-            const float manaPercent = (maxSpellPoints > 0)
-                ? std::clamp(static_cast<float>(member.spellPoints) / static_cast<float>(maxSpellPoints), 0.0f, 1.0f)
-                : 0.0f;
-            const GameplayHudTextureHandle *pResolvedHealthBar = healthBar ? &*healthBar : nullptr;
-
-            if (healthPercent > 0.0f)
+            const std::string meterId = id + (isHealth ? "Health" : "Mana");
+            const float amount = isHealth ? health : mana;
+            const std::optional<GameplayResolvedHudLayoutElement> rect =
+                context.resolveHudLayoutElement(meterId, width, height, 0, 0);
+            if (!rect)
             {
-                if (healthPercent <= 0.25f && healthBarRed)
+                continue;
+            }
+            const UiLayoutManager::LayoutElement *pMeterLayout = context.findHudLayoutElement(meterId);
+            if (pMeterLayout != nullptr && pMeterLayout->meterArc)
+            {
+                const UiLayoutManager::MeterArc &arc = *pMeterLayout->meterArc;
+                using GameplayUiSkin::ArcMaterial;
+                GameplayUiSkin::renderArc(context, *rect, arc.strokeWidth + 1.7f,
+                    arc.startDegrees, arc.sweepDegrees, ArcMaterial::TrackEdge);
+                GameplayUiSkin::renderArc(context, *rect, arc.strokeWidth + 0.5f,
+                    arc.startDegrees, arc.sweepDegrees, ArcMaterial::Track);
+                if (isHealth && trail > health)
                 {
-                    pResolvedHealthBar = &*healthBarRed;
+                    GameplayUiSkin::renderArc(context, *rect, arc.strokeWidth,
+                        arc.startDegrees, arc.sweepDegrees, ArcMaterial::Damage, health, trail);
                 }
-                else if (healthPercent <= 0.5f && healthBarYellow)
+                const GameplayUiSkin::HealthBand band = GameplayUiSkin::healthBand(health);
+                const ArcMaterial material = !isHealth ? ArcMaterial::Mana
+                    : band == GameplayUiSkin::HealthBand::High ? ArcMaterial::HealthHigh
+                    : band == GameplayUiSkin::HealthBand::Middle ? ArcMaterial::HealthMiddle
+                    : ArcMaterial::HealthLow;
+                if (amount > 0)
                 {
-                    pResolvedHealthBar = &*healthBarYellow;
+                    GameplayUiSkin::renderArc(context, *rect, arc.strokeWidth,
+                        arc.startDegrees, arc.sweepDegrees, material, 0, amount);
+                }
+                continue;
+            }
+            const bool vertical = rect->height > rect->width;
+            if (vertical)
+            {
+                GameplayUiSkin::renderTexture(context, "obsidian_party_meter_track",
+                    {rect->x - rect->scale, rect->y - rect->scale,
+                        rect->width + 2 * rect->scale, rect->height + 2 * rect->scale, rect->scale});
+            }
+            else
+            {
+                draw(meterId, "obsidian_hud_meter_track");
+            }
+            const std::optional<GameplayHudTextureHandle> texture =
+                isHealth ? GameplayUiSkin::healthMeterTexture(context, health, vertical)
+                    : context.gameplayUiRuntime().ensureHudTextureLoaded(
+                        vertical ? "obsidian_party_meter_sp" : "obsidian_hud_meter_sp");
+            if (isHealth && trail > health)
+            {
+                const std::optional<GameplayHudTextureHandle> damage =
+                    context.gameplayUiRuntime().ensureSolidHudTextureLoaded("__obsidian_damage_trail__", 0xff93c7e4u);
+                if (damage)
+                {
+                    const GameplayResolvedHudLayoutElement segment =
+                        GameplayUiSkin::meterSegment(*rect, health, trail, vertical);
+                    context.submitHudTexturedQuad(*damage, segment.x, segment.y, segment.width, segment.height);
                 }
             }
-
-            if (pResolvedHealthBar != nullptr && healthPercent > 0.0f)
+            if (texture && amount > 0)
             {
-                submitQuadUv(
-                    queuedHudQuads,
-                    *pResolvedHealthBar,
-                    leftFillX,
-                    fillY + (1.0f - healthPercent) * fillHeight,
-                    fillWidth,
-                    healthPercent * fillHeight,
-                    0.0f,
-                    1.0f - healthPercent,
-                    1.0f,
-                    1.0f);
-            }
-
-            if (manaBar && manaPercent > 0.0f)
-            {
-                submitQuadUv(
-                    queuedHudQuads,
-                    *manaBar,
-                    rightFillX,
-                    fillY + (1.0f - manaPercent) * fillHeight,
-                    fillWidth,
-                    manaPercent * fillHeight,
-                    0.0f,
-                    1.0f - manaPercent,
-                    1.0f,
-                    1.0f);
+                const GameplayResolvedHudLayoutElement segment =
+                    GameplayUiSkin::meterSegment(*rect, 0, amount, vertical);
+                context.gameplayUiRuntime().submitHudTexturedQuad(texture->textureHandle,
+                    segment.x, segment.y, segment.width, segment.height,
+                    0, vertical ? 1 - amount : 0, vertical ? 1 : amount, 1);
             }
         }
     }
-
-    if (gameplayHudLayout != GameplayHudLayoutMode::Widescreen)
+    if (isLimitedOverlayHud)
     {
-        const std::string shieldPrefix =
-            gameplayHudLayout == GameplayHudLayoutMode::Standard ? "OutdoorStandardCharShield_" : "CharShield_";
-
-        for (size_t memberIndex = displayedMemberCount; memberIndex < 5; ++memberIndex)
+        for (size_t i = members.size(); i < 5; ++i)
         {
-            const std::string slotShieldId = shieldPrefix + std::to_string(memberIndex + 1);
-            const UiLayoutManager::LayoutElement *pShieldLayout = context.findHudLayoutElement(slotShieldId);
-
-            if (pShieldLayout == nullptr || pShieldLayout->primaryAsset.empty())
-            {
-                continue;
-            }
-
-            const std::optional<GameplayHudTextureHandle> shieldTexture =
-                context.gameplayUiRuntime().ensureHudTextureLoaded(pShieldLayout->primaryAsset);
-
-            if (!shieldTexture)
-            {
-                continue;
-            }
-
-            const std::optional<GameplayResolvedHudLayoutElement> resolvedShield = resolveLayout(
-                context,
-                slotShieldId,
-                pShieldLayout->width > 0.0f ? pShieldLayout->width : static_cast<float>(shieldTexture->width),
-                pShieldLayout->height > 0.0f ? pShieldLayout->height : static_cast<float>(shieldTexture->height),
-                width,
-                height);
-
-            if (!resolvedShield)
-            {
-                continue;
-            }
-
-            submitQuad(
-                queuedHudQuads,
-                *shieldTexture,
-                resolvedShield->x,
-                resolvedShield->y,
-                resolvedShield->width,
-                resolvedShield->height);
+            draw("CharShield_" + std::to_string(i + 1));
         }
     }
 
@@ -1033,9 +633,66 @@ void GameplayUiRenderer::renderGameplayHudArt(GameplayScreenRuntime &context, in
         const std::string &layoutId = pLayout->id;
         const std::string &normalizedLayoutId = pLayout->normalizedId;
         const std::string &normalizedRoleId = entry.normalizedRoleId;
-        if (!pLayout->visible || !entry.visibleIn(gameplayHudLayout, context.interactionState().followerPanelOpen)
-            || !isBuffLayoutVisible(context, party, layoutId))
+        if (!pLayout->visible || !entry.visibleIn(gameplayHudLayout, context.interactionState().followerPanelOpen))
         {
+            continue;
+        }
+
+        if (normalizedRoleId.starts_with("outdoormobilebutton"))
+        {
+            const bool flight = normalizedRoleId == "outdoormobilebuttonflyup"
+                || normalizedRoleId == "outdoormobilebuttonflydown";
+            if (flight && !context.mobileFlightControlsAvailable())
+            {
+                continue;
+            }
+            const std::optional<GameplayResolvedHudLayoutElement> rect =
+                resolveLayout(context, layoutId, pLayout->width, pLayout->height, width, height);
+            if (rect)
+            {
+                const GameplayInputFrame *pInput = context.currentGameplayInputFrame();
+                const bool hovered = context.isPointerInsideResolvedElement(*rect, characterMouseX, characterMouseY);
+                const bool held = flight && pInput != nullptr && pInput->action(
+                    normalizedRoleId == "outdoormobilebuttonflyup" ? KeyboardAction::FlyUp : KeyboardAction::FlyDown).held;
+                const bool resume = normalizedRoleId == "outdoormobilebuttonpause"
+                    && context.turnBasedCombatRuntime().active();
+                flushQueuedHudQuads();
+                GameplayUiSkin::renderIconButton(context, *rect,
+                    resume ? "obsidian_action_resume" : pLayout->primaryAsset,
+                    hovered, held || (hovered && isLeftMousePressed), resume);
+            }
+            continue;
+        }
+
+        if (normalizedRoleId == "outdoorfollowertoggle")
+        {
+            flushQueuedHudQuads();
+            GameplayUiSkin::renderButton(context, layoutId, width, height,
+                context.interactionState().followerPanelOpen);
+            continue;
+        }
+        if (pLayout->parentId == "OutdoorFollowerToggle")
+        {
+            continue; // The button renderer owns its head illustration.
+        }
+        if (normalizedRoleId == "outdoorfollowerpanel")
+        {
+            const std::optional<GameplayResolvedHudLayoutElement> rect =
+                resolveLayout(context, layoutId, pLayout->width, pLayout->height, width, height);
+            if (rect)
+            {
+                flushQueuedHudQuads();
+                GameplayUiSkin::renderPanel(context, *rect);
+            }
+            continue;
+        }
+        if (normalizedRoleId == "outdoorfollowerscrollup" || normalizedRoleId == "outdoorfollowerscrolldown")
+        {
+            const size_t offset = context.interactionState().followerPanelScrollOffset;
+            const bool enabled = normalizedRoleId == "outdoorfollowerscrollup"
+                ? offset > 0 : offset + 3 < followerViews.size();
+            flushQueuedHudQuads();
+            GameplayUiSkin::renderButton(context, layoutId, width, height, false, enabled);
             continue;
         }
 
@@ -1071,49 +728,18 @@ void GameplayUiRenderer::renderGameplayHudArt(GameplayScreenRuntime &context, in
                 0.0f,
                 1.0f - minimapState.vSpan);
 
-            if (minimapState.vectorBackground)
+            const std::optional<GameplayHudTextureHandle> minimapTexture = minimapState.vectorBackground
+                ? context.gameplayUiRuntime().ensureSolidHudTextureLoaded(
+                    "__obsidian_indoor_minimap_background__", GameplayUiSkin::MapSurface)
+                : context.gameplayUiRuntime().ensureHudTextureLoaded(minimapState.textureName);
+            if (minimapTexture)
             {
-                const std::optional<GameplayHudTextureHandle> backgroundTexture =
-                    context.gameplayUiRuntime().ensureSolidHudTextureLoaded(
-                        "__indoor_minimap_background__",
-                        minimapState.backgroundColorAbgr);
-
-                if (!backgroundTexture)
-                {
-                    continue;
-                }
-
-                submitQuad(
-                    queuedHudQuads,
-                    *backgroundTexture,
-                    resolved->x,
-                    resolved->y,
-                    resolved->width,
-                    resolved->height);
-            }
-            else
-            {
-                const std::optional<GameplayHudTextureHandle> minimapTexture =
-                    context.gameplayUiRuntime().ensureHudTextureLoaded(minimapState.textureName);
-
-                if (!minimapTexture)
-                {
-                    continue;
-                }
-
-                submitQuadUv(
-                    queuedHudQuads,
-                    *minimapTexture,
-                    resolved->x,
-                    resolved->y,
-                    resolved->width,
-                    resolved->height,
-                    minimapState.u0,
-                    minimapState.v0,
-                    minimapState.u0 + minimapState.uSpan,
+                flushQueuedHudQuads();
+                context.gameplayUiRuntime().submitHudTexturedEllipse(minimapTexture->textureHandle,
+                    resolved->x, resolved->y, resolved->width, resolved->height,
+                    minimapState.u0, minimapState.v0, minimapState.u0 + minimapState.uSpan,
                     minimapState.v0 + minimapState.vSpan);
             }
-
             minimapOverlay = *resolved;
             hasMinimapState = true;
             continue;
@@ -1122,65 +748,46 @@ void GameplayUiRenderer::renderGameplayHudArt(GameplayScreenRuntime &context, in
         const std::optional<size_t> followerSlotIndex = followerPortraitSlotIndex(normalizedRoleId);
         if (followerSlotIndex)
         {
-            const IGameplayWorldRuntime *pWorldRuntime = context.worldRuntime();
-            const EventRuntimeState *pEventRuntimeState =
-                pWorldRuntime != nullptr ? pWorldRuntime->eventRuntimeState() : nullptr;
-            const NpcDialogTable *pNpcDialogTable = context.npcDialogTable();
-            const MergedNpcProfessionTable *pNpcProfessionTable = context.mergedNpcProfessionTable();
-
-            if (pEventRuntimeState != nullptr && pNpcDialogTable != nullptr && pNpcProfessionTable != nullptr)
+            const size_t followerIndex = context.interactionState().followerPanelScrollOffset + *followerSlotIndex;
+            if (followerIndex < followerViews.size())
             {
-                const Party *pParty = context.partyReadOnly();
-                const std::vector<HiredNpcFollowerView> followerViews =
-                    buildHiredNpcFollowerViews(
-                        *pEventRuntimeState,
-                        pParty,
-                        *pNpcDialogTable,
-                        *pNpcProfessionTable);
+                const std::string textureName =
+                    npcPortraitTextureName(followerViews[followerIndex].portraitPictureId);
+                const std::optional<GameplayHudTextureHandle> texture =
+                    !textureName.empty()
+                        ? context.gameplayUiRuntime().ensureHudTextureLoaded(textureName)
+                        : std::nullopt;
+                const std::optional<GameplayResolvedHudLayoutElement> resolved =
+                    resolveLayout(context, layoutId, pLayout->width, pLayout->height, width, height);
 
-                const size_t followerIndex =
-                    context.interactionState().followerPanelScrollOffset + *followerSlotIndex;
-
-                if (followerIndex < followerViews.size())
+                if (texture && resolved)
                 {
-                    const std::string textureName =
-                        npcPortraitTextureName(followerViews[followerIndex].portraitPictureId);
-                    const std::optional<GameplayHudTextureHandle> texture =
-                        !textureName.empty()
-                            ? context.gameplayUiRuntime().ensureHudTextureLoaded(textureName)
-                            : std::nullopt;
-                    const std::optional<GameplayResolvedHudLayoutElement> resolved =
-                        resolveLayout(context, layoutId, pLayout->width, pLayout->height, width, height);
-
-                    if (texture && resolved)
+                    if (texture->width == EventNpcPortraitNativeWidth
+                        && texture->height == EventNpcPortraitNativeHeight)
                     {
-                        if (texture->width == EventNpcPortraitNativeWidth
-                            && texture->height == EventNpcPortraitNativeHeight)
-                        {
-                            submitQuadUv(
-                                queuedHudQuads,
-                                *texture,
-                                resolved->x,
-                                resolved->y,
-                                resolved->width,
-                                resolved->height,
-                                EventNpcPortraitUvCropX / static_cast<float>(EventNpcPortraitNativeWidth),
-                                EventNpcPortraitUvCropY / static_cast<float>(EventNpcPortraitNativeHeight),
-                                (static_cast<float>(EventNpcPortraitNativeWidth) - EventNpcPortraitUvCropX)
-                                    / static_cast<float>(EventNpcPortraitNativeWidth),
-                                (static_cast<float>(EventNpcPortraitNativeHeight) - EventNpcPortraitUvCropY)
-                                    / static_cast<float>(EventNpcPortraitNativeHeight));
-                        }
-                        else
-                        {
-                            submitQuad(
-                                queuedHudQuads,
-                                *texture,
-                                resolved->x,
-                                resolved->y,
-                                resolved->width,
-                                resolved->height);
-                        }
+                        submitQuadUv(
+                            queuedHudQuads,
+                            *texture,
+                            resolved->x,
+                            resolved->y,
+                            resolved->width,
+                            resolved->height,
+                            EventNpcPortraitUvCropX / static_cast<float>(EventNpcPortraitNativeWidth),
+                            EventNpcPortraitUvCropY / static_cast<float>(EventNpcPortraitNativeHeight),
+                            (static_cast<float>(EventNpcPortraitNativeWidth) - EventNpcPortraitUvCropX)
+                                / static_cast<float>(EventNpcPortraitNativeWidth),
+                            (static_cast<float>(EventNpcPortraitNativeHeight) - EventNpcPortraitUvCropY)
+                                / static_cast<float>(EventNpcPortraitNativeHeight));
+                    }
+                    else
+                    {
+                        submitQuad(
+                            queuedHudQuads,
+                            *texture,
+                            resolved->x,
+                            resolved->y,
+                            resolved->width,
+                            resolved->height);
                     }
                 }
             }
@@ -1188,18 +795,20 @@ void GameplayUiRenderer::renderGameplayHudArt(GameplayScreenRuntime &context, in
             continue;
         }
 
+        if (!pLayout->labelText.empty() && pLayout->labelText.find('{') == std::string::npos)
+        {
+            flushQueuedHudQuads();
+            label(layoutId, pLayout->labelText);
+        }
         std::string primaryAsset = pLayout->primaryAsset;
 
         const bool flyBuffIcon = normalizedRoleId == "outdoorflybufficon";
-        const bool mobileResumeButton =
-            normalizedRoleId == "outdoormobilebuttonpause"
-            && context.turnBasedCombatRuntime().active();
-
-        if (mobileResumeButton)
+        const bool waterWalkBuffIcon = normalizedRoleId == "outdoorwaterwalkbufficon";
+        if ((flyBuffIcon && !gameplayFlightBuff(party))
+            || (waterWalkBuffIcon && !party.hasPartyBuff(PartyBuffId::WaterWalk)))
         {
-            primaryAsset = "resume_default";
+            continue;
         }
-
         if (flyBuffIcon)
         {
             const IGameplayWorldRuntime *pWorldRuntime = context.worldRuntime();
@@ -1212,94 +821,33 @@ void GameplayUiRenderer::renderGameplayHudArt(GameplayScreenRuntime &context, in
                 primaryAsset = *animationFrame;
             }
         }
+        else if (waterWalkBuffIcon)
+        {
+            const std::optional<std::string> animationFrame =
+                context.gameplayUiRuntime().iconAnimationFrameTextureName("spell27");
+            if (animationFrame)
+            {
+                primaryAsset = *animationFrame;
+            }
+        }
 
-        if (primaryAsset.empty())
+        if (primaryAsset.empty() && pLayout->hoverAsset.empty() && pLayout->pressedAsset.empty())
         {
             continue;
         }
 
         const std::optional<GameplayResolvedHudLayoutElement> interactiveResolved =
             resolveLayout(context, layoutId, pLayout->width, pLayout->height, width, height);
-        const GameplayInputFrame *pGameplayInput = context.currentGameplayInputFrame();
-        const bool mobileFlyUpHeld =
-            normalizedRoleId == "outdoormobilebuttonflyup"
-            && pGameplayInput != nullptr
-            && pGameplayInput->action(KeyboardAction::FlyUp).held;
-        const bool mobileFlyDownHeld =
-            normalizedRoleId == "outdoormobilebuttonflydown"
-            && pGameplayInput != nullptr
-            && pGameplayInput->action(KeyboardAction::FlyDown).held;
-        const bool mobileFlightButtonHeld = mobileFlyUpHeld || mobileFlyDownHeld;
-        const GameplayOverlayInteractionState &interactionState = context.interactionState();
-        const bool quickCastBadgeCaptured =
-            interactionState.gameplayHudClickLatch
-            && interactionState.gameplayHudPressedTarget.type == GameplayHudPointerTargetType::QuickCastButton;
-        const bool quickCastParentButton =
-            normalizedRoleId == "outdoormobilebuttonattack"
-            || normalizedRoleId == "outdoormobilebuttoncast";
-        bool pointerOverQuickCastBadge = false;
-
-        if (quickCastParentButton && isLeftMousePressed)
-        {
-            const UiLayoutManager::LayoutElement *pQuickCastLayout =
-                context.findHudLayoutElement("OutdoorMobileButtonQuickCast");
-            const std::optional<GameplayResolvedHudLayoutElement> quickCastResolved =
-                pQuickCastLayout != nullptr
-                    ? resolveLayout(
-                        context,
-                        pQuickCastLayout->id,
-                        pQuickCastLayout->width,
-                        pQuickCastLayout->height,
-                        width,
-                        height)
-                    : std::nullopt;
-            pointerOverQuickCastBadge =
-                quickCastResolved
-                && context.isPointerInsideResolvedElement(
-                    *quickCastResolved,
-                    characterMouseX,
-                    characterMouseY);
-        }
-
-        const bool quickCastBadgeOwnsPointerPress =
-            quickCastBadgeCaptured || pointerOverQuickCastBadge;
-        const std::string *pAssetName = nullptr;
-
-        if (mobileFlightButtonHeld && !pLayout->pressedAsset.empty())
-        {
-            pAssetName = &pLayout->pressedAsset;
-        }
-        else if (quickCastBadgeOwnsPointerPress && quickCastParentButton)
-        {
-            pAssetName = &primaryAsset;
-        }
-        else if (interactiveResolved && !flyBuffIcon)
-        {
-            pAssetName = context.resolveInteractiveAssetName(
-                *pLayout,
-                *interactiveResolved,
-                characterMouseX,
-                characterMouseY,
-                isLeftMousePressed);
-        }
-
+        const std::string *pAssetName = interactiveResolved && !flyBuffIcon && !waterWalkBuffIcon
+            ? context.resolveInteractiveAssetName(*pLayout, *interactiveResolved,
+                characterMouseX, characterMouseY, isLeftMousePressed) : &primaryAsset;
         std::optional<GameplayHudTextureHandle> texture;
-
-        if (mobileResumeButton && interactiveResolved)
-        {
-            const bool highlighted = context.isPointerInsideResolvedElement(
-                *interactiveResolved,
-                characterMouseX,
-                characterMouseY);
-            texture = context.gameplayUiRuntime().ensureHudTextureLoaded(
-                highlighted ? "resume_pressed" : "resume_default");
-        }
-        else if (pAssetName != nullptr)
+        if (pAssetName != nullptr && !pAssetName->empty())
         {
             texture = context.gameplayUiRuntime().ensureHudTextureLoaded(*pAssetName);
         }
 
-        if (!texture)
+        if (!texture && !primaryAsset.empty())
         {
             texture = context.gameplayUiRuntime().ensureHudTextureLoaded(primaryAsset);
         }
@@ -1358,21 +906,18 @@ void GameplayUiRenderer::renderGameplayHudArt(GameplayScreenRuntime &context, in
 
         for (const GameplayMinimapLineState &line : minimapLines)
         {
-            const float lineX0 =
+            float lineX0 =
                 minimapOverlay.x + ((line.u0 - minimapState.u0) / minimapState.uSpan) * minimapOverlay.width;
-            const float lineY0 =
+            float lineY0 =
                 minimapOverlay.y + ((line.v0 - minimapState.v0) / minimapState.vSpan) * minimapOverlay.height;
-            const float lineX1 =
+            float lineX1 =
                 minimapOverlay.x + ((line.u1 - minimapState.u0) / minimapState.uSpan) * minimapOverlay.width;
-            const float lineY1 =
+            float lineY1 =
                 minimapOverlay.y + ((line.v1 - minimapState.v0) / minimapState.vSpan) * minimapOverlay.height;
 
-            if ((lineX0 < minimapOverlay.x && lineX1 < minimapOverlay.x)
-                || (lineX0 > minimapOverlay.x + minimapOverlay.width
-                    && lineX1 > minimapOverlay.x + minimapOverlay.width)
-                || (lineY0 < minimapOverlay.y && lineY1 < minimapOverlay.y)
-                || (lineY0 > minimapOverlay.y + minimapOverlay.height
-                    && lineY1 > minimapOverlay.y + minimapOverlay.height))
+            if (!clipHudLineToCircle(minimapOverlay.x + minimapOverlay.width * 0.5f,
+                minimapOverlay.y + minimapOverlay.height * 0.5f, minimapOverlay.width * 0.5f - markerMargin,
+                lineX0, lineY0, lineX1, lineY1))
             {
                 continue;
             }
@@ -1476,10 +1021,10 @@ void GameplayUiRenderer::renderGameplayHudArt(GameplayScreenRuntime &context, in
             const float markerCenterY =
                 minimapOverlay.y + ((marker.v - minimapState.v0) / minimapState.vSpan) * minimapOverlay.height;
 
-            if (markerCenterX < markerMinX
-                || markerCenterX > markerMaxX
-                || markerCenterY < markerMinY
-                || markerCenterY > markerMaxY)
+            const float centerDx = markerCenterX - minimapOverlay.x - minimapOverlay.width * 0.5f;
+            const float centerDy = markerCenterY - minimapOverlay.y - minimapOverlay.height * 0.5f;
+            const float radius = minimapOverlay.width * 0.5f - markerMargin - markerHalfExtent;
+            if (centerDx * centerDx + centerDy * centerDy > radius * radius)
             {
                 continue;
             }
@@ -1527,9 +1072,9 @@ void GameplayUiRenderer::renderGameplayHudArt(GameplayScreenRuntime &context, in
         if (pInputFrame != nullptr && pInputFrame->mobileJoystickActive)
         {
             const std::optional<GameplayHudTextureHandle> joystickBase =
-                context.gameplayUiRuntime().ensureHudTextureLoaded("joystick_base_active");
+                context.gameplayUiRuntime().ensureHudTextureLoaded("obsidian_joystick_base");
             const std::optional<GameplayHudTextureHandle> joystickKnob =
-                context.gameplayUiRuntime().ensureHudTextureLoaded("joystick_knob_active");
+                context.gameplayUiRuntime().ensureHudTextureLoaded("obsidian_joystick_knob");
 
             if (joystickBase && joystickKnob)
             {
@@ -1554,36 +1099,26 @@ void GameplayUiRenderer::renderGameplayHudArt(GameplayScreenRuntime &context, in
     }
 #endif
 
-    if (hudScreenState == GameplayHudScreenState::Gameplay)
+    if (hudScreenState == GameplayHudScreenState::Gameplay && context.turnBasedCombatRuntime().active())
     {
-        const std::string turnBasedIndicatorAnimation =
-            turnBasedIndicatorAnimationName(context.turnBasedCombatRuntime());
-
-        if (!turnBasedIndicatorAnimation.empty())
-        {
-            const std::optional<std::string> turnBasedIndicatorTextureName =
-                context.gameplayUiRuntime().iconAnimationFrameTextureName(
-                    turnBasedIndicatorAnimation,
-                    context.animationTicks());
-            const std::optional<GameplayHudTextureHandle> turnBasedIndicator =
-                turnBasedIndicatorTextureName
-                    ? context.gameplayUiRuntime().ensureHudTextureLoaded(*turnBasedIndicatorTextureName)
-                    : std::nullopt;
-
-            if (turnBasedIndicator)
-            {
-                submitQuad(
-                    queuedHudQuads,
-                    *turnBasedIndicator,
-                    TurnBasedIndicatorX * uiScale,
-                    TurnBasedIndicatorY * uiScale,
-                    turnBasedIndicator->width * uiScale,
-                    turnBasedIndicator->height * uiScale);
-            }
-        }
+        flushQueuedHudQuads();
+        draw("ObsidianTurnPlate");
+        const TurnBasedCombatRuntime &turn = context.turnBasedCombatRuntime();
+        label("ObsidianTurnPhase", turn.stage() == TurnBasedCombatStage::Movement ? "Movement"
+            : turn.stage() == TurnBasedCombatStage::Attack ? "Attack" : "Waiting");
+        label("ObsidianTurnDetail", turn.stage() == TurnBasedCombatStage::Movement
+            ? std::to_string(turn.movementActionPoints()) + " AP" : "Turn based");
     }
 
     flushQueuedHudQuads();
+    if (!isLimitedOverlayHud)
+    {
+        renderGameplayBuffHud(context, width, height);
+        if (context.worldRuntime() != nullptr)
+        {
+            label("ObsidianMinimapClock", formatGameplayClock(context.worldRuntime()->gameMinutes()));
+        }
+    }
 }
 
 void GameplayUiRenderer::renderMobileInspectButton(GameplayScreenRuntime &context, int width, int height)
@@ -1599,7 +1134,7 @@ void GameplayUiRenderer::renderMobileInspectButton(GameplayScreenRuntime &contex
     }
 
     const UiLayoutManager::LayoutElement *pLayout =
-        context.findHudLayoutElement("OutdoorMobileInspectButtonIcon");
+        context.findHudLayoutElement(context.mobileInspectLayoutId());
 
     if (pLayout == nullptr || pLayout->primaryAsset.empty())
     {
@@ -1608,22 +1143,11 @@ void GameplayUiRenderer::renderMobileInspectButton(GameplayScreenRuntime &contex
 
     const GameplayInputFrame *pInput = context.currentGameplayInputFrame();
     const bool inspectHeld = pInput != nullptr && pInput->rightMouseButton.held;
-    const std::string &assetName = inspectHeld && !pLayout->pressedAsset.empty()
-        ? pLayout->pressedAsset
-        : pLayout->primaryAsset;
-    const std::optional<GameplayHudTextureHandle> texture =
-        context.gameplayUiRuntime().ensureHudTextureLoaded(assetName);
-
-    if (!texture)
-    {
-        return;
-    }
-
     const std::optional<GameplayResolvedHudLayoutElement> resolved = resolveLayout(
         context,
         pLayout->id,
-        pLayout->width > 0.0f ? pLayout->width : static_cast<float>(texture->width),
-        pLayout->height > 0.0f ? pLayout->height : static_cast<float>(texture->height),
+        pLayout->width,
+        pLayout->height,
         width,
         height);
 
@@ -1632,15 +1156,7 @@ void GameplayUiRenderer::renderMobileInspectButton(GameplayScreenRuntime &contex
         return;
     }
 
-    std::vector<GameplayHudBatchQuad> queuedHudQuads;
-    submitQuad(
-        queuedHudQuads,
-        *texture,
-        resolved->x,
-        resolved->y,
-        resolved->width,
-        resolved->height);
     context.prepareHudView(width, height);
-    context.submitHudQuadBatch(queuedHudQuads, width, height);
+    GameplayUiSkin::renderIconButton(context, *resolved, pLayout->primaryAsset, false, inspectHeld, inspectHeld);
 }
 } // namespace OpenYAMM::Game

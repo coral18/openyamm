@@ -2,6 +2,7 @@
 
 #include "game/maps/MapPresentation.h"
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
@@ -20,6 +21,9 @@ struct IndoorVertex
 struct IndoorFace
 {
     uint32_t attributes = 0;
+    // Imported 16.16 plane orientation remains defined when a closed door collapses its portal.
+    // Procedurally authored faces without this field derive it from their vertex winding.
+    std::optional<std::array<int32_t, 3>> planeNormal;
     std::vector<uint16_t> vertexIndices;
     std::vector<int16_t> textureUs;
     std::vector<int16_t> textureVs;

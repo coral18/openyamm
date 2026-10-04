@@ -1,0 +1,19 @@
+schema: openyamm.effectSprite.v2
+id: mm9:effect-sprite/smoke/blacksmoke
+source: sprites/smoke/blacksmoke.spr
+framesPerSecond: 9
+logicalWidth: 128
+logicalHeight: 128
+keyed: false
+translucent: false
+colorKey: 0
+frames:
+- mm9:effect-texture/smokeeffects/blacksmoke/blacksmoke_1
+- mm9:effect-texture/smokeeffects/blacksmoke/blacksmoke_2
+- mm9:effect-texture/smokeeffects/blacksmoke/blacksmoke_3
+- mm9:effect-texture/smokeeffects/blacksmoke/blacksmoke_4
+- mm9:effect-texture/smokeeffects/blacksmoke/blacksmoke_5
+- mm9:effect-texture/smokeeffects/blacksmoke/blacksmoke_6
+- mm9:effect-texture/smokeeffects/blacksmoke/blacksmoke_7
+- mm9:effect-texture/smokeeffects/blacksmoke/blacksmoke_8
+- mm9:effect-texture/smokeeffects/blacksmoke/blacksmoke_9

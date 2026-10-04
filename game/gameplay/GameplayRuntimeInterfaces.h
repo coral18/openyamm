@@ -17,6 +17,7 @@
 namespace OpenYAMM::Game
 {
 class MergedBolsterMonsterTable;
+struct MapArenaDefinition;
 struct GameplayMinimapState;
 struct GameplayMinimapLineState;
 struct GameplayMinimapMarkerState;
@@ -339,6 +340,7 @@ struct GameplayProjectileImpactPresentationState
     uint32_t timeSinceCreatedTicks = 0;
     uint32_t lifetimeTicks = 0;
     int16_t sectorId = -1;
+    size_t targetActorIndex = static_cast<size_t>(-1);
     bool freezeAnimation = false;
 };
 
@@ -420,6 +422,10 @@ struct GameplayPartyAttackProjectileRequest
 
 struct GameplayPartyAttackFallbackQuery
 {
+    float screenX = 0.0f;
+    float screenY = 0.0f;
+    int viewWidth = 0;
+    int viewHeight = 0;
     std::array<float, 16> viewMatrix = {};
     std::array<float, 16> projectionMatrix = {};
 };
@@ -596,6 +602,10 @@ public:
         int32_t toX,
         int32_t toY,
         int32_t toZ) = 0;
+    virtual const MapArenaDefinition *arenaDefinition() const
+    {
+        return nullptr;
+    }
     virtual size_t mapActorCount() const = 0;
     virtual bool actorRuntimeState(size_t actorIndex, GameplayRuntimeActorState &state) const = 0;
     virtual bool tryStealFromActor(size_t actorIndex, uint32_t successRoll, uint32_t caughtRoll)
@@ -717,6 +727,14 @@ public:
         bool visibleForFallback) const = 0;
     virtual std::vector<GameplayPartyAttackActorFacts> collectPartyAttackFallbackActors(
         const GameplayPartyAttackFallbackQuery &query) const = 0;
+    virtual std::optional<GameplayWorldPoint> partyAttackActorContactPoint(
+        size_t actorIndex,
+        const GameplayPartyAttackFallbackQuery &query) const
+    {
+        (void)actorIndex;
+        (void)query;
+        return std::nullopt;
+    }
     virtual bool applyPartyAttackMeleeDamage(
         size_t actorIndex,
         int damage,

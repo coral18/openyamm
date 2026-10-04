@@ -210,9 +210,7 @@ void OutdoorGameplayInputController::updateCameraFromInput(
                 }
             }
 
-            view.m_cameraTargetX = view.m_pOutdoorPartyRuntime->movementState().x;
-            view.m_cameraTargetY = view.m_pOutdoorPartyRuntime->movementState().y;
-            view.m_cameraTargetZ = view.m_pOutdoorPartyRuntime->movementState().footZ + view.m_cameraEyeHeight;
+            view.syncCameraToParty();
         }
     }
     else

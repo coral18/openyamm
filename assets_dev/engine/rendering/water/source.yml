@@ -1,0 +1,9 @@
+asset: water_nm.png
+source_project: OpenMW
+source_repository: https://gitlab.com/OpenMW/openmw
+source_revision: ce8a52117c746331251c0ecc353af5a4e735daa2
+source_path: files/data/textures/omw/water_nm.png
+sha256: c76723e6cb55496e149f06d2ade8899b2477f07bcd128909a9125c63f3a773ff
+license: GPL-3.0
+license_file: LICENSE.txt
+modifications: none

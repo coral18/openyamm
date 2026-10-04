@@ -43,9 +43,11 @@ The default development layout is:
 
 ```text
 assets_dev/
-  Anims/
-  Data/
-  Music/
+  engine/             shared tables, scripts and presentation
+  worlds/mm6/         world-local maps and presentation
+  worlds/mm7/
+  worlds/mm8/
+  worlds/mmmerge/
 ```
 
 Runtime packages can be distributed as ZIP archives under:
@@ -57,6 +59,13 @@ assets/
 The engine keeps practical original asset formats such as TXT gameplay tables, BMP-style
 art assets, WAV sound effects, MP3/FLAC music, and OGV video. Legacy archive and video
 container formats are replaced for runtime use.
+
+Runtime assets and the prebuilt Android sprite profile are stored directly
+in Git, so a normal clone can build and launch against `assets_dev` and CI can package
+Android without texture encoding or Git LFS. The lossless sprite inputs, creature
+master bank, original extractions and editor assets are optional local authoring
+data. See [asset storage and optional review tools](tools/ASSET_STORAGE.md).
+The MM9 world payload is currently local and is excluded from the portable checkout.
 
 ## Building
 
@@ -99,6 +108,14 @@ Run the editor:
 ```sh
 ./build/editor/openyamm-editor
 ```
+
+## Screenshots and visual checks
+
+For repeatable visual checks, see [Desktop runs and native screenshot tours](tools/RUN_GAME.md).
+The game can save PNGs directly through bgfx, including the HUD, on Wayland or X11. Use the debug
+console command `screenshot [name]`, launch-time capture settings, or a YAML tour to capture several
+camera poses in one run. Ready-to-run MM6/MM7/MM8 water viewpoints are in
+[`tools/screenshot_tours/`](tools/screenshot_tours/).
 
 ## Nightly Builds
 
@@ -157,16 +174,30 @@ OPENYAMM_USE_SYSTEM_SDL3=ON   Use an installed SDL3 package
 engine/              shared runtime systems
 game/                game application and gameplay systems
 editor/              editor application
-tools/               asset and data tools
+tools/               asset cooking, reusable review apps and development tools
 tests/               unit and regression tests
 assets_dev/          development asset root
-assets_editor_dev/   editor development asset root
+assets_cooked/android/sprites_new/  prebuilt Android creature GPU packages
+assets_source/       optional authoring banks (local; selected binaries can use LFS)
+assets_editor_dev/   optional local editor asset root
+level_generation/    optional local generation projects (excluded from Git)
+reference/           local behavioral/data references (excluded from Git and LFS)
 res/                 README screenshots
 ```
 
 ## License
 
-No license has been declared yet.
+OpenYAMM's original source code, build scripts, tests, and documentation are licensed under the
+**GNU General Public License, version 3 or later** (`GPL-3.0-or-later`), unless otherwise stated.
+Copyright (C) 2026 Petr Jasicek (pjasicek).
+
+See [LICENSE](LICENSE) for the full license and [COPYRIGHT](COPYRIGHT) for the attribution and scope.
+Distributors must preserve the applicable copyright notices and make the corresponding source available
+as required by the GPL. OpenYAMM is provided without warranty.
+
+Third-party dependencies retain their own licenses. Original Might and Magic assets, imported game data,
+and their converted or restored versions are not covered by the OpenYAMM code license; their distribution
+requires the appropriate rights from their respective rights holders.
 
 ## Screenshots
 

@@ -1,0 +1,45 @@
+# Compact area-transition window. The illustrated full-screen loading pages are separate.
+screen: LoadingTransition
+elements:
+- id: LoadingRoot
+  anchor: center
+  width: 853.333333
+  height: 480
+  children:
+  - id: LoadingPanel
+    anchor: top_left
+    offset_x: 276.666667
+    offset_y: 184
+    width: 300
+    height: 112
+    asset:
+      default: hud_x2/menus/omenu_modal.png
+    children:
+    - id: LoadingHourglass
+      anchor: top_left
+      offset_x: 32
+      offset_y: 28
+      width: 32
+      height: 48
+      asset:
+        default: obsidian_rest_hourglass_sand
+        frame: obsidian_rest_hourglass_frame
+    - id: LoadingTitle
+      anchor: top_left
+      offset_x: 92
+      offset_y: 23
+      width: 180
+      height: 26
+      text:
+        value: Loading...
+        font: fondamento
+        color: '#e5dcc7'
+        align_x: center
+        align_y: middle
+        scale: 0.48
+    - id: LoadingProgress
+      anchor: top_left
+      offset_x: 92
+      offset_y: 61
+      width: 180
+      height: 11

@@ -46,8 +46,10 @@ public:
         OutdoorGameView &view,
         uint16_t viewId,
         const float *pViewMatrix,
+        const float *pProjectionMatrix,
         const bx::Vec3 &cameraPosition,
-        const ViewFrustum &frustum);
+        const ViewFrustum &frustum,
+        const WaterRenderer::Reflection *pReflection = nullptr);
     static void renderRuntimeWorldItems(
         OutdoorGameView &view,
         uint16_t viewId,
@@ -77,6 +79,8 @@ public:
         const bx::Vec3 &cameraPosition);
 
 private:
+    static const OutdoorGameView::BillboardTextureHandle *restoreBillboardTexture(
+        OutdoorGameView &view, const std::string &name, int16_t palette, const std::string &resourceIdentity = {});
     static bool uploadBillboardTexture(OutdoorGameView &view, const OutdoorBitmapTexture &texture);
     static void appendWorldQuadVertices(
         std::vector<OutdoorGameView::TerrainVertex> &vertices,

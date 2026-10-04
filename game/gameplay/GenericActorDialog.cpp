@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <array>
+#include <charconv>
 #include <cstdlib>
 
 namespace OpenYAMM::Game
@@ -526,6 +527,49 @@ void applyGenericActorDialogResolution(
     runtimeState.npcNameOverrides[resolution.npcId] = resolution.generatedName;
     runtimeState.npcPictureOverrides[resolution.npcId] = resolution.portraitPictureId;
     runtimeState.npcProfessionOverrides[resolution.npcId] = resolution.generatedProfessionId;
+}
+
+std::optional<std::string> generatedNpcGroupNewsText(
+    const EventRuntimeState &runtimeState,
+    const NpcDialogTable &npcDialogTable,
+    uint32_t npcId,
+    const MapStatsEntry *pCurrentMap)
+{
+    for (const auto &[actorKey, mappedNpcId] : runtimeState.generatedNpcIdsByActorKey)
+    {
+        if (mappedNpcId != npcId
+            || (pCurrentMap != nullptr && !actorKey.starts_with(pCurrentMap->fileName + "#")))
+        {
+            continue;
+        }
+
+        // The saved actor identity is map#actor-index#group#actor-name.
+        const size_t mapEnd = actorKey.find('#');
+        const size_t actorEnd = mapEnd != std::string::npos ? actorKey.find('#', mapEnd + 1) : std::string::npos;
+        const size_t groupEnd = actorEnd != std::string::npos ? actorKey.find('#', actorEnd + 1) : std::string::npos;
+        if (groupEnd == std::string::npos)
+        {
+            return std::nullopt;
+        }
+
+        uint32_t groupId = 0;
+        const std::from_chars_result parsed = std::from_chars(
+            actorKey.data() + actorEnd + 1, actorKey.data() + groupEnd, groupId);
+        if (parsed.ec != std::errc() || parsed.ptr != actorKey.data() + groupEnd || groupId == 0)
+        {
+            return std::nullopt;
+        }
+
+        const auto overrideIt = runtimeState.npcGroupNews.find(groupId);
+        const uint32_t newsId = overrideIt != runtimeState.npcGroupNews.end()
+            ? overrideIt->second
+            : npcDialogTable.getNewsIdForGroup(groupId).value_or(0);
+        return newsId != 0 && !isPlaceholderGroupNews(newsId)
+            ? npcDialogTable.getNewsText(newsId)
+            : std::nullopt;
+    }
+
+    return std::nullopt;
 }
 
 bool hideGeneratedNpcActor(

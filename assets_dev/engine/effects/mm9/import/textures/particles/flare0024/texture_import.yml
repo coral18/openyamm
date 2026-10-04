@@ -1,0 +1,64 @@
+schema: openyamm.effectTextureImport.v1
+source:
+  path: /home/pjasicek/github/OpenYAMM/mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/PARTICLES/FLARE0024.dtx
+  format: LithTech DTX
+  sha256: aa263e45ed7615ffc0f3998ced620ae6e1391d5efbfff3ad0c54d651579a1e1d
+runtime:
+  texture: engine/effects/mm9/textures/particles/flare0024.png
+  format: PNG RGBA8
+  colorSpace: srgb
+  alphaUsage: blend
+  premultipliedAlpha: false
+  mipPolicy: generate-at-runtime
+  minFilter: linear
+  magFilter: linear
+  wrapU: clamp
+  wrapV: clamp
+conversion:
+  decoder: tools/mm9_import_discovery/convert_abc_model.py:decode_dtx_mips
+  decodedRgbChanged: false
+  decodedAlphaChanged: false
+  opaqueAlphaRepair: false
+  zeroAlphaRgbPreserved: true
+  sourceMipArtifacts: mips/*.png
+dtx:
+  version: -5
+  width: 32
+  height: 32
+  mipCount: 4
+  sectionCount: 0
+  internalFlags: 8
+  userFlags: 0
+  extraHex: '000000000000000000000000'
+  bppIdentifier: 0
+  command: ''
+  repairOpaqueAlpha: false
+  mips:
+  - index: 0
+    width: 32
+    height: 32
+    sourceOffset: 164
+    sourceBytes: 4096
+    decodedRgbaSha256: 42c46e4e9348ec7701da7aa0480eb760914099ebcf8b6ec9ec2b41ad1df1947a
+    artifact: mips/00.png
+  - index: 1
+    width: 16
+    height: 16
+    sourceOffset: 4260
+    sourceBytes: 1024
+    decodedRgbaSha256: b3d00c162913d4385097e244431b979485cad6484af136b7f409c98e2382ac42
+    artifact: mips/01.png
+  - index: 2
+    width: 8
+    height: 8
+    sourceOffset: 5284
+    sourceBytes: 256
+    decodedRgbaSha256: 0aaba49a104f4073786a1c9f2813dc87bdb3cf619f7296167884be219602a2e9
+    artifact: mips/02.png
+  - index: 3
+    width: 4
+    height: 4
+    sourceOffset: 5540
+    sourceBytes: 64
+    decodedRgbaSha256: aec705bd7a8661a7f4210d77285a410027860e1639f659f3328ae86bf5457212
+    artifact: mips/03.png

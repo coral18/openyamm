@@ -1,6 +1,8 @@
 #include "game/events/EventDialogContent.h"
 
 #include "game/events/ISceneEventContext.h"
+#include "game/gameplay/ArenaRuntime.h"
+#include "game/gameplay/GenericActorDialog.h"
 #include "game/gameplay/HouseInteraction.h"
 #include "game/gameplay/MasteryTeacherDialog.h"
 #include "game/gameplay/ReputationRuntime.h"
@@ -313,6 +315,46 @@ bool randomNpcNeedsBtbGate(
     }
 
     return effectivePartyReputation(pWorldRuntime->currentLocationReputation(), &eventRuntimeState) > 5;
+}
+
+std::string generatedNpcGreetingText(
+    const EventRuntimeState &runtimeState,
+    const NpcEntry &npc,
+    const NpcDialogTable &npcDialogTable,
+    const MergedNpcProfessionEntry &profession,
+    const MergedNpcBtbEntry &personality,
+    const MapStatsEntry *pCurrentMap,
+    const Party *pParty,
+    const IGameplayWorldRuntime *pWorldRuntime,
+    const MergedContinentSettingTable *pContinentSettingTable,
+    float currentGameMinutes,
+    bool npcIsHired,
+    bool seenGreeting)
+{
+    const std::optional<std::string> groupNews =
+        generatedNpcGroupNewsText(runtimeState, npcDialogTable, npc.id, pCurrentMap);
+    if (groupNews && !groupNews->empty())
+    {
+        return *groupNews;
+    }
+
+    // Use the same access decision as the conversation actions, so a refusal never offers Join.
+    const bool refusesConversation = continentAllowsNpcFollowers(pCurrentMap, pContinentSettingTable)
+        && randomNpcNeedsBtbGate(
+            runtimeState, pCurrentMap, pWorldRuntime, pContinentSettingTable,
+            npc.id, npcIsHired, &personality, currentGameMinutes);
+    const uint32_t textId = refusesConversation
+        ? (seenGreeting ? personality.reputationBelowZeroSecondGoodTextId
+                        : personality.reputationBelowZeroFirstGoodTextId)
+        : (seenGreeting ? personality.reputationOkSecondTextId : personality.reputationOkFirstTextId);
+    const std::optional<std::string> text = npcDialogTable.getText(textId);
+    const int reputation = pWorldRuntime != nullptr
+        ? effectivePartyReputation(pWorldRuntime->currentLocationReputation(), &runtimeState)
+        : 0;
+    const int requiredReputation = personality.creed == "Dark"
+        ? personality.requiredReputation : -personality.requiredReputation;
+    return text ? formatNpcProfessionText(
+        *text, npc, profession, pParty, reputation, requiredReputation, currentGameMinutes) : std::string();
 }
 
 std::string lowerTransitionTitle(const std::string &title)
@@ -792,6 +834,63 @@ std::vector<uint32_t> collectSelectableResidentNpcIds(
     return collectSelectableResidentNpcIdsImpl(houseEntry, npcDialogTable, eventRuntimeState);
 }
 
+std::string formatNpcProfessionText(
+    std::string text,
+    const NpcEntry &npc,
+    const MergedNpcProfessionEntry &profession,
+    const Party *pParty,
+    int effectiveReputation,
+    std::optional<int> requiredReputation,
+    float currentGameMinutes)
+{
+    const Character *pActiveMember = pParty != nullptr ? pParty->activeMember() : nullptr;
+    if (pActiveMember == nullptr && pParty != nullptr)
+    {
+        pActiveMember = pParty->member(0);
+    }
+
+    const std::string memberName = pActiveMember != nullptr ? pActiveMember->name : "traveler";
+    const std::string className = pActiveMember != nullptr ? pActiveMember->className : "traveler";
+    const uint32_t hour = static_cast<uint32_t>(std::max(0.0f, currentGameMinutes) / 60.0f) % 24u;
+    const std::string timeOfDay = hour <= 8u ? "morning" : (hour <= 16u ? "afternoon" : "evening");
+    const std::array<std::pair<std::string, std::string>, 14> replacements = {{
+        {"%01", npc.name},
+        {"%02", memberName},
+        {"%04", std::to_string(profession.weeklyCost)},
+        {"%05", timeOfDay},
+        {"%06", className},
+        {"%07", className},
+        {"%08", reputationLabel(effectiveReputation)},
+        {"%11", reputationLabel(effectiveReputation)},
+        {"%12", reputationLabel(requiredReputation.value_or(effectiveReputation))},
+        {"%13", memberName},
+        {"%14", profession.profession},
+        {"%15", memberName},
+        {"%16", memberName},
+        {"%17", std::to_string(profession.weeklyCost / 100u)},
+    }};
+
+    size_t position = 0;
+    while ((position = text.find('%', position)) != std::string::npos)
+    {
+        const std::string token = text.substr(position, 3);
+        const auto replacement = std::find_if(
+            replacements.begin(), replacements.end(),
+            [&token](const std::pair<std::string, std::string> &entry) { return entry.first == token; });
+        if (replacement != replacements.end())
+        {
+            text.replace(position, token.size(), replacement->second);
+            position += replacement->second.size();
+        }
+        else
+        {
+            ++position;
+        }
+    }
+
+    return text;
+}
+
 uint32_t npcBtbDialogueAccessVariableKey(uint32_t npcId)
 {
     constexpr uint32_t NpcBtbDialogueAccessVariableBase = 0x7B000000u;
@@ -1238,6 +1337,11 @@ EventDialogContent buildEventDialogContent(
         const std::optional<NpcEntry> npcEntry =
             runtimeNpcEntryIfExists(pNpcDialogTable, npcRuntimeState, dialog.sourceId);
         const NpcEntry *pNpc = npcEntry ? &*npcEntry : nullptr;
+        const MergedNpcProfessionEntry *pProfession =
+            pNpc != nullptr && pNpc->professionId != 0 && pNpcProfessionTable != nullptr
+                ? pNpcProfessionTable->get(pNpc->professionId)
+                : nullptr;
+        const bool npcIsHired = pNpc != nullptr && hasHiredNpcFollower(npcRuntimeState, pNpc->id);
         const bool hasPendingRosterJoinInvite =
             pCurrentOffer != nullptr
             && pCurrentOffer->kind == DialogueOfferKind::RosterJoin
@@ -1253,6 +1357,10 @@ EventDialogContent buildEventDialogContent(
         const bool hasPendingNpcHireOffer =
             pCurrentOffer != nullptr
             && pCurrentOffer->kind == DialogueOfferKind::NpcHire
+            && pCurrentOffer->npcId == dialog.sourceId;
+        const bool hasPendingArenaOffer =
+            pCurrentOffer != nullptr
+            && pCurrentOffer->kind == DialogueOfferKind::Arena
             && pCurrentOffer->npcId == dialog.sourceId;
         const bool hasEventMessageLines = !eventMessageLines.empty();
         allowEmptyNpcTalkDialog =
@@ -1298,21 +1406,45 @@ EventDialogContent buildEventDialogContent(
             && !hasPendingMasteryTeacherOffer
             && !hasPendingGuildMembershipOffer
             && !hasPendingNpcHireOffer
-            && !hasEventMessageLines
-            && pGreeting != nullptr)
+            && !hasPendingArenaOffer
+            && !hasEventMessageLines)
         {
             const uint32_t greetingDisplayCount = npcRuntimeState.npcGreetingDisplayCounts[dialog.sourceId];
-            const std::string &greetingText =
-                (greetingDisplayCount == 0 || pGreeting->greetingSecondary.empty())
-                ? pGreeting->greetingPrimary
-                : pGreeting->greetingSecondary;
-
-            if (!greetingText.empty())
+            if (pGreeting != nullptr)
             {
-                const std::vector<std::string> wrappedGreeting =
-                    wrapDialogText(greetingText, MaxLineWidth);
-                dialog.lines.insert(dialog.lines.end(), wrappedGreeting.begin(), wrappedGreeting.end());
-                eventRuntimeState.npcGreetingDisplayCounts[dialog.sourceId] = greetingDisplayCount + 1;
+                const std::string &greetingText =
+                    (greetingDisplayCount == 0 || pGreeting->greetingSecondary.empty())
+                    ? pGreeting->greetingPrimary
+                    : pGreeting->greetingSecondary;
+
+                if (!greetingText.empty())
+                {
+                    dialog.lines = wrapDialogText(greetingText, MaxLineWidth);
+                    eventRuntimeState.npcGreetingDisplayCounts[dialog.sourceId] = greetingDisplayCount + 1;
+                }
+            }
+            else if (pNpc != nullptr && pProfession != nullptr && pNpcBtbTable != nullptr
+                && isRuntimeRandomNpc(npcRuntimeState, pNpc->id))
+            {
+                const MergedNpcBtbEntry *pPersonality = pNpcBtbTable->get(pProfession->personality);
+                if (pPersonality != nullptr)
+                {
+                    auto &cachedGreeting = eventRuntimeState.dialogueState.generatedNpcGreeting;
+                    if (!cachedGreeting || cachedGreeting->npcId != pNpc->id)
+                    {
+                        std::string greeting = generatedNpcGreetingText(
+                            npcRuntimeState, *pNpc, *pNpcDialogTable, *pProfession, *pPersonality,
+                            pCurrentMap, pParty, pWorldRuntime, pContinentSettingTable,
+                            currentGameMinutes, npcIsHired, greetingDisplayCount != 0);
+                        if (!greeting.empty())
+                        {
+                            eventRuntimeState.npcGreetingDisplayCounts[pNpc->id] = greetingDisplayCount + 1;
+                        }
+                        cachedGreeting = EventRuntimeState::DialogueRuntimeState::GeneratedNpcGreeting{
+                            pNpc->id, std::move(greeting)};
+                    }
+                    dialog.lines = wrapDialogText(cachedGreeting->text, MaxLineWidth);
+                }
             }
         }
 
@@ -1331,7 +1463,18 @@ EventDialogContent buildEventDialogContent(
                 pNpcDialogTable->getTopicsForNpc(dialog.sourceId, pTopicOverrides);
             const EventRuntime eventRuntime = {};
 
-            if (hasPendingRosterJoinInvite)
+            if (hasPendingArenaOffer)
+            {
+                for (uint32_t difficulty = 1; difficulty <= 4; ++difficulty)
+                {
+                    EventDialogAction action = {};
+                    action.kind = EventDialogActionKind::ArenaChallenge;
+                    action.id = difficulty;
+                    action.label = arenaDifficultyName(ArenaDifficulty(difficulty));
+                    dialog.actions.push_back(std::move(action));
+                }
+            }
+            else if (hasPendingRosterJoinInvite)
             {
                 EventDialogAction acceptAction = {};
                 acceptAction.kind = EventDialogActionKind::RosterJoinAccept;
@@ -1407,12 +1550,6 @@ EventDialogContent buildEventDialogContent(
                     dialog.actions.push_back(std::move(joinAction));
                 }
 
-                const MergedNpcProfessionEntry *pProfession =
-                    pNpc != nullptr && pNpc->professionId != 0 && pNpcProfessionTable != nullptr
-                        ? pNpcProfessionTable->get(pNpc->professionId)
-                        : nullptr;
-                const bool npcIsHired =
-                    pNpc != nullptr && hasHiredNpcFollower(npcRuntimeState, pNpc->id);
                 const bool allowProfessionBasedHire =
                     pNpc != nullptr && (context.hostHouseId == 0 || pNpc->topicIds.empty());
                 const bool suppressProfessionTopicForHireableNpc =

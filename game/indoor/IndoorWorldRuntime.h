@@ -1,5 +1,7 @@
 #pragma once
 
+#include "game/gameplay/ActorInspectPreviewAnimation.h"
+
 #include "game/FaceEnums.h"
 #include "game/events/EventRuntime.h"
 #include "game/events/ISceneEventContext.h"
@@ -129,15 +131,6 @@ public:
         mutable GameplayMonsterBolsterResult bolsterCache = {};
     };
 
-    struct ActorInspectPreviewAnimationState
-    {
-        int16_t monsterId = 0;
-        ActorAiAnimationState animation = ActorAiAnimationState::Bored;
-        uint32_t actionTimeTicks = 0;
-        uint32_t actionLengthTicks = 0;
-        uint32_t lastUpdateTicks = 0;
-        uint32_t randomState = 0x6d2b79f5u;
-    };
 
     struct BloodSplatState
     {
@@ -267,6 +260,10 @@ public:
 
     const std::string &mapName() const override;
     const MonsterTable *monsterTable() const override;
+    const MapArenaDefinition *arenaDefinition() const override
+    {
+        return m_map && m_map->runtimeRestrictions.isArena && m_map->arena ? &*m_map->arena : nullptr;
+    }
     const MergedBolsterMonsterTable *mergedBolsterMonsterTable() const override;
     bool isIndoorMap() const override;
     bool allowsLloydsBeacon() const override;
@@ -448,6 +445,9 @@ public:
         bool visibleForFallback) const override;
     std::vector<GameplayPartyAttackActorFacts> collectPartyAttackFallbackActors(
         const GameplayPartyAttackFallbackQuery &query) const override;
+    std::optional<GameplayWorldPoint> partyAttackActorContactPoint(
+        size_t actorIndex,
+        const GameplayPartyAttackFallbackQuery &query) const override;
     bool applyPartyAttackMeleeDamage(
         size_t actorIndex,
         int damage,
@@ -584,6 +584,7 @@ private:
         bool valid = false;
         std::vector<IndoorVertex> vertices;
         IndoorFaceGeometryCache geometryCache;
+        std::vector<std::vector<uint16_t>> neighboringSectorIds;
         bool pathMapValid = false;
         std::shared_ptr<const PathMap> pathMapSnapshot;
     };
@@ -628,11 +629,11 @@ private:
         uint64_t blockedMoves = 0;
         uint64_t activeSelectionLosChecks = 0;
         uint64_t pathResolveCalls = 0;
+        uint64_t pathDirectChecks = 0;
         uint64_t pathPlans = 0;
         uint64_t pathQueued = 0;
         uint64_t pathActive = 0;
         uint64_t pathStopped = 0;
-        uint64_t pathIgnoredActorCollision = 0;
         uint64_t crowdOverrideActors = 0;
         uint64_t crowdStateUpdates = 0;
     };
@@ -662,7 +663,6 @@ private:
         const ActorPartyFacts &partyFacts,
         int16_t partySectorId,
         const std::vector<IndoorVertex> &vertices,
-        IndoorFaceGeometryCache &geometryCache,
         IndoorActorAiPerformanceDiagnostics *pDiagnostics = nullptr);
     ActorAiFrameFacts collectIndoorActorAiFrameFacts(
         float deltaSeconds,
@@ -761,7 +761,8 @@ private:
     void beginMapActorHitReaction(
         size_t actorIndex,
         MapDeltaActor &actor,
-        const GameplayWorldPoint *pSource);
+        const GameplayWorldPoint *pSource,
+        bool force = false);
     void beginMapActorDyingState(size_t actorIndex, MapDeltaActor &actor);
     void spawnMonsterDeathDropsForActor(size_t actorIndex, const MapDeltaActor &actor);
     bool spawnMonsterDeathDropItem(
@@ -781,7 +782,8 @@ private:
     bool spawnIndoorProjectileImpactVisual(
         const GameplayProjectileService::ProjectileState &projectile,
         const GameplayWorldPoint &point,
-        bool centerVertically);
+        bool centerVertically,
+        size_t targetActorIndex = static_cast<size_t>(-1));
     bool spawnIndoorWaterSplashImpactVisual(const GameplayWorldPoint &point);
     bool spawnImmediateSpellImpactVisualAt(
         const GameplayWorldPoint &point,
@@ -835,7 +837,7 @@ private:
     std::optional<CorpseViewState> m_activeCorpseView;
     std::vector<MapActorAiState> m_mapActorAiStates;
     std::vector<size_t> m_actorCorpsePhysicsActorIndices;
-    mutable ActorInspectPreviewAnimationState m_actorInspectPreviewAnimation = {};
+    mutable ActorInspectPreviewAnimation m_actorInspectPreviewAnimation = {};
     std::vector<uint8_t> m_activatedIndoorSectorMask;
     std::vector<BloodSplatState> m_bloodSplats;
     uint64_t m_bloodSplatRevision = 0;
@@ -849,6 +851,7 @@ private:
     int16_t m_lastIndoorJournalRevealSectorId = -1;
     int16_t m_lastIndoorJournalRevealEyeSectorId = -1;
     uint64_t m_lastIndoorJournalRevealSurfaceRevision = 0;
+    uint64_t m_lastIndoorJournalRevealVisibilityRevision = 0;
     uint64_t m_indoorMinimapRevealRevision = 0;
     size_t m_lastIndoorJournalRevealFaceCount = 0;
     size_t m_lastIndoorJournalRevealOutlineCount = 0;

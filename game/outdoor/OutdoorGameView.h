@@ -1,11 +1,14 @@
 #pragma once
 
 #include "game/render/SpriteAtlasCache.h"
+#include "game/render/NativeSpriteTextureCache.h"
 #include "game/render/TextureFiltering.h"
+#include "game/render/WaterRenderer.h"
 
 #include "game/app/GameSettings.h"
 #include "game/fx/WorldFxRenderResources.h"
 #include "game/fx/WorldFxSystem.h"
+#include "game/fx/EffectRenderer.h"
 #include "game/outdoor/OutdoorCollisionData.h"
 #include "game/outdoor/OutdoorLightingRuntime.h"
 #include "game/outdoor/OutdoorSpatialFxRuntime.h"
@@ -44,6 +47,7 @@
 #include "game/ui/GameplayOverlayAdapters.h"
 #include "game/ui/UiLayoutManager.h"
 #include "engine/AssetFileSystem.h"
+#include "engine/render/ModelRenderer.h"
 
 #include <bgfx/bgfx.h>
 #include <bx/math.h>
@@ -93,7 +97,8 @@ class OutdoorGameView
     : public IGameplayOverlaySceneAdapter
 {
 public:
-    explicit OutdoorGameView(GameSession &gameSession);
+    OutdoorGameView(GameSession &gameSession, SpriteAtlasCache &spriteAtlasCache,
+        NativeSpriteTextureCache &nativeSpriteCache);
     ~OutdoorGameView();
 
     bool hasPendingSpriteWarmups() const
@@ -122,11 +127,13 @@ public:
         GameAudioSystem *pGameAudioSystem,
         OutdoorSceneRuntime &sceneRuntime,
         const GameSettings &settings);
-    void render(int width, int height, const GameplayInputFrame &input, float deltaSeconds);
+    void render(int width, int height, const GameplayInputFrame &input, float deltaSeconds,
+        bool preparingResources = false);
     void shutdown();
     float cameraYawRadians() const;
     float cameraPitchRadians() const;
     void setCameraAngles(float yawRadians, float pitchRadians);
+    void syncCameraToParty();
     void setCameraEyeHeight(float eyeHeight);
     void reopenMenuScreen();
     bool requestQuickSave();
@@ -350,6 +357,7 @@ private:
     struct AnimatedWaterTerrainTileState
     {
         uint16_t layer = 0;
+        bool isWaterSurface = false;
         std::vector<std::vector<BgraMipLevel>> frameMipLevels;
         std::vector<uint32_t> frameLengthTicks;
         uint32_t animationLengthTicks = 0;
@@ -595,6 +603,8 @@ public:
     bool trySaveToSelectedGameSlot() override;
     const GameSettings &settingsSnapshot() const;
     GameplayWorldUiRenderState gameplayUiRenderState(int width, int height) const;
+    WorldFxSystem &worldFxSystem();
+    const EffectRenderer::Diagnostics &effectRenderDiagnostics() const;
 private:
     float effectiveCameraYawRadians() const;
     float effectiveCameraPitchRadians() const;
@@ -653,12 +663,7 @@ private:
         float fontScale = 1.0f;
     };
 
-    struct CombatTargetState
-    {
-        bool active = false;
-        size_t actorIndex = 0;
-        float remainingSeconds = 0.0f;
-    };
+
 
     bool m_isInitialized;
     bool m_isRenderable;
@@ -697,6 +702,9 @@ private:
     bgfx::ProgramHandle m_outdoorTexturedFogProgramHandle;
     bgfx::ProgramHandle m_outdoorTerrainFogProgramHandle;
     TerrainDecorationRenderer m_terrainDecorations;
+    WaterRenderer m_waterRenderer;
+    bgfx::UniformHandle m_worldClipPlaneUniformHandle = BGFX_INVALID_HANDLE;
+    bgfx::UniformHandle m_waterSurfaceControlUniformHandle = BGFX_INVALID_HANDLE;
     struct TerrainDecorationBatch
     {
         TerrainDecorationPatch range;
@@ -754,9 +762,12 @@ private:
     std::vector<BModelWorldRenderChunk> m_bmodelWorldRenderChunks;
     uint64_t m_bmodelWorldRenderRevision = std::numeric_limits<uint64_t>::max();
     uint64_t m_bloodSplatVertexBufferRevision = std::numeric_limits<uint64_t>::max();
-    SpriteAtlasCache m_spriteAtlasCache;
+    SpriteAtlasCache &m_spriteAtlasCache;
+    NativeSpriteTextureCache &m_nativeSpriteCache;
     std::deque<BillboardTextureHandle> m_billboardTextureHandles;
     WorldFxRenderResources m_worldFxRenderResources;
+    EffectRenderer m_effectRenderer;
+    Engine::ModelRenderer m_modelRenderer;
     std::array<float, OutdoorFxUniformLightCount * 4> m_cachedOutdoorFxLightPositions = {};
     std::array<float, OutdoorFxUniformLightCount * 4> m_cachedOutdoorFxLightColors = {};
     std::array<float, 4> m_cachedOutdoorFxLightParams = {};
@@ -814,6 +825,7 @@ private:
     float m_lastSkyUpdateElapsedTime = -1.0f;
     std::vector<AnimatedWaterTerrainTileState> m_animatedWaterTerrainTiles;
     std::optional<uint32_t> m_lastAnimatedWaterAnimationTicks;
+    bool m_lastAnimatedWaterShaderEnabled = false;
     SpriteLoadCache m_spriteLoadCache;
     std::unordered_set<std::string> m_runtimeBillboardLoadWarningKeys;
     std::vector<uint16_t> m_pendingSpriteFrameWarmups;
@@ -889,6 +901,5 @@ private:
     int m_lastRenderWidth = 0;
     int m_lastRenderHeight = 0;
     std::vector<CombatFloatingText> m_combatFloatingTexts;
-    CombatTargetState m_combatTargetState;
 };
 }

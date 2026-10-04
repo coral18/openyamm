@@ -1,0 +1,36 @@
+OpenYAMM - Open Yet Another Might and Magic
+Copyright (C) 2026 Petr Jasicek (pjasicek)
+
+SPDX-License-Identifier: GPL-3.0-or-later
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program in the LICENSE file. If not, see
+<https://www.gnu.org/licenses/>.
+
+Scope
+-----
+Unless explicitly stated otherwise, this declaration applies to the original
+OpenYAMM source code, build scripts, tests, and documentation in this repository.
+Other contributors retain copyright in their contributions. Existing copyright
+and license notices must be preserved as required by the applicable licenses.
+
+Third-party libraries, tools, and reference checkouts retain their own copyright
+notices and licenses. This declaration does not relicense them.
+
+Game assets and imported game data are not licensed by this declaration. This
+includes original Might and Magic content, extracted or converted game scripts,
+and restored or upscaled versions of original artwork. These materials remain
+subject to their respective rights holders' terms. The OpenYAMM code license
+does not grant permission to redistribute those materials or use their trademarks.
+
+Source repository: https://github.com/pjasicek/openyamm

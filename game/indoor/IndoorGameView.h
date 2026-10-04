@@ -61,7 +61,8 @@ public:
         IndoorSceneRuntime &sceneRuntime,
         GameAudioSystem *pGameAudioSystem);
     void setSettingsSnapshot(const GameSettings &settings);
-    void render(int width, int height, const GameplayInputFrame &input, float deltaSeconds);
+    void render(int width, int height, const GameplayInputFrame &input, float deltaSeconds,
+        bool preparingResources = false);
     void shutdown();
     void reopenMenuScreen();
     bool requestQuickSave();
@@ -122,12 +123,7 @@ private:
         float fontScale = 1.0f;
     };
 
-    struct CombatTargetState
-    {
-        bool active = false;
-        size_t actorIndex = 0;
-        float remainingSeconds = 0.0f;
-    };
+
 
     struct PendingSavePreviewCaptureState
     {
@@ -158,6 +154,5 @@ private:
     float m_walkingMotionHoldSeconds = 0.0f;
     std::optional<uint32_t> m_activeWalkingSoundId;
     std::vector<CombatFloatingText> m_combatFloatingTexts;
-    CombatTargetState m_combatTargetState;
 };
 } // namespace OpenYAMM::Game

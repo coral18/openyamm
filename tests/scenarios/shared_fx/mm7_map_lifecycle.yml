@@ -1,0 +1,18 @@
+id: shared_fx.mm7_map_lifecycle
+title: Shared model and FX regression - MM7 map lifecycle
+world: mm7
+mode: faithful
+tags: [mm7, smoke, shared_fx]
+steps:
+  - new_game_flow:
+      start_map: 7out01.odm
+  - assert:
+      map: 7out01.odm
+  - load_map:
+      map: 7d29.blv
+  - assert:
+      map: 7d29.blv
+  - load_map:
+      map: 7out01.odm
+  - assert:
+      map: 7out01.odm

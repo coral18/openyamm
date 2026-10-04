@@ -1152,7 +1152,8 @@ GameplayProjectileService::spawnProjectileImpactVisual(
     float x,
     float y,
     float z,
-    bool centerVertically)
+    bool centerVertically,
+    size_t targetActorIndex)
 {
     ProjectileImpactSpawnResult result = {};
 
@@ -1178,6 +1179,7 @@ GameplayProjectileService::spawnProjectileImpactVisual(
         : z;
     impactState.lifetimeTicks = definition.lifetimeTicks;
     impactState.sectorId = projectile.sectorId;
+    impactState.targetActorIndex = targetActorIndex;
 
     const ProjectileImpactState &impact = addProjectileImpact(std::move(impactState));
     result.spawned = true;
@@ -2076,6 +2078,7 @@ void GameplayProjectileService::collectProjectilePresentationState(
         state.timeSinceCreatedTicks = impact.timeSinceCreatedTicks;
         state.lifetimeTicks = impact.lifetimeTicks;
         state.sectorId = impact.sectorId;
+        state.targetActorIndex = impact.targetActorIndex;
         state.freezeAnimation = impact.freezeAnimation;
         impacts.push_back(std::move(state));
     }

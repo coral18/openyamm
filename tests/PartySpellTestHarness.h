@@ -128,6 +128,31 @@ public:
         m_pEventRuntimeState = pEventRuntimeState;
     }
 
+    void bindMapDeltaData(Game::MapDeltaData *pMapDeltaData)
+    {
+        m_pMapDeltaData = pMapDeltaData;
+    }
+
+    void bindArenaDefinition(const Game::MapArenaDefinition *pArena)
+    {
+        m_pArena = pArena;
+    }
+
+    const Game::MapArenaDefinition *arenaDefinition() const override
+    {
+        return m_pArena;
+    }
+
+    Game::MapDeltaData *mapDeltaData() override
+    {
+        return m_pMapDeltaData;
+    }
+
+    const Game::MapDeltaData *mapDeltaData() const override
+    {
+        return m_pMapDeltaData;
+    }
+
     void bindGlobalEventProgram(const std::optional<Game::ScriptedEventProgram> *pGlobalEventProgram)
     {
         m_pGlobalEventProgram = pGlobalEventProgram;
@@ -1043,6 +1068,8 @@ private:
     Game::Party *m_pParty = nullptr;
     Game::EventRuntimeState m_eventRuntimeState = {};
     Game::EventRuntimeState *m_pEventRuntimeState = nullptr;
+    Game::MapDeltaData *m_pMapDeltaData = nullptr;
+    const Game::MapArenaDefinition *m_pArena = nullptr;
     const std::optional<Game::ScriptedEventProgram> *m_pGlobalEventProgram = nullptr;
     const Game::MonsterTable *m_pMonsterTable = nullptr;
     const Game::MergedBolsterMonsterTable *m_pBolsterMonsterTable = nullptr;

@@ -1,0 +1,18 @@
+schema: openyamm.effectSprite.v2
+id: mm9:effect-sprite/spirit
+source: sprites/spirit.spr
+framesPerSecond: 10
+logicalWidth: 64
+logicalHeight: 64
+keyed: false
+translucent: false
+colorKey: 0
+frames:
+- mm9:effect-texture/spirit1
+- mm9:effect-texture/spirit2
+- mm9:effect-texture/spirit3
+- mm9:effect-texture/spirit4
+- mm9:effect-texture/spirit5
+- mm9:effect-texture/spirit6
+- mm9:effect-texture/spirit7
+- mm9:effect-texture/spirit8

@@ -1,4 +1,5 @@
 #include "game/app/GameSettings.h"
+#include "game/render/CombatActorHealthBarPolicy.h"
 
 #include <algorithm>
 #include <cctype>
@@ -298,20 +299,6 @@ std::string turnRateModeString(TurnRateMode mode)
     return "32x";
 }
 
-std::string gameplayUiLayoutString(GameplayUiLayout layout)
-{
-    switch (layout)
-    {
-    case GameplayUiLayout::Standard:
-        return "standard";
-
-    case GameplayUiLayout::Widescreen:
-        return "widescreen";
-    }
-
-    return "widescreen";
-}
-
 std::string windowModeString(WindowMode mode)
 {
     switch (mode)
@@ -369,18 +356,6 @@ ControlScheme parseControlScheme(const std::string &value)
     }
 
     return ControlScheme::Modern;
-}
-
-GameplayUiLayout parseGameplayUiLayout(const std::string &value)
-{
-    const std::string normalized = toLowerCopy(trimCopy(value));
-
-    if (normalized == "standard")
-    {
-        return GameplayUiLayout::Standard;
-    }
-
-    return GameplayUiLayout::Widescreen;
 }
 
 WindowMode parseWindowMode(const std::string &value)
@@ -790,14 +765,39 @@ std::optional<GameSettings> loadGameSettings(const std::filesystem::path &path, 
         }
     }
 
-    if (const std::optional<std::string> value = getIniValue(document, "gameplay", "combat_actor_hp_bars"))
+    if (const std::optional<std::string> value = getIniValue(document, "gameplay", "enemy_health_bars"))
     {
-        bool parsed = settings.combatActorHealthBars;
-
-        if (parseBoolValue(*value, parsed))
+        if (validEnemyHealthBarMode(*value))
         {
-            settings.combatActorHealthBars = parsed;
+            settings.enemyHealthBarMode = *value;
         }
+    }
+    else
+    {
+        // Explicit migration from the retired world-bar and top-centered panel settings.
+        const std::optional<std::string> bars = getIniValue(document, "gameplay", "combat_actor_hp_bars");
+        const std::optional<std::string> panel = getIniValue(document, "gameplay", "combat_target_panel");
+        bool enabled = true;
+        bool targetEnabled = false;
+        if (bars && parseBoolValue(*bars, enabled) && !enabled)
+        {
+            if (panel)
+            {
+                parseBoolValue(*panel, targetEnabled);
+            }
+            settings.enemyHealthBarMode = targetEnabled ? "target" : "off";
+        }
+    }
+    if (const std::optional<std::string> value = getIniValue(document, "gameplay", "enemy_health_bar_values"))
+    {
+        if (validEnemyHealthBarValues(*value))
+        {
+            settings.enemyHealthBarValues = *value;
+        }
+    }
+    if (const std::optional<std::string> value = getIniValue(document, "gameplay", "enemy_health_bar_damage_trail"))
+    {
+        parseBoolValue(*value, settings.enemyHealthBarDamageTrail);
     }
 
     if (const std::optional<std::string> value = getIniValue(document, "gameplay", "quest_markers"))
@@ -810,13 +810,13 @@ std::optional<GameSettings> loadGameSettings(const std::filesystem::path &path, 
         }
     }
 
-    if (const std::optional<std::string> value = getIniValue(document, "gameplay", "combat_target_panel"))
+    if (const std::optional<std::string> value = getIniValue(document, "gameplay", "melee_hit_blood_effects"))
     {
-        bool parsed = settings.combatTargetPanel;
+        bool parsed = settings.meleeHitBloodEffects;
 
         if (parseBoolValue(*value, parsed))
         {
-            settings.combatTargetPanel = parsed;
+            settings.meleeHitBloodEffects = parsed;
         }
     }
 
@@ -883,6 +883,30 @@ std::optional<GameSettings> loadGameSettings(const std::filesystem::path &path, 
     if (const std::optional<std::string> value = getIniValue(document, "video", "cinematic_grading"))
     {
         parseBoolValue(*value, settings.cinematicGrading);
+    }
+    if (const std::optional<std::string> value = getIniValue(document, "video", "water_shader"))
+    {
+        parseBoolValue(*value, settings.waterShader);
+    }
+    if (const std::optional<std::string> value = getIniValue(document, "video", "water_reflections"))
+    {
+        parseBoolValue(*value, settings.waterReflections);
+    }
+    if (const std::optional<std::string> value = getIniValue(document, "video", "water_reflection_size"))
+    {
+        int parsed = settings.waterReflectionSize;
+        if (parseIntValue(*value, parsed))
+        {
+            settings.waterReflectionSize = std::clamp(parsed, 128, 2048);
+        }
+    }
+    if (const std::optional<std::string> value = getIniValue(document, "video", "water_movement_ripples"))
+    {
+        parseBoolValue(*value, settings.waterMovementRipples);
+    }
+    if (const std::optional<std::string> value = getIniValue(document, "video", "water_sprite_reflections"))
+    {
+        parseBoolValue(*value, settings.waterSpriteReflections);
     }
     if (const std::optional<std::string> value = getIniValue(document, "video", "cinematic_strength"))
     {
@@ -994,10 +1018,7 @@ std::optional<GameSettings> loadGameSettings(const std::filesystem::path &path, 
         }
     }
 
-    if (const std::optional<std::string> value = getIniValue(document, "video", "gameplay_ui_layout"))
-    {
-        settings.gameplayUiLayout = parseGameplayUiLayout(*value);
-    }
+    // Retired by the shared Obsidian HUD. Legacy INI values are omitted on the next save.
 
     if (const std::optional<std::string> value = getIniValue(document, "video", "window_mode"))
     {
@@ -1455,6 +1476,150 @@ std::optional<GameSettings> loadGameSettings(const std::filesystem::path &path, 
         }
     }
 
+    if (const std::optional<std::string> value = getIniValue(document, "debug", "menu_input_tour_path"))
+    {
+        settings.menuInputTourPath = trimCopy(*value);
+    }
+
+    if (const std::optional<std::string> value = getIniValue(document, "debug", "screenshot_path"))
+    {
+        settings.screenshotPath = trimCopy(*value);
+    }
+
+    if (const std::optional<std::string> value = getIniValue(document, "debug", "screenshot_delay_seconds"))
+    {
+        float parsed = 0.0f;
+        if (!parseFloatValue(*value, parsed) || !std::isfinite(parsed) || parsed < 0.0f || parsed > 600.0f)
+        {
+            error = "screenshot_delay_seconds must be finite in [0, 600].";
+            return std::nullopt;
+        }
+        settings.screenshotDelaySeconds = parsed;
+    }
+
+    if (const std::optional<std::string> value = getIniValue(document, "debug", "screenshot_tour_path"))
+    {
+        settings.screenshotTourPath = trimCopy(*value);
+    }
+
+    if (const std::optional<std::string> value = getIniValue(document, "debug", "effect_spawn_id"))
+    {
+        settings.effectSpawnId = trimCopy(*value);
+    }
+
+    constexpr std::array<const char *, 3> EffectPositionNames = {
+        "effect_spawn_x", "effect_spawn_y", "effect_spawn_z"};
+    for (size_t axis = 0; axis < EffectPositionNames.size(); ++axis)
+    {
+        if (const std::optional<std::string> value = getIniValue(document, "debug", EffectPositionNames[axis]))
+        {
+            float parsed = 0.0f;
+            if (!parseFloatValue(*value, parsed) || !std::isfinite(parsed))
+            {
+                error = std::string(EffectPositionNames[axis]) + " must be finite.";
+                return std::nullopt;
+            }
+            settings.effectSpawnPosition[axis] = parsed;
+        }
+    }
+
+    if (const std::optional<std::string> value = getIniValue(document, "debug", "effect_spawn_scale"))
+    {
+        float parsed = 0.0f;
+        if (!parseFloatValue(*value, parsed) || !std::isfinite(parsed) || parsed <= 0.0f)
+        {
+            error = "effect_spawn_scale must be finite and positive.";
+            return std::nullopt;
+        }
+        settings.effectSpawnScale = parsed;
+    }
+
+    if (const std::optional<std::string> value = getIniValue(document, "debug", "effect_spawn_yaw_radians"))
+    {
+        float parsed = 0.0f;
+        if (!parseFloatValue(*value, parsed) || !std::isfinite(parsed))
+        {
+            error = "effect_spawn_yaw_radians must be finite.";
+            return std::nullopt;
+        }
+        settings.effectSpawnYawRadians = parsed;
+    }
+    if (const std::optional<std::string> value = getIniValue(document, "debug", "effect_spawn_count"))
+    {
+        int parsed = 0;
+        if (!parseIntValue(*value, parsed) || parsed < 1 || parsed > 256)
+        {
+            error = "effect_spawn_count must be between 1 and 256.";
+            return std::nullopt;
+        }
+        settings.effectSpawnCount = static_cast<uint32_t>(parsed);
+    }
+    if (const std::optional<std::string> value = getIniValue(document, "debug", "effect_stats_delay_seconds"))
+    {
+        float parsed = 0.0f;
+        if (!parseFloatValue(*value, parsed) || !std::isfinite(parsed) || parsed < 0.0f || parsed > 600.0f)
+        {
+            error = "effect_stats_delay_seconds must be finite and between 0 and 600.";
+            return std::nullopt;
+        }
+        settings.effectStatsDelaySeconds = parsed;
+    }
+
+    if (const std::optional<std::string> value = getIniValue(document, "debug", "model_spawn_path"))
+    {
+        settings.modelSpawnPath = trimCopy(*value);
+    }
+    if (const std::optional<std::string> value = getIniValue(document, "debug", "model_spawn_clip"))
+    {
+        settings.modelSpawnClip = trimCopy(*value);
+    }
+
+    constexpr std::array<const char *, 3> ModelPositionNames = {
+        "model_spawn_x", "model_spawn_y", "model_spawn_z"};
+    for (size_t axis = 0; axis < ModelPositionNames.size(); ++axis)
+    {
+        if (const std::optional<std::string> value = getIniValue(document, "debug", ModelPositionNames[axis]))
+        {
+            float parsed = 0.0f;
+            if (!parseFloatValue(*value, parsed) || !std::isfinite(parsed))
+            {
+                error = std::string(ModelPositionNames[axis]) + " must be finite.";
+                return std::nullopt;
+            }
+            settings.modelSpawnPosition[axis] = parsed;
+        }
+    }
+
+    if (const std::optional<std::string> value = getIniValue(document, "debug", "model_spawn_scale"))
+    {
+        float parsed = 0.0f;
+        if (!parseFloatValue(*value, parsed) || !std::isfinite(parsed) || parsed <= 0.0f)
+        {
+            error = "model_spawn_scale must be finite and positive.";
+            return std::nullopt;
+        }
+        settings.modelSpawnScale = parsed;
+    }
+
+    if (const std::optional<std::string> value = getIniValue(document, "debug", "model_spawn_yaw_radians"))
+    {
+        float parsed = 0.0f;
+        if (!parseFloatValue(*value, parsed) || !std::isfinite(parsed))
+        {
+            error = "model_spawn_yaw_radians must be finite.";
+            return std::nullopt;
+        }
+        settings.modelSpawnYawRadians = parsed;
+    }
+    if (const std::optional<std::string> value = getIniValue(document, "debug", "model_spawn_markers"))
+    {
+        if (!parseBoolValue(*value, settings.modelSpawnMarkers))
+        {
+            error = "model_spawn_markers must be a boolean.";
+            return std::nullopt;
+        }
+    }
+
     error.clear();
     return settings;
 }
@@ -1510,9 +1675,11 @@ bool saveGameSettings(const std::filesystem::path &path, const GameSettings &set
         << "keyboard_interaction_depth=" << std::clamp(settings.keyboardInteractionDepth, 32, 4096) << '\n'
         << "mouse_interaction_depth=" << std::clamp(settings.mouseInteractionDepth, 32, 4096) << '\n'
         << "combat_text=" << (settings.combatText ? "true" : "false") << '\n'
-        << "combat_actor_hp_bars=" << (settings.combatActorHealthBars ? "true" : "false") << '\n'
+        << "enemy_health_bars=" << settings.enemyHealthBarMode << '\n'
+        << "enemy_health_bar_values=" << settings.enemyHealthBarValues << '\n'
+        << "enemy_health_bar_damage_trail=" << (settings.enemyHealthBarDamageTrail ? "true" : "false") << '\n'
         << "quest_markers=" << (settings.questMarkers ? "true" : "false") << '\n'
-        << "combat_target_panel=" << (settings.combatTargetPanel ? "true" : "false") << '\n'
+        << "melee_hit_blood_effects=" << (settings.meleeHitBloodEffects ? "true" : "false") << '\n'
         << "context_action_popup=" << (settings.contextActionPopup ? "true" : "false") << "\n\n"
         << "[startup]\n"
         << "start_in_main_menu=" << (settings.startInMainMenu ? "true" : "false") << '\n'
@@ -1563,6 +1730,11 @@ bool saveGameSettings(const std::filesystem::path &path, const GameSettings &set
         << "baked_sun_color=" << *getBakedLightingSetting(settings, "baked_sun_color") << '\n'
         << "baked_sky_color=" << *getBakedLightingSetting(settings, "baked_sky_color") << '\n'
         << "terrain_decorations=" << (settings.terrainDecorations ? "true" : "false") << '\n'
+        << "water_shader=" << (settings.waterShader ? "true" : "false") << '\n'
+        << "water_reflections=" << (settings.waterReflections ? "true" : "false") << '\n'
+        << "water_movement_ripples=" << (settings.waterMovementRipples ? "true" : "false") << '\n'
+        << "water_sprite_reflections=" << (settings.waterSpriteReflections ? "true" : "false") << '\n'
+        << "water_reflection_size=" << std::clamp(settings.waterReflectionSize, 128, 2048) << '\n'
         << "terrain_filtering=" << settings.terrainFiltering << '\n'
         << "terrain_anisotropy=" << settings.terrainAnisotropy << '\n'
         << "bmodel_filtering=" << settings.bmodelFiltering << '\n'
@@ -1579,7 +1751,7 @@ bool saveGameSettings(const std::filesystem::path &path, const GameSettings &set
         << "resolution=" << std::clamp(settings.resolutionWidth, 320, 16384)
         << 'x' << std::clamp(settings.resolutionHeight, 200, 16384) << '\n'
         << "vsync=" << (settings.verticalSync ? "true" : "false") << '\n'
-        << "gameplay_ui_layout=" << gameplayUiLayoutString(settings.gameplayUiLayout) << "\n\n"
+        << '\n'
         << "[video_quality]\n"
         << "texture=" << Engine::assetScaleTierToString(settings.assetScaleProfile.textures) << '\n'
         << "terrain=" << Engine::assetScaleTierToString(settings.assetScaleProfile.terrain) << '\n'

@@ -1,0 +1,538 @@
+# Original showcase recipes; edit here. Source art: provenance.yml.
+schema: openyamm.effectLibrary.v1
+effects:
+- id: openyamm:fx/healing_bloom
+  display_name: Healing Bloom
+  duration_seconds: 2.8
+  compatibility_profile: predictable
+  components:
+  - id: 1
+    type: sprite
+    start_seconds: 0
+    end_seconds: 1.9
+    sprite_resource: openyamm:effect-sprite/ring
+    blend: additive
+    offset:
+    - 0
+    - 0
+    - 3
+    color_keys:
+    - time: 0
+      rgb: &id001
+      - 180
+      - 255
+      - 215
+      transparency: 220
+    - time: 0.15
+      rgb: &id002
+      - 155
+      - 255
+      - 180
+      transparency: 20
+    - time: 0.65
+      rgb: &id003
+      - 65
+      - 215
+      - 155
+      transparency: 80
+    - time: 1
+      rgb: &id004
+      - 35
+      - 150
+      - 105
+      transparency: 255
+    scale_keys:
+    - time: 0
+      value: 0.12
+    - time: 0.4
+      value: 0.95
+    - time: 1
+      value: 1.2
+    motion_keys: []
+    alignment: world_plane
+    plane_right:
+    - 1
+    - 0
+    - 0
+    plane_up:
+    - 0
+    - 1
+    - 0
+  - id: 2
+    type: sprite
+    start_seconds: 0.35
+    end_seconds: 2.35
+    sprite_resource: openyamm:effect-sprite/ring
+    blend: additive
+    offset:
+    - 0
+    - 0
+    - 5
+    color_keys:
+    - time: 0
+      rgb: *id001
+      transparency: 220
+    - time: 0.15
+      rgb: *id002
+      transparency: 20
+    - time: 0.65
+      rgb: *id003
+      transparency: 80
+    - time: 1
+      rgb: *id004
+      transparency: 255
+    scale_keys:
+    - time: 0
+      value: 0.1
+    - time: 0.5
+      value: 0.7
+    - time: 1
+      value: 1
+    motion_keys: []
+    alignment: world_plane
+    plane_right:
+    - 1
+    - 0
+    - 0
+    plane_up:
+    - 0
+    - 1
+    - 0
+  - id: 3
+    type: sprite_system
+    start_seconds: 0
+    end_seconds: 1.5
+    sprite_resource: openyamm:effect-sprite/spark
+    blend: additive
+    offset:
+    - 0
+    - 0
+    - 8
+    color_keys:
+    - time: 0
+      rgb:
+      - 255
+      - 250
+      - 190
+      transparency: 30
+    - time: 0.3
+      rgb:
+      - 195
+      - 255
+      - 170
+      transparency: 0
+    - time: 1
+      rgb:
+      - 50
+      - 200
+      - 135
+      transparency: 255
+    scale_keys:
+    - time: 0
+      value: 0.05
+    - time: 0.25
+      value: 0.15
+    - time: 1
+      value: 0.01
+    motion_keys: []
+    particle_lifetime_seconds: 1.1
+    emission_shape: plane
+    radius: 65
+    velocity: 90
+    plane_direction:
+    - 0
+    - 0
+    - 1
+    sprites_per_emission: 3
+    emission_interval_seconds: 0.09
+    wind_direction:
+    - 0
+    - 0
+    - 0
+    wind_amount: 1
+  - id: 4
+    type: sprite
+    start_seconds: 0
+    end_seconds: 1.4
+    sprite_resource: openyamm:effect-sprite/spark
+    blend: additive
+    offset:
+    - 0
+    - 0
+    - 70
+    color_keys:
+    - time: 0
+      rgb: *id001
+      transparency: 220
+    - time: 0.15
+      rgb: *id002
+      transparency: 20
+    - time: 0.65
+      rgb: *id003
+      transparency: 80
+    - time: 1
+      rgb: *id004
+      transparency: 255
+    scale_keys:
+    - time: 0
+      value: 0.05
+    - time: 0.35
+      value: 0.45
+    - time: 1
+      value: 0.12
+    motion_keys: []
+- id: openyamm:fx/ember_impact
+  display_name: Ember Impact
+  duration_seconds: 2.6
+  compatibility_profile: predictable
+  components:
+  - id: 1
+    type: sprite
+    start_seconds: 0
+    end_seconds: 0.98
+    sprite_resource: openyamm:effect-sprite/fireball
+    blend: additive
+    offset:
+    - 0
+    - 0
+    - 75
+    color_keys:
+    - time: 0
+      rgb:
+      - 255
+      - 255
+      - 255
+      transparency: 100
+    - time: 0.08
+      rgb:
+      - 255
+      - 245
+      - 215
+      transparency: 0
+    - time: 0.55
+      rgb:
+      - 255
+      - 190
+      - 120
+      transparency: 80
+    - time: 1
+      rgb:
+      - 180
+      - 60
+      - 20
+      transparency: 255
+    scale_keys:
+    - time: 0
+      value: 0.16
+    - time: 0.2
+      value: 0.7
+    - time: 0.7
+      value: 0.8
+    - time: 1
+      value: 0.95
+    motion_keys: []
+  - id: 2
+    type: sprite
+    start_seconds: 0
+    end_seconds: 0.7
+    sprite_resource: openyamm:effect-sprite/ring
+    blend: additive
+    offset:
+    - 0
+    - 0
+    - 4
+    color_keys:
+    - time: 0
+      rgb:
+      - 255
+      - 245
+      - 190
+      transparency: 10
+    - time: 1
+      rgb:
+      - 200
+      - 50
+      - 15
+      transparency: 255
+    scale_keys:
+    - time: 0
+      value: 0.12
+    - time: 1
+      value: 1.2
+    motion_keys: []
+    alignment: world_plane
+    plane_right:
+    - 1
+    - 0
+    - 0
+    plane_up:
+    - 0
+    - 1
+    - 0
+  - id: 3
+    type: sprite_system
+    start_seconds: 0
+    end_seconds: 0.12
+    sprite_resource: openyamm:effect-sprite/spark
+    blend: additive
+    offset:
+    - 0
+    - 0
+    - 70
+    color_keys:
+    - time: 0
+      rgb:
+      - 255
+      - 230
+      - 120
+      transparency: 0
+    - time: 0.4
+      rgb:
+      - 255
+      - 130
+      - 30
+      transparency: 20
+    - time: 1
+      rgb:
+      - 150
+      - 25
+      - 5
+      transparency: 255
+    scale_keys:
+    - time: 0
+      value: 0.1
+    - time: 1
+      value: 0.01
+    motion_keys: []
+    particle_lifetime_seconds: 0.8
+    emission_shape: sphere
+    radius: 10
+    velocity: 190
+    plane_direction:
+    - 0
+    - 0
+    - 1
+    sprites_per_emission: 7
+    emission_interval_seconds: 0.04
+    wind_direction:
+    - 0
+    - 0
+    - -60
+    wind_amount: 1
+  - id: 4
+    type: sprite_system
+    start_seconds: 0.15
+    end_seconds: 0.6
+    sprite_resource: openyamm:effect-sprite/smoke
+    blend: alpha
+    offset:
+    - 0
+    - 0
+    - 85
+    color_keys:
+    - time: 0
+      rgb:
+      - 95
+      - 80
+      - 70
+      transparency: 230
+    - time: 0.2
+      rgb:
+      - 90
+      - 85
+      - 80
+      transparency: 155
+    - time: 1
+      rgb:
+      - 80
+      - 80
+      - 85
+      transparency: 255
+    scale_keys:
+    - time: 0
+      value: 0.18
+    - time: 1
+      value: 0.7
+    motion_keys: []
+    particle_lifetime_seconds: 1.8
+    emission_shape: plane
+    radius: 25
+    velocity: 45
+    plane_direction:
+    - 0
+    - 0
+    - 1
+    sprites_per_emission: 1
+    emission_interval_seconds: 0.16
+    wind_direction:
+    - 15
+    - 0
+    - 0
+    wind_amount: 1
+- id: openyamm:fx/arcane_pulse
+  display_name: Arcane Pulse
+  duration_seconds: 1.9
+  compatibility_profile: predictable
+  components:
+  - id: 1
+    type: sprite
+    start_seconds: 0
+    end_seconds: 1.1
+    sprite_resource: openyamm:effect-sprite/arcane
+    blend: additive
+    offset:
+    - 0
+    - 0
+    - 80
+    color_keys:
+    - time: 0
+      rgb:
+      - 255
+      - 255
+      - 255
+      transparency: 160
+    - time: 0.18
+      rgb:
+      - 255
+      - 255
+      - 255
+      transparency: 0
+    - time: 1
+      rgb:
+      - 160
+      - 100
+      - 255
+      transparency: 255
+    scale_keys:
+    - time: 0
+      value: 0.1
+    - time: 0.22
+      value: 0.75
+    - time: 1
+      value: 1.05
+    motion_keys: []
+  - id: 2
+    type: sprite
+    start_seconds: 0
+    end_seconds: 0.95
+    sprite_resource: openyamm:effect-sprite/ring
+    blend: additive
+    offset:
+    - 0
+    - 0
+    - 80
+    color_keys:
+    - time: 0
+      rgb: &id005
+      - 225
+      - 195
+      - 255
+      transparency: 190
+    - time: 0.15
+      rgb: &id006
+      - 235
+      - 200
+      - 255
+      transparency: 0
+    - time: 0.5
+      rgb: &id007
+      - 160
+      - 90
+      - 255
+      transparency: 50
+    - time: 1
+      rgb: &id008
+      - 70
+      - 25
+      - 170
+      transparency: 255
+    scale_keys:
+    - time: 0
+      value: 0.06
+    - time: 1
+      value: 1.25
+    motion_keys: []
+  - id: 3
+    type: sprite
+    start_seconds: 0
+    end_seconds: 1.2
+    sprite_resource: openyamm:effect-sprite/ring
+    blend: additive
+    offset:
+    - 0
+    - 0
+    - 3
+    color_keys:
+    - time: 0
+      rgb: *id005
+      transparency: 190
+    - time: 0.15
+      rgb: *id006
+      transparency: 0
+    - time: 0.5
+      rgb: *id007
+      transparency: 50
+    - time: 1
+      rgb: *id008
+      transparency: 255
+    scale_keys:
+    - time: 0
+      value: 0.08
+    - time: 1
+      value: 0.95
+    motion_keys: []
+    alignment: world_plane
+    plane_right:
+    - 1
+    - 0
+    - 0
+    plane_up:
+    - 0
+    - 1
+    - 0
+  - id: 4
+    type: sprite_system
+    start_seconds: 0
+    end_seconds: 0.15
+    sprite_resource: openyamm:effect-sprite/spark
+    blend: additive
+    offset:
+    - 0
+    - 0
+    - 80
+    color_keys:
+    - time: 0
+      rgb: *id005
+      transparency: 190
+    - time: 0.15
+      rgb: *id006
+      transparency: 0
+    - time: 0.5
+      rgb: *id007
+      transparency: 50
+    - time: 1
+      rgb: *id008
+      transparency: 255
+    scale_keys:
+    - time: 0
+      value: 0.05
+    - time: 0.2
+      value: 0.16
+    - time: 1
+      value: 0.01
+    motion_keys: []
+    particle_lifetime_seconds: 1.2
+    emission_shape: sphere
+    radius: 16
+    velocity: 100
+    plane_direction:
+    - 0
+    - 0
+    - 1
+    sprites_per_emission: 6
+    emission_interval_seconds: 0.04
+    wind_direction:
+    - 0
+    - 0
+    - 0
+    wind_amount: 1

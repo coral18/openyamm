@@ -54,7 +54,8 @@ public:
         const bx::Vec3 &cameraForward,
         const bx::Vec3 &cameraRight,
         const bx::Vec3 &cameraUp,
-        float renderDistance);
+        float renderDistance,
+        bool reflection = false);
 
     static void renderOutdoorGameplayOverlay(
         OutdoorGameView &view,
@@ -68,11 +69,20 @@ public:
         const bx::Vec3 &cameraPosition);
 
 private:
+    static bool initializeWaterResources(OutdoorGameView &view,
+        const std::vector<OutdoorGameView::TexturedTerrainVertex> &vertices,
+        const OutdoorTerrainTextureAtlas &atlas);
+    static void renderWaterReflections(OutdoorGameView &view, const float *pProjection,
+        const bx::Vec3 &cameraPosition, const bx::Vec3 &cameraForward, const bx::Vec3 &cameraRight,
+        const bx::Vec3 &cameraUp, float farClipDistance, const OutdoorLightingRuntime &bModelLighting,
+        const OutdoorSelectedFxLights &globalBModelLights, bool useLocalBModelLighting);
+    static void submitResolvedBModelDrawGroup(OutdoorGameView &view,
+        const OutdoorGameView::ResolvedBModelDrawGroup &group, uint16_t viewId, size_t frameIndex, uint32_t transform);
     static void ensureTerrainDecorations(OutdoorGameView &view, const OutdoorMapData &outdoorMapData);
     static void initializeAnimatedWaterTileState(
         OutdoorGameView &view,
         const std::optional<OutdoorTerrainTextureAtlas> &outdoorTerrainTextureAtlas);
-    static void updateAnimatedWaterTileTexture(OutdoorGameView &view);
+    static void updateAnimatedWaterTileTexture(OutdoorGameView &view, bool enhancedWater);
     static std::vector<OutdoorGameView::TerrainVertex> buildTerrainVertices(const OutdoorMapData &mapData);
     static std::vector<uint16_t> buildTerrainIndices();
     static std::vector<OutdoorGameView::TexturedTerrainVertex> buildTexturedTerrainVertices(

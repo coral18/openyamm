@@ -5,6 +5,7 @@
 #include <optional>
 #include <string>
 #include <vector>
+#include <unordered_map>
 
 namespace OpenYAMM::Engine
 {
@@ -24,9 +25,16 @@ struct FontGlyphMetrics
     int leftSpacing = 0;
     int width = 0;
     int rightSpacing = 0;
+    float outlineAdvance = 0;
+
+    float advance() const
+    {
+        return outlineAdvance > 0 ? outlineAdvance : float(leftSpacing + width + rightSpacing);
+    }
 };
 
-// Geometry and advances stay in legacy logical pixels; only the atlas is supersampled.
+// Legacy faces keep logical geometry with a supersampled atlas. Independent
+// faces use screen pixels.
 struct FontAtlas
 {
     int firstChar = 0;
@@ -38,7 +46,14 @@ struct FontAtlas
     int atlasScale = 1;
     int atlasPadding = 0;
     std::array<FontGlyphMetrics, 256> glyphMetrics = {{}};
+    std::unordered_map<uint16_t, float> kerningPairs;
     std::vector<uint8_t> mainAtlasPixels;
+
+    float kerning(uint8_t previous, uint8_t current) const
+    {
+        const auto found = kerningPairs.find(uint16_t(previous) * 256 + current);
+        return found == kerningPairs.end() ? 0.0f : found->second;
+    }
 };
 
 struct FontAtlasImage
@@ -55,4 +70,10 @@ std::optional<FontAtlasImage> loadFontAtlas(
     const std::string &fontName,
     const FontSettings &settings,
     std::string &error);
+
+// Independent outline faces use their own advances, without requiring a legacy
+// FNT. Rasterize at the requested display height; zero uses the descriptor's
+// logical height.
+std::optional<FontAtlasImage> loadTrueTypeFontAtlas(const AssetFileSystem &assetFileSystem, const std::string &fontName,
+                                                    std::string &error, int pixelHeight = 0);
 }

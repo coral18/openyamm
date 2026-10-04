@@ -64,6 +64,8 @@ const char *scenarioDialogActionKindName(EventDialogActionKind kind)
             return "house_resident";
         case EventDialogActionKind::NpcTopic:
             return "npc_topic";
+        case EventDialogActionKind::ArenaChallenge:
+            return "arena_challenge";
         case EventDialogActionKind::NpcProfessionNews:
             return "npc_profession_news";
         case EventDialogActionKind::NpcProfessionAction:

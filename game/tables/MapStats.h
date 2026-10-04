@@ -1,6 +1,7 @@
 #pragma once
 
 #include "game/maps/MapRuntimeRestrictions.h"
+#include "game/maps/MapArenaDefinition.h"
 
 #include <cstdint>
 #include <optional>
@@ -88,6 +89,7 @@ struct MapStatsEntry
     std::optional<MapEdgeTransition> eastTransition;
     std::optional<MapEdgeTransition> westTransition;
     MapRuntimeRestrictions runtimeRestrictions = {};
+    std::optional<MapArenaDefinition> arena;
 
     const std::optional<MapEdgeTransition> *edgeTransition(MapBoundaryEdge edge) const;
     std::optional<MapEdgeTransition> *edgeTransition(MapBoundaryEdge edge);

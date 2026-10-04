@@ -44,6 +44,13 @@ elements:
         z_index: 300
         interactive: true
         asset:
-          default: c_close_up
-          pressed: c_close_DN
-          highlighted: c_close_ht
+          default: obsidian_button_close_normal
+          pressed: obsidian_button_close_pressed
+          highlighted: obsidian_button_close_hover
+        text:
+          value: Close
+          font: Fondamento
+          color: "#e8d1a4"
+          align_x: center
+          align_y: middle
+          scale: 0.41666665625

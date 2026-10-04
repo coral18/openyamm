@@ -1,0 +1,11 @@
+schema: openyamm.effectSprite.v2
+id: mm9:effect-sprite/spells/bwring
+source: sprites/spells/bwring.spr
+framesPerSecond: 15
+logicalWidth: 64
+logicalHeight: 64
+keyed: false
+translucent: false
+colorKey: 0
+frames:
+- mm9:effect-texture/blackwhitering

@@ -5,6 +5,7 @@
 #include <array>
 #include <cstdint>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -12,6 +13,16 @@
 
 namespace OpenYAMM::Engine
 {
+struct ImageDimensions
+{
+    int width = 0;
+    int height = 0;
+};
+
+// Reads PNG/BMP/PCX metadata without allocating or decoding image pixels.
+std::optional<ImageDimensions> readImageDimensions(std::span<const uint8_t> header);
+std::optional<ImageDimensions> loadImageDimensions(const AssetFileSystem &assets, const std::string &path);
+
 struct ImagePixelsBgra
 {
     int width = 0;

@@ -16,7 +16,7 @@ import time
 
 import bpy
 import numpy as np
-from mathutils import Vector
+from mathutils import Matrix, Vector
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -52,6 +52,8 @@ def main():
     parser.add_argument('--output', required=True, type=Path)
     parser.add_argument('--azimuth', type=float)
     parser.add_argument('--samples', type=int)
+    parser.add_argument('--decoration-shadows', action=argparse.BooleanOptionalAction, default=None,
+                        help='Bake static decoration alpha silhouettes into the sun term only')
     parser.add_argument('--preview-only', action='store_true')
     args = parser.parse_args(sys.argv[sys.argv.index('--') + 1:])
     profile = json.loads(args.profile.read_text())
@@ -59,6 +61,10 @@ def main():
         profile['azimuth'] = args.azimuth
     if args.samples is not None:
         profile['samples'] = args.samples
+    if args.decoration_shadows is not None:
+        profile['decoration_shadows'] = args.decoration_shadows
+    if not isinstance(profile.get('decoration_shadows', False), bool):
+        raise ValueError('decoration_shadows must be a boolean')
     world, map_name = profile['world'], profile['map']
     source = ROOT / 'assets_dev/worlds' / world / 'maps' / map_name
     native = parse_odm_file(source)['payload']
@@ -94,6 +100,9 @@ def main():
                        Path(__file__).with_name('bake_geometry.py').read_bytes()).hexdigest(),
                    'asset_helper_sha256': hashlib.sha256(
                        Path(__file__).with_name('bake_assets.py').read_bytes()).hexdigest()}
+    if profile.get('decoration_shadows', False):
+        recipe_data['decoration_helper_sha256'] = hashlib.sha256(
+            Path(__file__).with_name('bake_decorations.py').read_bytes()).hexdigest()
     (out / recipe.name).write_text(json.dumps(recipe_data, sort_keys=True, indent=2)+'\n')
     deps[str(recipe.relative_to(ROOT / 'assets_dev'))] = fnv((out / recipe.name).read_bytes())
     bpy.ops.object.select_all(action='SELECT')
@@ -256,6 +265,58 @@ def main():
     objects = [make_mesh('terrain', entries, (terrain_size, terrain_size))]
     objects.extend(make_mesh('buildings_'+str(pi), groups[pi], building_dimensions[pi])
                    for pi in range(len(building_dimensions)))
+    decoration_objects = []
+    decoration_report = None
+    if profile.get('decoration_shadows', False):
+        effective_profile = out / 'effective_profile.json'
+        effective_profile.write_text(json.dumps(profile, indent=2) + '\n')
+        decoration_report = json.loads(subprocess.check_output([
+            '/usr/bin/python3', str(Path(__file__).with_name('bake_decorations.py')),
+            '--profile', str(effective_profile), '--output', str(out / 'decoration_masks')], text=True))
+        for path in decoration_report['dependencies']:
+            dependency(ROOT / 'assets_dev' / path)
+        card_materials = {}
+        right = Vector((-math.sin(a), math.cos(a), 0))
+        for card in decoration_report['cards']:
+            if card['mask'] not in card_materials:
+                mat = bpy.data.materials.new('decoration_' + Path(card['mask']).stem)
+                mat.use_nodes = True
+                nodes, links = mat.node_tree.nodes, mat.node_tree.links
+                nodes.clear()
+                output_node = nodes.new('ShaderNodeOutputMaterial')
+                transparent = nodes.new('ShaderNodeBsdfTransparent')
+                opaque = nodes.new('ShaderNodeBsdfDiffuse')
+                opaque.inputs['Color'].default_value = (0, 0, 0, 1)
+                mix = nodes.new('ShaderNodeMixShader')
+                mask = nodes.new('ShaderNodeTexImage')
+                mask.image = bpy.data.images.load(card['mask'], check_existing=True)
+                mask.image.colorspace_settings.name = 'Non-Color'
+                mask.extension = 'CLIP'
+                mask.interpolation = 'Linear'
+                uv = nodes.new('ShaderNodeUVMap')
+                uv.uv_map = 'material'
+                links.new(uv.outputs['UV'], mask.inputs['Vector'])
+                links.new(mask.outputs['Color'], mix.inputs[0])
+                links.new(transparent.outputs[0], mix.inputs[1])
+                links.new(opaque.outputs[0], mix.inputs[2])
+                links.new(mix.outputs[0], output_node.inputs['Surface'])
+                card_materials[card['mask']] = mat
+            base = Vector(tuple(card['position'][k] for k in 'xyz'))
+            half = right * (card['width'] / 2)
+            up = Vector((0, 0, card['height']))
+            points = [base - half, base + half, base + half + up, base - half + up]
+            u0, u1 = (1, 0) if card['mirrored'] else (0, 1)
+            uv = [(u0, 0), (u1, 0), (u1, 1), (u0, 1)]
+            obj, _ = make_mesh('decoration_' + str(card['index']),
+                               [(points, uv, uv, card_materials[card['mask']])], (0, 0))
+            obj.visible_camera = False
+            obj.visible_diffuse = False
+            obj.visible_glossy = False
+            obj.visible_transmission = False
+            decoration_objects.append(obj)
+        # Dense foliage can require many transparent intersections along a sun ray.
+        scene.cycles.transparent_max_bounces = max(64, scene.cycles.transparent_max_bounces)
+        print('DECORATION SHADOWS', decoration_report['counts'], decoration_report['skip_reasons'], flush=True)
     if args.preview_only:
         camera_data = bpy.data.cameras.new('review camera')
         camera = bpy.data.objects.new('review camera',camera_data)
@@ -277,6 +338,11 @@ def main():
             azimuth = math.radians(angle)
             direction = Vector((math.cos(e)*math.cos(azimuth),math.cos(e)*math.sin(azimuth),math.sin(e)))
             sun.rotation_euler = (-direction).to_track_quat('-Z','Y').to_euler()
+            # Rotate the bake-only cards around their own ground anchors for each preview sun.
+            for obj, card in zip(decoration_objects, decoration_report['cards'] if decoration_report else []):
+                base = Vector(tuple(card['position'][k] for k in 'xyz')) / 128
+                rotation = Matrix.Rotation(azimuth - a, 4, 'Z')
+                obj.matrix_world = Matrix.Translation(base) @ rotation @ Matrix.Translation(-base)
             scene.render.filepath = str(out / ('sun_'+str(angle)+'.png'))
             bpy.ops.render.render(write_still=True)
         return
@@ -330,6 +396,8 @@ def main():
              'sun_direction': list(toward_sun), 'bakes': [], 'dependencies': deps,
              'probe_count': len(probe_positions), 'atlas_pages': 2*(len(objects)-1),
              'atlas_bytes': sum(width*height*8 for obj,(width,height) in objects[:-1])}
+    if decoration_report is not None:
+        stats['decoration_shadows'] = decoration_report
     for obj, (width, height) in objects:
         target = bpy.data.images.new(obj.name, width=width, height=height, float_buffer=True)
         for mat in obj.data.materials:
@@ -345,6 +413,8 @@ def main():
         scene.render.bake.use_pass_indirect = True
         scene.render.bake.margin = 0 if obj.name == 'probes' else 3
         for term in ['sun','sky']:
+            for caster in decoration_objects:
+                caster.hide_render = term != 'sun'
             sun_data.energy = profile['sun_energy'] if term == 'sun' else 0
             sky.inputs[1].default_value = profile['sky_energy'] if term == 'sky' else 0
             start = time.monotonic()

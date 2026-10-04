@@ -10,6 +10,8 @@
 #include "game/tables/SpeechReactionTable.h"
 #include "game/tables/MergedBaseTables.h"
 
+#include <array>
+#include <functional>
 #include <future>
 #include <optional>
 #include <string>
@@ -49,7 +51,13 @@ public:
         const CharacterDollTable &characterDollTable,
         const MergedCharacterVoiceTable &characterVoiceTable);
     void shutdown();
-    void update(float listenerX, float listenerY, float listenerZ, float deltaSeconds);
+    void update(float listenerX, float listenerY, float listenerZ, float deltaSeconds, float listenerYawRadians = 0.0f);
+    uint64_t playActorSound(size_t actorIndex, SoundRef sound, const WorldPosition &position, float pitch = 1.0f);
+    void updateActorVoices(
+        const WorldPosition &listenerFeet,
+        const std::function<std::optional<WorldPosition>(size_t)> &sourcePosition);
+    void stopActorVoices();
+    bool isSoundInstancePlaying(uint64_t instanceId) const;
     void setBackgroundMusicTrack(int redbookTrack);
     void stopBackgroundMusic();
     void stopBackgroundMusicImmediate();
@@ -91,6 +99,15 @@ public:
         SoundScope scope,
         const std::optional<WorldPosition> &position,
         bool loop);
+    uint64_t playAssetInstance(
+        const std::string &virtualPath,
+        PlaybackGroup group,
+        const std::optional<WorldPosition> &position,
+        bool loop,
+        float volume = 1.0f,
+        float pitch = 1.0f,
+        float innerRadius = -1.0f,
+        float outerRadius = -1.0f);
     bool playLoopingSound(
         uint32_t soundId,
         PlaybackGroup group,
@@ -115,10 +132,19 @@ public:
     bool playSpeech(const Character &character, SpeechId speechId, uint32_t seed = 0, uint32_t speakerKey = 0);
     const SpeechReactionEntry *findSpeechReaction(SpeechId speechId) const;
     void stopSoundInstance(uint64_t instanceId);
+    void setSoundInstancePosition(uint64_t instanceId, const WorldPosition &position);
     void stopGroup(PlaybackGroup group);
     void stopAllPlayback();
 
 private:
+    struct ActorVoice
+    {
+        size_t actorIndex = 0;
+        SoundRef sound = {};
+        uint64_t instanceId = 0;
+        int volume = 0;
+    };
+
     struct PendingMusicDecodeJob
     {
         int redbookTrack = 0;
@@ -153,6 +179,8 @@ private:
     SoundCatalog m_soundCatalog;
     SpeechReactionTable m_speechReactionTable;
     Engine::AudioSystem m_audioSystem;
+    std::array<ActorVoice, 4> m_actorVoices = {};
+    WorldPosition m_actorListenerFeet = {};
     std::unordered_map<PlaybackGroup, uint64_t> m_activeGroupInstanceIds;
     std::unordered_map<uint32_t, uint64_t> m_activeSpeechInstanceIds;
     std::unordered_map<uint32_t, uint64_t> m_activeNonResettableSoundInstanceIds;

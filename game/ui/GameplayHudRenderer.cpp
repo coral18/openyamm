@@ -1,6 +1,8 @@
 #include "game/ui/GameplayHudRenderer.h"
 
 #include "game/gameplay/GameplayScreenRuntime.h"
+#include "game/gameplay/TurnBasedCombatRuntime.h"
+#include "game/ui/GameplayUiSkin.h"
 
 #include <algorithm>
 #include <cmath>
@@ -11,15 +13,6 @@ namespace OpenYAMM::Game
 {
 namespace
 {
-constexpr const char *StatusBarFrameAsset = "Ui-FrSp";
-
-enum class ActiveGameplayHudLayout
-{
-    Overlay,
-    Standard,
-    Widescreen
-};
-
 bool isOverlayHudState(GameplayHudScreenState hudScreenState)
 {
     return hudScreenState == GameplayHudScreenState::Dialogue
@@ -37,57 +30,6 @@ bool isOverlayHudState(GameplayHudScreenState hudScreenState)
         || hudScreenState == GameplayHudScreenState::QuickReference;
 }
 
-const char *basebarLayoutIdForHudLayout(ActiveGameplayHudLayout layout)
-{
-    switch (layout)
-    {
-    case ActiveGameplayHudLayout::Overlay:
-        return "OutdoorBasebar";
-
-    case ActiveGameplayHudLayout::Standard:
-        return "OutdoorStandardBasebar";
-
-    case ActiveGameplayHudLayout::Widescreen:
-        return "OutdoorGameplayBasebar";
-    }
-
-    return "OutdoorGameplayBasebar";
-}
-
-const char *partyStripLayoutIdForHudLayout(ActiveGameplayHudLayout layout)
-{
-    switch (layout)
-    {
-    case ActiveGameplayHudLayout::Overlay:
-        return "OutdoorPartyStrip";
-
-    case ActiveGameplayHudLayout::Standard:
-        return "OutdoorStandardPartyStrip";
-
-    case ActiveGameplayHudLayout::Widescreen:
-        return "OutdoorGameplayPartyStrip";
-    }
-
-    return "OutdoorGameplayPartyStrip";
-}
-
-const char *statusBarLayoutIdForHudLayout(ActiveGameplayHudLayout layout)
-{
-    switch (layout)
-    {
-    case ActiveGameplayHudLayout::Overlay:
-        return "OutdoorStatusBar";
-
-    case ActiveGameplayHudLayout::Standard:
-        return "OutdoorStandardStatusBar";
-
-    case ActiveGameplayHudLayout::Widescreen:
-        return "OutdoorGameplayStatusBar";
-    }
-
-    return "OutdoorGameplayStatusBar";
-}
-
 std::optional<GameplayScreenRuntime::ResolvedHudLayoutElement> resolveLayout(
     GameplayScreenRuntime &context,
     const std::string &layoutId,
@@ -99,40 +41,9 @@ std::optional<GameplayScreenRuntime::ResolvedHudLayoutElement> resolveLayout(
     return context.resolveHudLayoutElement(layoutId, screenWidth, screenHeight, fallbackWidth, fallbackHeight);
 }
 
-uint32_t makeAbgrColor(uint8_t red, uint8_t green, uint8_t blue, uint8_t alpha = 255)
-{
-    return (static_cast<uint32_t>(alpha) << 24)
-        | (static_cast<uint32_t>(blue) << 16)
-        | (static_cast<uint32_t>(green) << 8)
-        | static_cast<uint32_t>(red);
-}
-
-const char *fallbackContextActionIconId(GameplayContextActionKind kind)
-{
-    switch (kind)
-    {
-    case GameplayContextActionKind::OpenChest:
-    case GameplayContextActionKind::OpenDoor:
-    case GameplayContextActionKind::PressButton:
-    case GameplayContextActionKind::UseLever:
-    case GameplayContextActionKind::GenericEvent:
-    case GameplayContextActionKind::EnterHouse:
-    case GameplayContextActionKind::DropHeldItem:
-        return "use";
-    case GameplayContextActionKind::Talk:
-    case GameplayContextActionKind::PickUpItem:
-    case GameplayContextActionKind::LootCorpse:
-    case GameplayContextActionKind::None:
-        break;
-    }
-
-    return "interact";
-}
-
 std::optional<GameplayHudTextureHandle> loadContextActionIcon(
     GameplayScreenRuntime &context,
-    const GameplayContextAction &action,
-    bool pressed)
+    const GameplayContextAction &action)
 {
     if (action.kind == GameplayContextActionKind::DropHeldItem
         && context.heldInventoryItem().active
@@ -153,26 +64,9 @@ std::optional<GameplayHudTextureHandle> loadContextActionIcon(
         }
     }
 
-    const char *pSuffix = pressed ? "_pressed" : "_default";
-    const std::vector<std::string> candidates = {
-        action.iconId + pSuffix,
-        std::string(fallbackContextActionIconId(action.kind)) + pSuffix,
-        std::string(fallbackContextActionIconId(action.kind)) + "_default",
-        "interact_default",
-    };
-
-    for (const std::string &candidate : candidates)
-    {
-        const std::optional<GameplayHudTextureHandle> texture =
-            context.gameplayUiRuntime().ensureHudTextureLoaded(candidate);
-
-        if (texture)
-        {
-            return texture;
-        }
-    }
-
-    return std::nullopt;
+    const UiLayoutManager::LayoutElement *pIcon = context.findHudLayoutElement(action.iconId);
+    return pIcon != nullptr && !pIcon->primaryAsset.empty()
+        ? context.gameplayUiRuntime().ensureHudTextureLoaded(pIcon->primaryAsset) : std::nullopt;
 }
 
 std::string fitContextActionLabel(
@@ -362,7 +256,7 @@ void renderCenteredContextActionLabelLines(
     }
 }
 
-void renderMobileContextAction(GameplayScreenRuntime &context, int width, int height)
+void renderContextAction(GameplayScreenRuntime &context, int width, int height)
 {
     const GameplayContextActionState &state = context.contextActionStateReadOnly();
 
@@ -406,56 +300,24 @@ void renderMobileContextAction(GameplayScreenRuntime &context, int width, int he
         context.interactionState().gameplayHudClickLatch
         && pressedTarget.type == GameplayHudPointerTargetType::ContextActionButton
         && pressedTarget.index == state.primaryIndex;
-    const uint32_t panelColor = pressed ? makeAbgrColor(27, 19, 11, 230) : makeAbgrColor(17, 13, 9, 220);
-    const uint32_t borderColor = pressed ? makeAbgrColor(255, 159, 47, 255) : makeAbgrColor(246, 211, 106, 245);
-    const float border = std::max(2.0f, buttonRect->scale * 2.0f);
-
-    const auto submitSolidQuad =
-        [&context](float x, float y, float quadWidth, float quadHeight, uint32_t colorAbgr)
-        {
-            const std::optional<GameplayHudTextureHandle> texture =
-                context.gameplayUiRuntime().ensureSolidHudTextureLoaded(
-                    "__mobile_context_action_" + std::to_string(colorAbgr),
-                    colorAbgr);
-
-            if (texture)
-            {
-                context.submitHudTexturedQuad(*texture, x, y, quadWidth, quadHeight);
-            }
-        };
-
-    submitSolidQuad(buttonRect->x, buttonRect->y, buttonRect->width, buttonRect->height, panelColor);
-    submitSolidQuad(buttonRect->x, buttonRect->y, buttonRect->width, border, borderColor);
-    submitSolidQuad(
-        buttonRect->x,
-        buttonRect->y + buttonRect->height - border,
-        buttonRect->width,
-        border,
-        borderColor);
-    submitSolidQuad(buttonRect->x, buttonRect->y, border, buttonRect->height, borderColor);
-    submitSolidQuad(
-        buttonRect->x + buttonRect->width - border,
-        buttonRect->y,
-        border,
-        buttonRect->height,
-        borderColor);
+    GameplayUiSkin::renderPanel(context, *buttonRect, false, 0.32f);
 
     const float iconSize = std::min(42.0f * buttonRect->scale, buttonRect->height - 10.0f * buttonRect->scale);
     const float iconX = buttonRect->x + 7.0f * buttonRect->scale;
     const float iconY = buttonRect->y + (buttonRect->height - iconSize) * 0.5f;
-    const std::optional<GameplayHudTextureHandle> icon = loadContextActionIcon(context, action, pressed);
+    const std::optional<GameplayHudTextureHandle> icon = loadContextActionIcon(context, action);
 
     if (icon)
     {
-        context.submitHudTexturedQuad(*icon, iconX, iconY, iconSize, iconSize);
+        context.submitHudTexturedQuad(*icon, iconX, iconY + (pressed ? buttonRect->scale : 0), iconSize, iconSize);
     }
 
     UiLayoutManager::LayoutElement labelLayout = {};
-    labelLayout.fontName = "Create";
-    labelLayout.textColorAbgr = makeAbgrColor(246, 211, 106);
+    labelLayout.fontName = "Fondamento";
+    labelLayout.textColorAbgr = pressed ? GameplayUiSkin::Gold : GameplayUiSkin::Ivory;
     labelLayout.textAlignX = UiLayoutManager::TextAlignX::Center;
     labelLayout.textAlignY = UiLayoutManager::TextAlignY::Middle;
-    labelLayout.textScale = 0.92f;
+    labelLayout.textScale = 0.4166667f;
     labelLayout.textPadX = 0.0f;
     labelLayout.textPadY = 0.0f;
 
@@ -483,281 +345,132 @@ void renderMobileContextAction(GameplayScreenRuntime &context, int width, int he
 
 void GameplayHudRenderer::renderGameplayHud(GameplayScreenRuntime &context, int width, int height)
 {
-    Party *pParty = context.party();
-
+    const Party *pParty = context.partyReadOnly();
     if (pParty == nullptr || !context.hasHudRenderResources() || width <= 0 || height <= 0)
     {
         return;
     }
-
     context.prepareHudView(width, height);
-    const Party &party = *pParty;
-    const GameplayHudScreenState hudScreenState = context.currentHudScreenState();
-    const bool isLimitedOverlayHud = isOverlayHudState(hudScreenState)
+    const GameplayHudScreenState state = context.currentHudScreenState();
+    const bool fullscreen = isOverlayHudState(state)
         && !activeEventDialogPreservesGameplayHud(context.activeEventDialog());
-    const ActiveGameplayHudLayout gameplayHudLayout = isLimitedOverlayHud
-        ? ActiveGameplayHudLayout::Overlay
-#if defined(__ANDROID__)
-        : ActiveGameplayHudLayout::Widescreen;
-#else
-        : (context.settingsSnapshot().gameplayUiLayout == GameplayUiLayout::Standard
-            ? ActiveGameplayHudLayout::Standard
-            : ActiveGameplayHudLayout::Widescreen);
-#endif
-    const bool useGameplayWideHud = gameplayHudLayout == ActiveGameplayHudLayout::Widescreen;
-    const bool shouldRenderStatusBar =
-        hudScreenState != GameplayHudScreenState::Spellbook
-        && hudScreenState != GameplayHudScreenState::Rest
-        && hudScreenState != GameplayHudScreenState::Menu
-        && hudScreenState != GameplayHudScreenState::Controls
-        && hudScreenState != GameplayHudScreenState::Keyboard
-        && hudScreenState != GameplayHudScreenState::VideoOptions
-        && hudScreenState != GameplayHudScreenState::SaveGame
-        && hudScreenState != GameplayHudScreenState::LoadGame
-        && hudScreenState != GameplayHudScreenState::Journal
-        && hudScreenState != GameplayHudScreenState::QuickReference;
-
-    const auto replaceAll =
-        [](std::string text, const std::string &from, const std::string &to) -> std::string
-        {
-            size_t position = 0;
-
-            while ((position = text.find(from, position)) != std::string::npos)
-            {
-                text.replace(position, from.size(), to);
-                position += to.size();
-            }
-
-            return text;
-        };
-    const auto resolveCounterLabel =
-        [&replaceAll](const std::string &labelText, const std::string &value) -> std::string
-        {
-            if (labelText.empty())
-            {
-                return value;
-            }
-
-            const std::string replacedGold = replaceAll(labelText, "{gold}", value);
-            const std::string replacedFood = replaceAll(replacedGold, "{food}", value);
-            return replacedFood == labelText ? value : replacedFood;
-        };
-
-    std::string statusBarLabel;
-
-    if (context.statusBarEventRemainingSeconds() > 0.0f && !context.statusBarEventText().empty())
+    std::string status;
+    if (context.houseBankState().inputActive())
     {
-        statusBarLabel = context.statusBarEventText();
+        status = std::string(context.houseBankState().inputMode
+            == GameplayUiController::HouseBankInputMode::Deposit ? "Deposit: " : "Withdraw: ")
+            + context.houseBankState().inputText + "_";
     }
-    else if (!context.statusBarHoverText().empty())
+    else if (context.statusBarEventRemainingSeconds() > 0 && !context.statusBarEventText().empty())
     {
-        statusBarLabel = context.statusBarHoverText();
+        status = context.statusBarEventText();
     }
-
-    if (shouldRenderStatusBar)
+    else
     {
-        const std::string statusBarLayoutId = statusBarLayoutIdForHudLayout(gameplayHudLayout);
-        const UiLayoutManager::LayoutElement *pStatusBarLayout = context.findHudLayoutElement(statusBarLayoutId);
-
-        if (pStatusBarLayout != nullptr)
+        status = context.statusBarHoverText();
+    }
+    if (status.empty() && state == GameplayHudScreenState::Dialogue)
+    {
+        status = context.interactionState().dialogueStatusHint;
+    }
+    if (!status.empty() && (state == GameplayHudScreenState::Gameplay || state == GameplayHudScreenState::Character
+        || state == GameplayHudScreenState::Dialogue || state == GameplayHudScreenState::Chest
+        || state == GameplayHudScreenState::Spellbook))
+    {
+        const std::string id = fullscreen ? "OutdoorStatusBar" : "OutdoorGameplayStatusBar";
+        const UiLayoutManager::LayoutElement *pLayout = context.findHudLayoutElement(id);
+        std::optional<GameplayResolvedHudLayoutElement> rect = context.resolveHudLayoutElement(id, width, height, 0, 0);
+        if (pLayout != nullptr && rect)
         {
-            float logicalStatusBarWidth = pStatusBarLayout->width > 0.0f ? pStatusBarLayout->width : 360.0f;
-
-            if (useGameplayWideHud && !statusBarLabel.empty())
+            if (fullscreen)
             {
-                logicalStatusBarWidth = std::clamp(
-                    context.measureHudTextWidth(pStatusBarLayout->fontName, statusBarLabel)
-                        * std::max(0.1f, pStatusBarLayout->textScale)
-                        + 24.0f,
-                    32.0f,
-                    483.0f);
-            }
-
-            const std::optional<GameplayResolvedHudLayoutElement> resolvedStatusBar =
-                resolveLayout(
-                    context,
-                    statusBarLayoutId,
-                    logicalStatusBarWidth,
-                    pStatusBarLayout->height > 0.0f ? pStatusBarLayout->height : 18.0f,
-                    width,
-                    height);
-
-            if (resolvedStatusBar)
-            {
-                if (useGameplayWideHud && !statusBarLabel.empty() && !pStatusBarLayout->primaryAsset.empty())
+                UiLayoutManager::LayoutElement label = *pLayout;
+                const float textWidth = context.measureHudTextWidth(label.fontName, status);
+                const float availableWidth = rect->width / rect->scale - 2 * std::abs(label.textPadX);
+                if (textWidth > availableWidth)
                 {
-                    const std::optional<GameplayHudTextureHandle> statusBarTexture =
-                        context.gameplayUiRuntime().ensureHudTextureLoaded(pStatusBarLayout->primaryAsset);
-
-                    if (statusBarTexture)
+                    label.textScale = std::max(0.75f, availableWidth / textWidth);
+                }
+                const IGameplayWorldRuntime *pWorld = context.worldRuntime();
+                const EventRuntimeState *pEvents = pWorld != nullptr ? pWorld->eventRuntimeState() : nullptr;
+                const bool editing = context.houseBankState().inputActive()
+                    || (pEvents != nullptr && pEvents->pendingInputPrompt.has_value());
+                // Keep the entered suffix and caret visible when the input exceeds the fixed rail.
+                while (editing && !status.empty()
+                    && context.measureHudTextWidth(label.fontName, status) * label.textScale > availableWidth)
+                {
+                    size_t next = 1;
+                    while (next < status.size() && (static_cast<unsigned char>(status[next]) & 0xc0) == 0x80)
                     {
-                        context.submitHudTexturedQuad(
-                            *statusBarTexture,
-                            resolvedStatusBar->x,
-                            resolvedStatusBar->y,
-                            resolvedStatusBar->width,
-                            resolvedStatusBar->height);
+                        ++next;
+                    }
+                    status.erase(0, next);
+                }
+                context.renderLayoutLabel(label, *rect, status);
+            }
+            else
+            {
+                const std::optional<GameplayHudFontHandle> font = context.findHudFont(pLayout->fontName);
+                if (font)
+                {
+                    const float bottom = rect->y + rect->height;
+                    const float scale = rect->scale * pLayout->textScale;
+                    const float maxWidth = 330.666667f * rect->scale;
+                    std::vector<std::string> lines = context.wrapHudTextToWidth(*font, status,
+                        (maxWidth - 16 * rect->scale) / scale);
+                    const size_t maximumLines = 8;
+                    if (lines.size() > maximumLines)
+                    {
+                        lines.resize(maximumLines);
+                        lines.back() += "...";
+                    }
+                    float textWidth = 0;
+                    for (const std::string &line : lines)
+                    {
+                        textWidth = std::max(textWidth, context.measureHudTextWidth(font->fontName, line) * scale);
+                    }
+                    const float lineHeight = font->fontHeight * scale;
+                    rect->width = std::min(maxWidth, textWidth + 16 * rect->scale);
+                    rect->x = (width - rect->width) * 0.5f;
+                    rect->height = std::min(78.933333f * rect->scale,
+                        lineHeight * lines.size() + 12 * rect->scale);
+                    rect->y = bottom - rect->height;
+                    const std::optional<GameplayResolvedHudLayoutElement> dock =
+                        context.resolveHudLayoutElement("ObsidianTurnDock", width, height, 0, 0);
+                    if (context.turnBasedCombatRuntime().active() && dock
+                        && dock->x + dock->width > rect->x && dock->x < rect->x + rect->width
+                        && dock->y < rect->y + rect->height && dock->y + dock->height > rect->y)
+                    {
+                        rect->y = dock->y - rect->height - 8 * rect->scale;
+                    }
+                    GameplayUiSkin::renderTexture(context, "obsidian_hud_status_plate", *rect);
+                    for (size_t i = 0; i < lines.size(); ++i)
+                    {
+                        context.renderLayoutLabel(*pLayout, {rect->x + 8 * rect->scale,
+                            rect->y + 6 * rect->scale + i * lineHeight,
+                            rect->width - 16 * rect->scale, lineHeight, rect->scale}, lines[i]);
                     }
                 }
-
-                if (useGameplayWideHud && !statusBarLabel.empty())
-                {
-                    const std::optional<GameplayHudTextureHandle> statusBarFrameTexture =
-                        context.gameplayUiRuntime().ensureHudTextureLoaded(StatusBarFrameAsset);
-
-                    if (statusBarFrameTexture)
-                    {
-                        context.submitHudTexturedQuad(
-                            *statusBarFrameTexture,
-                            resolvedStatusBar->x,
-                            resolvedStatusBar->y,
-                            resolvedStatusBar->width,
-                            resolvedStatusBar->height);
-                    }
-                }
-
-                context.renderLayoutLabel(*pStatusBarLayout, *resolvedStatusBar, statusBarLabel);
             }
         }
     }
-
-    if (context.settingsSnapshot().contextActionPopup && hudScreenState == GameplayHudScreenState::Gameplay)
+    if (!fullscreen)
     {
-        renderMobileContextAction(context, width, height);
-    }
-
-    if (!isLimitedOverlayHud)
-    {
-        const char *pTopBarLayoutId =
-            gameplayHudLayout == ActiveGameplayHudLayout::Standard ? "OutdoorStandardTopBar" : nullptr;
-
-        if (pTopBarLayoutId != nullptr)
+        for (bool gold : {true, false})
         {
-            const UiLayoutManager::LayoutElement *pTopBarLayout = context.findHudLayoutElement(pTopBarLayoutId);
-
-            if (pTopBarLayout != nullptr)
+            const std::string id = gold ? "OutdoorGoldLabel" : "OutdoorFoodLabel";
+            const UiLayoutManager::LayoutElement *pLayout = context.findHudLayoutElement(id);
+            const std::optional<GameplayResolvedHudLayoutElement> rect =
+                context.resolveHudLayoutElement(id, width, height, 0, 0);
+            if (pLayout != nullptr && rect)
             {
-                const std::optional<GameplayResolvedHudLayoutElement> topBar =
-                    resolveLayout(
-                        context,
-                        pTopBarLayoutId,
-                        pTopBarLayout->width > 0.0f ? pTopBarLayout->width : 640.0f,
-                        pTopBarLayout->height > 0.0f ? pTopBarLayout->height : 29.0f,
-                        width,
-                        height);
-
-                if (topBar && !pTopBarLayout->labelText.empty())
-                {
-                    const std::string label = replaceAll(
-                        replaceAll(pTopBarLayout->labelText, "{gold}", std::to_string(party.gold())),
-                        "{food}",
-                        std::to_string(party.food()));
-                    context.renderLayoutLabel(*pTopBarLayout, *topBar, label);
-                }
-            }
-        }
-
-        const char *pGoldLabelLayoutId = gameplayHudLayout == ActiveGameplayHudLayout::Standard
-            ? "OutdoorStandardGoldLabel"
-            : "OutdoorGoldLabel";
-        const UiLayoutManager::LayoutElement *pGoldLabelLayout = context.findHudLayoutElement(pGoldLabelLayoutId);
-
-        if (pGoldLabelLayout != nullptr)
-        {
-            const std::optional<GameplayResolvedHudLayoutElement> goldLabel =
-                resolveLayout(
-                    context,
-                    pGoldLabelLayoutId,
-                    pGoldLabelLayout->width > 0.0f ? pGoldLabelLayout->width : 28.0f,
-                    pGoldLabelLayout->height > 0.0f ? pGoldLabelLayout->height : 14.0f,
-                    width,
-                    height);
-
-            if (goldLabel)
-            {
-                context.renderLayoutLabel(
-                    *pGoldLabelLayout,
-                    *goldLabel,
-                    resolveCounterLabel(pGoldLabelLayout->labelText, std::to_string(party.gold())));
-            }
-        }
-
-        const char *pFoodLabelLayoutId = gameplayHudLayout == ActiveGameplayHudLayout::Standard
-            ? "OutdoorStandardFoodLabel"
-            : "OutdoorFoodLabel";
-        const UiLayoutManager::LayoutElement *pFoodLabelLayout = context.findHudLayoutElement(pFoodLabelLayoutId);
-
-        if (pFoodLabelLayout != nullptr)
-        {
-            const std::optional<GameplayResolvedHudLayoutElement> foodLabel =
-                resolveLayout(
-                    context,
-                    pFoodLabelLayoutId,
-                    pFoodLabelLayout->width > 0.0f ? pFoodLabelLayout->width : 28.0f,
-                    pFoodLabelLayout->height > 0.0f ? pFoodLabelLayout->height : 14.0f,
-                    width,
-                    height);
-
-            if (foodLabel)
-            {
-                context.renderLayoutLabel(
-                    *pFoodLabelLayout,
-                    *foodLabel,
-                    resolveCounterLabel(pFoodLabelLayout->labelText, std::to_string(party.food())));
+                context.renderLayoutLabel(*pLayout, *rect, std::to_string(gold ? pParty->gold() : pParty->food()));
             }
         }
     }
-
-    if (isLimitedOverlayHud)
+    if (context.settingsSnapshot().contextActionPopup && state == GameplayHudScreenState::Gameplay)
     {
-        return;
-    }
-
-    const UiLayoutManager::LayoutElement *pBottomLeftButtonsLayout =
-        context.findHudLayoutElement("OutdoorBottomLeftButtons");
-
-    if (pBottomLeftButtonsLayout != nullptr)
-    {
-        const std::optional<GameplayResolvedHudLayoutElement> bottomLeftButtons =
-            resolveLayout(context, "OutdoorBottomLeftButtons", 180.0f, 32.0f, width, height);
-
-        if (bottomLeftButtons)
-        {
-            context.renderLayoutLabel(
-                *pBottomLeftButtonsLayout,
-                *bottomLeftButtons,
-                pBottomLeftButtonsLayout->labelText);
-        }
-    }
-
-    const std::string skullPanelLayoutId =
-        gameplayHudLayout == ActiveGameplayHudLayout::Standard ? "OutdoorStandardBuffSkullPanel" : "OutdoorBuffSkullPanel";
-    const UiLayoutManager::LayoutElement *pSkullPanelLayout = context.findHudLayoutElement(skullPanelLayoutId);
-
-    if (pSkullPanelLayout != nullptr)
-    {
-        const std::optional<GameplayResolvedHudLayoutElement> skullPanel =
-            resolveLayout(context, skullPanelLayoutId, 96.0f, 48.0f, width, height);
-
-        if (skullPanel)
-        {
-            context.renderLayoutLabel(*pSkullPanelLayout, *skullPanel, pSkullPanelLayout->labelText);
-        }
-    }
-
-    const std::string bodyPanelLayoutId =
-        gameplayHudLayout == ActiveGameplayHudLayout::Standard ? "OutdoorStandardBuffBodyPanel" : "OutdoorBuffBodyPanel";
-    const UiLayoutManager::LayoutElement *pBodyPanelLayout = context.findHudLayoutElement(bodyPanelLayoutId);
-
-    if (pBodyPanelLayout != nullptr)
-    {
-        const std::optional<GameplayResolvedHudLayoutElement> bodyPanel =
-            resolveLayout(context, bodyPanelLayoutId, 96.0f, 48.0f, width, height);
-
-        if (bodyPanel)
-        {
-            context.renderLayoutLabel(*pBodyPanelLayout, *bodyPanel, pBodyPanelLayout->labelText);
-        }
+        renderContextAction(context, width, height);
     }
 }
 } // namespace OpenYAMM::Game

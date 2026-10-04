@@ -102,6 +102,62 @@ TEST_CASE("Billboard opacity masks expose the visible top for world-space anchor
     CHECK(mask.opaqueTopNormalized() == doctest::Approx(0.5f));
 }
 
+TEST_CASE("Billboard opacity masks find the nearest visible silhouette point")
+{
+    std::vector<uint8_t> pixels(5 * 5 * 4, 0);
+    for (int y = 1; y <= 3; ++y)
+    {
+        pixels[(y * 5 + 2) * 4 + 3] = 255;
+    }
+    for (int x = 1; x <= 3; ++x)
+    {
+        pixels[(2 * 5 + x) * 4 + 3] = 255;
+    }
+    BillboardOpacityMask mask;
+    mask.assignFromBgra(pixels, 5, 5);
+
+    const std::optional<std::array<float, 2>> right = mask.nearestOpaqueNormalized(1.4f, 0.5f);
+    const std::optional<std::array<float, 2>> above = mask.nearestOpaqueNormalized(0.5f, -0.5f);
+    const std::optional<std::array<float, 2>> below = mask.nearestOpaqueNormalized(0.5f, 1.5f);
+    const std::optional<std::array<float, 2>> diagonal = mask.nearestOpaqueNormalized(1.4f, -0.5f);
+
+    REQUIRE(right.has_value());
+    CHECK((*right)[0] == doctest::Approx(0.8f));
+    CHECK((*right)[1] == doctest::Approx(0.5f));
+    REQUIRE(above.has_value());
+    CHECK((*above)[0] == doctest::Approx(0.5f));
+    CHECK((*above)[1] == doctest::Approx(0.2f));
+    REQUIRE(below.has_value());
+    CHECK((*below)[0] == doctest::Approx(0.5f));
+    CHECK((*below)[1] == doctest::Approx(0.8f));
+    REQUIRE(diagonal.has_value());
+    CHECK((*diagonal)[0] == doctest::Approx(0.6f));
+    CHECK((*diagonal)[1] == doctest::Approx(0.2f));
+}
+
+TEST_CASE("Billboard opacity masks reject an entirely transparent silhouette")
+{
+    const std::vector<uint8_t> pixels(3 * 3 * 4, 0);
+    BillboardOpacityMask mask;
+    mask.assignFromBgra(pixels, 3, 3);
+
+    CHECK_FALSE(mask.nearestOpaqueNormalized(0.5f, 0.5f).has_value());
+}
+
+TEST_CASE("Billboard opacity masks move transparent filler hits to the nearest opaque pixel")
+{
+    std::vector<uint8_t> pixels(3 * 3 * 4, 255);
+    pixels[(1 * 3 + 1) * 4 + 3] = 0;
+    BillboardOpacityMask mask;
+    mask.assignFromBgra(pixels, 3, 3);
+
+    const std::optional<std::array<float, 2>> nearest = mask.nearestOpaqueNormalized(0.5f, 0.5f);
+
+    REQUIRE(nearest.has_value());
+    CHECK((*nearest)[0] == doctest::Approx(0.5f));
+    CHECK((*nearest)[1] == doctest::Approx(1.0f / 3.0f));
+}
+
 TEST_CASE("Billboard opacity masks read atlas crops with row stride and partial alpha")
 {
     std::vector<uint8_t> pixels(7 * 6 * 4, 0);
@@ -247,4 +303,26 @@ TEST_CASE("Cached animation mip chains retain rectangular dimensions and cutout 
         preserveBgraCutoutCoverage(expected, pixels, 160);
         CHECK(cutout[level].pixels == expected);
     }
+}
+
+TEST_CASE("map bitmap residency retains recently used images within its byte budget")
+{
+    using namespace OpenYAMM::Game;
+    MapAssetLoadSharedCache cache;
+    cache.beginLoad(1);
+    cache.bitmapPixelsByKey["old"] = MapAssetBitmapPixelsResult{1, 1, {1, 2, 3, 4}};
+    cache.touchBitmap("old");
+    cache.bitmapPixelsByKey["new"] = MapAssetBitmapPixelsResult{1, 1, {5, 6, 7, 8}};
+    cache.touchBitmap("new");
+    cache.bitmapBinaryFilesByPath["source"] = std::vector<uint8_t>{1, 2};
+    cache.trimBitmapData(4);
+    CHECK_FALSE(cache.bitmapPixelsByKey.contains("old"));
+    CHECK(cache.bitmapPixelsByKey.contains("new"));
+    CHECK(cache.bitmapBinaryFilesByPath.empty());
+    CHECK(cache.retainedBitmapBytes() == 4);
+    cache.beginLoad(1);
+    CHECK(cache.retainedBitmapBytes() == 4);
+    cache.beginLoad(2);
+    CHECK(cache.bitmapPixelsByKey.empty());
+    CHECK(cache.bitmapLastUse.empty());
 }

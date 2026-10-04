@@ -1,49 +1,91 @@
 #pragma once
 
-#include "game/audio/SoundIds.h"
-#include "game/ui/MenuScreenBase.h"
-#include "game/ui/UiLayoutManager.h"
+#include "game/app/GameSettings.h"
+#include "game/ui/MenuDesignScreen.h"
 
+#include <filesystem>
 #include <functional>
-#include <optional>
 
 namespace OpenYAMM::Game
 {
 class GameAudioSystem;
+class GameDataRepository;
 
-class MainMenuScreen : public MenuScreenBase
+class MainMenuScreen : public MenuDesignScreen
 {
-public:
+  public:
     using Action = std::function<void()>;
-
-    MainMenuScreen(
-        const Engine::AssetFileSystem &assetFileSystem,
-        GameAudioSystem *pGameAudioSystem,
-        Action newGameAction,
-        Action loadGameAction,
-        Action quitAction);
-
+    struct Actions
+    {
+        Action newGame, loadGame, saveGame, quit, resume, mainMenu;
+        std::function<bool(const std::filesystem::path &)> continueGame;
+        std::function<bool(const GameSettings &, bool, std::string &)> applySettings;
+    };
+    MainMenuScreen(const Engine::AssetFileSystem &assets, const GameDataRepository &gameData, GameAudioSystem *pAudio,
+                   const GameSettings &settings, Actions actions, bool paused = false, std::string location = {},
+                   std::string date = {});
     AppMode mode() const override;
     void prepareForFirstFrame();
+    void onExit() override;
+    void handleSdlEvent(const SDL_Event &event) override;
 
-private:
+  private:
+    struct Setting
+    {
+        std::string id, section, group, name, description, type, unit, depends;
+        int minimum = 0, maximum = 100;
+        std::vector<std::pair<std::string, std::string>> options;
+    };
+    struct Binding
+    {
+        KeyboardAction action;
+        std::string id, name, group;
+    };
+    struct Section
+    {
+        std::string id, name;
+    };
+    enum class Page
+    {
+        Home,
+        Settings,
+        Credits
+    };
     void drawScreen(float deltaSeconds) override;
-    bool ensureLayoutLoaded();
-    std::optional<Rect> resolveLayoutRect(
-        const std::string &layoutId,
-        float fallbackWidth = 0.0f,
-        float fallbackHeight = 0.0f) const;
-    ButtonVisualSet resolveButtonVisuals(
-        const std::string &layoutId,
-        const ButtonVisualSet &fallbackVisuals) const;
-    std::string resolveAssetName(const std::string &layoutId, const std::string &fallbackAssetName) const;
-    void playUiClickSound(SoundId soundId) const;
-
-    GameAudioSystem *m_pGameAudioSystem = nullptr;
-    Action m_newGameAction;
-    Action m_loadGameAction;
-    Action m_quitAction;
-    UiLayoutManager m_layoutManager;
-    bool m_layoutLoaded = false;
+    void drawHome();
+    void drawSettings(float deltaSeconds);
+    void drawKeyboard(const std::string &prefix, const Rect &viewport);
+    void loadCatalog();
+    void editSetting(const Setting &setting, const std::string &value);
+    void chooseSetting(const Setting &setting);
+    size_t dirtyCount() const;
+    void leaveSettings();
+    void applySettings(bool leaveAfter = false);
+    void restoreDefaults();
+    void captureBinding(KeyboardAction action);
+    void acceptBinding(InputBinding binding);
+    void revertDisplay();
+    Actions m_actions;
+    const GameDataRepository &m_gameData;
+    GameSettings m_committed;
+    GameSettings m_draft;
+    std::vector<Setting> m_settings;
+    std::vector<Binding> m_bindings;
+    std::vector<Section> m_sections;
+    std::optional<std::filesystem::path> m_latestSave;
+    std::string m_latestSaveMap;
+    std::string m_latestSaveLocation;
+    std::optional<KeyboardAction> m_capture;
+    Page m_page = Page::Home;
+    std::string m_section = "gameplay";
+    std::string m_location, m_date, m_status, m_search;
+    std::string m_bindingGroup = "All actions";
+    bool m_paused = false;
+    bool m_searchEditing = false;
+    bool m_displayPreview = false;
+    bool m_leaveAfterApply = false;
+    bool m_suppressEscape = false;
+    float m_displaySeconds = 0;
+    float m_scroll = 0;
 };
-}
+} // namespace OpenYAMM::Game

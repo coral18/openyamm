@@ -16,6 +16,11 @@ float vecDot(const bx::Vec3 &left, const bx::Vec3 &right)
     return left.x * right.x + left.y * right.y + left.z * right.z;
 }
 
+double sweepDot(const bx::Vec3 &left, const bx::Vec3 &right)
+{
+    return double(left.x) * right.x + double(left.y) * right.y + double(left.z) * right.z;
+}
+
 float vecLength(const bx::Vec3 &value)
 {
     return std::sqrt(vecDot(value, value));
@@ -316,9 +321,10 @@ float adjustedSweepMoveDistance(float hitDistance, float backoffDistance)
 }
 
 bool solveNearestSweepDistance(
-    float a,
-    float b,
-    float c,
+    double a,
+    double b,
+    double c,
+    float radius,
     float maxDistance,
     float &distance
 )
@@ -328,33 +334,29 @@ bool solveNearestSweepDistance(
         return false;
     }
 
-    const float discriminant = b * b - 4.0f * a * c;
-
+    // b is twice the distance from the edge times the approach speed. Compare
+    // the normalized approach, so a projected tangent does not keep colliding
+    // at distance zero just because the sphere is large.
+    if (b >= 0.0f || (c <= 0.0f && b >= -2.0f * radius * CollisionEpsilon))
+    {
+        return false;
+    }
+    if (c <= 0.0f)
+    {
+        distance = 0.0f;
+        return true;
+    }
+    const double discriminant = b * b - 4.0 * a * c;
     if (discriminant < 0.0f)
     {
         return false;
     }
-
-    float rootA = (-b - std::sqrt(discriminant)) / (2.0f * a);
-    float rootB = (-b + std::sqrt(discriminant)) / (2.0f * a);
-
-    if (rootA > rootB)
+    const double contactDistance = (-b - std::sqrt(discriminant)) / (2.0 * a);
+    if (contactDistance >= 0.0f && contactDistance <= maxDistance + CollisionEpsilon)
     {
-        std::swap(rootA, rootB);
-    }
-
-    if (rootA > CollisionEpsilon && rootA <= maxDistance + CollisionEpsilon)
-    {
-        distance = std::clamp(rootA, 0.0f, maxDistance);
+        distance = float(std::min(contactDistance, double(maxDistance)));
         return true;
     }
-
-    if (rootB > CollisionEpsilon && rootB <= maxDistance + CollisionEpsilon)
-    {
-        distance = std::clamp(rootB, 0.0f, maxDistance);
-        return true;
-    }
-
     return false;
 }
 
@@ -369,18 +371,17 @@ std::optional<IndoorSweptFaceHit> sweepIndoorSphereAgainstPoint(
 {
     const bx::Vec3 normalizedDirection = vecNormalize(direction);
     const bx::Vec3 delta = vecSubtract(sphere.center, point);
-    const float a = vecDot(normalizedDirection, normalizedDirection);
-    const float b = 2.0f * vecDot(delta, normalizedDirection);
-    const float c = vecDot(delta, delta) - sphere.radius * sphere.radius;
+    const double a = sweepDot(normalizedDirection, normalizedDirection);
+    const double b = 2.0 * sweepDot(delta, normalizedDirection);
+    const double c = sweepDot(delta, delta) - double(sphere.radius) * sphere.radius;
     float hitDistance = 0.0f;
 
-    if (!solveNearestSweepDistance(a, b, c, moveDistance, hitDistance))
+    if (!solveNearestSweepDistance(a, b, c, sphere.radius, moveDistance, hitDistance))
     {
         return std::nullopt;
     }
 
-    const bx::Vec3 sphereCenterAtHit = vecAdd(sphere.center, vecScale(normalizedDirection, hitDistance));
-    bx::Vec3 collisionNormal = vecNormalize(vecSubtract(sphereCenterAtHit, point));
+    bx::Vec3 collisionNormal = vecNormalize(vecAdd(delta, vecScale(normalizedDirection, hitDistance)));
 
     if (vecLength(collisionNormal) <= CollisionEpsilon)
     {
@@ -426,12 +427,13 @@ std::optional<IndoorSweptFaceHit> sweepIndoorSphereAgainstSegment(
     const float startAlongEdge = vecDot(startDelta, edgeDirection);
     const bx::Vec3 perpendicularStartDelta =
         vecSubtract(startDelta, vecScale(edgeDirection, startAlongEdge));
-    const float a = vecDot(perpendicularDirection, perpendicularDirection);
-    const float b = 2.0f * vecDot(perpendicularStartDelta, perpendicularDirection);
-    const float c = vecDot(perpendicularStartDelta, perpendicularStartDelta) - sphere.radius * sphere.radius;
+    // Preserve small edge clearances when subtracting the much larger radius squared.
+    const double a = sweepDot(perpendicularDirection, perpendicularDirection);
+    const double b = 2.0 * sweepDot(perpendicularStartDelta, perpendicularDirection);
+    const double c = sweepDot(perpendicularStartDelta, perpendicularStartDelta) - double(sphere.radius) * sphere.radius;
     float hitDistance = 0.0f;
 
-    if (!solveNearestSweepDistance(a, b, c, moveDistance, hitDistance))
+    if (!solveNearestSweepDistance(a, b, c, sphere.radius, moveDistance, hitDistance))
     {
         return std::nullopt;
     }
@@ -446,7 +448,10 @@ std::optional<IndoorSweptFaceHit> sweepIndoorSphereAgainstSegment(
 
     const float clampedHitAlongEdge = std::clamp(hitAlongEdge, 0.0f, edgeLength);
     const bx::Vec3 contactPoint = vecAdd(start, vecScale(edgeDirection, clampedHitAlongEdge));
-    bx::Vec3 collisionNormal = vecNormalize(vecSubtract(sphereCenterAtHit, contactPoint));
+    // Keep the normal in the same relative coordinates as the sweep equation.
+    // Reconstructing it from absolute world points loses precision at cave seams.
+    bx::Vec3 collisionNormal =
+        vecNormalize(vecAdd(perpendicularStartDelta, vecScale(perpendicularDirection, hitDistance)));
 
     if (vecLength(collisionNormal) <= CollisionEpsilon)
     {
@@ -614,20 +619,19 @@ std::optional<IndoorSweptFaceHit> sweepIndoorSphereAgainstFaceWithNormalizedDire
             || rawEndDistance == 0.0f
             || (rawStartDistance > 0.0f) == (rawEndDistance > 0.0f);
 
+        if (staysOnSameSide
+            && rawStartAbsDistance >= sphere.radius - CollisionEpsilon
+            && rawEndAbsDistance >= rawStartAbsDistance - CollisionEpsilon)
+        {
+            // A tangent or separating sphere outside the plane cannot enter its
+            // polygon edges. Avoid roundoff turning edge contact into overlap.
+            return std::nullopt;
+        }
+
         if (startsInsideFaceRadius && staysOnSameSide && rawEndAbsDistance >= rawStartAbsDistance - CollisionEpsilon)
         {
-            if (geometry.kind == IndoorFaceKind::Floor
-                && std::fabs(vecDot(normalizedDirection, collisionNormal)) <= CollisionEpsilon)
-            {
-                return sweepIndoorSphereAgainstFaceBoundary(
-                    sphere,
-                    normalizedDirection,
-                    moveDistance,
-                    geometry,
-                    options);
-            }
-
-            return std::nullopt;
+            // Moving along or away from the plane can still hit a doorway edge.
+            return sweepIndoorSphereAgainstFaceBoundary(sphere, normalizedDirection, moveDistance, geometry, options);
         }
     }
 

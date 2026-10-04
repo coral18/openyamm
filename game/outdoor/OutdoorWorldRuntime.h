@@ -1,5 +1,7 @@
 #pragma once
 
+#include "game/gameplay/ActorInspectPreviewAnimation.h"
+
 #include "game/events/ISceneEventContext.h"
 #include "game/events/EventRuntime.h"
 #include "game/events/ScriptedEventProgram.h"
@@ -357,15 +359,6 @@ public:
         bool waterTerrainImpact = false;
     };
 
-    struct ActorInspectPreviewAnimationState
-    {
-        int16_t monsterId = 0;
-        ActorAnimation animation = ActorAnimation::Bored;
-        uint32_t actionTimeTicks = 0;
-        uint32_t actionLengthTicks = 0;
-        uint32_t lastUpdateTicks = 0;
-        uint32_t randomState = 0x6d2b79f5u;
-    };
 
     struct ProjectileFrameWorldFacts
     {
@@ -468,6 +461,8 @@ public:
         uint32_t soundId = 0;
         uint32_t sourceId = 0;
         std::string reason;
+        std::optional<size_t> actorIndex;
+        float pitch = 1.0f;
         float x = 0.0f;
         float y = 0.0f;
         float z = 0.0f;
@@ -674,6 +669,9 @@ public:
         bool visibleForFallback) const override;
     bool partyAttackActorHasLineOfSight(size_t actorIndex) const;
     std::vector<GameplayPartyAttackActorFacts> collectPartyAttackFallbackActors(
+        const GameplayPartyAttackFallbackQuery &query) const override;
+    std::optional<GameplayWorldPoint> partyAttackActorContactPoint(
+        size_t actorIndex,
         const GameplayPartyAttackFallbackQuery &query) const override;
     std::optional<ActorDecisionDebugInfo> debugActorDecisionInfo(
         size_t actorIndex,
@@ -1149,6 +1147,8 @@ private:
         float z,
         bool positional = true,
         SoundScope soundScope = SoundScope::Engine);
+    void pushOutdoorMonsterSound(size_t actorIndex, uint32_t soundId, const char *pReason);
+    bool beginMapActorHitReaction(size_t actorIndex, bool force = false, bool emitAudio = true);
     void pushProjectileAudioEvent(const GameplayProjectileService::ProjectileAudioRequest &request);
     bool spawnProjectileFromMapActor(
         const MapActorState &actor,
@@ -1308,7 +1308,8 @@ private:
         float x,
         float y,
         float z,
-        bool centerVertically = false);
+        bool centerVertically = false,
+        size_t targetActorIndex = static_cast<size_t>(-1));
     bool spawnImmediateSpellVisual(
         uint32_t spellId,
         float x,
@@ -1332,7 +1333,8 @@ private:
         float x,
         float y,
         float z,
-        bool centerVertically);
+        bool centerVertically,
+        size_t targetActorIndex = static_cast<size_t>(-1));
     GameplayProjectileService::ProjectileImpactSpawnResult spawnWaterSplashImpactVisual(
         const GameplayProjectileService::ProjectileImpactVisualDefinition &definition,
         float x,
@@ -1384,7 +1386,7 @@ private:
     std::optional<ChestViewState> m_activeChestView;
     std::optional<GameplayWorldPoint> m_pendingEventSourcePoint;
     std::optional<EventRuntimeState> m_eventRuntimeState;
-    mutable ActorInspectPreviewAnimationState m_actorInspectPreviewAnimation = {};
+    mutable ActorInspectPreviewAnimation m_actorInspectPreviewAnimation = {};
     const ItemTable *m_pItemTable = nullptr;
     Party *m_pParty = nullptr;
     OutdoorPartyRuntime *m_pPartyRuntime = nullptr;
@@ -1510,19 +1512,11 @@ private:
         const std::vector<bool> &activeActorMask);
     void applyOutdoorActorAudioRequests(const std::vector<ActorAudioRequest> &audioRequests);
     void applyOutdoorActorFxRequests(const std::vector<ActorFxRequest> &fxRequests);
-    bool hasOutdoorActorActiveBehaviorUpdate(const ActorAiUpdate &update, bool activeActor) const;
+    bool hasOutdoorActorBehaviorUpdate(const ActorAiUpdate &update) const;
     void ensureOutdoorActorMovementState(MapActorState &actor, const MonsterTable::MonsterStatsEntry &stats);
     void applyOeOutdoorActorFloorCorrection(MapActorState &actor, const MonsterTable::MonsterStatsEntry &stats);
-    void applyOutdoorActorStateUpdate(
-        MapActorState &actor,
-        const ActorStateUpdate &state,
-        bool activeActor,
-        bool activeBehavior);
-    void applyOutdoorActorAnimationUpdate(
-        MapActorState &actor,
-        const ActorAnimationUpdate &animation,
-        bool activeActor,
-        bool activeBehavior);
+    void applyOutdoorActorStateUpdate(MapActorState &actor, const ActorStateUpdate &state);
+    void applyOutdoorActorAnimationUpdate(MapActorState &actor, const ActorAnimationUpdate &animation);
     void applyOutdoorActorMovementIntent(
         size_t actorIndex,
         MapActorState &actor,
@@ -1558,6 +1552,7 @@ private:
         float moveSpeed,
         float desiredMoveZ,
         bool meleePursuitActive,
+        bool crowdSteeringActive,
         bool inMeleeRange,
         const GameplayWorldPoint &targetPosition,
         float targetEdgeDistance,
@@ -1567,11 +1562,7 @@ private:
         ActorAnimation &nextAnimation,
         float &desiredMoveX,
         float &desiredMoveY);
-    void updateOutdoorInactiveAndInvalidActors(
-        float partyX,
-        float partyY,
-        float partyZ,
-        const std::vector<bool> &activeActorMask);
+    void updateOutdoorInactiveAndInvalidActors(const std::vector<bool> &activeActorMask);
     void applyActorFrameSideEffects(float deltaSeconds, float partyX, float partyY, float partyZ);
     void updateMm9ActorReactions(float deltaSeconds, float partyX, float partyY, float partyZ);
     void startMm9CivilianFlee(MapActorState &actor);

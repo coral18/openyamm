@@ -10,6 +10,8 @@
 
 namespace OpenYAMM::Game
 {
+inline constexpr float IndoorActorMaxDropHeight = 100.0f;
+
 struct IndoorMoveState
 {
     float x = 0.0f;
@@ -74,7 +76,6 @@ enum class IndoorMoveInvalidPositionReason
     None,
     ActorLedgeDrop,
     LeadingActorLedgeDrop,
-    LostGroundSupport,
     SteepFloor,
     StepUpTooHigh,
     CeilingFloorCrush,

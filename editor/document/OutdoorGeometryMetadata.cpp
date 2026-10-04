@@ -197,6 +197,7 @@ std::string serializeOutdoorGeometryMetadata(const EditorOutdoorGeometryMetadata
         if (!entry.importSource.sourcePath.empty()
             || !entry.importSource.sourceMeshName.empty()
             || entry.importSource.mergeCoplanarFaces
+            || entry.importSource.preserveSourceWinding
             || !entry.importSource.defaultTextureName.empty()
             || !entry.importSource.materialRemaps.empty())
         {
@@ -210,6 +211,7 @@ std::string serializeOutdoorGeometryMetadata(const EditorOutdoorGeometryMetadata
 
             emitter << YAML::Key << "scale" << YAML::Value << entry.importSource.importScale;
             emitter << YAML::Key << "merge_coplanar_faces" << YAML::Value << entry.importSource.mergeCoplanarFaces;
+            emitter << YAML::Key << "preserve_source_winding" << YAML::Value << entry.importSource.preserveSourceWinding;
             emitter << YAML::EndMap;
 
             emitter << YAML::Key << "materials" << YAML::Value << YAML::BeginMap;
@@ -339,6 +341,11 @@ std::optional<EditorOutdoorGeometryMetadata> loadOutdoorGeometryMetadataFromText
                         sourceNode,
                         "merge_coplanar_faces",
                         entry.importSource.mergeCoplanarFaces,
+                        errorMessage)
+                    || !readScalarNode(
+                        sourceNode,
+                        "preserve_source_winding",
+                        entry.importSource.preserveSourceWinding,
                         errorMessage))
                 {
                     return std::nullopt;

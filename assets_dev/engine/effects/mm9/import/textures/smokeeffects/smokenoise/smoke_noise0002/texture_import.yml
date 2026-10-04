@@ -1,0 +1,64 @@
+schema: openyamm.effectTextureImport.v1
+source:
+  path: /home/pjasicek/github/OpenYAMM/mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/SMOKEEFFECTS/SMOKENOISE/SMOKE_NOISE0002.dtx
+  format: LithTech DTX
+  sha256: 780ce0eb9361620cec09f55cc86f64a814f1ca3d8da7d74247c56c3ab900a8a6
+runtime:
+  texture: engine/effects/mm9/textures/smokeeffects/smokenoise/smoke_noise0002.png
+  format: PNG RGBA8
+  colorSpace: srgb
+  alphaUsage: blend
+  premultipliedAlpha: false
+  mipPolicy: generate-at-runtime
+  minFilter: linear
+  magFilter: linear
+  wrapU: clamp
+  wrapV: clamp
+conversion:
+  decoder: tools/mm9_import_discovery/convert_abc_model.py:decode_dtx_mips
+  decodedRgbChanged: false
+  decodedAlphaChanged: false
+  opaqueAlphaRepair: false
+  zeroAlphaRgbPreserved: true
+  sourceMipArtifacts: mips/*.png
+dtx:
+  version: -5
+  width: 64
+  height: 64
+  mipCount: 4
+  sectionCount: 0
+  internalFlags: 136
+  userFlags: 0
+  extraHex: '000003000000000000000000'
+  bppIdentifier: 3
+  command: ''
+  repairOpaqueAlpha: false
+  mips:
+  - index: 0
+    width: 64
+    height: 64
+    sourceOffset: 164
+    sourceBytes: 16384
+    decodedRgbaSha256: daeb9fda9c13e532505b2e047891da5934d4902ff3e3e6e71fb12b2894152e93
+    artifact: mips/00.png
+  - index: 1
+    width: 32
+    height: 32
+    sourceOffset: 16548
+    sourceBytes: 4096
+    decodedRgbaSha256: 88f178e1baf2e1bc28908239d72fd89ce0a534d86e141e24a1ac5e1dbb35a2b4
+    artifact: mips/01.png
+  - index: 2
+    width: 16
+    height: 16
+    sourceOffset: 20644
+    sourceBytes: 1024
+    decodedRgbaSha256: f5848d4ab329e3a2b95dd170a54231d00ae3ddccdfde640d39e3c8081b57f0d3
+    artifact: mips/02.png
+  - index: 3
+    width: 8
+    height: 8
+    sourceOffset: 21668
+    sourceBytes: 256
+    decodedRgbaSha256: f1a6f94ebada97e335125a029728d220d4560f2e2c6bb3870fb8f2dfa011df8b
+    artifact: mips/03.png

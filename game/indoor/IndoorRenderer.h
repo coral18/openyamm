@@ -3,11 +3,14 @@
 #include <deque>
 
 #include "game/render/SpriteAtlasCache.h"
+#include "game/render/NativeSpriteTextureCache.h"
 
 #include "engine/AssetFileSystem.h"
 #include "engine/AssetScaleTier.h"
+#include "engine/render/ModelRenderer.h"
 #include "game/indoor/IndoorMapData.h"
 #include "game/indoor/IndoorLightingRuntime.h"
+#include "game/render/IndoorStaticLighting.h"
 #include "game/indoor/IndoorPortalGraph.h"
 #include "game/indoor/IndoorPortalVisibility.h"
 #include "game/tables/ChestTable.h"
@@ -15,10 +18,12 @@
 #include "game/maps/MapDeltaData.h"
 #include "game/maps/MapAssetLoader.h"
 #include "game/render/TextureFiltering.h"
+#include "game/render/WaterRenderer.h"
 #include "game/render/BillboardOpacityMask.h"
 #include "game/tables/ItemTable.h"
 #include "game/fx/WorldFxRenderResources.h"
 #include "game/fx/WorldFxSystem.h"
+#include "game/fx/EffectRenderer.h"
 #include "game/tables/MapStats.h"
 #include "game/tables/MonsterTable.h"
 #include "game/events/EventRuntime.h"
@@ -44,18 +49,10 @@ namespace OpenYAMM::Game
 class GameSession;
 struct GameSettings;
 struct GameplayInputFrame;
+struct GameplayPartyAttackFallbackQuery;
 struct PartySpellCastResult;
 class IndoorSceneRuntime;
 
-struct BakedStaticLightSource
-{
-    bx::Vec3 position = {0.0f, 0.0f, 0.0f};
-    float radius = 0.0f;
-    uint8_t red = 255;
-    uint8_t green = 255;
-    uint8_t blue = 255;
-    float alpha = 1.0f;
-};
 
 class IndoorRenderer
 {
@@ -69,7 +66,7 @@ public:
         float sourceHeight = 0.0f;
     };
 
-    IndoorRenderer();
+    IndoorRenderer(SpriteAtlasCache &spriteAtlasCache, NativeSpriteTextureCache &nativeSpriteCache);
     ~IndoorRenderer();
 
     IndoorRenderer(const IndoorRenderer &) = delete;
@@ -98,7 +95,8 @@ public:
         const GameplayInputFrame &input,
         float deltaSeconds,
         bool allowWorldInput = true,
-        bool allowWorldSimulation = true);
+        bool allowWorldSimulation = true,
+        bool preparingResources = false);
     void updateWorldMovement(
         const GameplayInputFrame &input,
         float deltaSeconds,
@@ -121,8 +119,10 @@ public:
         float v1,
         TextureFilterProfile filterProfile = TextureFilterProfile::Ui) const;
     void setGameplayMouseLookMode(bool enabled, bool cursorMode);
+    bool isWaterSupportFace(size_t faceIndex) const;
     WorldFxSystem &worldFxSystem();
     const WorldFxSystem &worldFxSystem() const;
+    const EffectRenderer::Diagnostics &effectRenderDiagnostics() const;
     std::optional<GameplayActorPick> gameplayActorPickAtCursor(
         int viewWidth,
         int viewHeight,
@@ -144,8 +144,12 @@ public:
     std::optional<size_t> gameplayHoveredActorIndex() const;
     std::optional<size_t> gameplayClosestVisibleHostileActorIndex() const;
     std::optional<bx::Vec3> gameplayActorTargetPoint(size_t actorIndex) const;
+    std::optional<bx::Vec3> gameplayActorNearestOpaquePoint(
+        size_t actorIndex,
+        const GameplayPartyAttackFallbackQuery &query) const;
     std::optional<bx::Vec3> gameplayGroundTargetPoint(float screenX, float screenY) const;
-    std::vector<int16_t> visibleIndoorMapRevealSectorIds(int16_t sectorId, int16_t eyeSectorId) const;
+    const std::vector<int16_t> &visibleIndoorMapRevealSectorIds() const;
+    uint64_t indoorMapRevealRevision() const;
     float cameraYawRadians() const;
     float cameraPitchRadians() const;
     bool canActivateGameplayWorldHit(const GameplayWorldHit &hit) const;
@@ -210,9 +214,24 @@ private:
         bool valid = false;
     };
 
+    struct TexturedFaceTriangle
+    {
+        std::array<size_t, 3> faceVertexIndices = {};
+        uint32_t vertexOffset = 0;
+        uint32_t vertexCount = 0;
+    };
+
+    struct TexturedFaceMesh
+    {
+        std::vector<TexturedVertex> vertices;
+        std::vector<uint32_t> indices;
+        std::vector<TexturedFaceTriangle> triangles;
+    };
+
     struct TexturedBatch
     {
         bgfx::DynamicVertexBufferHandle vertexBufferHandle = BGFX_INVALID_HANDLE;
+        bgfx::IndexBufferHandle indexBufferHandle = BGFX_INVALID_HANDLE;
         std::string textureName;
         int16_t sectorId = -1;
         int16_t backSectorId = -1;
@@ -224,10 +243,13 @@ private:
         int textureHeight = 0;
         uint32_t vertexCapacity = 0;
         uint32_t vertexCount = 0;
+        uint32_t indexCount = 0;
         bx::Vec3 boundsMin = {0.0f, 0.0f, 0.0f};
         bx::Vec3 boundsMax = {0.0f, 0.0f, 0.0f};
         bool hasBounds = false;
+        uint32_t waterColorAbgr = 0;
         std::vector<TexturedVertex> vertices;
+        std::vector<uint32_t> indices;
     };
 
     struct CachedIndoorLightSelection
@@ -326,20 +348,7 @@ private:
         const std::optional<MapDeltaData> &indoorMapDeltaData,
         const std::optional<EventRuntimeState> &eventRuntimeState
     );
-    static std::vector<TexturedVertex> buildTexturedVertices(
-        const IndoorMapData &indoorMapData,
-        const std::vector<IndoorVertex> &vertices,
-        const OutdoorBitmapTexture &texture,
-        const std::vector<size_t> *pFaceIndices,
-        const std::optional<MapDeltaData> &indoorMapDeltaData,
-        const std::optional<EventRuntimeState> &eventRuntimeState,
-        bool coloredLights = true,
-        const DecorationBillboardSet *pDecorationBillboardSet = nullptr,
-        const std::vector<BakedStaticLightSource> *pBakedStaticLightSources = nullptr,
-        const std::vector<BakedStaticLightSource> *pBakedStaticLightSubdivisionSources = nullptr,
-        bool allowBakedLightSubdivision = true
-    );
-    static std::vector<TexturedVertex> buildFaceTexturedVertices(
+    static TexturedFaceMesh buildFaceTexturedMesh(
         const IndoorMapData &indoorMapData,
         const std::vector<IndoorVertex> &vertices,
         const OutdoorBitmapTexture &texture,
@@ -350,13 +359,10 @@ private:
         const DecorationBillboardSet *pDecorationBillboardSet = nullptr,
         const std::vector<BakedStaticLightSource> *pBakedStaticLightSources = nullptr,
         const std::vector<BakedStaticLightSource> *pBakedStaticLightSubdivisionSources = nullptr,
-        bool allowBakedLightSubdivision = true
+        bool useBaseSubdivisionGeometry = false,
+        std::span<const TexturedVertex> subdivisionTemplate = {},
+        std::span<const TexturedFaceTriangle> triangleTemplate = {}
     );
-    static bool bakedStaticLightMayAffectTriangle(
-        const std::vector<BakedStaticLightSource> &bakedStaticLightSources,
-        const TexturedVertex (&triangleVertices)[3]
-    );
-    static float texturedVertexDistanceSquared(const TexturedVertex &first, const TexturedVertex &second);
     static TexturedVertex interpolateTexturedVertex(const TexturedVertex &first, const TexturedVertex &second);
     static void refreshBakedStaticLight(
         const std::vector<BakedStaticLightSource> &bakedStaticLightSources,
@@ -364,11 +370,13 @@ private:
         TexturedVertex &vertex
     );
     static void appendBakedStaticLightSubdividedTriangle(
-        std::vector<TexturedVertex> &vertices,
+        TexturedFaceMesh &mesh,
+        std::unordered_map<uint64_t, uint32_t> &vertexIndices,
         const std::vector<BakedStaticLightSource> &bakedStaticLightSources,
         const std::vector<BakedStaticLightSource> &bakedStaticLightSubdivisionSources,
         bool coloredLights,
         const TexturedVertex (&triangleVertices)[3],
+        const std::array<bx::Vec3, 3> &subdivisionPositions,
         int depth
     );
     static std::vector<TerrainVertex> buildWireframeVertices(
@@ -418,11 +426,13 @@ private:
         const std::vector<std::vector<IndoorVisibilityFrustum>> &visibleSectorFrustums,
         const IndoorLightingFrame &lightingFrame,
         const GameplayContextActionState *pContextActionState = nullptr,
-        LightingStats *pLightingStats = nullptr
+        LightingStats *pLightingStats = nullptr,
+        const WaterRenderer::Reflection *pReflection = nullptr
     );
     void renderActorPreviewBillboards(
         uint16_t viewId,
         const float *pViewMatrix,
+        const float *pProjectionMatrix,
         const bx::Vec3 &cameraPosition,
         const std::vector<uint8_t> &visibleSectorMask,
         const IndoorLightingFrame &lightingFrame,
@@ -430,7 +440,8 @@ private:
         const GameplayContextActionState *pContextActionState = nullptr,
         const GameSession *pGameSession = nullptr,
         const GameSettings *pSettings = nullptr,
-        LightingStats *pLightingStats = nullptr
+        LightingStats *pLightingStats = nullptr,
+        const WaterRenderer::Reflection *pReflection = nullptr
     );
     void renderSpriteObjectBillboards(
         uint16_t viewId,
@@ -470,6 +481,9 @@ private:
         int16_t paletteId);
     void registerBillboardTextureIndex(size_t textureIndex);
     const BillboardTextureHandle *findBillboardTexture(const std::string &textureName, int16_t paletteId) const;
+    const BillboardTextureHandle *restoreBillboardTexture(
+        const std::string &name, int16_t palette, const std::string &resourceIdentity = {});
+    void preloadAtlasAnimations();
     const BillboardTextureHandle *ensureSpriteBillboardTexture(const std::string &textureName, int16_t paletteId);
     const std::optional<MapDeltaData> &runtimeMapDeltaData() const;
     const std::optional<EventRuntimeState> &runtimeEventRuntimeStateStorage() const;
@@ -481,6 +495,13 @@ private:
     void rebuildIndoorRenderMemberships();
     void rebuildMechanismBindings();
     bool rebuildAllTexturedBatches(uint64_t &texturedBuildNanoseconds);
+    bool updateWaterGeometry();
+    bool submitTexturedBatch(const TexturedBatch &batch, uint16_t viewId, const IndoorDrawLightSet &lights,
+        const bx::Vec3 &eye, float yaw, float pitch, int width, int height, bool secretFacesDetected,
+        const std::array<float, 4> &clipPlane, float projectionScale = 1.0f);
+    void renderWaterReflections(const bx::Vec3 &forward,
+        const IndoorLightingFrameInput &lightingInput, int width, int height, bool billboards);
+
     bool refreshBakedStaticLighting(
         bool refreshAllVertices,
         size_t &refreshedVertexCount,
@@ -595,9 +616,10 @@ private:
         float yawRadians = 0.0f;
         float pitchRadians = 0.0f;
         float aspectRatio = 1.0f;
+        int viewportHeight = 0;
         std::vector<uint8_t> visibleSectorMask;
         std::vector<std::vector<IndoorVisibilityFrustum>> visibleSectorFrustums;
-        std::vector<IndoorAcceptedPortalVisibility> acceptedPortals;
+        std::vector<int16_t> mapRevealSectorIds;
         std::vector<IndoorPortalVisibilityTrace> portalTraces;
 
         void clear()
@@ -606,11 +628,12 @@ private:
             sectorId = -1;
             visibleSectorMask.clear();
             visibleSectorFrustums.clear();
-            acceptedPortals.clear();
+            mapRevealSectorIds.clear();
             portalTraces.clear();
         }
     };
     void clearPortalVisibilityCaches() const;
+    mutable uint64_t m_indoorMapRevealRevision = 0;
     std::vector<uint8_t> buildVisibleSectorMask(const bx::Vec3 &cameraPosition) const;
     void logIndoorVisibilityDiagnostics(
         const std::vector<uint8_t> &baseVisibleSectorMask,
@@ -619,7 +642,6 @@ private:
     ) const;
     bool isSectorVisible(int16_t sectorId, const std::vector<uint8_t> &visibleSectorMask) const;
     bool isRenderSectorVisible(int16_t sectorId, const std::vector<uint8_t> &visibleSectorMask) const;
-    bool isTexturedBatchVisible(const TexturedBatch &batch, const std::vector<uint8_t> &visibleSectorMask) const;
 
     bool m_isInitialized;
     bool m_isRenderable;
@@ -685,9 +707,14 @@ private:
     uint32_t m_bloodSplatVertexCount = 0;
     uint64_t m_bloodSplatVertexBufferRevision = std::numeric_limits<uint64_t>::max();
     std::vector<TexturedBatch> m_texturedBatches;
+    WaterRenderer m_waterRenderer;
+    bool m_waterGeometryDirty = true;
+    bool m_waterResourcesInitialized = false;
+    bgfx::UniformHandle m_worldClipPlaneUniform = BGFX_INVALID_HANDLE;
     std::unordered_map<uint32_t, CachedIndoorLightSelection> m_indoorLightingSelectionCache;
     std::vector<IndoorTextureHandle> m_indoorTextureHandles;
-    SpriteAtlasCache m_spriteAtlasCache;
+    SpriteAtlasCache &m_spriteAtlasCache;
+    NativeSpriteTextureCache &m_nativeSpriteCache;
     std::deque<BillboardTextureHandle> m_billboardTextureHandles;
     std::unordered_map<BillboardTextureLookupKey, size_t, BillboardTextureLookupKeyHash>
         m_billboardTextureIndexByKey;
@@ -700,12 +727,15 @@ private:
     uint32_t m_indoorLightingSelectionFrame = 0;
     std::unordered_map<uint64_t, BillboardLightingCacheEntry> m_billboardLightingCache;
     WorldFxRenderResources m_worldFxRenderResources;
+    EffectRenderer m_effectRenderer;
+    Engine::ModelRenderer m_modelRenderer;
     WorldFxSystem m_worldFxSystem;
     IndoorLightingRuntime m_indoorLightingRuntime;
     std::vector<MechanismBinding> m_mechanismBindings;
     std::vector<int32_t> m_faceBatchIndices;
     std::vector<uint32_t> m_faceVertexOffsets;
     std::vector<uint32_t> m_faceVertexCounts;
+    std::vector<std::vector<TexturedFaceTriangle>> m_faceSubdivisionTriangles;
     float m_cameraPositionX;
     float m_cameraPositionY;
     float m_cameraPositionZ;

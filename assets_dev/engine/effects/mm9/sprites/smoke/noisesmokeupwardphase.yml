@@ -1,0 +1,20 @@
+schema: openyamm.effectSprite.v2
+id: mm9:effect-sprite/smoke/noisesmokeupwardphase
+source: sprites/smoke/noisesmokeupwardphase.spr
+framesPerSecond: 15
+logicalWidth: 128
+logicalHeight: 128
+keyed: false
+translucent: false
+colorKey: 0
+frames:
+- mm9:effect-texture/smokeeffects/noisesmokeupwardphase/noise_smoke_upwardphase_0000
+- mm9:effect-texture/smokeeffects/noisesmokeupwardphase/noise_smoke_upwardphase_0001
+- mm9:effect-texture/smokeeffects/noisesmokeupwardphase/noise_smoke_upwardphase_0002
+- mm9:effect-texture/smokeeffects/noisesmokeupwardphase/noise_smoke_upwardphase_0003
+- mm9:effect-texture/smokeeffects/noisesmokeupwardphase/noise_smoke_upwardphase_0004
+- mm9:effect-texture/smokeeffects/noisesmokeupwardphase/noise_smoke_upwardphase_0005
+- mm9:effect-texture/smokeeffects/noisesmokeupwardphase/noise_smoke_upwardphase_0006
+- mm9:effect-texture/smokeeffects/noisesmokeupwardphase/noise_smoke_upwardphase_0007
+- mm9:effect-texture/smokeeffects/noisesmokeupwardphase/noise_smoke_upwardphase_0008
+- mm9:effect-texture/smokeeffects/noisesmokeupwardphase/noise_smoke_upwardphase_0009

@@ -1,4 +1,5 @@
 #include "game/gameplay/GameplayActorAiSystem.h"
+#include "game/gameplay/ActorVocalizationRules.h"
 
 #include "game/gameplay/GameMechanics.h"
 #include "game/gameplay/GameplayActorService.h"
@@ -235,7 +236,6 @@ struct CrowdSteeringEligibility
     bool actorCanFly = false;
     bool inMeleeRange = false;
     bool movementBlocked = false;
-    bool triggerOnMovementBlocked = false;
     float targetEdgeDistance = 0.0f;
 };
 
@@ -401,7 +401,7 @@ IdleBehaviorResult resolveIdleBehavior(
     float wanderRadius,
     float moveSpeed)
 {
-    IdleBehaviorResult result = idleStandBehavior(false);
+    IdleBehaviorResult result = idleStandBehavior(actorChoosesBored(actorId, idleDecisionCount));
     result.nextDecisionCount = idleDecisionCount + 1;
 
     const uint32_t decisionSeed = mixActorDecisionSeed(actorId, idleDecisionCount, 12345u);
@@ -444,7 +444,7 @@ IdleBehaviorResult resolveIdleBehavior(
 
     if (result.actionSeconds <= 0.0f)
     {
-        result = idleStandBehavior(false);
+        result = idleStandBehavior(actorChoosesBored(actorId, idleDecisionCount));
         result.nextDecisionCount = idleDecisionCount + 1;
         result.updateYaw = true;
         result.yawRadians = proposedYaw;
@@ -2243,7 +2243,7 @@ CombatEngagePlan chooseCombatEngagePlan(const CombatEngagePlanInput &input)
         && (std::abs(input.currentMoveDirectionX) > 0.001f
             || std::abs(input.currentMoveDirectionY) > 0.001f);
 
-    if (input.abilityIsMelee && input.crowdStandActive)
+    if (input.abilityIsMelee && input.crowdStandActive && !input.inMeleeRange)
     {
         result.action = CombatEngageAction::HoldCrowdStand;
         result.preserveCrowdSteering = true;
@@ -2435,7 +2435,14 @@ void applyActiveMovementCommit(
     update.movementIntent.targetPosition = movementTargetPosition;
     update.movementIntent.targetEdgeDistance = actor.target.currentEdgeDistance;
     update.movementIntent.targetHasAttackLineOfSight = actor.target.currentHasAttackLineOfSight;
-    update.movementIntent.inMeleeRange = actor.movement.inMeleeRange;
+    update.movementIntent.inMeleeRange =
+        actor.movement.inMeleeRange && actor.target.currentHasAttackLineOfSight;
+    update.movementIntent.crowdSteeringActive =
+        preserveCrowdSteering
+        && update.movementIntent.meleePursuitActive
+        && movementCommit.applyMovement
+        && (update.state.crowdSideLockRemainingSeconds.value_or(actor.runtime.crowdSideLockRemainingSeconds) > 0.0f
+            || update.state.crowdRetreatRemainingSeconds.value_or(actor.runtime.crowdRetreatRemainingSeconds) > 0.0f);
 
     if (actor.stats.canFly)
     {
@@ -2455,6 +2462,9 @@ void applyActiveMovementCommit(
         }
     }
 }
+
+void AI_HoldIdle(ActorAiCommandContext &ai);
+void AI_StartIdleStand(ActorAiCommandContext &ai);
 
 bool AI_CombatFlow(ActorAiCommandContext &ai, bool attackInProgress)
 {
@@ -2511,6 +2521,19 @@ bool AI_CombatFlow(ActorAiCommandContext &ai, bool attackInProgress)
     }
 
     AI_ApplyCombatFlowOutcome(ai, flowOutcome);
+    if (flowAction == ActorCombatFlowAction::FriendlyNearParty)
+    {
+        if (actionSeconds <= 0.0f)
+        {
+            AI_StartIdleStand(ai);
+        }
+        else
+        {
+            AI_HoldIdle(ai);
+            ai.setActionSeconds(actionSeconds);
+            ai.setIdleDecisionSeconds(idleDecisionSeconds);
+        }
+    }
     return true;
 }
 
@@ -2678,9 +2701,7 @@ CrowdSteeringState buildCrowdSteeringState(const ActorAiFacts &actor)
 
 bool shouldApplyCrowdSteering(const CrowdSteeringEligibility &eligibility)
 {
-    const bool hasTrigger =
-        eligibility.contactedActorCount > 0
-        || (eligibility.triggerOnMovementBlocked && eligibility.movementBlocked);
+    const bool hasTrigger = eligibility.contactedActorCount > 0 || eligibility.movementBlocked;
 
     return hasTrigger
         && eligibility.meleePursuitActive
@@ -2821,6 +2842,8 @@ void applyCrowdSteeringStateUpdate(ActorAiCommandContext &ai, const CrowdSteerin
     ai.setCrowdSideSign(state.sideSign);
 }
 
+void AI_Bored(ActorAiCommandContext &ai);
+
 void AI_CrowdStand(ActorAiCommandContext &ai, const CrowdSteeringResult &crowdSteering)
 {
     IdleBehaviorResult idleBehavior = idleStandBehavior(crowdSteering.bored);
@@ -2832,31 +2855,34 @@ void AI_CrowdStand(ActorAiCommandContext &ai, const CrowdSteeringResult &crowdSt
     ai.setIdleDecisionSeconds(idleBehavior.idleDecisionSeconds);
     ai.setAttackImpactTriggered(false);
     ai.setCrowdSideLockRemainingSeconds(0.0f);
-    ai.setAnimationState(idleBehavior.bored ? ActorAiAnimationState::Bored : ActorAiAnimationState::Standing);
+    ai.setAnimationState(ActorAiAnimationState::Standing);
     ai.setAnimationTimeTicks(0.0f);
     ai.setMovementAction(ActorAiMovementAction::Stand);
     ai.clearMovementDirection();
     ai.clearVelocity();
+    if (idleBehavior.bored)
+    {
+        AI_Bored(ai);
+    }
+    ai.setIdleDecisionCount(ai.actor().runtime.idleDecisionCount + 1);
 }
 
 void AI_CrowdRetreat(ActorAiCommandContext &ai, const CrowdSteeringResult &crowdSteering)
 {
     const ActorAiFacts &actor = ai.actor();
     const int sideSign = crowdSteering.sideSign > 0 ? 1 : -1;
-    const float retreatAngle = actor.movement.crowdRetreatAngleRadians > 0.0f
-        ? actor.movement.crowdRetreatAngleRadians
-        : ActorCrowdRetreatAngleRadians;
-    const float angleOffset = sideSign > 0 ? retreatAngle : -retreatAngle;
+    const float angleOffset = sideSign > 0 ? ActorCrowdRetreatAngleRadians : -ActorCrowdRetreatAngleRadians;
+    const GameplayWorldPoint movementTarget = actorMovementTargetPosition(actor);
     const float yaw = normalizeAngleRadians(
         std::atan2(
-            actor.target.currentPosition.y - actor.movement.position.y,
-            actor.target.currentPosition.x - actor.movement.position.x)
+            movementTarget.y - actor.movement.position.y,
+            movementTarget.x - actor.movement.position.x)
         + angleOffset);
     const float moveDirectionX = std::cos(yaw);
     const float moveDirectionY = std::sin(yaw);
 
     ai.setMotionState(ActorAiMotionState::Pursuing);
-    ai.setActionSeconds(std::max(actor.runtime.actionSeconds, crowdSteering.retreatSeconds));
+    ai.setActionSeconds(crowdSteering.retreatSeconds);
     ai.setAttackImpactTriggered(false);
     ai.setCrowdSideLockRemainingSeconds(crowdSteering.retreatSeconds);
     ai.setAnimationState(ActorAiAnimationState::Walking);
@@ -2864,26 +2890,25 @@ void AI_CrowdRetreat(ActorAiCommandContext &ai, const CrowdSteeringResult &crowd
     ai.faceYaw(yaw);
     ai.setMoveDirection(moveDirectionX, moveDirectionY);
     ai.setDesiredMovement(moveDirectionX, moveDirectionY);
+    ai.update().movementIntent.crowdSteeringActive = true;
 }
 
 void AI_CrowdSidestep(ActorAiCommandContext &ai, const CrowdSteeringResult &crowdSteering)
 {
     const ActorAiFacts &actor = ai.actor();
     const int sideSign = crowdSteering.sideSign > 0 ? 1 : -1;
-    const float sidestepAngle = actor.movement.crowdSidestepAngleRadians > 0.0f
-        ? actor.movement.crowdSidestepAngleRadians
-        : ActorCrowdSidestepAngleRadians;
-    const float angleOffset = sideSign > 0 ? sidestepAngle : -sidestepAngle;
+    const float angleOffset = sideSign > 0 ? ActorCrowdSidestepAngleRadians : -ActorCrowdSidestepAngleRadians;
+    const GameplayWorldPoint movementTarget = actorMovementTargetPosition(actor);
     const float yaw = normalizeAngleRadians(
         std::atan2(
-            actor.target.currentPosition.y - actor.movement.position.y,
-            actor.target.currentPosition.x - actor.movement.position.x)
+            movementTarget.y - actor.movement.position.y,
+            movementTarget.x - actor.movement.position.x)
         + angleOffset);
     const float moveDirectionX = std::cos(yaw);
     const float moveDirectionY = std::sin(yaw);
 
     ai.setMotionState(ActorAiMotionState::Pursuing);
-    ai.setActionSeconds(std::max(actor.runtime.actionSeconds, ActorCrowdSideLockSeconds));
+    ai.setActionSeconds(ActorCrowdSideLockSeconds);
     ai.setAttackImpactTriggered(false);
     ai.setCrowdSideLockRemainingSeconds(ActorCrowdSideLockSeconds);
     ai.setAnimationState(ActorAiAnimationState::Walking);
@@ -2891,6 +2916,7 @@ void AI_CrowdSidestep(ActorAiCommandContext &ai, const CrowdSteeringResult &crow
     ai.faceYaw(yaw);
     ai.setMoveDirection(moveDirectionX, moveDirectionY);
     ai.setDesiredMovement(moveDirectionX, moveDirectionY);
+    ai.update().movementIntent.crowdSteeringActive = true;
 }
 
 bool AI_CrowdSteer(ActorAiCommandContext &ai)
@@ -2909,7 +2935,6 @@ bool AI_CrowdSteer(ActorAiCommandContext &ai)
     crowdSteering.actorCanFly = actor.stats.canFly;
     crowdSteering.inMeleeRange = actor.movement.inMeleeRange;
     crowdSteering.movementBlocked = actor.movement.movementBlocked;
-    crowdSteering.triggerOnMovementBlocked = actor.movement.crowdSteeringTriggersOnMovementBlocked;
     crowdSteering.targetEdgeDistance = actor.target.currentEdgeDistance;
 
     if (!shouldApplyCrowdSteering(crowdSteering))
@@ -3105,18 +3130,6 @@ void applyAttackImpactOutcome(const ActorAiFacts &actor, ActorAiUpdate &update)
     else if (attackImpact.action == AttackImpactAction::ActorMeleeImpact)
     {
         request.kind = ActorAiAttackRequestKind::ActorMelee;
-
-        if (actor.target.currentActorIndex != static_cast<size_t>(-1) && actor.target.currentHp > 0)
-        {
-            ActorAudioRequest hitAudio = {};
-            hitAudio.kind =
-                attackImpact.damage >= actor.target.currentHp
-                ? ActorAiAudioRequestKind::Death
-                : ActorAiAudioRequestKind::Hit;
-            hitAudio.actorIndex = actor.target.currentActorIndex;
-            hitAudio.position = actor.target.currentAudioPosition;
-            update.audioRequests.push_back(hitAudio);
-        }
     }
 
     update.attackRequest = request;
@@ -3147,6 +3160,16 @@ void AI_Pursue(ActorAiCommandContext &ai, PursueActionMode mode, float minimumAc
         ai.setDesiredMovement(pursueAction.moveDirectionX, pursueAction.moveDirectionY);
         ai.setActionSeconds(pursueAction.actionSeconds);
         ai.setAttackImpactTriggered(false);
+        // MM8's Pursue3 alone occasionally uses the hit slot, independently of damage reactions.
+        if (mode == PursueActionMode::OffsetWide
+            && actorVocalizationRoll(actor.actorId, actor.runtime.pursueDecisionCount, 0x281da370u) < 2u)
+        {
+            ActorAudioRequest audio = {};
+            audio.kind = ActorAiAudioRequestKind::Hit;
+            audio.actorIndex = actor.actorIndex;
+            audio.position = actor.movement.position;
+            ai.requestAudio(audio);
+        }
         return;
     }
 
@@ -3216,7 +3239,6 @@ void AI_StartAttack(ActorAiCommandContext &ai, const CombatAbilityChoiceResult &
     attackAudio.kind = ActorAiAudioRequestKind::Attack;
     attackAudio.actorIndex = actor.actorIndex;
     attackAudio.position = actor.movement.position;
-    attackAudio.position.z += static_cast<float>(actor.stats.height) * 0.5f;
     ai.requestAudio(attackAudio);
 }
 
@@ -3580,23 +3602,48 @@ void AI_Stand(ActorAiCommandContext &ai)
 void AI_Bored(ActorAiCommandContext &ai)
 {
     const ActorAiFacts &actor = ai.actor();
+    const float yaw = ai.update().movementIntent.updateYaw
+        ? ai.update().movementIntent.yawRadians : actor.runtime.yawRadians;
+    if (!actorFidgetFacesListener(
+            yaw,
+            actor.world.listenerPosition.x - actor.movement.position.x,
+            actor.world.listenerPosition.y - actor.movement.position.y))
+    {
+        AI_Stand(ai);
+        ai.setActionSeconds(IdleStandSeconds);
+        ai.setIdleDecisionSeconds(IdleStandSeconds);
+        return;
+    }
 
     ai.setMotionState(ActorAiMotionState::Standing);
     ai.setAnimationState(ActorAiAnimationState::Bored);
+    ai.setAnimationTimeTicks(0.0f);
+    ai.setActionSeconds(actor.runtime.boredAnimationSeconds);
+    ai.setIdleDecisionSeconds(actor.runtime.boredAnimationSeconds);
     ai.setMovementAction(ActorAiMovementAction::Stand);
     ai.clearMovementDirection();
     ai.clearVelocity();
 
-    const uint32_t soundSeed = mixActorDecisionSeed(actor.actorId, actor.runtime.idleDecisionCount, 0x04b1d0f5u);
-
-    if ((soundSeed % 100u) < 5u)
+    if (actorBoredSoundRoll(actor.actorId, actor.runtime.idleDecisionCount))
     {
         ActorAudioRequest boredAudio = {};
         boredAudio.kind = ActorAiAudioRequestKind::Bored;
         boredAudio.actorIndex = actor.actorIndex;
         boredAudio.position = actor.movement.position;
-        boredAudio.position.z += static_cast<float>(actor.stats.height) * 0.5f;
         ai.requestAudio(boredAudio);
+    }
+}
+
+void AI_WanderVoice(ActorAiCommandContext &ai)
+{
+    const ActorAiFacts &actor = ai.actor();
+    if (actorWanderSoundRoll(actor.actorId, actor.runtime.idleDecisionCount))
+    {
+        ActorAudioRequest audio = {};
+        audio.kind = ActorAiAudioRequestKind::Bored;
+        audio.actorIndex = actor.actorIndex;
+        audio.position = actor.movement.position;
+        ai.requestAudio(audio);
     }
 }
 
@@ -3619,6 +3666,7 @@ void AI_RandomMove(ActorAiCommandContext &ai, const IdleBehaviorResult &idleBeha
         ai.setMovementAction(ActorAiMovementAction::Wander);
         ai.setMoveDirection(idleBehavior.moveDirectionX, idleBehavior.moveDirectionY);
         ai.setDesiredMovement(idleBehavior.moveDirectionX, idleBehavior.moveDirectionY);
+        AI_WanderVoice(ai);
         return;
     }
 
@@ -3651,45 +3699,37 @@ void AI_RandomMove(ActorAiCommandContext &ai, float moveDirectionX, float moveDi
     }
 }
 
-void AI_StandOrBored(ActorAiCommandContext &ai)
+void AI_HoldIdle(ActorAiCommandContext &ai)
+{
+    ai.setMotionState(ActorAiMotionState::Standing);
+    ai.setAnimationState(ai.actor().runtime.animationState == ActorAiAnimationState::Bored
+        ? ActorAiAnimationState::Bored : ActorAiAnimationState::Standing);
+    ai.setMovementAction(ActorAiMovementAction::Stand);
+    ai.clearMovementDirection();
+    ai.clearVelocity();
+}
+
+void AI_StartIdleStand(ActorAiCommandContext &ai)
 {
     const ActorAiFacts &actor = ai.actor();
-
-    if (actor.runtime.motionState == ActorAiMotionState::Wandering && actor.movement.movementAllowed)
-    {
-        ai.setMotionState(ActorAiMotionState::Wandering);
-        ai.setAnimationState(ActorAiAnimationState::Walking);
-        ai.setMovementAction(ActorAiMovementAction::Wander);
-        ai.setMoveDirection(actor.movement.moveDirectionX, actor.movement.moveDirectionY);
-        ai.update().movementIntent.applyMovement = true;
-        return;
-    }
-
-    ai.setMotionState(ActorAiMotionState::Standing);
-    ai.setAnimationState(ActorAiAnimationState::Standing);
-    ai.setMovementAction(ActorAiMovementAction::Stand);
+    ai.setIdleDecisionCount(actor.runtime.idleDecisionCount + 1);
+    AI_RandomMove(ai, idleStandBehavior(actorChoosesBored(actor.actorId, actor.runtime.idleDecisionCount)));
 }
 
 void AI_StandOrBored(ActorAiCommandContext &ai, float actionSeconds)
 {
     const ActorAiFacts &actor = ai.actor();
 
-    if (!actor.movement.movementAllowed)
-    {
-        AI_Stand(ai);
-        return;
-    }
-
-    if (actor.status.hostileToParty || actor.movement.wanderRadius <= 0.0f)
+    if (!actor.movement.movementAllowed || actor.status.hostileToParty || actor.movement.wanderRadius <= 0.0f)
     {
         if (actionSeconds <= 0.0f)
         {
-            AI_RandomMove(ai, idleStandBehavior(false));
+            AI_StartIdleStand(ai);
             ai.setMotionState(ActorAiMotionState::Standing);
         }
         else
         {
-            AI_Stand(ai);
+            AI_HoldIdle(ai);
         }
 
         return;
@@ -3711,6 +3751,17 @@ void AI_StandOrBored(ActorAiCommandContext &ai, float actionSeconds)
             ai.faceYaw(std::atan2(moveDirectionY, moveDirectionX));
         }
 
+        if (actor.runtime.motionState != ActorAiMotionState::Wandering || actionSeconds <= 0.0f)
+        {
+            if (actor.movement.effectiveMoveSpeed <= 0.0f)
+            {
+                AI_StartIdleStand(ai);
+                return;
+            }
+            ai.setIdleDecisionCount(actor.runtime.idleDecisionCount + 1);
+            ai.setActionSeconds(std::max(0.25f, distanceToHome / (4.0f * actor.movement.effectiveMoveSpeed)));
+            AI_WanderVoice(ai);
+        }
         AI_RandomMove(ai, moveDirectionX, moveDirectionY);
         return;
     }
@@ -3726,14 +3777,14 @@ void AI_StandOrBored(ActorAiCommandContext &ai, float actionSeconds)
 
     if (actor.runtime.motionState == ActorAiMotionState::Wandering)
     {
-        AI_RandomMove(ai, idleStandBehavior(false));
+        AI_StartIdleStand(ai);
         ai.setMotionState(ActorAiMotionState::Standing);
         return;
     }
 
     if (actionSeconds > 0.0f)
     {
-        AI_Stand(ai);
+        AI_HoldIdle(ai);
         return;
     }
 
@@ -3755,7 +3806,7 @@ void AI_StandOrBored(ActorAiCommandContext &ai, float actionSeconds)
     }
     else
     {
-        idleBehavior = idleStandBehavior(false);
+        idleBehavior = idleStandBehavior(actorChoosesBored(actor.actorId, actor.runtime.idleDecisionCount));
         idleBehavior.nextDecisionCount = actor.runtime.idleDecisionCount + 1;
     }
 
@@ -3853,6 +3904,10 @@ ActorAiUpdate AI_ActiveBehavior(
 ActorAiUpdate updateBackgroundActor(const ActorAiFacts &actor, const ActorAiFrameFacts &frame)
 {
     ActorAiCommandContext ai(actor, frame);
+    if (actor.status.invisible)
+    {
+        return ai.finish();
+    }
     const bool frameHandled = AI_DeathOrStatus(ai);
 
     if (frameHandled || ai.update().state.spellEffects)
@@ -3860,9 +3915,23 @@ ActorAiUpdate updateBackgroundActor(const ActorAiFacts &actor, const ActorAiFram
         return ai.finish();
     }
 
-    ActorAiCommandContext standAi(actor);
-    AI_StandOrBored(standAi);
-    return standAi.finish();
+    const float remainingSeconds = std::max(0.0f, actor.runtime.actionSeconds - frame.fixedStepSeconds);
+    ai.setAnimationTimeTicks(actor.runtime.animationTimeTicks + frame.fixedStepSeconds * ActorAiTicksPerSecond);
+    ai.setActionSeconds(remainingSeconds);
+    ai.setIdleDecisionSeconds(remainingSeconds);
+    if (remainingSeconds > 0.0f)
+    {
+        AI_HoldIdle(ai);
+    }
+    else
+    {
+        // MM8's background StandOrBored requests the party direction before testing fidget facing.
+        ai.faceYaw(std::atan2(
+            actor.world.listenerPosition.y - actor.movement.position.y,
+            actor.world.listenerPosition.x - actor.movement.position.x));
+        AI_StartIdleStand(ai);
+    }
+    return ai.finish();
 }
 
 ActorAiUpdate updateActor(const ActorAiFacts &actor, const ActorAiFrameFacts &frame)

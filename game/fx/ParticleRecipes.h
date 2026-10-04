@@ -1,7 +1,9 @@
 #pragma once
 
 #include <cstdint>
+#include <optional>
 #include <string>
+#include <string_view>
 
 namespace OpenYAMM::Game
 {
@@ -138,6 +140,8 @@ ProjectileRecipe classifyProjectileRecipe(
     const std::string &objectName,
     const std::string &spriteName,
     uint16_t objectFlags);
+std::string_view projectileRecipeName(ProjectileRecipe recipe);
+std::optional<ProjectileRecipe> projectileRecipeFromName(std::string_view name);
 
 uint32_t projectileRecipeColorAbgr(ProjectileRecipe recipe);
 uint32_t projectileRecipeImpactColorAbgr(ProjectileRecipe recipe);

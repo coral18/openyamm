@@ -13,6 +13,14 @@ public:
     virtual ~IScreen() = default;
 
     virtual AppMode mode() const = 0;
+    virtual bool rendersOverGameplay() const
+    {
+        return false;
+    }
+    virtual bool textInputActive() const
+    {
+        return false;
+    }
     virtual void renderFrame(
         int width,
         int height,

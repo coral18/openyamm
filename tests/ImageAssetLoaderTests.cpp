@@ -276,3 +276,49 @@ TEST_CASE("restored icon preference settings round trip without changing explici
     }
     std::filesystem::remove(path);
 }
+
+TEST_CASE("ImageAssetLoader reads dimensions without pixel data and rejects invalid headers")
+{
+    using namespace OpenYAMM::Engine;
+    const std::vector<uint8_t> png = {
+        137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 4, 0, 0, 0, 1,
+        8, 6, 0, 0, 0, 249, 60, 15, 205};
+    const std::optional<ImageDimensions> dimensions = readImageDimensions(png);
+    REQUIRE(dimensions);
+    CHECK(dimensions->width == 4);
+    CHECK(dimensions->height == 1);
+    CHECK_FALSE(decodeImagePixelsBgra(png, "header-only.png"));
+    std::vector<uint8_t> invalid = png;
+    invalid[20] = 1;
+    CHECK_FALSE(readImageDimensions(invalid));
+    CHECK_FALSE(readImageDimensions(std::span(png.data(), 24)));
+    const std::vector<uint8_t> bmp = makeTwoPixelIndexedBmp();
+    REQUIRE(readImageDimensions(bmp));
+    CHECK(readImageDimensions(bmp)->width == 2);
+    std::vector<uint8_t> topDown = bmp;
+    topDown[22] = topDown[23] = topDown[24] = topDown[25] = 255;
+    REQUIRE(readImageDimensions(topDown));
+    CHECK(readImageDimensions(topDown)->height == 1);
+    topDown[22] = topDown[23] = topDown[24] = 0;
+    topDown[25] = 128;
+    CHECK_FALSE(readImageDimensions(topDown));
+    REQUIRE(readImageDimensions(makeTwoPixelIndexedPcx()));
+    CHECK(readImageDimensions(makeTwoPixelIndexedPcx())->width == 2);
+}
+
+TEST_CASE("ImageAssetLoader PNG channel conversion preserves alpha and transparency keys")
+{
+    using namespace OpenYAMM::Engine;
+    const std::vector<uint8_t> png = {
+        137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 4, 0, 0, 0, 1, 8, 6,
+        0, 0, 0, 249, 60, 15, 205, 0, 0, 0, 22, 73, 68, 65, 84, 120, 156, 99, 224, 18, 145, 251, 207,
+        240, 31, 8, 128, 132, 134, 145, 141, 32, 0, 67, 2, 7, 221, 30, 88, 140, 144, 0, 0, 0, 0, 73,
+        69, 78, 68, 174, 66, 96, 130};
+    ImageDecodeOptions options;
+    options.applyTealTransparencyKey = true;
+    options.applyMagentaTransparencyKey = true;
+    const std::optional<ImagePixelsBgra> image = decodeImagePixelsBgra(png, "colors.png", options);
+    REQUIRE(image);
+    const std::vector<uint8_t> expected = {30, 20, 10, 255, 255, 255, 0, 0, 255, 0, 255, 0, 60, 50, 40, 17};
+    CHECK(image->pixels == expected);
+}

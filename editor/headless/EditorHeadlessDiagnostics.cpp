@@ -2257,8 +2257,9 @@ bool verifyIndoorMapPackageLoad(
         return false;
     }
 
+    // The coincident static quads share four vertices; the moving door owns four separate vertices.
     if (sourceCompileResult.indoorGeometry.sectors.size() != 2
-        || sourceCompileResult.indoorGeometry.vertices.size() != 20
+        || sourceCompileResult.indoorGeometry.vertices.size() != 8
         || sourceCompileResult.indoorGeometry.faces.size() != 10
         || sourceCompileResult.indoorGeometry.doorCount != 1
         || sourceCompileResult.generatedDoors.size() != 1
@@ -2269,7 +2270,14 @@ bool verifyIndoorMapPackageLoad(
         || sourceCompileResult.indoorGeometry.sectors[0].portalFaceIds.empty()
         || sourceCompileResult.indoorGeometry.sectors[1].portalFaceIds.empty())
     {
-        failure = "indoor package test compiled unexpected indoor source geometry";
+        const Game::IndoorMapData &geometry = sourceCompileResult.indoorGeometry;
+        failure = "indoor package test compiled unexpected indoor source geometry: sectors="
+            + std::to_string(geometry.sectors.size()) + " vertices=" + std::to_string(geometry.vertices.size())
+            + " faces=" + std::to_string(geometry.faces.size()) + " doors=" + std::to_string(geometry.doorCount)
+            + " generatedDoors=" + std::to_string(sourceCompileResult.generatedDoors.size())
+            + " entities=" + std::to_string(geometry.entities.size()) + " lights="
+            + std::to_string(geometry.lights.size()) + " spawns=" + std::to_string(geometry.spawns.size())
+            + " texture=" + (geometry.faces.empty() ? "<none>" : geometry.faces.front().textureName);
         return false;
     }
 
@@ -2349,7 +2357,7 @@ bool verifyIndoorMapPackageLoad(
 
     if (!reloadedSourceGeometry
         || reloadedSourceGeometry->sectors.size() != 2
-        || reloadedSourceGeometry->vertices.size() != 20
+        || reloadedSourceGeometry->vertices.size() != 8
         || reloadedSourceGeometry->faces.size() != 10
         || reloadedSourceGeometry->doorCount != 1
         || reloadedSourceGeometry->entities.size() != 1
@@ -3605,6 +3613,54 @@ void removeTemporaryRoundTripSupportFiles(const Engine::AssetFileSystem &assetFi
 EditorHeadlessDiagnostics::EditorHeadlessDiagnostics(const OpenYAMM::Engine::ApplicationConfig &config)
     : m_config(config)
 {
+}
+
+int EditorHeadlessDiagnostics::runBuildMap(
+    const std::filesystem::path &basePath,
+    const std::filesystem::path &sourcePath) const
+{
+    Engine::AssetFileSystem assetFileSystem;
+
+    if (!assetFileSystem.initialize(
+            basePath,
+            m_config.assetRoot,
+            m_config.assetScaleTier,
+            m_config.assetScaleProfile,
+            m_config.activeWorldId))
+    {
+        std::cerr << "Map build failed: could not initialize asset file system\n";
+        return 1;
+    }
+
+    EditorDocument document;
+    std::string errorMessage;
+
+    if (!document.loadMapPhysicalPath(assetFileSystem, std::filesystem::absolute(sourcePath), errorMessage))
+    {
+        std::cerr << "Map build failed to load " << sourcePath << ": " << errorMessage << '\n';
+        return 1;
+    }
+
+    const std::vector<std::string> diagnostics = document.validate();
+
+    if (!diagnostics.empty())
+    {
+        for (const std::string &diagnostic : diagnostics)
+        {
+            std::cerr << "Map validation: " << diagnostic << '\n';
+        }
+
+        return 1;
+    }
+
+    if (!document.buildRuntime(errorMessage))
+    {
+        std::cerr << "Map build failed: " << errorMessage << '\n';
+        return 1;
+    }
+
+    std::cout << "Built native map: " << document.geometryPhysicalPath() << '\n';
+    return 0;
 }
 
 int EditorHeadlessDiagnostics::runRegressionSuite(

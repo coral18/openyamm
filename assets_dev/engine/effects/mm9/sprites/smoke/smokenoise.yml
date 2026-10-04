@@ -1,0 +1,20 @@
+schema: openyamm.effectSprite.v2
+id: mm9:effect-sprite/smoke/smokenoise
+source: sprites/smoke/smokenoise.spr
+framesPerSecond: 15
+logicalWidth: 64
+logicalHeight: 64
+keyed: false
+translucent: false
+colorKey: 0
+frames:
+- mm9:effect-texture/smokeeffects/smokenoise/smoke_noise0000
+- mm9:effect-texture/smokeeffects/smokenoise/smoke_noise0001
+- mm9:effect-texture/smokeeffects/smokenoise/smoke_noise0002
+- mm9:effect-texture/smokeeffects/smokenoise/smoke_noise0003
+- mm9:effect-texture/smokeeffects/smokenoise/smoke_noise0004
+- mm9:effect-texture/smokeeffects/smokenoise/smoke_noise0005
+- mm9:effect-texture/smokeeffects/smokenoise/smoke_noise0006
+- mm9:effect-texture/smokeeffects/smokenoise/smoke_noise0007
+- mm9:effect-texture/smokeeffects/smokenoise/smoke_noise0008
+- mm9:effect-texture/smokeeffects/smokenoise/smoke_noise0009

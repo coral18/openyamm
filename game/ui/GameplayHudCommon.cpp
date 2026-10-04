@@ -5,6 +5,8 @@
 #include "game/render/TextureFiltering.h"
 #include "game/StringUtils.h"
 
+#include <yaml-cpp/yaml.h>
+
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
@@ -800,7 +802,8 @@ std::optional<std::vector<uint8_t>> GameplayHudCommon::loadSpriteBitmapPixelsBgr
     int16_t paletteId,
     int &width,
     int &height,
-    const std::string &worldId)
+    const std::string &worldId,
+    Engine::AssetScaleTier *pLoadedTier)
 {
     if (pAssetFileSystem == nullptr)
     {
@@ -827,6 +830,10 @@ std::optional<std::vector<uint8_t>> GameplayHudCommon::loadSpriteBitmapPixelsBgr
 
     width = image->width;
     height = image->height;
+    if (pLoadedTier != nullptr)
+    {
+        *pLoadedTier = image->assetScaleTier;
+    }
     return image->pixels;
 }
 
@@ -835,8 +842,11 @@ const GameplayHudTextureData *GameplayHudCommon::findHudTexture(
     const std::unordered_map<std::string, size_t> &textureIndexByName,
     const std::string &textureName)
 {
-    const std::string normalizedTextureName = toLowerCopy(textureName);
-    const auto iterator = textureIndexByName.find(normalizedTextureName);
+    auto iterator = textureIndexByName.find(textureName);
+    if (iterator == textureIndexByName.end())
+    {
+        iterator = textureIndexByName.find(toLowerCopy(textureName));
+    }
 
     if (iterator == textureIndexByName.end() || iterator->second >= textures.size())
     {
@@ -888,7 +898,8 @@ bool GameplayHudCommon::loadHudTexture(
         static_cast<uint16_t>(height),
         pixels->data(),
         static_cast<uint32_t>(pixels->size()),
-        TextureFilterProfile::Ui,
+        textureHandle.textureName.starts_with("obsidian_")
+            ? TextureFilterProfile::UiIllustration : TextureFilterProfile::Ui,
         BGFX_SAMPLER_U_CLAMP | BGFX_SAMPLER_V_CLAMP);
 
     if (!bgfx::isValid(textureHandle.textureHandle))
@@ -1028,56 +1039,81 @@ bool GameplayHudCommon::loadHudFont(
         return true;
     }
 
-    std::optional<std::string> fontPath = findCachedAssetPath(pAssetFileSystem, cache, "Data/icons", fontName + ".fnt");
-
-    if (!fontPath)
+    std::string error;
+    std::optional<Engine::FontAtlasImage> image;
+    bool independentFont = false;
+    const std::optional<std::string> descriptorText =
+        pAssetFileSystem->readTextFile("fonts/truetype/" + toLowerCopy(fontName) + ".yml");
+    if (descriptorText)
     {
-        fontPath = findCachedAssetPath(pAssetFileSystem, cache, "Data/EnglishT", fontName + ".fnt");
-    }
-
-    if (!fontPath)
-    {
-        const std::optional<std::string> pcxFontPath =
-            findCachedAssetPath(pAssetFileSystem, cache, "ui/dialogue", fontName + ".pcx");
-        if (pcxFontPath)
+        try
         {
-            Engine::ImageDecodeOptions decodeOptions = {};
-            decodeOptions.applyTealTransparencyKey = true;
-            const std::optional<Engine::ImagePixelsBgra> image = Engine::loadImageAssetPixelsBgra(
-                *pAssetFileSystem,
-                *pcxFontPath,
-                cache.binaryFilesByPath,
-                decodeOptions);
-            const std::optional<GameplayHudFontData> bitmapFont = image
-                ? buildColumnSeparatedHudFont(*image, fontName)
-                : std::nullopt;
-            if (bitmapFont)
+            const YAML::Node descriptor = YAML::Load(*descriptorText);
+            independentFont = descriptor["metrics"].as<std::string>("legacy") == "freetype";
+        }
+        catch (const YAML::Exception &exception)
+        {
+            std::cout << "HUD font load failed: font=\"" << fontName
+                      << "\" reason=invalid-descriptor: " << exception.what() << '\n';
+            return false;
+        }
+    }
+    if (independentFont)
+    {
+        image = Engine::loadTrueTypeFontAtlas(*pAssetFileSystem, fontName, error);
+    }
+    else
+    {
+        std::optional<std::string> fontPath =
+            findCachedAssetPath(pAssetFileSystem, cache, "Data/icons", fontName + ".fnt");
+
+        if (!fontPath)
+        {
+            fontPath = findCachedAssetPath(pAssetFileSystem, cache, "Data/EnglishT", fontName + ".fnt");
+        }
+
+        if (!fontPath)
+        {
+            const std::optional<std::string> pcxFontPath =
+                findCachedAssetPath(pAssetFileSystem, cache, "ui/dialogue", fontName + ".pcx");
+            if (pcxFontPath)
             {
-                fonts.push_back(*bitmapFont);
-                return true;
+                Engine::ImageDecodeOptions decodeOptions = {};
+                decodeOptions.applyTealTransparencyKey = true;
+                const std::optional<Engine::ImagePixelsBgra> image = Engine::loadImageAssetPixelsBgra(
+                    *pAssetFileSystem,
+                    *pcxFontPath,
+                    cache.binaryFilesByPath,
+                    decodeOptions);
+                const std::optional<GameplayHudFontData> bitmapFont = image
+                    ? buildColumnSeparatedHudFont(*image, fontName)
+                    : std::nullopt;
+                if (bitmapFont)
+                {
+                    fonts.push_back(*bitmapFont);
+                    return true;
+                }
+
+                std::cout << "HUD font load failed: font=\"" << fontName << "\" path=\"" << *pcxFontPath
+                          << "\" reason=column-separated-pcx-parse-failed\n";
+                return false;
             }
 
-            std::cout << "HUD font load failed: font=\"" << fontName << "\" path=\"" << *pcxFontPath
-                      << "\" reason=column-separated-pcx-parse-failed\n";
+            std::cout << "HUD font load failed: font=\"" << fontName << "\" reason=path-not-found\n";
             return false;
         }
 
-        std::cout << "HUD font load failed: font=\"" << fontName << "\" reason=path-not-found\n";
-        return false;
+        const std::optional<std::vector<uint8_t>> fontBytes = readCachedBinaryFile(pAssetFileSystem, cache, *fontPath);
+
+        if (!fontBytes || fontBytes->empty())
+        {
+            std::cout << "HUD font load failed: font=\"" << fontName << "\" path=\"" << *fontPath
+                      << "\" reason=read-failed\n";
+            return false;
+        }
+
+        image = Engine::loadFontAtlas(*pAssetFileSystem, *fontBytes, fontName, settings, error);
     }
-
-    const std::optional<std::vector<uint8_t>> fontBytes = readCachedBinaryFile(pAssetFileSystem, cache, *fontPath);
-
-    if (!fontBytes || fontBytes->empty())
-    {
-        std::cout << "HUD font load failed: font=\"" << fontName << "\" path=\"" << *fontPath
-                  << "\" reason=read-failed\n";
-        return false;
-    }
-
-    std::string error;
-    std::optional<Engine::FontAtlasImage> image =
-        Engine::loadFontAtlas(*pAssetFileSystem, *fontBytes, fontName, settings, error);
     if (!image)
     {
         std::cout << "HUD font load failed: font=\"" << fontName << "\" reason=" << error << '\n';
@@ -1087,11 +1123,12 @@ bool GameplayHudCommon::loadHudFont(
     GameplayHudFontData fontHandle = {};
     static_cast<Engine::FontAtlas &>(fontHandle) = std::move(image->atlas);
     fontHandle.fontName = toLowerCopy(fontName);
+    fontHandle.smooth = fontHandle.atlasScale > 1 || independentFont;
     const int atlasWidth = fontHandle.atlasWidth;
     const int atlasHeight = fontHandle.atlasHeight;
     const std::vector<uint8_t> &mainPixels = fontHandle.mainAtlasPixels;
     const std::vector<uint8_t> &shadowPixels = image->shadowPixels;
-    const TextureFilterProfile filter = fontHandle.atlasScale > 1
+    const TextureFilterProfile filter = fontHandle.smooth
         ? TextureFilterProfile::SmoothText : TextureFilterProfile::Text;
 
     fontHandle.mainTextureHandle = createBgraTexture2D(
@@ -1119,8 +1156,8 @@ bool GameplayHudCommon::loadHudFont(
             bgfx::destroy(fontHandle.shadowTextureHandle);
         }
 
-        std::cout << "HUD font load failed: font=\"" << fontName << "\" path=\"" << *fontPath
-                  << "\" atlas=" << atlasWidth << "x" << atlasHeight << " reason=texture-create-failed\n";
+        std::cout << "HUD font load failed: font=\"" << fontName << "\" atlas=" << atlasWidth << "x" << atlasHeight
+                  << " reason=texture-create-failed\n";
         return false;
     }
 
@@ -1234,7 +1271,7 @@ bgfx::TextureHandle GameplayHudCommon::ensureHudFontMainTextureColor(
 
     for (size_t pixelIndex = 0; pixelIndex + 3 < tintedPixels.size(); pixelIndex += 4)
     {
-        if (tintedPixels[pixelIndex + 3] == 0 && font.atlasScale == 1)
+        if (tintedPixels[pixelIndex + 3] == 0 && !font.smooth)
         {
             continue;
         }
@@ -1249,7 +1286,7 @@ bgfx::TextureHandle GameplayHudCommon::ensureHudFontMainTextureColor(
         static_cast<uint16_t>(font.atlasHeight),
         tintedPixels.data(),
         static_cast<uint32_t>(tintedPixels.size()),
-        font.atlasScale > 1 ? TextureFilterProfile::SmoothText : TextureFilterProfile::Text);
+        font.smooth ? TextureFilterProfile::SmoothText : TextureFilterProfile::Text);
 
     if (!bgfx::isValid(textureHandle))
     {
@@ -1267,6 +1304,7 @@ bgfx::TextureHandle GameplayHudCommon::ensureHudFontMainTextureColor(
 float GameplayHudCommon::measureHudTextWidth(const GameplayHudFontData &font, const std::string &text)
 {
     float widthPixels = 0.0f;
+    uint8_t previous = 0;
 
     for (unsigned char character : text)
     {
@@ -1282,7 +1320,8 @@ float GameplayHudCommon::measureHudTextWidth(const GameplayHudFontData &font, co
         }
 
         const GameplayHudFontGlyphMetricsData &glyphMetrics = font.glyphMetrics[character];
-        widthPixels += static_cast<float>(glyphMetrics.leftSpacing + glyphMetrics.width + glyphMetrics.rightSpacing);
+        widthPixels += font.kerning(previous, character) + glyphMetrics.advance();
+        previous = character;
     }
 
     return std::max(0.0f, widthPixels);
@@ -1406,6 +1445,7 @@ void GameplayHudCommon::renderHudFontLayer(
     }
 
     float penX = textX;
+    uint8_t previous = 0;
 
     for (unsigned char character : text)
     {
@@ -1421,7 +1461,7 @@ void GameplayHudCommon::renderHudFontLayer(
         }
 
         const GameplayHudFontGlyphMetricsData &glyphMetrics = font.glyphMetrics[character];
-        penX += static_cast<float>(glyphMetrics.leftSpacing) * fontScale;
+        penX += (font.kerning(previous, character) + glyphMetrics.leftSpacing) * fontScale;
 
         if (glyphMetrics.width > 0)
         {
@@ -1446,10 +1486,11 @@ void GameplayHudCommon::renderHudFontLayer(
                 v0,
                 u1,
                 v1,
-                font.atlasScale > 1 ? TextureFilterProfile::SmoothText : TextureFilterProfile::Text);
+                font.smooth ? TextureFilterProfile::SmoothText : TextureFilterProfile::Text);
         }
 
-        penX += static_cast<float>(glyphMetrics.width + glyphMetrics.rightSpacing) * fontScale;
+        penX += (glyphMetrics.advance() - glyphMetrics.leftSpacing) * fontScale;
+        previous = character;
     }
 }
 
@@ -1486,18 +1527,14 @@ void GameplayHudCommon::renderLayoutLabel(
 
     float fontScale = resolved.scale * std::max(0.1f, layout.textScale);
 
-    if (fontScale >= 1.0f)
+    if (!pFont->smooth && fontScale >= 1.0f)
     {
         fontScale = snappedHudFontScale(fontScale);
-    }
-    else
-    {
-        fontScale = std::max(0.5f, fontScale);
     }
 
     const float labelHeightPixels = static_cast<float>(pFont->fontHeight) * fontScale;
     const float maxLabelWidth = std::max(0.0f, resolved.width - std::abs(layout.textPadX * fontScale) * 2.0f);
-    std::string clampedLabel = clampHudTextToWidth(*pFont, label, maxLabelWidth);
+    std::string clampedLabel = clampHudTextToWidth(*pFont, label, maxLabelWidth / fontScale);
 
     if (clampedLabel.empty())
     {
@@ -1506,7 +1543,7 @@ void GameplayHudCommon::renderLayoutLabel(
         if (pFallbackFont != nullptr)
         {
             pFont = pFallbackFont;
-            clampedLabel = clampHudTextToWidth(*pFont, label, maxLabelWidth);
+            clampedLabel = clampHudTextToWidth(*pFont, label, maxLabelWidth / fontScale);
         }
     }
 

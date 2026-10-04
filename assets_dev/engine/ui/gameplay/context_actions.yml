@@ -1,0 +1,185 @@
+# Semantic context-action illustrations. Names match event metadata kinds.
+screen: ContextActions
+elements:
+- id: context_talk
+  anchor: top_left
+  visible: false
+  width: 48
+  height: 48
+  asset:
+    default: obsidian_action_talk
+- id: context_pickup_item
+  anchor: top_left
+  visible: false
+  width: 48
+  height: 48
+  asset:
+    default: obsidian_action_hand
+- id: context_press_button
+  anchor: top_left
+  visible: false
+  width: 48
+  height: 48
+  asset:
+    default: obsidian_action_hand
+- id: context_generic_event
+  anchor: top_left
+  visible: false
+  width: 48
+  height: 48
+  asset:
+    default: obsidian_action_hand
+- id: context_secret_event
+  anchor: top_left
+  visible: false
+  width: 48
+  height: 48
+  asset:
+    default: obsidian_action_hand
+- id: context_loot_corpse
+  anchor: top_left
+  visible: false
+  width: 48
+  height: 48
+  asset:
+    default: obsidian_action_pouch
+- id: context_drop_item
+  anchor: top_left
+  visible: false
+  width: 48
+  height: 48
+  asset:
+    default: obsidian_action_pouch
+- id: context_open_chest
+  anchor: top_left
+  visible: false
+  width: 48
+  height: 48
+  asset:
+    default: obsidian_action_chest
+- id: context_enter_house
+  anchor: top_left
+  visible: false
+  width: 48
+  height: 48
+  asset:
+    default: obsidian_action_door
+- id: context_open_door
+  anchor: top_left
+  visible: false
+  width: 48
+  height: 48
+  asset:
+    default: obsidian_action_door
+- id: context_leave_dungeon
+  anchor: top_left
+  visible: false
+  width: 48
+  height: 48
+  asset:
+    default: obsidian_action_door
+- id: context_travel
+  anchor: top_left
+  visible: false
+  width: 48
+  height: 48
+  asset:
+    default: obsidian_action_door
+- id: context_passage
+  anchor: top_left
+  visible: false
+  width: 48
+  height: 48
+  asset:
+    default: obsidian_action_door
+- id: context_use_lever
+  anchor: top_left
+  visible: false
+  width: 48
+  height: 48
+  asset:
+    default: obsidian_action_lever
+- id: context_use_switch
+  anchor: top_left
+  visible: false
+  width: 48
+  height: 48
+  asset:
+    default: obsidian_action_lever
+- id: context_use_elevator
+  anchor: top_left
+  visible: false
+  width: 48
+  height: 48
+  asset:
+    default: obsidian_action_lever
+- id: context_use_pedestal
+  anchor: top_left
+  visible: false
+  width: 48
+  height: 48
+  asset:
+    default: obsidian_action_lever
+- id: context_fountain
+  anchor: top_left
+  visible: false
+  width: 48
+  height: 48
+  asset:
+    default: obsidian_action_fountain
+- id: context_well
+  anchor: top_left
+  visible: false
+  width: 48
+  height: 48
+  asset:
+    default: obsidian_action_fountain
+- id: context_shrine
+  anchor: top_left
+  visible: false
+  width: 48
+  height: 48
+  asset:
+    default: obsidian_action_shrine
+- id: context_boost
+  anchor: top_left
+  visible: false
+  width: 48
+  height: 48
+  asset:
+    default: obsidian_action_shrine
+- id: context_obelisk
+  anchor: top_left
+  visible: false
+  width: 48
+  height: 48
+  asset:
+    default: obsidian_action_obelisk
+- id: context_read
+  anchor: top_left
+  visible: false
+  width: 48
+  height: 48
+  asset:
+    default: obsidian_action_read
+- id: context_teleport
+  anchor: top_left
+  visible: false
+  width: 48
+  height: 48
+  asset:
+    default: obsidian_action_portal
+- id: context_enter_dungeon
+  anchor: top_left
+  visible: false
+  width: 48
+  height: 48
+  asset:
+    default: obsidian_action_door
+- id: context_close
+  anchor: top_left
+  visible: false
+  width: 48
+  height: 48
+  asset:
+    default: obsidian_action_door

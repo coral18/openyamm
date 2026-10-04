@@ -1,0 +1,12 @@
+output_dir: ../../output/screenshots/water_review/mm6
+settle_seconds: 2
+exit: true
+shots:
+  - name: new-sorpigal-water
+    position: [1370.718, -8612.107, 974.502]
+    yaw: 0.322
+    pitch: -0.3714933313
+  - name: new-sorpigal-water-wide
+    position: [1370.718, -8612.107, 974.502]
+    yaw: 0.7
+    pitch: -0.3714933313

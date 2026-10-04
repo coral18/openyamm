@@ -1,9 +1,11 @@
 #include "game/gameplay/GameplayScreenRuntime.h"
+#include "game/ui/GameplayHudCommon.h"
 
 #include "game/app/GameSession.h"
 #include "game/audio/SoundIds.h"
 #include "game/debug/GameplayDebugTrace.h"
 #include "game/gameplay/GameplayItemService.h"
+#include "game/gameplay/GameplayInputFrame.h"
 #include "game/gameplay/NpcFollowerRuntime.h"
 #include "game/gameplay/GameplaySpeechRules.h"
 #include "game/gameplay/GameplayDialogContextBuilder.h"
@@ -18,8 +20,10 @@
 #include "game/party/SpellSchool.h"
 #include "game/StringUtils.h"
 #include "game/tables/MergedBaseTables.h"
+#include "game/ui/EnemyHealthBarRenderer.h"
 #include "game/ui/GameplayJournalMapUi.h"
 #include "game/ui/SpellbookUiLayout.h"
+#include "game/ui/GameplayUiSkin.h"
 
 #include <SDL3/SDL.h>
 
@@ -417,6 +421,30 @@ GameplayScreenRuntime::GameplayScreenRuntime(GameSession &session)
 {
 }
 
+CombatActorHealthBarRuntime &GameplayScreenRuntime::enemyHealthBars() const
+{
+    return m_enemyHealthBars;
+}
+
+void GameplayScreenRuntime::updateEnemyHealthBars(
+    float seconds, std::span<const GameplayCombatFeedbackEvent> events) const
+{
+    if (settingsSnapshot().enemyHealthBarMode == "off" || worldRuntime() == nullptr)
+    {
+        m_enemyHealthBars.clear();
+        return;
+    }
+    m_enemyHealthBars.advance(seconds);
+    for (const GameplayCombatFeedbackEvent &event : events)
+    {
+        GameplayActorInspectState state;
+        if (worldRuntime()->actorInspectState(event.actorIndex, 0, state))
+        {
+            m_enemyHealthBars.recordCombatEvent(event.actorIndex, state.currentHp, state.maxHp, event.damage);
+        }
+    }
+}
+
 void GameplayScreenRuntime::bindAudioSystem(GameAudioSystem *pAudioSystem)
 {
     m_pAudioSystem = pAudioSystem;
@@ -429,6 +457,7 @@ void GameplayScreenRuntime::bindSettings(GameSettings *pSettings)
 
 void GameplayScreenRuntime::bindSceneAdapter(IGameplayOverlaySceneAdapter *pSceneAdapter)
 {
+    m_enemyHealthBars.clear();
     m_pSceneAdapter = pSceneAdapter;
 }
 
@@ -436,12 +465,23 @@ void GameplayScreenRuntime::clearSceneAdapter(IGameplayOverlaySceneAdapter *pSce
 {
     if (m_pSceneAdapter == pSceneAdapter)
     {
+        if (m_pAudioSystem != nullptr)
+        {
+            m_pAudioSystem->stopActorVoices();
+        }
+        m_enemyHealthBars.clear();
         m_pSceneAdapter = nullptr;
     }
 }
 
 void GameplayScreenRuntime::clearTransientBindings()
 {
+    if (m_pAudioSystem != nullptr)
+    {
+        m_pAudioSystem->stopActorVoices();
+    }
+    m_enemyHealthBars.clear();
+    m_pendingMapMoveDialogClose = {};
     m_pAudioSystem = nullptr;
     m_pSettings = nullptr;
     m_pSceneAdapter = nullptr;
@@ -580,6 +620,20 @@ uint32_t GameplayScreenRuntime::closeActiveEventDialog()
     return hostHouseId;
 }
 
+void GameplayScreenRuntime::closeActiveDialogForMapMove()
+{
+    DialogueCloseCallback closeDialog = std::move(m_pendingMapMoveDialogClose);
+    m_pendingMapMoveDialogClose = {};
+    if (closeDialog)
+    {
+        closeDialog();
+    }
+    else
+    {
+        closeActiveEventDialog();
+    }
+}
+
 void GameplayScreenRuntime::returnToHouseBankMainDialogShared()
 {
     GameplayDialogUiFlowState state = dialogUiFlowState();
@@ -629,8 +683,77 @@ bool GameplayScreenRuntime::mobileFlightControlsAvailable() const
         && pParty->hasPartyBuff(PartyBuffId::Fly);
 }
 
+const char *GameplayScreenRuntime::mobileInspectLayoutId() const
+{
+    return currentHudScreenState() == GameplayHudScreenState::Gameplay
+        ? "OutdoorMobileInspectButton" : "OutdoorMobileOverlayInspectButton";
+}
+
+std::vector<GameplayTouchControl> GameplayScreenRuntime::mobileTouchControls(int width, int height) const
+{
+    std::vector<GameplayTouchControl> controls;
+    controls.reserve(18);
+    const auto append = [&](const char *pId, GameplayTouchRole role = GameplayTouchRole::Hud)
+    {
+        const HudLayoutElement *pLayout = findHudLayoutElement(pId);
+        if (pLayout == nullptr || !pLayout->visible)
+        {
+            return;
+        }
+        const std::optional<ResolvedHudLayoutElement> rect = resolveHudLayoutElement(pId, width, height, 0, 0);
+        if (rect)
+        {
+            controls.push_back({role, rect->x, rect->y, rect->width, rect->height});
+        }
+    };
+    if (mobileInspectControlAvailable())
+    {
+        append(mobileInspectLayoutId(), GameplayTouchRole::Inspect);
+    }
+    if (currentHudScreenState() != GameplayHudScreenState::Gameplay)
+    {
+        return controls;
+    }
+    if (interactionState().partyBuffPopupOpen || interactionState().personalBuffPopupMember)
+    {
+        // A tap outside an open buff popup dismisses it, rather than beginning camera or movement input.
+        controls.push_back({GameplayTouchRole::Hud, 0, 0, static_cast<float>(width), static_cast<float>(height)});
+    }
+    for (const char *pId : {"OutdoorTopBar", "ObsidianHeroBuffPanel", "ObsidianSkullBuffPanel",
+        "OutdoorMinimapFrame", "OutdoorFollowerToggle", "OutdoorGameplayBasebar",
+        "OutdoorMobileSystemPanel", "OutdoorMobileActionPanel", "OutdoorMobileButtonQuickCast"})
+    {
+        append(pId);
+    }
+    if (interactionState().followerPanelOpen)
+    {
+        append("OutdoorFollowerPanel");
+    }
+    if (turnBasedCombatRuntime().active())
+    {
+        append("ObsidianTurnPlate");
+    }
+    const GameplayContextActionState &actions = contextActionStateReadOnly();
+    if (actions.visible && actions.primaryIndex < actions.actions.size()
+        && (settingsSnapshot().contextActionPopup
+            || actions.actions[actions.primaryIndex].kind == GameplayContextActionKind::DropHeldItem))
+    {
+        append("OutdoorMobileContextActionButton");
+    }
+    if (mobileFlightControlsAvailable())
+    {
+        append("OutdoorMobileButtonFlyUp", GameplayTouchRole::FlyUp);
+        append("OutdoorMobileButtonFlyDown", GameplayTouchRole::FlyDown);
+    }
+    return controls;
+}
+
 bool GameplayScreenRuntime::mobileInspectControlAvailable() const
 {
+    if (utilitySpellOverlayReadOnly().active)
+    {
+        return false;
+    }
     const GameplayHudScreenState hudScreenState = currentHudScreenState();
 
     if (hudScreenState == GameplayHudScreenState::Gameplay
@@ -2134,12 +2257,18 @@ void GameplayScreenRuntime::executeActiveDialogAction(
         beforeCloseContinuation(result);
     }
 
-    closeActiveDialogActionResult(result, closeActiveDialog);
-
-    if (result.shouldCloseActiveDialog && pEventRuntimeState->pendingMapMove.has_value())
+    const bool mapMovePending = pEventRuntimeState->pendingMapMove.has_value();
+    if (mapMovePending)
     {
+        // Present the departure dialogue for the transition's final frame.
+        // The map-move handler closes it after retaining the loading background.
+        m_pendingMapMoveDialogClose = result.shouldCloseActiveDialog ? closeActiveDialog : DialogueCloseCallback{};
         m_session.setPendingMapMove(std::move(*pEventRuntimeState->pendingMapMove));
         pEventRuntimeState->pendingMapMove.reset();
+    }
+    else
+    {
+        closeActiveDialogActionResult(result, closeActiveDialog);
     }
 
     if (afterCloseContinuation)
@@ -2147,7 +2276,12 @@ void GameplayScreenRuntime::executeActiveDialogAction(
         afterCloseContinuation(result);
     }
 
-    presentPendingDialogActionResult(result, presentPendingEventDialogCallback);
+    if (!mapMovePending)
+    {
+        // Travel advances the date, which can change the available routes. Keep
+        // the departure screen intact instead of rebuilding it for the new day.
+        presentPendingDialogActionResult(result, presentPendingEventDialogCallback);
+    }
 }
 
 void GameplayScreenRuntime::refreshHouseBankInputDialog()
@@ -2756,6 +2890,20 @@ void GameplayScreenRuntime::consumePendingEventRuntimeAudioRequests()
     }
 
     IGameplayWorldRuntime *pWorldRuntime = worldRuntime();
+    if (pWorldRuntime != nullptr)
+    {
+        m_pAudioSystem->updateActorVoices(
+            {pWorldRuntime->partyX(), pWorldRuntime->partyY(), pWorldRuntime->partyFootZ()},
+            [pWorldRuntime](size_t actorIndex) -> std::optional<GameAudioSystem::WorldPosition>
+            {
+                GameplayRuntimeActorState actor = {};
+                if (!pWorldRuntime->actorRuntimeState(actorIndex, actor) || actor.isInvisible)
+                {
+                    return std::nullopt;
+                }
+                return GameAudioSystem::WorldPosition{actor.preciseX, actor.preciseY, actor.preciseZ};
+            });
+    }
     EventRuntimeState *pEventRuntimeState = pWorldRuntime != nullptr ? pWorldRuntime->eventRuntimeState() : nullptr;
 
     if (pEventRuntimeState == nullptr || pEventRuntimeState->pendingSounds.empty())
@@ -2765,6 +2913,15 @@ void GameplayScreenRuntime::consumePendingEventRuntimeAudioRequests()
 
     for (const EventRuntimeState::PendingSound &request : pEventRuntimeState->pendingSounds)
     {
+        if (request.actorIndex)
+        {
+            m_pAudioSystem->playActorSound(
+                *request.actorIndex,
+                SoundRef{request.soundScope, request.soundId},
+                {float(request.x), float(request.y), float(request.z)},
+                request.pitch);
+            continue;
+        }
         if (request.kind == EventRuntimeState::PendingSound::Kind::StopKeyed)
         {
             const std::unordered_map<uint64_t, uint64_t>::iterator iterator =
@@ -3076,6 +3233,10 @@ bool GameplayScreenRuntime::ensureGameplayLayoutsLoaded()
 void GameplayScreenRuntime::preloadReferencedAssets()
 {
     uiRuntime().preloadReferencedAssets();
+    if (settingsSnapshot().enemyHealthBarMode != "off")
+    {
+        EnemyHealthBarRenderer::preload(*this);
+    }
 }
 
 bool GameplayScreenRuntime::ensurePortraitRuntimeLoaded()
@@ -3226,7 +3387,79 @@ std::optional<GameplayScreenRuntime::ResolvedHudLayoutElement> GameplayScreenRun
     float fallbackWidth,
     float fallbackHeight) const
 {
-    return uiRuntime().resolveHudLayoutElement(layoutId, screenWidth, screenHeight, fallbackWidth, fallbackHeight);
+    std::optional<ResolvedHudLayoutElement> rect =
+        uiRuntime().resolveHudLayoutElement(layoutId, screenWidth, screenHeight, fallbackWidth, fallbackHeight);
+    if (!rect)
+    {
+        return rect;
+    }
+    const Party *pParty = partyReadOnly();
+    const size_t count = pParty != nullptr ? std::clamp(pParty->members().size(), size_t{1}, size_t{5}) : 5;
+    if (layoutId.starts_with("ObsidianPc") || layoutId == "OutdoorGameplayBasebar")
+    {
+        const HudLayoutElement *pFirst = findHudLayoutElement("ObsidianPc1");
+        const HudLayoutElement *pSecond = findHudLayoutElement("ObsidianPc2");
+        if (pFirst != nullptr && pSecond != nullptr)
+        {
+            const float unusedWidth = (5 - count) * (pSecond->gapX - pFirst->gapX) * rect->scale;
+            rect->x += unusedWidth * 0.5f;
+            if (layoutId == "OutdoorGameplayBasebar")
+            {
+                rect->width -= unusedWidth;
+            }
+        }
+    }
+    if (layoutId == "ObsidianHeroBuffPanel" || layoutId == "ObsidianSkullBuffPanel")
+    {
+        const std::optional<ResolvedHudLayoutElement> bar =
+            uiRuntime().resolveHudLayoutElement("OutdoorTopBar", screenWidth, screenHeight, 0, 0);
+        if (bar)
+        {
+            rect->x = bar->x + 3 * bar->scale;
+            rect->y = bar->y + bar->height + 6 * bar->scale;
+            if (layoutId == "ObsidianSkullBuffPanel")
+            {
+                rect->x += rect->width + 7 * rect->scale;
+            }
+        }
+    }
+    if (layoutId == "OutdoorFlyBuffIcon" || layoutId == "OutdoorWaterWalkBuffIcon")
+    {
+        const std::optional<ResolvedHudLayoutElement> skull =
+            resolveHudLayoutElement("ObsidianSkullBuffPanel", screenWidth, screenHeight, 0, 0);
+        if (skull)
+        {
+            rect->x = skull->x + skull->width + 7 * skull->scale;
+            rect->y = skull->y + (skull->height - rect->height) * 0.5f;
+            if (layoutId == "OutdoorWaterWalkBuffIcon")
+            {
+                rect->x += rect->width + 4 * rect->scale;
+            }
+        }
+    }
+    const HudLayoutElement *pElement = findHudLayoutElement(layoutId);
+    while (pElement != nullptr)
+    {
+        if (pElement->id == "OutdoorMobileActionPanel" || pElement->id == "OutdoorMobileSystemPanel")
+        {
+            const std::optional<ResolvedHudLayoutElement> panel = uiRuntime().resolveHudLayoutElement(
+                pElement->id, screenWidth, screenHeight, 0, 0);
+            const std::optional<ResolvedHudLayoutElement> basebar = resolveHudLayoutElement(
+                "OutdoorGameplayBasebar", screenWidth, screenHeight, 0, 0);
+            if (panel && basebar)
+            {
+                rect->y += GameplayHudCommon::touchPanelVerticalOffset(*panel, *basebar);
+            }
+            break;
+        }
+        if (pElement->parentId == "CharacterSkillsViewport")
+        {
+            rect->y -= characterScreenReadOnly().skillScrollOffset * rect->scale;
+            break;
+        }
+        pElement = pElement->parentId.empty() ? nullptr : findHudLayoutElement(pElement->parentId);
+    }
+    return rect;
 }
 
 std::optional<GameplayScreenRuntime::ResolvedHudLayoutElement> GameplayScreenRuntime::resolvePartyPortraitRect(
@@ -3254,83 +3487,14 @@ std::optional<GameplayScreenRuntime::ResolvedHudLayoutElement> GameplayScreenRun
         || hudScreenState == GameplayHudScreenState::LoadGame
         || hudScreenState == GameplayHudScreenState::Journal
         || hudScreenState == GameplayHudScreenState::QuickReference;
-    const bool useGameplayWideHud =
-        !isLimitedOverlayHud && settingsSnapshot().gameplayUiLayout == GameplayUiLayout::Widescreen;
-    const std::string basebarLayoutId = isLimitedOverlayHud
-        ? "OutdoorBasebar"
-        : (settingsSnapshot().gameplayUiLayout == GameplayUiLayout::Standard
-            ? "OutdoorStandardBasebar"
-            : "OutdoorGameplayBasebar");
-    const std::string partyStripLayoutId = isLimitedOverlayHud
-        ? "OutdoorPartyStrip"
-        : (settingsSnapshot().gameplayUiLayout == GameplayUiLayout::Standard
-            ? "OutdoorStandardPartyStrip"
-            : "OutdoorGameplayPartyStrip");
-    const HudLayoutElement *pBasebarLayout = findHudLayoutElement(basebarLayoutId);
-    const HudLayoutElement *pPartyStripLayout = findHudLayoutElement(partyStripLayoutId);
-
-    if (pBasebarLayout == nullptr || pPartyStripLayout == nullptr)
+    if (memberIndex >= pParty->members().size())
     {
         return std::nullopt;
     }
+    return resolveHudLayoutElement(
+        std::string(isLimitedOverlayHud ? "ObsidianOverlayPc" : "ObsidianPc")
+            + std::to_string(memberIndex + 1) + "Face", width, height, 0.0f, 0.0f);
 
-    const std::optional<HudTextureHandle> basebarTexture =
-        const_cast<GameplayScreenRuntime *>(this)
-            ->gameplayUiRuntime().ensureHudTextureLoaded(pBasebarLayout->primaryAsset);
-    const std::optional<HudTextureHandle> faceMaskTexture = const_cast<GameplayScreenRuntime *>(this)
-        ->gameplayUiRuntime().ensureHudTextureLoaded(pPartyStripLayout->primaryAsset);
-
-    if (!basebarTexture || !faceMaskTexture)
-    {
-        return std::nullopt;
-    }
-
-    const std::optional<ResolvedHudLayoutElement> resolvedBasebar = resolveHudLayoutElement(
-        basebarLayoutId,
-        width,
-        height,
-        basebarTexture->width,
-        basebarTexture->height);
-    const std::optional<ResolvedHudLayoutElement> resolvedPartyStrip = resolveHudLayoutElement(
-        partyStripLayoutId,
-        width,
-        height,
-        basebarTexture->width,
-        basebarTexture->height);
-
-    if (!resolvedBasebar || !resolvedPartyStrip)
-    {
-        return std::nullopt;
-    }
-
-    const std::vector<Character> &members = pParty->members();
-
-    if (memberIndex >= members.size())
-    {
-        return std::nullopt;
-    }
-
-    const float portraitWidth = static_cast<float>(faceMaskTexture->width) * resolvedBasebar->scale;
-    const float portraitHeight = static_cast<float>(faceMaskTexture->height) * resolvedBasebar->scale;
-    float portraitStartX = resolvedPartyStrip->x + resolvedPartyStrip->width * (20.0f / 471.0f);
-    float portraitY = resolvedPartyStrip->y + resolvedPartyStrip->height * (23.0f / 92.0f);
-    const float portraitDeltaX = resolvedPartyStrip->width * (94.0f / 471.0f);
-
-    if (useGameplayWideHud)
-    {
-        const float basebarCenterX = resolvedBasebar->x + resolvedBasebar->width * 0.5f;
-        const float portraitGroupWidth = portraitWidth + static_cast<float>(members.size() - 1) * portraitDeltaX;
-        portraitStartX = basebarCenterX - portraitGroupWidth * 0.5f;
-        portraitY -= 15.0f * resolvedBasebar->scale;
-    }
-
-    return ResolvedHudLayoutElement{
-        portraitStartX + static_cast<float>(memberIndex) * portraitDeltaX,
-        portraitY,
-        portraitWidth,
-        portraitHeight,
-        resolvedBasebar->scale
-    };
 }
 
 std::optional<size_t> GameplayScreenRuntime::resolvePartyPortraitIndexAtPoint(
@@ -3515,14 +3679,59 @@ void GameplayScreenRuntime::submitHudTexturedQuadRotatedCounterClockwise(
     uiRuntime().submitHudTexturedQuadRotatedCounterClockwise(texture.textureHandle, x, y, quadWidth, quadHeight);
 }
 
+float GameplayScreenRuntime::characterSkillRowHeight() const
+{
+    return 18.0f;
+}
+
+float GameplayScreenRuntime::characterSkillsContentHeight(int width, int height) const
+{
+    const std::optional<ResolvedHudLayoutElement> viewport =
+        resolveHudLayoutElement("CharacterSkillsViewport", width, height, 0, 0);
+    if (!viewport)
+    {
+        return 0;
+    }
+    float contentHeight = 0;
+    for (const char *pId : {"CharacterSkillsMagicListRegion", "CharacterSkillsMiscListRegion"})
+    {
+        const std::optional<ResolvedHudLayoutElement> rect = resolveHudLayoutElement(pId, width, height, 0, 0);
+        if (rect)
+        {
+            contentHeight = std::max(contentHeight,
+                (rect->y + rect->height - viewport->y) / viewport->scale + characterScreenReadOnly().skillScrollOffset);
+        }
+    }
+    return contentHeight;
+}
+
 void GameplayScreenRuntime::renderLayoutLabel(
     const HudLayoutElement &layout,
     const ResolvedHudLayoutElement &resolved,
-    const std::string &label) const
+    const std::string &label,
+    bool applyButtonState,
+    const ResolvedHudLayoutElement *pClip) const
 {
+    HudLayoutElement renderedLayout = layout;
+    ResolvedHudLayoutElement renderedRect = resolved;
+    const GameplayInputFrame *pInput = currentGameplayInputFrame();
+    const HudLayoutElement *pButton = &layout;
+    while (pButton != nullptr && !pButton->interactive)
+    {
+        pButton = pButton->parentId.empty() ? nullptr : findHudLayoutElement(pButton->parentId);
+    }
+    if (applyButtonState && toLowerCopy(layout.fontName) == "fondamento" && pInput != nullptr && pButton != nullptr
+        && GameplayHudCommon::isPointerInsideResolvedElement(resolved, pInput->pointerX, pInput->pointerY))
+    {
+        renderedLayout.textColorAbgr = 0xffd4efffu;
+        if (pInput->leftMouseButton.held)
+        {
+            renderedRect.y += resolved.scale;
+        }
+    }
     GameplayHudCommon::renderLayoutLabel(
-        layout,
-        resolved,
+        renderedLayout,
+        renderedRect,
         label,
         [this](const std::string &fontName) -> const GameplayHudFontData *
         {
@@ -3544,7 +3753,7 @@ void GameplayScreenRuntime::renderLayoutLabel(
             gameplayFont.shadowTextureHandle = font.shadowTextureHandle;
             return uiRuntime().ensureHudFontMainTextureColor(gameplayFont, colorAbgr);
         },
-        [this](const GameplayHudFontData &font,
+        [this, pClip](const GameplayHudFontData &font,
                bgfx::TextureHandle textureHandle,
                const std::string &text,
                float textX,
@@ -3556,7 +3765,7 @@ void GameplayScreenRuntime::renderLayoutLabel(
             gameplayFont.fontHeight = font.fontHeight;
             gameplayFont.mainTextureHandle = font.mainTextureHandle;
             gameplayFont.shadowTextureHandle = font.shadowTextureHandle;
-            renderHudFontLayer(gameplayFont, textureHandle, text, textX, textY, fontScale);
+            renderHudFontLayer(gameplayFont, textureHandle, text, textX, textY, fontScale, pClip);
         });
 }
 
@@ -3591,9 +3800,10 @@ void GameplayScreenRuntime::renderHudFontLayer(
     const std::string &text,
     float textX,
     float textY,
-    float fontScale) const
+    float fontScale,
+    const GameplayResolvedHudLayoutElement *pClip) const
 {
-    uiRuntime().renderHudFontLayer(font, textureHandle, text, textX, textY, fontScale);
+    uiRuntime().renderHudFontLayer(font, textureHandle, text, textX, textY, fontScale, pClip);
 }
 
 void GameplayScreenRuntime::bindHudRenderBackend(const GameplayHudRenderBackend &backend)
@@ -3651,6 +3861,14 @@ void GameplayScreenRuntime::renderViewportSidePanels(
         return;
     }
 
+    if (textureName == "obsidian_reading_surface")
+    {
+        const float scale = static_cast<float>(screenHeight) / 480.0f;
+        GameplayUiSkin::renderSurface(*this, {0, 0, viewport.x, float(screenHeight), scale});
+        const float right = viewport.x + viewport.width;
+        GameplayUiSkin::renderSurface(*this, {right, 0, screenWidth - right, float(screenHeight), scale});
+        return;
+    }
     const std::optional<HudTextureHandle> texture = gameplayUiRuntime().ensureHudTextureLoaded(textureName);
 
     if (!texture)
@@ -4077,6 +4295,29 @@ std::optional<GameplayResolvedHudLayoutElement> GameplayScreenRuntime::resolveCh
         return std::nullopt;
     }
 
+    const auto applyVisualPlacement = [&](GameplayResolvedHudLayoutElement rect)
+    {
+        const uint32_t dollType = pCharacterDollType != nullptr ? pCharacterDollType->id : 0;
+        for (const ItemEquipmentPlacement &placement : itemDefinition.equipmentPlacements)
+        {
+            if (placement.dollType == dollType && placement.slot == slot)
+            {
+                rect.x += static_cast<float>(placement.x) * resolved->scale;
+                rect.y += static_cast<float>(placement.y) * resolved->scale;
+                break;
+            }
+        }
+        if (slot == EquipmentSlot::Gauntlets || slot == EquipmentSlot::Amulet || slot >= EquipmentSlot::Ring1)
+        {
+            const float drawScale = itemDefinition.jewelryDrawScale;
+            rect.x += rect.width * (1.0f - drawScale) * 0.5f;
+            rect.y += rect.height * (1.0f - drawScale) * 0.5f;
+            rect.width *= drawScale;
+            rect.height *= drawScale;
+        }
+        return rect;
+    };
+
     const float iconWidth = static_cast<float>(texture.width) * resolved->scale;
     const float iconHeight = static_cast<float>(texture.height) * resolved->scale;
 
@@ -4103,7 +4344,7 @@ std::optional<GameplayResolvedHudLayoutElement> GameplayScreenRuntime::resolveCh
         rect.width = iconWidth;
         rect.height = iconHeight;
         rect.scale = resolved->scale;
-        return rect;
+        return applyVisualPlacement(rect);
     }
 
     if (slot == EquipmentSlot::Bow)
@@ -4118,7 +4359,7 @@ std::optional<GameplayResolvedHudLayoutElement> GameplayScreenRuntime::resolveCh
         rect.width = iconWidth;
         rect.height = iconHeight;
         rect.scale = resolved->scale;
-        return rect;
+        return applyVisualPlacement(rect);
     }
 
     if (slot == EquipmentSlot::MainHand || slot == EquipmentSlot::OffHand)
@@ -4182,7 +4423,7 @@ std::optional<GameplayResolvedHudLayoutElement> GameplayScreenRuntime::resolveCh
             rect.height = iconHeight;
         }
         rect.scale = resolved->scale;
-        return rect;
+        return applyVisualPlacement(rect);
     }
 
     GameplayResolvedHudLayoutElement rect = {};
@@ -4191,7 +4432,7 @@ std::optional<GameplayResolvedHudLayoutElement> GameplayScreenRuntime::resolveCh
     rect.width = iconWidth;
     rect.height = iconHeight;
     rect.scale = resolved->scale;
-    return rect;
+    return applyVisualPlacement(rect);
 }
 
 void GameplayScreenRuntime::submitWorldTextureQuad(

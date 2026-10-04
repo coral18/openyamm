@@ -14,7 +14,7 @@ import sys
 
 
 ROOT = Path(__file__).resolve().parents[2]
-PROFILES = ROOT / 'level_generation/lighting/baked_outdoors/profiles'
+PROFILES = Path(__file__).resolve().parent / 'baked_outdoors/profiles'
 
 
 def main():
@@ -23,6 +23,8 @@ def main():
     parser.add_argument('--world', nargs='+', choices=['mm6', 'mm7', 'mm8'], default=['mm6', 'mm7', 'mm8'])
     parser.add_argument('--samples', type=int, help='Override profile samples; 16 for drafts, normally 64')
     parser.add_argument('--azimuth', type=float, help='Override sun azimuth in every selected map profile (degrees)')
+    parser.add_argument('--decoration-shadows', action=argparse.BooleanOptionalAction, default=None,
+                        help='Override static decoration alpha sun shadows for selected maps')
     parser.add_argument('--blender', default='blender', help='Blender executable with Cycles support')
     parser.add_argument('--install', action='store_true', help='Copy successful lighting/recipe pairs into assets_dev')
     parser.add_argument('--dry-run', action='store_true', help='List candidates without baking or writing files')
@@ -82,6 +84,8 @@ def main():
             profile['samples'] = args.samples
         if args.azimuth is not None:
             profile['azimuth'] = args.azimuth % 360
+        if args.decoration_shadows is not None:
+            profile['decoration_shadows'] = args.decoration_shadows
         profile_path = map_output / 'profile.json'
         profile_path.write_text(json.dumps(profile, indent=2) + '\n')
         log_path = map_output / 'blender.log'

@@ -37,6 +37,39 @@ float distance2d(const PathPoint &from, const PathPoint &to)
     return std::sqrt(distanceSquared2d(from, to));
 }
 
+bool directCheckObjectMatchesRequest(const ActorPathState &state, const ActorPathResolveRequest &request)
+{
+    const PathObject &previousObject = state.directCheckObject;
+    const PathObject &object = request.object;
+    return state.directCheckValid
+        && previousObject.canFly == object.canFly
+        && previousObject.radius == object.radius
+        && previousObject.height == object.height
+        && previousObject.stepLength == object.stepLength
+        && previousObject.stepHeight == object.stepHeight
+        && previousObject.dropHeight == object.dropHeight;
+}
+
+bool directCheckMatchesRequest(const ActorPathState &state, const ActorPathResolveRequest &request)
+{
+    const float movementLimit = std::max(1.0f, std::min(request.object.radius, request.object.stepLength));
+    return directCheckObjectMatchesRequest(state, request)
+        && distanceSquared3d(state.directCheckSource, request.source) <= movementLimit * movementLimit
+        && distanceSquared3d(state.directCheckTarget, request.target) <= movementLimit * movementLimit;
+}
+
+void recordDirectCheck(ActorPathState &state, const ActorPathResolveRequest &request, bool reachable)
+{
+    state.directCheckValid = request.allowDirect;
+    state.lastDirectReachable = reachable;
+    state.directCheckSource = request.source;
+    state.directCheckTarget = request.target;
+    state.directCheckObject = request.object;
+    state.lastDirectCheckSeconds = request.nowSeconds;
+    state.mapRevision = static_cast<uint32_t>(request.mapRevision);
+    state.nextDirectCheckSeconds = request.nowSeconds + std::max(0.01, request.directCheckIntervalSeconds);
+}
+
 bool pathWaypointReached(const PathPoint &source, const PathPoint &waypoint, float reachDistance)
 {
     return distance2d(source, waypoint) <= std::max(1.0f, reachDistance);
@@ -151,6 +184,59 @@ void ActorPathRuntime::clear()
     }
 
     m_actorStates.clear();
+    m_pendingReachabilityActors.clear();
+    m_reachabilityQueued.clear();
+    m_reachabilityGranted.clear();
+    m_reachabilityBudgetEnabled = false;
+}
+
+void ActorPathRuntime::beginReachabilityFrame(size_t maxChecks)
+{
+    m_reachabilityBudgetEnabled = true;
+    m_reachabilityChecksRemaining = maxChecks;
+    std::fill(m_reachabilityGranted.begin(), m_reachabilityGranted.end(), false);
+    // Reserve checks for actors deferred earlier, rather than favouring the first actor in every AI step.
+    while (m_reachabilityChecksRemaining != 0 && !m_pendingReachabilityActors.empty())
+    {
+        const size_t actorIndex = m_pendingReachabilityActors.front();
+        m_pendingReachabilityActors.pop_front();
+        if (!m_reachabilityQueued[actorIndex])
+        {
+            continue;
+        }
+        m_reachabilityQueued[actorIndex] = false;
+        m_reachabilityGranted[actorIndex] = true;
+        --m_reachabilityChecksRemaining;
+    }
+}
+
+bool ActorPathRuntime::consumeReachabilityCheck(size_t actorIndex)
+{
+    if (!m_reachabilityBudgetEnabled)
+    {
+        return true;
+    }
+    if (actorIndex >= m_reachabilityQueued.size())
+    {
+        m_reachabilityQueued.resize(actorIndex + 1, false);
+        m_reachabilityGranted.resize(actorIndex + 1, false);
+    }
+    if (m_reachabilityGranted[actorIndex])
+    {
+        m_reachabilityGranted[actorIndex] = false;
+        return true;
+    }
+    if (m_reachabilityChecksRemaining != 0)
+    {
+        --m_reachabilityChecksRemaining;
+        return true;
+    }
+    if (!m_reachabilityQueued[actorIndex])
+    {
+        m_pendingReachabilityActors.push_back(actorIndex);
+        m_reachabilityQueued[actorIndex] = true;
+    }
+    return false;
 }
 
 void ActorPathRuntime::resetActor(size_t actorIndex)
@@ -158,6 +244,11 @@ void ActorPathRuntime::resetActor(size_t actorIndex)
     if (actorIndex < m_actorStates.size())
     {
         m_actorStates[actorIndex] = {};
+    }
+    if (actorIndex < m_reachabilityQueued.size())
+    {
+        m_reachabilityQueued[actorIndex] = false;
+        m_reachabilityGranted[actorIndex] = false;
     }
 }
 
@@ -223,24 +314,50 @@ ActorPathResolveResult ActorPathRuntime::resolveWaypointInternal(
 
     result.reachedWaypointCount += advanceReachedWaypoints(pathMap, state, request);
 
-    const double directInterval = std::max(0.01, request.directCheckIntervalSeconds);
+    // A failed straight-line probe is only a shortcut opportunity when a valid route already exists.
+    // Distant actors can follow that route while its endpoints move, without assuming a clear straight line.
+    const bool reuseBlockedCheck = request.distantRouteReuseDistance > 0.0f
+        && !state.lastDirectReachable
+        && !pathIsStale(state, request)
+        && directCheckObjectMatchesRequest(state, request)
+        && distanceSquared3d(request.source, request.target)
+            > request.distantRouteReuseDistance * request.distantRouteReuseDistance;
+
+    if (!request.allowDirect || (!reuseBlockedCheck && !directCheckMatchesRequest(state, request)))
+    {
+        state.directCheckValid = false;
+        state.lastDirectReachable = false;
+    }
+
+    const double directCheckDeadline = reuseBlockedCheck
+        ? state.lastDirectCheckSeconds + std::max(0.01, request.distantRouteCheckIntervalSeconds)
+        : state.nextDirectCheckSeconds;
     const bool directCheckDue =
         request.allowDirect
-        && (!state.directCheckValid || request.nowSeconds >= state.nextDirectCheckSeconds);
+        && (!state.directCheckValid || request.nowSeconds >= directCheckDeadline);
 
     if (directCheckDue)
     {
-        const bool directReachable = pathMap.canReachDirectly(request.source, request.target, request.object);
-        state.directCheckValid = true;
-        state.lastDirectReachable = directReachable;
-        state.nextDirectCheckSeconds = request.nowSeconds + directInterval;
-
-        if (directReachable)
+        if (consumeReachabilityCheck(request.actorIndex))
         {
-            state = {};
-            result.directReachable = true;
-            return result;
+            const bool directReachable = pathMap.canReachDirectly(request.source, request.target, request.object);
+            result.directChecked = true;
+            if (directReachable)
+            {
+                state = {};
+            }
+            recordDirectCheck(state, request, directReachable);
         }
+        else
+        {
+            result.deferred = true;
+        }
+    }
+
+    if (request.allowDirect && state.directCheckValid && state.lastDirectReachable)
+    {
+        result.directReachable = true;
+        return result;
     }
 
     consumeCompletedPlan(state, request, result);
@@ -248,7 +365,13 @@ ActorPathResolveResult ActorPathRuntime::resolveWaypointInternal(
     const bool stalePath = pathIsStale(state, request);
     const bool activePathBeforePlan = pathCanStillBeFollowed(state);
 
-    if (stalePath)
+    // An unchecked route is not a failed route. Keep following a valid path while waiting for the check.
+    if (directCheckDue && !result.directChecked && !activePathBeforePlan)
+    {
+        return result;
+    }
+
+    if (stalePath && !(directCheckDue && !result.directChecked))
     {
         const bool actorPlanReady = request.nowSeconds >= state.nextPlanSeconds;
 
@@ -409,6 +532,7 @@ bool ActorPathRuntime::installPlanResult(
         state.requestId = 0;
         state.failedUntilSeconds = request.nowSeconds + std::max(0.1, request.failedRetrySeconds);
         state.nextPlanSeconds = state.failedUntilSeconds;
+        recordDirectCheck(state, request, false);
         result.failed = true;
 
         if (useRecoveryBestWaypoint)
@@ -420,11 +544,7 @@ bool ActorPathRuntime::installPlanResult(
             state.waypoints = {planResult.debug.bestPoint};
             state.waypointIndex = 0;
             state.recoveryBestWaypointActive = true;
-            state.directCheckValid = true;
-            state.lastDirectReachable = false;
             state.planStatus = planResult.status;
-            state.nextDirectCheckSeconds =
-                request.nowSeconds + std::max(0.01, request.directCheckIntervalSeconds);
             resetWaypointProgress(state, request);
             result.pathActive = true;
             result.waypointIndex = state.waypointIndex;
@@ -470,11 +590,8 @@ bool ActorPathRuntime::installPlanResult(
     state.inProgress = false;
     state.requestId = 0;
     state.failedUntilSeconds = 0.0;
-    state.directCheckValid = true;
-    state.lastDirectReachable = false;
+    recordDirectCheck(state, request, false);
     state.planStatus = planResult.status;
-    state.nextDirectCheckSeconds =
-        request.nowSeconds + std::max(0.01, request.directCheckIntervalSeconds);
     state.nextPlanSeconds = request.nowSeconds + std::max(0.0, request.minReplanIntervalSeconds);
     state.nextShortcutCheckSeconds = 0.0;
     resetWaypointProgress(state, request);
@@ -512,7 +629,7 @@ bool ActorPathRuntime::queuePlan(
     job.request = request;
     job.pathMap =
         pathMapSnapshot != nullptr
-            ? std::make_shared<PathMap>(*pathMapSnapshot)
+            ? pathMapSnapshot
             : std::make_shared<PathMap>(pathMap);
 
     {
@@ -605,7 +722,7 @@ size_t ActorPathRuntime::advanceReachedWaypoints(
     const PathMap &pathMap,
     ActorPathState &state,
     const ActorPathResolveRequest &request
-) const
+)
 {
     const size_t originalIndex = state.waypointIndex;
 
@@ -620,10 +737,10 @@ size_t ActorPathRuntime::advanceReachedWaypoints(
                     : request.waypointReachDistance)))
     {
         if (state.waypointIndex + 1 < state.waypoints.size()
-            && !pathMap.canReachDirectly(
+            && (!consumeReachabilityCheck(request.actorIndex) || !pathMap.canReachDirectly(
                 request.source,
                 state.waypoints[state.waypointIndex + 1],
-                request.object))
+                request.object)))
         {
             break;
         }
@@ -653,7 +770,7 @@ size_t ActorPathRuntime::advanceShortcutWaypoints(
     const PathMap &pathMap,
     ActorPathState &state,
     const ActorPathResolveRequest &request
-) const
+)
 {
     if (!pathCanStillBeFollowed(state)
         || !request.allowDirect
@@ -668,7 +785,6 @@ size_t ActorPathRuntime::advanceShortcutWaypoints(
     }
 
     const double intervalSeconds = std::max(0.01, request.shortcutCheckIntervalSeconds);
-    state.nextShortcutCheckSeconds = request.nowSeconds + intervalSeconds;
 
     const size_t originalIndex = state.waypointIndex;
     const size_t maxShortcutWaypointScan =
@@ -688,6 +804,11 @@ size_t ActorPathRuntime::advanceShortcutWaypoints(
             continue;
         }
 
+        if (!consumeReachabilityCheck(request.actorIndex))
+        {
+            return 0;
+        }
+        state.nextShortcutCheckSeconds = request.nowSeconds + intervalSeconds;
         if (!pathMap.canReachDirectly(request.source, state.waypoints[index], request.object))
         {
             continue;
@@ -705,7 +826,7 @@ size_t ActorPathRuntime::advanceStalledWaypoint(
     const PathMap &pathMap,
     ActorPathState &state,
     const ActorPathResolveRequest &request
-) const
+)
 {
     if (!pathCanStillBeFollowed(state))
     {
@@ -739,6 +860,12 @@ size_t ActorPathRuntime::advanceStalledWaypoint(
     const bool stalled = request.nowSeconds - state.lastWaypointProgressSeconds >= WaypointStallSeconds;
 
     if (!stalled)
+    {
+        return 0;
+    }
+
+    if (state.waypointIndex + 1 < state.waypoints.size()
+        && !consumeReachabilityCheck(request.actorIndex))
     {
         return 0;
     }

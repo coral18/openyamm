@@ -55,6 +55,7 @@ enum class DialogueOfferKind : uint32_t
     MasteryTeacher,
     GuildMembership,
     NpcHire,
+    Arena,
 };
 
 enum class MechanismAction
@@ -203,6 +204,8 @@ struct EventRuntimeState
         uint32_t soundId = 0;
         std::string soundName;
         uint64_t key = 0;
+        std::optional<size_t> actorIndex;
+        float pitch = 1.0f;
         int32_t x = 0;
         int32_t y = 0;
         int32_t z = 0;
@@ -244,6 +247,12 @@ struct EventRuntimeState
 
     struct DialogueRuntimeState
     {
+        struct GeneratedNpcGreeting
+        {
+            uint32_t npcId = 0;
+            std::string text;
+        };
+
         uint32_t hostHouseId = 0;
         std::vector<DialogueMenuId> menuStack;
         std::optional<DialogueOfferState> currentOffer;
@@ -251,6 +260,8 @@ struct EventRuntimeState
         uint32_t trainingHouseId = 0;
         std::vector<uint32_t> trainingLevelsByMember;
         std::optional<SuspendedMm9RudeDialogue> suspendedMm9RudeDialogue;
+        // Presentation cache for the current conversation; only the greeting visit count is saved.
+        std::optional<GeneratedNpcGreeting> generatedNpcGreeting;
     };
 
     using HiredNpcFollower = ::OpenYAMM::Game::HiredNpcFollower;
@@ -284,6 +295,23 @@ struct EventRuntimeState
     {
         uint32_t spellId = 0;
         std::vector<size_t> memberIndices;
+    };
+
+    struct WorldEffectRequest
+    {
+        std::string id;
+        std::array<float, 3> position = {};
+        float scale = 1.0f;
+        float yawRadians = 0.0f;
+    };
+
+    struct WorldModelRequest
+    {
+        std::string assetPath;
+        std::string clipName;
+        std::array<float, 3> position = {};
+        float scale = 1.0f;
+        float yawRadians = 0.0f;
     };
 
     struct RuntimeMapNote
@@ -505,6 +533,8 @@ struct EventRuntimeState
     std::vector<uint32_t> removedAwardIds;
     std::vector<PortraitFxRequest> portraitFxRequests;
     std::vector<SpellFxRequest> spellFxRequests;
+    std::vector<WorldEffectRequest> worldEffectRequests;
+    std::vector<WorldModelRequest> worldModelRequests;
     std::optional<PendingDialogueContext> pendingDialogueContext;
     std::optional<PendingMapMove> pendingMapMove;
     std::optional<PendingMovie> pendingMovie;

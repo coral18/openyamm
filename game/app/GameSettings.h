@@ -21,12 +21,6 @@ enum class TurnRateMode
     Smooth
 };
 
-enum class GameplayUiLayout
-{
-    Standard,
-    Widescreen
-};
-
 enum class WindowMode
 {
     Windowed,
@@ -131,6 +125,11 @@ struct GameSettings
     std::array<float, 3> bakedSunColor = {1.0f, 1.0f, 1.0f};
     std::array<float, 3> bakedSkyColor = {0.8f, 0.9f, 1.0f};
     bool terrainDecorations = false;
+    bool waterShader = true;
+    bool waterReflections = true;
+    bool waterSpriteReflections = false;
+    bool waterMovementRipples = true;
+    int waterReflectionSize = 512;
     std::string terrainFiltering = "anisotropic";
     std::string terrainAnisotropy = "8x";
     std::string bmodelFiltering = "anisotropic";
@@ -144,7 +143,6 @@ struct GameSettings
     bool waitForLevelSprites = true;
     Engine::FontSettings fonts;
     Engine::AssetScaleProfile assetScaleProfile = Engine::createUniformAssetScaleProfile(Engine::AssetScaleTier::X1);
-    GameplayUiLayout gameplayUiLayout = GameplayUiLayout::Widescreen;
     WindowMode windowMode = WindowMode::Windowed;
     int resolutionWidth = 1600;
     int resolutionHeight = 900;
@@ -191,12 +189,31 @@ struct GameSettings
     bool newGameGodLich = false;
     bool allowIncompleteCharacterCreation = false;
     bool debugConsole = true;
+    // Launch-only directives: never persisted by saveGameSettings.
+    std::string screenshotPath;
+    std::string menuInputTourPath;
+    float screenshotDelaySeconds = 0.0f;
+    std::string screenshotTourPath;
+    std::string effectSpawnId;
+    std::array<float, 3> effectSpawnPosition = {};
+    float effectSpawnScale = 1.0f;
+    float effectSpawnYawRadians = 0.0f;
+    uint32_t effectSpawnCount = 1;
+    float effectStatsDelaySeconds = -1.0f;
+    std::string modelSpawnPath;
+    std::string modelSpawnClip;
+    std::array<float, 3> modelSpawnPosition = {};
+    float modelSpawnScale = 1.0f;
+    float modelSpawnYawRadians = 0.0f;
+    bool modelSpawnMarkers = false;
     int keyboardInteractionDepth = 512;
     int mouseInteractionDepth = 512;
     bool combatText = true;
-    bool combatActorHealthBars = true;
+    std::string enemyHealthBarMode = "combat";
+    std::string enemyHealthBarValues = "target";
+    bool enemyHealthBarDamageTrail = true;
     bool questMarkers = true;
-    bool combatTargetPanel = false;
+    bool meleeHitBloodEffects = false;
 #if defined(__ANDROID__)
     bool contextActionPopup = true;
 #else

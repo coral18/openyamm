@@ -1,5 +1,30 @@
 -- MMMerge map supplement: Castle Ironfist local outdoor state.
 
+-- The mounted Ironfist map places the sword at decoration 230, while the legacy
+-- event references decoration 232 (an unrelated rock).
+ReplaceMapEvent(225, nil, function()
+    if IsQBitSet(QBit(1327)) then
+        return
+    end
+
+    if not IsAtLeast(ActualMight, 40) then
+        evt.FaceExpression(51)
+        evt.StatusText("The Sword won't budge!")
+        return
+    end
+
+    SetQBit(QBit(1327))
+    evt.GiveItem(4, 23, 1609)
+    evt.SetSprite(230, 1, "swrdstx")
+end)
+
+ReplaceMapEvent(65534, nil, function()
+    if IsQBitSet(QBit(1327)) then
+        evt.SetSprite(230, 1, "swrdstx")
+    end
+end)
+AppendMapOnLoadEvent(65534)
+
 ReplaceMapEvent(8, "Royal Lines", function()
     evt.EnterHouse(471)
 end, "Royal Lines")

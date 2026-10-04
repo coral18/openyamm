@@ -21,6 +21,9 @@
 #include "game/content/ContentManifest.h"
 #include "game/debug/DebugConsole.h"
 #include "game/debug/GameImGuiBgfxRenderer.h"
+#include "game/debug/ScreenshotCaptureService.h"
+#include "game/debug/ScreenshotTour.h"
+#include "game/debug/MenuInputTour.h"
 #include "game/maps/SaveGame.h"
 #include "game/scene/IMapSceneRuntime.h"
 #include "game/ui/screens/LoadingOverlayScreen.h"
@@ -49,13 +52,15 @@ public:
     int run();
 
 private:
-    struct DebugMapJumpStart
-    {
-        int32_t x = 0;
-        int32_t y = 0;
-        int32_t z = 0;
-        int32_t directionYawUnits = 0;
-    };
+  MenuInputTour m_menuInputTour;
+  std::vector<uint8_t> m_menuSavePreviewBmp;
+  struct DebugMapJumpStart
+  {
+      int32_t x = 0;
+      int32_t y = 0;
+      int32_t z = 0;
+      int32_t directionYawUnits = 0;
+  };
 
     struct MapStartDestination
     {
@@ -112,6 +117,14 @@ private:
         uint32_t sequence = 0;
         GameplayTraceMovementSnapshot start;
         GameplayTraceMovementSnapshot stop;
+    };
+
+    enum class ScreenshotTourStage
+    {
+        NotStarted,
+        Settling,
+        WaitingForCapture,
+        Finished,
     };
 
     struct FramePerformanceDiagnostics
@@ -206,6 +219,11 @@ private:
         const std::vector<uint8_t> &previewBmp = {});
     bool quickLoadFromPath(const std::filesystem::path &path, bool initializeView);
     void openMainMenuScreen();
+    void openMenuScreen(bool paused);
+    void openPauseMenuScreen();
+    void openSaveGameScreen();
+    void resumeMenuGameplay();
+    bool applyMenuSettings(const GameSettings &settings, bool persist, std::string &error);
     void openLoadGameScreen(bool returnToGameplayMenu = false, const std::string &source = "main_menu");
     void openNewGameScreen(const std::string &source = "main_menu");
     bool processPendingArcomageGame();
@@ -222,7 +240,9 @@ private:
     bool loadSessionFromPath(const std::filesystem::path &path);
     void beginLoadingOverlay(
         LoadingOverlayScreen::Presentation presentation = LoadingOverlayScreen::Presentation::Fullscreen);
-    void renderLoadingOverlayProgress(int progressPercent);
+    void drawLoadingOverlay();
+    uint32_t renderLoadingOverlayProgress(int progressPercent);
+    void prepareGameplayRendering();
     void pumpLoadingOverlayAnimation();
     void completeLoadingOverlay();
     void cancelLoadingOverlay();
@@ -244,6 +264,9 @@ private:
     std::vector<std::string> resolvePendingInputAnswers(
         const EventRuntimeState::PendingInputPrompt &prompt) const;
     void renderFrame(int width, int height, float mouseWheelDelta, float deltaSeconds);
+    void updateScreenshotCaptureFrame();
+    bool applyScreenshotTourShotPose(const ScreenshotTourShot &shot);
+    void advanceScreenshotTourAfterCapture(size_t shotIndex, bool success);
     bool logFramePerformanceDiagnostics(uint32_t currentTick);
     void logFrameHitchDiagnostics(const FramePerformanceDiagnostics &diagnostics) const;
 
@@ -256,6 +279,8 @@ private:
     GameAudioSystem m_gameAudioSystem;
     GameSession m_gameSession;
     GameInputSystem m_gameInputSystem;
+    SpriteAtlasCache m_spriteAtlasCache;
+    NativeSpriteTextureCache m_nativeSpriteCache;
     IndoorRenderer m_indoorRenderer;
     IndoorGameView m_indoorGameView;
     OutdoorGameView m_outdoorGameView;
@@ -289,6 +314,7 @@ private:
     std::string m_loadingOverlayBackgroundTextureName;
     LoadingOverlayScreen::Presentation m_loadingOverlayPresentation = LoadingOverlayScreen::Presentation::Fullscreen;
     bool m_loadingOverlayActive = false;
+    bool m_loadingOverlayReadyToDismiss = false;
     int m_loadingOverlayCurrentProgressPercent = 0;
     uint64_t m_loadingOverlayNextAnimationFrameTick = 0;
     bool m_mainMenuChildScreensPrepared = false;
@@ -310,5 +336,19 @@ private:
     bool m_debugConsoleFrameBegun = false;
     bool m_debugConsoleCommandsRegistered = false;
     std::optional<PendingDebugMapJump> m_pendingDebugMapJump;
+    std::vector<EffectHandle> m_debugEffectHandles;
+    std::vector<Engine::ModelInstanceHandle> m_debugModelHandles;
+    ScreenshotCaptureService m_screenshotCaptureService;
+    std::optional<ScreenshotTour> m_screenshotTour;
+    ScreenshotTourStage m_screenshotTourStage = ScreenshotTourStage::NotStarted;
+    size_t m_screenshotTourShotIndex = 0;
+    uint64_t m_screenshotTourSettleStartTicks = 0;
+    bool m_screenshotTourLoadFailed = false;
+    bool m_debugLaunchEffectSpawned = false;
+    bool m_debugLaunchEffectStatsLogged = false;
+    bool m_debugLaunchModelSpawned = false;
+    bool m_screenshotScheduledCaptureFired = false;
+    bool m_screenshotGameplayStartTicksValid = false;
+    uint64_t m_screenshotGameplayStartTicks = 0;
 };
 }

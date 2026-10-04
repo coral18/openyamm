@@ -1,0 +1,20 @@
+schema: openyamm.effectSprite.v2
+id: mm9:effect-sprite/spells/skull
+source: sprites/spells/skull.spr
+framesPerSecond: 15
+logicalWidth: 64
+logicalHeight: 64
+keyed: false
+translucent: false
+colorKey: 0
+frames:
+- mm9:effect-texture/skull/skul1anim
+- mm9:effect-texture/skull/skull2anim
+- mm9:effect-texture/skull/skull3anim
+- mm9:effect-texture/skull/skull4anim
+- mm9:effect-texture/skull/skull5anim
+- mm9:effect-texture/skull/skull6anim
+- mm9:effect-texture/skull/skull7anim
+- mm9:effect-texture/skull/skull8anim
+- mm9:effect-texture/skull/skull9anim
+- mm9:effect-texture/skull/skull10anim

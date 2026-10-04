@@ -2,20 +2,60 @@
 
 #include "game/app/GameSession.h"
 #include "game/audio/GameAudioSystem.h"
+#include "game/fx/WorldFxSystem.h"
 #include "game/gameplay/GameplayScreenRuntime.h"
+
+#include "engine/AssetFileSystem.h"
+#include "engine/models/ModelAnimation.h"
 
 #include <algorithm>
 #include <cmath>
+#include <iostream>
 
 namespace OpenYAMM::Game
 {
 namespace
 {
 constexpr float Pi = 3.14159265358979323846f;
+constexpr float NormalEpsilonSquared = 1.0e-8f;
 
 uint32_t withAlpha(uint32_t colorAbgr, uint8_t alpha)
 {
     return (colorAbgr & 0x00ffffffu) | (static_cast<uint32_t>(alpha) << 24);
+}
+
+std::optional<std::array<float, 4>> rotationFromPositiveZ(const std::array<float, 3> &direction)
+{
+    const float lengthSquared = direction[0] * direction[0]
+        + direction[1] * direction[1]
+        + direction[2] * direction[2];
+    if (!std::isfinite(lengthSquared) || lengthSquared <= NormalEpsilonSquared)
+    {
+        return std::nullopt;
+    }
+
+    const float inverseLength = 1.0f / std::sqrt(lengthSquared);
+    const std::array<float, 3> normal = {
+        direction[0] * inverseLength,
+        direction[1] * inverseLength,
+        direction[2] * inverseLength,
+    };
+    if (normal[2] < -0.9999f)
+    {
+        return std::array<float, 4>{1.0f, 0.0f, 0.0f, 0.0f};
+    }
+
+    std::array<float, 4> rotation = {-normal[1], normal[0], 0.0f, 1.0f + normal[2]};
+    const float quaternionLength = std::sqrt(
+        rotation[0] * rotation[0]
+        + rotation[1] * rotation[1]
+        + rotation[2] * rotation[2]
+        + rotation[3] * rotation[3]);
+    for (float &component : rotation)
+    {
+        component /= quaternionLength;
+    }
+    return rotation;
 }
 }
 
@@ -29,6 +69,8 @@ void GameplayFxService::clear()
     m_gameplayScreenOverlayState = {};
     m_activeProjectilePresentationStates.clear();
     m_activeProjectileImpactPresentationStates.clear();
+    m_pendingWorldEffects.clear();
+    m_nextWorldEffectSeed = 1;
 }
 
 void GameplayFxService::syncProjectilePresentation()
@@ -47,7 +89,8 @@ GameplayProjectileService::ProjectileImpactSpawnResult GameplayFxService::spawnP
     float x,
     float y,
     float z,
-    bool centerVertically)
+    bool centerVertically,
+    size_t targetActorIndex)
 {
     return m_session.gameplayProjectileService().spawnProjectileImpactVisual(
         projectile,
@@ -55,7 +98,8 @@ GameplayProjectileService::ProjectileImpactSpawnResult GameplayFxService::spawnP
         x,
         y,
         z,
-        centerVertically);
+        centerVertically,
+        targetActorIndex);
 }
 
 GameplayProjectileService::ProjectileImpactSpawnResult GameplayFxService::spawnWaterSplashImpactVisual(
@@ -201,6 +245,28 @@ void GameplayFxService::renderGameplayScreenOverlay(
     runtime.submitHudTexturedQuad(*texture, 0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height));
 }
 
+void GameplayFxService::queueMeleeHitBloodEffect(
+    const std::array<float, 3> &contactPosition,
+    const std::array<float, 3> &outwardNormal)
+{
+    const std::optional<std::array<float, 4>> rotation = rotationFromPositiveZ(outwardNormal);
+    if (!rotation
+        || !std::isfinite(contactPosition[0])
+        || !std::isfinite(contactPosition[1])
+        || !std::isfinite(contactPosition[2]))
+    {
+        return;
+    }
+
+    m_pendingWorldEffects.push_back({
+        .id = "mm9:melee_blood",
+        .position = contactPosition,
+        .rotation = *rotation,
+        .scale = 1.0f,
+        .seed = m_nextWorldEffectSeed++,
+    });
+}
+
 void GameplayFxService::consumePendingEventFxRequests(GameplayScreenRuntime &runtime) const
 {
     IGameplayWorldRuntime *pWorldRuntime = runtime.worldRuntime();
@@ -230,6 +296,106 @@ void GameplayFxService::consumePendingEventFxRequests(GameplayScreenRuntime &run
     }
 
     pEventRuntimeState->spellFxRequests.clear();
+}
+
+void GameplayFxService::consumePendingWorldFxRequests(
+    EventRuntimeState *pEventRuntimeState,
+    WorldFxSystem &worldFxSystem,
+    Engine::AssetFileSystem &assetFileSystem)
+{
+    for (const PendingWorldEffect &request : m_pendingWorldEffects)
+    {
+        EffectSpawnParams params;
+        params.position = request.position;
+        params.rotation = request.rotation;
+        params.scale = request.scale;
+        params.seed = request.seed;
+        const EffectHandle handle = worldFxSystem.namedEffects().spawn(request.id, params);
+        if (!worldFxSystem.namedEffects().contains(handle))
+        {
+            std::cerr << "Gameplay world effect spawn failed: " << request.id << '\n';
+        }
+    }
+    m_pendingWorldEffects.clear();
+
+    if (pEventRuntimeState == nullptr)
+    {
+        return;
+    }
+
+    for (const EventRuntimeState::WorldEffectRequest &request : pEventRuntimeState->worldEffectRequests)
+    {
+        const bool validTransform =
+            std::isfinite(request.position[0])
+            && std::isfinite(request.position[1])
+            && std::isfinite(request.position[2])
+            && std::isfinite(request.scale)
+            && request.scale > 0.0f
+            && std::isfinite(request.yawRadians);
+        if (request.id.empty() || !validTransform)
+        {
+            std::cerr << "Ignored invalid scripted world effect request\n";
+            continue;
+        }
+
+        EffectSpawnParams params;
+        params.position = request.position;
+        params.rotation = {
+            0.0f,
+            0.0f,
+            std::sin(request.yawRadians * 0.5f),
+            std::cos(request.yawRadians * 0.5f),
+        };
+        params.scale = request.scale;
+        const EffectHandle handle = worldFxSystem.namedEffects().spawn(request.id, params);
+        if (!worldFxSystem.namedEffects().contains(handle))
+        {
+            std::cerr << "Scripted world effect spawn failed: " << request.id << '\n';
+        }
+    }
+    pEventRuntimeState->worldEffectRequests.clear();
+
+    for (const EventRuntimeState::WorldModelRequest &request : pEventRuntimeState->worldModelRequests)
+    {
+        const bool validTransform =
+            std::isfinite(request.position[0])
+            && std::isfinite(request.position[1])
+            && std::isfinite(request.position[2])
+            && std::isfinite(request.scale)
+            && request.scale > 0.0f
+            && std::isfinite(request.yawRadians);
+        if (request.assetPath.empty() || !validTransform)
+        {
+            std::cerr << "Ignored invalid scripted world model request\n";
+            continue;
+        }
+
+        const Engine::ModelLoadResult loaded =
+            worldFxSystem.modelAssets().load(assetFileSystem, request.assetPath);
+        if (!loaded)
+        {
+            std::cerr << "Scripted world model load failed: " << loaded.error << '\n';
+            continue;
+        }
+
+        const Engine::ModelTransform transform = Engine::gltfModelPlacement(
+            request.position,
+            request.yawRadians,
+            request.scale);
+        const Engine::ModelInstanceHandle handle = worldFxSystem.models().create(loaded.asset, transform);
+        if (!worldFxSystem.models().contains(handle))
+        {
+            std::cerr << "Scripted world model spawn failed: " << request.assetPath << '\n';
+            continue;
+        }
+        if (!request.clipName.empty()
+            && !worldFxSystem.models().play(handle, request.clipName, Engine::ModelPlaybackMode::Loop))
+        {
+            worldFxSystem.models().destroy(handle);
+            std::cerr << "Scripted world model clip was not found: " << request.clipName << '\n';
+        }
+    }
+    pEventRuntimeState->worldModelRequests.clear();
 }
 
 const std::vector<GameplayProjectilePresentationState> &GameplayFxService::activeProjectilePresentationStates() const

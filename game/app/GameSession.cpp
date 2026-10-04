@@ -1071,10 +1071,11 @@ void GameSession::updateMm9QuestMarkerCache()
         data().mm9QuestInteractionTable());
 }
 
-void GameSession::clearSharedInputFrameResult()
+void GameSession::clearSharedInputFrameResult(bool blockWorldInput)
 {
     m_sharedInputFrameResult = {};
-    m_sharedWorldInteractionBlockedThisFrame = false;
+    m_sharedInputFrameResult.worldInputBlocked = blockWorldInput;
+    m_sharedWorldInteractionBlockedThisFrame = blockWorldInput;
     m_gameplayScreenState.gameplayMouseLookState().clear();
 }
 

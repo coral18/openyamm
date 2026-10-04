@@ -4,7 +4,7 @@
   <name>OpenYAMM</name>
   <summary>OpenYAMM game engine</summary>
   <metadata_license>CC0-1.0</metadata_license>
-  <project_license>LicenseRef-OpenYAMM</project_license>
+  <project_license>GPL-3.0-or-later</project_license>
   <description>
     <p>OpenYAMM is a modern game engine for running supported Might and Magic worlds from packaged content archives.</p>
   </description>

@@ -1,5 +1,6 @@
 #include "engine/BgfxContext.h"
 #include "engine/EngineApplication.h"
+#include "engine/ImageAssetLoader.h"
 
 #include <SDL3/SDL.h>
 
@@ -8,6 +9,7 @@
 #include <filesystem>
 #include <iostream>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -23,8 +25,11 @@ constexpr Sint64 AndroidInputTypeClassText = 0x00000001;
 constexpr Sint64 AndroidInputTypeTextVariationVisiblePassword = 0x00000090;
 constexpr Sint64 AndroidInputTypeTextFlagNoSuggestions = 0x00080000;
 
-bool startManagedAndroidTextInput(SDL_Window *pWindow)
+#endif
+
+bool startManagedTextInput(SDL_Window *pWindow)
 {
+#if defined(__ANDROID__)
     SDL_PropertiesID properties = SDL_CreateProperties();
 
     if (properties == 0)
@@ -44,8 +49,10 @@ bool startManagedAndroidTextInput(SDL_Window *pWindow)
     const bool started = SDL_StartTextInputWithProperties(pWindow, properties);
     SDL_DestroyProperties(properties);
     return started;
-}
+#else
+    return SDL_StartTextInput(pWindow);
 #endif
+}
 
 uint64_t averageNanoseconds(uint64_t totalNanoseconds, uint64_t count)
 {
@@ -356,6 +363,23 @@ int EngineApplication::run() const
     }
 
     std::unique_ptr<SDL_Window, SdlWindowDeleter> pWindow(pRawWindow);
+#if !defined(__ANDROID__)
+    const std::optional<std::vector<uint8_t>> iconBytes =
+        assetFileSystem.readBinaryFile("engine/branding/app_icon.png");
+    std::optional<ImagePixelsBgra> icon = iconBytes
+        ? decodeImagePixelsBgra(*iconBytes, "engine/branding/app_icon.png") : std::nullopt;
+    if (icon)
+    {
+        SDL_Surface *pIcon = SDL_CreateSurfaceFrom(
+            icon->width, icon->height, SDL_PIXELFORMAT_BGRA32, icon->pixels.data(), icon->width * 4);
+        if (pIcon != nullptr)
+        {
+            // Compositors that use the desktop app ID may not support window icons.
+            SDL_SetWindowIcon(pWindow.get(), pIcon);
+            SDL_DestroySurface(pIcon);
+        }
+    }
+#endif
     if (!applyWindowMode(pWindow.get(), m_config))
     {
         invokeShutdownCallback(m_shutdownCallback);
@@ -398,8 +422,15 @@ int EngineApplication::run() const
     std::cout << "Window mode: " << windowModeName(m_config.windowMode) << '\n';
     std::cout << "Window requested: " << m_config.windowWidth << "x" << m_config.windowHeight << '\n';
     std::cout << "Window drawable: " << drawableWidth << "x" << drawableHeight << '\n';
+    m_pRunningWindow = pWindow.get();
+    m_pRunningContext = &bgfxContext;
     std::cout << "VSync: " << (m_config.verticalSync ? "on" : "off") << '\n';
     std::cout << "Renderer: " << bgfx::getRendererName(bgfxContext.getRendererType()) << '\n';
+    if (const bgfx::Caps *pCaps = bgfx::getCaps())
+    {
+        std::cout << "GPU: vendor=0x" << std::hex << pCaps->vendorId << " device=0x" << pCaps->deviceId << std::dec
+                  << " SDL=" << SDL_GetCurrentVideoDriver() << '\n';
+    }
     std::cout << "Mounted search paths:\n";
 
     const std::vector<std::string> searchPaths = assetFileSystem.getSearchPaths();
@@ -431,25 +462,24 @@ int EngineApplication::run() const
     uint64_t fpsWindowSizeNanoseconds = 0;
     uint64_t fpsRenderCallbackNanoseconds = 0;
     uint64_t fpsBgfxFrameNanoseconds = 0;
-#if defined(__ANDROID__)
-    bool managedTextInputActive = false;
-    const auto syncManagedTextInput =
-        [&managedTextInputActive, this, &pWindow]()
+    const auto syncManagedTextInput = [this, &pWindow]()
+    {
+        if (!m_textInputActiveCallback)
         {
-            const bool textInputRequested = m_textInputActiveCallback && m_textInputActiveCallback();
+            return;
+        }
+        const bool textInputRequested = m_textInputActiveCallback();
+        const bool textInputActive = SDL_TextInputActive(pWindow.get());
 
-            if (textInputRequested && !managedTextInputActive)
-            {
-                startManagedAndroidTextInput(pWindow.get());
-                managedTextInputActive = true;
-            }
-            else if (!textInputRequested && managedTextInputActive)
-            {
-                SDL_StopTextInput(pWindow.get());
-                managedTextInputActive = false;
-            }
-        };
-#endif
+        if (textInputRequested && !textInputActive)
+        {
+            startManagedTextInput(pWindow.get());
+        }
+        else if (!textInputRequested && textInputActive)
+        {
+            SDL_StopTextInput(pWindow.get());
+        }
+    };
 
     while (isRunning)
     {
@@ -527,9 +557,7 @@ int EngineApplication::run() const
             }
         }
 
-#if defined(__ANDROID__)
         syncManagedTextInput();
-#endif
 
         const uint64_t windowSizeBeginTickCount = collectFrameTimings ? SDL_GetTicksNS() : 0;
         int drawableWidth = 0;
@@ -574,9 +602,7 @@ int EngineApplication::run() const
             bgfx::touch(0);
         }
 
-#if defined(__ANDROID__)
         syncManagedTextInput();
-#endif
 
         uint64_t frameRenderCallbackNanoseconds = 0;
 
@@ -692,16 +718,63 @@ int EngineApplication::run() const
         }
     }
 
-#if defined(__ANDROID__)
-    if (managedTextInputActive)
+    if (m_textInputActiveCallback && SDL_TextInputActive(pWindow.get()))
     {
         SDL_StopTextInput(pWindow.get());
     }
-#endif
 
     invokeShutdownCallback(m_shutdownCallback);
 
+    m_pRunningWindow = nullptr;
+    m_pRunningContext = nullptr;
     return 0;
+}
+
+bool EngineApplication::applyDisplaySettings(WindowMode mode, int width, int height, bool verticalSync,
+                                             std::string &error)
+{
+    if (m_pRunningWindow == nullptr || m_pRunningContext == nullptr)
+    {
+        error = "The display is not initialized.";
+        return false;
+    }
+    if (!SDL_SetWindowFullscreen(m_pRunningWindow, false) || !SDL_SetWindowFullscreenMode(m_pRunningWindow, nullptr) ||
+        !SDL_SetWindowBordered(m_pRunningWindow, mode != WindowMode::WindowedFullscreen))
+    {
+        error = SDL_GetError();
+        return false;
+    }
+    bool success = true;
+    if (mode == WindowMode::Windowed)
+    {
+        success = SDL_SetWindowSize(m_pRunningWindow, width, height);
+    }
+    else if (mode == WindowMode::Fullscreen)
+    {
+        SDL_DisplayMode displayMode = {};
+        success = SDL_GetClosestFullscreenDisplayMode(SDL_GetDisplayForWindow(m_pRunningWindow), width, height, 0, true,
+                                                      &displayMode) &&
+                  SDL_SetWindowFullscreenMode(m_pRunningWindow, &displayMode) &&
+                  SDL_SetWindowFullscreen(m_pRunningWindow, true);
+    }
+    else
+    {
+        success = SDL_SetWindowFullscreen(m_pRunningWindow, true);
+    }
+    if (!success)
+    {
+        error = SDL_GetError();
+        return false;
+    }
+    m_config.windowMode = mode;
+    m_config.windowWidth = width;
+    m_config.windowHeight = height;
+    m_config.verticalSync = verticalSync;
+    int pixelWidth = 0, pixelHeight = 0;
+    SDL_GetWindowSizeInPixels(m_pRunningWindow, &pixelWidth, &pixelHeight);
+    m_pRunningContext->setVerticalSync(verticalSync);
+    m_pRunningContext->resize(m_pRunningWindow, pixelWidth, pixelHeight);
+    return true;
 }
 
 void EngineApplication::setConfiguration(const ApplicationConfig &config)

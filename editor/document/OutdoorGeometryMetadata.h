@@ -21,6 +21,7 @@ struct EditorBModelImportSource
     std::string sourceMeshName;
     float importScale = 1.0f;
     bool mergeCoplanarFaces = false;
+    bool preserveSourceWinding = false;
     std::string defaultTextureName;
     std::vector<EditorMaterialTextureRemap> materialRemaps;
 };

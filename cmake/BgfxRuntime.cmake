@@ -70,6 +70,10 @@ function(openyamm_copy_runtime_shader outputName)
 endfunction()
 
 function(openyamm_compile_bgfx_shader_for_target sourcePath shaderType outputName shaderPlatform shaderProfile shaderDirectory)
+    set(shaderDefines)
+    if (ARGN)
+        list(APPEND shaderDefines --define "${ARGN}")
+    endif()
     if (NOT TARGET openyamm_shaderc)
         message(FATAL_ERROR "openyamm_shaderc target is unavailable; set OPENYAMM_HOST_SHADERC when cross-compiling.")
     endif()
@@ -81,6 +85,7 @@ function(openyamm_compile_bgfx_shader_for_target sourcePath shaderType outputNam
             --platform "${shaderPlatform}"
             -p "${shaderProfile}"
             --type "${shaderType}"
+            ${shaderDefines}
             --varyingdef "${CMAKE_SOURCE_DIR}/game/shaders/varying.def.sc"
             -i "${CMAKE_SOURCE_DIR}/game/shaders"
             -i "${OPENYAMM_BGFX_SOURCE_DIR}/src"
@@ -93,6 +98,8 @@ function(openyamm_compile_bgfx_shader_for_target sourcePath shaderType outputNam
             "${CMAKE_SOURCE_DIR}/game/shaders/billboard_lit.sh"
             "${CMAKE_SOURCE_DIR}/game/shaders/outdoor_textured_fog.sh"
             "${CMAKE_SOURCE_DIR}/game/shaders/outdoor_sunlight.sh"
+            "${CMAKE_SOURCE_DIR}/game/shaders/world_clip.sh"
+            "${CMAKE_SOURCE_DIR}/game/shaders/water_surface.sh"
             "${CMAKE_SOURCE_DIR}/game/shaders/outdoor_baked_lighting.sh"
             "${CMAKE_SOURCE_DIR}/game/shaders/outdoor_bmodel_lightmap.sh"
             "${OPENYAMM_BGFX_SOURCE_DIR}/examples/common/common.sh"
@@ -111,7 +118,8 @@ function(openyamm_compile_bgfx_shader sourcePath shaderType outputName)
             "${outputName}"
             "${shaderPlatform}"
             "${shaderProfile}"
-            "${shaderDirectory}")
+            "${shaderDirectory}"
+            ${ARGN})
     endforeach()
 endfunction()
 
@@ -396,9 +404,20 @@ function(openyamm_configure_runtime_shaders)
         "vs_screen_color.bin")
     openyamm_copy_runtime_shader("vs_shadowmaps_texture.bin")
     openyamm_compile_bgfx_shader(
+        "${CMAKE_SOURCE_DIR}/game/shaders/fs_menu_tint.sc"
+        fragment
+        "fs_menu_tint.bin")
+    openyamm_compile_bgfx_shader(
         "${CMAKE_SOURCE_DIR}/game/shaders/fs_shadowmaps_texture.sc"
         "fragment"
         "fs_shadowmaps_texture.bin")
+    openyamm_compile_bgfx_shader(
+        "${CMAKE_SOURCE_DIR}/game/shaders/vs_water.sc" "vertex" "vs_water.bin")
+    openyamm_compile_bgfx_shader(
+        "${CMAKE_SOURCE_DIR}/game/shaders/fs_water.sc" "fragment" "fs_water.bin")
+    openyamm_compile_bgfx_shader(
+        "${CMAKE_SOURCE_DIR}/game/shaders/fs_water.sc" "fragment" "fs_water_ripples.bin"
+        "WATER_MOVEMENT_RIPPLES=1")
     openyamm_compile_bgfx_shader(
         "${CMAKE_SOURCE_DIR}/game/shaders/vs_outdoor_textured_fog.sc"
         "vertex"
@@ -435,9 +454,20 @@ function(openyamm_configure_runtime_shaders)
         "vertex"
         "vs_indoor_textured_lit.bin")
     openyamm_compile_bgfx_shader(
+        "${CMAKE_SOURCE_DIR}/game/shaders/fs_sprite_outline.sc"
+        "fragment"
+        "fs_sprite_outline.bin")
+    openyamm_compile_bgfx_shader(
         "${CMAKE_SOURCE_DIR}/game/shaders/fs_sprite_atlas.sc"
         "fragment"
         "fs_sprite_atlas.bin")
+    openyamm_compile_bgfx_shader(
+        "${CMAKE_SOURCE_DIR}/game/shaders/fs_indoor_water.sc"
+        "fragment"
+        "fs_indoor_water.bin")
+    openyamm_compile_bgfx_shader(
+        "${CMAKE_SOURCE_DIR}/game/shaders/fs_indoor_water.sc" "fragment" "fs_indoor_water_ripples.bin"
+        "WATER_MOVEMENT_RIPPLES=1")
     openyamm_compile_bgfx_shader(
         "${CMAKE_SOURCE_DIR}/game/shaders/fs_indoor_textured_lit.sc"
         "fragment"
@@ -458,6 +488,14 @@ function(openyamm_configure_runtime_shaders)
         "${CMAKE_SOURCE_DIR}/game/shaders/fs_particle.sc"
         "fragment"
         "fs_particle.bin")
+    openyamm_compile_bgfx_shader(
+        "${CMAKE_SOURCE_DIR}/game/shaders/vs_model.sc"
+        "vertex"
+        "vs_model.bin")
+    openyamm_compile_bgfx_shader(
+        "${CMAKE_SOURCE_DIR}/game/shaders/fs_model.sc"
+        "fragment"
+        "fs_model.bin")
     openyamm_compile_bgfx_shader(
         "${CMAKE_SOURCE_DIR}/game/shaders/vs_spell_area_preview.sc"
         "vertex"
@@ -505,18 +543,23 @@ function(openyamm_configure_runtime_shaders)
         vs_screen_color.bin
         vs_shadowmaps_texture.bin
         fs_shadowmaps_texture.bin
+        fs_menu_tint.bin
+        vs_water.bin fs_water.bin fs_indoor_water.bin fs_water_ripples.bin fs_indoor_water_ripples.bin
         vs_outdoor_textured_fog.bin
         vs_outdoor_billboard_lit.bin
         fs_outdoor_textured_fog.bin
         fs_outdoor_terrain_fog.bin
         fs_outdoor_billboard_lit.bin
         fs_sprite_atlas.bin
+        fs_sprite_outline.bin
         vs_indoor_textured_lit.bin
         fs_indoor_textured_lit.bin
         vs_outdoor_force_perspective.bin
         fs_outdoor_force_perspective.bin
         vs_particle.bin
         fs_particle.bin
+        vs_model.bin
+        fs_model.bin
         vs_spell_area_preview.bin
         fs_spell_area_preview.bin
         vs_editor_preview_material.bin

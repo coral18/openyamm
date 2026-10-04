@@ -1,9 +1,9 @@
 include_guard(GLOBAL)
 
 # Apply to populated trees too: FetchContent PATCH_COMMAND alone misses existing builds.
-function(openyamm_patch_bgfx_gl_uniform_cache sourceDirectory)
+function(openyamm_patch_bgfx_gl sourceDirectory patchName)
     find_package(Git REQUIRED)
-    set(patchFile "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/patches/bgfx-gl-uniform-cache.patch")
+    set(patchFile "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/patches/${patchName}.patch")
     set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${patchFile}")
     execute_process(
         COMMAND "${GIT_EXECUTABLE}" apply --check "${patchFile}"
@@ -17,7 +17,7 @@ function(openyamm_patch_bgfx_gl_uniform_cache sourceDirectory)
             RESULT_VARIABLE patchResult ERROR_VARIABLE patchError
         )
         if (NOT patchResult EQUAL 0)
-            message(FATAL_ERROR "Cannot apply bgfx GL uniform cache patch: ${patchError}")
+            message(FATAL_ERROR "Cannot apply ${patchName} patch: ${patchError}")
         endif()
     else()
         execute_process(
@@ -26,7 +26,7 @@ function(openyamm_patch_bgfx_gl_uniform_cache sourceDirectory)
             RESULT_VARIABLE reverseCheck OUTPUT_QUIET ERROR_QUIET
         )
         if (NOT reverseCheck EQUAL 0)
-            message(FATAL_ERROR "bgfx source does not match the pinned GL uniform cache patch: ${sourceDirectory}")
+            message(FATAL_ERROR "bgfx source does not match the pinned ${patchName} patch: ${sourceDirectory}")
         endif()
     endif()
 endfunction()

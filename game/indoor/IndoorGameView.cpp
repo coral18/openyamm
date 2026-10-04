@@ -25,6 +25,7 @@
 #include "game/ui/GameplayDebugOverlayRenderer.h"
 #include "game/ui/GameplayDialogueRenderer.h"
 #include "game/ui/GameplayHudOverlaySupport.h"
+#include "game/ui/GameplayUiSkin.h"
 #include "game/gameplay/GameplayScreenRuntime.h"
 #include "game/ui/SpellbookUiLayout.h"
 #include "game/StringUtils.h"
@@ -58,7 +59,6 @@ constexpr float HudFontIntegerSnapThreshold = 0.1f;
 constexpr float MaxUiViewportAspect = 4.0f / 3.0f;
 constexpr float WalkingSoundMovementSpeedThreshold = 20.0f;
 constexpr float WalkingMotionHoldSeconds = 0.125f;
-constexpr float CombatTargetPanelDurationSeconds = 4.0f;
 constexpr uint16_t MainViewId = 0;
 constexpr uint16_t HudViewId = 2;
 constexpr uint64_t GameplayMouseLookCursorSyncIntervalTicks = 100;
@@ -84,39 +84,10 @@ uint32_t makeCombatHudColor(uint8_t red, uint8_t green, uint8_t blue, uint8_t al
         | static_cast<uint32_t>(red);
 }
 
-void drawCombatHudRect(
-    GameplayScreenRuntime &screenRuntime,
-    const std::string &textureName,
-    float x,
-    float y,
-    float width,
-    float height,
-    uint32_t colorAbgr)
-{
-    const std::optional<GameplayScreenRuntime::HudTextureHandle> texture =
-        screenRuntime.gameplayUiRuntime().ensureSolidHudTextureLoaded(textureName, colorAbgr);
-
-    if (!texture)
-    {
-        return;
-    }
-
-    screenRuntime.submitHudTexturedQuad(*texture, x, y, width, height);
-}
-
 float combatDamageFontScale(int damage)
 {
     const float damageMagnitude = std::sqrt(static_cast<float>(std::max(1, damage)));
     return 1.55f + std::clamp(damageMagnitude / 22.0f, 0.0f, 0.75f);
-}
-
-float combatDamageTextOriginZ(float actorZ, float actorHeight)
-{
-    constexpr float TorsoHeightFraction = 0.55f;
-    constexpr float MinimumTorsoOffset = 48.0f;
-    constexpr float MaximumEffectiveActorHeight = 256.0f;
-    const float effectiveHeight = std::clamp(actorHeight, 0.0f, MaximumEffectiveActorHeight);
-    return actorZ + std::max(MinimumTorsoOffset, effectiveHeight * TorsoHeightFraction);
 }
 
 bool windowHasInputFocus(SDL_Window *pWindow)
@@ -1001,6 +972,7 @@ bool IndoorGameView::initialize(
     m_pIndoorRenderer = &indoorRenderer;
     m_pIndoorSceneRuntime = &sceneRuntime;
     m_pGameAudioSystem = pGameAudioSystem;
+    m_pIndoorRenderer->worldFxSystem().bindNamedEffectAudio(m_pGameAudioSystem);
     m_map = map;
     m_pIndoorSceneRuntime->worldRuntime().bindGameplayView(this);
     m_gameSession.gameplayScreenRuntime().bindSceneAdapter(this);
@@ -1057,10 +1029,7 @@ void IndoorGameView::setSettingsSnapshot(const GameSettings &settings)
         m_combatFloatingTexts.clear();
     }
 
-    if (!m_settings.combatTargetPanel)
-    {
-        m_combatTargetState = {};
-    }
+
 
     IndoorPartyRuntime *pRuntime = partyRuntime();
 
@@ -1072,7 +1041,8 @@ void IndoorGameView::setSettingsSnapshot(const GameSettings &settings)
     }
 }
 
-void IndoorGameView::render(int width, int height, const GameplayInputFrame &input, float deltaSeconds)
+void IndoorGameView::render(int width, int height, const GameplayInputFrame &input, float deltaSeconds,
+    bool preparingResources)
 {
     m_lastRenderWidth = width;
     m_lastRenderHeight = height;
@@ -1087,7 +1057,14 @@ void IndoorGameView::render(int width, int height, const GameplayInputFrame &inp
         m_pIndoorRenderer != nullptr ? m_pIndoorRenderer->hudTextureSamplerHandle() : invalidSamplerHandle;
     hudRenderBackend.viewId = HudViewId;
     m_gameSession.gameplayScreenRuntime().bindHudRenderBackend(hudRenderBackend);
-
+    if (preparingResources)
+    {
+        if (m_pIndoorRenderer != nullptr)
+        {
+            m_pIndoorRenderer->render(width, height, m_gameSession, input, 0.0f, false, false, true);
+        }
+        return;
+    }
     presentPendingEventFeedback();
 
     SDL_Window *pWindow = SDL_GetMouseFocus();
@@ -1189,7 +1166,9 @@ void IndoorGameView::render(int width, int height, const GameplayInputFrame &inp
         !captureSavePreviewThisFrame
         && utilityOverlay.lloydSetPreviewCapturePending
         && !utilityOverlay.lloydSetPreviewScreenshotRequested;
-    m_renderGameplayUiThisFrame = !captureSavePreviewThisFrame && !captureLloydsBeaconPreviewThisFrame;
+    // Save previews capture the presented gameplay frame. Hiding the HUD here
+    // exposes a HUD-less frame after every travel autosave and quick save.
+    m_renderGameplayUiThisFrame = !captureLloydsBeaconPreviewThisFrame;
 
     updateItemInspectOverlayState(width, height, input);
 
@@ -1276,16 +1255,6 @@ void IndoorGameView::updateCombatFeedback(float deltaSeconds)
         floatingText.remainingSeconds = std::max(0.0f, floatingText.remainingSeconds - elapsedSeconds);
     }
 
-    if (m_combatTargetState.active)
-    {
-        m_combatTargetState.remainingSeconds =
-            std::max(0.0f, m_combatTargetState.remainingSeconds - elapsedSeconds);
-
-        if (m_combatTargetState.remainingSeconds <= 0.0f)
-        {
-            m_combatTargetState = {};
-        }
-    }
 
     m_combatFloatingTexts.erase(
         std::remove_if(
@@ -1304,22 +1273,12 @@ void IndoorGameView::updateCombatFeedback(float deltaSeconds)
 
     const std::vector<GameplayCombatFeedbackEvent> events =
         m_pIndoorSceneRuntime->worldRuntime().drainCombatFeedbackEvents();
-    std::optional<size_t> targetOnlyActorIndex;
-    std::optional<size_t> damagedActorIndex;
+    m_gameSession.gameplayScreenRuntime().updateEnemyHealthBars(elapsedSeconds, events);
 
     for (const GameplayCombatFeedbackEvent &event : events)
     {
         if (event.actorIndex < m_pIndoorSceneRuntime->worldRuntime().mapActorCount())
         {
-            if (event.damage > 0)
-            {
-                damagedActorIndex = event.actorIndex;
-            }
-            else
-            {
-                targetOnlyActorIndex = event.actorIndex;
-            }
-
             if (event.damage > 0 && m_settings.combatText)
             {
                 m_combatFloatingTexts.push_back(
@@ -1329,7 +1288,7 @@ void IndoorGameView::updateCombatFeedback(float deltaSeconds)
                         .text = std::to_string(event.damage),
                         .x = event.x,
                         .y = event.y,
-                        .z = combatDamageTextOriginZ(event.z, event.height),
+                        .z = GameplayUiSkin::combatDamageTextOriginZ(event.z, event.height),
                         .remainingSeconds = 0.6f,
                         .durationSeconds = 0.6f,
                         .colorAbgr = event.damage >= 100
@@ -1339,15 +1298,6 @@ void IndoorGameView::updateCombatFeedback(float deltaSeconds)
                     });
             }
         }
-    }
-
-    const std::optional<size_t> panelActorIndex = damagedActorIndex ? damagedActorIndex : targetOnlyActorIndex;
-
-    if (panelActorIndex)
-    {
-        m_combatTargetState.active = true;
-        m_combatTargetState.actorIndex = *panelActorIndex;
-        m_combatTargetState.remainingSeconds = CombatTargetPanelDurationSeconds;
     }
 }
 
@@ -1361,8 +1311,8 @@ void IndoorGameView::renderCombatFeedbackOverlay(int width, int height)
     GameplayScreenRuntime &screenRuntime = m_gameSession.gameplayScreenRuntime();
     screenRuntime.prepareHudView(width, height);
 
-    constexpr const char *FontName = "Create";
-    constexpr float CombatFontScale = 1.0f;
+    constexpr const char *FontName = GameplayUiSkin::CombatFontName;
+    constexpr float CombatFontScale = GameplayUiSkin::CombatDamageFontScale;
     constexpr float DamageRisePixels = 29.0f;
 
     if (m_settings.combatText)
@@ -1406,91 +1356,7 @@ void IndoorGameView::renderCombatFeedbackOverlay(int width, int height)
         }
     }
 
-    if (!m_settings.combatTargetPanel)
-    {
-        return;
-    }
 
-    GameplayActorInspectState inspectState = {};
-    IndoorWorldRuntime &worldRuntime = m_pIndoorSceneRuntime->worldRuntime();
-
-    if (!m_combatTargetState.active
-        || m_combatTargetState.remainingSeconds <= 0.0f
-        || !worldRuntime.actorInspectState(m_combatTargetState.actorIndex, 0, inspectState)
-        || inspectState.maxHp <= 0
-        || inspectState.currentHp <= 0
-        || inspectState.isDead)
-    {
-        m_combatTargetState = {};
-        return;
-    }
-
-    constexpr float PanelWidth = 260.0f;
-    constexpr float PanelHeight = 40.0f;
-    constexpr float BarHeight = 14.0f;
-    constexpr float Border = 2.0f;
-    constexpr float NameScale = 1.0f;
-    const float panelX = (static_cast<float>(width) - PanelWidth) * 0.5f;
-    const float panelY = 0.0f;
-    const float nameWidth = screenRuntime.measureHudTextWidth(FontName, inspectState.displayName) * NameScale;
-    const float nameX = panelX + (PanelWidth - nameWidth) * 0.5f;
-    const float barX = panelX + 12.0f;
-    const float barY = panelY + 22.0f;
-    const float barWidth = PanelWidth - 24.0f;
-    const float fillRatio =
-        std::clamp(static_cast<float>(inspectState.currentHp) / static_cast<float>(inspectState.maxHp), 0.0f, 1.0f);
-
-    drawCombatHudRect(
-        screenRuntime,
-        "__combat_target_panel_bg_tinted_strong__",
-        panelX,
-        panelY,
-        PanelWidth,
-        PanelHeight,
-        makeCombatHudColor(78, 16, 19, 214));
-    drawCombatHudRect(
-        screenRuntime,
-        "__combat_target_panel_highlight_tinted__",
-        panelX,
-        panelY,
-        PanelWidth,
-        1.0f,
-        makeCombatHudColor(158, 41, 44, 230));
-    screenRuntime.renderHudTextLine(
-        FontName,
-        makeCombatHudColor(255, 211, 132, 255),
-        inspectState.displayName,
-        nameX,
-        panelY + 2.0f,
-        NameScale);
-    drawCombatHudRect(
-        screenRuntime,
-        "__combat_target_bar_frame_tinted_strong__",
-        barX,
-        barY,
-        barWidth,
-        BarHeight,
-        makeCombatHudColor(18, 12, 10, 230));
-    const float fillWidth = (barWidth - Border * 2.0f) * fillRatio;
-    if (fillWidth > 0.0f)
-    {
-        drawCombatHudRect(
-            screenRuntime,
-            "__combat_target_bar_fill_tinted__",
-            barX + Border,
-            barY + Border,
-            fillWidth,
-            BarHeight - Border * 2.0f,
-            makeCombatHudColor(177, 25, 28, 245));
-        drawCombatHudRect(
-            screenRuntime,
-            "__combat_target_bar_gloss_tinted__",
-            barX + Border,
-            barY + Border,
-            fillWidth,
-            std::max(1.0f, (BarHeight - Border * 2.0f) * 0.32f),
-            makeCombatHudColor(255, 108, 82, 155));
-    }
 }
 
 GameplayWorldUiRenderState IndoorGameView::gameplayUiRenderState(int width, int height) const
@@ -1521,6 +1387,7 @@ void IndoorGameView::shutdown()
     if (m_pIndoorRenderer != nullptr)
     {
         m_pIndoorRenderer->setGameplayMouseLookMode(false, false);
+        m_pIndoorRenderer->worldFxSystem().bindNamedEffectAudio(nullptr);
     }
 
     if (m_pGameAudioSystem != nullptr)

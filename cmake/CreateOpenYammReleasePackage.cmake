@@ -27,21 +27,6 @@ if (NOT DEFINED OPENYAMM_RELEASE_SETTINGS_TEMPLATE OR OPENYAMM_RELEASE_SETTINGS_
     set(OPENYAMM_RELEASE_SETTINGS_TEMPLATE "${openyammReleaseSourceDir}/settings_release.ini")
 endif()
 
-function(openyamm_release_zip_directory sourceDir outputZip)
-    if (NOT IS_DIRECTORY "${sourceDir}")
-        message(FATAL_ERROR "Release package source directory does not exist: ${sourceDir}")
-    endif()
-
-    execute_process(
-        COMMAND "${CMAKE_COMMAND}" -E tar cf "${outputZip}" --format=zip -- .
-        WORKING_DIRECTORY "${sourceDir}"
-        RESULT_VARIABLE zipResult
-    )
-
-    if (NOT zipResult EQUAL 0)
-        message(FATAL_ERROR "Failed to create release package: ${outputZip}")
-    endif()
-endfunction()
 
 file(REMOVE_RECURSE "${OPENYAMM_RELEASE_STAGE_DIR}")
 file(REMOVE "${OPENYAMM_RELEASE_ZIP_PATH}")
@@ -52,6 +37,11 @@ file(MAKE_DIRECTORY "${OPENYAMM_RELEASE_STAGE_DIR}/runtime")
 
 file(COPY "${OPENYAMM_RELEASE_EXECUTABLE}" DESTINATION "${OPENYAMM_RELEASE_STAGE_DIR}")
 file(COPY "${OPENYAMM_RELEASE_SHADER_DIR}" DESTINATION "${OPENYAMM_RELEASE_STAGE_DIR}/runtime")
+file(COPY
+    "${CMAKE_CURRENT_LIST_DIR}/../LICENSE"
+    "${CMAKE_CURRENT_LIST_DIR}/../COPYRIGHT"
+    DESTINATION "${OPENYAMM_RELEASE_STAGE_DIR}"
+)
 
 set(openyammReleaseRuntimeDependencyDirs "")
 get_filename_component(openyammReleaseExecutableDir "${OPENYAMM_RELEASE_EXECUTABLE}" DIRECTORY)
@@ -124,28 +114,16 @@ if (NOT openyammReleaseSettingsResult EQUAL 0)
     message(FATAL_ERROR "Failed to create release settings.ini")
 endif()
 
-openyamm_release_zip_directory(
-    "${OPENYAMM_RELEASE_ASSET_DEV_DIR}/engine"
-    "${OPENYAMM_RELEASE_STAGE_DIR}/assets/engine.zip"
+execute_process(
+    COMMAND "${OPENYAMM_RELEASE_PYTHON}" "${CMAKE_CURRENT_LIST_DIR}/../tools/package_runtime_assets.py"
+        --assets-root "${OPENYAMM_RELEASE_ASSET_DEV_DIR}"
+        --output "${OPENYAMM_RELEASE_STAGE_DIR}/assets"
+        --profile desktop --cooker "${OPENYAMM_RELEASE_COOKER}"
+    RESULT_VARIABLE assetPackageResult
 )
-
-file(GLOB worldPackageDirs
-    LIST_DIRECTORIES true
-    "${OPENYAMM_RELEASE_ASSET_DEV_DIR}/worlds/*"
-)
-list(SORT worldPackageDirs)
-
-foreach(worldPackageDir IN LISTS worldPackageDirs)
-    if (NOT IS_DIRECTORY "${worldPackageDir}")
-        continue()
-    endif()
-
-    get_filename_component(worldPackageName "${worldPackageDir}" NAME)
-    openyamm_release_zip_directory(
-        "${worldPackageDir}"
-        "${OPENYAMM_RELEASE_STAGE_DIR}/assets/worlds/${worldPackageName}.zip"
-    )
-endforeach()
+if (NOT assetPackageResult EQUAL 0)
+    message(FATAL_ERROR "Runtime asset verification/packaging failed")
+endif()
 
 get_filename_component(openyammReleaseParentDir "${OPENYAMM_RELEASE_STAGE_DIR}" DIRECTORY)
 get_filename_component(openyammReleaseFolderName "${OPENYAMM_RELEASE_STAGE_DIR}" NAME)

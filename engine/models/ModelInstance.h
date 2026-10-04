@@ -1,0 +1,85 @@
+#pragma once
+
+#include "engine/models/ModelAnimation.h"
+
+#include <cstdint>
+#include <limits>
+#include <memory>
+#include <optional>
+#include <string>
+#include <vector>
+
+namespace OpenYAMM::Engine
+{
+struct ModelInstanceHandle
+{
+    uint32_t index = std::numeric_limits<uint32_t>::max();
+    uint32_t generation = 0;
+
+    bool operator==(const ModelInstanceHandle &) const = default;
+};
+
+enum class ModelPlaybackMode
+{
+    Once,
+    Loop
+};
+
+class ModelInstanceSystem
+{
+public:
+    ModelInstanceHandle create(std::shared_ptr<const ModelAsset> asset, const ModelTransform &rootTransform = {});
+    bool destroy(ModelInstanceHandle handle);
+    void clear();
+
+    bool contains(ModelInstanceHandle handle) const;
+    bool setTransform(ModelInstanceHandle handle, const ModelTransform &transform);
+    bool setVisible(ModelInstanceHandle handle, bool visible);
+    bool setNodeMarkersVisible(ModelInstanceHandle handle, bool visible);
+    bool play(ModelInstanceHandle handle, const std::string &clipName, ModelPlaybackMode mode);
+    bool pause(ModelInstanceHandle handle, bool paused);
+    bool stop(ModelInstanceHandle handle);
+    bool setTime(ModelInstanceHandle handle, float timeSeconds);
+    void update(float deltaSeconds);
+
+    const ModelAsset *asset(ModelInstanceHandle handle) const;
+    std::shared_ptr<const ModelAsset> sharedAsset(ModelInstanceHandle handle) const;
+    const ModelPose *pose(ModelInstanceHandle handle) const;
+    const ModelMatrix *nodeMatrix(ModelInstanceHandle handle, uint32_t nodeIndex) const;
+    const ModelMatrix *nodeMatrix(ModelInstanceHandle handle, const std::string &nodeName) const;
+    const ModelBounds *bounds(ModelInstanceHandle handle) const;
+    float playbackTime(ModelInstanceHandle handle) const;
+    bool isPlaying(ModelInstanceHandle handle) const;
+    bool isVisible(ModelInstanceHandle handle) const;
+    bool areNodeMarkersVisible(ModelInstanceHandle handle) const;
+    std::vector<ModelInstanceHandle> handles() const;
+    size_t size() const;
+
+private:
+    struct Slot
+    {
+        uint32_t generation = 1;
+        bool active = false;
+        bool visible = true;
+        bool nodeMarkersVisible = false;
+        bool playing = false;
+        bool paused = false;
+        bool clipSelected = false;
+        ModelPlaybackMode playbackMode = ModelPlaybackMode::Once;
+        uint32_t clipIndex = 0;
+        float timeSeconds = 0.0f;
+        ModelTransform rootTransform;
+        std::shared_ptr<const ModelAsset> asset;
+        ModelPose pose;
+        ModelBounds bounds;
+    };
+
+    Slot *find(ModelInstanceHandle handle);
+    const Slot *find(ModelInstanceHandle handle) const;
+    void evaluate(Slot &slot);
+
+    std::vector<Slot> m_slots;
+    std::vector<uint32_t> m_freeIndices;
+    size_t m_activeCount = 0;
+};
+}

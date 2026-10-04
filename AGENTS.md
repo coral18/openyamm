@@ -25,13 +25,197 @@ These rules apply to all AI-generated contributions in this repository.
 
 - Use the local OpenEnroth checkout at `reference/OpenEnroth-git/`; do not search OpenEnroth on the web when local
   reference is available.
+- For original MM8 engine behavior research (pathing, collision, AI updates, timing or optimizations), use Rizin as
+  the primary binary analysis tool and start with [MM8 Rizin Guide](re_mm8/RIZIN_GUIDE.md). Use
+  `re_mm8/mm8_orig/MM8-Rel.exe` as the default target, verified against the supplied GOG installer; the patched
+  `mm8.exe` is for explicit comparisons. Match executable hashes before reusing addresses, distinguish disk code
+  from runtime patches, and preserve `re_mm8/mm8_orig/` unchanged.
+  For ODM rendering, visibility and rendering optimizations, use the verified
+  [MM8 outdoor rendering investigation](re_mm8/OUTDOOR_RENDERING.md) and its original-executable annotations.
+  Compare original techniques with the existing renderer using
+  [MM8 versus OpenYAMM rendering](re_mm8/OPENYAMM_RENDERING_COMPARISON.md) before proposing optimization changes.
+- Start searches in relevant source directories; include `reference/`, `mm9/`, generated assets, and build trees only
+  when needed.
 - Development compile command: `cmake --build build --target openyamm -j25`.
-- Prefer doctest/unit coverage for pure logic.
-- Use focused headless coverage for runtime/map behavior when unit tests are not enough.
+- Do not run Vulkan builds or rebuilds (including `build-vulkan/`) unless the user explicitly requests them for
+  the current task. Previous Vulkan build authorization does not carry forward to later tasks.
+- Prefer doctest/unit coverage for pure logic. Build with `cmake --build build --target openyamm_unit_tests -j25`,
+  then run focused tests with `./build/tests/openyamm_unit_tests --test-case='*pattern*'`.
+- Use focused headless coverage for runtime/map behavior when unit tests are not enough:
+  `./build/game/openyamm --headless-run-scenario <scenario.yml>`. Examples live in `tests/scenarios/`.
 - If a task explicitly names planning documents, follow those documents for that task only; do not treat stale plans as
   active global instructions.
 - When the user references an image by filename or bare id, such as `901.png` or `901`, first resolve it as
-  `test/img/901.png` unless the user provided a different path.
+  `test_img/901.png` unless the user provided a different path.
+
+### Native Game Visual Checks
+
+- Use `./tools/run_game.sh [game arguments...]` to launch the normal `build/game/openyamm` on the current desktop
+  display for real-GPU checks. It runs from the repository root, uses the ordinary settings/assets/saves, and forwards
+  arguments directly to the game. It does not build, use Xvfb, or force a renderer; verify the active GPU in the logs.
+- For repeatable desktop runs, prefer `./tools/run_game.sh --isolated <name> --world mm6 --map oute3.odm ...`.
+  See [Desktop game runs](tools/RUN_GAME.md) or `./tools/run_game.sh --isolated --help` for copied settings/saves,
+  camera overrides, rendering settings and timed exit. Runs bypass the menu, retain records in a unique temporary
+  directory, and close their own game process automatically (default: three-second warmup plus fifteen seconds).
+- The user authorized this desktop launcher. When desktop access requires `require_escalated`, use the saved
+  `./tools/run_game.sh` command-prefix approval when available, without asking again. Approval persistence is controlled
+  by the client. This approval covers launching the game, not arbitrary profiler commands or system configuration.
+- Use `./tools/capture_gameplay.sh <name> --world mm6 --map oute3.odm --stage <stage> ...` for isolated
+  Xvfb screenshots and scripted input; `--help` lists save, pose, action and output options. It requires `xvfb-run`,
+  which is absent on some hosts; when only scripted stills are needed, prefer the engine-native capture below.
+- The user authorized this reusable capture workflow. Use the saved `./tools/capture_gameplay.sh` command-prefix
+  approval when available; do not ask again for each camera or run. If the sandbox blocks display sockets, run the
+  wrapper with `require_escalated` and that prefix. Approval persistence is controlled by the client, not this file.
+- Prefer engine-native screenshot capture over desktop/X11 screenshot tools; the game writes the PNG itself through its
+  bgfx frame readback, so it is compositor-independent (Wayland-safe) and includes the HUD. Use absolute output paths
+  because isolated runs use their own working directory.
+  - One pose: `./tools/run_game.sh --isolated <name> --world mm6 --map oute3.odm --position X Y Z --yaw-radians Y
+    --pitch-degrees P --warmup 5 --seconds 12 --set debug.screenshot_path=/absolute/shot.png
+    --set debug.screenshot_delay_seconds=4`. The delay counts from gameplay start (map loaded, loading overlay closed);
+    give it room while tuning settings.
+  - Many poses in one boot: author a tour YAML with `output_dir`, optional `settle_seconds` (default 1.5) and
+    `exit: true`, plus `shots:` entries of `name`, `position: [x, y, z]`, `yaw` and `pitch` in radians
+    (see `output/test_tour.yml` for an example). Pass `--set debug.screenshot_tour_path=/absolute/tour.yml`; shots are
+    written as `NN-<name>.png` in order, and `exit: true` closes the game after the last shot.
+  - Interactive: `> screenshot [name]` in the debug console saves `output/screenshots/<name>.png`.
+  The `[debug]` capture keys (`screenshot_path`, `screenshot_delay_seconds`, `screenshot_tour_path`) are one-shot launch
+  directives: parsed from the INI but never written back on save, so they fire only for the launch that requested them.
+- Captures use isolated saves/settings and do not establish real-hardware GPU performance. Inspect the images and logs.
+
+### Level Generation
+
+- For creating or revising indoor/outdoor maps, start with [Level Generation](level_generation/README.md), even when
+  the user does not name the document. Follow its applicable indoor/outdoor workflow, reference studies, calibration,
+  and current pipeline-status notes; example maps are references, not universal layouts or exporters.
+- Use [Blender MCP Startup](level_generation/BLENDER_MCP_STARTUP.md) for agent-managed startup/reconnection.
+  Prioritize visual authenticity and quick static wiring/build checks; follow the README's criteria for runtime
+  scenarios rather than running a scenario for every face, service, or event binding.
+
+### Creature Generation
+
+- Treat `CREATURE_RESTORE <source-pattern>` as an explicit request to follow
+  [Creature Restore](.agents/skills/creature-restore/SKILL.md), also invocable as `$creature-restore`.
+  Honor scope overrides such as front-only, resume, or plan-only; discussing the workflow does not start generation.
+- For MM6–MM8 creature sprite restoration/upscaling, atlas export, masks, or color variants, start with
+  [Sprite Atlas and Variants Pipeline](level_generation/creatures/SPRITE_ATLAS_VARIANTS_PIPELINE.md), even when the
+  user does not name the document. It contains the short generation recipe and separately marked future engine deltas.
+- Use [Direct Sprite Workflow](level_generation/creatures/DIRECT_SPRITE_WORKFLOW.md) for detailed AI prompting,
+  transparency/edge cleanup, alignment, and review. For a requested rigged 3D model, use
+  [Sprite-to-3D Workflow](level_generation/creatures/SPRITE_TO_3D_WORKFLOW.md).
+- Keep asset-generation checks focused on visuals and quick manifest/alpha/placement validation. Renderer work and
+  its runtime tests are separate scope; proposed engine deltas are not automatically part of each generation task.
+
+### In-game HUD Design Reference
+
+- The latest user-approved in-game HUD design is **Obsidian refinement 04** (2026-09-27). When revisiting HUD design,
+  start with the [approved design reference](level_generation/ui/hud_concepts_20260927/README.md#latest-approved-design),
+  its preserved screenshot and interactive mockup. This remains the selected visual baseline. The user authorized
+  wholesale native integration on 2026-09-28; the shared gameplay HUD is now Obsidian on desktop and Android.
+  The final native refinements use 10% larger gameplay portraits, a 112-logical-pixel minimap, lower portrait placement
+  and separated HP/SP bars. Do not restore names or redundant condition labels beneath gameplay portraits.
+  The [2129 native refinement](level_generation/ui/obsidian_engine_handoff_20260928/refinement_2129/README.md)
+  puts the four icon-only menu actions beside gold/food on one slim top-left bar. The minimap is raised and has no
+  location title. Hero/skull panels below the shared bar display ordinary party buffs; the timed-icon/overflow strip
+  is retained for future special modifiers only. HP meters use green at 66% and above, yellow above 33%, and red at
+  33% or below. Preserve these later user-directed changes when using the earlier browser studies.
+  The [2130 correction](level_generation/ui/obsidian_engine_handoff_20260928/refinement_2130/README.md) anchors the
+  bar at screen (0,0), insets the gold icon and removes the bar/minimap outer shadows. It replaces legacy buff layers
+  with true-alpha Obsidian atlases and restores the old desktop skull meanings: Torch Light glow, Feather Fall clouds,
+  Stoneskin stone skull, Day of the Gods halo, Wizard Eye near eye and Protection from Magic garland. Do not restore
+  the incorrect Android mapping that assigned the Torch Light glow to Fly.
+  The [2131–2132 refinement](level_generation/ui/obsidian_engine_handoff_20260928/refinement_2132/README.md) reduces
+  resistance gems to a shared size budget, adds a three-unit left buff-panel inset, restores subtle minimap shading
+  and places live time above it. A reskinned legacy head at the right edge toggles the original followers panel.
+  Fly/Levitate and Water Walk use separate animated indicators; never add them to the skull layers or badges.
+  The [dynamic party basebar](level_generation/ui/obsidian_engine_handoff_20260928/refinement_party_basebar/README.md)
+  implements the 2026-09-29 follow-up: one centered Obsidian frame sized to the active party, exterior end ornaments,
+  and vertical HP/mana tracks to each portrait's right. Keep the accepted portrait scale, HP colours, recovery and
+  selection rules, and omit the mana track when maximum mana is zero. This supersedes floating gameplay portraits
+  and horizontal gameplay meters in the earlier studies; the approved refinement below supersedes this first version.
+  The user subsequently selected **A, split arcs** from the
+  [2133 curved-meter study](level_generation/ui/obsidian_curved_portraits_20260929/README.md).
+  Its [native integration](level_generation/ui/obsidian_curved_portraits_20260929/native/README.md) supersedes the
+  vertical gameplay tracks: HP wraps left, mana right, selection stays on the inner rim/top diamond, aggro/recovery
+  lower-left and personal buffs lower-right. The dynamic basebar is flush with the screen bottom, with a narrower
+  border and compact end ornaments; all portrait elements clear its border/corners. Retain accepted portrait size,
+  HP bands, no-mana and nobody-ready rules.
+  The user approved the final native appearance on 2026-09-29; this fitted split-arc implementation is the current
+  gameplay portrait/basebar baseline, not a pending browser proposal.
+  The 2134 follow-up enlarges only the gameplay selection diamond from 16 to 20 logical pixels; keep the portrait
+  dimensions and HP/mana arc widths unchanged. See the native reference's `refinement_2134/` captures.
+  The 2135 follow-up uses Lucida scale 0.75 for gameplay event/hover status text and anchors its content-sized plate
+  six logical pixels above the basebar; longer text grows upward. Fullscreen status/input rail styling is unchanged.
+  The [full-screen follow-up](level_generation/ui/obsidian_curved_portraits_20260929/native/overlay_arcs/README.md)
+  applies the same split arcs, selected rim/diamond and lower indicators to inventory, house dialogue and the other
+  shared overlay screens. Keep their existing portrait dimensions, fixed 4:3 frame and clear status/input rail;
+  overlay selection continues to identify the inspected member even while the party is recovering.
+- For the separate centred 4:3 inventory and house-dialogue screens, the user selected **Carved Obsidian**
+  (2026-09-27). Follow the [full-screen design reference](level_generation/ui/hud_overlay_study_20260927/README.md)
+  for the current refinements. Native fullscreen chrome includes the clear status/input rail from 2116; retain
+  the fixed 4:3 media geometry and existing portrait/paperdoll assets.
+- **Fondamento** is the user-selected button typeface (2026-09-28). For overlay reading surfaces the user selected
+  **dark obsidian, soft ivory and the recreated MM fonts in their original roles**. The
+  [extended overlay collection, revision 03](level_generation/ui/obsidian_overlays_20260928/README.md) follows
+  references 2078–2088: original content layouts, held-RMB inspection, blue whole-row skill upgrades, simple dialogue,
+  a bottom-anchored item value, grouped rest controls and clearer section/column divisions.
+  The user approved **revision 03 in full on 2026-09-28**, including its semantic colours, shared border and
+  glyph-free buff illustrations. Use the [staged integration package](level_generation/ui/obsidian_overlays_20260928/staging/README.md)
+  for source graphics and design contracts. Current mounted layouts and shared render/input code implement this collection.
+- The [Adventurer's Guild replacement](level_generation/ui/obsidian_adventurers_guild_20260929/README.md)
+  implements the requested Obsidian reskin from 2143: generated carved-stone/brass frame, recessed eight-slot roster,
+  ivory SMALLNUM reading text, biography divider, gold selection and Fondamento Hire/Exit buttons. Preserve its
+  original portrait geometry, paging, double-click character inspection, paperdoll and hiring behavior. Runtime
+  artwork and layout are mounted under the engine-owned icons and `adventurers_inn.yml`; native captures are linked.
+- The user approved the [painted Obsidian rest hourglass](level_generation/ui/obsidian_rest_hourglass_20260929/README.md)
+  and its **2140 conserved-sand correction**, then requested native integration on 2026-09-29. The
+  [native implementation](level_generation/ui/obsidian_rest_hourglass_20260929/native/README.md) uses one fixed RGBA
+  shell and a sand atlas exported from the approved volume model. Preserve the eight-second drain, one-second smooth
+  half-turn, both painted orientations and fixed total sand. Do not restore the legacy `hglas` animation. The shared
+  rest layout includes the wider date block, fine divider and centred Exit Rest button.
+- The user approved **Carved Obsidian journal revision 01** (2026-09-28): map, quests, story and all six
+  autonote categories using references 2091–2094, plus the separate 2090 status-strip treatment. Start with the
+  [approved journal design](level_generation/ui/obsidian_journal_20260928/README.md) and its
+  [staged integration package](level_generation/ui/obsidian_journal_20260928/staging/README.md).
+  It preserves the approved art, native map viewport and reading fonts, Fondamento button states and journal YAML.
+  The subsequent text refinement uses justified quest/story/autonote paragraphs with left-aligned final lines;
+  native glyph metrics, paragraph endings and pagination remain authoritative in the shared renderer.
+  See the [native integration record](level_generation/ui/obsidian_engine_handoff_20260928/NATIVE_INTEGRATION.md)
+  and its GPU capture gallery for current implementation and checks. Android uses the shared desktop layout plus
+  the [remaining-UI follow-up](level_generation/ui/obsidian_remaining_20260929/README.md)'s `touch_controls.yml`.
+  The user approved this final Android arrangement on 2026-09-29; use its
+  [approved captures](level_generation/ui/obsidian_remaining_20260929/README.md#latest-approved-android-layout)
+  as the current baseline.
+  Preserve large thumb controls: Attack/Spell side by side with attached Quick Cast. The lower-left controls are
+  one vertical column, bottom to top Turn Mode, Inventory, Inspect, with 80-unit buttons and eight-unit gaps.
+  This column stays beside the party at 4:3. Groups lift above the dynamic party frame only when they overlap it;
+  do not restore small controls against the screen edges. The Android context popup belongs immediately above
+  the right-hand Attack/Spell pair, clears Quick Cast and follows that group's party-frame displacement.
+  The right group uses a 1024-wide scale reference (about 6% smaller at 2:1) to stay beside the full party bar;
+  wider phones retain full size. The left group retains its 965-wide reference. Flight arrows are visible and
+  touchable only outdoors with the Fly party buff active.
+  This follow-up also installs Obsidian Lloyd's Beacon,
+  jewelry/magnifier, context illustrations and teleport Close buttons, and removes the legacy shop frame fallback.
+  Spellbook art remains intentional. Preserve the separate menu implementation when revisiting gameplay UI.
+
+- The user approved **Carved Obsidian menus revision 03** (2026-09-28), including main/pause, save/load,
+  continent/party creation, Settings, keyboard and credits. Start with the
+  [approved menu study](level_generation/ui/menu_study_20260928/README.md) and its
+  [runtime staging bundle](level_generation/ui/menu_study_20260928/runtime_stage/README.md).
+  It preserves blank graphics, Fondamento/Arrus/Lucida fonts, layout YAML drafts and integration contracts.
+  This is an approved design handoff; native menu activation remains separate work.
+
+### Decoration And Effect Restoration
+
+- For prepared MM6–MM8 PC/NPC portrait and small HUD/icon sheets, use
+  [Dense64 batching](level_generation/ui/hud_inventory/BATCHING_DENSE64.md) and the current
+  [chat bundle index](level_generation/ui/hud_inventory/CHAT_BUNDLES.md). The user selected a maximum of 64
+  targets per sheet, constrained by the measured pixel budget; use fewer for larger art. Check retained results
+  and superseded assignments before generating. Preparation and raw-return cataloguing do not accept artwork.
+- For MM6–MM8 non-creature sprite enhancement (decorations, items, projectiles, FX, weather or UI), start with
+  [Prepared Sprite Restoration Jobs](level_generation/sprites/restoration_jobs/README.md). Use its exact prompts,
+  palette references, resumable queue and imagegen skill; planning alone does not authorize generation.
+- Preserve native animation/placement and use the relevant soft-effect cleanup rules. Keep visual review concise;
+  engine installation and runtime scenarios are separate from asset restoration.
 
 ### Android Testing
 
@@ -92,7 +276,6 @@ missing world hooks. Prefer fixing the shared path or the world hook over adding
 
 ### Flat Base, World, And Mod Content
 
-- The long-term content architecture is documented in `WORLD_CAMPAIGN_MOD_ARCHITECTURE.md`.
 - OpenYAMM is the engine. Worlds such as MM8, MM7, MM6, or future custom settings should be mounted content packages,
   not separate engines or hardcoded runtime modes.
 - Use a flat MMerge-like base: `assets_dev/engine/` is the global/base content layer and `assets_dev/worlds/*` contains
@@ -112,20 +295,29 @@ missing world hooks. Prefer fixing the shared path or the world hook over adding
 - Use canonical namespaced ids for world-specific data. Treat MM6/MM7/MM8 raw ids as import aliases, not global truth.
 - Implement world support incrementally around existing runtime systems through package mounting, world manifests, mod
   manifests, declared id ranges, and active-world context. Do not rewrite the game engine for this.
-- For MM6/MMerge import work, use the "MM6 Import Reference From MMerge" section in
-  `WORLD_CAMPAIGN_MOD_ARCHITECTURE.md`. Treat `reference/mmerge_data_forus/` and `reference/mmmerge/` as data and
-  behavior references only; import into normal world/mod architecture instead of reproducing MMerge's memory-hook
-  runtime shape.
-- Track MMerge TXT table integration in `MMERGE_TXT_TABLE_INTEGRATION_INVENTORY.md` and update it whenever a table is
-  promoted, converted, skipped, or given a loader.
-- Track MMerge icon ownership in `MMERGE_ICON_OWNERSHIP.md`. Keep merge-owned/global icons in
-  `assets_dev/engine/icons`, original-world NPC portraits in `assets_dev/worlds/mm*/icons`, and preserve the documented
-  lowercase/0644 import rules.
+- For MM6/MMerge import work, treat `reference/mmerge_data_forus/` and `reference/mmmerge/` as data and behavior
+  references only; import into normal world/mod architecture instead of reproducing MMerge's memory-hook runtime shape.
+- Keep restored merge-owned/global icons in `assets_dev/engine/icons_x2` and restored MM6–MM8 NPC portraits in
+  `assets_dev/worlds/mm*/icons_x2`; keep lowercase filenames and 0644 permissions. `engine/icon_packages.txt`
+  declares the authoritative package tiers; MM9 retains its native `worlds/mm9/icons` scope. Original MM6–MM8
+  icons are archived outside runtime mounts under `assets_legacy/icons_20260926/`. Do not repopulate their retired
+  `icons` folders. See `level_generation/ui/hud_inventory/runtime_install_20260926/README.md` for receipts and
+  source mapping.
+- Follow `MM9_RUDE_SCR_INTEGRATION.md` for MM9 RUDE, dialogue-linked SCR, item, promotion, skill, and service work.
+  Compile only the required NPC dialogue hooks at build time; do not add a general SCR runtime or MM9 spells/skills.
+- MM9 integration and implementation must not regress existing MM6/MM7/MM8 gameplay, data behavior, save/load,
+  rendering, asset lookup, stability, startup or map-loading time, memory use, or runtime performance. Keep MM9-specific
+  content and work world/mod-scoped; when MM9 is not mounted, it must add no meaningful runtime cost. Validate affected
+  MM6/MM7/MM8 paths alongside MM9 rather than treating successful MM9 behavior as sufficient verification.
+- When changing MM9 equipment art, use `MM9_EQUIPMENT_PAPERDOLL_GENERATION_GOAL.md` as a maintenance reference and
+  `MM9_ARMOR_PAPERDOLL_AI_GENERATION.md` for armor prompting, fitting, and review. For paired armor `vN`/`vNa` changes,
+  apply the consistency checks in `MM9_ARMOR_POSE_PAIR_CONSISTENCY_GOAL.md`. The generation run and pose audit are
+  completed work; validate affected assets without restarting their historical completion gates.
 
 ## Assets And Runtime
 
 - Keep original asset formats whenever practical: TXT gameplay data, WAV audio, MP3/FLAC music, OGV video, ZIP packages.
-- Development assets live under `assets_dev/`; runtime packages live under `assets/*.zip`.
+- Development assets live under `assets_dev/`; runtime packages live under `assets/*.zip` and `assets/worlds/*.zip`.
 - Renderer uses bgfx. Keep rendering simple: static meshes, sprites/billboards, UI, basic lighting, fog.
 - Audio uses SDL3 with an engine mixer layer for effects, music, volume groups, and fades.
 - Video uses FFmpeg OGV decoding with audio/video sync and looping/cutscene support.

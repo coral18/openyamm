@@ -12,6 +12,13 @@ textures:
   - {name: tree, file: tree.png, palette_id: 140, logical_size: [1, 1], pixel_scale: 2}
 )";
 
+// RGBA 2x2: opaque magenta, half-alpha color, transparent black, opaque color.
+const uint8_t Png2x2[] = {
+    137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 2, 0, 0, 0, 2,
+    8, 6, 0, 0, 0, 114, 182, 13, 36, 0, 0, 0, 26, 73, 68, 65, 84, 120, 156, 99, 248, 207, 240,
+    255, 63, 151, 136, 92, 3, 11, 35, 3, 35, 163, 134, 156, 205, 127, 0, 56, 72, 5, 66, 134,
+    107, 38, 117, 0, 0, 0, 0, 73, 69, 78, 68, 174, 66, 96, 130};
+
 struct DecorationTextureFixture
 {
     std::filesystem::path root = std::filesystem::temp_directory_path()
@@ -56,19 +63,15 @@ TEST_CASE("map decoration textures preserve RGBA and native size only in their e
     std::filesystem::create_directories(directory);
     std::filesystem::create_directories(assetsRoot / "engine");
     std::ofstream(directory / "manifest.yml") << Manifest;
-    // RGBA 2x2: opaque magenta, half-alpha color, transparent black, opaque color.
-    const uint8_t png[] = {
-        137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 2, 0, 0, 0, 2,
-        8, 6, 0, 0, 0, 114, 182, 13, 36, 0, 0, 0, 26, 73, 68, 65, 84, 120, 156, 99, 248, 207, 240,
-        255, 63, 151, 136, 92, 3, 11, 35, 3, 35, 163, 134, 156, 205, 127, 0, 56, 72, 5, 66, 134,
-        107, 38, 117, 0, 0, 0, 0, 73, 69, 78, 68, 174, 66, 96, 130};
-    std::ofstream(directory / "tree.png", std::ios::binary).write(reinterpret_cast<const char *>(png), sizeof(png));
+    std::ofstream(directory / "tree.png", std::ios::binary).write(
+        reinterpret_cast<const char *>(Png2x2), sizeof(Png2x2));
     Engine::AssetFileSystem assets;
     REQUIRE(assets.initialize(fixture.root, assetsRoot, Engine::AssetScaleTier::X1, "mm6"));
     std::string error;
     const auto textures = Game::loadMapDecorationTextures(assets, "mm6", "oute3.odm", error);
     REQUIRE_MESSAGE(textures, error);
     REQUIRE(textures->size() == 1);
+    CHECK_FALSE(textures->front().resourceIdentity.empty());
     const Game::OutdoorBitmapTexture &texture = textures->front();
     CHECK(texture.width == 1);
     CHECK(texture.height == 1);
@@ -93,4 +96,37 @@ TEST_CASE("map decoration textures preserve RGBA and native size only in their e
     std::ofstream(directory / "manifest.yml") << Manifest;
     std::filesystem::remove(directory / "tree.png");
     CHECK_FALSE(Game::loadMapDecorationTextures(assets, "mm6", "oute3.odm", error));
+}
+
+TEST_CASE("restored decoration pack uses the frame palette key and retains native dimensions")
+{
+    using namespace OpenYAMM;
+    DecorationTextureFixture fixture;
+    const std::filesystem::path assetsRoot = fixture.root / "assets_dev";
+    const std::filesystem::path directory = assetsRoot / "engine/decorations_x2";
+    std::filesystem::create_directories(directory);
+    std::ofstream(directory / "tree_p140.png", std::ios::binary).write(
+        reinterpret_cast<const char *>(Png2x2), sizeof(Png2x2));
+
+    Engine::AssetScaleProfile profile;
+    profile.decorations = Engine::AssetScaleTier::X2;
+    Engine::AssetFileSystem assets;
+    REQUIRE(assets.initialize(fixture.root, assetsRoot, Engine::AssetScaleTier::X1, profile, "mm6"));
+    CHECK(Game::hasRestoredDecorationTexture(assets, "TREE", 140));
+    const auto restored = Game::loadRestoredDecorationTexture(assets, "TREE", 140);
+    REQUIRE(restored);
+    CHECK(restored->width == 1);
+    CHECK(restored->height == 1);
+    CHECK(restored->physicalWidth == 2);
+    CHECK(restored->physicalHeight == 2);
+    CHECK(restored->hasTransparentPixels);
+    CHECK(restored->hasPartialAlphaPixels);
+    CHECK_FALSE(Game::loadRestoredDecorationTexture(assets, "tree", 141));
+    CHECK_FALSE(Game::hasRestoredDecorationTexture(assets, "tree", 141));
+
+    assets.shutdown();
+    Engine::AssetScaleProfile nativeProfile;
+    Engine::AssetFileSystem nativeAssets;
+    REQUIRE(nativeAssets.initialize(fixture.root, assetsRoot, Engine::AssetScaleTier::X1, nativeProfile, "mm6"));
+    CHECK(Game::loadRestoredDecorationTexture(nativeAssets, "tree", 140));
 }

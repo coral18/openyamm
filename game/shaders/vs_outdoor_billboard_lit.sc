@@ -1,5 +1,5 @@
 $input a_position, a_texcoord0, a_color0
-$output v_texcoord0, v_color0, v_depth
+$output v_texcoord0, v_color0, v_depth, v_worldPosition
 
 #include "common.sh"
 
@@ -11,4 +11,5 @@ void main()
     v_texcoord0 = a_texcoord0;
     v_color0 = a_color0;
     v_depth = abs(viewPosition.z);
+    v_worldPosition = mul(u_model[0], worldPosition).xyz;
 }

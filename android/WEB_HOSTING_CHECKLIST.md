@@ -14,18 +14,18 @@ Use this for sideload releases hosted outside Google Play.
 
 ## Versioning Policy
 
-- `versionName` is human-readable semver.
+- `versionName` uses the current `X.Y` release tag.
 - `versionCode` must strictly increase for every hosted update.
-- Use `versionCode = major * 10000 + minor * 100 + patch`.
-- Current default: `versionName=0.1.0`, `versionCode=100`.
-- For the next small update, use `0.1.1` / `101`.
-- For the next larger preview, use `0.2.0` / `200`.
+- Use `versionCode = major * 10000 + minor * 100`. This reserves the final two digits for possible patch builds later.
+- Current default: `versionName=0.13`, `versionCode=1300`.
+- For the next preview, use `0.14` / `1400`.
+- Tagged CI builds calculate these values automatically from the tag; for example, `0.7` becomes version code `700`.
 
 Edit these in `android/gradle.properties` before building:
 
 ```properties
-openyamm.android.versionName=0.1.0
-openyamm.android.versionCode=100
+openyamm.android.versionName=0.13
+openyamm.android.versionCode=1300
 ```
 
 ## Build And Verify

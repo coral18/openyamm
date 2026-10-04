@@ -66,6 +66,13 @@ public:
         Bottom
     };
 
+    struct MeterArc
+    {
+        float startDegrees = 0;
+        float sweepDegrees = 0;
+        float strokeWidth = 0;
+    };
+
     struct LayoutElement
     {
         std::string id;
@@ -82,6 +89,7 @@ public:
         float offsetY = 0.0f;
         float width = 0.0f;
         float height = 0.0f;
+        std::optional<MeterArc> meterArc;
         std::string bottomToId;
         float bottomGap = 0.0f;
         float minScale = 1.0f;
@@ -95,6 +103,8 @@ public:
         std::string primaryAsset;
         std::string hoverAsset;
         std::string pressedAsset;
+        std::string selectedAsset;
+        std::string disabledAsset;
         std::string secondaryAsset;
         std::string tertiaryAsset;
         std::string quaternaryAsset;

@@ -2,8 +2,10 @@
 
 #include "engine/AssetFileSystem.h"
 #include "engine/AssetScaleTier.h"
+#include "engine/AudioSpatialization.h"
 #include "engine/TextTable.h"
 #include "game/audio/GameAudioSystem.h"
+#include "game/audio/ActorAudioRules.h"
 #include "game/audio/SoundCatalog.h"
 #include "game/audio/SoundIds.h"
 #include "game/gameplay/GameplaySpeechRules.h"
@@ -18,6 +20,7 @@
 #include <array>
 #include <cctype>
 #include <filesystem>
+#include <numbers>
 #include <string>
 #include <unordered_set>
 #include <vector>
@@ -871,4 +874,107 @@ TEST_CASE("damage impact sound request uses armor family mapping")
     REQUIRE_EQ(armoredRequests.size(), 1u);
     CHECK_EQ(armoredRequests[0].kind, OpenYAMM::Game::Party::PendingAudioRequest::Kind::Sound);
     CHECK(isMetalImpactSound(armoredRequests[0].soundId));
+}
+
+TEST_CASE("actor audio uses MM8 integer distance and inclusive 8192 boundary")
+{
+    using OpenYAMM::Game::actorVoiceVolume;
+    CHECK_EQ(actorVoiceVolume(0, 0, 0), 114);
+    CHECK_EQ(actorVoiceVolume(4096, 0, 0), 64);
+    CHECK_EQ(actorVoiceVolume(0, 0, -4096), 64);
+    CHECK_EQ(actorVoiceVolume(4096, 4096, 4096), 35);
+    CHECK_EQ(actorVoiceVolume(-4096, 4096, -4096), 35);
+    CHECK_EQ(actorVoiceVolume(6144, 6144, 0), 0);
+    CHECK_EQ(actorVoiceVolume(8191, 0, 0), 15);
+    CHECK_EQ(actorVoiceVolume(8192, 0, 0), 14);
+    CHECK_EQ(actorVoiceVolume(8193, 0, 0), 0);
+    CHECK_EQ(actorVoiceVolume(0, -8192, 0), 14);
+    CHECK_EQ(actorVoiceVolume(0, 0, 8193), 0);
+    CHECK_EQ(actorVoiceVolume(8192, 0, 4), 0);
+    CHECK_EQ(actorVoiceVolume(1000000000, 0, 0), 0);
+}
+
+TEST_CASE("positional audio rotates with listener yaw and preserves relative bearing")
+{
+    using OpenYAMM::Engine::positionalAudioPan;
+    constexpr float pi = std::numbers::pi_v<float>;
+    CHECK(positionalAudioPan(0, -100, 0) == doctest::Approx(1));
+    CHECK(positionalAudioPan(0, -100, pi) == doctest::Approx(-1));
+    CHECK(positionalAudioPan(100, 0, 0) == doctest::Approx(0));
+    CHECK(positionalAudioPan(-100, 0, 0) == doctest::Approx(0));
+    CHECK(positionalAudioPan(0, 100, pi / 2) == doctest::Approx(0).epsilon(0.0001));
+    CHECK(positionalAudioPan(0, 0, pi) == doctest::Approx(0));
+    CHECK(positionalAudioPan(1300 - 1200, 4200 - 4000, 0.75f)
+        == doctest::Approx(positionalAudioPan(100, 200, 0.75f)));
+    CHECK(positionalAudioPan(100, 200, 0.75f)
+        == doctest::Approx(positionalAudioPan(1000, 2000, 0.75f)));
+}
+
+TEST_CASE("actor audio uses verified Shrink powers without undefined pitch")
+{
+    using OpenYAMM::Game::actorVoicePitch;
+    CHECK_EQ(actorVoicePitch(0, 0.25f), 1.0f);
+    CHECK_EQ(actorVoicePitch(10, 0.5f), 1.5f);
+    CHECK_EQ(actorVoicePitch(10, 1.0f / 3), 2.0f);
+    CHECK_EQ(actorVoicePitch(10, 0.25f), 2.5f);
+    CHECK_EQ(actorVoicePitch(10, 1), 1.0f);
+    CHECK_EQ(actorVoicePitch(10, 0), 1.0f);
+}
+
+TEST_CASE("actor audio owns four moving voices and replaces only quieter actors")
+{
+    using OpenYAMM::Game::GameAudioSystem;
+    using OpenYAMM::Game::worldSound;
+    const OpenYAMM::Tests::RegressionGameData &gameData = requireRegressionGameData();
+    OpenYAMM::Engine::AssetFileSystem assetFileSystem;
+    GameAudioSystem audio;
+    std::string failure;
+    REQUIRE_MESSAGE(initializeRegressionAudioSystem(gameData, assetFileSystem, audio, failure), failure.c_str());
+
+    const uint64_t first = audio.playActorSound(0, worldSound(1030), {100, 0, 0});
+    REQUIRE(first != 0);
+    CHECK_EQ(audio.playActorSound(0, worldSound(1030), {100, 0, 0}), first);
+    const uint64_t replacement = audio.playActorSound(0, worldSound(1031), {100, 0, 0});
+    REQUIRE(replacement != 0);
+    CHECK_NE(replacement, first);
+    CHECK_FALSE(audio.isSoundInstancePlaying(first));
+
+    const uint64_t second = audio.playActorSound(1, worldSound(1030), {2000, 0, 0});
+    const uint64_t third = audio.playActorSound(2, worldSound(1030), {4000, 0, 0});
+    const uint64_t fourth = audio.playActorSound(3, worldSound(1030), {6000, 0, 0});
+    REQUIRE(second != 0);
+    REQUIRE(third != 0);
+    REQUIRE(fourth != 0);
+    CHECK_NE(second, third);
+    CHECK_EQ(audio.playActorSound(4, worldSound(1030), {6000, 0, 0}), 0);
+    CHECK_EQ(audio.playActorSound(4, worldSound(1030), {7000, 0, 0}), 0);
+    CHECK_EQ(audio.playActorSound(4, worldSound(1030), {8193, 0, 0}), 0);
+    const uint64_t nearer = audio.playActorSound(4, worldSound(1030), {1000, 0, 0});
+    REQUIRE(nearer != 0);
+    CHECK_FALSE(audio.isSoundInstancePlaying(fourth));
+    CHECK(audio.isSoundInstancePlaying(third));
+
+    audio.updateActorVoices({}, [](size_t index) -> std::optional<GameAudioSystem::WorldPosition>
+    {
+        if (index == 1)
+        {
+            return std::nullopt;
+        }
+        return GameAudioSystem::WorldPosition{index == 0 ? 8193.0f : 8192.0f, 0, 0};
+    });
+    CHECK_FALSE(audio.isSoundInstancePlaying(replacement));
+    CHECK_FALSE(audio.isSoundInstancePlaying(second));
+    CHECK(audio.isSoundInstancePlaying(third));
+    CHECK(audio.isSoundInstancePlaying(nearer));
+
+    const uint64_t ui = audio.playSoundInstance(worldSound(1030), GameAudioSystem::PlaybackGroup::Ui, {}, false);
+    REQUIRE(ui != 0);
+    audio.beginMapSoundPreload();
+    CHECK_FALSE(audio.isSoundInstancePlaying(third));
+    CHECK_FALSE(audio.isSoundInstancePlaying(nearer));
+    CHECK(audio.isSoundInstancePlaying(ui));
+    audio.endMapSoundPreload();
+    CHECK(audio.playActorSound(0, worldSound(1030), {8192, 0, 0}) != 0);
+    audio.stopAllPlayback();
+    CHECK_FALSE(audio.isSoundInstancePlaying(ui));
 }

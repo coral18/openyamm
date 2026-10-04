@@ -1,0 +1,18 @@
+schema: openyamm.effectSprite.v2
+id: mm9:effect-sprite/dragonbreath
+source: sprites/dragonbreath.spr
+framesPerSecond: 15
+logicalWidth: 32
+logicalHeight: 32
+keyed: false
+translucent: false
+colorKey: 0
+frames:
+- mm9:effect-texture/dragonbreath/firebreath1
+- mm9:effect-texture/dragonbreath/firebreath2
+- mm9:effect-texture/dragonbreath/firebreath3
+- mm9:effect-texture/dragonbreath/firebreath4
+- mm9:effect-texture/dragonbreath/firebreath5
+- mm9:effect-texture/dragonbreath/firebreath6
+- mm9:effect-texture/dragonbreath/firebreath7
+- mm9:effect-texture/dragonbreath/firebreath8

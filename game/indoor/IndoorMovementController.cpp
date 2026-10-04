@@ -17,7 +17,6 @@ namespace
 {
 constexpr float MaximumRise = 50.0f;
 constexpr float MaximumDrop = 160.0f;
-constexpr float ActorLedgeDropGuardHeight = 100.0f;
 constexpr float MaximumStepUpFromCurrentFootZ = MaximumRise;
 constexpr float MaximumUphillSlopeNormalZ = 0.70767211914f;
 constexpr float SlideFactor = 0.89263916f;
@@ -447,38 +446,6 @@ float resolveDoorDistance(
     return runtimeMechanism.currentDistance;
 }
 
-bool shouldIgnoreExistingActorOverlap(
-    float currentX,
-    float currentY,
-    const IndoorBodyDimensions &body,
-    const IndoorActorCollision &collider,
-    bool actorVsActor)
-{
-    if (!actorVsActor)
-    {
-        return false;
-    }
-
-    const float minimumDistance = body.radius + collider.radius;
-
-    if (minimumDistance <= 0.0f)
-    {
-        return false;
-    }
-
-    const float currentDeltaX = currentX - collider.x;
-    const float currentDeltaY = currentY - collider.y;
-    const float currentDistanceSquared = currentDeltaX * currentDeltaX + currentDeltaY * currentDeltaY;
-    const float minimumDistanceSquared = minimumDistance * minimumDistance;
-
-    if (currentDistanceSquared >= minimumDistanceSquared)
-    {
-        return false;
-    }
-
-    return true;
-}
-
 IndoorSweptBody buildPrimitiveSweptBody(
     float x,
     float y,
@@ -854,7 +821,7 @@ IndoorMoveState IndoorMovementController::resolveGroundedSupportState(
             state.y,
             state.footZ,
             GroundSnapSlack,
-            ActorLedgeDropGuardHeight,
+            IndoorActorMaxDropHeight,
             body,
             &supportFaceMask)
         : IndoorFloorSample{};
@@ -871,7 +838,7 @@ IndoorMoveState IndoorMovementController::resolveGroundedSupportState(
         state.y,
         state.footZ,
         GroundSnapSlack,
-        ActorLedgeDropGuardHeight,
+        IndoorActorMaxDropHeight,
         body,
         preferredSectorId,
         &supportFaceMask);
@@ -881,7 +848,7 @@ IndoorMoveState IndoorMovementController::resolveGroundedSupportState(
         return state;
     }
 
-    if (floor.height > state.footZ + GroundSnapSlack || state.footZ - floor.height > ActorLedgeDropGuardHeight)
+    if (floor.height > state.footZ + GroundSnapSlack || state.footZ - floor.height > IndoorActorMaxDropHeight)
     {
         return state;
     }
@@ -1876,6 +1843,13 @@ IndoorMoveState IndoorMovementController::resolveMoveSingleStep(
 
     const auto finalizeFallState = [&](IndoorMoveState result) -> IndoorMoveState
     {
+        if (pDebugInfo != nullptr && pDebugInfo->collisionResponseSucceeded)
+        {
+            const float distance = pDebugInfo->wantedHorizontalMove
+                ? movementDistance(result.x - state.x, result.y - state.y, 0.0f)
+                : movementDistance(result.x - state.x, result.y - state.y, result.footZ - state.footZ);
+            pDebugInfo->collisionResponseSucceeded = distance > 0.0001f;
+        }
         result.landedThisFrame = false;
         result.fallDistance = 0.0f;
 
@@ -2023,7 +1997,7 @@ IndoorMoveState IndoorMovementController::resolveMoveSingleStep(
         const auto floorDropsBelowActorLedgeGuard =
             [&state](const IndoorFloorSample &sample) -> bool
         {
-            return !sample.hasFloor || sample.height < state.footZ - ActorLedgeDropGuardHeight;
+            return !sample.hasFloor || sample.height < state.footZ - IndoorActorMaxDropHeight;
         };
         const auto recordInvalidPosition =
             [&](
@@ -2242,9 +2216,9 @@ IndoorMoveState IndoorMovementController::resolveMoveSingleStep(
             &nonBlockingMechanismFaceMask,
             &geometryCache);
 
-        if (ceiling.hasCeiling && !flying && resolvedFootZ + body.height > ceiling.height - 1.0f)
+        if (ceiling.hasCeiling && !flying && resolvedFootZ + body.height > ceiling.height)
         {
-            resolvedFootZ = ceiling.height - body.height - 1.0f;
+            resolvedFootZ = ceiling.height - body.height;
             resolvedVerticalVelocity = std::min(resolvedVerticalVelocity, 0.0f);
         }
 
@@ -2267,17 +2241,9 @@ IndoorMoveState IndoorMovementController::resolveMoveSingleStep(
             resolvedGrounded = !flying;
         }
 
-        if (guardGroundActorAgainstLedgeDrop && !resolvedGrounded)
-        {
-            recordInvalidPosition(
-                IndoorMoveInvalidPositionReason::LostGroundSupport,
-                floor,
-                leadingFootprintFloor,
-                &ceiling,
-                std::nullopt,
-                resolvedFootZ);
-            return false;
-        }
+        // A permitted downward step starts a fall when it exceeds GroundSnapSlack.
+        // The floor probes above enforce the ledge limit; requiring grounded here
+        // would prevent actors from ever walking off such steps.
 
         const float resolvedEyeZ = resolvedFootZ + body.height;
         const std::optional<int16_t> eyeSectorId = findIndoorSectorForPoint(
@@ -2451,59 +2417,6 @@ IndoorMoveState IndoorMovementController::resolveMoveSingleStep(
         return bestOverlap;
     };
 
-    const auto tryRecoverFromWallOverlap =
-        [&](const IndoorMoveState &baseState, const IndoorWallCollision &overlap) -> std::optional<IndoorMoveState>
-    {
-        const bx::Vec3 horizontalNormal = normalizeVec({overlap.normal.x, overlap.normal.y, 0.0f});
-
-        if (!overlap.hit || lengthVec(horizontalNormal) <= 0.0001f)
-        {
-            return std::nullopt;
-        }
-
-        constexpr std::array<float, 7> RecoveryDistances = {{4.0f, 8.0f, 16.0f, 32.0f, 64.0f, 96.0f, 128.0f}};
-
-        for (float directionSign : {1.0f, -1.0f})
-        {
-            for (float distance : RecoveryDistances)
-            {
-                IndoorMoveState recoveredState = {};
-
-                if (tryResolvePosition(
-                        baseState.x,
-                        baseState.y,
-                        baseState.x + horizontalNormal.x * directionSign * distance,
-                        baseState.y + horizontalNormal.y * directionSign * distance,
-                        baseState.footZ,
-                        0.0f,
-                        recoveredState,
-                        true,
-                        nullptr,
-                        nullptr,
-                        overlap.faceIndex))
-                {
-                    if (pDebugInfo != nullptr)
-                    {
-                        pDebugInfo->collisionResponseTried = true;
-                        pDebugInfo->collisionResponseSucceeded = true;
-                        pDebugInfo->primaryBlockKind = IndoorMoveBlockKind::Wall;
-                        pDebugInfo->hitFaceIndex = overlap.faceIndex;
-                        pDebugInfo->hitNormal = overlap.normal;
-                        pDebugInfo->responseStep = {
-                            recoveredState.x - baseState.x,
-                            recoveredState.y - baseState.y,
-                            recoveredState.footZ - baseState.footZ
-                        };
-                    }
-
-                    return recoveredState;
-                }
-            }
-        }
-
-        return std::nullopt;
-    };
-
     const auto recoveryTraceBlockedByFace =
         [&](
             const IndoorMoveState &baseState,
@@ -2575,6 +2488,80 @@ IndoorMoveState IndoorMovementController::resolveMoveSingleStep(
             movementLength,
             blockingFaces,
             sweepOptions).has_value();
+    };
+
+    const auto tryRecoverFromWallOverlap =
+        [&](const IndoorMoveState &baseState, const IndoorWallCollision &overlap) -> std::optional<IndoorMoveState>
+    {
+        bx::Vec3 recoveryDirection = normalizeVec({overlap.normal.x, overlap.normal.y, 0.0f});
+        const IndoorFaceGeometryData *pGeometry =
+            geometryCache.geometryForFace(*m_pIndoorMapData, vertices, overlap.faceIndex);
+
+        if (!overlap.hit || lengthVec(recoveryDirection) <= 0.0001f
+            || pGeometry == nullptr || pGeometry->vertices.empty())
+        {
+            return std::nullopt;
+        }
+
+        const bx::Vec3 bodyCenter = {
+            baseState.x,
+            baseState.y,
+            baseState.footZ + std::min(body.height * 0.5f, std::max(body.radius, 1.0f))
+        };
+        const float signedDistance =
+            dotVec(subtractVec(bodyCenter, pGeometry->vertices.front()), pGeometry->normal);
+
+        // Recover toward the actor's existing side of the surface. Trying the opposite
+        // side when a crowd blocks escape can teleport the actor through a closed door.
+        if (signedDistance * dotVec(recoveryDirection, pGeometry->normal) < 0.0f)
+        {
+            recoveryDirection = scaleVec(recoveryDirection, -1.0f);
+        }
+
+        constexpr std::array<float, 7> RecoveryDistances = {{4.0f, 8.0f, 16.0f, 32.0f, 64.0f, 96.0f, 128.0f}};
+
+        for (float distance : RecoveryDistances)
+        {
+            const float candidateX = baseState.x + recoveryDirection.x * distance;
+            const float candidateY = baseState.y + recoveryDirection.y * distance;
+            if (recoveryTraceBlockedByFace(baseState, candidateX, candidateY, overlap.faceIndex))
+            {
+                continue;
+            }
+
+            IndoorMoveState recoveredState = {};
+            if (tryResolvePosition(
+                    baseState.x,
+                    baseState.y,
+                    candidateX,
+                    candidateY,
+                    baseState.footZ,
+                    0.0f,
+                    recoveredState,
+                    true,
+                    nullptr,
+                    nullptr,
+                    overlap.faceIndex))
+            {
+                if (pDebugInfo != nullptr)
+                {
+                    pDebugInfo->collisionResponseTried = true;
+                    pDebugInfo->collisionResponseSucceeded = true;
+                    pDebugInfo->primaryBlockKind = IndoorMoveBlockKind::Wall;
+                    pDebugInfo->hitFaceIndex = overlap.faceIndex;
+                    pDebugInfo->hitNormal = overlap.normal;
+                    pDebugInfo->responseStep = {
+                        recoveredState.x - baseState.x,
+                        recoveredState.y - baseState.y,
+                        recoveredState.footZ - baseState.footZ
+                    };
+                }
+
+                return recoveredState;
+            }
+        }
+
+        return std::nullopt;
     };
 
     const auto tryRecoverAlongWallTangent =
@@ -2751,44 +2738,6 @@ IndoorMoveState IndoorMovementController::resolveMoveSingleStep(
         return std::nullopt;
     };
 
-    const auto wallContactDoesNotBlockSweep =
-        [&](const IndoorFaceGeometryData &face, const IndoorMoveState &moveState, const bx::Vec3 &moveStep) -> bool
-    {
-        if (!sweptRequest.allowBlockedWallRecovery
-            || !indoorFaceBlocksAsWallOverlap(face, moveState.footZ))
-        {
-            return false;
-        }
-
-        const float movementLength = std::sqrt(moveStep.x * moveStep.x + moveStep.y * moveStep.y);
-
-        if (movementLength <= 0.0001f)
-        {
-            return false;
-        }
-
-        const float bodyCenterZ =
-            moveState.footZ + std::min(body.height * 0.5f, std::max(body.radius, 1.0f));
-        const bx::Vec3 oldCenter = {moveState.x, moveState.y, bodyCenterZ};
-        const bx::Vec3 newCenter = {
-            moveState.x + moveStep.x,
-            moveState.y + moveStep.y,
-            bodyCenterZ + moveStep.z
-        };
-        const float oldSignedDistance = dotVec(subtractVec(oldCenter, face.vertices.front()), face.normal);
-        const float newSignedDistance = dotVec(subtractVec(newCenter, face.vertices.front()), face.normal);
-        const float oldDistance = std::abs(oldSignedDistance);
-        const float newDistance = std::abs(newSignedDistance);
-        const bool startedInsideWallRadius = oldDistance <= body.radius + 0.5f;
-        const bool stayedOnSameSide =
-            oldSignedDistance == 0.0f
-            || newSignedDistance == 0.0f
-            || (oldSignedDistance > 0.0f) == (newSignedDistance > 0.0f);
-        const bool didNotMoveTowardWall = newDistance >= oldDistance - 0.5f;
-
-        return startedInsideWallRadius && stayedOnSameSide && didNotMoveTowardWall;
-    };
-
     if (!state.grounded
         && state.supportFaceIndex != static_cast<size_t>(-1)
         && std::fabs(state.verticalVelocity) >= WallOverlapRecoveryMinVelocity)
@@ -2845,18 +2794,6 @@ IndoorMoveState IndoorMovementController::resolveMoveSingleStep(
                 sweepIndoorBodyAgainstCylinder(contactSweptBody, direction, distance, cylinder);
 
             if (!cylinderHit)
-            {
-                continue;
-            }
-
-            const bool actorVsActor =
-                sweptRequest.ignoredActorIndex.has_value() && collider.reportActorContact;
-            if (shouldIgnoreExistingActorOverlap(
-                    moveState.x,
-                    moveState.y,
-                    body,
-                    collider,
-                    actorVsActor))
             {
                 continue;
             }
@@ -2973,84 +2910,33 @@ IndoorMoveState IndoorMovementController::resolveMoveSingleStep(
     bool sweptFaceHit = false;
     bool sweptFailed = false;
     constexpr int MaxSweptIterations = 8;
+    std::array<bx::Vec3, MaxSweptIterations> contactNormals = {{
+        {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f},
+        {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}
+    }};
+    size_t contactCount = 0;
 
     const auto projectStepAfterFaceHit =
         [&](
             const bx::Vec3 &step,
             const SweptCollisionHit &hit,
-            const IndoorMoveState &advancedState,
             const IndoorFaceGeometryData *pHitGeometry) -> bx::Vec3
     {
-        if (hit.type != SweptCollisionHitType::Face)
-        {
-            const bx::Vec3 responseStep = projectIndoorVelocityAlongPlane(
-                step,
-                hit.normal,
-                hit.type == SweptCollisionHitType::Floor ? 1.0f : SlideFactor);
-            return lockVerticalStep(responseStep);
-        }
-
-        const bx::Vec3 slidePlaneOrigin = {
-            hit.point.x,
-            hit.point.y,
-            hit.point.z - hit.heightOffset
-        };
-        const bx::Vec3 adjustedLowSphereCenter = {
-            advancedState.x,
-            advancedState.y,
-            advancedState.footZ + body.radius
-        };
-        const bx::Vec3 slidePlaneNormal =
-            normalizeVec(subtractVec(adjustedLowSphereCenter, slidePlaneOrigin));
-
-        if (lengthVec(slidePlaneNormal) <= 0.0001f)
-        {
-            const bx::Vec3 responseStep = projectIndoorVelocityAlongPlane(step, hit.normal, SlideFactor);
-            return lockVerticalStep(
-                applySteepFloorCollisionResponse(responseStep, pHitGeometry, deltaSeconds),
-                pHitGeometry);
-        }
-
-        const bx::Vec3 intendedLowSphereCenter = {
-            advancedState.x + step.x,
-            advancedState.y + step.y,
-            advancedState.footZ + body.radius + step.z
-        };
-        const float destinationPlaneDistance =
-            dotVec(subtractVec(intendedLowSphereCenter, slidePlaneOrigin), slidePlaneNormal);
-        const bx::Vec3 projectedDestination =
-            subtractVec(intendedLowSphereCenter, scaleVec(slidePlaneNormal, destinationPlaneDistance));
-        bx::Vec3 slideDirection =
-            normalizeVec(subtractVec(projectedDestination, slidePlaneOrigin));
-
-        if (lengthVec(slideDirection) <= 0.0001f)
-        {
-            const bx::Vec3 responseStep = projectIndoorVelocityAlongPlane(step, hit.normal, SlideFactor);
-            return lockVerticalStep(
-                applySteepFloorCollisionResponse(responseStep, pHitGeometry, deltaSeconds),
-                pHitGeometry);
-        }
-
+        // Use the sweep's contact normal. Reconstructing it at the backed-off
+        // position tilts a tangent slide into the opposite floor or ceiling.
+        bx::Vec3 slideDirection = normalizeVec(projectIndoorVelocityAlongPlane(step, hit.normal, 1.0f));
         if (pHitGeometry != nullptr
             && indoorFaceIsSteepFloorCollisionSurface(*pHitGeometry)
             && slideDirection.z > 0.0f)
         {
             const bx::Vec3 horizontalSlideDirection = normalizeVec({slideDirection.x, slideDirection.y, 0.0f});
-
             if (lengthVec(horizontalSlideDirection) > 0.0001f)
             {
                 slideDirection = horizontalSlideDirection;
             }
         }
 
-        const float projectedStepDistance = dotVec(step, slideDirection);
-
-        if (std::fabs(projectedStepDistance) <= 0.0001f)
-        {
-            return {0.0f, 0.0f, 0.0f};
-        }
-
-        const bx::Vec3 responseStep = scaleVec(slideDirection, projectedStepDistance * SlideFactor);
+        const bx::Vec3 responseStep = scaleVec(slideDirection, dotVec(step, slideDirection) * SlideFactor);
         return lockVerticalStep(
             applySteepFloorCollisionResponse(responseStep, pHitGeometry, deltaSeconds),
             pHitGeometry);
@@ -3141,11 +3027,6 @@ IndoorMoveState IndoorMovementController::resolveMoveSingleStep(
                     iterativeState.x,
                     iterativeState.y,
                     iterativeState.footZ))
-            {
-                continue;
-            }
-
-            if (wallContactDoesNotBlockSweep(*pFace, iterativeState, remainingStep))
             {
                 continue;
             }
@@ -3408,6 +3289,12 @@ IndoorMoveState IndoorMovementController::resolveMoveSingleStep(
             }
         }
 
+        if (movementDistance(advancedState.x - iterativeState.x, advancedState.y - iterativeState.y,
+                advancedState.footZ - iterativeState.footZ) > 0.0001f)
+        {
+            contactCount = 0;
+        }
+        contactNormals[contactCount++] = nearestHit->normal;
         iterativeState = advancedState;
 
         if (sweptRequest.blockActorSlide
@@ -3440,7 +3327,7 @@ IndoorMoveState IndoorMovementController::resolveMoveSingleStep(
 
         if (nearestHit->type == SweptCollisionHitType::Face && nearestHit->boundaryHit)
         {
-            remainingStep = projectStepAfterFaceHit(leftoverStep, *nearestHit, advancedState, pNearestHitGeometry);
+            remainingStep = projectStepAfterFaceHit(leftoverStep, *nearestHit, pNearestHitGeometry);
         }
         else
         {
@@ -3450,6 +3337,27 @@ IndoorMoveState IndoorMovementController::resolveMoveSingleStep(
                 lockVerticalStep(
                     applySteepFloorCollisionResponse(responseStep, pNearestHitGeometry, deltaSeconds),
                     pNearestHitGeometry);
+        }
+
+        // A slide against a second face must also respect the first contact.
+        // Otherwise floor/ceiling seams alternate zero-distance hits forever.
+        for (size_t contactIndex = 0; contactIndex + 1 < contactCount; ++contactIndex)
+        {
+            const bx::Vec3 &normal = contactNormals[contactIndex];
+            if (dotVec(remainingStep, normal) >= -0.0001f)
+            {
+                continue;
+            }
+            const bx::Vec3 crease = normalizeVec(bx::cross(normal, nearestHit->normal));
+            remainingStep = scaleVec(crease, dotVec(leftoverStep, crease) * responseDamping);
+            for (size_t otherIndex = 0; otherIndex < contactCount; ++otherIndex)
+            {
+                if (dotVec(remainingStep, contactNormals[otherIndex]) < -0.0001f)
+                {
+                    remainingStep = {0.0f, 0.0f, 0.0f};
+                    break;
+                }
+            }
         }
 
         if (pDebugInfo != nullptr)
@@ -4405,7 +4313,10 @@ bool IndoorMovementController::collidesWithActors(
         const float candidateDistanceSquared =
             candidateDeltaX * candidateDeltaX + candidateDeltaY * candidateDeltaY;
 
-        if (candidateDistanceSquared >= minimumDistance * minimumDistance)
+        // The swept contact can round just inside the cylinder. Do not reject
+        // that contact before its tangential sliding response can run.
+        const float contactDistance = std::max(0.0f, minimumDistance - 0.01f);
+        if (candidateDistanceSquared >= contactDistance * contactDistance)
         {
             continue;
         }
@@ -4414,14 +4325,9 @@ bool IndoorMovementController::collidesWithActors(
         const float currentDeltaY = currentY - collider.y;
         const float currentDistanceSquared = currentDeltaX * currentDeltaX + currentDeltaY * currentDeltaY;
 
-        const bool actorVsActor = ignoredActorIndex.has_value() && collider.reportActorContact;
-
-        if (shouldIgnoreExistingActorOverlap(
-                currentX,
-                currentY,
-                body,
-                collider,
-                actorVsActor))
+        const float approach =
+            currentDeltaX * (candidateX - currentX) + currentDeltaY * (candidateY - currentY);
+        if (currentDistanceSquared < minimumDistance * minimumDistance && approach >= 0.0f)
         {
             continue;
         }
@@ -4434,11 +4340,6 @@ bool IndoorMovementController::collidesWithActors(
                 collider.actorIndex) == pContactedActorIndices->end())
         {
             pContactedActorIndices->push_back(collider.actorIndex);
-        }
-
-        if (candidateDistanceSquared > currentDistanceSquared + 1.0f)
-        {
-            continue;
         }
 
         if (pHitActor != nullptr)

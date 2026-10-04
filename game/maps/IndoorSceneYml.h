@@ -1,6 +1,7 @@
 #pragma once
 
 #include "game/maps/MapRuntimeRestrictions.h"
+#include "game/maps/MapArenaDefinition.h"
 #include "game/maps/MapDeltaData.h"
 #include "game/maps/MapItemSourceData.h"
 #include "game/indoor/IndoorMapData.h"
@@ -85,6 +86,7 @@ struct IndoorSceneData
     std::string geometryFile;
     std::optional<std::string> legacyCompanionFile;
     MapRuntimeRestrictions runtimeRestrictions = {};
+    std::optional<MapArenaDefinition> arena;
     IndoorSceneEnvironment environment = {};
     bool hasSpawns = false;
     std::vector<IndoorSceneSpawn> spawns;

@@ -1,13 +1,17 @@
 #include "game/tables/ItemTable.h"
 #include "engine/ImageAssetLoader.h"
 #include "game/party/SkillData.h"
+#include "game/party/CharacterState.h"
+#include <charconv>
 #include "game/StringUtils.h"
 
 #include <algorithm>
 #include <array>
+#include <cerrno>
 #include <cctype>
 #include <cmath>
 #include <cstdint>
+#include <cstdlib>
 #include <cstring>
 #include <unordered_map>
 #include <unordered_set>
@@ -288,21 +292,11 @@ std::optional<uint32_t> parseItemId(const std::vector<std::string> &row)
     }
 }
 
-bool readInt32LittleEndian(const std::vector<uint8_t> &bytes, size_t offset, int32_t &value)
-{
-    if (offset + sizeof(value) > bytes.size())
-    {
-        return false;
-    }
-
-    std::memcpy(&value, bytes.data() + offset, sizeof(value));
-    return true;
-}
-
 bool loadBitmapDimensions(
     const Engine::AssetFileSystem &assetFileSystem,
     Engine::DirectoryAssetPathCache &directories,
     Engine::AssetPathLookupCache &paths,
+    std::unordered_map<std::string, std::optional<Engine::ImageDimensions>> &dimensions,
     const std::string &iconName,
     int &width,
     int &height,
@@ -322,40 +316,17 @@ bool loadBitmapDimensions(
         return false;
     }
 
-    const std::optional<std::vector<uint8_t>> imageBytes = assetFileSystem.readBinaryFile(*imagePath);
-
-    if (!imageBytes || imageBytes->empty())
+    auto [entry, inserted] = dimensions.try_emplace(*imagePath);
+    if (inserted)
+    {
+        entry->second = Engine::loadImageDimensions(assetFileSystem, *imagePath);
+    }
+    if (!entry->second)
     {
         return false;
     }
-
-    int32_t bitmapWidth = 0;
-    int32_t bitmapHeight = 0;
-
-    if (imageBytes->size() >= 26
-        && (*imageBytes)[0] == 'B'
-        && (*imageBytes)[1] == 'M'
-        && readInt32LittleEndian(*imageBytes, 18, bitmapWidth)
-        && readInt32LittleEndian(*imageBytes, 22, bitmapHeight)
-        && bitmapWidth > 0
-        && bitmapHeight != 0)
-    {
-        width = bitmapWidth;
-        height = std::abs(bitmapHeight);
-    }
-    else
-    {
-        const std::optional<Engine::ImagePixelsBgra> decodedImage =
-            Engine::decodeImagePixelsBgra(*imageBytes, *imagePath);
-
-        if (!decodedImage || decodedImage->width <= 0 || decodedImage->height <= 0)
-        {
-            return false;
-        }
-
-        width = decodedImage->width;
-        height = decodedImage->height;
-    }
+    width = entry->second->width;
+    height = entry->second->height;
 
     const Engine::AssetScaleTier loadedTier = Engine::assetScaleTierFromResolvedPath(*imagePath);
     width = Engine::scalePhysicalPixelsToLogical(width, loadedTier);
@@ -380,6 +351,7 @@ bool ItemTable::load(
 {
     Engine::DirectoryAssetPathCache directories;
     Engine::AssetPathLookupCache paths;
+    std::unordered_map<std::string, std::optional<Engine::ImageDimensions>> dimensions;
     uint32_t maxItemId = 0;
 
     for (const std::vector<std::string> &row : itemRows)
@@ -478,7 +450,8 @@ bool ItemTable::load(
         int iconHeight = 0;
 
         if (loadBitmapDimensions(
-                assetFileSystem, directories, paths, entry.iconName, iconWidth, iconHeight, entry.iconVirtualPath))
+                assetFileSystem, directories, paths, dimensions, entry.iconName,
+                iconWidth, iconHeight, entry.iconVirtualPath))
         {
             entry.inventoryWidth = inventorySlotsFromPixels(iconWidth);
             entry.inventoryHeight = inventorySlotsFromPixels(iconHeight);
@@ -527,6 +500,95 @@ bool ItemDefinition::hasContentFlag(const std::string &flag) const
         {
             return toLowerCopy(candidate) == normalizedFlag;
         });
+}
+
+bool ItemTable::loadVisualRows(const std::vector<std::vector<std::string>> &rows, std::string &errorMessage)
+{
+    // Validate a complete import before replacing any existing visual metadata.
+    std::vector<ItemDefinition> entries = m_entries;
+    std::unordered_set<std::string> keys;
+    const std::array<std::string, 16> slots = {"OffHand", "MainHand", "Bow", "Armor", "Helm", "Belt",
+        "Cloak", "Gauntlets", "Boots", "Amulet", "Ring1", "Ring2", "Ring3", "Ring4", "Ring5", "Ring6"};
+    const auto integer = [](const std::string &text, int &value)
+    {
+        const auto result = std::from_chars(text.data(), text.data() + text.size(), value);
+        return result.ec == std::errc() && result.ptr == text.data() + text.size();
+    };
+    const auto scale = [](const std::string &text, float &value)
+    {
+        char *pEnd = nullptr;
+        errno = 0;
+        value = std::strtof(text.c_str(), &pEnd);
+        return errno != ERANGE && pEnd == text.c_str() + text.size()
+            && std::isfinite(value) && value > 0.0f && value <= 1.0f;
+    };
+    for (ItemDefinition &entry : entries)
+    {
+        entry.equipmentPlacements.clear();
+        entry.inventoryDrawScale = 1.0f;
+        entry.jewelryDrawScale = 1.0f;
+    }
+    for (size_t rowIndex = 0; rowIndex < rows.size(); ++rowIndex)
+    {
+        const std::vector<std::string> &row = rows[rowIndex];
+        const std::string kind = getCell(row, 0);
+        if (kind.empty() || kind.starts_with("#") || kind == "Kind")
+        {
+            continue;
+        }
+        int itemId = 0;
+        bool valid = integer(getCell(row, 1), itemId) && itemId > 0
+            && static_cast<size_t>(itemId) < entries.size() && !entries[itemId].canonicalId.empty();
+        if (valid)
+        {
+            ItemDefinition &entry = entries[itemId];
+            if (kind == "inventory")
+            {
+                int width = 0;
+                int height = 0;
+                valid = keys.insert(kind + ":" + std::to_string(itemId)).second
+                    && integer(getCell(row, 6), width) && integer(getCell(row, 7), height)
+                    && width >= 1 && width <= 14 && height >= 1 && height <= 9
+                    && scale(getCell(row, 8), entry.inventoryDrawScale)
+                    && scale(getCell(row, 9), entry.jewelryDrawScale);
+                if (valid)
+                {
+                    entry.inventoryWidth = static_cast<uint8_t>(width);
+                    entry.inventoryHeight = static_cast<uint8_t>(height);
+                }
+            }
+            else if (kind == "placement")
+            {
+                int dollType = 0;
+                ItemEquipmentPlacement placement;
+                const std::string slot = getCell(row, 3);
+                const auto position = std::find(slots.begin(), slots.end(), slot);
+                valid = integer(getCell(row, 2), dollType) && dollType >= 0 && dollType <= 5
+                    && position != slots.end() && integer(getCell(row, 4), placement.x)
+                    && integer(getCell(row, 5), placement.y)
+                    && keys.insert(kind + ":" + std::to_string(itemId) + ":"
+                        + std::to_string(dollType) + ":" + slot).second;
+                if (valid)
+                {
+                    placement.dollType = static_cast<uint32_t>(dollType);
+                    placement.slot = static_cast<EquipmentSlot>(std::distance(slots.begin(), position));
+                    entry.equipmentPlacements.push_back(placement);
+                }
+            }
+            else
+            {
+                valid = false;
+            }
+        }
+        if (!valid)
+        {
+            errorMessage = "Invalid or duplicate item visual row " + std::to_string(rowIndex + 1);
+            return false;
+        }
+    }
+    m_entries = std::move(entries);
+    errorMessage.clear();
+    return true;
 }
 
 const ItemDefinition *ItemTable::get(uint32_t itemId) const

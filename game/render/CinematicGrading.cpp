@@ -1,5 +1,7 @@
 #include "game/render/CinematicGrading.h"
 #include "game/render/RuntimeShader.h"
+#include "game/render/WaterMath.h"
+#include "engine/BgfxContext.h"
 
 #include <algorithm>
 #include <array>
@@ -11,7 +13,7 @@ namespace OpenYAMM::Game
 {
 namespace
 {
-constexpr bgfx::ViewId GradingView = 249;
+constexpr bgfx::ViewId GradingView = WorldGradingView;
 constexpr uint16_t LutSize = 32;
 struct ScreenVertex
 {
@@ -121,13 +123,19 @@ bool CinematicGrading::resize(uint16_t width, uint16_t height)
 
 void CinematicGrading::resetViews()
 {
+    if (!Engine::BgfxContext::isBgfxInitialized())
+    {
+        return;
+    }
+    constexpr std::array<uint16_t, WorldGradingView + 1> order = worldRenderViewOrder(false);
+    bgfx::setViewOrder(0, uint16_t(order.size()), order.data());
     if (!m_active)
     {
         return;
     }
     bgfx::setViewFrameBuffer(0, BGFX_INVALID_HANDLE);
     bgfx::setViewFrameBuffer(1, BGFX_INVALID_HANDLE);
-    bgfx::setViewOrder(0, GradingView + 1);
+    bgfx::setViewFrameBuffer(GradingView, BGFX_INVALID_HANDLE);
     m_active = false;
 }
 
@@ -157,14 +165,7 @@ bool CinematicGrading::begin(int width, int height, bool enabled, int strength)
         {-1.0f, -3.0f, 0.0f, 0.0f, flip ? -1.0f : 2.0f}
     };
     std::memcpy(m_vertices.data, vertices, sizeof(vertices));
-    std::array<bgfx::ViewId, GradingView + 1> order = {};
-    order[0] = 0;
-    order[1] = 1;
-    order[2] = GradingView;
-    for (bgfx::ViewId i = 3; i <= GradingView; ++i)
-    {
-        order[i] = i - 1;
-    }
+    constexpr std::array<uint16_t, WorldGradingView + 1> order = worldRenderViewOrder(true);
     bgfx::setViewOrder(0, uint16_t(order.size()), order.data());
     bgfx::setViewFrameBuffer(0, m_frameBuffer);
     bgfx::setViewFrameBuffer(1, m_frameBuffer);
@@ -174,14 +175,14 @@ bool CinematicGrading::begin(int width, int height, bool enabled, int strength)
     return true;
 }
 
-void CinematicGrading::submit()
+void CinematicGrading::submit(bgfx::FrameBufferHandle target)
 {
     if (!m_active)
     {
         return;
     }
     bgfx::setViewName(GradingView, "Cinematic grading");
-    bgfx::setViewFrameBuffer(GradingView, BGFX_INVALID_HANDLE);
+    bgfx::setViewFrameBuffer(GradingView, target);
     bgfx::setViewRect(GradingView, 0, 0, m_width, m_height);
     bgfx::setViewClear(GradingView, BGFX_CLEAR_NONE);
     const float params[4] = {m_strength, float(LutSize - 1) / LutSize, 0.5f / LutSize, 0.0f};
@@ -191,6 +192,19 @@ void CinematicGrading::submit()
     bgfx::setVertexBuffer(0, &m_vertices);
     bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A);
     bgfx::submit(GradingView, m_program);
+}
+
+void CinematicGrading::setOutputFrameBuffer(bgfx::FrameBufferHandle target)
+{
+    if (m_active)
+    {
+        bgfx::setViewFrameBuffer(GradingView, target);
+    }
+    else
+    {
+        bgfx::setViewFrameBuffer(0, target);
+        bgfx::setViewFrameBuffer(1, target);
+    }
 }
 
 void CinematicGrading::shutdown()

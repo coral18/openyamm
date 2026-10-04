@@ -1,0 +1,18 @@
+id: shared_fx.mm8_map_lifecycle
+title: Shared model and FX regression - MM8 map lifecycle
+world: mm8
+mode: faithful
+tags: [mm8, smoke, shared_fx]
+steps:
+  - new_game_flow:
+      start_map: out01.odm
+  - assert:
+      map: out01.odm
+  - load_map:
+      map: d31.blv
+  - assert:
+      map: d31.blv
+  - load_map:
+      map: out01.odm
+  - assert:
+      map: out01.odm

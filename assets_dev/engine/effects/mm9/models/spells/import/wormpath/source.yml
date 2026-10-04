@@ -1,0 +1,30 @@
+model: mm9/extracted/MODELS/MODELS/SPELLS/WORMPATH.abc
+textures: []
+converter: tools/mm9_import_discovery/convert_abc_model.py
+converterVersion: 3
+sourceSha256: 52f5c1fad7e6020fd7dbf2dccdf14271e433050b3156321d2be4e81db9c3ccab
+exportMode: animation-path
+coordinateScale: 2.56
+coordinateTransform: LithTech ABC local axes preserved; scene placement converts Y-up
+  to OpenYAMM Z-up
+warnings: []
+trajectoryValidation:
+  status: passed
+  coordinatePlacement: glTF (x,y,z) -> OpenYAMM (x,z,y)
+  nodeNamesExact: true
+  hierarchyExact: true
+  nodes: 10
+  clips: 1
+  keySamples: 21
+  midpointSamples: 20
+  nodeComparisons: 410
+  positionTolerance: 0.0001
+  rotationMatrixTolerance: 1.0e-05
+  maxOpenyammPositionError: 6.177572151451739e-05
+  maxRotationMatrixError: 0.0
+  clipResults:
+  - name: wormpath
+    keySamples: 21
+    midpointSamples: 20
+    maxOpenyammPositionError: 6.177572151451739e-05
+    maxRotationMatrixError: 0.0

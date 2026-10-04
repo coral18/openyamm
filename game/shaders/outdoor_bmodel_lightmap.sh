@@ -1,5 +1,6 @@
 
 #include "common.sh"
+#include "world_clip.sh"
 
 SAMPLER2D(s_texColor, 0);
 SAMPLER2D(s_texLightmap, 1);
@@ -79,6 +80,7 @@ vec3 getFxLighting(vec3 worldPosition)
 
 void main()
 {
+    clipWorldPosition(v_worldPosition);
     vec2 texcoord = v_texcoord0;
     texcoord.xy += v_flowInfo.xy * u_secretPulseParams.y;
 

@@ -1,0 +1,933 @@
+schema: openyamm.mm9EffectCapabilities.v1
+source:
+  fxf: engine/effects/mm9/source/spells.fxf
+  bindings: engine/effects/mm9/resource_bindings.yml
+  library: engine/effects/mm9/library.yml
+scope:
+  spawnMode: one_shot
+  looping: unsupported
+  visibleDeformingModels: unsupported
+  actorBodyAnchors: unsupported
+  knownGlobalDifferences:
+  - Native continuous-key loop behavior remains unresolved.
+  - Legacy texture-stage state and source mip upload are approximated by PNG and generated
+    mipmaps.
+  - The exact native spatial-audio attenuation curve remains unverified.
+summary:
+  recipes: 48
+  componentKeys: 176
+  statuses:
+    supported_one_shot: 36
+    unsupported: 12
+  blockers:
+    missing_source_asset: 2
+    needs_body_anchors: 6
+    needs_mesh_deformation: 6
+effects:
+- id: mm9:sparklies
+  sourceName: sparklies
+  status: supported_one_shot
+  componentCount: 11
+  componentTypes:
+  - Sprite
+  - SpriteSystem
+  capabilities:
+  - fixed_sprite
+  - sprite_emitter
+  blockers: []
+  missingResources: []
+  unpackagedResources: []
+  bodyAnchors: []
+  models: []
+  looping: unsupported_until_native_continuous_key_semantics_are_implemented
+- id: mm9:paralyze
+  sourceName: spell-paralyze
+  status: supported_one_shot
+  componentCount: 4
+  componentTypes:
+  - PlaySound
+  - SpriteSystem
+  capabilities:
+  - sound
+  - sprite_emitter
+  blockers: []
+  missingResources: []
+  unpackagedResources: []
+  bodyAnchors: []
+  models: []
+  looping: unsupported_until_native_continuous_key_semantics_are_implemented
+- id: mm9:skullcurse
+  sourceName: spell-skullcurse
+  status: unsupported
+  componentCount: 3
+  componentTypes:
+  - Model
+  - PlaySound
+  - SpriteSystem
+  capabilities:
+  - model
+  - sound
+  - sprite_emitter
+  blockers:
+  - needs_body_anchors
+  missingResources: []
+  unpackagedResources:
+  - models/spells/headtwirl.abc
+  - sounds/spells/curse.wav
+  bodyAnchors:
+  - componentId: 23
+    mode: 8
+    anchor: tail_or_user_node_8
+  models:
+  - componentId: 22
+    legacy: models/spells/headtwirl.abc
+    visible: false
+    mode: animation_path
+  looping: unsupported_until_native_continuous_key_semantics_are_implemented
+- id: mm9:fg_spell-elemental_protection
+  sourceName: fg spell-elemental protection
+  status: supported_one_shot
+  componentCount: 3
+  componentTypes:
+  - PlaySound
+  - SpriteSystem
+  capabilities:
+  - sound
+  - sprite_emitter
+  blockers: []
+  missingResources: []
+  unpackagedResources: []
+  bodyAnchors: []
+  models: []
+  looping: unsupported_until_native_continuous_key_semantics_are_implemented
+- id: mm9:town_portal
+  sourceName: spell-town portal
+  status: supported_one_shot
+  componentCount: 3
+  componentTypes:
+  - Sprite
+  - SpriteSystem
+  capabilities:
+  - fixed_sprite
+  - sprite_emitter
+  blockers: []
+  missingResources: []
+  unpackagedResources: []
+  bodyAnchors: []
+  models: []
+  looping: unsupported_until_native_continuous_key_semantics_are_implemented
+- id: mm9:dark_grasp
+  sourceName: spell-dark grasp
+  status: supported_one_shot
+  componentCount: 3
+  componentTypes:
+  - PlaySound
+  - SpriteSystem
+  capabilities:
+  - sound
+  - sprite_emitter
+  blockers: []
+  missingResources: []
+  unpackagedResources: []
+  bodyAnchors: []
+  models: []
+  looping: unsupported_until_native_continuous_key_semantics_are_implemented
+- id: mm9:death's_touch
+  sourceName: spell-death's touch
+  status: unsupported
+  componentCount: 17
+  componentTypes:
+  - Model
+  - PlaySound
+  - Sprite
+  - SpriteSystem
+  capabilities:
+  - fixed_sprite
+  - model
+  - sound
+  - sprite_emitter
+  blockers:
+  - needs_mesh_deformation
+  missingResources: []
+  unpackagedResources:
+  - models/spells/centerdrop.abc
+  - skins/clansoldier1.dtx
+  - sounds/spells/deathstouch.wav
+  bodyAnchors: []
+  models:
+  - componentId: 15
+    legacy: models/spells/wormpath.abc
+    visible: false
+    mode: animation_path
+  - componentId: 27
+    legacy: models/spells/wormpath.abc
+    visible: false
+    mode: animation_path
+  - componentId: 36
+    legacy: models/spells/wormpath.abc
+    visible: false
+    mode: animation_path
+  - componentId: 35
+    legacy: models/spells/wormpath.abc
+    visible: false
+    mode: animation_path
+  - componentId: 46
+    legacy: models/spells/centerdrop.abc
+    visible: true
+    mode: deforming
+    reason: 'piece ''nodes04'' is deforming: vertices are attached to nodes 1 and
+      2'
+  looping: unsupported_until_native_continuous_key_semantics_are_implemented
+- id: mm9:disease
+  sourceName: spell-disease
+  status: supported_one_shot
+  componentCount: 4
+  componentTypes:
+  - PlaySound
+  - SpriteSystem
+  capabilities:
+  - sound
+  - sprite_emitter
+  blockers: []
+  missingResources: []
+  unpackagedResources: []
+  bodyAnchors: []
+  models: []
+  looping: unsupported_until_native_continuous_key_semantics_are_implemented
+- id: mm9:enrage
+  sourceName: spell-enrage
+  status: supported_one_shot
+  componentCount: 4
+  componentTypes:
+  - PlaySound
+  - SpriteSystem
+  capabilities:
+  - sound
+  - sprite_emitter
+  blockers: []
+  missingResources: []
+  unpackagedResources: []
+  bodyAnchors: []
+  models: []
+  looping: unsupported_until_native_continuous_key_semantics_are_implemented
+- id: mm9:column_of_fire
+  sourceName: spell-column of fire
+  status: supported_one_shot
+  componentCount: 5
+  componentTypes:
+  - PlaySound
+  - SpriteSystem
+  capabilities:
+  - sound
+  - sprite_emitter
+  blockers: []
+  missingResources: []
+  unpackagedResources: []
+  bodyAnchors: []
+  models: []
+  looping: unsupported_until_native_continuous_key_semantics_are_implemented
+- id: mm9:meteor_shower
+  sourceName: spell-meteor shower
+  status: supported_one_shot
+  componentCount: 10
+  componentTypes:
+  - 'Null'
+  - PlaySound
+  - Sprite
+  - SpriteSystem
+  capabilities:
+  - fixed_sprite
+  - null_transform
+  - sound
+  - sprite_emitter
+  blockers: []
+  missingResources: []
+  unpackagedResources: []
+  bodyAnchors: []
+  models: []
+  looping: unsupported_until_native_continuous_key_semantics_are_implemented
+- id: mm9:poison
+  sourceName: spell-poison
+  status: supported_one_shot
+  componentCount: 4
+  componentTypes:
+  - PlaySound
+  - SpriteSystem
+  capabilities:
+  - sound
+  - sprite_emitter
+  blockers: []
+  missingResources: []
+  unpackagedResources: []
+  bodyAnchors: []
+  models: []
+  looping: unsupported_until_native_continuous_key_semantics_are_implemented
+- id: mm9:turn_undead
+  sourceName: spell-turn undead
+  status: supported_one_shot
+  componentCount: 4
+  componentTypes:
+  - PlaySound
+  - Sprite
+  - SpriteSystem
+  capabilities:
+  - fixed_sprite
+  - sound
+  - sprite_emitter
+  blockers: []
+  missingResources: []
+  unpackagedResources: []
+  bodyAnchors: []
+  models: []
+  looping: unsupported_until_native_continuous_key_semantics_are_implemented
+- id: mm9:souldrinker
+  sourceName: spell-souldrinker
+  status: supported_one_shot
+  componentCount: 3
+  componentTypes:
+  - PlaySound
+  - SpriteSystem
+  capabilities:
+  - sound
+  - sprite_emitter
+  blockers: []
+  missingResources: []
+  unpackagedResources: []
+  bodyAnchors: []
+  models: []
+  looping: unsupported_until_native_continuous_key_semantics_are_implemented
+- id: mm9:bugs
+  sourceName: bugs
+  status: supported_one_shot
+  componentCount: 2
+  componentTypes:
+  - SpriteSystem
+  capabilities:
+  - sprite_emitter
+  blockers: []
+  missingResources: []
+  unpackagedResources: []
+  bodyAnchors: []
+  models: []
+  looping: unsupported_until_native_continuous_key_semantics_are_implemented
+- id: mm9:jarjarb_setup
+  sourceName: jarjarb setup
+  status: unsupported
+  componentCount: 6
+  componentTypes:
+  - Model
+  - SpriteSystem
+  capabilities:
+  - model
+  - sprite_emitter
+  blockers:
+  - needs_mesh_deformation
+  missingResources: []
+  unpackagedResources:
+  - models/jajarb.abc
+  - skins/colloidal1.dtx
+  bodyAnchors: []
+  models:
+  - componentId: 0
+    legacy: models/jajarb.abc
+    visible: true
+    mode: deforming
+    reason: 'piece ''NGon01'' is deforming: vertices are attached to nodes 39 and
+      1'
+  looping: unsupported_until_native_continuous_key_semantics_are_implemented
+- id: mm9:poison_cloud
+  sourceName: spell-poison cloud
+  status: supported_one_shot
+  componentCount: 1
+  componentTypes:
+  - SpriteSystem
+  capabilities:
+  - sprite_emitter
+  blockers: []
+  missingResources: []
+  unpackagedResources: []
+  bodyAnchors: []
+  models: []
+  looping: unsupported_until_native_continuous_key_semantics_are_implemented
+- id: mm9:transfusion
+  sourceName: spell-transfusion
+  status: supported_one_shot
+  componentCount: 4
+  componentTypes:
+  - PlaySound
+  - Sprite
+  - SpriteSystem
+  capabilities:
+  - fixed_sprite
+  - sound
+  - sprite_emitter
+  blockers: []
+  missingResources: []
+  unpackagedResources: []
+  bodyAnchors: []
+  models: []
+  looping: unsupported_until_native_continuous_key_semantics_are_implemented
+- id: mm9:fg_spell-eye_of_the_storm
+  sourceName: fg spell-eye of the storm
+  status: unsupported
+  componentCount: 8
+  componentTypes:
+  - Model
+  - PlaySound
+  - SpriteSystem
+  capabilities:
+  - model
+  - sound
+  - sprite_emitter
+  blockers:
+  - needs_mesh_deformation
+  missingResources: []
+  unpackagedResources:
+  - models/spells/storm.abc
+  - sounds/spells/storm.wav
+  - sprites/spells/leaf.spr
+  - spritetextures/wind.dtx
+  bodyAnchors: []
+  models:
+  - componentId: 1
+    legacy: models/spells/storm.abc
+    visible: true
+    mode: deforming
+    reason: 'piece ''insidesphere01'' is deforming: vertices are attached to nodes
+      6 and 5'
+  looping: unsupported_until_native_continuous_key_semantics_are_implemented
+- id: mm9:fg_spell-shared_life
+  sourceName: fg spell-shared life
+  status: supported_one_shot
+  componentCount: 5
+  componentTypes:
+  - 'Null'
+  - PlaySound
+  - SpriteSystem
+  capabilities:
+  - null_transform
+  - sound
+  - sprite_emitter
+  blockers: []
+  missingResources: []
+  unpackagedResources: []
+  bodyAnchors: []
+  models: []
+  looping: unsupported_until_native_continuous_key_semantics_are_implemented
+- id: mm9:fg_spell-divine_intervention
+  sourceName: fg spell-divine intervention
+  status: supported_one_shot
+  componentCount: 4
+  componentTypes:
+  - 'Null'
+  - SpriteSystem
+  capabilities:
+  - null_transform
+  - sprite_emitter
+  blockers: []
+  missingResources: []
+  unpackagedResources: []
+  bodyAnchors: []
+  models: []
+  looping: unsupported_until_native_continuous_key_semantics_are_implemented
+- id: mm9:fg_spell-resistance_to_death
+  sourceName: fg spell-resistance to death
+  status: supported_one_shot
+  componentCount: 4
+  componentTypes:
+  - PlaySound
+  - Sprite
+  - SpriteSystem
+  capabilities:
+  - fixed_sprite
+  - sound
+  - sprite_emitter
+  blockers: []
+  missingResources: []
+  unpackagedResources: []
+  bodyAnchors: []
+  models: []
+  looping: unsupported_until_native_continuous_key_semantics_are_implemented
+- id: mm9:fg_spell-feather_fall
+  sourceName: fg spell-feather fall
+  status: supported_one_shot
+  componentCount: 3
+  componentTypes:
+  - 'Null'
+  - PlaySound
+  - SpriteSystem
+  capabilities:
+  - null_transform
+  - sound
+  - sprite_emitter
+  blockers: []
+  missingResources: []
+  unpackagedResources: []
+  bodyAnchors: []
+  models: []
+  looping: unsupported_until_native_continuous_key_semantics_are_implemented
+- id: mm9:spell_reaver
+  sourceName: spell-spell reaver
+  status: supported_one_shot
+  componentCount: 5
+  componentTypes:
+  - PlaySound
+  - Sprite
+  - SpriteSystem
+  capabilities:
+  - fixed_sprite
+  - sound
+  - sprite_emitter
+  blockers: []
+  missingResources: []
+  unpackagedResources: []
+  bodyAnchors: []
+  models: []
+  looping: unsupported_until_native_continuous_key_semantics_are_implemented
+- id: mm9:ghost
+  sourceName: ghost
+  status: unsupported
+  componentCount: 1
+  componentTypes:
+  - Model
+  capabilities:
+  - model
+  blockers:
+  - missing_source_asset
+  - needs_mesh_deformation
+  missingResources:
+  - skins/ghost.dtx
+  unpackagedResources:
+  - models/ghost.abc
+  bodyAnchors: []
+  models:
+  - componentId: 16
+    legacy: models/ghost.abc
+    visible: true
+    mode: deforming
+    reason: 'piece ''body1'' is deforming: vertices are attached to nodes 5 and 6'
+  looping: unsupported_until_native_continuous_key_semantics_are_implemented
+- id: mm9:elemental-old
+  sourceName: elemental-old
+  status: supported_one_shot
+  componentCount: 6
+  componentTypes:
+  - 'Null'
+  - Sprite
+  - SpriteSystem
+  capabilities:
+  - fixed_sprite
+  - null_transform
+  - sprite_emitter
+  blockers: []
+  missingResources: []
+  unpackagedResources: []
+  bodyAnchors: []
+  models: []
+  looping: unsupported_until_native_continuous_key_semantics_are_implemented
+- id: mm9:elemental_blast
+  sourceName: elemental blast
+  status: supported_one_shot
+  componentCount: 6
+  componentTypes:
+  - 'Null'
+  - Sprite
+  - SpriteSystem
+  capabilities:
+  - fixed_sprite
+  - null_transform
+  - sprite_emitter
+  blockers: []
+  missingResources: []
+  unpackagedResources: []
+  bodyAnchors: []
+  models: []
+  looping: unsupported_until_native_continuous_key_semantics_are_implemented
+- id: mm9:blobby
+  sourceName: blobby
+  status: unsupported
+  componentCount: 2
+  componentTypes:
+  - Model
+  capabilities:
+  - model
+  blockers:
+  - missing_source_asset
+  - needs_mesh_deformation
+  missingResources:
+  - models/spells/armortube.abc
+  unpackagedResources:
+  - models/monk.abc
+  - skins/monk1.dtx
+  - skins/props/plantsandtrees/treebark3.dtx
+  bodyAnchors: []
+  models:
+  - componentId: 0
+    legacy: models/monk.abc
+    visible: true
+    mode: deforming
+    reason: 'piece ''monk'' is deforming: vertices are attached to nodes 6 and 5'
+  - componentId: 1
+    legacy: models/spells/armortube.abc
+    visible: true
+    mode: missing
+  looping: unsupported_until_native_continuous_key_semantics_are_implemented
+- id: mm9:armor
+  sourceName: spell-armor
+  status: unsupported
+  componentCount: 4
+  componentTypes:
+  - Model
+  - PlaySound
+  - SpriteSystem
+  capabilities:
+  - model
+  - sound
+  - sprite_emitter
+  blockers:
+  - needs_mesh_deformation
+  missingResources: []
+  unpackagedResources:
+  - models/spells/tube.abc
+  - skins/props/plantsandtrees/treebark3.dtx
+  - sounds/spells/natarmor.wav
+  - sprites/spells/leaf.spr
+  bodyAnchors: []
+  models:
+  - componentId: 10
+    legacy: models/spells/tube.abc
+    visible: true
+    mode: deforming
+    reason: 'piece ''armorspell'' is deforming: vertices are attached to nodes 23
+      and 25'
+  looping: unsupported_until_native_continuous_key_semantics_are_implemented
+- id: mm9:Njam_lightball_for_cutscene
+  sourceName: Njam lightball for cutscene
+  status: supported_one_shot
+  componentCount: 2
+  componentTypes:
+  - Sprite
+  capabilities:
+  - fixed_sprite
+  blockers: []
+  missingResources: []
+  unpackagedResources: []
+  bodyAnchors: []
+  models: []
+  looping: unsupported_until_native_continuous_key_semantics_are_implemented
+- id: mm9:GreaterDemon
+  sourceName: GreaterDemon
+  status: supported_one_shot
+  componentCount: 3
+  componentTypes:
+  - Sprite
+  - SpriteSystem
+  capabilities:
+  - fixed_sprite
+  - sprite_emitter
+  blockers: []
+  missingResources: []
+  unpackagedResources: []
+  bodyAnchors: []
+  models: []
+  looping: unsupported_until_native_continuous_key_semantics_are_implemented
+- id: mm9:dragon_smoke
+  sourceName: dragon smoke
+  status: unsupported
+  componentCount: 2
+  componentTypes:
+  - SpriteSystem
+  capabilities:
+  - sprite_emitter
+  blockers:
+  - needs_body_anchors
+  missingResources: []
+  unpackagedResources: []
+  bodyAnchors:
+  - componentId: 0
+    mode: 8
+    anchor: tail_or_user_node_8
+  - componentId: 3
+    mode: 9
+    anchor: tail_or_user_node_9
+  models: []
+  looping: unsupported_until_native_continuous_key_semantics_are_implemented
+- id: mm9:redyeldots
+  sourceName: redyeldots
+  status: unsupported
+  componentCount: 2
+  componentTypes:
+  - SpriteSystem
+  capabilities:
+  - sprite_emitter
+  blockers:
+  - needs_body_anchors
+  missingResources: []
+  unpackagedResources: []
+  bodyAnchors:
+  - componentId: 0
+    mode: 2
+    anchor: left_hand
+  - componentId: 1
+    mode: 3
+    anchor: right_hand
+  models: []
+  looping: unsupported_until_native_continuous_key_semantics_are_implemented
+- id: mm9:greenyeldots
+  sourceName: greenyeldots
+  status: unsupported
+  componentCount: 2
+  componentTypes:
+  - SpriteSystem
+  capabilities:
+  - sprite_emitter
+  blockers:
+  - needs_body_anchors
+  missingResources: []
+  unpackagedResources: []
+  bodyAnchors:
+  - componentId: 0
+    mode: 2
+    anchor: left_hand
+  - componentId: 1
+    mode: 3
+    anchor: right_hand
+  models: []
+  looping: unsupported_until_native_continuous_key_semantics_are_implemented
+- id: mm9:bluedots
+  sourceName: bluedots
+  status: unsupported
+  componentCount: 2
+  componentTypes:
+  - SpriteSystem
+  capabilities:
+  - sprite_emitter
+  blockers:
+  - needs_body_anchors
+  missingResources: []
+  unpackagedResources: []
+  bodyAnchors:
+  - componentId: 0
+    mode: 2
+    anchor: left_hand
+  - componentId: 1
+    mode: 3
+    anchor: right_hand
+  models: []
+  looping: unsupported_until_native_continuous_key_semantics_are_implemented
+- id: mm9:smoke
+  sourceName: smoke
+  status: supported_one_shot
+  componentCount: 1
+  componentTypes:
+  - SpriteSystem
+  capabilities:
+  - sprite_emitter
+  blockers: []
+  missingResources: []
+  unpackagedResources: []
+  bodyAnchors: []
+  models: []
+  looping: unsupported_until_native_continuous_key_semantics_are_implemented
+- id: mm9:smokestack
+  sourceName: smokestack
+  status: supported_one_shot
+  componentCount: 1
+  componentTypes:
+  - SpriteSystem
+  capabilities:
+  - sprite_emitter
+  blockers: []
+  missingResources: []
+  unpackagedResources: []
+  bodyAnchors: []
+  models: []
+  looping: unsupported_until_native_continuous_key_semantics_are_implemented
+- id: mm9:firefly
+  sourceName: firefly
+  status: supported_one_shot
+  componentCount: 2
+  componentTypes:
+  - Model
+  - Sprite
+  capabilities:
+  - fixed_sprite
+  - model
+  blockers: []
+  missingResources: []
+  unpackagedResources: []
+  bodyAnchors: []
+  models:
+  - componentId: 15
+    legacy: models/spells/bugpath.abc
+    visible: false
+    mode: animation_path
+  looping: unsupported_until_native_continuous_key_semantics_are_implemented
+- id: mm9:spellfx
+  sourceName: spellfx
+  status: supported_one_shot
+  componentCount: 2
+  componentTypes:
+  - Model
+  - Sprite
+  capabilities:
+  - fixed_sprite
+  - model
+  blockers: []
+  missingResources: []
+  unpackagedResources: []
+  bodyAnchors: []
+  models:
+  - componentId: 15
+    legacy: models/spells/bugpath.abc
+    visible: false
+    mode: animation_path
+  looping: unsupported_until_native_continuous_key_semantics_are_implemented
+- id: mm9:spirit
+  sourceName: spirit
+  status: supported_one_shot
+  componentCount: 1
+  componentTypes:
+  - Sprite
+  capabilities:
+  - fixed_sprite
+  blockers: []
+  missingResources: []
+  unpackagedResources: []
+  bodyAnchors: []
+  models: []
+  looping: unsupported_until_native_continuous_key_semantics_are_implemented
+- id: mm9:blacksmoke
+  sourceName: blacksmoke
+  status: supported_one_shot
+  componentCount: 1
+  componentTypes:
+  - SpriteSystem
+  capabilities:
+  - sprite_emitter
+  blockers: []
+  missingResources: []
+  unpackagedResources: []
+  bodyAnchors: []
+  models: []
+  looping: unsupported_until_native_continuous_key_semantics_are_implemented
+- id: mm9:oval
+  sourceName: oval
+  status: supported_one_shot
+  componentCount: 1
+  componentTypes:
+  - Sprite
+  capabilities:
+  - fixed_sprite
+  blockers: []
+  missingResources: []
+  unpackagedResources: []
+  bodyAnchors: []
+  models: []
+  looping: unsupported_until_native_continuous_key_semantics_are_implemented
+- id: mm9:mist
+  sourceName: mist
+  status: supported_one_shot
+  componentCount: 1
+  componentTypes:
+  - SpriteSystem
+  capabilities:
+  - sprite_emitter
+  blockers: []
+  missingResources: []
+  unpackagedResources: []
+  bodyAnchors: []
+  models: []
+  looping: unsupported_until_native_continuous_key_semantics_are_implemented
+- id: mm9:fireblue
+  sourceName: fireblue
+  status: supported_one_shot
+  componentCount: 1
+  componentTypes:
+  - SpriteSystem
+  capabilities:
+  - sprite_emitter
+  blockers: []
+  missingResources: []
+  unpackagedResources: []
+  bodyAnchors: []
+  models: []
+  looping: unsupported_until_native_continuous_key_semantics_are_implemented
+- id: mm9:LichKingRes
+  sourceName: LichKingRes
+  status: unsupported
+  componentCount: 1
+  componentTypes:
+  - SpriteSystem
+  capabilities:
+  - sprite_emitter
+  blockers:
+  - needs_body_anchors
+  missingResources: []
+  unpackagedResources: []
+  bodyAnchors:
+  - componentId: 0
+    mode: 8
+    anchor: tail_or_user_node_8
+  models: []
+  looping: unsupported_until_native_continuous_key_semantics_are_implemented
+- id: mm9:redpops
+  sourceName: redpops
+  status: supported_one_shot
+  componentCount: 1
+  componentTypes:
+  - SpriteSystem
+  capabilities:
+  - sprite_emitter
+  blockers: []
+  missingResources: []
+  unpackagedResources: []
+  bodyAnchors: []
+  models: []
+  looping: unsupported_until_native_continuous_key_semantics_are_implemented
+- id: mm9:greenpool
+  sourceName: greenpool
+  status: supported_one_shot
+  componentCount: 3
+  componentTypes:
+  - SpriteSystem
+  capabilities:
+  - sprite_emitter
+  blockers: []
+  missingResources: []
+  unpackagedResources: []
+  bodyAnchors: []
+  models: []
+  looping: unsupported_until_native_continuous_key_semantics_are_implemented
+- id: mm9:specks
+  sourceName: specks
+  status: supported_one_shot
+  componentCount: 8
+  componentTypes:
+  - Model
+  - SpriteSystem
+  capabilities:
+  - model
+  - sprite_emitter
+  blockers: []
+  missingResources: []
+  unpackagedResources: []
+  bodyAnchors: []
+  models:
+  - componentId: 15
+    legacy: models/spells/pathup.abc
+    visible: false
+    mode: animation_path
+  - componentId: 27
+    legacy: models/spells/pathup.abc
+    visible: false
+    mode: animation_path
+  - componentId: 36
+    legacy: models/spells/pathup.abc
+    visible: false
+    mode: animation_path
+  - componentId: 35
+    legacy: models/spells/pathup.abc
+    visible: false
+    mode: animation_path
+  looping: unsupported_until_native_continuous_key_semantics_are_implemented

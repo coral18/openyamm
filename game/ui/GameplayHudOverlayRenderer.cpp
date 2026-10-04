@@ -186,7 +186,7 @@ std::string replaceAll(std::string text, const std::string &from, const std::str
 
 void renderViewportParchmentSidePanels(GameplayScreenRuntime &view, int width, int height)
 {
-    view.renderViewportSidePanels(width, height, "UI-Parch");
+    view.renderViewportSidePanels(width, height, "obsidian_reading_surface");
 }
 } // namespace
 
@@ -404,8 +404,10 @@ void GameplayHudOverlayRenderer::renderChestPanel(GameplayScreenRuntime &view, i
                 continue;
             }
 
-            const float itemWidth = static_cast<float>(itemTexture->width) * gridMetrics.scale;
-            const float itemHeight = static_cast<float>(itemTexture->height) * gridMetrics.scale;
+            const float itemWidth =
+                static_cast<float>(itemTexture->width) * gridMetrics.scale * pItemDefinition->inventoryDrawScale;
+            const float itemHeight =
+                static_cast<float>(itemTexture->height) * gridMetrics.scale * pItemDefinition->inventoryDrawScale;
             const InventoryItemScreenRect itemRect =
                 computeInventoryItemScreenRect(gridMetrics, renderItem, itemWidth, itemHeight);
             view.submitHudTexturedQuad(*itemTexture, itemRect.x, itemRect.y, itemRect.width, itemRect.height);
@@ -521,8 +523,10 @@ void GameplayHudOverlayRenderer::renderInventoryNestedOverlay(
             continue;
         }
 
-        const float itemWidth = static_cast<float>(itemTexture->width) * gridMetrics.scale;
-        const float itemHeight = static_cast<float>(itemTexture->height) * gridMetrics.scale;
+        const float itemWidth =
+            static_cast<float>(itemTexture->width) * gridMetrics.scale * pItemDefinition->inventoryDrawScale;
+        const float itemHeight =
+            static_cast<float>(itemTexture->height) * gridMetrics.scale * pItemDefinition->inventoryDrawScale;
         const InventoryItemScreenRect itemRect =
             computeInventoryItemScreenRect(gridMetrics, item, itemWidth, itemHeight);
 

@@ -1,0 +1,64 @@
+schema: openyamm.effectTextureImport.v1
+source:
+  path: mm9/extracted/SPRITETEXTURES/SPRITETEXTURES/FLIES/FLY02.dtx
+  format: LithTech DTX
+  sha256: 779fa4cbda4da40603e650198c753babecdae26a5c5a6a4674387322e9a01c54
+runtime:
+  texture: engine/effects/mm9/textures/flies/fly02.png
+  format: PNG RGBA8
+  colorSpace: srgb
+  alphaUsage: blend
+  premultipliedAlpha: false
+  mipPolicy: generate-at-runtime
+  minFilter: linear
+  magFilter: linear
+  wrapU: clamp
+  wrapV: clamp
+conversion:
+  decoder: tools/mm9_import_discovery/convert_abc_model.py:decode_dtx_mips
+  decodedRgbChanged: false
+  decodedAlphaChanged: false
+  opaqueAlphaRepair: false
+  zeroAlphaRgbPreserved: true
+  sourceMipArtifacts: mips/*.png
+dtx:
+  version: -5
+  width: 16
+  height: 16
+  mipCount: 4
+  sectionCount: 0
+  internalFlags: 136
+  userFlags: 0
+  extraHex: '000000000000000000000000'
+  bppIdentifier: 0
+  command: ''
+  repairOpaqueAlpha: false
+  mips:
+  - index: 0
+    width: 16
+    height: 16
+    sourceOffset: 164
+    sourceBytes: 1024
+    decodedRgbaSha256: 08c4662641d2dc6932a0d21a60f23f175ed3934f1617cba5685eae34ef4e0b88
+    artifact: mips/00.png
+  - index: 1
+    width: 8
+    height: 8
+    sourceOffset: 1188
+    sourceBytes: 256
+    decodedRgbaSha256: 9773a2b839f73345b9e8b63df61143237cb32eca91308c50661db7bf2efdeae3
+    artifact: mips/01.png
+  - index: 2
+    width: 4
+    height: 4
+    sourceOffset: 1444
+    sourceBytes: 64
+    decodedRgbaSha256: 7e6812080e2f11ef301af431134d82620069ff5685cf3d407bef4fcacce20bb7
+    artifact: mips/02.png
+  - index: 3
+    width: 2
+    height: 2
+    sourceOffset: 1508
+    sourceBytes: 16
+    decodedRgbaSha256: 5a8f0890280a552a66318a16c1f97d3f156a798b0810d8f6945b433b3b1c5ea4
+    artifact: mips/03.png

@@ -12,7 +12,7 @@ namespace
 const std::vector<std::string> GameplayLayoutFiles = {
     "Data/ui/gameplay/gameplay.yml",
 #if defined(__ANDROID__)
-    "Data/ui/gameplay/gameplay_mobile.yml",
+    "Data/ui/gameplay/touch_controls.yml",
 #endif
     "Data/ui/gameplay/chest.yml",
     "Data/ui/gameplay/dialogue.yml",
@@ -30,6 +30,7 @@ const std::vector<std::string> GameplayLayoutFiles = {
     "Data/ui/gameplay/quick_reference.yml",
     "Data/ui/gameplay/town_portal.yml",
     "Data/ui/gameplay/lloyds_beacon.yml",
+    "Data/ui/gameplay/context_actions.yml",
     "Data/ui/gameplay/item_inspect.yml",
     "Data/ui/gameplay/character_inspect.yml",
     "Data/ui/gameplay/buff_inspect.yml",

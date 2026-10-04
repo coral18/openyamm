@@ -1,10 +1,12 @@
 #include "engine/AssetFileSystem.h"
 #include "engine/FontAsset.h"
 #include "game/app/GameSettings.h"
+#include "game/ui/UiLayoutManager.h"
 
 #include <doctest/doctest.h>
 
 #include <chrono>
+#include <cmath>
 #include <filesystem>
 #include <fstream>
 
@@ -35,7 +37,9 @@ struct FontFixture
             "create.yml", "openyamm_create_faithful.ttf", "lucida.yml", "openyamm_lucida_faithful.ttf",
             "smallnum.yml", "openyamm_smallnum_faithful.ttf", "comic.yml", "openyamm_comic_faithful.ttf",
             "book2.yml", "openyamm_book2_faithful.ttf", "autonote.yml", "openyamm_autonote_faithful.ttf",
-            "endgame.yml", "openyamm_endgame_faithful.ttf", "spell.yml", "openyamm_spell_faithful.ttf"})
+            "endgame.yml", "openyamm_endgame_faithful.ttf", "spell.yml", "openyamm_spell_faithful.ttf",
+            "fondamento.yml", "fondamento_regular.ttf", "menu_arrus.yml", "menu_lucida.yml",
+            "alegreya_semibold.yml", "alegreya_variable.ttf"})
         {
             std::filesystem::copy_file(source / "truetype" / pFile, root / "engine/fonts/truetype" / pFile);
         }
@@ -59,6 +63,195 @@ int textWidth(const Engine::FontAtlas &font, const std::string &text)
     }
     return width;
 }
+}
+
+TEST_CASE("menu outline fonts load independently of legacy metrics")
+{
+    FontFixture fixture;
+    std::string error;
+    for (const char *pName : {"fondamento", "menu_arrus", "menu_lucida", "alegreya_semibold"})
+    {
+        const auto image = Engine::loadTrueTypeFontAtlas(fixture.assets, pName, error);
+        INFO(error);
+        REQUIRE(image);
+        CHECK(image->atlas.atlasScale == 1);
+        CHECK(image->atlas.glyphMetrics['W'].advance() > image->atlas.glyphMetrics['i'].advance());
+        CHECK(image->atlas.glyphMetrics[' '].advance() > 0);
+        bool fractionalAdvance = false;
+        for (const Engine::FontGlyphMetrics &metrics : image->atlas.glyphMetrics)
+        {
+            fractionalAdvance = fractionalAdvance || metrics.advance() != std::floor(metrics.advance());
+        }
+        if (std::string(pName) == "fondamento")
+        {
+            CHECK(fractionalAdvance);
+        }
+        CHECK(textWidth(image->atlas, "WWW") > textWidth(image->atlas, "iii"));
+        CHECK(textWidth(image->atlas, "Begin Adventure") > 0);
+        bool ink = false;
+        for (size_t i = 3; i < image->atlas.mainAtlasPixels.size(); i += 4)
+            ink = ink || image->atlas.mainAtlasPixels[i] != 0;
+        CHECK(ink);
+    }
+    CHECK_FALSE(Engine::loadTrueTypeFontAtlas(fixture.assets, "../fondamento", error));
+    CHECK_FALSE(Engine::loadTrueTypeFontAtlas(fixture.assets, "arrus", error));
+}
+
+TEST_CASE("menu outline font atlas rasterizes at display size with antialiased "
+          "ink and one shadow mask")
+{
+    FontFixture fixture;
+    std::string error;
+    for (const char *pName : {"fondamento", "menu_arrus", "menu_lucida", "alegreya_semibold"})
+    {
+        for (int pixelHeight : {11, 13, 17, 21, 26, 64, 128})
+        {
+            CAPTURE(pName);
+            CAPTURE(pixelHeight);
+            const auto image = Engine::loadTrueTypeFontAtlas(fixture.assets, pName, error, pixelHeight);
+            REQUIRE_MESSAGE(image, error);
+            const Engine::FontAtlas &font = image->atlas;
+            CHECK(font.fontHeight == pixelHeight);
+            CHECK(font.atlasScale == 1);
+            const int cellWidth = font.atlasCellWidth + 2 * font.atlasPadding;
+            const int cellHeight = font.fontHeight + 2 * font.atlasPadding;
+            for (unsigned char character : std::string("Wil\xc9\xe9"))
+            {
+                CAPTURE(character);
+                const int cellX = character % 16 * cellWidth;
+                const int cellY = character / 16 * cellHeight;
+                size_t ink = 0;
+                size_t antialiased = 0;
+                bool sameShadow = true;
+                bool whiteInk = true;
+                bool contained = true;
+                for (int y = 0; y < cellHeight; ++y)
+                {
+                    for (int x = 0; x < cellWidth; ++x)
+                    {
+                        const size_t offset = (size_t(cellY + y) * font.atlasWidth + cellX + x) * 4;
+                        const uint8_t alpha = font.mainAtlasPixels[offset + 3];
+                        ink += alpha > 0;
+                        antialiased += alpha > 0 && alpha < 255;
+                        sameShadow &= image->shadowPixels[offset + 3] == alpha;
+                        whiteInk &= font.mainAtlasPixels[offset] == 255 && font.mainAtlasPixels[offset + 1] == 255 &&
+                                    font.mainAtlasPixels[offset + 2] == 255;
+                        if (alpha > 0)
+                        {
+                            contained &= x > 0 && x < font.glyphMetrics[character].width + 2 * font.atlasPadding - 1 &&
+                                         y > 0 && y < cellHeight - 1;
+                        }
+                    }
+                }
+                CHECK(ink > 0);
+                // Pixel-aligned faithful strokes can be fully opaque at their original
+                // sizes.
+                if (std::string(pName) == "fondamento")
+                {
+                    CHECK(antialiased > 0);
+                }
+                CHECK(sameShadow);
+                CHECK(whiteInk);
+                CHECK(contained);
+            }
+        }
+    }
+    CHECK_FALSE(Engine::loadTrueTypeFontAtlas(fixture.assets, "fondamento", error, -1));
+    CHECK_FALSE(Engine::loadTrueTypeFontAtlas(fixture.assets, "fondamento", error, 513));
+}
+
+TEST_CASE("enemy label font loads its authored semibold weight and rejects invalid weights")
+{
+    FontFixture fixture;
+    std::string error;
+    const std::optional<Engine::FontAtlasImage> semibold =
+        Engine::loadTrueTypeFontAtlas(fixture.assets, "alegreya_semibold", error);
+    REQUIRE_MESSAGE(semibold, error);
+    CHECK(semibold->atlas.fontHeight == 24);
+    CHECK(textWidth(semibold->atlas, "Guardian of VARN 617/617") * 0.42f < 144.0f);
+    CHECK(semibold->atlas.mainAtlasPixels.size() < 2 * 1024 * 1024);
+
+    const auto writeWeight = [&](int weight)
+    {
+        std::ofstream descriptor(fixture.root / "engine/fonts/truetype/alegreya_semibold.yml");
+        descriptor << "file: alegreya_variable.ttf\nmetrics: freetype\nlogical_height: 24\nbaseline: 18\n"
+                   << "encoding: windows-1252\nweight: " << weight << '\n';
+    };
+    writeWeight(400);
+    const std::optional<Engine::FontAtlasImage> regular =
+        Engine::loadTrueTypeFontAtlas(fixture.assets, "alegreya_semibold", error);
+    REQUIRE_MESSAGE(regular, error);
+    const auto ink = [](const Engine::FontAtlas &font)
+    {
+        uint64_t sum = 0;
+        for (size_t offset = 3; offset < font.mainAtlasPixels.size(); offset += 4)
+        {
+            sum += font.mainAtlasPixels[offset];
+        }
+        return sum;
+    };
+    CHECK(ink(semibold->atlas) > ink(regular->atlas));
+
+    writeWeight(999);
+    CHECK_FALSE(Engine::loadTrueTypeFontAtlas(fixture.assets, "alegreya_semibold", error));
+    CHECK(error.find("weight") != std::string::npos);
+    writeWeight(0);
+    CHECK_FALSE(Engine::loadTrueTypeFontAtlas(fixture.assets, "alegreya_semibold", error));
+}
+
+TEST_CASE("menu headings fit their layout at the intended font size across display scales")
+{
+    FontFixture fixture;
+    Game::UiLayoutManager layouts;
+    for (const char *pLayout : {"settings_gameplay", "settings_video", "settings_audio", "settings_controls",
+                               "settings_keyboard", "continent_selection", "character_creation", "load_game",
+                               "save_game"})
+    {
+        const std::filesystem::path path = std::filesystem::path(OPENYAMM_SOURCE_DIR) /
+                                           "assets_dev/engine/ui/gameplay" / (std::string(pLayout) + ".yml");
+        std::ifstream input(path);
+        REQUIRE(input.good());
+        const std::string text((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
+        REQUIRE(layouts.loadLayoutText(path.string(), text));
+    }
+    std::string error;
+    const auto baseFont = Engine::loadTrueTypeFontAtlas(fixture.assets, "fondamento", error);
+    REQUIRE_MESSAGE(baseFont, error);
+    size_t checkedHeadings = 0;
+    for (float scale : {0.9375f, 1.5f, 1.83f, 1.875f, 2.25f})
+    {
+        std::unordered_map<int, Engine::FontAtlas> sizedFonts;
+        for (const auto &[key, element] : layouts.elements())
+        {
+            const std::string &id = element.id;
+            const bool heading = id.ends_with("Title") || id.ends_with("Heading") || id.ends_with("Name") ||
+                                 id.ends_with("Section0") || id.ends_with("Section1") || id.ends_with("ConfirmButton");
+            if (!heading || element.fontName != "fondamento")
+            {
+                continue;
+            }
+            ++checkedHeadings;
+            CAPTURE(id);
+            CAPTURE(scale);
+            const int pixelHeight = int(std::lround(baseFont->atlas.fontHeight * element.textScale * scale));
+            if (!sizedFonts.contains(pixelHeight))
+            {
+                auto image = Engine::loadTrueTypeFontAtlas(fixture.assets, "fondamento", error, pixelHeight);
+                REQUIRE_MESSAGE(image, error);
+                sizedFonts.emplace(pixelHeight, std::move(image->atlas));
+            }
+            const Engine::FontAtlas &font = sizedFonts.at(pixelHeight);
+            float width = 0;
+            uint8_t previous = 0;
+            for (unsigned char character : element.labelText)
+            {
+                width += font.glyphMetrics[character].advance() + font.kerning(previous, character);
+                previous = character;
+            }
+            CHECK(width <= (element.width - 2 * element.textPadX) * scale + 0.5f);
+        }
+    }
+    CHECK(checkedHeadings > 100);
 }
 
 TEST_CASE("font atlas TTF preserves native layout and rasterizes all CP1252 cells without clipping")
@@ -149,13 +342,13 @@ TEST_CASE("font atlas TTF preserves native layout and rasterizes all CP1252 cell
     {
         CHECK(textWidth(ttf->atlas, text) == textWidth(bitmap->atlas, text));
     }
-    const bool blackInk = std::string(pName) == "AUTONOTE";
+    const bool noteFace = std::string(pName) == "AUTONOTE";
     size_t partialAlphaCount = 0;
     size_t mainInkCount = 0;
     size_t shadowCount = 0;
     for (size_t offset = 3; offset < ttf->atlas.mainAtlasPixels.size(); offset += 4)
     {
-        const uint8_t alpha = blackInk ? ttf->shadowPixels[offset] : ttf->atlas.mainAtlasPixels[offset];
+        const uint8_t alpha = ttf->atlas.mainAtlasPixels[offset];
         partialAlphaCount += alpha > 0 && alpha < 255;
         mainInkCount += ttf->atlas.mainAtlasPixels[offset] > 0;
         shadowCount += ttf->shadowPixels[offset] > 0;
@@ -170,10 +363,10 @@ TEST_CASE("font atlas TTF preserves native layout and rasterizes all CP1252 cell
     {
         CHECK(shadowCount > 1000);
     }
-    if (blackInk)
+    if (noteFace)
     {
-        CHECK(mainInkCount == 0);
-        // Restored l is the native vertical stroke at x=0, y=3..14: no synthetic +1,+1 copy.
+        CHECK(mainInkCount > 1000);
+        // Obsidian uses tintable ivory ink; the restored l retains its native stroke and has no shifted shadow.
         const int cellX = (108 % 16) * (ttf->atlas.atlasCellWidth + 10) * 4;
         const int cellY = (108 / 16) * (height + 10) * 4;
         bool coverageMatches = true;
@@ -183,7 +376,8 @@ TEST_CASE("font atlas TTF preserves native layout and rasterizes all CP1252 cell
             {
                 const size_t offset = (size_t(cellY + y) * ttf->atlas.atlasWidth + cellX + x) * 4;
                 const bool ink = x >= 20 && x < 24 && y >= 32 && y < 80;
-                coverageMatches &= ttf->shadowPixels[offset + 3] == (ink ? 255 : 0);
+                coverageMatches &= ttf->atlas.mainAtlasPixels[offset + 3] == (ink ? 255 : 0);
+                coverageMatches &= ttf->shadowPixels[offset + 3] == 0;
                 coverageMatches &= ttf->shadowPixels[offset] == 0
                     && ttf->shadowPixels[offset + 1] == 0 && ttf->shadowPixels[offset + 2] == 0;
             }

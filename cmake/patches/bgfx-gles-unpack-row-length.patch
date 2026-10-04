@@ -1,0 +1,13 @@
+diff --git a/src/renderer_gl.cpp b/src/renderer_gl.cpp
+--- a/src/renderer_gl.cpp
++++ b/src/renderer_gl.cpp
+@@ -6070,7 +6070,8 @@ namespace bgfx
+ 			&& !s_textureFormat[m_requestedFormat].m_supported
+ 			&& !s_renderGL->m_textureSwizzleSupport
+ 			;
+-		const bool unpackRowLength = !!BGFX_CONFIG_RENDERER_OPENGL || s_extension[Extension::EXT_unpack_subimage].m_supported;
++		const bool unpackRowLength = !!BGFX_CONFIG_RENDERER_OPENGL || s_renderGL->m_gles3
++			|| s_extension[Extension::EXT_unpack_subimage].m_supported;
+ 		const bool compressed      = bimg::isCompressed(bimg::TextureFormat::Enum(m_requestedFormat) );
+ 		const bool convert         = false
+ 			|| (compressed && m_textureFormat != m_requestedFormat)

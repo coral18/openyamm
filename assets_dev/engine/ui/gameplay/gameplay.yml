@@ -1,1056 +1,1664 @@
+# Native Obsidian UI; see level_generation/ui/obsidian_engine_handoff_20260928/NATIVE_INTEGRATION.md
 screen: OutdoorHud
-
 elements:
-  - id: OutdoorBasebar
-    anchor: bottom_center
-    width: 640
-    height: 114
-    z_index: 200
-    scale:
-      min: 1.0
-      max: 8.0
-    asset:
-      default: Basebar
-    notes: Legacy centered base bar kept for stacked overlays above gameplay.
-    children:
-      - id: OutdoorPartyStrip
-        anchor: top_left
-        width: 483
-        height: 114
-        asset:
-          default: FACEMASK
-          selected: selring
-          frame: manaFRM
-          health_bar: ManaG
-          mana_bar: manaB
-        notes: Legacy party strip used by overlay screens.
-
-      - id: OutdoorStatusBar
-        anchor: center_in
-        offset_x: -78.5
-        offset_y: -47
-        width: 483
-        height: 15
-        text:
-          font: Lucida
-          align_x: center
-          align_y: middle
-        notes: Legacy one-line status region used by overlay screens.
-
-      - id: CharShield_1
-        anchor: top_left
-        offset_x: 15
-        offset_y: 22
-        width: 67
-        height: 92
-        asset:
-          default: IBshield01
-        notes: Empty overlay slot shield 1.
-
-      - id: CharShield_2
-        anchor: top_left
-        offset_x: 113
-        offset_y: 22
-        width: 67
-        height: 92
-        asset:
-          default: IBshield01
-        notes: Empty overlay slot shield 2.
-
-      - id: CharShield_3
-        anchor: top_left
-        offset_x: 211
-        offset_y: 22
-        width: 67
-        height: 92
-        asset:
-          default: IBshield02
-        notes: Empty overlay slot shield 3.
-
-      - id: CharShield_4
-        anchor: top_left
-        offset_x: 308
-        offset_y: 22
-        width: 67
-        height: 92
-        asset:
-          default: IBshield03
-        notes: Empty overlay slot shield 4.
-
-      - id: CharShield_5
-        anchor: top_left
-        offset_x: 405
-        offset_y: 22
-        width: 67
-        height: 92
-        asset:
-          default: IBshield04
-        notes: Empty overlay slot shield 5.
-
-  - id: OutdoorStandardBasebar
-    anchor: bottom_center
-    width: 640
-    height: 114
-    z_index: 200
-    scale:
-      min: 1.0
-      max: 8.0
-    asset:
-      default: Basebar
-    notes: Standard gameplay base bar matching the original centered layout.
-    children:
-      - id: OutdoorStandardPartyStrip
-        anchor: top_left
-        width: 483
-        height: 114
-        asset:
-          default: FACEMASK
-          selected: selring
-          frame: manaFRM
-          health_bar: ManaG
-          mana_bar: manaB
-        notes: Standard gameplay party strip.
-
-      - id: OutdoorStandardStatusBar
-        anchor: center_in
-        offset_x: -78.5
-        offset_y: -47
-        width: 483
-        height: 15
-        text:
-          font: Lucida
-          align_x: center
-          align_y: middle
-        notes: Standard gameplay status text region.
-
-      - id: OutdoorStandardMinimap
-        anchor: right
-        offset_x: -19
-        width: 122
-        height: 83
-        asset:
-          default: MINIMAP
-        notes: Standard gameplay minimap.
-
-      - id: OutdoorStandardMinimapFrame
-        anchor: right
-        width: 159
-        height: 113
-        asset:
-          default: mapframe
-        notes: Standard gameplay minimap frame.
-        children:
-          - id: OutdoorStandardMinimapZoomIn
-            anchor: top_right
-            offset_x: -4
-            offset_y: 6
-            width: 13
-            height: 15
-            interactive: true
-            asset:
-              default: map+up
-              pressed: map+dn
-            notes: Standard gameplay minimap zoom in button.
-
-          - id: OutdoorStandardMinimapZoomOut
-            anchor: bottom_right
-            offset_x: -4
-            offset_y: -5
-            width: 13
-            height: 15
-            interactive: true
-            asset:
-              default: map-up
-              pressed: map-dn
-            notes: Standard gameplay minimap zoom out button.
-
-      - id: OutdoorStandardCharShield_1
-        anchor: top_left
-        offset_x: 15
-        offset_y: 22
-        width: 67
-        height: 92
-        asset:
-          default: IBshield01
-        notes: Empty standard gameplay slot shield 1.
-
-      - id: OutdoorStandardCharShield_2
-        anchor: top_left
-        offset_x: 113
-        offset_y: 22
-        width: 67
-        height: 92
-        asset:
-          default: IBshield01
-        notes: Empty standard gameplay slot shield 2.
-
-      - id: OutdoorStandardCharShield_3
-        anchor: top_left
-        offset_x: 211
-        offset_y: 22
-        width: 67
-        height: 92
-        asset:
-          default: IBshield02
-        notes: Empty standard gameplay slot shield 3.
-
-      - id: OutdoorStandardCharShield_4
-        anchor: top_left
-        offset_x: 308
-        offset_y: 22
-        width: 67
-        height: 92
-        asset:
-          default: IBshield03
-        notes: Empty standard gameplay slot shield 4.
-
-      - id: OutdoorStandardCharShield_5
-        anchor: top_left
-        offset_x: 405
-        offset_y: 22
-        width: 67
-        height: 92
-        asset:
-          default: IBshield04
-        notes: Empty standard gameplay slot shield 5.
-
-  - id: OutdoorStandardTopBar
-    anchor: top_center
-    width: 640
-    height: 29
-    z_index: 50
-    scale:
-      min: 1.0
-      max: 8.0
-    asset:
-      default: topbar
-    notes: Standard gameplay top bar.
-    children:
-      - id: OutdoorStandardButtonOptions
-        anchor: center_in
-        offset_x: 220
-        width: 50
-        height: 22
-        interactive: true
-        asset:
-          default: butn4u
-          highlighted: butn4d
-          pressed: butn4d
-        notes: Standard options button.
-
-      - id: OutdoorStandardButtonQuickReference
-        anchor: center_in
-        offset_x: 165
-        width: 60
-        height: 24
-        interactive: true
-        asset:
-          default: butn3u
-          highlighted: butn3d
-          pressed: butn3d
-        notes: Standard quick reference button.
-
-      - id: OutdoorStandardButtonRest
-        anchor: center_in
-        offset_x: 115
-        width: 40
-        height: 24
-        interactive: true
-        asset:
-          default: butn2u
-          highlighted: butn2d
-          pressed: butn2d
-        notes: Standard rest button.
-
-      - id: OutdoorStandardButtonBooks
-        anchor: center_in
-        offset_x: 72.5
-        width: 40
-        height: 24
-        interactive: true
-        asset:
-          default: butn1u
-          highlighted: butn1d
-          pressed: butn1d
-        notes: Standard books button.
-
-      - id: OutdoorStandardGoldFoodIcon
-        anchor: center_in
-        offset_x: -165
-        width: 134
-        height: 21
-        asset:
-          default: scoreBG
-        notes: Standard gold and food background.
-
-      - id: OutdoorStandardFoodLabel
-        anchor: center_in
-        offset_x: -180
-        width: 28
-        height: 14
-        text:
-          value: "{food}"
-          font: SMALLNUM
-          align_x: center
-          align_y: middle
-        notes: Standard food counter text.
-
-      - id: OutdoorStandardGoldLabel
-        anchor: center_in
-        offset_x: -85
-        width: 28
-        height: 14
-        text:
-          value: "{gold}"
-          font: SMALLNUM
-          align_x: center
-          align_y: middle
-        notes: Standard gold counter text.
-
-      - id: OutdoorStandardFlyBuffIcon
-        anchor: top_left
-        offset_x: 6
-        offset_y: 31
-        width: 64
-        height: 64
-        asset:
-          default: sp21a10
-        notes: Standard Fly buff icon.
-
-      - id: OutdoorStandardCompassFront
-        anchor: center_in
-        width: 49
-        height: 19
-        asset:
-          default: compcovr
-        notes: Standard compass overlay art.
-
-      - id: OutdoorStandardBuffSkullPanel
-        anchor: top_right
-        width: 64
-        height: 64
-        asset:
-          default: asiR00
-        notes: Standard skull buff panel.
-        children:
-          - id: OutdoorStandardBuffSkull_FeatherFall
-            anchor: center_in
-            width: 64
-            height: 64
-            asset:
-              default: asiR07
-            notes: Standard Feather Fall buff icon.
-
-          - id: OutdoorStandardBuffSkull_Stoneskin
-            anchor: center_in
-            width: 64
-            height: 64
-            asset:
-              default: asiR01
-            notes: Standard Stoneskin buff icon.
-
-          - id: OutdoorStandardBuffSkull_DayOfGods
-            anchor: center_in
-            width: 64
-            height: 64
-            asset:
-              default: asiR05
-            notes: Standard Day of the Gods buff icon.
-
-          - id: OutdoorStandardBuffSkull_Torchlight
-            anchor: center_in
-            width: 64
-            height: 64
-            asset:
-              default: asiR06
-            notes: Standard Torchlight buff icon.
-
-          - id: OutdoorStandardBuffSkull_WizardEye
-            anchor: center_in
-            width: 64
-            height: 64
-            asset:
-              default: asiR02
-            notes: Standard Wizard Eye buff icon.
-
-          - id: OutdoorStandardBuffSkull_ProtectionFromGods
-            anchor: center_in
-            width: 64
-            height: 64
-            asset:
-              default: asiR04
-            notes: Standard Protection from Magic buff icon.
-
-      - id: OutdoorStandardBuffBodyPanel
-        anchor: top_left
-        width: 64
-        height: 64
-        asset:
-          default: asiL00
-        notes: Standard body buff panel.
-        children:
-          - id: OutdoorStandardBuffBody_FireResistance
-            anchor: center_in
-            width: 64
-            height: 64
-            asset:
-              default: asiL01
-            notes: Standard Fire Resistance buff icon.
-
-          - id: OutdoorStandardBuffBody_WaterResistance
-            anchor: center_in
-            width: 64
-            height: 64
-            asset:
-              default: asiL02
-            notes: Standard Water Resistance buff icon.
-
-          - id: OutdoorStandardBuffBody_AirResistance
-            anchor: center_in
-            width: 64
-            height: 64
-            asset:
-              default: asiL03
-            notes: Standard Air Resistance buff icon.
-
-          - id: OutdoorStandardBuffBody_EarthResistance
-            anchor: center_in
-            width: 64
-            height: 64
-            asset:
-              default: asiL04
-            notes: Standard Earth Resistance buff icon.
-
-          - id: OutdoorStandardBuffBody_MindResistance
-            anchor: center_in
-            width: 64
-            height: 64
-            asset:
-              default: asiL05
-            notes: Standard Mind Resistance buff icon.
-
-          - id: OutdoorStandardBuffBody_BodyResistance
-            anchor: center_in
-            width: 64
-            height: 64
-            asset:
-              default: asiL06
-            notes: Standard Body Resistance buff icon.
-
-          - id: OutdoorStandardBuffBody_Shield
-            anchor: center_in
-            width: 64
-            height: 64
-            asset:
-              default: asiL07
-            notes: Standard Shield buff icon.
-
-          - id: OutdoorStandardBuffBody_Heroism
-            anchor: center_in
-            width: 64
-            height: 64
-            asset:
-              default: asiL08
-            notes: Standard Heroism buff icon.
-
-          - id: OutdoorStandardBuffBody_Haste
-            anchor: center_in
-            width: 64
-            height: 64
-            asset:
-              default: asiL09
-            notes: Standard Haste buff icon.
-
-          - id: OutdoorStandardBuffBody_Immolation
-            anchor: center_in
-            width: 64
-            height: 64
-            asset:
-              default: asiL10
-            notes: Standard Immolation buff icon.
-
-  - id: OutdoorGameplayBasebar
-    anchor_space: screen
-    anchor: bottom_center
-    offset_y: 1
-    width: 485
-    height: 94
-    z_index: 200
-    scale:
-      min: 1.0
-      max: 8.0
-    asset:
-      default: Basebar_cut
-    notes: Gameplay-only centered base bar cropped to current party size.
-    children:
-      - id: OutdoorGameplayPartyStrip
-        anchor: top_left
-        width: 471
-        height: 92
-        asset:
-          default: FACEMASK
-          selected: selring
-          frame: manaFRM
-          health_bar: ManaG
-          mana_bar: manaB
-        notes: Gameplay-only party strip assets.
-
-      - id: OutdoorGameplayStatusBar
-        anchor: center_above
-        offset_y: -3
-        height: 18
-        asset:
-          default: status_bar
-        text:
-          font: Lucida
-          align_x: center
-          align_y: middle
-        notes: Gameplay-only centered status banner above the party strip.
-
-      - id: OutdoorGameplayBasebar_OrnLeft1
-        anchor: bottom_left
-        offset_x: 15
-        offset_y: -32
-        width: 33
-        height: 32
-        z_index: 10
-        asset:
-          default: UI-OrL
-
-      - id: OutdoorGameplayBasebar_OrnLeft2
-        anchor: bottom_left
-        offset_x: 6
-        offset_y: -64
-        width: 33
-        height: 32
-        z_index: 10
-        asset:
-          default: UI-OrL
-
-      - id: OutdoorGameplayBasebar_OrnRight1
-        anchor: bottom_right
-        offset_x: 22
-        offset_y: -32
-        width: 39
-        height: 32
-        z_index: 10
-        asset:
-          default: UI-OrR
-
-      - id: OutdoorGameplayBasebar_OrnRight2
-        anchor: bottom_right
-        offset_x: 14
-        offset_y: -64
-        width: 39
-        height: 32
-        z_index: 10
-        asset:
-          default: UI-OrR
-
-  - id: OutdoorOptionsBar
-    anchor_space: screen
-    anchor: bottom_left
-    width: 185
-    height: 34
-    z_index: 60
-    scale:
-      min: 1.0
-      max: 8.0
-    asset:
-      default: topbar
-    notes: Gameplay command strip at the lower-left screen corner.
-    children:
-      - id: OutdoorOptionsBarFrame
-        anchor: center
-        width: 185
-        height: 34
-        z_index: 70
-        asset:
-          default: UI-FrMnu
-
-      - id: OutdoorButtonBooks
-        anchor: top_left
-        offset_x: 5
-        offset_y: 7
-        width: 33
-        height: 24
-        interactive: true
-        asset:
-          default: butn1u
-          highlighted: butn1d
-          pressed: butn1d
-        notes: Books button.
-
-      - id: OutdoorButtonQuickReference
-        anchor: top_left
-        offset_x: 55
-        offset_y: 5
-        width: 60
-        height: 24
-        interactive: true
-        asset:
-          default: butn3u
-          highlighted: butn3d
-          pressed: butn3d
-        notes: Quick reference button.
-
-      - id: OutdoorButtonOptions
-        anchor: top_left
-        offset_x: 130
-        offset_y: 6
-        width: 50
-        height: 22
-        interactive: true
-        asset:
-          default: butn4u
-          highlighted: butn4d
-          pressed: butn4d
-        notes: Options button.
-
-  - id: OutdoorGoldBar
-    anchor_space: screen
+- id: OutdoorBasebar
+  anchor: bottom_center
+  width: 640
+  height: 114
+  z_index: 200
+  scale:
+    min: 1.0
+    max: 8.0
+  asset:
+    default: obsidian_hud_fullscreen_basebar
+  notes: Carved Obsidian status revision from 2116. Fixed 640x114; clear status/input rail, 22.4 high.
+  children:
+  - id: OutdoorPartyStrip
     anchor: top_left
-    width: 125
-    height: 25
-    z_index: 60
-    scale:
-      min: 1.0
-      max: 8.0
-    asset:
-      default: topbar
+    width: 483
+    height: 114
+    notes: Shared gameplay split arcs and indicators, fitted to the fixed 4:3 carved frame and clear status rail.
     children:
-      - id: OutdoorGoldBar_Frame
-        anchor: center_in
-        width: 125
-        height: 25
-        asset:
-          default: Ui-FrGol
-
-      - id: OutdoorGoldIcon
+    - id: ObsidianOverlayPc1
+      anchor: top_left
+      offset_x: 19
+      offset_y: 28
+      width: 78
+      height: 81
+      interactive: true
+      notes: Fixed full-screen slot; split arcs fit below the status/input rail. Hide unused slots.
+      children:
+      - id: ObsidianOverlayPc1Face
         anchor: top_left
-        offset_x: 8
-        offset_y: 2
-        width: 45
-        height: 23
-        asset:
-          default: scoreBG_gold
-
-      - id: OutdoorGoldLabel
+        offset_x: 16.333333
+        offset_y: 8.0
+        width: 45.333333
+        height: 60.266667
+        notes: Existing overlay portrait size and animated expressions; ellipse clip.
+      - id: ObsidianOverlayPc1Rim
         anchor: top_left
-        offset_x: 60
-        offset_y: 5
-        width: 34
-        height: 14
-        text:
-          value: "{gold}"
-          font: SMALLNUM
-          align_x: center
-          align_y: middle
-
-  - id: OutdoorFlyBuffIcon
-    anchor_space: screen
+        offset_x: 15.033333
+        offset_y: 6.7
+        width: 47.933333
+        height: 62.866667
+        meter_arc:
+          start_degrees: -90
+          sweep_degrees: 360
+          stroke_width: 0.85
+      - id: ObsidianOverlayPc1Selection
+        anchor: top_left
+        offset_x: 29
+        offset_y: -5.5
+        width: 20
+        height: 20
+        asset:
+          default: obsidian_hud_selection_diamond
+      - id: ObsidianOverlayPc1Health
+        anchor: top_left
+        offset_x: 9.893333
+        offset_y: 1.573333
+        width: 58.213333
+        height: 73.12
+        meter_arc:
+          start_degrees: 100
+          sweep_degrees: 160
+          stroke_width: 4.6
+        notes: Shared gameplay HP arc, colours and damage trail; left side fills upward.
+      - id: ObsidianOverlayPc1Mana
+        anchor: top_left
+        offset_x: 9.893333
+        offset_y: 1.573333
+        width: 58.213333
+        height: 73.12
+        meter_arc:
+          start_degrees: 80
+          sweep_degrees: -160
+          stroke_width: 4.6
+        notes: Shared blue SP arc; omit the entire gauge when maximum SP is zero.
+      - id: ObsidianOverlayPc1Readiness
+        anchor: top_left
+        offset_x: 4.2
+        offset_y: 63.3
+        width: 11.6
+        height: 13.2
+        notes: Lower-left aggro diamond and recovery ring; clears the carved bottom frame.
+      - id: ObsidianOverlayPc1PersonalBuffs
+        anchor: top_left
+        offset_x: 60.3
+        offset_y: 63.62
+        width: 15.4
+        height: 15.4
+        asset:
+          default: obsidian_personal_buffs
+        interactive: true
+        visible: false
+        notes: Lower-right live buff medallion; consumes click before portrait selection.
+    - id: ObsidianOverlayPc2
+      anchor: top_left
+      offset_x: 113
+      offset_y: 28
+      width: 78
+      height: 81
+      interactive: true
+      notes: Fixed full-screen slot; split arcs fit below the status/input rail. Hide unused slots.
+      children:
+      - id: ObsidianOverlayPc2Face
+        anchor: top_left
+        offset_x: 16.333333
+        offset_y: 8.0
+        width: 45.333333
+        height: 60.266667
+        notes: Existing overlay portrait size and animated expressions; ellipse clip.
+      - id: ObsidianOverlayPc2Rim
+        anchor: top_left
+        offset_x: 15.033333
+        offset_y: 6.7
+        width: 47.933333
+        height: 62.866667
+        meter_arc:
+          start_degrees: -90
+          sweep_degrees: 360
+          stroke_width: 0.85
+      - id: ObsidianOverlayPc2Selection
+        anchor: top_left
+        offset_x: 29
+        offset_y: -5.5
+        width: 20
+        height: 20
+        asset:
+          default: obsidian_hud_selection_diamond
+      - id: ObsidianOverlayPc2Health
+        anchor: top_left
+        offset_x: 9.893333
+        offset_y: 1.573333
+        width: 58.213333
+        height: 73.12
+        meter_arc:
+          start_degrees: 100
+          sweep_degrees: 160
+          stroke_width: 4.6
+        notes: Shared gameplay HP arc, colours and damage trail; left side fills upward.
+      - id: ObsidianOverlayPc2Mana
+        anchor: top_left
+        offset_x: 9.893333
+        offset_y: 1.573333
+        width: 58.213333
+        height: 73.12
+        meter_arc:
+          start_degrees: 80
+          sweep_degrees: -160
+          stroke_width: 4.6
+        notes: Shared blue SP arc; omit the entire gauge when maximum SP is zero.
+      - id: ObsidianOverlayPc2Readiness
+        anchor: top_left
+        offset_x: 4.2
+        offset_y: 63.3
+        width: 11.6
+        height: 13.2
+        notes: Lower-left aggro diamond and recovery ring; clears the carved bottom frame.
+      - id: ObsidianOverlayPc2PersonalBuffs
+        anchor: top_left
+        offset_x: 60.3
+        offset_y: 63.62
+        width: 15.4
+        height: 15.4
+        asset:
+          default: obsidian_personal_buffs
+        interactive: true
+        visible: false
+        notes: Lower-right live buff medallion; consumes click before portrait selection.
+    - id: ObsidianOverlayPc3
+      anchor: top_left
+      offset_x: 207
+      offset_y: 28
+      width: 78
+      height: 81
+      interactive: true
+      notes: Fixed full-screen slot; split arcs fit below the status/input rail. Hide unused slots.
+      children:
+      - id: ObsidianOverlayPc3Face
+        anchor: top_left
+        offset_x: 16.333333
+        offset_y: 8.0
+        width: 45.333333
+        height: 60.266667
+        notes: Existing overlay portrait size and animated expressions; ellipse clip.
+      - id: ObsidianOverlayPc3Rim
+        anchor: top_left
+        offset_x: 15.033333
+        offset_y: 6.7
+        width: 47.933333
+        height: 62.866667
+        meter_arc:
+          start_degrees: -90
+          sweep_degrees: 360
+          stroke_width: 0.85
+      - id: ObsidianOverlayPc3Selection
+        anchor: top_left
+        offset_x: 29
+        offset_y: -5.5
+        width: 20
+        height: 20
+        asset:
+          default: obsidian_hud_selection_diamond
+      - id: ObsidianOverlayPc3Health
+        anchor: top_left
+        offset_x: 9.893333
+        offset_y: 1.573333
+        width: 58.213333
+        height: 73.12
+        meter_arc:
+          start_degrees: 100
+          sweep_degrees: 160
+          stroke_width: 4.6
+        notes: Shared gameplay HP arc, colours and damage trail; left side fills upward.
+      - id: ObsidianOverlayPc3Mana
+        anchor: top_left
+        offset_x: 9.893333
+        offset_y: 1.573333
+        width: 58.213333
+        height: 73.12
+        meter_arc:
+          start_degrees: 80
+          sweep_degrees: -160
+          stroke_width: 4.6
+        notes: Shared blue SP arc; omit the entire gauge when maximum SP is zero.
+      - id: ObsidianOverlayPc3Readiness
+        anchor: top_left
+        offset_x: 4.2
+        offset_y: 63.3
+        width: 11.6
+        height: 13.2
+        notes: Lower-left aggro diamond and recovery ring; clears the carved bottom frame.
+      - id: ObsidianOverlayPc3PersonalBuffs
+        anchor: top_left
+        offset_x: 60.3
+        offset_y: 63.62
+        width: 15.4
+        height: 15.4
+        asset:
+          default: obsidian_personal_buffs
+        interactive: true
+        visible: false
+        notes: Lower-right live buff medallion; consumes click before portrait selection.
+    - id: ObsidianOverlayPc4
+      anchor: top_left
+      offset_x: 301
+      offset_y: 28
+      width: 78
+      height: 81
+      interactive: true
+      notes: Fixed full-screen slot; split arcs fit below the status/input rail. Hide unused slots.
+      children:
+      - id: ObsidianOverlayPc4Face
+        anchor: top_left
+        offset_x: 16.333333
+        offset_y: 8.0
+        width: 45.333333
+        height: 60.266667
+        notes: Existing overlay portrait size and animated expressions; ellipse clip.
+      - id: ObsidianOverlayPc4Rim
+        anchor: top_left
+        offset_x: 15.033333
+        offset_y: 6.7
+        width: 47.933333
+        height: 62.866667
+        meter_arc:
+          start_degrees: -90
+          sweep_degrees: 360
+          stroke_width: 0.85
+      - id: ObsidianOverlayPc4Selection
+        anchor: top_left
+        offset_x: 29
+        offset_y: -5.5
+        width: 20
+        height: 20
+        asset:
+          default: obsidian_hud_selection_diamond
+      - id: ObsidianOverlayPc4Health
+        anchor: top_left
+        offset_x: 9.893333
+        offset_y: 1.573333
+        width: 58.213333
+        height: 73.12
+        meter_arc:
+          start_degrees: 100
+          sweep_degrees: 160
+          stroke_width: 4.6
+        notes: Shared gameplay HP arc, colours and damage trail; left side fills upward.
+      - id: ObsidianOverlayPc4Mana
+        anchor: top_left
+        offset_x: 9.893333
+        offset_y: 1.573333
+        width: 58.213333
+        height: 73.12
+        meter_arc:
+          start_degrees: 80
+          sweep_degrees: -160
+          stroke_width: 4.6
+        notes: Shared blue SP arc; omit the entire gauge when maximum SP is zero.
+      - id: ObsidianOverlayPc4Readiness
+        anchor: top_left
+        offset_x: 4.2
+        offset_y: 63.3
+        width: 11.6
+        height: 13.2
+        notes: Lower-left aggro diamond and recovery ring; clears the carved bottom frame.
+      - id: ObsidianOverlayPc4PersonalBuffs
+        anchor: top_left
+        offset_x: 60.3
+        offset_y: 63.62
+        width: 15.4
+        height: 15.4
+        asset:
+          default: obsidian_personal_buffs
+        interactive: true
+        visible: false
+        notes: Lower-right live buff medallion; consumes click before portrait selection.
+    - id: ObsidianOverlayPc5
+      anchor: top_left
+      offset_x: 395
+      offset_y: 28
+      width: 78
+      height: 81
+      interactive: true
+      notes: Fixed full-screen slot; split arcs fit below the status/input rail. Hide unused slots.
+      children:
+      - id: ObsidianOverlayPc5Face
+        anchor: top_left
+        offset_x: 16.333333
+        offset_y: 8.0
+        width: 45.333333
+        height: 60.266667
+        notes: Existing overlay portrait size and animated expressions; ellipse clip.
+      - id: ObsidianOverlayPc5Rim
+        anchor: top_left
+        offset_x: 15.033333
+        offset_y: 6.7
+        width: 47.933333
+        height: 62.866667
+        meter_arc:
+          start_degrees: -90
+          sweep_degrees: 360
+          stroke_width: 0.85
+      - id: ObsidianOverlayPc5Selection
+        anchor: top_left
+        offset_x: 29
+        offset_y: -5.5
+        width: 20
+        height: 20
+        asset:
+          default: obsidian_hud_selection_diamond
+      - id: ObsidianOverlayPc5Health
+        anchor: top_left
+        offset_x: 9.893333
+        offset_y: 1.573333
+        width: 58.213333
+        height: 73.12
+        meter_arc:
+          start_degrees: 100
+          sweep_degrees: 160
+          stroke_width: 4.6
+        notes: Shared gameplay HP arc, colours and damage trail; left side fills upward.
+      - id: ObsidianOverlayPc5Mana
+        anchor: top_left
+        offset_x: 9.893333
+        offset_y: 1.573333
+        width: 58.213333
+        height: 73.12
+        meter_arc:
+          start_degrees: 80
+          sweep_degrees: -160
+          stroke_width: 4.6
+        notes: Shared blue SP arc; omit the entire gauge when maximum SP is zero.
+      - id: ObsidianOverlayPc5Readiness
+        anchor: top_left
+        offset_x: 4.2
+        offset_y: 63.3
+        width: 11.6
+        height: 13.2
+        notes: Lower-left aggro diamond and recovery ring; clears the carved bottom frame.
+      - id: ObsidianOverlayPc5PersonalBuffs
+        anchor: top_left
+        offset_x: 60.3
+        offset_y: 63.62
+        width: 15.4
+        height: 15.4
+        asset:
+          default: obsidian_personal_buffs
+        interactive: true
+        visible: false
+        notes: Lower-right live buff medallion; consumes click before portrait selection.
+  - id: OutdoorStatusBar
     anchor: top_left
-    offset_x: 6
-    offset_y: 31
-    width: 64
-    height: 64
-    z_index: 61
+    offset_x: 14.4
+    offset_y: 2.666667
+    width: 454.933333
+    height: 17.066667
+    text:
+      font: Lucida
+      align_x: center
+      align_y: middle
+      color: '#e5dcc7'
+    notes: Reserved clear rail. Native Lucida 17; input/caret takes priority over event and hover text. No Ui-FrSp
+      ornament.
+  - id: CharShield_1
+    anchor: top_left
+    offset_x: 31.866667
+    offset_y: 33.06666666666667
+    width: 52.266666666666666
+    height: 72.53333333333333
+    asset:
+      default: obsidian_empty_slot_01
+    notes: Empty party slot only; never cover an occupied portrait. Approved banner colour treatment applies.
+  - id: CharShield_2
+    anchor: top_left
+    offset_x: 125.866667
+    offset_y: 33.06666666666667
+    width: 52.266666666666666
+    height: 72.53333333333333
+    asset:
+      default: obsidian_empty_slot_01
+    notes: Empty party slot only; never cover an occupied portrait. Approved banner colour treatment applies.
+  - id: CharShield_3
+    anchor: top_left
+    offset_x: 219.866667
+    offset_y: 33.06666666666667
+    width: 52.266666666666666
+    height: 72.53333333333333
+    asset:
+      default: obsidian_empty_slot_02
+    notes: Empty party slot only; never cover an occupied portrait. Approved banner colour treatment applies.
+  - id: CharShield_4
+    anchor: top_left
+    offset_x: 313.866667
+    offset_y: 33.06666666666667
+    width: 52.266666666666666
+    height: 72.53333333333333
+    asset:
+      default: obsidian_empty_slot_03
+    notes: Empty party slot only; never cover an occupied portrait. Approved banner colour treatment applies.
+  - id: CharShield_5
+    anchor: top_left
+    offset_x: 407.866667
+    offset_y: 33.06666666666667
+    width: 52.266666666666666
+    height: 72.53333333333333
+    asset:
+      default: obsidian_empty_slot_04
+    notes: Empty party slot only; never cover an occupied portrait. Approved banner colour treatment applies.
+- id: OutdoorGameplayBasebar
+  anchor: bottom_center
+  anchor_space: screen
+  offset_x: 0.0
+  offset_y: 0.0
+  width: 446
+  height: 104
+  notes: 'Approved A split arcs. Dynamic width 46+80*n for 1..5 members, flush with screen bottom.
+    Narrow frame and compact exterior ornaments; all portrait elements clear the border and corners.'
+  children:
+  - id: OutdoorGameplayPartyStrip
+    anchor: top_left
+    offset_x: 0.0
+    offset_y: 0.0
+    width: 446
+    height: 104
+    children:
+    - id: ObsidianPc1
+      anchor: top_left
+      offset_x: 24
+      offset_y: 12
+      width: 78
+      height: 88
+      interactive: true
+      notes: Repeated live party slot; hide unused slots.
+      children:
+      - id: ObsidianPc1Face
+        anchor: top_left
+        offset_x: 15.24
+        offset_y: 8.0
+        width: 47.52
+        height: 63.946666
+        notes: Existing animated PC portrait at the accepted 10 percent enlargement; ellipse clip.
+      - id: ObsidianPc1Rim
+        anchor: top_left
+        offset_x: 13.94
+        offset_y: 6.7
+        width: 50.12
+        height: 66.546666
+        meter_arc:
+          start_degrees: -90
+          sweep_degrees: 360
+          stroke_width: 0.85
+      - id: ObsidianPc1Selection
+        anchor: top_left
+        offset_x: 29
+        offset_y: -5.5
+        width: 20
+        height: 20
+        asset:
+          default: obsidian_hud_selection_diamond
+      - id: ObsidianPc1Health
+        anchor: top_left
+        offset_x: 8.8
+        offset_y: 1.573333
+        width: 60.4
+        height: 76.8
+        meter_arc:
+          start_degrees: 100
+          sweep_degrees: 160
+          stroke_width: 4.6
+        notes: Left HP arc fills from bottom toward top; green, amber, red and short damage trail.
+      - id: ObsidianPc1Mana
+        anchor: top_left
+        offset_x: 8.8
+        offset_y: 1.573333
+        width: 60.4
+        height: 76.8
+        meter_arc:
+          start_degrees: 80
+          sweep_degrees: -160
+          stroke_width: 4.6
+        notes: Right blue SP arc fills upward; omit the entire gauge when maximum SP is zero.
+      - id: ObsidianPc1Readiness
+        anchor: top_left
+        offset_x: 4.2
+        offset_y: 68.0
+        width: 11.6
+        height: 13.2
+        notes: Lower-left plain aggro diamond with its existing recovery ring; dim when incapacitated.
+      - id: ObsidianPc1PersonalBuffs
+        anchor: top_left
+        offset_x: 60.3
+        offset_y: 67.3
+        width: 15.4
+        height: 15.4
+        asset:
+          default: obsidian_personal_buffs
+        interactive: true
+        visible: false
+        notes: Lower-right medallion; visible with individual effects; consumes click before portrait selection.
+    - id: ObsidianPc2
+      anchor: top_left
+      offset_x: 104
+      offset_y: 12
+      width: 78
+      height: 88
+      interactive: true
+      notes: Repeated live party slot; hide unused slots.
+      children:
+      - id: ObsidianPc2Face
+        anchor: top_left
+        offset_x: 15.24
+        offset_y: 8.0
+        width: 47.52
+        height: 63.946666
+        notes: Existing animated PC portrait at the accepted 10 percent enlargement; ellipse clip.
+      - id: ObsidianPc2Rim
+        anchor: top_left
+        offset_x: 13.94
+        offset_y: 6.7
+        width: 50.12
+        height: 66.546666
+        meter_arc:
+          start_degrees: -90
+          sweep_degrees: 360
+          stroke_width: 0.85
+      - id: ObsidianPc2Selection
+        anchor: top_left
+        offset_x: 29
+        offset_y: -5.5
+        width: 20
+        height: 20
+        asset:
+          default: obsidian_hud_selection_diamond
+      - id: ObsidianPc2Health
+        anchor: top_left
+        offset_x: 8.8
+        offset_y: 1.573333
+        width: 60.4
+        height: 76.8
+        meter_arc:
+          start_degrees: 100
+          sweep_degrees: 160
+          stroke_width: 4.6
+        notes: Left HP arc fills from bottom toward top; green, amber, red and short damage trail.
+      - id: ObsidianPc2Mana
+        anchor: top_left
+        offset_x: 8.8
+        offset_y: 1.573333
+        width: 60.4
+        height: 76.8
+        meter_arc:
+          start_degrees: 80
+          sweep_degrees: -160
+          stroke_width: 4.6
+        notes: Right blue SP arc fills upward; omit the entire gauge when maximum SP is zero.
+      - id: ObsidianPc2Readiness
+        anchor: top_left
+        offset_x: 4.2
+        offset_y: 68.0
+        width: 11.6
+        height: 13.2
+        notes: Lower-left plain aggro diamond with its existing recovery ring; dim when incapacitated.
+      - id: ObsidianPc2PersonalBuffs
+        anchor: top_left
+        offset_x: 60.3
+        offset_y: 67.3
+        width: 15.4
+        height: 15.4
+        asset:
+          default: obsidian_personal_buffs
+        interactive: true
+        visible: false
+        notes: Lower-right medallion; visible with individual effects; consumes click before portrait selection.
+    - id: ObsidianPc3
+      anchor: top_left
+      offset_x: 184
+      offset_y: 12
+      width: 78
+      height: 88
+      interactive: true
+      notes: Repeated live party slot; hide unused slots.
+      children:
+      - id: ObsidianPc3Face
+        anchor: top_left
+        offset_x: 15.24
+        offset_y: 8.0
+        width: 47.52
+        height: 63.946666
+        notes: Existing animated PC portrait at the accepted 10 percent enlargement; ellipse clip.
+      - id: ObsidianPc3Rim
+        anchor: top_left
+        offset_x: 13.94
+        offset_y: 6.7
+        width: 50.12
+        height: 66.546666
+        meter_arc:
+          start_degrees: -90
+          sweep_degrees: 360
+          stroke_width: 0.85
+      - id: ObsidianPc3Selection
+        anchor: top_left
+        offset_x: 29
+        offset_y: -5.5
+        width: 20
+        height: 20
+        asset:
+          default: obsidian_hud_selection_diamond
+      - id: ObsidianPc3Health
+        anchor: top_left
+        offset_x: 8.8
+        offset_y: 1.573333
+        width: 60.4
+        height: 76.8
+        meter_arc:
+          start_degrees: 100
+          sweep_degrees: 160
+          stroke_width: 4.6
+        notes: Left HP arc fills from bottom toward top; green, amber, red and short damage trail.
+      - id: ObsidianPc3Mana
+        anchor: top_left
+        offset_x: 8.8
+        offset_y: 1.573333
+        width: 60.4
+        height: 76.8
+        meter_arc:
+          start_degrees: 80
+          sweep_degrees: -160
+          stroke_width: 4.6
+        notes: Right blue SP arc fills upward; omit the entire gauge when maximum SP is zero.
+      - id: ObsidianPc3Readiness
+        anchor: top_left
+        offset_x: 4.2
+        offset_y: 68.0
+        width: 11.6
+        height: 13.2
+        notes: Lower-left plain aggro diamond with its existing recovery ring; dim when incapacitated.
+      - id: ObsidianPc3PersonalBuffs
+        anchor: top_left
+        offset_x: 60.3
+        offset_y: 67.3
+        width: 15.4
+        height: 15.4
+        asset:
+          default: obsidian_personal_buffs
+        interactive: true
+        visible: false
+        notes: Lower-right medallion; visible with individual effects; consumes click before portrait selection.
+    - id: ObsidianPc4
+      anchor: top_left
+      offset_x: 264
+      offset_y: 12
+      width: 78
+      height: 88
+      interactive: true
+      notes: Repeated live party slot; hide unused slots.
+      children:
+      - id: ObsidianPc4Face
+        anchor: top_left
+        offset_x: 15.24
+        offset_y: 8.0
+        width: 47.52
+        height: 63.946666
+        notes: Existing animated PC portrait at the accepted 10 percent enlargement; ellipse clip.
+      - id: ObsidianPc4Rim
+        anchor: top_left
+        offset_x: 13.94
+        offset_y: 6.7
+        width: 50.12
+        height: 66.546666
+        meter_arc:
+          start_degrees: -90
+          sweep_degrees: 360
+          stroke_width: 0.85
+      - id: ObsidianPc4Selection
+        anchor: top_left
+        offset_x: 29
+        offset_y: -5.5
+        width: 20
+        height: 20
+        asset:
+          default: obsidian_hud_selection_diamond
+      - id: ObsidianPc4Health
+        anchor: top_left
+        offset_x: 8.8
+        offset_y: 1.573333
+        width: 60.4
+        height: 76.8
+        meter_arc:
+          start_degrees: 100
+          sweep_degrees: 160
+          stroke_width: 4.6
+        notes: Left HP arc fills from bottom toward top; green, amber, red and short damage trail.
+      - id: ObsidianPc4Mana
+        anchor: top_left
+        offset_x: 8.8
+        offset_y: 1.573333
+        width: 60.4
+        height: 76.8
+        meter_arc:
+          start_degrees: 80
+          sweep_degrees: -160
+          stroke_width: 4.6
+        notes: Right blue SP arc fills upward; omit the entire gauge when maximum SP is zero.
+      - id: ObsidianPc4Readiness
+        anchor: top_left
+        offset_x: 4.2
+        offset_y: 68.0
+        width: 11.6
+        height: 13.2
+        notes: Lower-left plain aggro diamond with its existing recovery ring; dim when incapacitated.
+      - id: ObsidianPc4PersonalBuffs
+        anchor: top_left
+        offset_x: 60.3
+        offset_y: 67.3
+        width: 15.4
+        height: 15.4
+        asset:
+          default: obsidian_personal_buffs
+        interactive: true
+        visible: false
+        notes: Lower-right medallion; visible with individual effects; consumes click before portrait selection.
+    - id: ObsidianPc5
+      anchor: top_left
+      offset_x: 344
+      offset_y: 12
+      width: 78
+      height: 88
+      interactive: true
+      notes: Repeated live party slot; hide unused slots.
+      children:
+      - id: ObsidianPc5Face
+        anchor: top_left
+        offset_x: 15.24
+        offset_y: 8.0
+        width: 47.52
+        height: 63.946666
+        notes: Existing animated PC portrait at the accepted 10 percent enlargement; ellipse clip.
+      - id: ObsidianPc5Rim
+        anchor: top_left
+        offset_x: 13.94
+        offset_y: 6.7
+        width: 50.12
+        height: 66.546666
+        meter_arc:
+          start_degrees: -90
+          sweep_degrees: 360
+          stroke_width: 0.85
+      - id: ObsidianPc5Selection
+        anchor: top_left
+        offset_x: 29
+        offset_y: -5.5
+        width: 20
+        height: 20
+        asset:
+          default: obsidian_hud_selection_diamond
+      - id: ObsidianPc5Health
+        anchor: top_left
+        offset_x: 8.8
+        offset_y: 1.573333
+        width: 60.4
+        height: 76.8
+        meter_arc:
+          start_degrees: 100
+          sweep_degrees: 160
+          stroke_width: 4.6
+        notes: Left HP arc fills from bottom toward top; green, amber, red and short damage trail.
+      - id: ObsidianPc5Mana
+        anchor: top_left
+        offset_x: 8.8
+        offset_y: 1.573333
+        width: 60.4
+        height: 76.8
+        meter_arc:
+          start_degrees: 80
+          sweep_degrees: -160
+          stroke_width: 4.6
+        notes: Right blue SP arc fills upward; omit the entire gauge when maximum SP is zero.
+      - id: ObsidianPc5Readiness
+        anchor: top_left
+        offset_x: 4.2
+        offset_y: 68.0
+        width: 11.6
+        height: 13.2
+        notes: Lower-left plain aggro diamond with its existing recovery ring; dim when incapacitated.
+      - id: ObsidianPc5PersonalBuffs
+        anchor: top_left
+        offset_x: 60.3
+        offset_y: 67.3
+        width: 15.4
+        height: 15.4
+        asset:
+          default: obsidian_personal_buffs
+        interactive: true
+        visible: false
+        notes: Lower-right medallion; visible with individual effects; consumes click before portrait selection.
+  - id: OutdoorGameplayStatusBar
+    anchor: center_above
+    offset_x: 0.0
+    offset_y: -6.0
+    width: 330.666667
+    height: 25.6
+    text:
+      value: ''
+      font: Lucida
+      color: '#e5dcc7'
+      align_x: center
+      align_y: middle
+      scale: 0.75
+    visible: false
+    notes: Content-sized event/hover plate, six logical pixels above the party basebar. Hide empty; grow upward.
+    anchor_space: screen
     scale:
-      min: 1.0
+      min: 0.5
       max: 8.0
-    asset:
-      default: sp21a10
-    notes: Fly buff icon.
-
-  - id: OutdoorFoodRestBar
-    anchor_space: screen
-    anchor: top_right
-    width: 125
-    height: 25
-    z_index: 60
-    scale:
-      min: 1.0
-      max: 8.0
-    asset:
-      default: topbar
-    children:
-      - id: OutdoorFoodRestBar_Frame
-        anchor: center_in
-        width: 125
-        height: 25
-        asset:
-          default: Ui-FrGol
-
-      - id: OutdoorFoodIcon
-        anchor: top_left
-        offset_x: 5
-        offset_y: 2
-        width: 45
-        height: 23
-        asset:
-          default: scoreBG_food
-
-      - id: OutdoorFoodLabel
-        anchor: top_left
-        offset_x: 40
-        offset_y: 5
-        width: 34
-        height: 14
-        text:
-          value: "{food}"
-          font: SMALLNUM
-          align_x: center
-          align_y: middle
-
-      - id: OutdoorButtonRest
-        anchor: top_left
-        offset_x: 83
-        offset_y: 2
-        width: 40
-        height: 24
-        interactive: true
-        asset:
-          default: butn2u
-          highlighted: butn2d
-          pressed: butn2d
-        notes: Rest button.
-
-  - id: OutdoorBuffBodyPanel
-    anchor_space: screen
-    anchor: bottom_left
-    offset_x: 6
-    offset_y: -39
-    width: 64
-    height: 64
-    z_index: 58
-    asset:
-      default: asiL00
-    notes: Body buff panel.
-    children:
-      - id: OutdoorBuffBody_Frame
-        anchor: center_in
-        width: 67
-        height: 67
-        asset:
-          default: Ui-FrSp
-
-      - id: OutdoorBuffBody_FireResistance
-        anchor: center_in
-        width: 64
-        height: 64
-        asset:
-          default: asiL01
-        notes: Fire Resistance buff icon.
-
-      - id: OutdoorBuffBody_WaterResistance
-        anchor: center_in
-        width: 64
-        height: 64
-        asset:
-          default: asiL02
-        notes: Water Resistance buff icon.
-
-      - id: OutdoorBuffBody_AirResistance
-        anchor: center_in
-        width: 64
-        height: 64
-        asset:
-          default: asiL03
-        notes: Air Resistance buff icon.
-
-      - id: OutdoorBuffBody_EarthResistance
-        anchor: center_in
-        width: 64
-        height: 64
-        asset:
-          default: asiL04
-        notes: Earth Resistance buff icon.
-
-      - id: OutdoorBuffBody_MindResistance
-        anchor: center_in
-        width: 64
-        height: 64
-        asset:
-          default: asiL05
-        notes: Mind Resistance buff icon.
-
-      - id: OutdoorBuffBody_BodyResistance
-        anchor: center_in
-        width: 64
-        height: 64
-        asset:
-          default: asiL06
-        notes: Body Resistance buff icon.
-
-      - id: OutdoorBuffBody_Shield
-        anchor: center_in
-        width: 64
-        height: 64
-        asset:
-          default: asiL07
-        notes: Shield buff icon.
-
-      - id: OutdoorBuffBody_Heroism
-        anchor: center_in
-        width: 64
-        height: 64
-        asset:
-          default: asiL08
-        notes: Heroism buff icon.
-
-      - id: OutdoorBuffBody_Haste
-        anchor: center_in
-        width: 64
-        height: 64
-        asset:
-          default: asiL09
-        notes: Haste buff icon.
-
-      - id: OutdoorBuffBody_Immolation
-        anchor: center_in
-        width: 64
-        height: 64
-        asset:
-          default: asiL10
-        notes: Immolation buff icon.
-
-  - id: OutdoorBuffSkullPanel
-    anchor_space: screen
-    anchor: bottom_left
-    offset_x: 77
-    offset_y: -39
-    width: 64
-    height: 64
-    z_index: 58
-    asset:
-      default: asiR00
-    notes: Skull buff panel.
-    children:
-      - id: OutdoorBuffSkull_Frame
-        anchor: center_in
-        width: 67
-        height: 67
-        asset:
-          default: Ui-FrSp
-
-      - id: OutdoorBuffSkull_FeatherFall
-        anchor: center_in
-        width: 64
-        height: 64
-        asset:
-          default: asiR07
-        notes: Feather Fall buff icon.
-
-      - id: OutdoorBuffSkull_Stoneskin
-        anchor: center_in
-        width: 64
-        height: 64
-        asset:
-          default: asiR01
-        notes: Stoneskin buff icon.
-
-      - id: OutdoorBuffSkull_DayOfGods
-        anchor: center_in
-        width: 64
-        height: 64
-        asset:
-          default: asiR05
-        notes: Day of the Gods buff icon.
-
-      - id: OutdoorBuffSkull_Torchlight
-        anchor: center_in
-        width: 64
-        height: 64
-        asset:
-          default: asiR06
-        notes: Torchlight buff icon.
-
-      - id: OutdoorBuffSkull_WizardEye
-        anchor: center_in
-        width: 64
-        height: 64
-        asset:
-          default: asiR02
-        notes: Wizard Eye buff icon.
-
-      - id: OutdoorBuffSkull_ProtectionFromGods
-        anchor: center_in
-        width: 64
-        height: 64
-        asset:
-          default: asiR04
-        notes: Protection from Magic buff icon.
-
-  - id: OutdoorMinimapFrame
-    anchor_space: screen
-    anchor: bottom_right
-    offset_x: 1
-    width: 159
-    height: 113
-    z_index: 70
-    scale:
-      min: 1.0
-      max: 8.0
-    asset:
-      default: mapframe
-    notes: Gameplay minimap frame in the lower-right corner.
-    children:
-      - id: OutdoorMinimap
-        anchor: center_in
-        offset_x: -1
-        offset_y: 1
-        width: 122
-        height: 83
-        asset:
-          default: MINIMAP
-        notes: Moving minimap texture crop.
-
-      - id: OutdoorMinimapZoomIn
-        anchor: top_right
-        offset_x: -4
-        offset_y: 6
-        width: 13
-        height: 15
-        interactive: true
-        asset:
-          default: map+up
-          pressed: map+dn
-        notes: Minimap zoom in button.
-
-      - id: OutdoorMinimapZoomOut
-        anchor: bottom_right
-        offset_x: -4
-        offset_y: -5
-        width: 13
-        height: 15
-        interactive: true
-        asset:
-          default: map-up
-          pressed: map-dn
-        notes: Minimap zoom out button.
-
-  - id: OutdoorFollowerPanel
-    anchor_space: screen
-    anchor: right
-    offset_y: -56
-    width: 91
-    height: 292
-    z_index: 110
-    scale:
-      min: 1.0
-      max: 8.0
-    asset:
-      default: npcpnl
-    notes: MMerge follower panel, moved to the right screen edge and centered vertically for the widescreen HUD.
-    children:
-      - id: OutdoorFollowerSlot_1
-        anchor: top_left
-        offset_x: 10
-        offset_y: 20
-        width: 71
-        height: 81
-        interactive: true
-        asset:
-          default: evtnpc-b
-        notes: MMerge follower portrait slot 1.
-
-      - id: OutdoorFollowerPortrait_1
-        anchor: top_left
-        offset_x: 14
-        offset_y: 24
-        width: 63
-        height: 73
-        notes: Dynamic follower portrait 1 draw region.
-
-      - id: OutdoorFollowerSlot_2
-        anchor: top_left
-        offset_x: 10
-        offset_y: 105
-        width: 71
-        height: 81
-        interactive: true
-        asset:
-          default: evtnpc-b
-        notes: MMerge follower portrait slot 2.
-
-      - id: OutdoorFollowerPortrait_2
-        anchor: top_left
-        offset_x: 14
-        offset_y: 109
-        width: 63
-        height: 73
-        notes: Dynamic follower portrait 2 draw region.
-
-      - id: OutdoorFollowerSlot_3
-        anchor: top_left
-        offset_x: 10
-        offset_y: 190
-        width: 71
-        height: 81
-        interactive: true
-        asset:
-          default: evtnpc-b
-        notes: MMerge follower portrait slot 3.
-
-      - id: OutdoorFollowerPortrait_3
-        anchor: top_left
-        offset_x: 14
-        offset_y: 194
-        width: 63
-        height: 73
-        notes: Dynamic follower portrait 3 draw region.
-
-      - id: OutdoorFollowerScrollUp
-        anchor: top_left
-        offset_x: 7
-        offset_y: 5
-        width: 77
-        height: 12
-        interactive: true
-        asset:
-          default: npcupa
-          pressed: npcupb
-        notes: MMerge follower panel scroll-up button.
-
-      - id: OutdoorFollowerScrollDown
-        anchor: top_left
-        offset_x: 7
-        offset_y: 275
-        width: 77
-        height: 12
-        interactive: true
-        asset:
-          default: npcdwa
-          pressed: npcdwb
-        notes: MMerge follower panel scroll-down button.
-
-  - id: OutdoorFollowerToggle
-    anchor_space: screen
-    anchor: bottom_right
-    offset_y: -113
-    width: 26
+    z_index: 200
+- id: OutdoorTopBar
+  anchor_space: screen
+  anchor: top_left
+  offset_x: 0
+  offset_y: 0
+  width: 268
+  height: 26
+  scale:
+    min: 0.5
+    max: 8
+  z_index: 200
+  children:
+  - id: ObsidianTopBarPlate
+    anchor: top_left
+    offset_x: 0
+    offset_y: 0
+    width: 268
     height: 26
-    z_index: 111
-    scale:
-      min: 1.0
-      max: 8.0
-    interactive: true
     asset:
-      default: npcopenup
-      pressed: npcopendw
-    notes: MMerge follower panel open/close toggle button, placed at the right screen edge above the minimap.
-
-  - id: OutdoorMobileContextActionButton
-    anchor_space: screen
-    anchor: bottom_right
-    offset_x: -8
-    offset_y: -8
-    width: 260
-    height: 56
-    z_index: 101
+      default: obsidian_hud_topbar_flat
+  - id: OutdoorGoldBar
+    anchor: top_left
+    offset_x: 0
+    offset_y: 0
+    width: 142.4
+    height: 26
+    children:
+    - id: OutdoorGoldIcon
+      anchor: top_left
+      offset_x: 6
+      offset_y: 5.8
+      width: 19.733333
+      height: 14.4
+      asset:
+        default: scorebg_gold
+    - id: OutdoorGoldLabel
+      anchor: top_left
+      offset_x: 27
+      offset_y: 0
+      width: 42
+      height: 26
+      text:
+        value: '{gold}'
+        font: Lucida
+        color: '#e5dcc7'
+        align_x: center
+        align_y: middle
+        scale: 0.65882353
+    - id: OutdoorFoodIcon
+      anchor: top_left
+      offset_x: 76.266667
+      offset_y: 5.8
+      width: 19.733333
+      height: 14.4
+      asset:
+        default: scorebg_food
+    - id: OutdoorFoodLabel
+      anchor: top_left
+      offset_x: 97.6
+      offset_y: 0
+      width: 41.066667
+      height: 26
+      text:
+        value: '{food}'
+        font: Lucida
+        color: '#e5dcc7'
+        align_x: center
+        align_y: middle
+        scale: 0.65882353
+  - id: OutdoorOptionsBar
+    anchor: top_left
+    offset_x: 144
+    offset_y: 0
+    width: 120
+    height: 26
+    children:
+    - id: OutdoorButtonBooks
+      anchor: top_left
+      offset_x: 0
+      offset_y: 0
+      width: 28
+      height: 26
+      asset:
+        hover: obsidian_hud_command_hover
+        pressed: obsidian_hud_buff_hover
+      children:
+      - id: ObsidianCommandIconBooks
+        anchor: top_left
+        offset_x: 2.8
+        offset_y: 2.866667
+        width: 22.4
+        height: 20.266667
+        asset:
+          default: obsidian_books
+      interactive: true
+    - id: OutdoorButtonQuickReference
+      anchor: top_left
+      offset_x: 30
+      offset_y: 0
+      width: 28
+      height: 26
+      asset:
+        hover: obsidian_hud_command_hover
+        pressed: obsidian_hud_buff_hover
+      children:
+      - id: ObsidianCommandIconQuickReference
+        anchor: top_left
+        offset_x: 2.8
+        offset_y: 2.866667
+        width: 22.4
+        height: 20.266667
+        asset:
+          default: obsidian_party
+      interactive: true
+    - id: OutdoorButtonRest
+      anchor: top_left
+      offset_x: 60
+      offset_y: 0
+      width: 28
+      height: 26
+      asset:
+        hover: obsidian_hud_command_hover
+        pressed: obsidian_hud_buff_hover
+      children:
+      - id: ObsidianCommandIconRest
+        anchor: top_left
+        offset_x: 2.8
+        offset_y: 2.866667
+        width: 22.4
+        height: 20.266667
+        asset:
+          default: obsidian_rest
+      interactive: true
+    - id: OutdoorButtonOptions
+      anchor: top_left
+      offset_x: 90
+      offset_y: 0
+      width: 28
+      height: 26
+      asset:
+        hover: obsidian_hud_command_hover
+        pressed: obsidian_hud_buff_hover
+      children:
+      - id: ObsidianCommandIconOptions
+        anchor: top_left
+        offset_x: 2.8
+        offset_y: 2.866667
+        width: 22.4
+        height: 20.266667
+        asset:
+          default: obsidian_options
+      interactive: true
+  notes: One shared resource/command strip. Command actions are icon-only; fullscreen bars retain their own layout.
+- id: ObsidianHeroBuffPanel
+  anchor_space: screen
+  anchor: top_left
+  offset_x: 0
+  offset_y: 0
+  width: 60
+  height: 60
+  scale:
+    min: 0.6
+    max: 8
+    reference_width: 965
+  z_index: 200
+  asset:
+    default: obsidian_buff_hero
+  interactive: true
+  notes: Manually rendered layered buff panel, anchored below OutdoorTopBar by the shared resolver; compact Android
+    size +7%.
+- id: ObsidianSkullBuffPanel
+  anchor_space: screen
+  anchor: top_left
+  offset_x: 0
+  offset_y: 0
+  width: 60
+  height: 60
+  scale:
+    min: 0.6
+    max: 8
+    reference_width: 965
+  z_index: 200
+  asset:
+    default: obsidian_buff_skull
+  interactive: true
+  notes: Manually rendered layered buff panel, anchored below OutdoorTopBar by the shared resolver; compact Android
+    size +7%.
+- id: OutdoorFlyBuffIcon
+  anchor_space: screen
+  anchor: top_left
+  width: 32
+  height: 32
+  scale:
+    min: 0.6
+    max: 8
+    reference_width: 965
+  z_index: 200
+  asset:
+    default: sp21a10
+  notes: Separate flight indicator for Fly or Levitate; positioned beside the skull and animated while flying.
+- id: OutdoorWaterWalkBuffIcon
+  anchor_space: screen
+  anchor: top_left
+  width: 32
+  height: 32
+  scale:
+    min: 0.6
+    max: 8
+    reference_width: 965
+  z_index: 200
+  asset:
+    default: sp27a10
+  notes: Separate animated Water Walk indicator; positioned beside the flight indicator.
+- id: ObsidianPartyBuffStrip
+  anchor: top_left
+  offset_x: 14.933333
+  offset_y: 122
+  width: 142.933333
+  height: 65.066667
+  children:
+  - id: ObsidianPartyBuff1
+    anchor: top_left
+    offset_x: 0.0
+    offset_y: 0.0
+    width: 25.6
+    height: 30.4
+    asset:
+      default: obsidian_hud_buff_normal
+    children:
+    - id: ObsidianPartyBuffArt1
+      anchor: top_left
+      offset_x: 3.2
+      offset_y: 1.6
+      width: 19.2
+      height: 19.2
+      notes: Glyph-free icon resolved by enum from design/buffs.yml.
+    - id: ObsidianPartyBuffTimer1
+      anchor: top_left
+      offset_x: 0.0
+      offset_y: 22.4
+      width: 25.6
+      height: 6.4
+      text:
+        value: ''
+        font: SMALLNUM
+        color: '#e5dcc7'
+        align_x: center
+        align_y: middle
+        scale: 0.34285714
+    interactive: true
+    visible: true
+  - id: ObsidianPartyBuff2
+    anchor: top_left
+    offset_x: 29.333333
+    offset_y: 0.0
+    width: 25.6
+    height: 30.4
+    asset:
+      default: obsidian_hud_buff_normal
+    children:
+    - id: ObsidianPartyBuffArt2
+      anchor: top_left
+      offset_x: 3.2
+      offset_y: 1.6
+      width: 19.2
+      height: 19.2
+      notes: Glyph-free icon resolved by enum from design/buffs.yml.
+    - id: ObsidianPartyBuffTimer2
+      anchor: top_left
+      offset_x: 0.0
+      offset_y: 22.4
+      width: 25.6
+      height: 6.4
+      text:
+        value: ''
+        font: SMALLNUM
+        color: '#e5dcc7'
+        align_x: center
+        align_y: middle
+        scale: 0.34285714
+    interactive: true
+    visible: true
+  - id: ObsidianPartyBuff3
+    anchor: top_left
+    offset_x: 58.666667
+    offset_y: 0.0
+    width: 25.6
+    height: 30.4
+    asset:
+      default: obsidian_hud_buff_normal
+    children:
+    - id: ObsidianPartyBuffArt3
+      anchor: top_left
+      offset_x: 3.2
+      offset_y: 1.6
+      width: 19.2
+      height: 19.2
+      notes: Glyph-free icon resolved by enum from design/buffs.yml.
+    - id: ObsidianPartyBuffTimer3
+      anchor: top_left
+      offset_x: 0.0
+      offset_y: 22.4
+      width: 25.6
+      height: 6.4
+      text:
+        value: ''
+        font: SMALLNUM
+        color: '#e5dcc7'
+        align_x: center
+        align_y: middle
+        scale: 0.34285714
+    interactive: true
+    visible: true
+  - id: ObsidianPartyBuff4
+    anchor: top_left
+    offset_x: 88.0
+    offset_y: 0.0
+    width: 25.6
+    height: 30.4
+    asset:
+      default: obsidian_hud_buff_normal
+    children:
+    - id: ObsidianPartyBuffArt4
+      anchor: top_left
+      offset_x: 3.2
+      offset_y: 1.6
+      width: 19.2
+      height: 19.2
+      notes: Glyph-free icon resolved by enum from design/buffs.yml.
+    - id: ObsidianPartyBuffTimer4
+      anchor: top_left
+      offset_x: 0.0
+      offset_y: 22.4
+      width: 25.6
+      height: 6.4
+      text:
+        value: ''
+        font: SMALLNUM
+        color: '#e5dcc7'
+        align_x: center
+        align_y: middle
+        scale: 0.34285714
+    interactive: true
+    visible: true
+  - id: ObsidianPartyBuff5
+    anchor: top_left
+    offset_x: 0.0
+    offset_y: 34.666667
+    width: 25.6
+    height: 30.4
+    asset:
+      default: obsidian_hud_buff_normal
+    children:
+    - id: ObsidianPartyBuffArt5
+      anchor: top_left
+      offset_x: 3.2
+      offset_y: 1.6
+      width: 19.2
+      height: 19.2
+      notes: Glyph-free icon resolved by enum from design/buffs.yml.
+    - id: ObsidianPartyBuffTimer5
+      anchor: top_left
+      offset_x: 0.0
+      offset_y: 22.4
+      width: 25.6
+      height: 6.4
+      text:
+        value: ''
+        font: SMALLNUM
+        color: '#e5dcc7'
+        align_x: center
+        align_y: middle
+        scale: 0.34285714
     interactive: true
     visible: false
-    scale:
-      min: 1.0
-      max: 8.0
-    notes: Runtime context action popup target; enabled by setting for mobile or desktop testing.
+  - id: ObsidianPartyBuff6
+    anchor: top_left
+    offset_x: 29.333333
+    offset_y: 34.666667
+    width: 25.6
+    height: 30.4
+    asset:
+      default: obsidian_hud_buff_normal
+    children:
+    - id: ObsidianPartyBuffArt6
+      anchor: top_left
+      offset_x: 3.2
+      offset_y: 1.6
+      width: 19.2
+      height: 19.2
+      notes: Glyph-free icon resolved by enum from design/buffs.yml.
+    - id: ObsidianPartyBuffTimer6
+      anchor: top_left
+      offset_x: 0.0
+      offset_y: 22.4
+      width: 25.6
+      height: 6.4
+      text:
+        value: ''
+        font: SMALLNUM
+        color: '#e5dcc7'
+        align_x: center
+        align_y: middle
+        scale: 0.34285714
+    interactive: true
+    visible: false
+  - id: ObsidianPartyBuff7
+    anchor: top_left
+    offset_x: 58.666667
+    offset_y: 34.666667
+    width: 25.6
+    height: 30.4
+    asset:
+      default: obsidian_hud_buff_normal
+    children:
+    - id: ObsidianPartyBuffArt7
+      anchor: top_left
+      offset_x: 3.2
+      offset_y: 1.6
+      width: 19.2
+      height: 19.2
+      notes: Glyph-free icon resolved by enum from design/buffs.yml.
+    - id: ObsidianPartyBuffTimer7
+      anchor: top_left
+      offset_x: 0.0
+      offset_y: 22.4
+      width: 25.6
+      height: 6.4
+      text:
+        value: ''
+        font: SMALLNUM
+        color: '#e5dcc7'
+        align_x: center
+        align_y: middle
+        scale: 0.34285714
+    interactive: true
+    visible: false
+  - id: ObsidianPartyBuff8
+    anchor: top_left
+    offset_x: 88.0
+    offset_y: 34.666667
+    width: 25.6
+    height: 30.4
+    asset:
+      default: obsidian_hud_buff_normal
+    children:
+    - id: ObsidianPartyBuffArt8
+      anchor: top_left
+      offset_x: 3.2
+      offset_y: 1.6
+      width: 19.2
+      height: 19.2
+      notes: Glyph-free icon resolved by enum from design/buffs.yml.
+    - id: ObsidianPartyBuffTimer8
+      anchor: top_left
+      offset_x: 0.0
+      offset_y: 22.4
+      width: 25.6
+      height: 6.4
+      text:
+        value: ''
+        font: SMALLNUM
+        color: '#e5dcc7'
+        align_x: center
+        align_y: middle
+        scale: 0.34285714
+    interactive: true
+    visible: false
+  - id: ObsidianPartyBuffOverflow
+    anchor: top_left
+    offset_x: 117.333333
+    offset_y: 0.0
+    width: 25.6
+    height: 30.4
+    asset:
+      default: obsidian_hud_buff_overflow
+    interactive: true
+    text:
+      value: ''
+      font: Lucida
+      color: '#e5dcc7'
+      align_x: center
+      align_y: middle
+      scale: 0.53333333
+    notes: Live +N hidden count; no fixture count in runtime.
+  notes: Reserved timed icon/overflow presentation for future special modifiers; no ordinary party spells route
+    here.
+  anchor_space: screen
+  scale:
+    min: 0.5
+    max: 8.0
+  z_index: 200
+  visible: false
+- id: OutdoorMinimapFrame
+  anchor: top_right
+  offset_x: -14
+  offset_y: 24
+  width: 125.44
+  height: 130.666667
+  children:
+  - id: ObsidianMinimapClockPlate
+    anchor: top_left
+    offset_x: 33.72
+    offset_y: -19
+    width: 58
+    height: 14
+    asset:
+      default: obsidian_hud_clock_plate
+  - id: ObsidianMinimapClock
+    anchor: top_left
+    offset_x: 33.72
+    offset_y: -19
+    width: 58
+    height: 14
+    text:
+      value: '{time}'
+      font: Lucida
+      color: '#e5dcc7'
+      align_x: center
+      align_y: middle
+      scale: 0.7
+  - id: OutdoorMinimap
+    anchor: top_left
+    offset_x: 6.72
+    offset_y: 0
+    width: 112
+    height: 112
+    interactive: true
+    notes: Live circular map clip; keep Wizard Eye semantics and picking.
+  - id: ObsidianMinimapRim
+    anchor: top_left
+    offset_x: -3.28
+    offset_y: -10
+    width: 132
+    height: 132
+    asset:
+      default: obsidian_hud_minimap_rim_soft
+  - id: OutdoorMinimapZoomOut
+    anchor: top_left
+    offset_x: 9.336364
+    offset_y: 86
+    width: 12.8
+    height: 12.8
+    children:
+    - id: ObsidianMapZoomPlateOut
+      anchor: top_left
+      offset_x: -1.066667
+      offset_y: -1.066667
+      width: 14.933333333333334
+      height: 14.933333333333334
+      asset:
+        default: obsidian_hud_zoom_normal
+    - id: ObsidianMapZoomLabelOut
+      anchor: top_left
+      offset_x: 0.0
+      offset_y: 0.0
+      width: 12.8
+      height: 12.8
+      text:
+        value: '-'
+        font: Lucida
+        color: '#e5dcc7'
+        align_x: center
+        align_y: middle
+        scale: 0.75
+    interactive: true
+  - id: OutdoorMinimapZoomIn
+    anchor: top_left
+    offset_x: 103.836364
+    offset_y: 86
+    width: 12.8
+    height: 12.8
+    children:
+    - id: ObsidianMapZoomPlateIn
+      anchor: top_left
+      offset_x: -1.066667
+      offset_y: -1.066667
+      width: 14.933333333333334
+      height: 14.933333333333334
+      asset:
+        default: obsidian_hud_zoom_normal
+    - id: ObsidianMapZoomLabelIn
+      anchor: top_left
+      offset_x: 0.0
+      offset_y: 0.0
+      width: 12.8
+      height: 12.8
+      text:
+        value: +
+        font: Lucida
+        color: '#e5dcc7'
+        align_x: center
+        align_y: middle
+        scale: 0.75
+    interactive: true
+  anchor_space: screen
+  scale:
+    min: 0.5
+    max: 8.0
+  z_index: 200
+- id: OutdoorFollowerToggle
+  anchor: top_right
+  offset_x: 0
+  offset_y: 146
+  width: 26
+  height: 26
+  asset:
+    default: obsidian_follower_toggle_normal
+    hover: obsidian_follower_toggle_hover
+    pressed: obsidian_follower_toggle_pressed
+    selected: obsidian_follower_toggle_selected
+  children:
+  - id: ObsidianFollowersHead
+    anchor: top_left
+    offset_x: 1
+    offset_y: 1
+    width: 24
+    height: 24
+    asset:
+      default: obsidian_followers_head
+  interactive: true
+  anchor_space: screen
+  scale:
+    min: 0.5
+    max: 8.0
+  z_index: 220
+  notes: Right-edge head tab toggles the original three-slot followers panel. No separate followers text button.
+- id: OutdoorFollowerPanel
+  anchor_space: screen
+  anchor: top_right
+  offset_x: 0
+  offset_y: 176
+  width: 91
+  height: 292
+  z_index: 210
+  scale:
+    min: 1.0
+    max: 8.0
+  notes: Live three-slot follower panel with shared Carved Obsidian frame; visibility follows the head toggle.
+  children:
+  - id: OutdoorFollowerSlot_1
+    anchor: top_left
+    offset_x: 10
+    offset_y: 20
+    width: 71
+    height: 81
+    interactive: true
+    asset:
+      default: obsidian_follower_slot_normal
+      hover: obsidian_follower_slot_hover
+      pressed: obsidian_follower_slot_pressed
+    notes: Live follower portrait or stateful scroll control; render with shared popup/button treatment.
+  - id: OutdoorFollowerPortrait_1
+    anchor: top_left
+    offset_x: 14
+    offset_y: 24
+    width: 63
+    height: 73
+    notes: Dynamic follower portrait 1 draw region.
+  - id: OutdoorFollowerSlot_2
+    anchor: top_left
+    offset_x: 10
+    offset_y: 105
+    width: 71
+    height: 81
+    interactive: true
+    asset:
+      default: obsidian_follower_slot_normal
+      hover: obsidian_follower_slot_hover
+      pressed: obsidian_follower_slot_pressed
+    notes: Live follower portrait or stateful scroll control; render with shared popup/button treatment.
+  - id: OutdoorFollowerPortrait_2
+    anchor: top_left
+    offset_x: 14
+    offset_y: 109
+    width: 63
+    height: 73
+    notes: Dynamic follower portrait 2 draw region.
+  - id: OutdoorFollowerSlot_3
+    anchor: top_left
+    offset_x: 10
+    offset_y: 190
+    width: 71
+    height: 81
+    interactive: true
+    asset:
+      default: obsidian_follower_slot_normal
+      hover: obsidian_follower_slot_hover
+      pressed: obsidian_follower_slot_pressed
+    notes: Live follower portrait or stateful scroll control; render with shared popup/button treatment.
+  - id: OutdoorFollowerPortrait_3
+    anchor: top_left
+    offset_x: 14
+    offset_y: 194
+    width: 63
+    height: 73
+    notes: Dynamic follower portrait 3 draw region.
+  - id: OutdoorFollowerScrollUp
+    anchor: top_left
+    offset_x: 7
+    offset_y: 5
+    width: 77
+    height: 12
+    interactive: true
+    asset:
+      default: obsidian_follower_scroll_up_normal
+      hover: obsidian_follower_scroll_up_hover
+      pressed: obsidian_follower_scroll_up_pressed
+      disabled: obsidian_follower_scroll_up_disabled
+    notes: Live follower portrait or stateful scroll control; render with shared popup/button treatment.
+  - id: OutdoorFollowerScrollDown
+    anchor: top_left
+    offset_x: 7
+    offset_y: 275
+    width: 77
+    height: 12
+    interactive: true
+    asset:
+      default: obsidian_follower_scroll_down_normal
+      hover: obsidian_follower_scroll_down_hover
+      pressed: obsidian_follower_scroll_down_pressed
+      disabled: obsidian_follower_scroll_down_disabled
+    notes: Live follower portrait or stateful scroll control; render with shared popup/button treatment.
+- id: ObsidianTurnDock
+  anchor: bottom_left
+  offset_x: 14.933333
+  offset_y: -15.466667
+  width: 69.333333
+  height: 33.066667
+  children:
+  - id: ObsidianTurnPlate
+    anchor: top_left
+    offset_x: -3.2
+    offset_y: -3.2
+    width: 75.73333333333333
+    height: 39.46666666666667
+    asset:
+      default: obsidian_hud_turn_normal
+  - id: ObsidianTurnPhase
+    anchor: top_left
+    offset_x: 4.266667
+    offset_y: 4.266667
+    width: 60.8
+    height: 12.8
+    text:
+      value: ''
+      font: Lucida
+      color: '#e5dcc7'
+      align_x: center
+      align_y: middle
+      scale: 0.7
+  - id: ObsidianTurnDetail
+    anchor: top_left
+    offset_x: 4.266667
+    offset_y: 18.133333
+    width: 60.8
+    height: 9.6
+    text:
+      value: ''
+      font: SMALLNUM
+      color: '#e5dcc7'
+      align_x: center
+      align_y: middle
+      scale: 0.55
+  interactive: true
+  visible: false
+  anchor_space: screen
+  scale:
+    min: 0.5
+    max: 8.0
+  z_index: 200
+- id: ObsidianPartyBuffPopup
+  anchor: top_left
+  offset_x: 14.933333
+  offset_y: 86.4
+  width: 192.0
+  height: 96.0
+  visible: false
+  notes: Measured, scrollable remaining effects; popup style and input rules in design/gameplay.yml.
+  anchor_space: screen
+  scale:
+    min: 0.5
+    max: 8.0
+  z_index: 200
+- id: ObsidianPersonalBuffPopup
+  anchor: bottom_center
+  offset_x: 0.0
+  offset_y: -130.133333
+  width: 184.0
+  height: 96.0
+  visible: false
+  notes: Live selected owner's effects. Opens from medallion without changing selection.
+  anchor_space: screen
+  scale:
+    min: 0.5
+    max: 8.0
+  z_index: 200
+- id: OutdoorMobileContextActionButton
+  anchor: bottom_center
+  offset_y: -182
+  width: 230
+  height: 42
+  z_index: 240
+  interactive: true
+  scale:
+    min: 1.0
+    max: 8.0
+  notes: Shared contextual action; shown only when enabled or holding an item. Native input retains this ID.

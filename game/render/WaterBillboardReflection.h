@@ -1,0 +1,51 @@
+#pragma once
+
+#include "game/render/BillboardGeometry.h"
+#include "game/render/ViewFrustum.h"
+
+#include <algorithm>
+#include <cmath>
+#include <cstddef>
+#include <cstdint>
+#include <vector>
+
+namespace OpenYAMM::Game
+{
+constexpr float WaterBillboardDistance = 4096.0f;
+constexpr float WaterBillboardFadeDistance = 3072.0f;
+constexpr size_t MaxWaterBillboards = 64;
+
+inline float waterBillboardFade(float distanceSquared)
+{
+    constexpr float end = WaterBillboardDistance * WaterBillboardDistance;
+    constexpr float start = WaterBillboardFadeDistance * WaterBillboardFadeDistance;
+    return std::clamp((end - distanceSquared) / (end - start), 0.0f, 1.0f);
+}
+
+inline uint32_t waterBillboardColor(uint32_t colorAbgr, float distanceSquared)
+{
+    const uint32_t alpha = uint32_t(float(colorAbgr >> 24) * waterBillboardFade(distanceSquared) + 0.5f);
+    return (colorAbgr & 0x00ffffffu) | (alpha << 24);
+}
+
+inline bool waterBillboardVisible(const BillboardQuad &quad, const ViewFrustum &frustum, float height)
+{
+    return quad.center.z + std::abs(quad.right.z) + std::abs(quad.up.z) > height
+        && frustum.intersectsQuad(quad.center, quad.right, quad.up);
+}
+
+// Keep the nearest candidates before the caller applies its normal transparency ordering.
+template<class DrawItem>
+void limitWaterBillboards(std::vector<DrawItem> &items, size_t limit)
+{
+    if (items.size() > limit)
+    {
+        std::nth_element(items.begin(), items.begin() + limit, items.end(),
+            [](const DrawItem &left, const DrawItem &right)
+            {
+                return left.distanceSquared < right.distanceSquared;
+            });
+        items.resize(limit);
+    }
+}
+}

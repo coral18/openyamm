@@ -14,6 +14,7 @@
 #include "game/party/SkillData.h"
 #include "game/tables/MergedBaseTables.h"
 #include "game/ui/GameplayHudCommon.h"
+#include "game/ui/GameplayUiSkin.h"
 #include "game/ui/SpellbookUiLayout.h"
 #include "game/StringUtils.h"
 
@@ -1700,9 +1701,7 @@ void GameplayPartyOverlayInputController::handleCharacterOverlayInput(
             ? pCharacterDollTable->getDollType(pActiveCharacterDollEntry->dollTypeId)
             : nullptr;
     const CharacterSkillUiData skillUiData = buildCharacterSkillUiData(pActiveCharacter, !isReadOnlyAdventurersInnView);
-    const std::optional<GameplayHudFontHandle> skillRowFont = context.findHudFont("Lucida");
-    const float skillRowHeight =
-        skillRowFont.has_value() ? static_cast<float>(std::max(1, skillRowFont->fontHeight - 3)) : 11.0f;
+    const float skillRowHeight = context.characterSkillRowHeight();
     context.clearHudLayoutRuntimeHeightOverrides();
     context.setHudLayoutRuntimeHeightOverride(
         "CharacterSkillsWeaponsListRegion",
@@ -1716,6 +1715,72 @@ void GameplayPartyOverlayInputController::handleCharacterOverlayInput(
     context.setHudLayoutRuntimeHeightOverride(
         "CharacterSkillsMiscListRegion",
         skillRowHeight * static_cast<float>(std::max<size_t>(1, skillUiData.miscRows.size())));
+
+    GameplayUiController::CharacterScreenState &screen = context.characterScreen();
+    const bool skillsPage = screen.page == GameplayUiController::CharacterPage::Skills;
+    const bool awardsPage = screen.page == GameplayUiController::CharacterPage::Awards;
+    if (!input.leftMouseButton.held)
+    {
+        screen.scrollDragOffset.reset();
+    }
+    if (skillsPage || awardsPage)
+    {
+        const std::optional<GameplayResolvedHudLayoutElement> viewport = context.resolveHudLayoutElement(
+            skillsPage ? "CharacterSkillsViewport" : "CharacterAwardsList", screenWidth, screenHeight, 0, 0);
+        if (viewport)
+        {
+            const float contentHeight = skillsPage ? context.characterSkillsContentHeight(screenWidth, screenHeight) : 0;
+            const float maximum = skillsPage ? std::max(0.0f, contentHeight - viewport->height / viewport->scale)
+                : float(screen.awardMaximumScrollOffset);
+            const float visible = skillsPage
+                ? std::min(1.0f, viewport->height / std::max(1.0f, contentHeight * viewport->scale))
+                : screen.awardVisibleFraction;
+            float offset = skillsPage ? screen.skillScrollOffset : float(screen.awardScrollOffset);
+            const bool inside = context.isPointerInsideResolvedElement(*viewport, input.pointerX, input.pointerY);
+            if (inside)
+            {
+                offset -= input.mouseWheelDelta * (skillsPage ? skillRowHeight * 3 : 1);
+            }
+            offset = std::clamp(offset, 0.0f, maximum);
+            GameplayResolvedHudLayoutElement thumb = GameplayUiSkin::scrollbarThumb(
+                *viewport, maximum > 0 ? offset / maximum : 0, visible);
+            const bool trackHit = inside && input.pointerX >= viewport->x + viewport->width - 8 * viewport->scale;
+            bool consumed = false;
+            if (maximum > 0 && trackHit && input.leftMouseButton.pressed)
+            {
+                consumed = true;
+                if (input.pointerY >= thumb.y && input.pointerY <= thumb.y + thumb.height)
+                {
+                    screen.scrollDragOffset = input.pointerY - thumb.y;
+                }
+                else
+                {
+                    const float page = skillsPage ? viewport->height / viewport->scale
+                        : std::max(1.0f, maximum * visible / std::max(0.01f, 1 - visible));
+                    offset += input.pointerY < thumb.y ? -page : page;
+                }
+            }
+            if (screen.scrollDragOffset && maximum > 0 && viewport->height > thumb.height)
+            {
+                offset = (input.pointerY - viewport->y - *screen.scrollDragOffset)
+                    / (viewport->height - thumb.height) * maximum;
+                consumed = true;
+            }
+            offset = std::clamp(offset, 0.0f, maximum);
+            if (skillsPage)
+            {
+                screen.skillScrollOffset = offset;
+            }
+            else
+            {
+                screen.awardScrollOffset = size_t(std::round(offset));
+            }
+            if (consumed)
+            {
+                return;
+            }
+        }
+    }
 
     const bool closePressed =
         (pKeyboardState != nullptr && pKeyboardState[SDL_SCANCODE_ESCAPE])
@@ -1999,63 +2064,6 @@ void GameplayPartyOverlayInputController::handleCharacterOverlayInput(
                     target.type = targetType;
                     return target;
                 };
-
-            if (context.characterScreenReadOnly().page == GameplayUiController::CharacterPage::Awards)
-            {
-                GameplayCharacterPointerTarget target = resolveCharacterButtonTarget(
-                    "CharacterAwardsScrollUpButton",
-                    GameplayCharacterPointerTargetType::AwardScrollUpButton);
-
-                if (target.type != GameplayCharacterPointerTargetType::None)
-                {
-                    return target;
-                }
-
-                target = resolveCharacterButtonTarget(
-                    "CharacterAwardsScrollDownButton",
-                    GameplayCharacterPointerTargetType::AwardScrollDownButton);
-
-                if (target.type != GameplayCharacterPointerTargetType::None)
-                {
-                    return target;
-                }
-
-                target = resolveCharacterButtonTarget(
-                    "CharacterAwardsScrollThumb",
-                    GameplayCharacterPointerTargetType::AwardScrollTrack);
-
-                if (target.type == GameplayCharacterPointerTargetType::None)
-                {
-                    target = resolveCharacterButtonTarget(
-                        "CharacterAwardsScrollTrack",
-                        GameplayCharacterPointerTargetType::AwardScrollTrack);
-                }
-
-                if (target.type != GameplayCharacterPointerTargetType::None)
-                {
-                    const UiLayoutManager::LayoutElement *pTrackLayout =
-                        context.findHudLayoutElement("CharacterAwardsScrollTrack");
-                    const std::optional<GameplayResolvedHudLayoutElement> trackRect =
-                        pTrackLayout != nullptr
-                            ? context.resolveHudLayoutElement(
-                                "CharacterAwardsScrollTrack",
-                                screenWidth,
-                                screenHeight,
-                                pTrackLayout->width,
-                                pTrackLayout->height)
-                            : std::nullopt;
-
-                    if (trackRect.has_value() && trackRect->height > 0.0f)
-                    {
-                        target.scrollFraction = std::clamp(
-                            (pointerY - trackRect->y) / trackRect->height,
-                            0.0f,
-                            1.0f);
-                    }
-
-                    return target;
-                }
-            }
 
             if (!context.isAdventurersInnCharacterSourceActive() && pParty != nullptr && pParty->activeMemberIndex() > 0)
             {
@@ -2350,6 +2358,12 @@ void GameplayPartyOverlayInputController::handleCharacterOverlayInput(
 
             if (context.characterScreenReadOnly().page == GameplayUiController::CharacterPage::Skills)
             {
+                const std::optional<GameplayResolvedHudLayoutElement> viewport =
+                    context.resolveHudLayoutElement("CharacterSkillsViewport", screenWidth, screenHeight, 0, 0);
+                if (!viewport || !context.isPointerInsideResolvedElement(*viewport, pointerX, pointerY))
+                {
+                    return {};
+                }
                 const auto findSkillRowTarget =
                     [&context, screenWidth, screenHeight, pointerX, pointerY, skillRowHeight](
                         const char *pRegionId,
@@ -2613,61 +2627,11 @@ void GameplayPartyOverlayInputController::handleCharacterOverlayInput(
                 if (context.characterScreenReadOnly().page != target.page)
                 {
                     context.characterScreen().awardScrollOffset = 0;
+                    context.characterScreen().skillScrollOffset = 0;
+                    context.characterScreen().scrollDragOffset.reset();
                 }
 
                 context.characterScreen().page = target.page;
-                return;
-            }
-
-            if (target.type == GameplayCharacterPointerTargetType::AwardScrollUpButton)
-            {
-                if (context.characterScreenReadOnly().awardScrollOffset > 0)
-                {
-                    --context.characterScreen().awardScrollOffset;
-                }
-
-                return;
-            }
-
-            if (target.type == GameplayCharacterPointerTargetType::AwardScrollDownButton && pActiveCharacter != nullptr)
-            {
-                const AwardTable *pAwardTable = context.awardTable();
-                const size_t awardCount = pAwardTable != nullptr && pParty != nullptr
-                    ? visibleAwardCount(
-                          *pAwardTable,
-                          *pActiveCharacter,
-                          *pParty,
-                          [&context](uint32_t autonoteId)
-                          {
-                              return context.isAutonoteUnlocked(autonoteId);
-                          })
-                    : pActiveCharacter->awards.size();
-                const size_t maximumScrollOffset = awardCount > 0 ? awardCount - 1 : 0;
-
-                if (context.characterScreenReadOnly().awardScrollOffset < maximumScrollOffset)
-                {
-                    ++context.characterScreen().awardScrollOffset;
-                }
-
-                return;
-            }
-
-            if (target.type == GameplayCharacterPointerTargetType::AwardScrollTrack && pActiveCharacter != nullptr)
-            {
-                const AwardTable *pAwardTable = context.awardTable();
-                const size_t awardCount = pAwardTable != nullptr && pParty != nullptr
-                    ? visibleAwardCount(
-                          *pAwardTable,
-                          *pActiveCharacter,
-                          *pParty,
-                          [&context](uint32_t autonoteId)
-                          {
-                              return context.isAutonoteUnlocked(autonoteId);
-                          })
-                    : pActiveCharacter->awards.size();
-                const size_t maximumScrollOffset = awardCount > 0 ? awardCount - 1 : 0;
-                context.characterScreen().awardScrollOffset = static_cast<size_t>(
-                    std::round(target.scrollFraction * static_cast<float>(maximumScrollOffset)));
                 return;
             }
 
@@ -3102,8 +3066,10 @@ void GameplayPartyOverlayInputController::handleCharacterOverlayInput(
                     resolvedInventoryGrid->width,
                     resolvedInventoryGrid->height,
                     resolvedInventoryGrid->scale);
-                const float itemWidth = static_cast<float>(itemTexture->width) * gridMetrics.scale;
-                const float itemHeight = static_cast<float>(itemTexture->height) * gridMetrics.scale;
+                const float itemWidth =
+                    static_cast<float>(itemTexture->width) * gridMetrics.scale * pItemDefinition->inventoryDrawScale;
+                const float itemHeight =
+                    static_cast<float>(itemTexture->height) * gridMetrics.scale * pItemDefinition->inventoryDrawScale;
                 const float drawX = activationX - context.heldInventoryItem().grabOffsetX;
                 const float drawY = activationY - context.heldInventoryItem().grabOffsetY;
                 const std::optional<std::pair<int, int>> placement =
@@ -3202,8 +3168,10 @@ void GameplayPartyOverlayInputController::handleCharacterOverlayInput(
                 Character::InventoryHeight - 1));
             context.heldInventoryItem().grabCellOffsetX = hoveredGridX - heldItem.gridX;
             context.heldInventoryItem().grabCellOffsetY = hoveredGridY - heldItem.gridY;
-            const float itemWidth = static_cast<float>(itemTexture->width) * gridMetrics.scale;
-            const float itemHeight = static_cast<float>(itemTexture->height) * gridMetrics.scale;
+            const float itemWidth =
+                static_cast<float>(itemTexture->width) * gridMetrics.scale * pItemDefinition->inventoryDrawScale;
+            const float itemHeight =
+                static_cast<float>(itemTexture->height) * gridMetrics.scale * pItemDefinition->inventoryDrawScale;
             const InventoryItemScreenRect itemRect =
                 computeInventoryItemScreenRect(gridMetrics, heldItem, itemWidth, itemHeight);
             context.heldInventoryItem().grabOffsetX = activationX - itemRect.x;

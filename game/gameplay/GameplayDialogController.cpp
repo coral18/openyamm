@@ -3,6 +3,7 @@
 #include "game/StringUtils.h"
 #include "game/audio/SoundIds.h"
 #include "game/debug/GameplayDebugTrace.h"
+#include "game/gameplay/ArenaRuntime.h"
 #include "game/gameplay/BountyHuntRuntime.h"
 #include "game/gameplay/GenericActorDialog.h"
 #include "game/gameplay/GameMechanics.h"
@@ -77,6 +78,8 @@ const char *eventDialogActionKindName(EventDialogActionKind kind)
             return "house_resident";
         case EventDialogActionKind::NpcTopic:
             return "npc_topic";
+        case EventDialogActionKind::ArenaChallenge:
+            return "arena_challenge";
         case EventDialogActionKind::NpcProfessionNews:
             return "npc_profession_news";
         case EventDialogActionKind::NpcProfessionAction:
@@ -1934,53 +1937,6 @@ std::optional<NpcEntry> runtimeNpcEntry(
     return entry;
 }
 
-void replaceAllInPlace(std::string &text, const std::string &from, const std::string &to)
-{
-    if (from.empty())
-    {
-        return;
-    }
-
-    size_t position = 0;
-    while ((position = text.find(from, position)) != std::string::npos)
-    {
-        text.replace(position, from.length(), to);
-        position += to.length();
-    }
-}
-
-std::string formatNpcProfessionText(
-    std::string text,
-    const NpcEntry &npc,
-    const MergedNpcProfessionEntry &profession,
-    const Party *pParty,
-    int effectiveReputation = 0,
-    std::optional<int> requiredReputation = std::nullopt)
-{
-    const Character *pActiveMember = nullptr;
-
-    if (pParty != nullptr)
-    {
-        pActiveMember = pParty->member(pParty->activeMemberIndex());
-    }
-
-    const std::string activeMemberName = pActiveMember != nullptr && !pActiveMember->name.empty()
-        ? pActiveMember->name
-        : "traveler";
-
-    replaceAllInPlace(text, "%01", npc.name);
-    replaceAllInPlace(text, "%02", activeMemberName);
-    replaceAllInPlace(text, "%04", std::to_string(profession.weeklyCost));
-    replaceAllInPlace(text, "%11", reputationLabel(effectiveReputation));
-    replaceAllInPlace(
-        text,
-        "%12",
-        reputationLabel(requiredReputation.has_value() ? *requiredReputation : effectiveReputation));
-    replaceAllInPlace(text, "%14", profession.profession);
-    replaceAllInPlace(text, "%17", std::to_string(profession.weeklyCost / 100u));
-    return text;
-}
-
 int effectiveReputationForContext(const GameplayDialogController::Context &context)
 {
     return context.pWorldRuntime != nullptr
@@ -3703,13 +3659,25 @@ GameplayDialogController::Result GameplayDialogController::executeActiveDialogAc
 
     if (action.kind == EventDialogActionKind::NpcProfessionDescription)
     {
-        if (context.pNpcDialogTable != nullptr && action.secondaryId != 0)
+        if (context.pNpcDialogTable != nullptr && context.pNpcProfessionTable != nullptr && action.secondaryId != 0)
         {
+            const std::optional<NpcEntry> npc = runtimeNpcEntry(
+                context.pNpcDialogTable, context.eventRuntimeState, context.activeEventDialog.sourceId);
+            const MergedNpcProfessionEntry *pProfession = npc
+                ? context.pNpcProfessionTable->get(npc->professionId)
+                : nullptr;
             const std::optional<std::string> description = context.pNpcDialogTable->getText(action.secondaryId);
 
-            if (description && !description->empty())
+            if (npc && pProfession != nullptr && description && !description->empty())
             {
-                context.eventRuntimeState.messages.push_back(*description);
+                context.eventRuntimeState.messages.push_back(formatNpcProfessionText(
+                    *description,
+                    *npc,
+                    *pProfession,
+                    context.pParty,
+                    effectiveReputationForContext(context),
+                    std::nullopt,
+                    context.pWorldRuntime != nullptr ? context.pWorldRuntime->gameMinutes() : 0.0f));
             }
         }
 
@@ -3876,6 +3844,37 @@ GameplayDialogController::Result GameplayDialogController::executeActiveDialogAc
         }
 
         result.shouldOpenPendingEventDialog = true;
+        return result;
+    }
+
+    if (action.kind == EventDialogActionKind::ArenaChallenge
+        || (action.kind == EventDialogActionKind::NpcTopic && action.id == ArenaTopicId))
+    {
+        const uint32_t npcId = context.activeEventDialog.sourceId;
+        if (context.pWorldRuntime == nullptr)
+        {
+            context.eventRuntimeState.messages.push_back("The Arena is unavailable here.");
+        }
+        else if (action.kind == EventDialogActionKind::ArenaChallenge)
+        {
+            const std::optional<EventRuntimeState::DialogueOfferState> &offer =
+                context.eventRuntimeState.dialogueState.currentOffer;
+            if (offer && offer->kind == DialogueOfferKind::Arena && offer->npcId == npcId)
+            {
+                result.shouldCloseActiveDialog = startArenaChallenge(
+                    *context.pWorldRuntime, ArenaDifficulty(action.id), uint32_t(std::rand()));
+            }
+        }
+        else
+        {
+            result.shouldCloseActiveDialog = interactWithArena(*context.pWorldRuntime, npcId);
+        }
+        if (!result.shouldCloseActiveDialog)
+        {
+            setPendingDialogueContext(context.eventRuntimeState, DialogueContextKind::NpcTalk,
+                npcId, currentDialogueHostHouseId(context.eventRuntimeState));
+            result.shouldOpenPendingEventDialog = true;
+        }
         return result;
     }
 
@@ -4126,6 +4125,7 @@ GameplayDialogController::Result GameplayDialogController::openNpcDialogue(
         return result;
     }
 
+    context.eventRuntimeState.dialogueState.generatedNpcGreeting.reset();
     executeNpcHook(context, EventRuntimeHookKind::NpcEnter, npcId, sourceActorIndex);
     context.eventRuntimeState.dialogueState.hostHouseId = hostHouseId;
     setPendingDialogueContext(
@@ -4559,10 +4559,6 @@ bool GameplayDialogController::refreshHouseBankInputDialog(Context &context, boo
 
     const std::string promptLabel =
         houseBankState.inputMode == GameplayUiController::HouseBankInputMode::Deposit ? "Deposit" : "Withdraw";
-    const std::string enteredText = houseBankState.inputText.empty()
-        ? (showCursor ? "_" : "")
-        : (houseBankState.inputText + (showCursor ? "_" : ""));
-
     context.activeEventDialog.lines.clear();
     context.activeEventDialog.lines.push_back(
         "Balance: " + std::to_string(context.pParty != nullptr ? context.pParty->bankGold() : 0));
@@ -4570,7 +4566,6 @@ bool GameplayDialogController::refreshHouseBankInputDialog(Context &context, boo
     context.activeEventDialog.lines.push_back(promptLabel);
     context.activeEventDialog.lines.push_back("How Much?");
     context.activeEventDialog.lines.push_back(std::string {});
-    context.activeEventDialog.lines.push_back(enteredText);
     context.activeEventDialog.actions.clear();
     context.selectionIndex = 0;
     return true;

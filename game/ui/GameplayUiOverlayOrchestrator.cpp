@@ -57,7 +57,8 @@ GameplayUiOverlayInputResult GameplayUiOverlayOrchestrator::handleStandardOverla
     }
     else if (config.menuActive)
     {
-        (void)GameplayOverlayInputController::handleMenuOverlayInput(overlayContext, input);
+        // GameApplication promotes this shared pause state to the native menu screen.
+        // Do not dispatch obsolete image-button hits during the transition frame.
     }
     else if (config.controlsActive)
     {
@@ -210,7 +211,7 @@ void GameplayUiOverlayOrchestrator::renderStandardOverlays(
 
         GameplayPartyOverlayRenderer::renderRestOverlay(overlayContext, width, height);
         recordStage(&GameplayUiOverlayFramePerformanceDiagnostics::restNanoseconds);
-        GameplayPartyOverlayRenderer::renderMenuOverlay(overlayContext, width, height);
+        // The native pause screen is rendered by GameApplication above the frozen game view.
         recordStage(&GameplayUiOverlayFramePerformanceDiagnostics::menuNanoseconds);
         GameplayPartyOverlayRenderer::renderControlsOverlay(overlayContext, width, height);
         recordStage(&GameplayUiOverlayFramePerformanceDiagnostics::controlsNanoseconds);

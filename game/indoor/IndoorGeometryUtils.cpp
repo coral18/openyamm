@@ -215,7 +215,7 @@ bool faceBlocksInitialActorPlacement(const IndoorFaceGeometryData &geometry, flo
 {
     if (geometry.isPortal
         || hasFaceAttribute(geometry.attributes, FaceAttribute::Untouchable)
-        || geometry.maxZ <= footZ + InitialActorPlacementWallMinHeight)
+        || geometry.maxZ <= footZ + GeometryEpsilon)
     {
         return false;
     }
@@ -225,7 +225,13 @@ bool faceBlocksInitialActorPlacement(const IndoorFaceGeometryData &geometry, flo
         return true;
     }
 
-    if (geometry.kind != IndoorFaceKind::Wall)
+    if (geometry.kind == IndoorFaceKind::Floor)
+    {
+        return geometry.minZ > footZ + FloorSlack;
+    }
+
+    if (geometry.kind != IndoorFaceKind::Wall
+        || geometry.maxZ <= footZ + InitialActorPlacementWallMinHeight)
     {
         return false;
     }
@@ -806,9 +812,11 @@ IndoorPortalSectorTrace traceIndoorLineThroughPortalSectors(
     return trace;
 }
 
-std::vector<std::vector<uint16_t>> buildNeighboringIndoorSectorIds(const IndoorMapData &indoorMapData)
+std::vector<std::vector<uint16_t>> buildNeighboringIndoorSectorIds(
+    const IndoorMapData &indoorMapData,
+    const MapDeltaData *pMapDeltaData)
 {
-    const IndoorPortalGraph portalGraph = buildIndoorPortalGraph(indoorMapData);
+    const IndoorPortalGraph portalGraph = buildIndoorPortalGraph(indoorMapData, pMapDeltaData);
     std::vector<std::vector<uint16_t>> sectorIds(indoorMapData.sectors.size());
 
     for (size_t sectorIndex = 0; sectorIndex < indoorMapData.sectors.size(); ++sectorIndex)
@@ -1164,6 +1172,66 @@ bool isIndoorCylinderBlockedByFace(
     return isPointInsideProjectedPolygon(projectedFacePoint, geometry.projectedVertices);
 }
 
+namespace
+{
+bool placementBodyTouchesFace(
+    const IndoorFaceGeometryData &geometry,
+    float x,
+    float y,
+    float z,
+    float radius,
+    float height)
+{
+    if (!geometry.hasPlane || geometry.vertices.empty()
+        || x + radius < geometry.minX || x - radius > geometry.maxX
+        || y + radius < geometry.minY || y - radius > geometry.maxY
+        || z + height <= geometry.minZ + GeometryEpsilon || z >= geometry.maxZ - GeometryEpsilon)
+    {
+        return false;
+    }
+
+    // Match the movement body's lower, middle and upper spheres, including polygon-edge contacts.
+    const float lowZ = z + radius;
+    const float highZ = z + std::max(radius, height - radius);
+    for (float centerZ : {lowZ, (lowZ + highZ) * 0.5f, highZ})
+    {
+        const bx::Vec3 center = {x, y, centerZ};
+        const float distance = vecDot(vecSubtract(center, geometry.vertices.front()), geometry.normal);
+        if (std::fabs(distance) >= radius - GeometryEpsilon)
+        {
+            continue;
+        }
+        const bx::Vec3 projected = {
+            x - geometry.normal.x * distance,
+            y - geometry.normal.y * distance,
+            centerZ - geometry.normal.z * distance
+        };
+        if (isPointInsideProjectedPolygon(
+                projectFacePoint(geometry.projectionAxis, projected), geometry.projectedVertices))
+        {
+            return true;
+        }
+        for (size_t index = 0; index < geometry.vertices.size(); ++index)
+        {
+            const bx::Vec3 &start = geometry.vertices[index];
+            const bx::Vec3 delta = vecSubtract(geometry.vertices[(index + 1) % geometry.vertices.size()], start);
+            const float lengthSquared = vecDot(delta, delta);
+            const float t = lengthSquared > GeometryEpsilon
+                ? std::clamp(vecDot(vecSubtract(center, start), delta) / lengthSquared, 0.0f, 1.0f) : 0.0f;
+            const bx::Vec3 separation = {
+                center.x - start.x - delta.x * t,
+                center.y - start.y - delta.y * t,
+                center.z - start.z - delta.z * t
+            };
+            if (vecDot(separation, separation) < radius * radius - GeometryEpsilon)
+            {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 bool indoorActorPlacementOverlapsBlockingWall(
     const IndoorMapData &indoorMapData,
     const std::vector<IndoorVertex> &vertices,
@@ -1184,7 +1252,7 @@ bool indoorActorPlacementOverlapsBlockingWall(
             return false;
         }
 
-        return isIndoorCylinderBlockedByFace(*pGeometry, x, y, z, radius, height);
+        return placementBodyTouchesFace(*pGeometry, x, y, z, radius, height);
     };
 
     if (sectorId >= 0 && static_cast<size_t>(sectorId) < indoorMapData.sectors.size())
@@ -1214,6 +1282,128 @@ bool indoorActorPlacementOverlapsBlockingWall(
     return false;
 }
 
+bool placementCrossesWall(
+    const IndoorMapData &map,
+    const std::vector<IndoorVertex> &vertices,
+    IndoorFaceGeometryCache &cache,
+    const bx::Vec3 &start,
+    const bx::Vec3 &end,
+    int16_t sectorId)
+{
+    if (sectorId < 0 || static_cast<size_t>(sectorId) >= map.sectors.size())
+    {
+        return true;
+    }
+    for (uint16_t faceId : map.sectors[sectorId].faceIds)
+    {
+        const IndoorFaceGeometryData *pFace = cache.geometryForFace(map, vertices, faceId);
+        if (pFace == nullptr || pFace->isPortal || hasFaceAttribute(pFace->attributes, FaceAttribute::Untouchable)
+            || pFace->kind != IndoorFaceKind::Wall || !pFace->hasPlane)
+        {
+            continue;
+        }
+        const float startDistance = vecDot(vecSubtract(start, pFace->vertices.front()), pFace->normal);
+        const float endDistance = vecDot(vecSubtract(end, pFace->vertices.front()), pFace->normal);
+        if (std::fabs(startDistance) <= GeometryEpsilon
+            || (startDistance > 0.0f) == (endDistance > 0.0f)
+            || std::fabs(startDistance - endDistance) <= GeometryEpsilon)
+        {
+            continue;
+        }
+        const float t = startDistance / (startDistance - endDistance);
+        const bx::Vec3 point = {
+            start.x + (end.x - start.x) * t,
+            start.y + (end.y - start.y) * t,
+            start.z + (end.z - start.z) * t
+        };
+        if (isPointInsideProjectedPolygon(projectFacePoint(pFace->projectionAxis, point), pFace->projectedVertices))
+        {
+            return true;
+        }
+    }
+    return false;
+}
+}
+
+IndoorFloorSample sampleIndoorPlacementFloor(
+    const IndoorMapData &indoorMapData,
+    const std::vector<IndoorVertex> &vertices,
+    IndoorFaceGeometryCache &geometryCache,
+    float x,
+    float y,
+    float z,
+    float maxRise,
+    float maxDrop,
+    std::optional<int16_t> preferredSectorId)
+{
+    const auto sampleSector = [&](int16_t sectorId)
+    {
+        IndoorFloorSample best = {};
+        if (sectorId < 0 || static_cast<size_t>(sectorId) >= indoorMapData.sectors.size())
+        {
+            return best;
+        }
+        for (uint16_t faceId : indoorMapData.sectors[sectorId].floorFaceIds)
+        {
+            IndoorFloorSample candidate = evaluateIndoorFloorFace(
+                indoorMapData, vertices, faceId, x, y, z, maxRise, maxDrop, nullptr, &geometryCache);
+            if (!candidate.hasFloor)
+            {
+                continue;
+            }
+            const bool below = candidate.height <= z + 1.0f;
+            const bool bestBelow = best.height <= z + 1.0f;
+            if (!best.hasFloor || (below && !bestBelow)
+                || (below == bestBelow && (below ? candidate.height > best.height : candidate.height < best.height))
+                || (candidate.height == best.height && candidate.faceIndex < best.faceIndex))
+            {
+                best = candidate;
+                best.sectorId = sectorId;
+            }
+        }
+        return best;
+    };
+
+    // An explicit room confines offset searches to the encounter's already resolved room.
+    if (preferredSectorId)
+    {
+        return sampleSector(*preferredSectorId);
+    }
+    const std::optional<int16_t> pointSector =
+        findIndoorSectorForPoint(indoorMapData, vertices, {x, y, z}, &geometryCache, false);
+    if (pointSector)
+    {
+        const IndoorFloorSample floor = sampleSector(*pointSector);
+        if (floor.hasFloor)
+        {
+            return floor;
+        }
+    }
+
+    // Only misplaced markers need the wider search. Bounds reject unrelated rooms before polygon work.
+    IndoorFloorSample best = {};
+    float bestDistance = std::numeric_limits<float>::infinity();
+    const size_t firstSector = indoorMapData.sectors.size() > 1 ? 1 : 0;
+    for (size_t index = firstSector; index < indoorMapData.sectors.size(); ++index)
+    {
+        const IndoorSector &sector = indoorMapData.sectors[index];
+        if (x < sector.minX - FloorSlack || x > sector.maxX + FloorSlack
+            || y < sector.minY - FloorSlack || y > sector.maxY + FloorSlack
+            || z + maxRise < sector.minZ || z - maxDrop > sector.maxZ)
+        {
+            continue;
+        }
+        const IndoorFloorSample candidate = sampleSector(static_cast<int16_t>(index));
+        const float distance = std::fabs(candidate.height - z);
+        if (candidate.hasFloor && distance < bestDistance)
+        {
+            best = candidate;
+            bestDistance = distance;
+        }
+    }
+    return best;
+}
+
 IndoorInitialActorPlacement resolveIndoorInitialActorPlacement(
     const IndoorMapData &indoorMapData,
     const std::vector<IndoorVertex> &vertices,
@@ -1225,7 +1415,8 @@ IndoorInitialActorPlacement resolveIndoorInitialActorPlacement(
     float height,
     bool canFly,
     float maxRise,
-    float maxDrop)
+    float maxDrop,
+    std::optional<int16_t> preferredSectorId)
 {
     IndoorInitialActorPlacement result = {};
     result.x = x;
@@ -1238,17 +1429,16 @@ IndoorInitialActorPlacement resolveIndoorInitialActorPlacement(
     }
 
     const IndoorFloorSample floorSample =
-        sampleIndoorFloor(
+        sampleIndoorPlacementFloor(
             indoorMapData,
             vertices,
+            geometryCache,
             x,
             y,
-            z + radius,
+            z,
             maxRise,
             maxDrop,
-            std::nullopt,
-            nullptr,
-            &geometryCache);
+            preferredSectorId);
 
     if (!floorSample.hasFloor)
     {
@@ -1260,7 +1450,7 @@ IndoorInitialActorPlacement resolveIndoorInitialActorPlacement(
 
     if (!canFly || z <= floorSample.height + 1.0f)
     {
-        result.z = floorSample.height;
+        result.z = std::ceil(floorSample.height);
     }
 
     const auto actorFitsAt =
@@ -1298,7 +1488,7 @@ IndoorInitialActorPlacement resolveIndoorInitialActorPlacement(
             return std::nullopt;
         }
 
-        const float floorZ = candidateFloor.height;
+        const float floorZ = std::ceil(candidateFloor.height);
         const float startZ = std::max(requestedZ, floorZ);
 
         if (actorFitsAt(candidateX, candidateY, startZ, candidateFloor.sectorId))
@@ -1341,32 +1531,35 @@ IndoorInitialActorPlacement resolveIndoorInitialActorPlacement(
 
     if (actorFitsAt(result.x, result.y, result.z, result.sectorId))
     {
+        result.hasClearance = true;
         return result;
     }
 
-    constexpr std::array<float, 6> SearchRadii = {{8.0f, 16.0f, 32.0f, 48.0f, 64.0f, 96.0f}};
-    constexpr int SearchAngles = 16;
-    constexpr float TwoPi = 6.28318530717958647692f;
+    constexpr std::array<float, 11> SearchRadii = {{8, 16, 32, 48, 64, 96, 128, 192, 256, 384, 512}};
+    constexpr std::array<std::array<int, 2>, 16> SearchDirections = {{
+        {{1024, 0}}, {{946, 392}}, {{724, 724}}, {{392, 946}},
+        {{0, 1024}}, {{-392, 946}}, {{-724, 724}}, {{-946, 392}},
+        {{-1024, 0}}, {{-946, -392}}, {{-724, -724}}, {{-392, -946}},
+        {{0, -1024}}, {{392, -946}}, {{724, -724}}, {{946, -392}}
+    }};
 
     for (float searchRadius : SearchRadii)
     {
-        for (int angleIndex = 0; angleIndex < SearchAngles; ++angleIndex)
+        for (const std::array<int, 2> &direction : SearchDirections)
         {
-            const float angle = TwoPi * static_cast<float>(angleIndex) / static_cast<float>(SearchAngles);
-            const float candidateX = x + std::cos(angle) * searchRadius;
-            const float candidateY = y + std::sin(angle) * searchRadius;
+            const float candidateX = std::round(x + float(direction[0]) * searchRadius / 1024.0f);
+            const float candidateY = std::round(y + float(direction[1]) * searchRadius / 1024.0f);
             const IndoorFloorSample candidateFloor =
-                sampleIndoorFloor(
+                sampleIndoorPlacementFloor(
                     indoorMapData,
                     vertices,
+                    geometryCache,
                     candidateX,
                     candidateY,
-                    z + radius,
+                    z,
                     maxRise,
                     maxDrop,
-                    result.sectorId,
-                    nullptr,
-                    &geometryCache);
+                    result.sectorId);
 
             if (!candidateFloor.hasFloor
                 || candidateFloor.sectorId != result.sectorId
@@ -1379,7 +1572,7 @@ IndoorInitialActorPlacement resolveIndoorInitialActorPlacement(
 
             if (!canFly || z <= candidateFloor.height + 1.0f)
             {
-                candidateZ = candidateFloor.height;
+                candidateZ = std::ceil(candidateFloor.height);
             }
             else if (const std::optional<float> clearFlyingZ =
                          resolveFlyingZ(candidateX, candidateY, candidateZ, candidateFloor))
@@ -1397,17 +1590,75 @@ IndoorInitialActorPlacement resolveIndoorInitialActorPlacement(
                 continue;
             }
 
+            if (placementCrossesWall(
+                    indoorMapData, vertices, geometryCache,
+                    {x, y, result.z + height * 0.5f},
+                    {candidateX, candidateY, candidateZ + height * 0.5f}, result.sectorId))
+            {
+                continue;
+            }
+
             result.x = candidateX;
             result.y = candidateY;
             result.z = candidateZ;
             result.sectorId = candidateFloor.sectorId;
             result.movedHorizontally = true;
             result.wallOverlapResolved = true;
+            result.hasClearance = true;
             return result;
         }
     }
 
     return result;
+}
+
+IndoorInitialActorPlacement resolveIndoorEncounterPlacement(
+    const IndoorMapData &indoorMapData,
+    const std::vector<IndoorVertex> &vertices,
+    IndoorFaceGeometryCache &geometryCache,
+    const IndoorSpawn &spawn,
+    uint32_t spawnOrdinal,
+    float radius,
+    float height,
+    bool canFly)
+{
+    constexpr float SpawnFloorSlack = 4096.0f;
+    const IndoorInitialActorPlacement center = resolveIndoorInitialActorPlacement(
+        indoorMapData, vertices, geometryCache, float(spawn.x), float(spawn.y), float(spawn.z),
+        radius, height, canFly, SpawnFloorSlack, SpawnFloorSlack);
+    if (center.hasFloor && (spawnOrdinal == 0 || !center.hasClearance))
+    {
+        return center;
+    }
+
+    // Fixed integer offsets give the same placement on every load/platform without consuming encounter RNG.
+    constexpr std::array<std::array<int, 2>, 16> Offsets = {{
+        {{64, 0}}, {{0, 64}}, {{-64, 0}}, {{0, -64}},
+        {{45, 45}}, {{-45, 45}}, {{-45, -45}}, {{45, -45}},
+        {{32, 0}}, {{0, 32}}, {{-32, 0}}, {{0, -32}},
+        {{22, 22}}, {{-22, 22}}, {{-22, -22}}, {{22, -22}}
+    }};
+    for (size_t attempt = 0; attempt < Offsets.size(); ++attempt)
+    {
+        const std::array<int, 2> &offset = Offsets[(spawnOrdinal + Offsets.size() - 1 + attempt) % Offsets.size()];
+        const float x = center.x + float(offset[0]);
+        const float y = center.y + float(offset[1]);
+        const IndoorInitialActorPlacement candidate = resolveIndoorInitialActorPlacement(
+            indoorMapData, vertices, geometryCache, x, y, center.z, radius, height, canFly,
+            SpawnFloorSlack, SpawnFloorSlack,
+            center.hasFloor ? std::optional<int16_t>(center.sectorId) : std::nullopt);
+        if (candidate.hasClearance
+            && (!center.hasFloor || !placementCrossesWall(
+                indoorMapData, vertices, geometryCache,
+                {center.x, center.y, center.z + height * 0.5f},
+                {candidate.x, candidate.y, candidate.z + height * 0.5f}, center.sectorId)))
+        {
+            return candidate;
+        }
+    }
+    // Keep resolved support even if an imported monster body does not fit; hasClearance exposes that separate issue.
+    // A missing floor remains an explicit placement failure, never a successful raw-marker fallback.
+    return center;
 }
 
 IndoorFloorSample sampleIndoorFloor(

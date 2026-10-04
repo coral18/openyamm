@@ -1,0 +1,25 @@
+schema: openyamm.effectSprite.v2
+id: mm9:effect-sprite/fire/torchflame3
+source: sprites/fire/torchflame3.spr
+framesPerSecond: 15
+logicalWidth: 64
+logicalHeight: 64
+keyed: false
+translucent: false
+colorKey: 0
+frames:
+- mm9:effect-texture/flameeffects/torchflame/torchflame_additive0030
+- mm9:effect-texture/flameeffects/torchflame/torchflame_additive0031
+- mm9:effect-texture/flameeffects/torchflame/torchflame_additive0032
+- mm9:effect-texture/flameeffects/torchflame/torchflame_additive0033
+- mm9:effect-texture/flameeffects/torchflame/torchflame_additive0034
+- mm9:effect-texture/flameeffects/torchflame/torchflame_additive0035
+- mm9:effect-texture/flameeffects/torchflame/torchflame_additive0036
+- mm9:effect-texture/flameeffects/torchflame/torchflame_additive0037
+- mm9:effect-texture/flameeffects/torchflame/torchflame_additive0038
+- mm9:effect-texture/flameeffects/torchflame/torchflame_additive0039
+- mm9:effect-texture/flameeffects/torchflame/torchflame_additive0040
+- mm9:effect-texture/flameeffects/torchflame/torchflame_additive0041
+- mm9:effect-texture/flameeffects/torchflame/torchflame_additive0042
+- mm9:effect-texture/flameeffects/torchflame/torchflame_additive0043
+- mm9:effect-texture/flameeffects/torchflame/torchflame_additive0044

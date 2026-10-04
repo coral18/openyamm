@@ -121,7 +121,9 @@ android {
     }
 
     androidResources {
-        noCompress += ["zip", "ogv"]
+        // Keep _legacy bake dependencies; the default <dir>_* filter silently drops them from the APK.
+        ignoreAssetsPattern = "!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~"
+        noCompress += ["zip", "ogv", "oyatlas"]
     }
 
     externalNativeBuild {
@@ -175,7 +177,8 @@ android {
     }
 }
 
-def runtimeAssetsRoot = file(project.findProperty("openyamm.android.runtimeAssetsDir") ?: "${rootDir}/../assets")
+def runtimeAssetsRoot = file(project.findProperty("openyamm.android.runtimeAssetsDir") ?: "${rootDir}/../build/android-assets")
+def openYammLicenseFiles = files("${rootDir}/../LICENSE", "${rootDir}/../COPYRIGHT")
 
 def registerOpenYammApkAssetsTask = { taskName, nativeBuildTaskName, shaderBuildDirectories, generatedAssetsRoot ->
     tasks.register(taskName) {
@@ -190,6 +193,7 @@ def registerOpenYammApkAssetsTask = { taskName, nativeBuildTaskName, shaderBuild
         ]
 
         inputs.files(packagedAssetRoots.collect { it.zip })
+        inputs.files(openYammLicenseFiles)
         inputs.file(file("${rootDir}/settings.ini"))
         inputs.files(shaderBuildDirectories.collect { shaderBuildDirectory ->
             fileTree(shaderBuildDirectory) {
@@ -205,10 +209,24 @@ def registerOpenYammApkAssetsTask = { taskName, nativeBuildTaskName, shaderBuild
                 if (!assetRoot.zip.isFile()) {
                     throw new GradleException(
                         "Missing runtime asset package ${assetRoot.zip}. " +
-                        "Generate assets/*.zip before building the Android APK."
+                        "Run android/repack_runtime_assets.sh before building the Android APK."
                     )
                 }
 
+                if (assetRoot.into == "engine") {
+                    def archive = new java.util.zip.ZipFile(assetRoot.zip)
+                    try {
+                        def marker = archive.getEntry("sprite_texture_profile.json")
+                        def profile = marker == null ? null : new groovy.json.JsonSlurper().parse(
+                            archive.getInputStream(marker))
+                        if (profile?.schema_version != 2 || profile?.texture_profile != "android") {
+                            throw new GradleException("engine.zip must contain the Android ETC2/EAC sprite profile. " +
+                                "Run android/repack_runtime_assets.sh.")
+                        }
+                    } finally {
+                        archive.close()
+                    }
+                }
                 copy {
                     from(zipTree(assetRoot.zip))
                     into(file("${generatedAssetsRoot}/${assetRoot.into}"))
@@ -218,6 +236,11 @@ def registerOpenYammApkAssetsTask = { taskName, nativeBuildTaskName, shaderBuild
             copy {
                 from(file("${rootDir}/settings.ini"))
                 into(generatedAssetsRoot)
+            }
+
+            copy {
+                from(openYammLicenseFiles)
+                into(file("${generatedAssetsRoot}/licenses/openyamm"))
             }
 
             copy {

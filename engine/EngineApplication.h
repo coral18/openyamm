@@ -9,6 +9,7 @@
 
 namespace OpenYAMM::Engine
 {
+class BgfxContext;
 class EngineApplication
 {
 public:
@@ -31,12 +32,15 @@ public:
 
     int run() const;
     void setConfiguration(const ApplicationConfig &config);
+    bool applyDisplaySettings(WindowMode mode, int width, int height, bool verticalSync, std::string &error);
 
-private:
+  private:
     bool initializeAssetFileSystem(AssetFileSystem &assetFileSystem) const;
     bool validateConfiguration() const;
 
     ApplicationConfig m_config;
+    mutable SDL_Window *m_pRunningWindow = nullptr;
+    mutable BgfxContext *m_pRunningContext = nullptr;
     StartupCallback m_startupCallback;
     RenderSetupCallback m_renderSetupCallback;
     EventCallback m_eventCallback;

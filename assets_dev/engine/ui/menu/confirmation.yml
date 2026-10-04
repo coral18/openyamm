@@ -1,0 +1,124 @@
+screen: MenuConfirmation
+elements:
+- id: MenuConfirmationRoot
+  anchor: center
+  anchor_space: screen
+  width: 853.3333
+  height: 480
+  z_index: 0
+  scale:
+    min: 0.1
+    max: 8.0
+    reference_width: 853.3333
+    reference_height: 480
+  notes: Native menu canvas fitted uniformly by MenuDesignScreen.
+  children:
+  - id: MenuConfirmationVeil
+    anchor: top_left
+    offset_x: 0.0
+    offset_y: 0.0
+    width: 853.3333
+    height: 480.0
+    z_index: 100
+    visible: true
+    interactive: false
+    asset:
+      default: hud_x2/menus/omenu_modal_veil.png
+  - id: MenuConfirmationPanel
+    anchor: top_left
+    offset_x: 244.8
+    offset_y: 137.5
+    width: 363.7333
+    height: 205
+    z_index: 101
+    visible: true
+    interactive: false
+    asset:
+      default: hud_x2/menus/omenu_modal.png
+  - id: MenuConfirmationSeal
+    anchor: top_left
+    offset_x: 411.7333
+    offset_y: 155.5
+    width: 29.8667
+    height: 29.8667
+    z_index: 102
+    visible: true
+    interactive: false
+    asset:
+      default: hud_x2/menus/omenu_seal.png
+  - id: MenuConfirmationTitle
+    anchor: top_left
+    offset_x: 268
+    offset_y: 197.5
+    width: 318
+    height: 28
+    z_index: 103
+    visible: true
+    interactive: false
+    text:
+      value: '{confirmation_title}'
+      font: fondamento
+      color: '#e6d1a8'
+      align_x: center
+      align_y: middle
+      scale: 0.58333
+      pad_x: 0.0
+  - id: MenuConfirmationBody
+    anchor: top_left
+    offset_x: 268
+    offset_y: 228.5
+    width: 318
+    height: 42
+    z_index: 103
+    visible: true
+    interactive: false
+    text:
+      value: '{confirmation_body}'
+      font: menu_arrus
+      color: '#d0ceb7'
+      align_x: center
+      align_y: middle
+      scale: 0.74105
+      pad_x: 0.0
+  - id: MenuConfirmationCancelButton
+    anchor: top_left
+    offset_x: 272
+    offset_y: 279.5
+    width: 149
+    height: 28
+    z_index: 103
+    visible: true
+    interactive: true
+    asset:
+      default: hud_x2/menus/omenu_button_quiet_default.png
+      highlighted: hud_x2/menus/omenu_button_quiet_hover.png
+      pressed: hud_x2/menus/omenu_button_quiet_pressed.png
+    text:
+      value: '{cancel_label}'
+      font: fondamento
+      color: '#cbc5af'
+      align_x: center
+      align_y: middle
+      scale: 0.43333
+      pad_x: 12.8
+  - id: MenuConfirmationConfirmButton
+    anchor: top_left
+    offset_x: 427
+    offset_y: 279.5
+    width: 149
+    height: 28
+    z_index: 103
+    visible: true
+    interactive: true
+    asset:
+      default: hud_x2/menus/omenu_button_danger_default.png
+      highlighted: hud_x2/menus/omenu_button_danger_hover.png
+      pressed: hud_x2/menus/omenu_button_danger_pressed.png
+    text:
+      value: '{confirm_label}'
+      font: fondamento
+      color: '#edc0aa'
+      align_x: center
+      align_y: middle
+      scale: 0.43333
+      pad_x: 12.8

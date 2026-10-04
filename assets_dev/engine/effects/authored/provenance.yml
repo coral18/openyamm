@@ -1,0 +1,37 @@
+license: CC0-1.0
+sources:
+- key: kenney
+  sha256: b631d4b07f7002549fdcf155f01141ad482f79f3440e4e301eed49ce5f1d8958
+  url: https://kenney.nl/assets/particle-pack
+  author: Kenney
+  title: Particle Pack v1.1
+- key: fireball
+  sha256: f60de3f2ce56f941d6f089ea4ea93e3ae51c63fac84c1aa0d6615022f8647010
+  url: https://unity.com/blog/engine-platform/free-vfx-image-sequences-flipbooks
+  author: Unity Labs / Thomas ICHÉ
+  title: FireBall01
+- key: arcane
+  sha256: e404dd03289e41c87e64a67a781d4c5dc2b91cb1a45eb54883314231f1fd7b8d
+  url: https://opengameart.org/content/arcane-magic-effect
+  author: Cethiel
+  title: Arcane Magic Effect
+conversions:
+- sprite: openyamm:effect-sprite/ring
+  source: kenney
+  conversion: PNG (Transparent)/circle_01.png; RGBA decode and Lanczos 512 to 128;
+    retain soft alpha
+- sprite: openyamm:effect-sprite/spark
+  source: kenney
+  conversion: PNG (Transparent)/star_01.png; RGBA decode and Lanczos 512 to 128; retain
+    soft alpha
+- sprite: openyamm:effect-sprite/smoke
+  source: kenney
+  conversion: PNG (Transparent)/smoke_01.png; RGBA decode and Lanczos 512 to 128;
+    retain soft alpha
+- sprite: openyamm:effect-sprite/fireball
+  source: fireball
+  conversion: FireBall01_8x8.tga; row-major cells 0,4,...,60; 16 FPS authored timing;
+    RGB with opaque alpha; additive
+- sprite: openyamm:effect-sprite/arcane
+  source: arcane
+  conversion: 04/Arcane_Effect_5.png; centered on 128 RGBA canvas; static variant

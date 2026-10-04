@@ -6,6 +6,7 @@
 
 #include <cstdint>
 #include <optional>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -49,12 +50,20 @@ struct IndoorAcceptedPortalVisibility
     uint16_t faceId = 0;
 };
 
+inline bool indoorGeometrySectorsVisible(std::span<const uint8_t> visibleSectors,
+    int16_t sectorId, int16_t backSectorId)
+{
+    const bool frontKnown = sectorId >= 0 && size_t(sectorId) < visibleSectors.size();
+    const bool backKnown = backSectorId >= 0 && size_t(backSectorId) < visibleSectors.size();
+    return (!frontKnown && !backKnown) || (frontKnown && visibleSectors[sectorId] != 0)
+        || (backKnown && visibleSectors[backSectorId] != 0);
+}
+
 struct IndoorPortalVisibilityInput
 {
     const IndoorMapData *pMapData = nullptr;
     const IndoorPortalGraph *pPortalGraph = nullptr;
     const std::vector<IndoorVertex> *pVertices = nullptr;
-    const std::vector<IndoorVertex> *pPortalVertices = nullptr;
     const MapDeltaData *pMapDeltaData = nullptr;
     const std::optional<EventRuntimeState> *pEventRuntimeState = nullptr;
     bx::Vec3 cameraPosition = {0.0f, 0.0f, 0.0f};
@@ -62,6 +71,9 @@ struct IndoorPortalVisibilityInput
     bx::Vec3 cameraUp = {0.0f, 0.0f, 1.0f};
     float verticalFovDegrees = 60.0f;
     float aspectRatio = 1.0f;
+    // Render queries also reject apertures collapsed to a single screen row, as in MM8.
+    // Zero leaves gameplay geometry queries independent of framebuffer resolution.
+    int viewportHeight = 0;
     int16_t startSectorId = -1;
     uint16_t maxNodes = 256;
     uint16_t maxDepth = 32;

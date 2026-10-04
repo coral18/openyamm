@@ -1,0 +1,20 @@
+schema: openyamm.effectSprite.v2
+id: mm9:effect-sprite/spells/redflare
+source: sprites/spells/redflare.spr
+framesPerSecond: 15
+logicalWidth: 64
+logicalHeight: 64
+keyed: false
+translucent: false
+colorKey: 0
+frames:
+- mm9:effect-texture/redflare/redflare_0001
+- mm9:effect-texture/redflare/redflare_0002
+- mm9:effect-texture/redflare/redflare_0003
+- mm9:effect-texture/redflare/redflare_0004
+- mm9:effect-texture/redflare/redflare_0005
+- mm9:effect-texture/redflare/redflare_0006
+- mm9:effect-texture/redflare/redflare_0007
+- mm9:effect-texture/redflare/redflare_0008
+- mm9:effect-texture/redflare/redflare_0009
+- mm9:effect-texture/redflare/redflare_0010

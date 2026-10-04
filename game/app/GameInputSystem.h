@@ -3,9 +3,11 @@
 #include "game/app/GameSettings.h"
 #include "game/app/MobileJumpDoubleTapGesture.h"
 #include "game/gameplay/GameplayInputFrame.h"
+#include "game/gameplay/GameplayTouchControl.h"
 
 #include <array>
 #include <cstdint>
+#include <span>
 #include <string>
 
 namespace OpenYAMM::Game
@@ -24,9 +26,11 @@ public:
         bool mobileGameplayTouchControlsEnabled = true,
         bool mobileJumpGestureEnabled = true,
         bool mobileFlightControlsEnabled = false,
-        bool mobileInspectControlEnabled = true);
+        bool mobileInspectControlEnabled = true,
+        std::span<const GameplayTouchControl> touchControls = {});
 
     const GameplayInputFrame &frame() const;
+    GameplayInputFrame &frame();
     bool consumeMobileDebugConsoleToggleRequested();
     void resetRelativeMouseMotion();
     void suppressMouseButtonsUntilReleased();

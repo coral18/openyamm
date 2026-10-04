@@ -6,7 +6,9 @@
 #include <cstddef>
 #include <cstdint>
 #include <cctype>
+#include <cmath>
 #include <cstring>
+#include <limits>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -558,6 +560,12 @@ std::optional<IndoorMapData> IndoorMapDataLoader::loadFromBytes(const std::vecto
 
         face = {};
         face.attributes = attributes;
+        std::array<int32_t, 3> planeNormal = {};
+        for (size_t axis = 0; axis < planeNormal.size(); ++axis)
+        {
+            reader.readInt32(faceStructOffset + axis * sizeof(int32_t), planeNormal[axis]);
+        }
+        face.planeNormal = planeNormal;
         face.isPortal = (attributes & 0x1u) != 0;
         face.roomNumber = roomNumber;
         face.roomBehindNumber = roomBehindNumber;
@@ -1029,6 +1037,52 @@ std::optional<std::vector<uint8_t>> IndoorMapDataWriter::buildBytes(const Indoor
         }
 
         const size_t faceStructOffset = faceHeadersOffset + faceIndex * Layout.faceRecordSize + 0x10;
+        std::array<int32_t, 3> planeNormal = {};
+        if (face.planeNormal)
+        {
+            planeNormal = *face.planeNormal;
+        }
+        else if (vertexCount >= 3)
+        {
+            std::array<double, 3> normal = {};
+            for (size_t index = 0; index < vertexCount; ++index)
+            {
+                const uint16_t firstId = face.vertexIndices[index];
+                const uint16_t secondId = face.vertexIndices[(index + 1) % vertexCount];
+                if (firstId >= indoorMapData.vertices.size() || secondId >= indoorMapData.vertices.size())
+                {
+                    return std::nullopt;
+                }
+                const IndoorVertex &a = indoorMapData.vertices[firstId];
+                const IndoorVertex &b = indoorMapData.vertices[secondId];
+                normal[0] += (double(a.y) - b.y) * (double(a.z) + b.z);
+                normal[1] += (double(a.z) - b.z) * (double(a.x) + b.x);
+                normal[2] += (double(a.x) - b.x) * (double(a.y) + b.y);
+            }
+            const double length = std::hypot(normal[0], normal[1], normal[2]);
+            if (length > 0.0)
+            {
+                for (size_t axis = 0; axis < planeNormal.size(); ++axis)
+                {
+                    planeNormal[axis] = std::lround(normal[axis] * 65536.0 / length);
+                }
+            }
+        }
+        int64_t planeDistance = 0;
+        if (vertexCount > 0 && face.vertexIndices.front() < indoorMapData.vertices.size())
+        {
+            const IndoorVertex &origin = indoorMapData.vertices[face.vertexIndices.front()];
+            planeDistance = -(int64_t(planeNormal[0]) * origin.x
+                + int64_t(planeNormal[1]) * origin.y + int64_t(planeNormal[2]) * origin.z);
+        }
+        for (size_t axis = 0; axis < planeNormal.size(); ++axis)
+        {
+            writeValue<int32_t>(bytes, faceStructOffset + axis * sizeof(int32_t), planeNormal[axis]);
+            writeValue<float>(bytes, faceStructOffset - 0x10 + axis * sizeof(float), planeNormal[axis] / 65536.0f);
+        }
+        writeValue<float>(bytes, faceStructOffset - 0x04, planeDistance / 65536.0f);
+        writeValue<int32_t>(bytes, faceStructOffset + 0x0c, std::clamp<int64_t>(
+            planeDistance, std::numeric_limits<int32_t>::min(), std::numeric_limits<int32_t>::max()));
         writeValue<uint32_t>(bytes, faceStructOffset + 0x1c, face.attributes);
         writeValue<uint16_t>(bytes, faceStructOffset + 0x38, static_cast<uint16_t>(faceIndex));
         writeValue<uint16_t>(bytes, faceStructOffset + 0x3c, face.roomNumber);

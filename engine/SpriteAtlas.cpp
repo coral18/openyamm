@@ -68,7 +68,8 @@ std::optional<SpriteAtlas> SpriteAtlas::parse(const std::string &text, std::stri
     try
     {
         const YAML::Node root = YAML::Load(text);
-        require(root["schema_version"].as<int>() == 1, "Unsupported sprite atlas schema");
+        const int schemaVersion = root["schema_version"].as<int>();
+        require(schemaVersion == 1 || schemaVersion == 2, "Unsupported sprite atlas schema");
         const std::string recolorModel = root["recolor_model"].as<std::string>();
         const bool useSingleLut = recolorModel == "masked_luminance_lut_v1";
         const bool useMultiLut = recolorModel == "multi_mask_luminance_lut_v1";
@@ -81,10 +82,20 @@ std::optional<SpriteAtlas> SpriteAtlas::parse(const std::string &text, std::stri
             "Unsupported recolor model");
         const bool useLuminance = recolorModel == "masked_luminance_rgb_v1";
         SpriteAtlas atlas;
+        atlas.schemaVersion = schemaVersion;
+        if (schemaVersion == 2)
+        {
+            atlas.textureProfile = root["texture_profile"].as<std::string>();
+            require(atlas.textureProfile == "desktop" || atlas.textureProfile == "android",
+                "Invalid sprite texture profile");
+        }
         atlas.maskChannels = useFourRegions ? 4 : (useRegions ? 2 : 1);
         atlas.pixelsPerLogicalPixel = root["pixels_per_logical_pixel"].as<float>();
         require(std::isfinite(atlas.pixelsPerLogicalPixel) && atlas.pixelsPerLogicalPixel > 0
             && atlas.pixelsPerLogicalPixel <= 16, "Invalid sprite pixel scale");
+        atlas.brightnessMultiplier = root["brightness_multiplier"].as<float>(1.0f);
+        require(std::isfinite(atlas.brightnessMultiplier) && atlas.brightnessMultiplier > 0
+            && atlas.brightnessMultiplier <= 2, "Invalid sprite brightness multiplier");
         atlas.logicalCanvas = readArray<int, 2>(root["logical_canvas"]);
         atlas.logicalPivot = readArray<float, 2>(root["logical_pivot"]);
         for (size_t i = 0; i < 2; ++i)
@@ -97,10 +108,20 @@ std::optional<SpriteAtlas> SpriteAtlas::parse(const std::string &text, std::stri
         for (const YAML::Node &node : root["pages"])
         {
             SpriteAtlasPage page;
-            page.base = node["base"].as<std::string>();
-            page.mask = node["mask"].as<std::string>();
+            if (schemaVersion == 1)
+            {
+                page.base = node["base"].as<std::string>();
+                page.mask = node["mask"].as<std::string>();
+                require(isPagePath(page.base) && isPagePath(page.mask), "Invalid atlas page path");
+            }
+            else
+            {
+                page.texture = node["texture"].as<std::string>();
+                require(page.texture == "runtime/page-" + std::to_string(atlas.pages.size()) + ".oyatlas",
+                    "Invalid cooked atlas page path");
+                require(!node["base"] && !node["mask"], "Runtime atlases cannot reference source PNGs");
+            }
             page.size = readArray<int, 2>(node["size"]);
-            require(isPagePath(page.base) && isPagePath(page.mask), "Invalid atlas page path");
             require(page.size[0] > 0 && page.size[1] > 0 && page.size[0] <= 8192 && page.size[1] <= 8192,
                 "Invalid atlas page dimensions");
             atlas.pages.push_back(std::move(page));
@@ -115,7 +136,23 @@ std::optional<SpriteAtlas> SpriteAtlas::parse(const std::string &text, std::stri
             SpriteAtlasFrame frame;
             frame.page = node["page"].as<int>();
             frame.rectangle = readArray<int, 4>(node["atlas_xywh"]);
-            frame.cropOrigin = readArray<int, 2>(node["crop_origin_px"]);
+            frame.cropOrigin = readArray<float, 2>(node["crop_origin_px"]);
+            frame.drawSize = node["draw_size_px"] ? readArray<float, 2>(node["draw_size_px"])
+                : std::array<float, 2>{float(frame.rectangle[2]), float(frame.rectangle[3])};
+            for (size_t i = 0; i < 2; ++i)
+            {
+                require(std::isfinite(frame.cropOrigin[i]), "Invalid crop origin");
+                require(std::isfinite(frame.drawSize[i]) && frame.drawSize[i] > 0
+                    && frame.drawSize[i] <= 131072, "Invalid sprite draw size");
+            }
+            if (node["palette_overrides"])
+            {
+                require(node["palette_overrides"].IsMap(), "Invalid frame palette overrides");
+                for (const auto &overrideEntry : node["palette_overrides"])
+                {
+                    frame.paletteOverrides.emplace(overrideEntry.first.as<int>(), overrideEntry.second.as<int>());
+                }
+            }
             require(frame.page >= 0 && size_t(frame.page) < atlas.pages.size(), "Invalid frame page");
             const std::array<int, 2> &size = atlas.pages[frame.page].size;
             const std::array<int, 4> &rect = frame.rectangle;
@@ -132,7 +169,11 @@ std::optional<SpriteAtlas> SpriteAtlas::parse(const std::string &text, std::stri
             const int id = entry.first.as<int>();
             require(id >= 0 && id <= 32767, "Invalid sprite variant id");
             SpriteAtlasVariant variant;
-            if (!entry.second["exact_base_bypass"].as<bool>(false) && useLookup)
+            const std::string appearanceModel = entry.second["recolor_model"].as<std::string>(recolorModel);
+            const bool linearOverride = appearanceModel != recolorModel
+                && appearanceModel == "masked_luminance_rgb_v1" && useSingleLut;
+            require(appearanceModel == recolorModel || linearOverride, "Incompatible frame palette model");
+            if (!entry.second["exact_base_bypass"].as<bool>(false) && useLookup && !linearOverride)
             {
                 variant.lookup = entry.second["lookup"].as<std::string>();
                 const std::string suffix = ".rgba32f";
@@ -168,15 +209,23 @@ std::optional<SpriteAtlas> SpriteAtlas::parse(const std::string &text, std::stri
             else if (!entry.second["exact_base_bypass"].as<bool>(false))
             {
                 const std::array<float, 3> ramp = readArray<float, 3>(
-                    entry.second[useLuminance ? "luminance_vector" : "chroma_vector"]);
+                    entry.second[(useLuminance || linearOverride) ? "luminance_vector" : "chroma_vector"]);
                 for (size_t i = 0; i < 3; ++i)
                 {
                     require(std::isfinite(ramp[i]) && ramp[i] >= 0 && ramp[i] <= 4, "Invalid sprite chroma ramp");
                     variant.chroma[i] = ramp[i];
                 }
-                variant.chroma[3] = useLuminance ? 2 : 1;
+                variant.chroma[3] = (useLuminance || linearOverride) ? 2 : 1;
             }
             require(atlas.variants.emplace(id, variant).second, "Duplicate sprite variant");
+        }
+        for (const auto &[name, frame] : atlas.frames)
+        {
+            for (const auto &[nativePalette, appearance] : frame.paletteOverrides)
+            {
+                require(atlas.variants.contains(nativePalette) && atlas.variants.contains(appearance),
+                    "Unknown frame palette override");
+            }
         }
         return atlas;
     }

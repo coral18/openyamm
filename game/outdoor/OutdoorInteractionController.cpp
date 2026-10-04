@@ -2643,6 +2643,10 @@ GameplayPartyAttackFrameInput OutdoorInteractionController::buildPartyAttackFram
             .y = pickRequest.rayOrigin.y + pickRequest.rayDirection.y * 5120.0f,
             .z = pickRequest.rayOrigin.z + pickRequest.rayDirection.z * 5120.0f,
         };
+    input.fallbackQuery.screenX = pickRequest.screenX;
+    input.fallbackQuery.screenY = pickRequest.screenY;
+    input.fallbackQuery.viewWidth = pickRequest.viewWidth;
+    input.fallbackQuery.viewHeight = pickRequest.viewHeight;
     std::copy(
         pickRequest.viewMatrix.begin(),
         pickRequest.viewMatrix.end(),
@@ -2652,6 +2656,150 @@ GameplayPartyAttackFrameInput OutdoorInteractionController::buildPartyAttackFram
         pickRequest.projectionMatrix.end(),
         input.fallbackQuery.projectionMatrix.begin());
     return input;
+}
+
+std::optional<GameplayWorldPoint> OutdoorInteractionController::resolvePartyAttackActorContactPoint(
+    const OutdoorGameView &view,
+    size_t actorIndex,
+    const GameplayPartyAttackFallbackQuery &query)
+{
+    if (view.m_pOutdoorWorldRuntime == nullptr
+        || !view.m_outdoorActorPreviewBillboardSet
+        || query.viewWidth <= 0
+        || query.viewHeight <= 0)
+    {
+        return std::nullopt;
+    }
+
+    const OutdoorWorldRuntime::MapActorState *pActor = view.m_pOutdoorWorldRuntime->mapActorState(actorIndex);
+    if (pActor == nullptr || pActor->isInvisible)
+    {
+        return std::nullopt;
+    }
+
+    const ActorPreviewBillboard *pPreview = findActorPreviewBillboardForRuntimeActorIndex(view, actorIndex);
+    uint16_t spriteFrameIndex = pPreview != nullptr ? pPreview->spriteFrameIndex : pActor->spriteFrameIndex;
+    const std::array<uint16_t, 8> &actionSpriteFrameIndices =
+        pPreview != nullptr ? pPreview->actionSpriteFrameIndices : pActor->actionSpriteFrameIndices;
+    const size_t animationIndex = static_cast<size_t>(pActor->animation);
+    if (animationIndex < actionSpriteFrameIndices.size() && actionSpriteFrameIndices[animationIndex] != 0)
+    {
+        spriteFrameIndex = actionSpriteFrameIndices[animationIndex];
+    }
+
+    const uint32_t frameTimeTicks = static_cast<uint32_t>(std::max(0.0f, pActor->animationTimeTicks));
+    const SpriteFrameEntry *pFrame =
+        view.m_outdoorActorPreviewBillboardSet->spriteFrameTable.getFrame(spriteFrameIndex, frameTimeTicks);
+    if (pFrame == nullptr)
+    {
+        return std::nullopt;
+    }
+
+    const bx::Vec3 cameraPosition = {
+        view.m_cameraTargetX,
+        view.m_cameraTargetY,
+        view.m_cameraTargetZ,
+    };
+    const float angleToCamera = std::atan2(
+        static_cast<float>(pActor->y) - cameraPosition.y,
+        static_cast<float>(pActor->x) - cameraPosition.x);
+    const float octantAngle = pActor->yawRadians - angleToCamera + Pi + (Pi / 8.0f);
+    const int octant = static_cast<int>(std::floor(octantAngle / (Pi / 4.0f))) & 7;
+    const ResolvedSpriteTexture resolvedTexture = SpriteFrameTable::resolveTexture(*pFrame, octant);
+    const OutdoorGameView::BillboardTextureHandle *pTexture =
+        view.findBillboardTexture(resolvedTexture.textureName, pFrame->paletteId);
+    if (pTexture == nullptr || pTexture->width <= 0.0f || pTexture->height <= 0.0f)
+    {
+        return std::nullopt;
+    }
+
+    const uint16_t sourceHeight = pPreview != nullptr ? pPreview->height : pActor->height;
+    float heightScale = sourceHeight > 0
+        ? static_cast<float>(pActor->height) / static_cast<float>(sourceHeight)
+        : 1.0f;
+    if (pActor->shrinkRemainingSeconds > 0.0f)
+    {
+        heightScale *= std::clamp(pActor->shrinkDamageMultiplier, 0.25f, 1.0f);
+    }
+    const float spriteScale = std::max(pFrame->scale * heightScale, 0.01f);
+    const float worldWidth = pTexture->width * spriteScale;
+    const float worldHeight = pTexture->height * spriteScale;
+    const bx::Vec3 cameraRight = {
+        query.viewMatrix[0],
+        query.viewMatrix[4],
+        query.viewMatrix[8],
+    };
+    const bx::Vec3 cameraUp = {
+        query.viewMatrix[1],
+        query.viewMatrix[5],
+        query.viewMatrix[9],
+    };
+    const BillboardQuad quad = billboardQuad(
+        spriteBillboardCenter(
+            static_cast<float>(pActor->x),
+            static_cast<float>(pActor->y),
+            static_cast<float>(pActor->z),
+            cameraRight,
+            cameraUp,
+            *pTexture,
+            spriteScale,
+            resolvedTexture.mirrored),
+        cameraRight,
+        cameraUp,
+        worldWidth,
+        worldHeight);
+    const bx::Vec3 topLeft = bx::add(bx::sub(quad.center, quad.right), quad.up);
+    const bx::Vec3 topRight = bx::add(bx::add(quad.center, quad.right), quad.up);
+    const bx::Vec3 bottomLeft = bx::sub(bx::sub(quad.center, quad.right), quad.up);
+    const bx::Vec3 bottomRight = bx::sub(bx::add(quad.center, quad.right), quad.up);
+    float viewProjectionMatrix[16] = {};
+    bx::mtxMul(viewProjectionMatrix, query.viewMatrix.data(), query.projectionMatrix.data());
+    ProjectedPoint projectedTopLeft = {};
+    ProjectedPoint projectedTopRight = {};
+    ProjectedPoint projectedBottomLeft = {};
+    ProjectedPoint projectedBottomRight = {};
+
+    if (!projectWorldPointToScreen(
+            topLeft, query.viewWidth, query.viewHeight, viewProjectionMatrix, projectedTopLeft)
+        || !projectWorldPointToScreen(
+            topRight, query.viewWidth, query.viewHeight, viewProjectionMatrix, projectedTopRight)
+        || !projectWorldPointToScreen(
+            bottomLeft, query.viewWidth, query.viewHeight, viewProjectionMatrix, projectedBottomLeft)
+        || !projectWorldPointToScreen(
+            bottomRight, query.viewWidth, query.viewHeight, viewProjectionMatrix, projectedBottomRight))
+    {
+        return std::nullopt;
+    }
+
+    const float left = std::min(
+        std::min(projectedTopLeft.x, projectedTopRight.x),
+        std::min(projectedBottomLeft.x, projectedBottomRight.x));
+    const float right = std::max(
+        std::max(projectedTopLeft.x, projectedTopRight.x),
+        std::max(projectedBottomLeft.x, projectedBottomRight.x));
+    const float top = std::min(
+        std::min(projectedTopLeft.y, projectedTopRight.y),
+        std::min(projectedBottomLeft.y, projectedBottomRight.y));
+    const float bottom = std::max(
+        std::max(projectedTopLeft.y, projectedTopRight.y),
+        std::max(projectedBottomLeft.y, projectedBottomRight.y));
+    if (right <= left || bottom <= top)
+    {
+        return std::nullopt;
+    }
+
+    const std::optional<bx::Vec3> contact = nearestOpaqueBillboardPoint(
+        quad,
+        pTexture->opacityMask,
+        resolvedTexture.mirrored,
+        (query.screenX - left) / (right - left),
+        (query.screenY - top) / (bottom - top));
+    if (!contact)
+    {
+        return std::nullopt;
+    }
+
+    return GameplayWorldPoint{contact->x, contact->y, contact->z};
 }
 
 GameplayHoverStatusPayload OutdoorInteractionController::readCachedWorldHover(OutdoorGameView &view)

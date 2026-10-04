@@ -46,7 +46,8 @@ inline bool gameplayHudScreenFullyOccludesWorld(
     GameplayHudScreenState state,
     const EventDialogContent &activeEventDialog)
 {
-    if (state == GameplayHudScreenState::Gameplay)
+    // The native pause panel leaves the game visible, including its first capture frame.
+    if (state == GameplayHudScreenState::Gameplay || state == GameplayHudScreenState::Menu)
     {
         return false;
     }
@@ -358,9 +359,6 @@ enum class GameplayCharacterPointerTargetType
     ExitButton,
     DismissButton,
     MagnifyButton,
-    AwardScrollUpButton,
-    AwardScrollDownButton,
-    AwardScrollTrack,
     AdventurersInnHireButton,
     AdventurersInnScrollUpButton,
     AdventurersInnScrollDownButton,
@@ -383,7 +381,6 @@ struct GameplayCharacterPointerTarget
     uint8_t gridY = 0;
     EquipmentSlot equipmentSlot = EquipmentSlot::MainHand;
     size_t innIndex = 0;
-    float scrollFraction = 0.0f;
 
     bool operator==(const GameplayCharacterPointerTarget &other) const = default;
 };
@@ -455,7 +452,13 @@ enum class GameplayHudPointerTargetType
     FollowerPanelToggleButton,
     FollowerPanelPortrait,
     FollowerPanelScrollUpButton,
-    FollowerPanelScrollDownButton
+    FollowerPanelScrollDownButton,
+    BuffOverflow,
+    PersonalBuffs,
+    PartyBuff,
+    PartyBuffPanel,
+    DismissBuffs,
+    MinimapOpen
 };
 
 struct GameplayHudPointerTarget
@@ -617,6 +620,11 @@ struct GameplayInventoryNestedOverlayPointerTarget
 
 struct GameplayOverlayInteractionState
 {
+    int dialogueBodyScrollLines = 0;
+    std::string dialogueBodyText;
+    std::string dialogueStatusHint;
+    int itemInspectScrollLines = 0;
+    uint32_t itemInspectScrollItem = 0;
     bool closeOverlayLatch = false;
     bool restToggleLatch = false;
     bool restClickLatch = false;
@@ -634,6 +642,10 @@ struct GameplayOverlayInteractionState
     bool gameplayHudSpellTargetConfirmRequested = false;
     bool gameplayHudSpellTargetCancelRequested = false;
     bool gameplayHudDropHeldItemRequested = false;
+    bool partyBuffPopupOpen = false;
+    std::optional<size_t> personalBuffPopupMember;
+    bool overlayPersonalBuffClickLatch = false;
+    std::optional<size_t> overlayPersonalBuffPressedIndex;
     bool followerPanelOpen = false;
     size_t followerPanelScrollOffset = 0;
     bool menuToggleLatch = false;

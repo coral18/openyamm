@@ -1,4 +1,5 @@
 /build/
+/build-vulkan/
 /build-gprof/
 /build-prof/
 /out/
@@ -17,3 +18,46 @@ __pycache__/
 /android/signing.properties
 /android/keystores/
 /android/app-release.apk
+
+# Local captures, packaged builds, user configuration and authoring archives.
+/output/
+/logs/
+/.codex
+/.codex-log/
+/.openyamm-editor.ini
+/assets/*.zip
+/assets/worlds/*.zip
+/assets_legacy/
+/assets_dev/_legacy/
+/android/emulator-*.log
+/android/artwork/
+/codex-session*.txt
+/gprof*.txt
+/hitch*.txt
+
+# Local authoring banks, editor payloads and original game extractions.
+# Runtime assets belong in assets_dev; source banks can be archived separately.
+/assets_source/
+/assets_editor_dev/
+/data/
+# MM9 imports and the optional world payload are local for now.
+/mm9/
+/assets_dev/worlds/mm9/
+
+# Historical generation projects and outputs remain local; reusable code lives in tools/.
+/level_generation/
+# Generated equipment catalogs, previews, reports and browser test outputs.
+/tools/paperdoll_review/catalog.js
+/tools/paperdoll_review/native_manifest.json
+/tools/paperdoll_review/*/
+# Optional creature analysis outputs, never source code.
+/tools/creatures/quality_review/*/
+/tools/creatures/quality_review/*.json
+
+# Reusable tool sources stay portable; generated banks and experiments stay local.
+/tools/font_upscale/*/
+/tools/mm9_import_discovery/*/
+/tools/upscaling/*/
+/tools/upscaling/*.zip
+/tools/upscaling/*.json
+/tools/upscaling/realesrgan-ncnn-vulkan

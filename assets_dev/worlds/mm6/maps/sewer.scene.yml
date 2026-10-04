@@ -397,7 +397,7 @@ spawns:
   - spawn_index: 37
     position:
       x: -2752
-      y: 3776
+      y: 3456
       z: 0
     radius: 32
     type_id: 3
@@ -597,7 +597,7 @@ spawns:
   - spawn_index: 57
     position:
       x: -2752
-      y: 4992
+      y: 5376
       z: 0
     radius: 32
     type_id: 3

@@ -52,8 +52,6 @@ const char *indoorMoveInvalidPositionReasonName(IndoorMoveInvalidPositionReason 
             return "actor_ledge_drop";
         case IndoorMoveInvalidPositionReason::LeadingActorLedgeDrop:
             return "leading_actor_ledge_drop";
-        case IndoorMoveInvalidPositionReason::LostGroundSupport:
-            return "lost_ground_support";
         case IndoorMoveInvalidPositionReason::SteepFloor:
             return "steep_floor";
         case IndoorMoveInvalidPositionReason::StepUpTooHigh:

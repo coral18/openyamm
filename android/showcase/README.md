@@ -19,12 +19,14 @@
 
 ### 2. Inventory and equipment
 
-[![Annotated inventory controls](images/android_2_annotated.png)](images/android_2_annotated.png)
+[![Annotated inventory controls](images/android_2_annotated_mixing.png)](images/android_2_annotated_mixing.png)
 
 - Touch and drag an item to move it. Release over a valid inventory cell to place or swap it.
 - Release suitable equipment over the paper doll to equip it.
 - If the destination is invalid, the item remains held so it can be placed somewhere else.
 - Hold the magnifying glass and tap an item to inspect it without moving it.
+- To mix potions or prepare a reagent potion, first tap the source item to hold it. Keep the magnifying glass held
+  with one finger, then tap the target potion, reagent, or empty bottle with another finger.
 - Tap a party portrait to change the active character.
 - The same inspection modifier is available in relevant inventory, chest, and merchant item views.
 
@@ -74,6 +76,7 @@
 | Gameplay | Fly arrows | Ascend or descend; shown side by side while Fly is active |
 | Item views | Drag item | Move, place, swap, or equip an item |
 | Item views | Hold magnifier + tap item | Inspect item |
+| Inventory | Hold item, then hold magnifier + tap target item | Mix potions or combine a reagent with an empty bottle |
 | Character creation | Portrait arrows | Cycle available characters |
 | Arcomage | Tap hand card | Play it, or discard it when a discard is required |
 | Arcomage | Swipe upward from hand card | Discard the selected card |

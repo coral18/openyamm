@@ -16,15 +16,10 @@ namespace OpenYAMM::Game
 namespace
 {
 constexpr float VisibilityEpsilon = 0.001f;
-constexpr float FrustumClipEpsilon = 5.0f;
-constexpr float NearPortalSlack = 128.0f;
-constexpr float ClippedPortalRecoverySlack = 512.0f;
-constexpr float SharedBoundaryClippedPortalRecoverySlack = 1024.0f;
-constexpr float DegenerateVerticalPortalMaxNormalZ = 0.1f;
-constexpr float DegeneratePortalMaxHeight = 8.0f;
-constexpr float SynthesizedPortalMinWidth = 8.0f;
-constexpr float SynthesizedPortalMinHeight = 16.0f;
-constexpr uint16_t DegenerateChildFrustumRecoveryMaxDepth = 1;
+constexpr float FrustumClipEpsilon = 0.001f;
+constexpr float NearPortalSlack = 16.0f;
+constexpr float NearPortalPlaneDistance = 9.0f;
+constexpr float PortalNearClipDistance = 8.0f;
 
 float dotVec(const bx::Vec3 &left, const bx::Vec3 &right)
 {
@@ -70,19 +65,6 @@ bx::Vec3 normalizeVec(const bx::Vec3 &value)
     }
 
     return scaleVec(value, 1.0f / length);
-}
-
-uint32_t effectiveFaceAttributes(
-    const IndoorFace &face,
-    uint16_t faceId,
-    const MapDeltaData *pMapDeltaData)
-{
-    if (pMapDeltaData != nullptr && faceId < pMapDeltaData->faceAttributes.size())
-    {
-        return pMapDeltaData->faceAttributes[faceId];
-    }
-
-    return face.attributes;
 }
 
 float signedPlaneDistance(const IndoorVisibilityPlane &plane, const bx::Vec3 &point)
@@ -144,7 +126,8 @@ std::vector<IndoorVisibilityPlane> buildCameraFrustumPlanes(const IndoorPortalVi
 
 std::vector<bx::Vec3> clipPolygonToPlane(
     const std::vector<bx::Vec3> &polygon,
-    const IndoorVisibilityPlane &plane
+    const IndoorVisibilityPlane &plane,
+    float epsilon = FrustumClipEpsilon
 )
 {
     if (polygon.empty())
@@ -158,11 +141,11 @@ std::vector<bx::Vec3> clipPolygonToPlane(
     for (size_t pointIndex = 0; pointIndex < polygon.size(); ++pointIndex)
     {
         const bx::Vec3 &current = polygon[pointIndex];
-        const bx::Vec3 &next = polygon[(pointIndex + 1) % polygon.size()];
+        const bx::Vec3 &next = polygon[pointIndex + 1 < polygon.size() ? pointIndex + 1 : 0];
         const float currentDistance = signedPlaneDistance(plane, current);
         const float nextDistance = signedPlaneDistance(plane, next);
-        const bool currentInside = currentDistance >= -FrustumClipEpsilon;
-        const bool nextInside = nextDistance >= -FrustumClipEpsilon;
+        const bool currentInside = currentDistance >= -epsilon;
+        const bool nextInside = nextDistance >= -epsilon;
 
         if (currentInside && nextInside)
         {
@@ -240,6 +223,37 @@ std::vector<IndoorVisibilityPlane> buildPortalFrustumPlanes(
     return planes;
 }
 
+bool portalHasScreenHeight(
+    const std::vector<bx::Vec3> &polygon,
+    const bx::Vec3 &cameraPosition,
+    const bx::Vec3 &forward,
+    const bx::Vec3 &up,
+    float projectionScale,
+    int viewportHeight)
+{
+    if (polygon.size() < 3)
+    {
+        return false;
+    }
+    if (viewportHeight <= 0)
+    {
+        return true;
+    }
+
+    int minRow = viewportHeight;
+    int maxRow = 0;
+    for (const bx::Vec3 &point : polygon)
+    {
+        const bx::Vec3 relative = subtractVec(point, cameraPosition);
+        const float depth = std::max(dotVec(relative, forward), PortalNearClipDistance);
+        const int row = viewportHeight / 2 - int(std::floor(dotVec(relative, up) * projectionScale / depth));
+        minRow = std::min(minRow, row);
+        maxRow = std::max(maxRow, row);
+    }
+    // MM8 rejects equal min/max projected Y, including after clipping to the parent window.
+    return minRow < maxRow;
+}
+
 bool indoorPortalFaceVisible(
     size_t faceIndex,
     const std::optional<EventRuntimeState> *pEventRuntimeState)
@@ -301,283 +315,6 @@ bool cameraNearPortal(
         && cameraPosition.y <= maxBounds.y + slack
         && cameraPosition.z >= minBounds.z - slack
         && cameraPosition.z <= maxBounds.z + slack;
-}
-
-bool rangeOverlap(float leftMin, float leftMax, float rightMin, float rightMax, float &overlapMin, float &overlapMax)
-{
-    overlapMin = std::max(leftMin, rightMin);
-    overlapMax = std::min(leftMax, rightMax);
-    return overlapMax > overlapMin + VisibilityEpsilon;
-}
-
-int dominantAxis(const bx::Vec3 &normal)
-{
-    const float absX = std::fabs(normal.x);
-    const float absY = std::fabs(normal.y);
-    const float absZ = std::fabs(normal.z);
-
-    if (absX >= absY && absX >= absZ)
-    {
-        return 0;
-    }
-
-    return absY >= absZ ? 1 : 2;
-}
-
-float averagePortalAxisCoordinate(const std::vector<bx::Vec3> &vertices, int axis)
-{
-    if (vertices.empty())
-    {
-        return 0.0f;
-    }
-
-    float value = 0.0f;
-
-    for (const bx::Vec3 &point : vertices)
-    {
-        if (axis == 0)
-        {
-            value += point.x;
-        }
-        else if (axis == 1)
-        {
-            value += point.y;
-        }
-        else
-        {
-            value += point.z;
-        }
-    }
-
-    return value / static_cast<float>(vertices.size());
-}
-
-bool portalNormalSupportsSharedBoundaryPolygon(const bx::Vec3 &normal)
-{
-    constexpr float AxisAlignedPortalNormalThreshold = 0.95f;
-    const float dominantComponent = std::max(std::fabs(normal.x), std::max(std::fabs(normal.y), std::fabs(normal.z)));
-    return dominantComponent >= AxisAlignedPortalNormalThreshold;
-}
-
-std::vector<bx::Vec3> sectorBoundsCorners(const IndoorSector &sector)
-{
-    return {
-        {static_cast<float>(sector.minX), static_cast<float>(sector.minY), static_cast<float>(sector.minZ)},
-        {static_cast<float>(sector.minX), static_cast<float>(sector.minY), static_cast<float>(sector.maxZ)},
-        {static_cast<float>(sector.minX), static_cast<float>(sector.maxY), static_cast<float>(sector.minZ)},
-        {static_cast<float>(sector.minX), static_cast<float>(sector.maxY), static_cast<float>(sector.maxZ)},
-        {static_cast<float>(sector.maxX), static_cast<float>(sector.minY), static_cast<float>(sector.minZ)},
-        {static_cast<float>(sector.maxX), static_cast<float>(sector.minY), static_cast<float>(sector.maxZ)},
-        {static_cast<float>(sector.maxX), static_cast<float>(sector.maxY), static_cast<float>(sector.minZ)},
-        {static_cast<float>(sector.maxX), static_cast<float>(sector.maxY), static_cast<float>(sector.maxZ)}
-    };
-}
-
-void projectSectorBoundsToPortalPlaneAxes(
-    const IndoorSector &sector,
-    const bx::Vec3 &horizontalAxis,
-    float &minHorizontal,
-    float &maxHorizontal,
-    float &minZ,
-    float &maxZ)
-{
-    const std::vector<bx::Vec3> corners = sectorBoundsCorners(sector);
-    minHorizontal = maxHorizontal = dotVec(horizontalAxis, corners.front());
-    minZ = maxZ = corners.front().z;
-
-    for (const bx::Vec3 &corner : corners)
-    {
-        const float horizontal = dotVec(horizontalAxis, corner);
-        minHorizontal = std::min(minHorizontal, horizontal);
-        maxHorizontal = std::max(maxHorizontal, horizontal);
-        minZ = std::min(minZ, corner.z);
-        maxZ = std::max(maxZ, corner.z);
-    }
-}
-
-bool buildDegenerateVerticalPortalBoundaryPolygon(
-    const IndoorMapData &mapData,
-    const IndoorFaceGeometryData &geometry,
-    int16_t sectorAId,
-    int16_t sectorBId,
-    std::vector<bx::Vec3> &portalPolygon)
-{
-    if (!geometry.hasPlane
-        || std::fabs(geometry.normal.z) > DegenerateVerticalPortalMaxNormalZ
-        || geometry.maxZ - geometry.minZ > DegeneratePortalMaxHeight
-        || sectorAId < 0
-        || sectorBId < 0
-        || static_cast<size_t>(sectorAId) >= mapData.sectors.size()
-        || static_cast<size_t>(sectorBId) >= mapData.sectors.size())
-    {
-        return false;
-    }
-
-    const bx::Vec3 horizontalNormal = normalizeVec({geometry.normal.x, geometry.normal.y, 0.0f});
-    if (lengthVec(horizontalNormal) <= VisibilityEpsilon || geometry.vertices.empty())
-    {
-        return false;
-    }
-
-    const bx::Vec3 up = {0.0f, 0.0f, 1.0f};
-    const bx::Vec3 horizontalAxis = normalizeVec(crossVec(up, horizontalNormal));
-    if (lengthVec(horizontalAxis) <= VisibilityEpsilon)
-    {
-        return false;
-    }
-
-    const IndoorSector &sectorA = mapData.sectors[static_cast<size_t>(sectorAId)];
-    const IndoorSector &sectorB = mapData.sectors[static_cast<size_t>(sectorBId)];
-    float minHorizontalA = 0.0f;
-    float maxHorizontalA = 0.0f;
-    float minZA = 0.0f;
-    float maxZA = 0.0f;
-    float minHorizontalB = 0.0f;
-    float maxHorizontalB = 0.0f;
-    float minZB = 0.0f;
-    float maxZB = 0.0f;
-
-    projectSectorBoundsToPortalPlaneAxes(sectorA, horizontalAxis, minHorizontalA, maxHorizontalA, minZA, maxZA);
-    projectSectorBoundsToPortalPlaneAxes(sectorB, horizontalAxis, minHorizontalB, maxHorizontalB, minZB, maxZB);
-
-    float minHorizontal = 0.0f;
-    float maxHorizontal = 0.0f;
-    float minZ = 0.0f;
-    float maxZ = 0.0f;
-    if (!rangeOverlap(minHorizontalA, maxHorizontalA, minHorizontalB, maxHorizontalB, minHorizontal, maxHorizontal)
-        || !rangeOverlap(minZA, maxZA, minZB, maxZB, minZ, maxZ)
-        || maxHorizontal - minHorizontal < SynthesizedPortalMinWidth
-        || maxZ - minZ < SynthesizedPortalMinHeight)
-    {
-        return false;
-    }
-
-    const float planeDistance = -dotVec(horizontalNormal, geometry.vertices.front());
-    const auto pointOnPortalPlane =
-        [horizontalNormal, horizontalAxis, planeDistance](float horizontal, float z)
-    {
-        return addVec(
-            addVec(scaleVec(horizontalAxis, horizontal), {0.0f, 0.0f, z}),
-            scaleVec(horizontalNormal, -planeDistance));
-    };
-
-    portalPolygon = {
-        pointOnPortalPlane(minHorizontal, minZ),
-        pointOnPortalPlane(minHorizontal, maxZ),
-        pointOnPortalPlane(maxHorizontal, maxZ),
-        pointOnPortalPlane(maxHorizontal, minZ)
-    };
-    return true;
-}
-
-bool buildSharedSectorBoundaryPortalPolygon(
-    const IndoorMapData &mapData,
-    const IndoorFaceGeometryData &geometry,
-    int16_t sectorAId,
-    int16_t sectorBId,
-    std::vector<bx::Vec3> &portalPolygon)
-{
-    if (!geometry.hasPlane
-        || !portalNormalSupportsSharedBoundaryPolygon(geometry.normal)
-        || sectorAId < 0
-        || sectorBId < 0
-        || static_cast<size_t>(sectorAId) >= mapData.sectors.size()
-        || static_cast<size_t>(sectorBId) >= mapData.sectors.size())
-    {
-        return false;
-    }
-
-    const IndoorSector &sectorA = mapData.sectors[static_cast<size_t>(sectorAId)];
-    const IndoorSector &sectorB = mapData.sectors[static_cast<size_t>(sectorBId)];
-    float minFirst = 0.0f;
-    float maxFirst = 0.0f;
-    float minSecond = 0.0f;
-    float maxSecond = 0.0f;
-    portalPolygon.clear();
-    const int planeAxis = dominantAxis(geometry.normal);
-    const float planeCoordinate = averagePortalAxisCoordinate(geometry.vertices, planeAxis);
-
-    const auto appendXPlane =
-        [&portalPolygon](float x, float minY, float maxY, float minZ, float maxZ)
-    {
-        portalPolygon = {
-            {x, minY, minZ},
-            {x, minY, maxZ},
-            {x, maxY, maxZ},
-            {x, maxY, minZ}
-        };
-    };
-
-    const auto appendYPlane =
-        [&portalPolygon](float y, float minX, float maxX, float minZ, float maxZ)
-    {
-        portalPolygon = {
-            {minX, y, minZ},
-            {minX, y, maxZ},
-            {maxX, y, maxZ},
-            {maxX, y, minZ}
-        };
-    };
-
-    const auto appendZPlane =
-        [&portalPolygon](float z, float minX, float maxX, float minY, float maxY)
-    {
-        portalPolygon = {
-            {minX, minY, z},
-            {minX, maxY, z},
-            {maxX, maxY, z},
-            {maxX, minY, z}
-        };
-    };
-
-    if (planeAxis == 0
-        && rangeOverlap(sectorA.minY, sectorA.maxY, sectorB.minY, sectorB.maxY, minFirst, maxFirst)
-        && rangeOverlap(sectorA.minZ, sectorA.maxZ, sectorB.minZ, sectorB.maxZ, minSecond, maxSecond))
-    {
-        appendXPlane(planeCoordinate, minFirst, maxFirst, minSecond, maxSecond);
-        return true;
-    }
-
-    if (planeAxis == 1
-        && rangeOverlap(sectorA.minX, sectorA.maxX, sectorB.minX, sectorB.maxX, minFirst, maxFirst)
-        && rangeOverlap(sectorA.minZ, sectorA.maxZ, sectorB.minZ, sectorB.maxZ, minSecond, maxSecond))
-    {
-        appendYPlane(planeCoordinate, minFirst, maxFirst, minSecond, maxSecond);
-        return true;
-    }
-
-    if (planeAxis == 2
-        && rangeOverlap(sectorA.minX, sectorA.maxX, sectorB.minX, sectorB.maxX, minFirst, maxFirst)
-        && rangeOverlap(sectorA.minY, sectorA.maxY, sectorB.minY, sectorB.maxY, minSecond, maxSecond))
-    {
-        appendZPlane(planeCoordinate, minFirst, maxFirst, minSecond, maxSecond);
-        return true;
-    }
-
-    return false;
-}
-
-bool portalPolygonBehindCamera(
-    const std::vector<bx::Vec3> &portalPolygon,
-    const bx::Vec3 &cameraPosition,
-    const bx::Vec3 &cameraForward)
-{
-    if (portalPolygon.empty())
-    {
-        return true;
-    }
-
-    const bx::Vec3 forward = normalizeVec(cameraForward);
-
-    for (const bx::Vec3 &point : portalPolygon)
-    {
-        if (dotVec(forward, subtractVec(point, cameraPosition)) >= -NearPortalSlack)
-        {
-            return false;
-        }
-    }
-
-    return true;
 }
 
 bool sectorHasPortalGraphLinks(const IndoorPortalGraph &portalGraph, int16_t sectorId)
@@ -715,8 +452,6 @@ IndoorPortalVisibilityResult buildIndoorPortalVisibility(const IndoorPortalVisib
     }
 
     const IndoorMapData &mapData = *input.pMapData;
-    const std::vector<IndoorVertex> &portalVertices =
-        input.pPortalVertices != nullptr ? *input.pPortalVertices : *input.pVertices;
     IndoorPortalGraph localPortalGraph = {};
     const IndoorPortalGraph *pPortalGraph = input.pPortalGraph;
 
@@ -727,15 +462,20 @@ IndoorPortalVisibilityResult buildIndoorPortalVisibility(const IndoorPortalVisib
     }
 
     const std::vector<IndoorVisibilityPlane> rootFrustumPlanes = buildCameraFrustumPlanes(input);
-
+    const bx::Vec3 forward = normalizeVec(input.cameraForward);
+    const bx::Vec3 right = normalizeVec(crossVec(forward, input.cameraUp));
+    const bx::Vec3 up = normalizeVec(crossVec(right, forward));
+    const float projectionScale = input.viewportHeight * 0.5f
+        / std::tan(input.verticalFovDegrees * 3.14159265358979323846f / 360.0f);
+    const IndoorVisibilityPlane nearClipPlane = {
+        forward, -dotVec(forward, input.cameraPosition) - PortalNearClipDistance
+    };
     result.visibleSectorMask.assign(mapData.sectors.size(), 0);
     result.nodeIndicesBySector.resize(mapData.sectors.size());
     result.frustumsBySector.resize(mapData.sectors.size());
     result.nodes.reserve(std::min<size_t>(input.maxNodes, mapData.sectors.size() * 2 + 1));
 
     appendRootVisibilityNode(result, input.startSectorId, rootFrustumPlanes);
-
-    IndoorFaceGeometryCache geometryCache(mapData.faces.size());
 
     for (size_t nodeIndex = 0; nodeIndex < result.nodes.size(); ++nodeIndex)
     {
@@ -745,7 +485,6 @@ IndoorPortalVisibilityResult buildIndoorPortalVisibility(const IndoorPortalVisib
         }
 
         const IndoorVisibilityNode currentNode = result.nodes[nodeIndex];
-
         if (currentNode.depth >= input.maxDepth
             || currentNode.sectorId < 0
             || static_cast<size_t>(currentNode.sectorId) >= mapData.sectors.size())
@@ -760,8 +499,7 @@ IndoorPortalVisibilityResult buildIndoorPortalVisibility(const IndoorPortalVisib
 
         const IndoorSectorPortalCache &sectorCache =
             pPortalGraph->sectors[static_cast<size_t>(currentNode.sectorId)];
-        std::vector<bx::Vec3> sharedBoundaryPortalPolygon;
-        sharedBoundaryPortalPolygon.reserve(4);
+        std::vector<bx::Vec3> portalPolygon;
 
         for (uint16_t portalLinkId : sectorCache.portalLinkIds)
         {
@@ -868,151 +606,91 @@ IndoorPortalVisibilityResult buildIndoorPortalVisibility(const IndoorPortalVisib
                 continue;
             }
 
-            const IndoorFaceGeometryData *pGeometry =
-                geometryCache.geometryForFace(mapData, portalVertices, static_cast<size_t>(faceId));
-
-            if (pGeometry == nullptr || pGeometry->vertices.size() < 3)
+            // Door movement changes the aperture, not its authored front/back orientation.
+            // Use the current vertices with the original face normal, as MM8 does.
+            portalPolygon.clear();
+            for (uint16_t vertexId : face.vertexIndices)
+            {
+                if (vertexId >= input.pVertices->size())
+                {
+                    portalPolygon.clear();
+                    break;
+                }
+                portalPolygon.push_back(indoorVertexToWorld((*input.pVertices)[vertexId]));
+            }
+            bx::Vec3 planeNormal = {0.0f, 0.0f, 0.0f};
+            if (face.planeNormal)
+            {
+                planeNormal = normalizeVec({float((*face.planeNormal)[0]), float((*face.planeNormal)[1]),
+                    float((*face.planeNormal)[2])});
+            }
+            else
+            {
+                IndoorFaceGeometryData geometry = {};
+                if (buildIndoorFaceGeometry(mapData, mapData.vertices, faceId, geometry))
+                {
+                    planeNormal = geometry.normal;
+                }
+            }
+            if (portalPolygon.size() < 3 || lengthVec(planeNormal) <= VisibilityEpsilon)
             {
                 ++result.rejectedPortalCount;
                 ++result.invalidPortalCount;
                 appendPortalTrace(
-                    result,
-                    input.collectPortalTraces,
-                    currentNode.sectorId,
-                    connectedSectorId,
-                    faceId,
-                    portalLinkId,
-                    currentNode.depth,
-                    false,
-                    pGeometry == nullptr ? "missing_geometry" : "small_geometry");
+                    result, input.collectPortalTraces, currentNode.sectorId, connectedSectorId,
+                    faceId, portalLinkId, currentNode.depth, false, "invalid_portal_geometry");
                 continue;
             }
 
-            sharedBoundaryPortalPolygon.clear();
-            const std::vector<bx::Vec3> *pVisibilityPortalPolygon = &pGeometry->vertices;
-            bool usingSharedBoundaryPortalPolygon = false;
-
-            if (buildSharedSectorBoundaryPortalPolygon(
-                    mapData,
-                    *pGeometry,
-                    currentNode.sectorId,
-                    connectedSectorId,
-                    sharedBoundaryPortalPolygon))
+            float planeSide = dotVec(planeNormal, subtractVec(portalPolygon.front(), input.cameraPosition));
+            // MM8's full-view exception applies only at the initial node, within 9 units of
+            // the portal plane and its bounds expanded by 16 units.
+            const bool nearPortal = nodeIndex == 0
+                && std::fabs(planeSide) <= NearPortalPlaneDistance
+                && cameraNearPortal(input.cameraPosition, portalPolygon);
+            if (currentNode.sectorId != face.roomNumber)
             {
-                pVisibilityPortalPolygon = &sharedBoundaryPortalPolygon;
-                usingSharedBoundaryPortalPolygon = true;
+                planeSide = -planeSide;
             }
-            else if (buildDegenerateVerticalPortalBoundaryPolygon(
-                    mapData,
-                    *pGeometry,
-                    currentNode.sectorId,
-                    connectedSectorId,
-                    sharedBoundaryPortalPolygon))
-            {
-                pVisibilityPortalPolygon = &sharedBoundaryPortalPolygon;
-                usingSharedBoundaryPortalPolygon = true;
-            }
-
-            const std::vector<bx::Vec3> &visibilityPortalPolygon = *pVisibilityPortalPolygon;
-            const bool nearPortal = cameraNearPortal(input.cameraPosition, visibilityPortalPolygon);
-
-            if (!nearPortal
-                && portalPolygonBehindCamera(visibilityPortalPolygon, input.cameraPosition, input.cameraForward))
+            if (!nearPortal && planeSide >= 0.0f)
             {
                 ++result.rejectedPortalCount;
                 ++result.directionRejectedPortalCount;
                 appendPortalTrace(
-                    result,
-                    input.collectPortalTraces,
-                    currentNode.sectorId,
-                    connectedSectorId,
-                    faceId,
-                    portalLinkId,
-                    currentNode.depth,
-                    false,
-                    "behind_camera");
+                    result, input.collectPortalTraces, currentNode.sectorId, connectedSectorId,
+                    faceId, portalLinkId, currentNode.depth, false, "portal_facing");
                 continue;
             }
 
-            const bool recoverDegenerateChildFrustum =
-                currentNode.depth <= DegenerateChildFrustumRecoveryMaxDepth;
-            std::vector<bx::Vec3> clippedPortal =
-                nearPortal
-                ? visibilityPortalPolygon
-                : clipPolygonToFrustum(visibilityPortalPolygon, currentNode.frustumPlanes);
-            bool recoveredClippedPortal = false;
-
-            if (clippedPortal.size() < 3)
-            {
-                const float clippedPortalRecoverySlack =
-                    usingSharedBoundaryPortalPolygon
-                    ? SharedBoundaryClippedPortalRecoverySlack
-                    : ClippedPortalRecoverySlack;
-                if (!nearPortal
-                    && (!usingSharedBoundaryPortalPolygon || currentNode.depth > 0)
-                    && recoverDegenerateChildFrustum
-                    && cameraNearPortal(input.cameraPosition, visibilityPortalPolygon, clippedPortalRecoverySlack))
-                {
-                    clippedPortal = visibilityPortalPolygon;
-                    recoveredClippedPortal = true;
-                }
-                else
-                {
-                    ++result.rejectedPortalCount;
-                    ++result.clippedPortalRejectedCount;
-                    appendPortalTrace(
-                        result,
-                        input.collectPortalTraces,
-                        currentNode.sectorId,
-                        connectedSectorId,
-                        faceId,
-                        portalLinkId,
-                        currentNode.depth,
-                        false,
-                        nearPortal
-                            ? "near_portal_small"
-                            : (usingSharedBoundaryPortalPolygon ? "clipped_shared_boundary" : "clipped_portal"));
-                    continue;
-                }
-            }
-
             std::vector<IndoorVisibilityPlane> childFrustumPlanes;
-            bool appendParentSectorFrustum = recoveredClippedPortal;
-            if (std::fabs(pGeometry->normal.z) > 0.999f || nearPortal)
+            if (nearPortal)
             {
                 childFrustumPlanes = rootFrustumPlanes;
             }
             else
             {
-                childFrustumPlanes = buildPortalFrustumPlanes(input.cameraPosition, clippedPortal);
-                if (childFrustumPlanes.size() < 3 && recoverDegenerateChildFrustum)
-                {
-                    appendParentSectorFrustum = true;
-                    childFrustumPlanes = buildPortalFrustumPlanes(input.cameraPosition, visibilityPortalPolygon);
-                }
-            }
-
-            if (childFrustumPlanes.size() < 3)
-            {
-                if (recoverDegenerateChildFrustum)
-                {
-                    childFrustumPlanes = currentNode.frustumPlanes;
-                    appendParentSectorFrustum = false;
-                }
-                else
+                // Reject an empty aperture instead of expanding it to adjoining sector bounds.
+                // The same clipping applies to horizontal portals and every traversal depth.
+                const std::vector<bx::Vec3> clippedPortal = clipPolygonToFrustum(
+                    clipPolygonToPlane(portalPolygon, nearClipPlane), currentNode.frustumPlanes);
+                if (!portalHasScreenHeight(clippedPortal, input.cameraPosition, forward, up,
+                        projectionScale, input.viewportHeight))
                 {
                     ++result.rejectedPortalCount;
                     ++result.clippedPortalRejectedCount;
                     appendPortalTrace(
-                        result,
-                        input.collectPortalTraces,
-                        currentNode.sectorId,
-                        connectedSectorId,
-                        faceId,
-                        portalLinkId,
-                        currentNode.depth,
-                        false,
-                        "child_frustum_small");
+                        result, input.collectPortalTraces, currentNode.sectorId, connectedSectorId,
+                        faceId, portalLinkId, currentNode.depth, false, "clipped_portal");
+                    continue;
+                }
+                childFrustumPlanes = buildPortalFrustumPlanes(input.cameraPosition, clippedPortal);
+                if (childFrustumPlanes.size() < 3)
+                {
+                    ++result.rejectedPortalCount;
+                    ++result.clippedPortalRejectedCount;
+                    appendPortalTrace(
+                        result, input.collectPortalTraces, currentNode.sectorId, connectedSectorId,
+                        faceId, portalLinkId, currentNode.depth, false, "clipped_portal");
                     continue;
                 }
             }
@@ -1028,10 +706,6 @@ IndoorPortalVisibilityResult buildIndoorPortalVisibility(const IndoorPortalVisib
             result.nodes.push_back(std::move(childNode));
             result.nodeIndicesBySector[static_cast<size_t>(connectedSectorId)].push_back(childNodeIndex);
             appendUniqueSectorFrustum(result, connectedSectorId, result.nodes.back().frustumPlanes);
-            if (appendParentSectorFrustum)
-            {
-                appendUniqueSectorFrustum(result, connectedSectorId, currentNode.frustumPlanes);
-            }
             result.visibleSectorMask[static_cast<size_t>(connectedSectorId)] = 1;
             appendAcceptedPortalVisibility(result, connectedSectorId, faceId);
             appendPortalTrace(
