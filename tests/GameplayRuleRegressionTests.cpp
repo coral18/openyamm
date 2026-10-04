@@ -6084,6 +6084,7 @@ TEST_CASE("interactive decoration rules cover MM6 and MM7 indoor loot decoration
     CHECK_EQ(largeBagSpec->family, OpenYAMM::Game::InteractiveDecorationFamily::LargeBag);
     CHECK_EQ(largeBagSpec->baseEventId, 1743u);
     CHECK_EQ(largeBagSpec->eventCount, 5u);
+    CHECK(largeBagSpec->hideWhenCleared);
     CHECK_EQ(OpenYAMM::Game::initialInteractiveDecorationState(largeBagSpec->family, 0u), 1u);
     CHECK_EQ(OpenYAMM::Game::initialInteractiveDecorationState(largeBagSpec->family, 3u), 4u);
 
@@ -6093,6 +6094,7 @@ TEST_CASE("interactive decoration rules cover MM6 and MM7 indoor loot decoration
     CHECK_EQ(smallBagSpec->family, OpenYAMM::Game::InteractiveDecorationFamily::LargeBag);
     CHECK_EQ(smallBagSpec->baseEventId, 1743u);
     CHECK_EQ(smallBagSpec->eventCount, 5u);
+    CHECK(smallBagSpec->hideWhenCleared);
 
     const std::optional<OpenYAMM::Game::InteractiveDecorationBindingSpec> bucketSpec =
         OpenYAMM::Game::resolveInteractiveDecorationBindingSpec(makeDecoration("Bucket", "bucket"), "Bucket");
@@ -6126,6 +6128,77 @@ TEST_CASE("interactive decoration rules cover MM6 and MM7 indoor loot decoration
     CHECK(mm8BeaconFireSpec->useSeededInitialState);
 
     CHECK_FALSE(OpenYAMM::Game::resolveInteractiveDecorationBindingSpec(makeDecoration("", "bag"), "").has_value());
+}
+
+TEST_CASE("MM6 one-shot bags clear after empty item and gold searches")
+{
+    const OpenYAMM::Tests::RegressionGameData &gameData = requireRegressionGameData();
+    OpenYAMM::Game::DecorationTable decorationTable;
+    REQUIRE(decorationTable.loadRows(loadSourceTabSeparatedRows("assets_dev/engine/data_tables/decoration_data.txt")));
+
+    const std::string globalSource =
+        loadSourceFileText("assets_dev/engine/scripts/common/event_support.lua") + "\n\n"
+        + loadSourceFileText("assets_dev/engine/events/Global.lua");
+    std::string globalError;
+    const std::optional<OpenYAMM::Game::ScriptedEventProgram> globalProgram =
+        OpenYAMM::Game::ScriptedEventProgram::loadFromLuaText(
+            globalSource,
+            "@events/Global.lua",
+            OpenYAMM::Game::ScriptedEventScope::Global,
+            globalError);
+    REQUIRE_MESSAGE(globalProgram.has_value(), globalError.c_str());
+
+    for (const std::string &internalName : {std::string{"bag01"}, std::string{"bag_A"}})
+    {
+        CAPTURE(internalName);
+        const OpenYAMM::Game::DecorationEntry *pDecoration = decorationTable.findByInternalName(internalName);
+        REQUIRE(pDecoration != nullptr);
+        const std::optional<OpenYAMM::Game::InteractiveDecorationBindingSpec> bindingSpec =
+            OpenYAMM::Game::resolveInteractiveDecorationBindingSpec(*pDecoration, internalName);
+        REQUIRE(bindingSpec.has_value());
+
+        for (uint8_t state = 0; state < bindingSpec->eventCount; ++state)
+        {
+            CAPTURE(state);
+            OpenYAMM::Game::Party party = {};
+            party.setItemTable(&gameData.itemTable);
+            party.setItemEnchantTables(&gameData.standardItemEnchantTable, &gameData.specialItemEnchantTable);
+            party.seed(createRegressionPartySeed());
+            const int initialGold = party.gold();
+            OpenYAMM::Game::EventRuntimeState runtimeState = {};
+            runtimeState.decorVars[0] = state;
+            CHECK_FALSE(OpenYAMM::Game::interactiveDecorationIsCleared(
+                state, bindingSpec->eventCount, bindingSpec->hideWhenCleared));
+
+            OpenYAMM::Game::EventRuntimeState::ActiveDecorationContext context = {};
+            context.decorVarIndex = 0;
+            context.baseEventId = bindingSpec->baseEventId;
+            context.currentEventId = static_cast<uint16_t>(bindingSpec->baseEventId + state);
+            context.eventCount = bindingSpec->eventCount;
+            context.hideWhenCleared = bindingSpec->hideWhenCleared;
+            runtimeState.activeDecorationContext = context;
+
+            OpenYAMM::Game::EventRuntime eventRuntime = {};
+            REQUIRE(eventRuntime.executeEventById(
+                std::nullopt, globalProgram, context.currentEventId, runtimeState, &party));
+            CHECK_EQ(runtimeState.decorVars[0], bindingSpec->eventCount);
+            CHECK(OpenYAMM::Game::interactiveDecorationIsCleared(
+                runtimeState.decorVars[0], bindingSpec->eventCount, bindingSpec->hideWhenCleared));
+            if (state == 0)
+            {
+                REQUIRE_EQ(runtimeState.statusMessages.size(), 1u);
+                CHECK_EQ(runtimeState.statusMessages.front(), "Empty bag");
+            }
+            else if (state == 4)
+            {
+                CHECK_GT(party.gold(), initialGold);
+            }
+            else
+            {
+                CHECK_EQ(runtimeState.grantedItems.size(), 1u);
+            }
+        }
+    }
 }
 
 TEST_CASE("indoor decoration activation can use global events without local id collisions")

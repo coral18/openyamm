@@ -4214,13 +4214,6 @@ void GameplayOverlayInputController::handleLootOverlayInput(
 
                 if (view.worldRuntime() != nullptr)
                 {
-                    if (view.audioSystem() != nullptr && view.worldRuntime()->activeChestView() != nullptr)
-                    {
-                        view.audioSystem()->playCommonSound(
-                            SoundId::ChestClose,
-                            GameAudioSystem::PlaybackGroup::Ui);
-                    }
-
                     view.worldRuntime()->closeActiveChestView();
                     view.worldRuntime()->closeActiveCorpseView();
                     view.closeInventoryNestedOverlay();
@@ -4546,13 +4539,6 @@ void GameplayOverlayInputController::handleLootOverlayInput(
             }
             else if (view.worldRuntime() != nullptr)
             {
-                if (view.audioSystem() != nullptr && view.worldRuntime()->activeChestView() != nullptr)
-                {
-                    view.audioSystem()->playCommonSound(
-                        SoundId::ChestClose,
-                        GameAudioSystem::PlaybackGroup::Ui);
-                }
-
                 view.worldRuntime()->closeActiveChestView();
                 view.worldRuntime()->closeActiveCorpseView();
                 view.interactionState().activateInspectLatch = true;

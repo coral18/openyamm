@@ -209,6 +209,7 @@ uint8_t interactiveDecorationEventCount(InteractiveDecorationFamily family)
 bool interactiveDecorationHidesWhenCleared(InteractiveDecorationFamily family)
 {
     return family == InteractiveDecorationFamily::FlourSack
+        || family == InteractiveDecorationFamily::LargeBag
         || family == InteractiveDecorationFamily::CampFire
         || family == InteractiveDecorationFamily::Crystal;
 }

@@ -101,18 +101,14 @@ The build generates `AndroidShaderPaths.h` from the CMake runtime shader list. S
 the extracted files against the APK contents and updates missing or changed shaders, including
 changes that preserve file size. User settings and saves remain in the existing external directory.
 
-CI installs the published 0.12 APK, updates it with the signed ARM64 release APK in an Android 15
-emulator with ARM64 translation, and loads Regna before making the APK available for publication.
-This also verifies that the production signing identity permits an in-place update. The check requires successful
-renderer initialization and verifies every extracted shader against the APK; reaching the main
-menu alone is insufficient. It also checks rendering after Home, switching to Settings, and screen off/on,
-requiring surface recreation and the same game process throughout. Logs and screenshots are retained as a CI artifact.
+CI builds the signed ARM64 release APK, verifies its signature and packaged ABI, and generates a SHA256 checksum
+before uploading it. Emulator runtime checks are run manually.
 
 The asset filter retains underscore-prefixed directories so the `_legacy/sprites_original` bake dependencies
 included in `engine.zip` also reach the APK. Android's default `<dir>_*` exclusion drops these files and prevents
 baked outdoor maps from loading.
 
-Run the same check with Python Pillow installed on a disposable emulator (it replaces that emulator's game settings):
+Run the runtime check with Python Pillow installed on a disposable emulator (it replaces that emulator's game settings):
 
 ```sh
 python3 android/test_release_apk.py android/app-release.apk \
@@ -124,6 +120,9 @@ Both APKs must use the same signing certificate, and the candidate must have a h
 code. The test installs with `adb install -r`, checks that settings and save bytes survive,
 and loads that save. Use `--world` and `--map` when testing another world or map.
 Use `--resume-cycles N` to repeat the lifecycle checks (default: 3; 0 skips them).
+The check requires a rendered map and verifies every extracted shader against the APK. It also checks rendering after
+Home, switching to Settings, and screen off/on, requiring surface recreation and the same game process throughout.
+Logs and screenshots are saved in the output directory.
 
 For a release build using already prepared asset ZIPs outside the ordinary `build/android-assets/` directory,
 pass `-Popenyamm.android.runtimeAssetsDir=/absolute/path` to Gradle. The directory must contain

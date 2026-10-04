@@ -28,8 +28,12 @@ If the public URL is omitted, builds still upload privately to Nextcloud and ski
 
 Nightlies go into `openyamm/nightly/<run-id>-<attempt>/`. Tags go into
 `openyamm/releases/<version>/<run-id>-<attempt>/`. Each attempt has its own directory, keeping published links
-and downloads intact while another build uploads. Tagged GitHub releases are still never overwritten.
-Old build directories remain available until the account owner removes them; the workflow does not prune them.
+and downloads intact while another build uploads. After a nightly upload and GitHub release update succeed,
+the workflow removes previous nightly run directories, retaining only the newly published build. A failed upload
+or publication keeps the previous nightly available. Tagged releases are retained and never pruned or overwritten.
+Deleted nightlies may remain in Nextcloud's Trash until its
+[trash retention policy](https://docs.nextcloud.com/server/24/admin_manual/configuration_files/trashbin_configuration.html)
+expires them; removing their public directories does not bypass that server policy.
 
 The uploader sends 64 MiB chunks using the
 [Nextcloud chunked WebDAV API](https://docs.nextcloud.com/server/24/developer_manual/client_apis/WebDAV/chunking.html),

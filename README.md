@@ -4,9 +4,8 @@ OpenYAMM is Open Yet Another Might and Magic: a modern C++ reimplementation of
 Might and Magic VI, VII, and VIII, inspired by MMMerge and built on an engine
 that started from Might and Magic VIII.
 
-The goal is to keep the original game data and gameplay feel while providing a
-clean, maintainable, cross-platform engine with modern rendering, audio, UI,
-save/load, tooling, and editor support.
+It uses the original game data with HD artwork, a new HUD and menus, modern
+rendering, and UX improvements.
 
 ## Status
 
@@ -14,22 +13,112 @@ OpenYAMM is playable across Might and Magic VI, VII, and VIII, including
 continent travel between the games. Windows, Linux, and Android builds are
 supported.
 
-Main stories, promotions, quests, mechanics, spells, travel, dialogue, shops,
-houses, chests, combat, projectiles, inventory, party state, save/load, audio,
-video, and UI systems are implemented. Development is still active, with ongoing
-work on polish, compatibility, tooling, and editor workflows.
+The games share combat, spells, dialogue, quests, inventory, party state, and
+save/load systems. Development is active, with ongoing work on gameplay
+compatibility, polish, tooling, and the editor.
 
 ## Features
 
-- C++20 codebase
-- SDL3 platform, input, and audio layer
-- bgfx renderer
-- PhysicsFS asset filesystem
-- FFmpeg-backed video playback
-- Lua-powered event scripts
-- tab-separated gameplay tables
-- YAML scene and UI layout data
-- unit and regression test coverage for gameplay systems
+- HD textures, items, equipment, portraits, and interface backgrounds
+- HD MM6 monsters
+- New Obsidian HUD, menus, inventory, dialogue, and journal screens
+- Indoor and outdoor water with reflections, lightmaps, and shadows
+- Modeled MM6 ships and HD decorations
+- Enemy health bars, floating damage, and party recovery indicators
+- Android touch controls and context actions
+
+## Screenshots
+
+**New HUD**
+
+![Obsidian gameplay HUD with a five-character party](res/showcase/gameplay-hud.webp)
+
+**HD items and inventory**
+
+![God Lich inventory and equipped paperdoll](res/showcase/inventory.webp)
+
+**Water and reflections**
+
+![Outdoor water with bridge and sailboat reflections](res/showcase/water-shoreline.webp)
+
+**HD MM6 monsters**
+
+![HD MM6 hydra variants](res/showcase/creatures-hydras.webp)
+
+**Android touch controls**
+
+![Android gameplay in New Sorpigal with touch controls](res/showcase/android-gameplay.webp)
+
+<details>
+<summary>More interface screenshots</summary>
+
+**Main menu**
+
+![New main menu](res/showcase/main-menu.webp)
+
+**Quest journal**
+
+![Quest journal with restored fonts and navigation icons](res/showcase/journal-quests.webp)
+
+**HD equipment**
+
+![HD plate armor and inventory items](res/showcase/equipment-plate.webp)
+
+**MM6 Town Portal**
+
+![HD Enroth Town Portal map](res/showcase/town-portal-mm6.webp)
+
+**MM8 Town Portal**
+
+![HD Jadame Town Portal map](res/showcase/town-portal-mm8.webp)
+
+**Recovery indicator and enemy health bars**
+
+![Party recovery indicator after an attack, with goblin health bars](res/showcase/hud-recovery-combat.webp)
+
+</details>
+
+<details>
+<summary>More rendering and combat screenshots</summary>
+
+**Indoor water**
+
+![Water and reflections in the Tomb of VARN](res/showcase/water-varn.webp)
+
+**Lightmaps and shadows**
+
+![Lightmaps and shadows around buildings and a timber gate](res/showcase/lighting-street.webp)
+
+**HD decorations**
+
+![HD flowers, trees, and stonework in New Sorpigal](res/showcase/world-decorations.webp)
+
+**Modeled MM6 ships**
+
+![Modeled MM6 ships at the harbor](res/showcase/world-ships.webp)
+
+**HD MM6 dragon**
+
+![HD MM6 red dragon](res/showcase/creatures-dragon.webp)
+
+**Floating damage**
+
+![Floating damage number above a Thunder Lizard](res/showcase/combat-floating-damage.webp)
+
+</details>
+
+<details>
+<summary>More Android screenshots</summary>
+
+**Shop interaction**
+
+![Touch targeting and the shop interaction button](res/showcase/android-shop.webp)
+
+**NPC interaction**
+
+![NPC target highlight and the conversation button](res/showcase/android-npc.webp)
+
+</details>
 
 ## Assets
 
@@ -47,7 +136,7 @@ assets_dev/
   worlds/mm6/         world-local maps and presentation
   worlds/mm7/
   worlds/mm8/
-  worlds/mmmerge/
+  worlds/mmmerge/     Merge-specific maps
 ```
 
 Runtime packages can be distributed as ZIP archives under:
@@ -69,12 +158,18 @@ The MM9 world payload is currently local and is excluded from the portable check
 
 ## Building
 
+The engine uses C++20, SDL3, bgfx, PhysicsFS, FFmpeg, and Lua. Gameplay tables
+use tab-separated text, and scene and UI layouts use YAML.
+
 Requirements:
 
-- CMake 3.24 or newer
+- CMake 3.22 or newer
 - C++20 compiler
-- Lua 5.3 or 5.4 development package
+- Git and Python 3.11 or newer
 - standard native build tools for your platform
+
+CMake fetches and builds the project dependencies, including Lua 5.4. A separate
+system Lua development package is not required.
 
 Configure and build:
 
@@ -109,7 +204,7 @@ Run the editor:
 ./build/editor/openyamm-editor
 ```
 
-## Screenshots and visual checks
+## Visual Checks
 
 For repeatable visual checks, see [Desktop runs and native screenshot tours](tools/RUN_GAME.md).
 The game can save PNGs directly through bgfx, including the HUD, on Wayland or X11. Use the debug
@@ -119,10 +214,11 @@ camera poses in one run. Ready-to-run MM6/MM7/MM8 water viewpoints are in
 
 ## Nightly Builds
 
-The [Nightly releases](https://github.com/pjasicek/openyamm/actions/workflows/nightly.yml) GitHub Actions workflow
+The [Package builds](https://github.com/pjasicek/openyamm/actions/workflows/nightly.yml) GitHub Actions workflow
 builds unsigned Windows x64, x86_64 Flatpak, and signed Android arm64 packages every day at 03:27 UTC. After all
 packages pass structural and checksum checks, the workflow uploads complete packages to Nextcloud and updates the
 [nightly prerelease](https://github.com/pjasicek/openyamm/releases/tag/nightly) with download links and checksums.
+Public release links are published once a public Nextcloud folder share is configured.
 See [Nextcloud publishing setup](packaging/NEXTCLOUD.md) for the repository secrets and public folder share.
 The same workflow can be run manually,
 with publishing optionally disabled so the packages remain short-lived workflow artifacts.
@@ -145,17 +241,17 @@ packaged game assets remains subject to the asset distribution rights noted in t
 
 ## Tagged Releases
 
-Pushing a canonical `X.Y` tag, such as `0.7`, runs the same validated package builds and creates a normal GitHub
-release for that tag. The release links to versioned Windows, Flatpak, and signed Android packages on Nextcloud
-and contains their SHA256 files.
+Pushing a canonical `X.Y` tag, such as `1.0`, runs the same validated package builds. With public Nextcloud
+publishing configured, it creates a normal GitHub release for that tag. The release links to versioned
+Windows, Flatpak, and signed Android packages on Nextcloud and contains their SHA256 files.
 The Android version name matches the tag; its monotonically increasing version code is calculated as
-`major * 10000 + minor * 100` (`0.7` becomes `700`).
+`major * 10000 + minor * 100` (`1.0` becomes `10000`).
 
 Create a release only after the workflow changes are present on the commit being tagged:
 
 ```sh
-git tag -a 0.7 -m "OpenYAMM 0.7"
-git push origin 0.7
+git tag -a 1.0 -m "OpenYAMM 1.0"
+git push origin 1.0
 ```
 
 The workflow rejects non-canonical versions, does not mark tagged releases as prereleases, and does not overwrite an
@@ -201,17 +297,6 @@ as required by the GPL. OpenYAMM is provided without warranty.
 Third-party dependencies retain their own licenses. Original Might and Magic assets, imported game data,
 and their converted or restored versions are not covered by the OpenYAMM code license; their distribution
 requires the appropriate rights from their respective rights holders.
-
-## Screenshots
-
-![Gameplay screenshot 1](res/ss_1.webp)
-![Gameplay screenshot 2](res/ss_2.webp)
-![Gameplay screenshot 3](res/ss_3.webp)
-![Gameplay screenshot 4](res/ss_4.webp)
-![Gameplay screenshot 5](res/ss_5.webp)
-![Gameplay screenshot 6](res/ss_6.webp)
-![Gameplay screenshot 7](res/ss_7.webp)
-![Gameplay screenshot 8](res/ss_8.webp)
 
 ## Editor Screenshots
 

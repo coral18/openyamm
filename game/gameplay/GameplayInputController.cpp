@@ -99,11 +99,6 @@ bool closeActiveLootViewFromEscape(GameplayScreenRuntime &context, IGameplayWorl
     }
     else
     {
-        if (worldRuntime.activeChestView() != nullptr)
-        {
-            context.playCommonUiSound(SoundId::ChestClose);
-        }
-
         worldRuntime.closeActiveChestView();
         worldRuntime.closeActiveCorpseView();
         context.interactionState().activateInspectLatch = true;

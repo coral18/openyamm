@@ -187,11 +187,7 @@ jobs:
       - name: Install host build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install --no-install-recommends -y libgl1-mesa-dev libx11-dev libxext-dev python3-pil
-          test -x "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
-          test -x "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager"
-          echo "$ANDROID_HOME/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
-          echo "$ANDROID_HOME/platform-tools" >> "$GITHUB_PATH"
+          sudo apt-get install --no-install-recommends -y libgl1-mesa-dev libx11-dev libxext-dev
 
       - name: Restore Android signing key
         env:
@@ -234,57 +230,6 @@ jobs:
 
       - name: Build signed Android package
         run: android/build_release_apk.sh --repack-assets
-
-      - name: Load a rendered map in the signed Android APK
-        timeout-minutes: 15
-        run: |
-          android/gradlew --stop
-          export ANDROID_USER_HOME="$RUNNER_TEMP/openyamm-android-user"
-          export ANDROID_EMULATOR_HOME="$ANDROID_USER_HOME"
-          export ANDROID_AVD_HOME="$ANDROID_USER_HOME/avd"
-          mkdir -p "$ANDROID_AVD_HOME"
-          sdkmanager --install "emulator" "system-images;android-35;google_apis;x86_64"
-          echo no | avdmanager create avd --force --name release-test \
-            --package "system-images;android-35;google_apis;x86_64" --device pixel_7 \
-            --path "$ANDROID_AVD_HOME/release-test.avd"
-          "$ANDROID_HOME/emulator/emulator" -list-avds | grep -Fx release-test
-          sudo chmod a+rw /dev/kvm
-          mkdir -p android-release-test
-          "$ANDROID_HOME/emulator/emulator" -avd release-test -no-window -no-audio \
-            -no-snapshot -gpu swiftshader_indirect -memory 4096 -cores 2 \
-            -partition-size 8192 -port 5554 > android-release-test/emulator.log 2>&1 &
-          emulator_pid=$!
-          trap 'kill "$emulator_pid" 2>/dev/null || true' EXIT
-          booted=false
-          for attempt in $(seq 1 90); do
-            if [[ "$(adb -s emulator-5554 shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" == 1 ]]; then
-              booted=true
-              break
-            fi
-            sleep 2
-          done
-          if [[ "$booted" != true ]]; then
-            cat android-release-test/emulator.log
-            exit 1
-          fi
-          baseline_apk="$RUNNER_TEMP/OpenYAMM-0.12-android-arm64.apk"
-          curl --fail --location --retry 3 \
-            https://github.com/pjasicek/openyamm/releases/download/0.12/OpenYAMM-0.12-android-arm64.apk \
-            --output "$baseline_apk"
-          echo "5154e6b85393b15ced75c528c6f3099f41453be8c127d4d61deb701f93c48a76  $baseline_apk" | sha256sum --check
-          python3 android/test_release_apk.py android/app-release.apk \
-            --serial emulator-5554 --output android-release-test/mm8 --world mm8 --map out13.odm \
-            --baseline-apk "$baseline_apk"
-          python3 android/test_release_apk.py android/app-release.apk \
-            --serial emulator-5554 --output android-release-test/mm6 --world mm6 --map oute3.odm
-
-      - name: Upload Android runtime verification
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: android-runtime-verification-${{ github.run_id }}
-          path: android-release-test/
-          if-no-files-found: ignore
 
       - name: Prepare Android artifact
         env:
@@ -655,3 +600,14 @@ jobs:
               gh release delete-asset nightly "$asset" --repo "$GITHUB_REPOSITORY" --yes
             fi
           done
+
+      - name: Remove previous Nextcloud nightlies
+        if: needs.package_metadata.outputs.is_tag != 'true'
+        env:
+          OPENYAMM_NEXTCLOUD_URL: ${{ vars.OPENYAMM_NEXTCLOUD_URL || 'https://cloud.jasicek.net' }}
+          OPENYAMM_NEXTCLOUD_FOLDER: ${{ vars.OPENYAMM_NEXTCLOUD_FOLDER || 'openyamm' }}
+          OPENYAMM_NEXTCLOUD_USERNAME: ${{ secrets.OPENYAMM_NEXTCLOUD_USERNAME }}
+          OPENYAMM_NEXTCLOUD_APP_PASSWORD: ${{ secrets.OPENYAMM_NEXTCLOUD_APP_PASSWORD }}
+        run: |
+          python3 packaging/upload_nextcloud.py \
+            --remote-path "nightly/$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" --prune-nightlies

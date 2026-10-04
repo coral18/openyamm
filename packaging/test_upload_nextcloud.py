@@ -111,6 +111,45 @@ class UploadTest(unittest.TestCase):
                     uploader.upload_file(source, "https://cloud.jasicek.net/destination",
                                          "https://cloud.jasicek.net/uploads", "Basic private")
 
+    def test_nightly_cleanup_preserves_current_and_unrelated_content(self):
+        nightly = "https://cloud.jasicek.net/remote.php/dav/files/build%20user/openyamm/nightly"
+        entries = [
+            (nightly + "/", True),
+            (nightly + "/41-1/", True),
+            (nightly + "/41-2/", True),
+            (nightly + "/42-1/", True),
+            (nightly + "/40-1", False),
+            (nightly + "/notes/", True),
+            (nightly + "/40-2/child/", True),
+            (nightly + "/%2e%2e/releases/", True),
+            (nightly.replace("/nightly", "/releases") + "/41-1/", True),
+        ]
+        xml = '<d:multistatus xmlns:d="DAV:">'
+        for href, directory in entries:
+            resource = "<d:collection/>" if directory else ""
+            xml += (f"<d:response><d:href>{href}</d:href><d:propstat><d:prop>"
+                    f"<d:resourcetype>{resource}</d:resourcetype></d:prop>"
+                    "<d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response>")
+        xml += "</d:multistatus>"
+        deleted = []
+
+        def respond(method, url, authorization, **kwargs):
+            if method == "PROPFIND":
+                return xml.encode()
+            self.assertEqual(method, "DELETE")
+            deleted.append(url)
+
+        with patch.object(uploader, "request", respond), redirect_stdout(io.StringIO()):
+            uploader.prune_nightlies(nightly, "42-1", "Basic private")
+        self.assertEqual(deleted, [nightly + "/41-1", nightly + "/41-2"])
+
+    def test_nightly_cleanup_refuses_to_remove_last_build_if_replacement_is_missing(self):
+        listing = b'<d:multistatus xmlns:d="DAV:"/>'
+        with patch.object(uploader, "request", return_value=listing) as request:
+            with self.assertRaisesRegex(RuntimeError, "Current nightly folder is missing"):
+                uploader.prune_nightlies("https://cloud.jasicek.net/nightly", "42-1", "Basic private")
+        self.assertEqual(request.call_count, 1)
+
 
 if __name__ == "__main__":
     unittest.main()

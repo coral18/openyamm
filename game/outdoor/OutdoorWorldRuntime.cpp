@@ -4748,7 +4748,7 @@ void OutdoorWorldRuntime::activateChestView(uint32_t chestId)
         }
     }
 
-    if (m_pParty != nullptr && m_pParty->hasPartyBuff(PartyBuffId::Invisibility))
+    if (m_pParty != nullptr)
     {
         m_pParty->requestSound(SoundId::OpenChest);
     }
