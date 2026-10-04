@@ -19,7 +19,7 @@ void main()
     vec3 normal = waterWaveNormal(uv, baseNormal, tangent, bitangent, 0.95);
 #if WATER_MOVEMENT_RIPPLES
     float movementSheen;
-    normal = waterMovementNormal(normal, baseNormal, movementSheen);
+    normal = waterMovementNormal(v_worldPosition, normal, baseNormal, movementSheen);
 #endif
     vec3 viewDirection = normalize(u_cameraPosition.xyz - v_worldPosition);
     if (dot(normal, viewDirection) < 0.0)
@@ -56,7 +56,7 @@ void main()
     // A dungeon has no daylight sky response; unreflected pools retain their room illumination.
     // Stronger pond ripples still fit the existing reflection guard band and scissor budget.
     vec2 distortion = clamp(normal.xy * 0.05, vec2_splat(-0.014), vec2_splat(0.014));
-    vec3 reflected = waterReflection(distortion, waterColor);
+    vec3 reflected = waterReflection(v_worldPosition, distortion, waterColor);
     vec3 color = mix(waterColor, reflected, waterFresnel(normal, viewDirection)) + highlights;
 #if WATER_MOVEMENT_RIPPLES
     color += vec3(0.85, 0.92, 1.0) * movementSheen;

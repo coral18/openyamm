@@ -39,11 +39,11 @@ void main()
         vec3(1.0, 0.0, 0.0), vec3(0.0, 1.0, 0.0), 0.35 + u_waterParams.w * 0.15);
 #if WATER_MOVEMENT_RIPPLES
     float movementSheen;
-    normal = waterMovementNormal(normal, normalize(v_worldNormal), movementSheen);
+    normal = waterMovementNormal(v_worldPosition, normal, normalize(v_worldNormal), movementSheen);
 #endif
     vec3 viewDirection = normalize(u_cameraPosition.xyz - v_worldPosition);
     float fresnel = waterFresnel(normal, viewDirection);
-    vec3 reflected = waterReflection(normal.xy * 0.014, u_waterSkyColor.rgb);
+    vec3 reflected = waterReflection(v_worldPosition, normal.xy * 0.014, u_waterSkyColor.rgb);
 
     // The material tint retains native colour without its repeating animated pattern.
     // Ambient light still dims the water body at night; waves come from the normal map.

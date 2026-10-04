@@ -285,7 +285,10 @@ stage_flatpak_assets()
     if [ ! -f "$host_build_dir/CMakeCache.txt" ]; then
         cmake -S "$repo_root" -B "$host_build_dir" -DCMAKE_BUILD_TYPE=Release \
             -DOPENYAMM_BUILD_TESTS=OFF -DOPENYAMM_BUILD_EDITOR=OFF -DOPENYAMM_BUILD_TOOLS=OFF \
-            -DOPENYAMM_BUILD_DESKTOP_EXECUTABLE=OFF
+            -DOPENYAMM_BUILD_DESKTOP_EXECUTABLE=OFF \
+            -DSDL_ALSA=OFF -DSDL_JACK=OFF -DSDL_KMSDRM=OFF -DSDL_PIPEWIRE=OFF \
+            -DSDL_PULSEAUDIO=OFF -DSDL_SNDIO=OFF -DSDL_UNIX_CONSOLE_BUILD=ON \
+            -DSDL_WAYLAND=OFF -DSDL_X11=OFF
     fi
     cmake --build "$host_build_dir" --target openyamm_sprite_atlas_cook --parallel "$build_jobs"
     python3 "$repo_root/tools/package_runtime_assets.py" \

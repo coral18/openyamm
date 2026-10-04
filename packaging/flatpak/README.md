@@ -29,6 +29,16 @@ The build script uses the online CPU count minus two parallel jobs by default. O
 packaging/flatpak/build_flatpak.sh --jobs=8
 ```
 
+To create the bundle from an already completed export without repeating the build or installation:
+
+```sh
+packaging/flatpak/build_flatpak.sh --bundle-only
+```
+
+Use the original `--output-dir`, `--repo-dir` and `--branch` options when they differ from the defaults.
+The wrapper parses the whole workflow before execution so edits to the script during a long build cannot
+change the commands read when the builder finishes.
+
 Clean local Flatpak build output and legacy `.flatpak-builder` state:
 
 ```sh

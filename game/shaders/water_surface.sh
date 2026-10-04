@@ -26,12 +26,12 @@ float waterFresnel(vec3 normal, vec3 viewDirection)
 }
 
 // Callers bound normalized UV distortion to +/- 0.014, matching the capture/scissor margin.
-vec3 waterReflection(vec2 distortion, vec3 fallback)
+vec3 waterReflection(vec3 worldPosition, vec2 distortion, vec3 fallback)
 {
     vec3 reflected = fallback;
     if (u_waterParams.y > 0.5)
     {
-        vec4 reflectionClip = mul(u_waterReflectionMatrix, vec4(v_worldPosition, 1.0));
+        vec4 reflectionClip = mul(u_waterReflectionMatrix, vec4(worldPosition, 1.0));
         vec2 reflectionUv = reflectionClip.xy / max(reflectionClip.w, 0.0001);
         reflectionUv = reflectionUv * vec2(0.5, 0.5 * u_waterParams.z) + vec2_splat(0.5);
         // Guarded captures use a wider projection at the same pixel density.
@@ -49,7 +49,7 @@ vec3 waterReflection(vec2 distortion, vec3 fallback)
 uniform vec4 u_waterRippleRings[4];
 uniform vec4 u_waterRippleParams;
 
-vec3 waterMovementNormal(vec3 normal, vec3 baseNormal, out float sheen)
+vec3 waterMovementNormal(vec3 worldPosition, vec3 normal, vec3 baseNormal, out float sheen)
 {
     vec2 displacement = vec2_splat(0.0);
     sheen = 0.0;
@@ -60,7 +60,7 @@ vec3 waterMovementNormal(vec3 normal, vec3 baseNormal, out float sheen)
             break;
         }
         vec4 ring = u_waterRippleRings[i];
-        vec2 delta = v_worldPosition.xy - ring.xy;
+        vec2 delta = worldPosition.xy - ring.xy;
         float distanceSquared = dot(delta, delta);
         float inner = ring.z - 10.0;
         float outer = ring.z + 10.0;
