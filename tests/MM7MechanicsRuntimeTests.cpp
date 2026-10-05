@@ -10,7 +10,11 @@
 #include "game/gameplay/StealingRuntime.h"
 #include "game/items/InventoryItemUseRuntime.h"
 #include "game/items/ItemRuntime.h"
+#include "game/items/PriceCalculator.h"
 #include "game/party/Party.h"
+#include "game/maps/SaveGame.h"
+#include "game/party/SpellIds.h"
+#include "game/party/PartySpellSystem.h"
 #include "game/tables/MergedBaseTables.h"
 
 #include "tests/RegressionGameData.h"
@@ -413,13 +417,13 @@ TEST_CASE("MMerge follower bonuses expose skill, gold, food, and item-service ef
     state.hiredNpcFollowers.push_back({1003, 32, 300});
     state.hiredNpcFollowers.push_back({1004, 4, 100});
 
-    CHECK_EQ(hiredNpcSkillBonus(state, "Learning"), 20);
+    CHECK_EQ(hiredNpcSkillBonus(state.hiredNpcFollowers, "Learning"), 20);
     CHECK_EQ(hiredNpcRestFoodReduction(state), 2);
     CHECK_EQ(hiredNpcGoldFindBonusPercent(state), 20u);
     CHECK_EQ(totalHiredNpcFollowerFeePercent(state), 7u);
     CHECK_EQ(hiredNpcGoldAfterBonusAndFees(1000, state), 1116u);
-    CHECK(hiredNpcCanIdentifyItemKind(state, "Ring"));
-    CHECK_FALSE(hiredNpcCanRepairItemKind(state, "Armor"));
+    CHECK(hiredNpcHasProfession(state.hiredNpcFollowers, 4));
+    CHECK_FALSE(hiredNpcCanRepairItemKind(state.hiredNpcFollowers, "Armor"));
 }
 
 TEST_CASE("MMerge follower luck and resistance bonuses are visible in character summaries")
@@ -431,13 +435,15 @@ TEST_CASE("MMerge follower luck and resistance bonuses are visible in character 
     member.baseResistances.water = 7;
     member.baseResistances.earth = 8;
 
-    EventRuntimeState state = {};
-    state.hiredNpcFollowers.push_back({1001, 27, 100});
-    state.hiredNpcFollowers.push_back({1002, 37, 100});
+    PartySeed seed = {};
+    seed.members.push_back(member);
+    Party party;
+    party.seed(seed);
+    party.addHiredNpcFollower({1001, 27, 100});
+    party.addHiredNpcFollower({1002, 37, 100});
 
-    const CharacterSheetSummary summary =
-        GameMechanics::buildCharacterSheetSummary(member, nullptr, nullptr, nullptr, &state);
-    CHECK_EQ(summary.luck.actual, 20);
+    const CharacterSheetSummary summary = GameMechanics::buildCharacterSheetSummary(*party.member(0), nullptr);
+    CHECK_EQ(summary.luck.actual, 15);
     CHECK_EQ(summary.luck.base, 10);
     CHECK_EQ(summary.fireResistance.actual, 25);
     CHECK_EQ(summary.airResistance.actual, 26);
@@ -602,6 +608,7 @@ TEST_CASE("MMerge follower identify and repair helpers are shop service consumer
     runtimeState.hiredNpcFollowers.push_back({1001, 4, 100});
     runtimeState.hiredNpcFollowers.push_back({1002, 2, 100});
 
+    const int initialGold = party.gold();
     std::string statusText;
     HouseServiceRuntime::ShopItemServiceResult serviceResult = HouseServiceRuntime::ShopItemServiceResult::None;
 
@@ -619,6 +626,7 @@ TEST_CASE("MMerge follower identify and repair helpers are shop service consumer
         0,
         &runtimeState));
     CHECK(serviceResult == HouseServiceRuntime::ShopItemServiceResult::Success);
+    CHECK_EQ(party.gold(), initialGold);
 
     CHECK(HouseServiceRuntime::tryRepairInventoryItem(
         party,
@@ -634,4 +642,258 @@ TEST_CASE("MMerge follower identify and repair helpers are shop service consumer
         0,
         &runtimeState));
     CHECK(serviceResult == HouseServiceRuntime::ShopItemServiceResult::Success);
+    CHECK_EQ(party.gold(), initialGold);
+}
+
+TEST_CASE("hireling skill bonuses reach character gameplay values and disappear on dismissal")
+{
+    REQUIRE(OpenYAMM::Tests::regressionGameDataLoaded());
+    const OpenYAMM::Tests::RegressionGameData &data = OpenYAMM::Tests::regressionGameData();
+    Party party = makeOneMemberParty();
+    party.setItemTable(&data.itemTable);
+    Character *pMember = party.member(0);
+    pMember->skills["Merchant"] = {"Merchant", 1, SkillMastery::Expert};
+    pMember->skills["Perception"] = {"Perception", 1, SkillMastery::Expert};
+    pMember->skills["DisarmTraps"] = {"DisarmTraps", 1, SkillMastery::Expert};
+    pMember->skills["Sword"] = {"Sword", 1, SkillMastery::Normal};
+    pMember->skills["PlateArmor"] = {"PlateArmor", 1, SkillMastery::Normal};
+    pMember->equipment.mainHand = findFirstItemIdByEquipStat(data.itemTable, "Weapon", false);
+    REQUIRE(pMember->equipment.mainHand != 0);
+    const std::string weaponSkill = data.itemTable.get(pMember->equipment.mainHand)->skillGroup;
+    pMember->skills[weaponSkill] = {weaponSkill, 1, SkillMastery::Normal};
+    const CharacterSheetSummary before = GameMechanics::buildCharacterSheetSummary(*pMember, &data.itemTable);
+    const int merchantBefore = PriceCalculator::playerMerchant(pMember, 0);
+
+    party.addHiredNpcFollower({1001, 21, 200});
+    party.addHiredNpcFollower({1002, 22, 300});
+    party.addHiredNpcFollower({1003, 26, 300});
+    party.addHiredNpcFollower({1004, 46, 600});
+    CHECK_EQ(PriceCalculator::playerMerchant(pMember, 0), merchantBefore + 12);
+    CHECK_EQ(party.bestPartyWideUtilitySkillValue("Perception"), 14);
+    CHECK_EQ(party.bestPartyWideUtilitySkillValue("DisarmTraps"), 14);
+    CHECK_EQ(pMember->skillBonus("PlateArmor"), 2);
+    CHECK_EQ(pMember->skillBonus("Sword"), 2);
+    const CharacterSheetSummary after = GameMechanics::buildCharacterSheetSummary(*pMember, &data.itemTable);
+    CHECK(after.combat.attack > before.combat.attack);
+
+    Party restored;
+    restored.setItemTable(&data.itemTable);
+    restored.restoreSnapshot(party.snapshot());
+    CHECK_EQ(restored.member(0)->skillBonus("Sword"), 2);
+    for (uint32_t npcId = 1001; npcId <= 1004; ++npcId)
+    {
+        party.removeHiredNpcFollower(npcId);
+        restored.removeHiredNpcFollower(npcId);
+    }
+    CHECK_EQ(PriceCalculator::playerMerchant(pMember, 0), merchantBefore);
+    CHECK_EQ(party.bestPartyWideUtilitySkillValue("DisarmTraps"), 2);
+    CHECK_EQ(pMember->skillBonus("Sword"), 0);
+    CHECK_EQ(restored.member(0)->skillBonus("Sword"), 0);
+}
+
+TEST_CASE("hireling profession bonuses match the merged descriptions")
+{
+    struct SkillBonusCase
+    {
+        uint32_t professionId;
+        const char *pSkill;
+        int bonus;
+    };
+    const SkillBonusCase cases[] = {
+        {4, "Learning", 5}, {13, "Learning", 10}, {14, "Learning", 15},
+        {15, "Sword", 2}, {16, "Sword", 3}, {17, "FireMagic", 2}, {18, "BodyMagic", 3},
+        {19, "DarkMagic", 4}, {20, "Merchant", 4}, {21, "Merchant", 6}, {22, "Perception", 6},
+        {25, "DisarmTraps", 4}, {26, "DisarmTraps", 6}, {46, "PlateArmor", 2},
+        {47, "Perception", 5}, {48, "Merchant", 3}, {49, "Merchant", 4},
+        {50, "Merchant", 8}, {51, "DisarmTraps", 8},
+    };
+    for (const SkillBonusCase &entry : cases)
+    {
+        CAPTURE(entry.professionId);
+        Party party = makeOneMemberParty();
+        party.addHiredNpcFollower({1001, entry.professionId, 100});
+        CHECK_EQ(party.member(0)->skillBonus(entry.pSkill), entry.bonus);
+        party.refreshDerivedState();
+        CHECK_EQ(party.member(0)->skillBonus(entry.pSkill), entry.bonus);
+        party.removeHiredNpcFollower(1001);
+        CHECK_EQ(party.member(0)->skillBonus(entry.pSkill), 0);
+    }
+    for (uint32_t professionId : {4u, 13u, 14u})
+    {
+        Party party = makeOneMemberParty();
+        party.member(0)->skills["Learning"] = {"Learning", 1, SkillMastery::Grandmaster};
+        party.addHiredNpcFollower({1001, professionId, 100});
+        const int bonus = professionId == 4 ? 5 : professionId == 13 ? 10 : 15;
+        CHECK_EQ(party.grantSharedExperience(100), 114u + bonus);
+        CHECK_EQ(party.member(0)->experience, 114u + bonus);
+    }
+}
+
+TEST_CASE("hireling luck and elemental resistance reduce actual incoming damage")
+{
+    Party party = makeOneMemberParty();
+    auto totalDamage = [&party](CombatDamageType type)
+    {
+        std::mt19937 rng(91);
+        int damage = 0;
+        for (int roll = 0; roll < 1000; ++roll)
+        {
+            damage += GameMechanics::resolveCharacterIncomingDamage(
+                *party.member(0), nullptr, nullptr, nullptr, 100, type, rng);
+        }
+        return damage;
+    };
+    const int baselineFire = totalDamage(CombatDamageType::Fire);
+    const int baselinePhysical = totalDamage(CombatDamageType::Physical);
+    party.addHiredNpcFollower({1001, 37, 1000});
+    CHECK(totalDamage(CombatDamageType::Fire) < baselineFire);
+    CHECK_EQ(totalDamage(CombatDamageType::Physical), baselinePhysical);
+    party.addHiredNpcFollower({1002, 28, 200});
+    CHECK(totalDamage(CombatDamageType::Physical) < baselinePhysical);
+    party.removeHiredNpcFollower(1001);
+    party.removeHiredNpcFollower(1002);
+    CHECK_EQ(totalDamage(CombatDamageType::Fire), baselineFire);
+    CHECK_EQ(totalDamage(CombatDamageType::Physical), baselinePhysical);
+    party.addHiredNpcFollower({1003, 47, 400});
+    CHECK_EQ(GameMechanics::buildCharacterSheetSummary(*party.member(0), nullptr).luck.actual, 20);
+}
+
+TEST_CASE("Cartographer maintains expert Wizard Eye without overwriting real spell buffs")
+{
+    Party party = makeOneMemberParty();
+    party.addHiredNpcFollower({1001, 38, 200});
+    REQUIRE(party.hasPartyBuff(PartyBuffId::WizardEye));
+    CHECK_EQ(party.partyBuff(PartyBuffId::WizardEye)->skillMastery, SkillMastery::Expert);
+    party.advanceTimedStates(24.0f * 3600.0f);
+    CHECK(party.hasPartyBuff(PartyBuffId::WizardEye));
+    party.applyPartyBuff(PartyBuffId::WizardEye, 3600, 0, 19, 10, SkillMastery::Master, 0);
+    CHECK_EQ(party.partyBuff(PartyBuffId::WizardEye)->skillMastery, SkillMastery::Master);
+    party.removeHiredNpcFollower(1001);
+    CHECK_EQ(party.partyBuff(PartyBuffId::WizardEye)->skillMastery, SkillMastery::Master);
+    party.clearPartyBuff(PartyBuffId::WizardEye);
+    CHECK_FALSE(party.hasPartyBuff(PartyBuffId::WizardEye));
+    party.addHiredNpcFollower({1001, 38, 200});
+    party.clearDispellableBuffs();
+    CHECK(party.hasPartyBuff(PartyBuffId::WizardEye));
+    Party restored;
+    restored.restoreSnapshot(party.snapshot());
+    CHECK(restored.hasPartyBuff(PartyBuffId::WizardEye));
+    restored.removeHiredNpcFollower(1001);
+    CHECK_FALSE(restored.hasPartyBuff(PartyBuffId::WizardEye));
+}
+
+TEST_CASE("repair hirelings repair their item families without skills or gold")
+{
+    REQUIRE(OpenYAMM::Tests::regressionGameDataLoaded());
+    const ItemTable &items = OpenYAMM::Tests::regressionGameData().itemTable;
+    struct RepairCase
+    {
+        uint32_t professionId;
+        const char *pKind;
+        EquipmentSlot slot;
+    };
+    const RepairCase cases[] = {
+        {1, "Weapon", EquipmentSlot::MainHand}, {2, "Armor", EquipmentSlot::Armor},
+        {3, "Ring", EquipmentSlot::Ring1},
+    };
+    for (const RepairCase &entry : cases)
+    {
+        CAPTURE(entry.professionId);
+        Party party = makeOneMemberParty();
+        party.setItemTable(&items);
+        party.member(0)->skills.clear();
+        const uint32_t itemId = findFirstItemIdByEquipStat(items, entry.pKind, false);
+        REQUIRE(itemId != 0);
+        const ItemDefinition *pDefinition = items.get(itemId);
+        InventoryItem item = {};
+        item.objectDescriptionId = itemId;
+        item.width = std::max<uint8_t>(1, pDefinition->inventoryWidth);
+        item.height = std::max<uint8_t>(1, pDefinition->inventoryHeight);
+        item.broken = true;
+        REQUIRE(party.member(0)->addInventoryItemAt(item, 0, 0));
+        std::string status;
+        CHECK_FALSE(party.tryRepairMemberInventoryItem(0, 0, 0, 0, status));
+        party.addHiredNpcFollower({1001, entry.professionId, 200});
+        const int gold = party.gold();
+        CHECK(party.tryRepairMemberInventoryItem(0, 0, 0, 0, status));
+        CHECK_FALSE(party.memberInventoryItem(0, 0, 0)->broken);
+        CHECK_EQ(party.gold(), gold);
+        if (entry.slot == EquipmentSlot::MainHand)
+        {
+            party.member(0)->equipment.mainHand = itemId;
+        }
+        if (entry.slot == EquipmentSlot::Armor)
+        {
+            party.member(0)->equipment.armor = itemId;
+        }
+        if (entry.slot == EquipmentSlot::Ring1)
+        {
+            party.member(0)->equipment.ring1 = itemId;
+        }
+        party.equippedItemRuntimeMutable(0, entry.slot)->broken = true;
+        CHECK(party.tryRepairEquippedItem(0, entry.slot, 0, status));
+        party.removeHiredNpcFollower(1001);
+        CHECK_FALSE(party.canRepairItem(*pDefinition));
+    }
+}
+
+TEST_CASE("hireling camping and walking reductions keep their advertised minimum")
+{
+    EventRuntimeState state;
+    state.hiredNpcFollowers = {{1001, 29, 100}, {1002, 30, 200}, {1003, 48, 100}};
+    CHECK_EQ(hiredNpcCampingFoodCost(5, state), 1);
+    CHECK_EQ(hiredNpcCampingFoodCost(2, state), 1);
+    CHECK_EQ(hiredNpcCampingFoodCost(0, state), 0);
+    state.hiredNpcFollowers = {{1001, 5, 100}, {1002, 6, 200}, {1003, 7, 300}, {1004, 44, 100}};
+    CHECK_EQ(hiredNpcWalkingTravelDays(10, state), 3);
+    CHECK_EQ(hiredNpcWalkingTravelDays(5, state), 1);
+    CHECK_EQ(hiredNpcWalkingTravelDays(0, state), 0);
+}
+
+TEST_CASE("hireling magic bonus increases real spell power")
+{
+    REQUIRE(OpenYAMM::Tests::regressionGameDataLoaded());
+    const OpenYAMM::Tests::RegressionGameData &data = OpenYAMM::Tests::regressionGameData();
+    Party party = makeOneMemberParty();
+    party.member(0)->skills["SpiritMagic"] = {"SpiritMagic", 5, SkillMastery::Master};
+    OpenYAMM::Tests::PartySpellTestWorldRuntime world;
+    world.bindParty(&party);
+    PartySpellCastRequest request;
+    request.casterMemberIndex = 0;
+    request.spellId = spellIdValue(SpellId::Bless);
+    request.spendMana = false;
+    request.applyRecovery = false;
+    request.bypassGameplayCasterValidation = true;
+    REQUIRE(PartySpellSystem::castSpell(party, world, data.spellTable, request).succeeded());
+    const int originalPower = party.characterBuff(0, CharacterBuffId::Bless)->power;
+    party.addHiredNpcFollower({1001, 19, 2000});
+    REQUIRE(PartySpellSystem::castSpell(party, world, data.spellTable, request).succeeded());
+    CHECK_EQ(party.characterBuff(0, CharacterBuffId::Bless)->skillLevel, 9u);
+    CHECK(party.characterBuff(0, CharacterBuffId::Bless)->power > originalPower);
+}
+
+TEST_CASE("hireling bonuses are rebuilt after a disk save and never applied twice")
+{
+    Party party = makeOneMemberParty();
+    party.addHiredNpcFollower({1001, 37, 1000});
+    party.addHiredNpcFollower({1002, 38, 200});
+    party.addHiredNpcFollower({1003, 46, 600});
+    GameSaveData save;
+    save.mapFileName = "out02.odm";
+    save.party = party.snapshot();
+    const std::filesystem::path path = std::filesystem::temp_directory_path() / "openyamm_hireling_bonuses.oysav";
+    std::string error;
+    REQUIRE(saveGameDataToPath(path, save, error));
+    const std::optional<GameSaveData> loaded = loadGameDataFromPath(path, error);
+    std::filesystem::remove(path);
+    REQUIRE(loaded.has_value());
+    Party restored;
+    restored.restoreSnapshot(loaded->party);
+    CHECK_EQ(restored.member(0)->magicalBonuses.resistances.fire, 20);
+    CHECK_EQ(restored.member(0)->skillBonus("Sword"), 2);
+    CHECK(restored.hasPartyBuff(PartyBuffId::WizardEye));
+    restored.refreshDerivedState();
+    CHECK_EQ(restored.member(0)->magicalBonuses.resistances.fire, 20);
+    restored.removeHiredNpcFollower(1001);
+    CHECK_EQ(restored.member(0)->magicalBonuses.resistances.fire, 0);
 }

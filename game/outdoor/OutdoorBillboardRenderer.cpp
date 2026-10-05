@@ -806,7 +806,7 @@ uint32_t OutdoorBillboardRenderer::computeBillboardLightContributionAbgr(
                 [&](const std::array<float, 3> &point)
                 {
                     return view.m_pOutdoorWorldRuntime->hasClearOutdoorLineOfSight(
-                        {x, y, z}, {point[0], point[1], point[2]});
+                        {x, y, z}, {point[0], point[1], point[2]}, true);
                 });
             cached = view.m_bakedProbeCache.emplace(position, sample).first;
         }

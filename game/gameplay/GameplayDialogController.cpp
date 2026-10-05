@@ -17,6 +17,7 @@
 #include "game/mm9/Mm9SkillTrainer.h"
 #include "game/mm9/Mm9TransportRoute.h"
 #include "game/gameplay/ReputationRuntime.h"
+#include "game/gameplay/NpcFollowerRuntime.h"
 #include "game/items/PriceCalculator.h"
 #include "game/party/EventSpellBuffs.h"
 #include "game/tables/HouseTable.h"
@@ -1267,7 +1268,7 @@ void applyMapTransitionTravelSideEffects(
         applyTravelDaysSideEffects(
             *context.pParty,
             context.pWorldRuntime,
-            transition.travelDays,
+            hiredNpcWalkingTravelDays(transition.travelDays, context.eventRuntimeState),
             foodRequired);
     }
 }
@@ -1276,7 +1277,8 @@ void applyPendingMapMoveTravelSideEffects(
     GameplayDialogController::Context &context,
     const EventRuntimeState::PendingMapMove &move)
 {
-    const int travelDays = outdoorMapMoveTravelDays(context, move);
+    const int travelDays = hiredNpcWalkingTravelDays(
+        outdoorMapMoveTravelDays(context, move), context.eventRuntimeState);
 
     if (travelDays <= 0)
     {
@@ -1670,7 +1672,9 @@ bool castNpcFollowerPartySpell(
         return false;
     }
 
-    if (!tryApplyEventSpellBuffs(*context.pParty, spellId, skillLevel, rawSkillMastery))
+    const float durationSeconds = spellId == spellIdValue(SpellId::Bless) || spellId == spellIdValue(SpellId::Heroism)
+        ? 7200.0f : 0.0f;
+    if (!tryApplyEventSpellBuffs(*context.pParty, spellId, skillLevel, rawSkillMastery, durationSeconds))
     {
         return false;
     }
@@ -1738,12 +1742,11 @@ NpcProfessionActionExecution executeNpcFollowerProfessionAction(
 
                 if (professionId == NpcProfessionId::ExpertHealer)
                 {
-                    clearPartyCondition(*context.pParty, CharacterCondition::PoisonWeak);
-                    clearPartyCondition(*context.pParty, CharacterCondition::PoisonMedium);
-                    clearPartyCondition(*context.pParty, CharacterCondition::PoisonSevere);
-                    clearPartyCondition(*context.pParty, CharacterCondition::DiseaseWeak);
-                    clearPartyCondition(*context.pParty, CharacterCondition::DiseaseMedium);
-                    clearPartyCondition(*context.pParty, CharacterCondition::DiseaseSevere);
+                    for (uint32_t condition = 0; condition < static_cast<uint32_t>(CharacterCondition::Dead);
+                         ++condition)
+                    {
+                        clearPartyCondition(*context.pParty, static_cast<CharacterCondition>(condition));
+                    }
                 }
                 else if (professionId == NpcProfessionId::MasterHealer)
                 {
@@ -1758,33 +1761,37 @@ NpcProfessionActionExecution executeNpcFollowerProfessionAction(
         case static_cast<uint32_t>(NpcFollowerActionTopicId::MakeFood):
             if (professionId == NpcProfessionId::Cook || professionId == NpcProfessionId::Chef)
             {
-                if (context.pParty->food() > MaxFoodForCookFollower)
+                if (context.pParty->food() >= MaxFoodForCookFollower)
                 {
                     context.eventRuntimeState.messages.push_back("Your packs are already full!");
                     return execution;
                 }
 
-                context.pParty->addFood(
-                    professionId == NpcProfessionId::Chef
-                        ? ChefFollowerFoodAmount
-                        : CookFollowerFoodAmount);
+                const int amount = professionId == NpcProfessionId::Chef
+                    ? ChefFollowerFoodAmount : CookFollowerFoodAmount;
+                context.pParty->addFood(std::min(amount, MaxFoodForCookFollower - context.pParty->food()));
                 applied = true;
             }
             break;
 
         case static_cast<uint32_t>(NpcFollowerActionTopicId::CastFly):
             applied = professionId == NpcProfessionId::WindMaster
-                && castNpcFollowerPartySpell(context, spellIdValue(SpellId::Fly), 2, 3);
+                && castNpcFollowerPartySpell(context, spellIdValue(SpellId::Fly), 2, 4);
             break;
 
         case static_cast<uint32_t>(NpcFollowerActionTopicId::CastWaterWalk):
             applied = professionId == NpcProfessionId::WaterMaster
-                && castNpcFollowerPartySpell(context, spellIdValue(SpellId::WaterWalk), 3, 3);
+                && castNpcFollowerPartySpell(context, spellIdValue(SpellId::WaterWalk), 3, 4);
             break;
 
         case static_cast<uint32_t>(NpcFollowerActionTopicId::CastTownPortal):
             if (professionId == NpcProfessionId::GateMaster)
             {
+                if (partyHasIndoorExitAlert(context))
+                {
+                    context.eventRuntimeState.messages.push_back("There are hostile creatures nearby!");
+                    return execution;
+                }
                 markNpcProfessionActionUsed(context.eventRuntimeState, npcId, context.pWorldRuntime, context.pParty);
 
                 const size_t casterMemberIndex =
@@ -1796,7 +1803,7 @@ NpcProfessionActionExecution executeNpcFollowerProfessionAction(
                 GameplayUiController::UtilitySpellOverlayState &overlay =
                     context.uiController.utilitySpellOverlay();
                 overlay.skillLevelOverride = 10;
-                overlay.skillMasteryOverride = SkillMastery::Grandmaster;
+                overlay.skillMasteryOverride = SkillMastery::Master;
                 overlay.spendMana = false;
                 overlay.applyRecovery = false;
                 overlay.bypassGameplayCasterValidation = true;
@@ -2626,6 +2633,8 @@ GameplayDialogController::Result GameplayDialogController::executeActiveDialogAc
             *context.eventRuntimeState.pendingDialogueContext,
             pendingMapMove,
             action.id);
+        context.eventRuntimeState.lastMapTransitionConfirmed->travelDays =
+            hiredNpcWalkingTravelDays((*pTransition)->travelDays, context.eventRuntimeState);
         context.eventRuntimeState.pendingMapMove = std::move(pendingMapMove);
         result.shouldCloseActiveDialog = true;
         return result;

@@ -95,18 +95,6 @@ int professionTransportDayReduction(uint32_t professionId, bool stable)
     }
 }
 
-bool followerProfessionMatches(const EventRuntimeState &eventRuntimeState, const std::vector<uint32_t> &professionIds)
-{
-    for (uint32_t professionId : professionIds)
-    {
-        if (hiredNpcHasProfession(eventRuntimeState, professionId))
-        {
-            return true;
-        }
-    }
-
-    return false;
-}
 }
 
 std::vector<HiredNpcFollowerView> buildHiredNpcFollowerViews(
@@ -172,15 +160,15 @@ uint32_t hiredNpcFollowerGoldShare(uint32_t goldAmount, const EventRuntimeState 
     return goldAmount * totalHiredNpcFollowerFeePercent(eventRuntimeState) / 100u;
 }
 
-bool hiredNpcHasProfession(const EventRuntimeState &eventRuntimeState, uint32_t professionId)
+bool hiredNpcHasProfession(std::span<const HiredNpcFollower> followers, uint32_t professionId)
 {
     return std::find_if(
-        eventRuntimeState.hiredNpcFollowers.begin(),
-        eventRuntimeState.hiredNpcFollowers.end(),
+        followers.begin(),
+        followers.end(),
         [professionId](const EventRuntimeState::HiredNpcFollower &follower)
         {
-            return follower.professionId == professionId;
-        }) != eventRuntimeState.hiredNpcFollowers.end();
+            return follower.npcId != 0 && follower.professionId == professionId;
+        }) != followers.end();
 }
 
 int hiredNpcTransportDayReduction(const EventRuntimeState &eventRuntimeState, bool stable)
@@ -223,13 +211,23 @@ int hiredNpcCrossMapDayReduction(const EventRuntimeState &eventRuntimeState)
     return reduction;
 }
 
+int hiredNpcWalkingTravelDays(int baseDays, const EventRuntimeState &eventRuntimeState)
+{
+    return baseDays <= 0 ? 0 : std::max(1, baseDays - hiredNpcCrossMapDayReduction(eventRuntimeState));
+}
+
+int hiredNpcCampingFoodCost(int baseCost, const EventRuntimeState &eventRuntimeState)
+{
+    return baseCost <= 0 ? 0 : std::max(1, baseCost - hiredNpcRestFoodReduction(eventRuntimeState));
+}
+
 int hiredNpcRestFoodReduction(const EventRuntimeState &eventRuntimeState)
 {
     int reduction = 0;
 
     for (const EventRuntimeState::HiredNpcFollower &follower : eventRuntimeState.hiredNpcFollowers)
     {
-        if (follower.professionId == 29)
+        if (follower.professionId == 29 || follower.professionId == 48)
         {
             reduction += 1;
         }
@@ -242,11 +240,11 @@ int hiredNpcRestFoodReduction(const EventRuntimeState &eventRuntimeState)
     return reduction;
 }
 
-int hiredNpcSkillBonus(const EventRuntimeState &eventRuntimeState, const std::string &skillName)
+int hiredNpcSkillBonus(std::span<const HiredNpcFollower> followers, const std::string &skillName)
 {
     int bonus = 0;
 
-    for (const EventRuntimeState::HiredNpcFollower &follower : eventRuntimeState.hiredNpcFollowers)
+    for (const EventRuntimeState::HiredNpcFollower &follower : followers)
     {
         const uint32_t professionId = follower.professionId;
 
@@ -260,11 +258,15 @@ int hiredNpcSkillBonus(const EventRuntimeState &eventRuntimeState, const std::st
         {
             if (professionId == 20) bonus += 4;
             else if (professionId == 21) bonus += 6;
+            else if (professionId == 48) bonus += 3;
+            else if (professionId == 49) bonus += 4;
+            else if (professionId == 50) bonus += 8;
         }
         else if (skillName == "DisarmTraps")
         {
             if (professionId == 25) bonus += 4;
             else if (professionId == 26) bonus += 6;
+            else if (professionId == 51) bonus += 8;
         }
         else if (skillName == "Perception")
         {
@@ -295,7 +297,7 @@ int hiredNpcSkillBonus(const EventRuntimeState &eventRuntimeState, const std::st
     return bonus;
 }
 
-int hiredNpcPrimaryStatBonus(const EventRuntimeState &eventRuntimeState, const std::string &statName)
+int hiredNpcPrimaryStatBonus(std::span<const HiredNpcFollower> followers, const std::string &statName)
 {
     if (statName != "Luck")
     {
@@ -304,29 +306,36 @@ int hiredNpcPrimaryStatBonus(const EventRuntimeState &eventRuntimeState, const s
 
     int bonus = 0;
 
-    for (const EventRuntimeState::HiredNpcFollower &follower : eventRuntimeState.hiredNpcFollowers)
+    for (const EventRuntimeState::HiredNpcFollower &follower : followers)
     {
         if (follower.professionId == 27)
         {
-            bonus += 10;
+            bonus += 5;
         }
         else if (follower.professionId == 28)
         {
             bonus += 20;
+        }
+        else if (follower.professionId == 47)
+        {
+            bonus += 10;
         }
     }
 
     return bonus;
 }
 
-int hiredNpcResistanceBonus(const EventRuntimeState &eventRuntimeState, const std::string &resistanceName)
+int hiredNpcResistanceBonus(std::span<const HiredNpcFollower> followers, const std::string &resistanceName)
 {
     if (resistanceName != "Fire" && resistanceName != "Air" && resistanceName != "Water" && resistanceName != "Earth")
     {
         return 0;
     }
 
-    return hiredNpcHasProfession(eventRuntimeState, 37) ? 20 : 0;
+    return 20 * std::count_if(followers.begin(), followers.end(), [](const HiredNpcFollower &follower)
+    {
+        return follower.professionId == 37;
+    });
 }
 
 uint32_t hiredNpcGoldFindBonusPercent(const EventRuntimeState &eventRuntimeState)
@@ -355,30 +364,23 @@ uint32_t hiredNpcGoldAfterBonusAndFees(uint32_t goldAmount, const EventRuntimeSt
     return withBonus > fee ? withBonus - fee : 0;
 }
 
-bool hiredNpcCanRepairItemKind(const EventRuntimeState &eventRuntimeState, const std::string &equipStat)
+bool hiredNpcCanRepairItemKind(std::span<const HiredNpcFollower> followers, const std::string &equipStat)
 {
     if (equipStat == "Armor" || equipStat == "Shield" || equipStat == "Helm" || equipStat == "Belt"
         || equipStat == "Cloak" || equipStat == "Gauntlets" || equipStat == "Boots")
     {
-        return hiredNpcHasProfession(eventRuntimeState, 2);
+        return hiredNpcHasProfession(followers, 2);
     }
 
-    if (equipStat == "Ring" || equipStat == "Amulet" || equipStat == "WeaponW")
+    if (equipStat == "Ring" || equipStat == "Amulet" || equipStat == "WeaponW"
+        || equipStat == "Bottle" || equipStat == "Reagent" || equipStat == "Sscroll"
+        || equipStat == "Book" || equipStat == "Mscroll")
     {
-        return hiredNpcHasProfession(eventRuntimeState, 3);
+        return hiredNpcHasProfession(followers, 3);
     }
 
-    return followerProfessionMatches(eventRuntimeState, {1});
+    return (equipStat == "Weapon" || equipStat == "Weapon2" || equipStat == "Weapon1or2"
+        || equipStat == "Missile") && hiredNpcHasProfession(followers, 1);
 }
 
-bool hiredNpcCanIdentifyItemKind(const EventRuntimeState &eventRuntimeState, const std::string &equipStat)
-{
-    if (equipStat == "Helm" || equipStat == "Belt" || equipStat == "Cloak" || equipStat == "Gauntlets"
-        || equipStat == "Boots" || equipStat == "Ring" || equipStat == "Amulet" || equipStat == "WeaponW")
-    {
-        return hiredNpcHasProfession(eventRuntimeState, 4);
-    }
-
-    return false;
-}
 }

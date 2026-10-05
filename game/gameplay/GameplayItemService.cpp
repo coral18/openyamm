@@ -51,7 +51,7 @@ bool applyLootOperation(
     GameplayChestItemState &lootItem,
     const ItemTable &itemTable,
     ActiveLootOperation operation,
-    const Character *pInspector,
+    const Party *pParty,
     std::string &statusText)
 {
     statusText.clear();
@@ -89,7 +89,7 @@ bool applyLootOperation(
                 return false;
             }
 
-            if (pInspector == nullptr || !ItemRuntime::canCharacterIdentifyItem(*pInspector, *pItemDefinition))
+            if (pParty == nullptr || !pParty->canIdentifyItem(*pItemDefinition))
             {
                 statusText = IdentifyFailedText;
                 return false;
@@ -100,13 +100,14 @@ bool applyLootOperation(
             return true;
 
         case ActiveLootOperation::RepairWithSkill:
+        {
             if (!lootItem.item.broken)
             {
                 statusText = "Nothing to repair.";
                 return false;
             }
 
-            if (pInspector == nullptr || !ItemRuntime::canCharacterRepairItem(*pInspector, *pItemDefinition))
+            if (pParty == nullptr || !pParty->canRepairItem(*pItemDefinition))
             {
                 statusText = RepairFailedText;
                 return false;
@@ -116,6 +117,7 @@ bool applyLootOperation(
             lootItem.item.identified = true;
             statusText = "Repaired " + ItemRuntime::displayName(lootItem.item, *pItemDefinition) + ".";
             return true;
+        }
     }
 
     return false;
@@ -132,7 +134,7 @@ bool applyWorldItemOperation(
     size_t worldItemIndex,
     const ItemTable &itemTable,
     ActiveLootOperation operation,
-    const Character *pInspector,
+    const Party *pParty,
     std::string &statusText)
 {
     GameplayWorldItemInspectState worldItemState = {};
@@ -145,7 +147,7 @@ bool applyWorldItemOperation(
     GameplayChestItemState lootItem = {};
     lootItem.item = worldItemState.item;
 
-    if (!applyLootOperation(lootItem, itemTable, operation, pInspector, statusText))
+    if (!applyLootOperation(lootItem, itemTable, operation, pParty, statusText))
     {
         return false;
     }
@@ -924,7 +926,6 @@ bool GameplayItemService::tryIdentifyInspectedItem(
     }
 
     const Character *pRequestedInspector = pParty->member(inspectorMemberIndex);
-    const Character *pInspector = pParty->bestPartyWideUtilitySkillMember("IdentifyItem");
 
     if (pRequestedInspector == nullptr)
     {
@@ -963,7 +964,7 @@ bool GameplayItemService::tryIdentifyInspectedItem(
                 pChestView->items[overlay.sourceLootItemIndex],
                 *pItemTable,
                 ActiveLootOperation::IdentifyWithSkill,
-                pInspector,
+                pParty,
                 statusText))
         {
             return false;
@@ -986,7 +987,7 @@ bool GameplayItemService::tryIdentifyInspectedItem(
                 pCorpseView->items[overlay.sourceLootItemIndex],
                 *pItemTable,
                 ActiveLootOperation::IdentifyWithSkill,
-                pInspector,
+                pParty,
                 statusText))
         {
             return false;
@@ -1003,7 +1004,7 @@ bool GameplayItemService::tryIdentifyInspectedItem(
             overlay.sourceWorldItemIndex,
             *pItemTable,
             ActiveLootOperation::IdentifyWithSkill,
-            pInspector,
+            pParty,
             statusText);
     }
 
@@ -1027,7 +1028,6 @@ bool GameplayItemService::tryRepairInspectedItem(
     }
 
     const Character *pRequestedInspector = pParty->member(inspectorMemberIndex);
-    const Character *pInspector = pParty->bestPartyWideUtilitySkillMember("RepairItem");
 
     if (pRequestedInspector == nullptr)
     {
@@ -1066,7 +1066,7 @@ bool GameplayItemService::tryRepairInspectedItem(
                 pChestView->items[overlay.sourceLootItemIndex],
                 *pItemTable,
                 ActiveLootOperation::RepairWithSkill,
-                pInspector,
+                pParty,
                 statusText))
         {
             return false;
@@ -1089,7 +1089,7 @@ bool GameplayItemService::tryRepairInspectedItem(
                 pCorpseView->items[overlay.sourceLootItemIndex],
                 *pItemTable,
                 ActiveLootOperation::RepairWithSkill,
-                pInspector,
+                pParty,
                 statusText))
         {
             return false;
@@ -1106,7 +1106,7 @@ bool GameplayItemService::tryRepairInspectedItem(
             overlay.sourceWorldItemIndex,
             *pItemTable,
             ActiveLootOperation::RepairWithSkill,
-            pInspector,
+            pParty,
             statusText);
     }
 

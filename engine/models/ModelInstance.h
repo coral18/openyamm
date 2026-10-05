@@ -47,10 +47,12 @@ public:
 
     const ModelAsset *asset(ModelInstanceHandle handle) const;
     std::shared_ptr<const ModelAsset> sharedAsset(ModelInstanceHandle handle) const;
-    const ModelPose *pose(ModelInstanceHandle handle) const;
+    const ModelPose *pose(ModelInstanceHandle handle, bool deformSkins = true) const;
     const ModelMatrix *nodeMatrix(ModelInstanceHandle handle, uint32_t nodeIndex) const;
     const ModelMatrix *nodeMatrix(ModelInstanceHandle handle, const std::string &nodeName) const;
     const ModelBounds *bounds(ModelInstanceHandle handle) const;
+    const ModelBounds *cullingBounds(ModelInstanceHandle handle) const;
+    const ModelBounds *motionBounds(ModelInstanceHandle handle) const;
     float playbackTime(ModelInstanceHandle handle) const;
     bool isPlaying(ModelInstanceHandle handle) const;
     bool isVisible(ModelInstanceHandle handle) const;
@@ -74,13 +76,20 @@ private:
         float timeSeconds = 0.0f;
         ModelTransform rootTransform;
         std::shared_ptr<const ModelAsset> asset;
-        ModelPose pose;
-        ModelBounds bounds;
+        std::shared_ptr<const ModelDeformationBounds> deformationBounds;
+        mutable ModelPose pose;
+        mutable ModelBounds bounds;
+        mutable ModelBounds cullingBounds;
+        ModelBounds motionBounds;
+        mutable bool matricesDirty = true;
+        mutable bool verticesDirty = true;
+        mutable bool morphVerticesDirty = true;
     };
 
     Slot *find(ModelInstanceHandle handle);
     const Slot *find(ModelInstanceHandle handle) const;
     void evaluate(Slot &slot);
+    void evaluateMatrices(const Slot &slot) const;
 
     std::vector<Slot> m_slots;
     std::vector<uint32_t> m_freeIndices;

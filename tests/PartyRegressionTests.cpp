@@ -1040,6 +1040,57 @@ TEST_CASE("inventory identify and repair use best party utility skill")
     CHECK_FALSE(pItem->broken);
 }
 
+TEST_CASE("Scholar hireling identifies inventory and equipment without character skills")
+{
+    REQUIRE_MESSAGE(
+        OpenYAMM::Tests::regressionGameDataLoaded(),
+        OpenYAMM::Tests::regressionGameDataFailure().c_str());
+
+    const OpenYAMM::Game::ItemTable &itemTable = OpenYAMM::Tests::regressionGameData().itemTable;
+    const OpenYAMM::Game::ItemDefinition *pDefinition = nullptr;
+    for (const OpenYAMM::Game::ItemDefinition &definition : itemTable.entries())
+    {
+        if (definition.itemId != 0 && definition.equipStat == "Armor" && definition.identifyRepairDifficulty > 20
+            && OpenYAMM::Game::ItemRuntime::requiresIdentification(definition))
+        {
+            pDefinition = &definition;
+            break;
+        }
+    }
+    REQUIRE(pDefinition != nullptr);
+
+    OpenYAMM::Game::Party party = makeInventoryParty();
+    party.setItemTable(&itemTable);
+    for (size_t memberIndex = 0; memberIndex < party.members().size(); ++memberIndex)
+    {
+        party.member(memberIndex)->skills.clear();
+    }
+    OpenYAMM::Game::InventoryItem item = {};
+    item.objectDescriptionId = pDefinition->itemId;
+    item.quantity = 1;
+    item.width = std::max<uint8_t>(1, pDefinition->inventoryWidth);
+    item.height = std::max<uint8_t>(1, pDefinition->inventoryHeight);
+    item.identified = false;
+    REQUIRE(party.member(0)->addInventoryItemAt(item, 0, 0));
+
+    std::string statusText;
+    CHECK_FALSE(party.tryIdentifyMemberInventoryItem(0, 0, 0, 0, statusText));
+    party.addHiredNpcFollower({1001, 1, 100});
+    CHECK_FALSE(party.canIdentifyItem(*pDefinition));
+    party.addHiredNpcFollower({1002, 4, 100});
+    CHECK(party.tryIdentifyMemberInventoryItem(0, 0, 0, 0, statusText));
+    CHECK(party.memberInventoryItem(0, 0, 0)->identified);
+    CHECK_FALSE(party.tryIdentifyMemberInventoryItem(0, 0, 0, 0, statusText));
+    party.member(0)->equipment.armor = pDefinition->itemId;
+    party.member(0)->equipmentRuntime.armor.identified = false;
+    CHECK(party.tryIdentifyEquippedItem(0, OpenYAMM::Game::EquipmentSlot::Armor, 0, statusText));
+    CHECK(party.member(0)->equipmentRuntime.armor.identified);
+    party.removeHiredNpcFollower(1002);
+    CHECK_FALSE(party.canIdentifyItem(*pDefinition));
+    party.member(0)->equipmentRuntime.armor.identified = false;
+    CHECK_FALSE(party.tryIdentifyEquippedItem(0, OpenYAMM::Game::EquipmentSlot::Armor, 0, statusText));
+}
+
 TEST_CASE("member experience mutation clamps like OE")
 {
     OpenYAMM::Game::Party party = {};

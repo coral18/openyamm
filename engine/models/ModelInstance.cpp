@@ -64,6 +64,19 @@ ModelInstanceHandle ModelInstanceSystem::create(
     slot.timeSeconds = 0.0f;
     slot.rootTransform = rootTransform;
     slot.asset = std::move(asset);
+    slot.deformationBounds.reset();
+    for (const Slot &other : m_slots)
+    {
+        if (&other != &slot && other.active && other.asset == slot.asset)
+        {
+            slot.deformationBounds = other.deformationBounds;
+            break;
+        }
+    }
+    if (!slot.deformationBounds)
+    {
+        slot.deformationBounds = std::make_shared<ModelDeformationBounds>(buildModelDeformationBounds(*slot.asset));
+    }
     evaluate(slot);
     ++m_activeCount;
     return {index, slot.generation};
@@ -78,6 +91,7 @@ bool ModelInstanceSystem::destroy(ModelInstanceHandle handle)
     }
     pSlot->active = false;
     pSlot->asset.reset();
+    pSlot->deformationBounds.reset();
     pSlot->pose = {};
     pSlot->bounds = {};
     ++pSlot->generation;
@@ -101,6 +115,7 @@ void ModelInstanceSystem::clear()
         }
         slot.active = false;
         slot.asset.reset();
+        slot.deformationBounds.reset();
         slot.pose = {};
         slot.bounds = {};
         ++slot.generation;
@@ -129,8 +144,11 @@ bool ModelInstanceSystem::setTransform(ModelInstanceHandle handle, const ModelTr
     {
         return false;
     }
-    pSlot->rootTransform = transform;
-    evaluate(*pSlot);
+    if (pSlot->rootTransform != transform)
+    {
+        pSlot->rootTransform = transform;
+        evaluate(*pSlot);
+    }
     return true;
 }
 
@@ -283,12 +301,18 @@ bool ModelInstanceSystem::sample(ModelInstanceHandle handle, uint32_t clipIndex,
     {
         return false;
     }
+    const float clampedTime = std::min(timeSeconds, pSlot->asset->clips[clipIndex].durationSeconds);
+    const bool changed = !pSlot->clipSelected || pSlot->clipIndex != clipIndex
+        || pSlot->timeSeconds != clampedTime || pSlot->rootTransform != transform;
     pSlot->clipIndex = clipIndex;
     pSlot->clipSelected = true;
     pSlot->playing = false;
     pSlot->rootTransform = transform;
-    pSlot->timeSeconds = std::min(timeSeconds, pSlot->asset->clips[clipIndex].durationSeconds);
-    evaluate(*pSlot);
+    pSlot->timeSeconds = clampedTime;
+    if (changed)
+    {
+        evaluate(*pSlot);
+    }
     return true;
 }
 
@@ -304,15 +328,61 @@ std::shared_ptr<const ModelAsset> ModelInstanceSystem::sharedAsset(ModelInstance
     return pSlot != nullptr ? pSlot->asset : nullptr;
 }
 
-const ModelPose *ModelInstanceSystem::pose(ModelInstanceHandle handle) const
+const ModelPose *ModelInstanceSystem::pose(ModelInstanceHandle handle, bool deformSkins) const
 {
     const Slot *pSlot = find(handle);
-    return pSlot != nullptr ? &pSlot->pose : nullptr;
+    if (pSlot == nullptr)
+    {
+        return nullptr;
+    }
+    evaluateMatrices(*pSlot);
+    if (!deformSkins)
+    {
+        if (pSlot->morphVerticesDirty)
+        {
+            deformModelPose(*pSlot->asset, pSlot->pose, false);
+            pSlot->morphVerticesDirty = false;
+        }
+        return &pSlot->pose;
+    }
+    if (pSlot->verticesDirty)
+    {
+        deformModelPose(*pSlot->asset, pSlot->pose);
+        pSlot->bounds = {};
+        for (size_t nodeIndex = 0; nodeIndex < pSlot->asset->nodes.size(); ++nodeIndex)
+        {
+            const ModelNode &node = pSlot->asset->nodes[nodeIndex];
+            if (node.meshIndex < 0 || !modelMatrixVisible(pSlot->pose.globalMatrices[nodeIndex]))
+            {
+                continue;
+            }
+            const ModelMesh &mesh = pSlot->asset->meshes[node.meshIndex];
+            for (size_t primitiveIndex = 0; primitiveIndex < mesh.primitives.size(); ++primitiveIndex)
+            {
+                const ModelPrimitive &primitive = mesh.primitives[primitiveIndex];
+                const std::vector<ModelVertex> &vertices = node.skinIndex >= 0 || !primitive.morphTargets.empty()
+                    ? pSlot->pose.deformedVertices[nodeIndex][primitiveIndex] : primitive.vertices;
+                const ModelMatrix matrix = node.skinIndex >= 0
+                    ? identityModelMatrix() : pSlot->pose.globalMatrices[nodeIndex];
+                for (const ModelVertex &vertex : vertices)
+                {
+                    expandBounds(pSlot->bounds, matrix, vertex.position);
+                }
+            }
+        }
+        pSlot->verticesDirty = false;
+        pSlot->morphVerticesDirty = false;
+    }
+    return &pSlot->pose;
 }
 
 const ModelMatrix *ModelInstanceSystem::nodeMatrix(ModelInstanceHandle handle, uint32_t nodeIndex) const
 {
     const Slot *pSlot = find(handle);
+    if (pSlot != nullptr)
+    {
+        evaluateMatrices(*pSlot);
+    }
     if (pSlot == nullptr || nodeIndex >= pSlot->pose.globalMatrices.size())
     {
         return nullptr;
@@ -328,13 +398,31 @@ const ModelMatrix *ModelInstanceSystem::nodeMatrix(ModelInstanceHandle handle, c
         return nullptr;
     }
     const std::optional<uint32_t> nodeIndex = pSlot->asset->findNode(nodeName);
-    return nodeIndex ? &pSlot->pose.globalMatrices[*nodeIndex] : nullptr;
+    return nodeIndex ? nodeMatrix(handle, *nodeIndex) : nullptr;
 }
 
 const ModelBounds *ModelInstanceSystem::bounds(ModelInstanceHandle handle) const
 {
     const Slot *pSlot = find(handle);
+    pose(handle);
     return pSlot != nullptr ? &pSlot->bounds : nullptr;
+}
+
+const ModelBounds *ModelInstanceSystem::cullingBounds(ModelInstanceHandle handle) const
+{
+    const Slot *pSlot = find(handle);
+    if (pSlot == nullptr)
+    {
+        return nullptr;
+    }
+    evaluateMatrices(*pSlot);
+    return &pSlot->cullingBounds;
+}
+
+const ModelBounds *ModelInstanceSystem::motionBounds(ModelInstanceHandle handle) const
+{
+    const Slot *pSlot = find(handle);
+    return pSlot != nullptr ? &pSlot->motionBounds : nullptr;
 }
 
 float ModelInstanceSystem::playbackTime(ModelInstanceHandle handle) const
@@ -402,6 +490,26 @@ const ModelInstanceSystem::Slot *ModelInstanceSystem::find(ModelInstanceHandle h
 
 void ModelInstanceSystem::evaluate(Slot &slot)
 {
+    const float radius = slot.deformationBounds->motionRadius * std::max({std::abs(slot.rootTransform.scale[0]),
+        std::abs(slot.rootTransform.scale[1]), std::abs(slot.rootTransform.scale[2])});
+    slot.motionBounds = {slot.rootTransform.translation, slot.rootTransform.translation,
+        slot.deformationBounds->motionRadius >= 0};
+    for (size_t axis = 0; axis < 3; ++axis)
+    {
+        slot.motionBounds.min[axis] -= radius;
+        slot.motionBounds.max[axis] += radius;
+    }
+    slot.matricesDirty = true;
+    slot.verticesDirty = true;
+    slot.morphVerticesDirty = true;
+}
+
+void ModelInstanceSystem::evaluateMatrices(const Slot &slot) const
+{
+    if (!slot.matricesDirty)
+    {
+        return;
+    }
     if (slot.clipSelected && !slot.asset->clips.empty())
     {
         evaluateModelClip(*slot.asset, slot.clipIndex, slot.timeSeconds, slot.pose);
@@ -411,27 +519,9 @@ void ModelInstanceSystem::evaluate(Slot &slot)
         resetModelPose(*slot.asset, slot.pose);
     }
     evaluateModelHierarchy(*slot.asset, composeModelTransform(slot.rootTransform), slot.pose);
-    deformModelPose(*slot.asset, slot.pose);
-    slot.bounds = {};
-    for (size_t nodeIndex = 0; nodeIndex < slot.asset->nodes.size(); ++nodeIndex)
-    {
-        const ModelNode &node = slot.asset->nodes[nodeIndex];
-        if (node.meshIndex < 0 || !modelMatrixVisible(slot.pose.globalMatrices[nodeIndex]))
-        {
-            continue;
-        }
-        const ModelMesh &mesh = slot.asset->meshes[node.meshIndex];
-        for (size_t primitiveIndex = 0; primitiveIndex < mesh.primitives.size(); ++primitiveIndex)
-        {
-            const ModelPrimitive &primitive = mesh.primitives[primitiveIndex];
-            const std::vector<ModelVertex> &vertices = node.skinIndex >= 0 || !primitive.morphTargets.empty()
-                ? slot.pose.deformedVertices[nodeIndex][primitiveIndex] : primitive.vertices;
-            const ModelMatrix matrix = node.skinIndex >= 0 ? identityModelMatrix() : slot.pose.globalMatrices[nodeIndex];
-            for (const ModelVertex &vertex : vertices)
-            {
-                expandBounds(slot.bounds, matrix, vertex.position);
-            }
-        }
-    }
+    ++slot.pose.matrixRevision;
+    // Nonnegative, normalized skin weights keep each vertex inside the union of its joint bounds.
+    slot.cullingBounds = modelPoseBounds(*slot.asset, slot.pose, *slot.deformationBounds);
+    slot.matricesDirty = false;
 }
 }

@@ -329,6 +329,7 @@ add_executable(openyamm_runtime_tests
     IndoorActorDetectionRuntimeTests.cpp
     IndoorActorFlyingRuntimeTests.cpp
     IndoorActorFactionRuntimeTests.cpp
+    OutdoorLightingProbeRuntimeTests.cpp
 )
 
 target_include_directories(openyamm_runtime_tests PRIVATE

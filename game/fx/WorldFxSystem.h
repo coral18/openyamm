@@ -90,6 +90,7 @@ public:
     void syncActorModels(const IGameplayWorldRuntime &world);
     bool hasActorModel(size_t actorIndex) const;
     const Engine::ModelBounds *actorModelBounds(size_t actorIndex) const;
+    const Engine::ModelBounds *actorModelCullingBounds(size_t actorIndex) const;
     void setActorModelOutline(size_t actorIndex, uint32_t colorAbgr);
     void beginFrame();
     void updateParticles(float deltaSeconds, bool paused);

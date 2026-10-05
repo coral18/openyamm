@@ -372,6 +372,20 @@ TEST_CASE("outdoor lighting probes interpolate visible neighbors without light l
     CHECK(sheltered->sunVisibility == doctest::Approx(1.0));
     CHECK_FALSE(data.sampleProbe({64, 0, 128}, [](const std::array<float, 3> &) { return false; }));
     CHECK_FALSE(data.sampleProbe({10000, 0, 128}, visible));
+
+    SUBCASE("four occluded neighbors do not hide a farther visible probe")
+    {
+        data.probes = {
+            {{0, 0, 0}}, {{16, 0, 0}}, {{32, 0, 0}}, {{48, 0, 0}},
+            {{64, 0, 384}, {1, 1, 1}, {0.35f, 0.35f, 0.35f}},
+        };
+        data.indexProbes();
+        const std::optional<OpenYAMM::Game::OutdoorLightingData::Probe> aboveFloor =
+            data.sampleProbe({32, 0, 128}, [](const std::array<float, 3> &p) { return p[2] > 128; });
+        REQUIRE(aboveFloor);
+        CHECK(aboveFloor->sun[0] == doctest::Approx(1));
+        CHECK(aboveFloor->sky[0] == doctest::Approx(0.35));
+    }
 }
 
 TEST_CASE("outdoor lighting v4 validates measured direct and indirect model sunlight")

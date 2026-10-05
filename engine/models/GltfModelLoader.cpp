@@ -562,7 +562,7 @@ bool loadMeshes(const cgltf_data &data, ModelAsset &asset, std::string &error)
                     }
                 }
             }
-            for (const ModelVertexInfluences &influences : primitive.influences)
+            for (ModelVertexInfluences &influences : primitive.influences)
             {
                 float sum = 0.0f;
                 for (float weight : influences.weights)
@@ -573,6 +573,10 @@ bool loadMeshes(const cgltf_data &data, ModelAsset &asset, std::string &error)
                 {
                     error = "joint weights must sum to one";
                     return false;
+                }
+                for (float &weight : influences.weights)
+                {
+                    weight /= sum;
                 }
             }
             for (size_t targetIndex = 0; targetIndex < source.targets_count; ++targetIndex)

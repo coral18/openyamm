@@ -448,9 +448,7 @@ MonsterImpactHitCheck resolveMonsterImpactHitCheck(
 int characterCombatSkillLevel(const Character &character, const std::string &skillName)
 {
     const CharacterSkill *pSkill = character.findSkill(skillName);
-    const std::unordered_map<std::string, int>::const_iterator bonusIt =
-        character.itemSkillBonuses.find(skillName);
-    const int bonusLevel = bonusIt != character.itemSkillBonuses.end() ? bonusIt->second : 0;
+    const int bonusLevel = character.skillBonus(skillName);
     return (pSkill != nullptr ? static_cast<int>(pSkill->level) : 0) + bonusLevel;
 }
 

@@ -2768,6 +2768,7 @@ Character buildFreshCreatedCharacter(
     character.attackRecoveryReductionTicks = 0;
     character.recoveryProgressMultiplier = 1.0f;
     character.itemSkillBonuses.clear();
+    character.hiredNpcSkillBonuses.clear();
     character.inventory.clear();
 
     character.maxHealth = GameMechanics::calculateBaseCharacterMaxHealth(character, &classMultiplierTable);
@@ -9716,8 +9717,11 @@ void GameApplication::renderFrame(int width, int height, float mouseWheelDelta, 
         if (m_settings.actorModels)
         {
             std::string error;
+            const std::string manifestPath = m_settings.actorModelsManifest.empty()
+                ? "worlds/" + m_activeWorldManifest.id + "/models/actors.yml"
+                : m_settings.actorModelsManifest;
             if (!worldFx.configureActorModels(*m_pAssetFileSystem,
-                    "worlds/" + m_activeWorldManifest.id + "/models/actors.yml",
+                    manifestPath,
                     m_gameDataLoader.getMonsterTable(), error))
             {
                 std::cerr << "Actor model load failed: " << error << '\n';

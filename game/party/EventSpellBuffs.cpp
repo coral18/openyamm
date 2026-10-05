@@ -295,10 +295,12 @@ float resolveEventCharacterBuffDurationSeconds(uint32_t spellId, uint32_t skillL
     }
 }
 
-bool tryApplyEventCharacterBuff(Party &party, uint32_t spellId, uint32_t skillLevel, uint32_t rawSkillMastery)
+bool tryApplyEventCharacterBuff(Party &party, uint32_t spellId, uint32_t skillLevel, uint32_t rawSkillMastery,
+    float durationSecondsOverride)
 {
     const SkillMastery mastery = normalizeEventSkillMastery(rawSkillMastery);
-    const float durationSeconds = resolveEventCharacterBuffDurationSeconds(spellId, skillLevel, mastery);
+    const float durationSeconds = durationSecondsOverride > 0.0f
+        ? durationSecondsOverride : resolveEventCharacterBuffDurationSeconds(spellId, skillLevel, mastery);
 
     if (durationSeconds <= 0.0f)
     {
@@ -354,10 +356,12 @@ bool tryApplyEventCharacterBuff(Party &party, uint32_t spellId, uint32_t skillLe
     }
 }
 
-bool tryApplyEventPartyBuff(Party &party, uint32_t spellId, uint32_t skillLevel, uint32_t rawSkillMastery)
+bool tryApplyEventPartyBuff(Party &party, uint32_t spellId, uint32_t skillLevel, uint32_t rawSkillMastery,
+    float durationSecondsOverride)
 {
     const SkillMastery mastery = normalizeEventSkillMastery(rawSkillMastery);
-    const float durationSeconds = resolveEventPartyBuffDurationSeconds(spellId, skillLevel, mastery);
+    const float durationSeconds = durationSecondsOverride > 0.0f
+        ? durationSecondsOverride : resolveEventPartyBuffDurationSeconds(spellId, skillLevel, mastery);
 
     if (durationSeconds <= 0.0f)
     {
@@ -550,9 +554,10 @@ bool tryApplyEventSpellBuffs(
     Party &party,
     uint32_t spellId,
     uint32_t skillLevel,
-    uint32_t rawSkillMastery)
+    uint32_t rawSkillMastery,
+    float durationSecondsOverride)
 {
-    return tryApplyEventPartyBuff(party, spellId, skillLevel, rawSkillMastery)
-        || tryApplyEventCharacterBuff(party, spellId, skillLevel, rawSkillMastery);
+    return tryApplyEventPartyBuff(party, spellId, skillLevel, rawSkillMastery, durationSecondsOverride)
+        || tryApplyEventCharacterBuff(party, spellId, skillLevel, rawSkillMastery, durationSecondsOverride);
 }
 }

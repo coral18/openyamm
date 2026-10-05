@@ -143,6 +143,10 @@ std::string attackRecoveryInspectSupplement(
 
 std::string formatRemainingDuration(float remainingSeconds)
 {
+    if (std::isinf(remainingSeconds))
+    {
+        return "Constant";
+    }
     const int totalSeconds = std::max(0, int(std::lround(remainingSeconds)));
     const int hours = totalSeconds / 3600;
     const int minutes = (totalSeconds % 3600) / 60;
@@ -173,6 +177,10 @@ std::string formatRemainingDuration(float remainingSeconds)
 
 std::string formatCharacterDetailDuration(float remainingSeconds)
 {
+    if (std::isinf(remainingSeconds))
+    {
+        return "Constant";
+    }
     const int totalSeconds = std::max(0, int(std::lround(remainingSeconds)));
     const int hours = totalSeconds / 3600;
     const int minutes = (totalSeconds % 3600) / 60;
@@ -805,7 +813,7 @@ void GameplayHudOverlaySupport::updateCharacterInspectOverlay(
                     row.canonicalName,
                     SkillMastery::Grandmaster);
                 overlay.grandmaster.visible = !grandmasterDescription.empty();
-                overlay.skillBonus = GameMechanics::resolveCharacterItemSkillBonus(*pCharacter, row.canonicalName);
+                overlay.skillBonus = pCharacter->skillBonus(row.canonicalName);
                 overlay.sourceX = rowRect.x;
                 overlay.sourceY = rowRect.y;
                 overlay.sourceWidth = rowRect.width;
@@ -1002,7 +1010,6 @@ void GameplayHudOverlaySupport::updateCharacterDetailOverlay(
     const CharacterSheetSummary summary = GameMechanics::buildCharacterSheetSummary(
         *pCharacter,
         context.itemTable(),
-        nullptr,
         nullptr,
         nullptr,
         characterAttackTuningFromSettings(context.settingsSnapshot()));

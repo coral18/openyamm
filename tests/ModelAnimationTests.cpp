@@ -592,6 +592,12 @@ TEST_CASE("ModelAnimation skinning applies inverse bind, all influences, morphs 
     asset->clips[0].channels[1] = weights;
     REQUIRE(instances.sample(handle, 0, 1, transform));
     CHECK(instances.pose(handle)->morphWeights[0][0] == doctest::Approx(1));
+    asset->clips[0].channels[1].weightValues = {{-2}, {1}};
+    REQUIRE(instances.sample(handle, 0, 0, transform));
+    const ModelBounds conservative = *instances.cullingBounds(handle);
+    const ModelBounds exact = *instances.bounds(handle);
+    CHECK(conservative.min[0] <= exact.min[0]);
+    CHECK(conservative.max[0] >= exact.max[0]);
 }
 
 TEST_CASE("ModelAnimation MM6 demon loads all native clips and resets death visibility")
@@ -659,4 +665,62 @@ TEST_CASE("ModelAnimation MM6 demon loads all native clips and resets death visi
         CHECK(weight == 0.0f);
     }
     CHECK(instances.bounds(handle)->max[1] == doctest::Approx(1.707f).epsilon(.01));
+}
+
+TEST_CASE("ModelAnimation defers crowd deformation and bounds contain every demon animation")
+{
+    using namespace OpenYAMM::Engine;
+    AssetFileSystem assets;
+    const std::filesystem::path sourceRoot = OPENYAMM_SOURCE_DIR;
+    REQUIRE(assets.initialize(sourceRoot, sourceRoot / "assets_dev", AssetScaleTier::X1));
+    const ModelLoadResult loaded = GltfModelLoader().load(assets, "worlds/mm6/models/mm6_demon.glb");
+    REQUIRE_MESSAGE(loaded, loaded.error);
+    ModelInstanceSystem instances;
+    const ModelInstanceHandle first = instances.create(loaded.asset);
+    const ModelInstanceHandle second = instances.create(loaded.asset);
+    const ModelPose *pPose = instances.pose(first, false);
+    const uint32_t body = *loaded.asset->findNode("Demon_Native_Mesh");
+    for (const std::vector<ModelVertex> &primitive : pPose->deformedVertices[body])
+    {
+        CHECK(primitive.empty());
+    }
+    uint64_t revision = pPose->deformationRevision;
+    for (uint32_t clip = 0; clip < loaded.asset->clips.size(); ++clip)
+    {
+        for (float fraction : {0.0f, 0.2f, 0.5f, 0.8f, 1.0f})
+        {
+            ModelTransform placement = gltfModelPlacement({-9728, -11319, 161}, fraction * 6.0f, 104.8623316f);
+            placement.scale[0] *= 0.7f;
+            placement.scale[2] *= 1.3f;
+            const float time = loaded.asset->clips[clip].durationSeconds * fraction;
+            REQUIRE(instances.sample(first, clip, time, placement));
+            const ModelBounds conservative = *instances.cullingBounds(first);
+            const ModelBounds envelope = *instances.motionBounds(first);
+            CHECK(pPose->deformationRevision == revision);
+            REQUIRE(instances.nodeMatrix(first, 0) != nullptr);
+            CHECK(pPose->deformationRevision == revision);
+            const ModelBounds exact = *instances.bounds(first);
+            revision = pPose->deformationRevision;
+            CHECK(conservative.valid == exact.valid);
+            if (exact.valid)
+            {
+                for (size_t axis = 0; axis < 3; ++axis)
+                {
+                    CHECK(conservative.min[axis] <= exact.min[axis] + 0.01f);
+                    CHECK(conservative.max[axis] >= exact.max[axis] - 0.01f);
+                    CHECK(envelope.min[axis] <= exact.min[axis] + 0.01f);
+                    CHECK(envelope.max[axis] >= exact.max[axis] - 0.01f);
+                }
+            }
+            REQUIRE(instances.sample(first, clip, time, placement));
+            CHECK(instances.pose(first)->deformationRevision == revision);
+        }
+    }
+    // A second instance has its own pose and does not inherit the first actor's deformation.
+    CHECK(instances.pose(second)->deformationRevision == 1);
+    REQUIRE(instances.destroy(first));
+    const ModelInstanceHandle reused = instances.create(loaded.asset);
+    CHECK(reused.index == first.index);
+    CHECK(reused.generation != first.generation);
+    CHECK(instances.pose(reused)->deformationRevision == 1);
 }

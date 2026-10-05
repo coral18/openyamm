@@ -4834,7 +4834,7 @@ void OutdoorRenderer::renderWorldPasses(OutdoorGameView &view, uint16_t viewWidt
                     [&](const std::array<float, 3> &point)
                     {
                         return view.m_pOutdoorWorldRuntime->hasClearOutdoorLineOfSight(
-                            center, {point[0], point[1], point[2]});
+                            center, {point[0], point[1], point[2]}, true);
                     });
                 const std::array<std::array<float, 4>, 2> colors =
                     outdoorBakedLightingColors(*pAtmosphereState, view.m_gameSettings);
@@ -4857,7 +4857,12 @@ void OutdoorRenderer::renderWorldPasses(OutdoorGameView &view, uint16_t viewWidt
                     * (skyEnvironment ? skyTint : 0.15f);
             }
             return selected;
-        }, skyEnvironment ? &*skyEnvironment : nullptr);
+        }, skyEnvironment ? &*skyEnvironment : nullptr,
+        [&](const Engine::ModelBounds &bounds)
+        {
+            return frustum.intersectsBounds({bounds.min[0], bounds.min[1], bounds.min[2]},
+                {bounds.max[0], bounds.max[1], bounds.max[2]});
+        });
     // Translucent spells need the actors and models behind them in the color buffer first.
     if (view.m_showSpriteObjects)
     {

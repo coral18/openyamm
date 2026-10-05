@@ -7574,6 +7574,66 @@ int HeadlessGameplayDiagnostics::runRegressionSuite(
         return true;
     });
 
+    runCase("mm6_demon_actor_models_sorpigal_crowd", [&](std::string &failure)
+    {
+        if (!gameDataLoader.loadMapByFileNameForHeadlessGameplay(assetFileSystem, "oute3.odm"))
+        {
+            failure = "could not load New Sorpigal";
+            return false;
+        }
+        RegressionScenario scenario;
+        if (!initializeRegressionScenario(gameDataLoader, *gameDataLoader.getSelectedMap(), scenario))
+        {
+            failure = "could not initialize New Sorpigal";
+            return false;
+        }
+        WorldFxSystem fx;
+        if (!fx.configureActorModels(assetFileSystem, "worlds/mm6/models/sorpigal_demon_crowd.yml",
+                gameDataLoader.getMonsterTable(), failure))
+        {
+            return false;
+        }
+        const OutdoorWorldRuntime::Snapshot before = scenario.world.snapshot();
+        fx.syncActorModels(scenario.world);
+        size_t goblins = 0;
+        size_t magicians = 0;
+        for (size_t index = 0; index < before.mapActors.size(); ++index)
+        {
+            const OutdoorWorldRuntime::MapActorState &actor = before.mapActors[index];
+            const bool goblin = actor.monsterId >= 550 && actor.monsterId <= 552;
+            const bool magician = (actor.monsterId >= 610 && actor.monsterId <= 612)
+                || (actor.monsterId >= 631 && actor.monsterId <= 633)
+                || (actor.monsterId >= 904 && actor.monsterId <= 906);
+            const bool expected = (goblin || magician) && !actor.isInvisible;
+            if (fx.hasActorModel(index) != expected || (expected && !fx.actorModelBounds(index)->valid))
+            {
+                failure = "crowd configuration did not bind exactly the visible goblins and magicians";
+                return false;
+            }
+            if (expected)
+            {
+                goblins += goblin;
+                magicians += magician;
+            }
+            const OutdoorWorldRuntime::MapActorState *pActor = scenario.world.mapActorState(index);
+            if (pActor->monsterId != actor.monsterId || pActor->currentHp != actor.currentHp
+                || pActor->preciseX != actor.preciseX || pActor->preciseY != actor.preciseY
+                || pActor->preciseZ != actor.preciseZ || pActor->animationTimeTicks != actor.animationTimeTicks)
+            {
+                failure = "crowd presentation changed actor simulation data";
+                return false;
+            }
+        }
+        std::cout << "Sorpigal demon crowd: goblins=" << goblins << " magicians=" << magicians
+            << " models=" << fx.models().size() << '\n';
+        if (goblins == 0 || magicians == 0 || fx.models().size() != goblins + magicians)
+        {
+            failure = "crowd test requires both creature families and one model per matched actor";
+            return false;
+        }
+        return true;
+    });
+
     runCase("mm6_demon_actor_models_indoor_binding", [&](std::string &failure)
     {
         if (!gameDataLoader.loadMapByFileNameForHeadlessGameplay(assetFileSystem, "6d07.blv"))

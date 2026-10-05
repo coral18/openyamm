@@ -459,6 +459,12 @@ const Engine::ModelBounds *WorldFxSystem::actorModelBounds(size_t actorIndex) co
     return iterator != m_actorModels.end() ? m_models.bounds(iterator->second.handle) : nullptr;
 }
 
+const Engine::ModelBounds *WorldFxSystem::actorModelCullingBounds(size_t actorIndex) const
+{
+    const auto iterator = m_actorModels.find(actorIndex);
+    return iterator != m_actorModels.end() ? m_models.motionBounds(iterator->second.handle) : nullptr;
+}
+
 void WorldFxSystem::setActorModelOutline(size_t actorIndex, uint32_t colorAbgr)
 {
     const auto iterator = m_actorModels.find(actorIndex);

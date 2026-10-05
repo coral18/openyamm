@@ -21,6 +21,7 @@
 namespace OpenYAMM::Game
 {
 class ItemTable;
+struct ItemDefinition;
 class CharacterDollTable;
 class ClassMultiplierTable;
 class JournalQuestTable;
@@ -151,6 +152,7 @@ struct Character
     int attackRecoveryReductionTicks = 0;
     float recoveryProgressMultiplier = 1.0f;
     std::unordered_map<std::string, int> itemSkillBonuses;
+    std::unordered_map<std::string, int> hiredNpcSkillBonuses;
     std::unordered_set<std::string> equippedItemEffectFlags;
     std::array<std::optional<LloydBeacon>, 5> lloydsBeacons = {};
 
@@ -173,6 +175,7 @@ struct Character
     const CharacterSkill *findSkillByCanonicalName(const std::string &canonicalSkillName) const;
     CharacterSkill *findSkill(const std::string &skillName);
     CharacterSkill *findSkillByCanonicalName(const std::string &canonicalSkillName);
+    int skillBonus(const std::string &skillName) const;
     bool setSkillMastery(const std::string &skillName, SkillMastery mastery);
     void synchronizeInnateAbilitySpells();
     bool knowsSpell(uint32_t spellId) const;
@@ -490,6 +493,8 @@ public:
         bool requireCanAct = true) const;
     const Character *bestPartyWideUtilitySkillMember(std::string_view skillName, bool requireCanAct = true) const;
     int bestPartyWideUtilitySkillValue(std::string_view skillName, bool requireCanAct = true) const;
+    bool canIdentifyItem(const ItemDefinition &itemDefinition) const;
+    bool canRepairItem(const ItemDefinition &itemDefinition) const;
     bool tryIdentifyMemberInventoryItem(
         size_t memberIndex,
         uint8_t gridX,
@@ -683,6 +688,7 @@ private:
     std::unordered_map<uint32_t, uint32_t> m_npcItemOverrides;
     std::unordered_set<uint32_t> m_unavailableNpcIds;
     std::vector<HiredNpcFollower> m_hiredNpcFollowers;
+    PartyBuffState m_cartographerWizardEye = {};
     uint32_t m_heldItemIdForQueries = 0;
     std::vector<PendingAudioRequest> m_pendingAudioRequests;
 };

@@ -3,6 +3,7 @@
 #include "game/events/EventRuntime.h"
 #include "game/debug/GameplayDebugTrace.h"
 #include "game/gameplay/GameMechanics.h"
+#include "game/gameplay/NpcFollowerRuntime.h"
 #include "game/gameplay/ReputationRuntime.h"
 #include "game/items/ItemEnchantRuntime.h"
 #include "game/items/ItemEnchantTables.h"
@@ -83,16 +84,10 @@ std::string canonicalPartyWideUtilitySkillName(std::string_view skillName)
     return canonical;
 }
 
-int itemSkillBonusForName(const Character &member, const std::string &skillName)
-{
-    const auto iterator = member.itemSkillBonuses.find(skillName);
-    return iterator != member.itemSkillBonuses.end() ? iterator->second : 0;
-}
-
 int genericUtilitySkillScore(const Character &member, const std::string &skillName)
 {
     const CharacterSkill *pSkill = member.findSkill(skillName);
-    const int itemBonus = itemSkillBonusForName(member, skillName);
+    const int itemBonus = member.skillBonus(skillName);
 
     if ((pSkill == nullptr || pSkill->level == 0 || pSkill->mastery == SkillMastery::None) && itemBonus == 0)
     {
@@ -1930,6 +1925,21 @@ bool Character::hasCanonicalSkill(const std::string &canonicalSkillName) const
     return !canonicalSkillName.empty() && skills.contains(canonicalSkillName);
 }
 
+int Character::skillBonus(const std::string &skillName) const
+{
+    const std::string canonicalName = canonicalSkillName(skillName);
+    int bonus = 0;
+    for (const auto &[name, amount] : itemSkillBonuses)
+    {
+        if (canonicalSkillName(name) == canonicalName)
+        {
+            bonus += amount;
+        }
+    }
+    const auto followerBonus = hiredNpcSkillBonuses.find(canonicalName);
+    return bonus + (followerBonus != hiredNpcSkillBonuses.end() ? followerBonus->second : 0);
+}
+
 const CharacterSkill *Character::findSkill(const std::string &skillName) const
 {
     const std::string canonicalName = canonicalSkillName(skillName);
@@ -2821,6 +2831,7 @@ void Party::applyEventRuntimeState(const EventRuntimeState &runtimeState, bool g
         m_lastStatus = "award removed";
     }
 
+    bool followersChanged = false;
     for (const HiredNpcFollower &follower : runtimeState.hiredNpcFollowers)
     {
         if (follower.npcId == 0)
@@ -2839,9 +2850,11 @@ void Party::applyEventRuntimeState(const EventRuntimeState &runtimeState, bool g
         if (followerIt == m_hiredNpcFollowers.end())
         {
             m_hiredNpcFollowers.push_back(follower);
+            followersChanged = true;
         }
         else
         {
+            followersChanged = followersChanged || followerIt->professionId != follower.professionId;
             *followerIt = follower;
         }
     }
@@ -2852,6 +2865,10 @@ void Party::applyEventRuntimeState(const EventRuntimeState &runtimeState, bool g
         {
             m_unavailableNpcIds.insert(follower.npcId);
         }
+    }
+    if (followersChanged)
+    {
+        rebuildMagicalBonusesFromBuffs();
     }
 }
 
@@ -3103,7 +3120,8 @@ uint32_t Party::grantSharedExperience(uint32_t totalExperience)
             continue;
         }
 
-        const int learningPercent = learningPercentForExperienceGain(member);
+        const int learningPercent = learningPercentForExperienceGain(member)
+            + hiredNpcSkillBonus(m_hiredNpcFollowers, "Learning");
         const uint32_t learnedExperience =
             experiencePerEligibleMember
             + experiencePerEligibleMember * std::max(0, learningPercent) / 100;
@@ -4176,6 +4194,7 @@ void Party::addHiredNpcFollower(const HiredNpcFollower &follower)
     }
 
     m_unavailableNpcIds.insert(follower.npcId);
+    rebuildMagicalBonusesFromBuffs();
 }
 
 void Party::removeHiredNpcFollower(uint32_t npcId)
@@ -4199,6 +4218,7 @@ void Party::removeHiredNpcFollower(uint32_t npcId)
         }
 
         m_hiredNpcFollowers.erase(followerIt, m_hiredNpcFollowers.end());
+        rebuildMagicalBonusesFromBuffs();
     }
 }
 
@@ -4811,6 +4831,27 @@ int Party::bestPartyWideUtilitySkillValue(std::string_view skillName, bool requi
     return partyWideUtilitySkillScore(*pMember, canonicalPartyWideUtilitySkillName(skillName));
 }
 
+bool Party::canIdentifyItem(const ItemDefinition &itemDefinition) const
+{
+    if (hiredNpcHasProfession(m_hiredNpcFollowers, 4))
+    {
+        return true;
+    }
+
+    const Character *pInspector = bestPartyWideUtilitySkillMember("IdentifyItem");
+    return pInspector != nullptr && ItemRuntime::canCharacterIdentifyItem(*pInspector, itemDefinition);
+}
+
+bool Party::canRepairItem(const ItemDefinition &itemDefinition) const
+{
+    if (hiredNpcCanRepairItemKind(m_hiredNpcFollowers, itemDefinition.equipStat))
+    {
+        return true;
+    }
+    const Character *pInspector = bestPartyWideUtilitySkillMember("RepairItem");
+    return pInspector != nullptr && ItemRuntime::canCharacterRepairItem(*pInspector, itemDefinition);
+}
+
 bool Party::tryIdentifyMemberInventoryItem(
     size_t memberIndex,
     uint8_t gridX,
@@ -4874,7 +4915,7 @@ bool Party::tryIdentifyMemberInventoryItem(
         return false;
     }
 
-    if (pInspector == nullptr || !ItemRuntime::canCharacterIdentifyItem(*pInspector, *pItemDefinition))
+    if (!canIdentifyItem(*pItemDefinition))
     {
         statusText = "Identify Failed";
         logItemInteractionResult(
@@ -4970,7 +5011,7 @@ bool Party::tryRepairMemberInventoryItem(
         return false;
     }
 
-    if (pInspector == nullptr || !ItemRuntime::canCharacterRepairItem(*pInspector, *pItemDefinition))
+    if (!canRepairItem(*pItemDefinition))
     {
         statusText = "Repair Failed";
         logItemInteractionResult(
@@ -5198,7 +5239,7 @@ bool Party::tryIdentifyEquippedItem(
         return false;
     }
 
-    if (pInspector == nullptr || !ItemRuntime::canCharacterIdentifyItem(*pInspector, *pItemDefinition))
+    if (!canIdentifyItem(*pItemDefinition))
     {
         statusText = "Identify Failed";
         logItemInteractionResult(
@@ -5294,7 +5335,7 @@ bool Party::tryRepairEquippedItem(
         return false;
     }
 
-    if (pInspector == nullptr || !ItemRuntime::canCharacterRepairItem(*pInspector, *pItemDefinition))
+    if (!canRepairItem(*pItemDefinition))
     {
         statusText = "Repair Failed";
         logItemInteractionResult(
@@ -5312,6 +5353,7 @@ bool Party::tryRepairEquippedItem(
 
     if (repaired)
     {
+        rebuildMagicalBonusesFromBuffs();
         m_lastStatus = "item repaired";
     }
 
@@ -5436,6 +5478,7 @@ bool Party::repairEquippedItem(size_t memberIndex, EquipmentSlot slot, std::stri
 
     if (repaired)
     {
+        rebuildMagicalBonusesFromBuffs();
         m_lastStatus = "item repaired";
     }
 
@@ -6186,7 +6229,7 @@ bool Party::hasDispellableBuffs() const
 
 bool Party::hasPartyBuff(PartyBuffId buffId) const
 {
-    return m_partyBuffs[static_cast<size_t>(buffId)].active();
+    return partyBuff(buffId) != nullptr;
 }
 
 bool Party::hasCharacterBuff(size_t memberIndex, CharacterBuffId buffId) const
@@ -6197,6 +6240,11 @@ bool Party::hasCharacterBuff(size_t memberIndex, CharacterBuffId buffId) const
 const PartyBuffState *Party::partyBuff(PartyBuffId buffId) const
 {
     const PartyBuffState &buff = m_partyBuffs[static_cast<size_t>(buffId)];
+    if (buffId == PartyBuffId::WizardEye && m_cartographerWizardEye.active()
+        && (!buff.active() || buff.skillMastery < SkillMastery::Expert))
+    {
+        return &m_cartographerWizardEye;
+    }
     return buff.active() ? &buff : nullptr;
 }
 
@@ -6677,9 +6725,37 @@ SoundId Party::resolveDamageImpactSoundForMember(size_t memberIndex) const
 
 void Party::rebuildMagicalBonusesFromBuffs()
 {
+    m_cartographerWizardEye = {};
+    if (hiredNpcHasProfession(m_hiredNpcFollowers, 38))
+    {
+        m_cartographerWizardEye.remainingSeconds = std::numeric_limits<float>::infinity();
+        m_cartographerWizardEye.spellId = spellIdValue(SpellId::WizardEye);
+        m_cartographerWizardEye.skillLevel = 4;
+        m_cartographerWizardEye.skillMastery = SkillMastery::Expert;
+        m_cartographerWizardEye.power = 2;
+    }
+    std::unordered_map<std::string, int> followerSkills;
+    if (!m_hiredNpcFollowers.empty())
+    {
+        for (const std::string &skillName : allCanonicalSkillNames())
+        {
+            const int bonus = hiredNpcSkillBonus(m_hiredNpcFollowers, skillName);
+            if (bonus != 0)
+            {
+                followerSkills[skillName] = bonus;
+            }
+        }
+    }
+
     for (Character &member : m_members)
     {
+        member.hiredNpcSkillBonuses = followerSkills;
         member.magicalBonuses = member.temporaryEventBonuses;
+        member.magicalBonuses.luck += hiredNpcPrimaryStatBonus(m_hiredNpcFollowers, "Luck");
+        member.magicalBonuses.resistances.fire += hiredNpcResistanceBonus(m_hiredNpcFollowers, "Fire");
+        member.magicalBonuses.resistances.air += hiredNpcResistanceBonus(m_hiredNpcFollowers, "Air");
+        member.magicalBonuses.resistances.water += hiredNpcResistanceBonus(m_hiredNpcFollowers, "Water");
+        member.magicalBonuses.resistances.earth += hiredNpcResistanceBonus(m_hiredNpcFollowers, "Earth");
         member.magicalImmunities = {};
         member.magicalConditionImmunities = {};
         member.merchantBonus = 0;

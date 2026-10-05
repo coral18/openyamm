@@ -6,7 +6,6 @@
 #include <array>
 #include <cmath>
 #include <cstring>
-#include <limits>
 
 namespace OpenYAMM::Game
 {
@@ -203,8 +202,7 @@ std::optional<OutdoorLightingData::Probe> OutdoorLightingData::sampleProbe(
     }
     const int32_t cellX = int32_t(std::floor(position[0] / 512.0f));
     const int32_t cellY = int32_t(std::floor(position[1] / 512.0f));
-    std::array<std::pair<float, uint32_t>, 4> closest;
-    closest.fill({std::numeric_limits<float>::max(), 0});
+    std::vector<std::pair<float, uint32_t>> candidates;
     for (int32_t y = cellY - 1; y <= cellY + 1; ++y)
     {
         for (int32_t x = cellX - 1; x <= cellX + 1; ++x)
@@ -222,10 +220,9 @@ std::optional<OutdoorLightingData::Probe> OutdoorLightingData::sampleProbe(
                     const float delta = probes[index].position[axis] - position[axis];
                     distance += delta * delta;
                 }
-                if (distance < closest.back().first)
+                if (distance <= 2048.0f * 2048.0f)
                 {
-                    closest.back() = {distance, index};
-                    std::sort(closest.begin(), closest.end());
+                    candidates.emplace_back(distance, index);
                 }
             }
         }
@@ -233,9 +230,12 @@ std::optional<OutdoorLightingData::Probe> OutdoorLightingData::sampleProbe(
     Probe result;
     result.position = position;
     float totalWeight = 0.0f;
-    for (const auto &[distance, index] : closest)
+    size_t visibleCount = 0;
+    // Test nearest candidates first, stopping at four visible probes rather than four possibly occluded ones.
+    std::sort(candidates.begin(), candidates.end());
+    for (const auto &[distance, index] : candidates)
     {
-        if (distance > 2048.0f * 2048.0f || !visible(probes[index].position))
+        if (!visible(probes[index].position))
         {
             continue;
         }
@@ -248,6 +248,10 @@ std::optional<OutdoorLightingData::Probe> OutdoorLightingData::sampleProbe(
         }
         result.sunVisibility += probes[index].sunVisibility * weight;
         totalWeight += weight;
+        if (++visibleCount == 4)
+        {
+            break;
+        }
     }
     if (totalWeight == 0.0f)
     {

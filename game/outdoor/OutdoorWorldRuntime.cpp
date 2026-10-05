@@ -12519,7 +12519,8 @@ void OutdoorWorldRuntime::setOutdoorFaceGeometryAttributes(size_t bModelIndex, s
     invalidateOutdoorPathMaps(false);
 }
 
-bool OutdoorWorldRuntime::hasClearOutdoorLineOfSight(const bx::Vec3 &start, const bx::Vec3 &end) const
+bool OutdoorWorldRuntime::hasClearOutdoorLineOfSight(
+    const bx::Vec3 &start, const bx::Vec3 &end, bool includeWalkableFaces) const
 {
     if (m_pOutdoorMapData != nullptr)
     {
@@ -12574,7 +12575,7 @@ bool OutdoorWorldRuntime::hasClearOutdoorLineOfSight(const bx::Vec3 &start, cons
 
         const OutdoorFaceGeometryData &face = m_outdoorFaces[faceIndex];
 
-        if (!outdoorFaceBlocksMovement(face) || !face.hasPlane || face.isWalkable)
+        if (!outdoorFaceBlocksMovement(face) || !face.hasPlane || (!includeWalkableFaces && face.isWalkable))
         {
             continue;
         }

@@ -203,6 +203,7 @@ struct GameSettings
     uint32_t effectSpawnCount = 1;
     float effectStatsDelaySeconds = -1.0f;
     bool actorModels = false;
+    std::string actorModelsManifest;
     int16_t actorSpawnId = 0;
     uint32_t actorSpawnCount = 1;
     std::array<float, 3> actorSpawnPosition = {};

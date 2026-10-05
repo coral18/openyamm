@@ -158,6 +158,13 @@ or GPU-performance measurements.
 
 ## Model and named-effect diagnostics
 
+`./tools/run_sorpigal_demon_crowd.sh` runs a 1600×900 New Sorpigal FPS test with every goblin and
+mage/magician presented as the animated demon. It preserves normal rendering settings and actor gameplay
+data, using the launch-only `debug.actor_models_manifest=worlds/mm6/models/sorpigal_demon_crowd.yml` override.
+Add `--seconds 0` to keep the isolated game open; the default measures 30 seconds after ten seconds of warmup.
+The [fixed 229-actor report](../output/performance/sorpigal_demon_crowd_fix_20261005/REPORT.md) retains
+matching sprite/model measurements, native captures and CPU attribution.
+
 Shared rigid models and named effects can be spawned during an isolated run without editing map events. These
 `[debug]` values are also launch-only and are never written back to the settings file:
 

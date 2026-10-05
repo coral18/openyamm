@@ -81,6 +81,10 @@ These rules apply to all AI-generated contributions in this repository.
   The `[debug]` capture keys (`screenshot_path`, `screenshot_delay_seconds`, `screenshot_tour_path`) are one-shot launch
   directives: parsed from the INI but never written back on save, so they fire only for the launch that requested them.
 - Captures use isolated saves/settings and do not establish real-hardware GPU performance. Inspect the images and logs.
+- For CPU profiling, use `./tools/profile_game.sh` with its saved command-prefix approval; the user authorized
+  this reusable OpenYAMM profiling wrapper. `--enable-user-perf` sets `perf_event_paranoid=2` until reboot when
+  needed; administrator authentication is separate from sandbox approval. See [perf workflow](tools/PERF_PROFILING.md).
+  Do not request broader shell/Python permissions or run the game as root.
 
 ### Level Generation
 

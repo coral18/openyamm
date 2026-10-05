@@ -37,8 +37,7 @@ int masteryMultiplier(SkillMastery mastery)
 int identifyRepairSkillScore(const Character &character, const char *pSkillName)
 {
     const CharacterSkill *pSkill = character.findSkill(pSkillName);
-    const auto bonusIt = character.itemSkillBonuses.find(std::string(pSkillName));
-    const int bonusLevel = bonusIt != character.itemSkillBonuses.end() ? bonusIt->second : 0;
+    const int bonusLevel = character.skillBonus(std::string(pSkillName));
 
     if ((pSkill == nullptr || pSkill->mastery == SkillMastery::None || pSkill->level == 0) && bonusLevel == 0)
     {

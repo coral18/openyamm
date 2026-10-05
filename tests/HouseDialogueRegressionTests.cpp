@@ -1511,7 +1511,7 @@ TEST_CASE("hired follower views use runtime NPC overrides")
     CHECK_EQ(views.front().profession, pProfession->profession);
     CHECK_EQ(OpenYAMM::Game::totalHiredNpcFollowerFeePercent(runtimeState), 3u);
     CHECK_EQ(OpenYAMM::Game::hiredNpcFollowerGoldShare(1000, runtimeState), 30u);
-    CHECK(OpenYAMM::Game::hiredNpcHasProfession(runtimeState, 52));
+    CHECK(OpenYAMM::Game::hiredNpcHasProfession(runtimeState.hiredNpcFollowers, 52));
 
     OpenYAMM::Game::EventRuntimeState travelState = {};
     travelState.hiredNpcFollowers.push_back({1185, 9, 300});
@@ -2151,16 +2151,11 @@ TEST_CASE("gate master town portal uses follower spell power")
     REQUIRE(overlay.active);
     CHECK_EQ(overlay.mode, OpenYAMM::Game::GameplayUiController::UtilitySpellOverlayMode::TownPortal);
     CHECK_EQ(overlay.skillLevelOverride, 10u);
-    CHECK_EQ(overlay.skillMasteryOverride, OpenYAMM::Game::SkillMastery::Grandmaster);
+    CHECK_EQ(overlay.skillMasteryOverride, OpenYAMM::Game::SkillMastery::Master);
     CHECK_FALSE(overlay.spendMana);
     CHECK_FALSE(overlay.applyRecovery);
     CHECK(overlay.bypassGameplayCasterValidation);
     CHECK(overlay.bypassTownPortalFailureChecks);
-
-    OpenYAMM::Game::GameplayRuntimeActorState hostileActor = {};
-    hostileActor.hostileToParty = true;
-    hostileActor.hasDetectedParty = true;
-    harness.worldRuntime().addActor(hostileActor);
 
     OpenYAMM::Game::PartySpellCastRequest request = {};
     request.casterMemberIndex = overlay.casterMemberIndex;
@@ -2242,7 +2237,7 @@ TEST_CASE("wind master follower spell queues normal cast feedback")
     CHECK_EQ(harness.eventRuntimeState().pendingSounds.back().soundId, pFlySpell->effectSoundId);
 }
 
-TEST_CASE("hired NPC spell abilities use OE durations")
+TEST_CASE("hired NPC spell abilities use advertised durations")
 {
     const OpenYAMM::Tests::RegressionGameData &gameData = requireRegressionGameData();
 
@@ -2269,7 +2264,7 @@ TEST_CASE("hired NPC spell abilities use OE durations")
     REQUIRE(pFly != nullptr);
     CHECK_EQ(pFly->remainingSeconds, doctest::Approx(7200.0f));
     CHECK_EQ(pFly->skillLevel, 2u);
-    CHECK_EQ(pFly->skillMastery, OpenYAMM::Game::SkillMastery::Master);
+    CHECK_EQ(pFly->skillMastery, OpenYAMM::Game::SkillMastery::Grandmaster);
 
     OpenYAMM::Tests::HouseDialogueTestHarness waterWalkHarness =
         castFollowerSpell(WaterMasterProfessionId, "Cast Walk on Water");
@@ -2278,7 +2273,7 @@ TEST_CASE("hired NPC spell abilities use OE durations")
     REQUIRE(pWaterWalk != nullptr);
     CHECK_EQ(pWaterWalk->remainingSeconds, doctest::Approx(10800.0f));
     CHECK_EQ(pWaterWalk->skillLevel, 3u);
-    CHECK_EQ(pWaterWalk->skillMastery, OpenYAMM::Game::SkillMastery::Master);
+    CHECK_EQ(pWaterWalk->skillMastery, OpenYAMM::Game::SkillMastery::Grandmaster);
 
     OpenYAMM::Tests::HouseDialogueTestHarness blessHarness =
         castFollowerSpell(AcolyteProfessionId, "Cast Bless");
@@ -2287,7 +2282,7 @@ TEST_CASE("hired NPC spell abilities use OE durations")
         const OpenYAMM::Game::CharacterBuffState *pBless =
             blessHarness.party().characterBuff(memberIndex, OpenYAMM::Game::CharacterBuffId::Bless);
         REQUIRE(pBless != nullptr);
-        CHECK_EQ(pBless->remainingSeconds, doctest::Approx(8100.0f));
+        CHECK_EQ(pBless->remainingSeconds, doctest::Approx(7200.0f));
         CHECK_EQ(pBless->skillLevel, 5u);
         CHECK_EQ(pBless->skillMastery, OpenYAMM::Game::SkillMastery::Master);
     }
@@ -2297,7 +2292,7 @@ TEST_CASE("hired NPC spell abilities use OE durations")
     const OpenYAMM::Game::PartyBuffState *pHeroism =
         heroismHarness.party().partyBuff(OpenYAMM::Game::PartyBuffId::Heroism);
     REQUIRE(pHeroism != nullptr);
-    CHECK_EQ(pHeroism->remainingSeconds, doctest::Approx(8100.0f));
+    CHECK_EQ(pHeroism->remainingSeconds, doctest::Approx(7200.0f));
     CHECK_EQ(pHeroism->skillLevel, 5u);
     CHECK_EQ(pHeroism->skillMastery, OpenYAMM::Game::SkillMastery::Master);
 }
@@ -7677,4 +7672,117 @@ TEST_CASE("npc topic execution prefers global dialogue handler over colliding lo
     REQUIRE_FALSE(topicState.messages.empty());
     CHECK_NE(topicState.messages.back().find("I was captured"), std::string::npos);
     CHECK_EQ(topicState.messages.back().find("LOCAL DOOR HANDLER"), std::string::npos);
+}
+
+TEST_CASE("hireling daily abilities honor healing food and enemy restrictions")
+{
+    const OpenYAMM::Tests::RegressionGameData &gameData = requireRegressionGameData();
+    using namespace OpenYAMM::Game;
+    SUBCASE("Expert Healer clears ordinary ailments but preserves fatal conditions")
+    {
+        OpenYAMM::Tests::HouseDialogueTestHarness harness(gameData);
+        harness.eventRuntimeState().npcProfessionOverrides[KevinWatchPeasantNpcId] = 11;
+        harness.eventRuntimeState().hiredNpcFollowers.push_back({KevinWatchPeasantNpcId, 11, 2000});
+        harness.party().addHiredNpcFollower({KevinWatchPeasantNpcId, 11, 2000});
+        Character *pMember = harness.party().member(0);
+        pMember->health = 1;
+        pMember->conditions.set(static_cast<size_t>(CharacterCondition::Cursed));
+        pMember->conditions.set(static_cast<size_t>(CharacterCondition::Paralyzed));
+        pMember->conditions.set(static_cast<size_t>(CharacterCondition::Petrified));
+        const EventDialogContent dialog = harness.openNpcDialogue(KevinWatchPeasantNpcId);
+        const std::optional<size_t> action = findActionIndexByLabel(dialog, "Heal Party");
+        REQUIRE(action.has_value());
+        harness.executeAndPresent(*action);
+        CHECK_EQ(pMember->health, Party::effectiveMaximumHealth(*pMember));
+        CHECK_FALSE(pMember->conditions.test(static_cast<size_t>(CharacterCondition::Cursed)));
+        CHECK_FALSE(pMember->conditions.test(static_cast<size_t>(CharacterCondition::Paralyzed)));
+        CHECK(pMember->conditions.test(static_cast<size_t>(CharacterCondition::Petrified)));
+    }
+    SUBCASE("Chef stops at fourteen food and refusal does not spend the daily ability")
+    {
+        OpenYAMM::Tests::HouseDialogueTestHarness harness(gameData);
+        harness.eventRuntimeState().npcProfessionOverrides[KevinWatchPeasantNpcId] = 34;
+        harness.eventRuntimeState().hiredNpcFollowers.push_back({KevinWatchPeasantNpcId, 34, 400});
+        harness.party().addHiredNpcFollower({KevinWatchPeasantNpcId, 34, 400});
+        harness.party().addFood(14 - harness.party().food());
+        const EventDialogContent dialog = harness.openNpcDialogue(KevinWatchPeasantNpcId);
+        const std::optional<size_t> action = findActionIndexByLabel(dialog, "Make Food");
+        REQUIRE(action.has_value());
+        harness.executeAndPresent(*action);
+        CHECK_EQ(harness.party().food(), 14);
+        CHECK_EQ(harness.eventRuntimeState().hiredNpcFollowers.front().abilityUsedDay, 0u);
+        harness.party().addFood(-1);
+        const EventDialogContent retryDialog = harness.openNpcDialogue(KevinWatchPeasantNpcId);
+        const std::optional<size_t> retry = findActionIndexByLabel(retryDialog, "Make Food");
+        REQUIRE(retry.has_value());
+        harness.executeAndPresent(*retry);
+        CHECK_EQ(harness.party().food(), 14);
+        CHECK_FALSE(findActionIndexByLabel(harness.openNpcDialogue(KevinWatchPeasantNpcId), "Make Food").has_value());
+    }
+    SUBCASE("Gate Master refuses nearby enemies before consuming the daily ability")
+    {
+        OpenYAMM::Tests::HouseDialogueTestHarness harness(gameData);
+        harness.eventRuntimeState().hiredNpcFollowers.push_back({WilmaCookGateMasterNpcId, 41, 2000});
+        harness.party().addHiredNpcFollower({WilmaCookGateMasterNpcId, 41, 2000});
+        GameplayRuntimeActorState hostile;
+        hostile.hostileToParty = true;
+        hostile.hasDetectedParty = true;
+        harness.worldRuntime().addActor(hostile);
+        const EventDialogContent dialog = harness.openNpcDialogue(WilmaCookGateMasterNpcId);
+        const std::optional<size_t> action = findActionIndexByLabel(dialog, "Cast Town Portal");
+        REQUIRE(action.has_value());
+        harness.executeAndPresent(*action);
+        CHECK_FALSE(harness.uiController().utilitySpellOverlay().active);
+        CHECK_EQ(harness.eventRuntimeState().hiredNpcFollowers.front().abilityUsedDay, 0u);
+        REQUIRE_FALSE(harness.eventRuntimeState().messages.empty());
+        CHECK_EQ(harness.eventRuntimeState().messages.back(), "There are hostile creatures nearby!");
+
+        PartySpellCastRequest request;
+        request.casterMemberIndex = 0;
+        request.spellId = spellIdValue(SpellId::TownPortal);
+        request.skillLevelOverride = 10;
+        request.skillMasteryOverride = SkillMastery::Master;
+        request.spendMana = false;
+        request.applyRecovery = false;
+        request.bypassGameplayCasterValidation = true;
+        request.bypassTownPortalFailureChecks = true;
+        request.utilityAction = PartySpellUtilityActionKind::TownPortalDestination;
+        request.hasUtilityMapMove = true;
+        request.utilityMapMoveMapName = "out01.odm";
+        CHECK_FALSE(PartySpellSystem::castSpell(harness.party(), harness.worldRuntime(), gameData.spellTable,
+            request).succeeded());
+        CHECK_FALSE(harness.eventRuntimeState().pendingMapMove.has_value());
+    }
+}
+
+TEST_CASE("hireling walking reduction changes both the transition prompt and elapsed time")
+{
+    const OpenYAMM::Tests::RegressionGameData &gameData = requireRegressionGameData();
+    using namespace OpenYAMM::Game;
+    OpenYAMM::Tests::HouseDialogueTestHarness harness(gameData);
+    MapStatsEntry map;
+    map.fileName = "Out02.odm";
+    map.eastTransition.emplace();
+    map.eastTransition->destinationMapFileName = "Out06.odm";
+    map.eastTransition->travelDays = 5;
+    harness.setCurrentMap(map);
+    harness.eventRuntimeState().hiredNpcFollowers.push_back({1001, 7, 300});
+    harness.party().addHiredNpcFollower({1001, 7, 300});
+    EventRuntimeState::PendingDialogueContext pending;
+    pending.kind = DialogueContextKind::MapTransition;
+    pending.sourceId = static_cast<uint32_t>(MapBoundaryEdge::East);
+    harness.eventRuntimeState().pendingDialogueContext = pending;
+    const EventDialogContent &dialog = harness.presentPendingDialog(0, true);
+    CHECK(dialogContainsText(dialog, "It will take 2 days"));
+    const auto action = std::find_if(dialog.actions.begin(), dialog.actions.end(), [](const EventDialogAction &entry)
+    {
+        return entry.kind == EventDialogActionKind::MapTransitionConfirm;
+    });
+    REQUIRE(action != dialog.actions.end());
+    const size_t index = std::distance(dialog.actions.begin(), action);
+    const float before = harness.worldRuntime().gameMinutes();
+    harness.executeActiveDialogAction(index);
+    CHECK_EQ(harness.worldRuntime().gameMinutes(), doctest::Approx(before + 2 * 24 * 60));
+    REQUIRE(harness.eventRuntimeState().lastMapTransitionConfirmed.has_value());
+    CHECK_EQ(harness.eventRuntimeState().lastMapTransitionConfirmed->travelDays, 2u);
 }

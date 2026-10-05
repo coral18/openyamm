@@ -3123,7 +3123,6 @@ void GameplayPartyOverlayRenderer::renderQuickReferenceOverlay(GameplayScreenRun
             context.itemTable(),
             context.standardItemEnchantTable(),
             context.specialItemEnchantTable(),
-            context.worldRuntime() != nullptr ? context.worldRuntime()->eventRuntimeState() : nullptr,
             characterAttackTuningFromSettings(context.settingsSnapshot()));
         const std::string rangedAttack =
             summary.combat.shoot ? formatQuickReferenceSignedValue(*summary.combat.shoot) : "+0";
@@ -8363,7 +8362,6 @@ void GameplayPartyOverlayRenderer::renderCharacterOverlay(
             context.itemTable(),
             context.standardItemEnchantTable(),
             context.specialItemEnchantTable(),
-            context.worldRuntime() != nullptr ? context.worldRuntime()->eventRuntimeState() : nullptr,
             characterAttackTuningFromSettings(context.settingsSnapshot()));
 
         const auto formatPair = [](int actualValue, int baseValue) -> std::string

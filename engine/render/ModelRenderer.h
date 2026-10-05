@@ -51,12 +51,14 @@ public:
         const std::array<float, 3> &cameraPosition,
         const ModelRenderLighting &lighting = {},
         const std::function<ModelRenderLighting(const ModelBounds &)> &lightingForBounds = {},
-        const ModelSkyEnvironment *pSkyEnvironment = nullptr);
+        const ModelSkyEnvironment *pSkyEnvironment = nullptr,
+        const std::function<bool(const ModelBounds &)> &visibleBounds = {});
 
 private:
     struct PrimitiveResources
     {
         bgfx::VertexBufferHandle vertexBuffer = BGFX_INVALID_HANDLE;
+        bgfx::VertexBufferHandle skinnedVertexBuffer = BGFX_INVALID_HANDLE;
         bgfx::IndexBufferHandle indexBuffer = BGFX_INVALID_HANDLE;
         uint32_t indexCount = 0;
         int materialIndex = -1;
@@ -95,7 +97,10 @@ private:
     const AssetResources *prepare(std::shared_ptr<const ModelAsset> asset);
     void pruneUnusedAssets();
     void destroy(AssetResources &resources);
-    std::vector<Draw> collectDraws(const ModelInstanceSystem &instances);
+    std::vector<Draw> collectDraws(const ModelInstanceSystem &instances,
+        const std::function<bool(const ModelBounds &)> &visibleBounds);
+    void destroyDeformedBuffers(bool destroyGpu);
+    void bindSkin(const Draw &draw);
     bool bindGeometry(const Draw &draw);
     void submit(const Draw &draw, uint16_t viewId, const ModelRenderLighting &lighting);
     void submitNodeMarkers(const ModelPose &pose, uint16_t viewId) const;
@@ -115,7 +120,23 @@ private:
     bgfx::UniformHandle m_shadowParamsUniformHandle = BGFX_INVALID_HANDLE;
     std::array<ModelMatrix, ModelSunShadowCascades> m_shadowMatrices = {};
     std::array<std::array<float, 4>, 4> m_shadowParams = {};
-    std::unordered_map<const std::vector<ModelVertex> *, bgfx::TransientVertexBuffer> m_deformedVertexBuffers;
+    struct DeformedBuffer
+    {
+        ModelInstanceHandle owner;
+        bgfx::DynamicVertexBufferHandle handle = BGFX_INVALID_HANDLE;
+        uint32_t count = 0;
+        uint64_t revision = 0;
+    };
+    std::unordered_map<const std::vector<ModelVertex> *, DeformedBuffer> m_deformedVertexBuffers;
+    struct SkinPalette
+    {
+        ModelInstanceHandle owner;
+        bgfx::TextureHandle texture = BGFX_INVALID_HANDLE;
+        uint64_t revision = 0;
+    };
+    std::unordered_map<const ModelMatrix *, SkinPalette> m_skinPalettes;
+    bgfx::UniformHandle m_skinSamplerHandle = BGFX_INVALID_HANDLE;
+    bgfx::UniformHandle m_skinParamsHandle = BGFX_INVALID_HANDLE;
     bgfx::UniformHandle m_textureSamplerHandle = BGFX_INVALID_HANDLE;
     bgfx::UniformHandle m_normalSamplerHandle = BGFX_INVALID_HANDLE;
     bgfx::UniformHandle m_metallicRoughnessSamplerHandle = BGFX_INVALID_HANDLE;

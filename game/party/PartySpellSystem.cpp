@@ -1018,8 +1018,7 @@ bool resolveSpellSkill(
         return false;
     }
 
-    const auto bonusIt = caster.itemSkillBonuses.find(*skillName);
-    const int bonusLevel = bonusIt != caster.itemSkillBonuses.end() ? bonusIt->second : 0;
+    const int bonusLevel = caster.skillBonus(*skillName);
     skillLevel = std::max(0, static_cast<int>(pSkill->level) + bonusLevel);
     skillMastery = pSkill->mastery;
     return skillLevel > 0;
@@ -1775,8 +1774,7 @@ PartySpellCastResult PartySpellSystem::castSpell(
     {
         if (spellId == SpellId::TownPortal)
         {
-            if (!request.bypassTownPortalFailureChecks
-                && skillMastery < SkillMastery::Grandmaster
+            if (skillMastery < SkillMastery::Grandmaster
                 && hasNearbyHostileActor(worldRuntime))
             {
                 return makeFailureWithRecovery(

@@ -16,6 +16,7 @@ struct ModelTransform
     std::array<float, 3> translation = {0.0f, 0.0f, 0.0f};
     std::array<float, 4> rotation = {0.0f, 0.0f, 0.0f, 1.0f};
     std::array<float, 3> scale = {1.0f, 1.0f, 1.0f};
+    bool operator==(const ModelTransform &) const = default;
 };
 
 struct ModelVertex

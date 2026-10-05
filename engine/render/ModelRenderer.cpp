@@ -7,7 +7,6 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
-#include <cstring>
 #include <limits>
 #include <stdexcept>
 #include <utility>
@@ -33,6 +32,27 @@ bgfx::VertexLayout modelVertexLayout()
         .add(bgfx::Attrib::Position, 3, bgfx::AttribType::Float)
         .add(bgfx::Attrib::Normal, 3, bgfx::AttribType::Float)
         .add(bgfx::Attrib::TexCoord0, 2, bgfx::AttribType::Float)
+        .end();
+    return layout;
+}
+
+struct SkinnedVertex
+{
+    ModelVertex vertex;
+    ModelVertexInfluences influences;
+};
+
+bgfx::VertexLayout skinnedVertexLayout()
+{
+    bgfx::VertexLayout layout;
+    layout.begin()
+        .add(bgfx::Attrib::Position, 3, bgfx::AttribType::Float)
+        .add(bgfx::Attrib::Normal, 3, bgfx::AttribType::Float)
+        .add(bgfx::Attrib::TexCoord0, 2, bgfx::AttribType::Float)
+        .add(bgfx::Attrib::Indices, 4, bgfx::AttribType::Uint16)
+        .add(bgfx::Attrib::TexCoord1, 4, bgfx::AttribType::Uint16)
+        .add(bgfx::Attrib::Weight, 4, bgfx::AttribType::Float)
+        .add(bgfx::Attrib::TexCoord3, 4, bgfx::AttribType::Float)
         .end();
     return layout;
 }
@@ -144,6 +164,9 @@ struct ModelRenderer::Draw
     ModelMatrix matrix = {};
     const ModelMatrix *pCullMatrix = nullptr;
     const std::vector<ModelVertex> *pVertices = nullptr;
+    uint64_t deformationRevision = 0;
+    const ModelSkin *pSkin = nullptr;
+    const ModelPose *pPose = nullptr;
     const ModelRenderLighting *pLighting = nullptr;
     uint32_t outlineColorAbgr = 0;
     float distanceSquared = 0.0f;
@@ -153,23 +176,37 @@ struct ModelRenderer::Draw
 bool ModelRenderer::bindGeometry(const Draw &draw)
 {
     bgfx::setTransform(draw.matrix.data());
-    if (draw.pVertices != nullptr)
+    bindSkin(draw);
+    if (draw.pSkin != nullptr)
     {
-        auto found = m_deformedVertexBuffers.find(draw.pVertices);
-        if (found == m_deformedVertexBuffers.end())
+        bgfx::setVertexBuffer(0, draw.pPrimitive->skinnedVertexBuffer);
+    }
+    else if (draw.pVertices != nullptr)
+    {
+        const uint32_t count = uint32_t(draw.pVertices->size());
+        if (count == 0)
         {
-            const bgfx::VertexLayout layout = modelVertexLayout();
-            const uint32_t count = uint32_t(draw.pVertices->size());
-            if (count == 0 || bgfx::getAvailTransientVertexBuffer(count, layout) < count)
-            {
-                return false;
-            }
-            bgfx::TransientVertexBuffer vertices = {};
-            bgfx::allocTransientVertexBuffer(&vertices, count, layout);
-            std::memcpy(vertices.data, draw.pVertices->data(), count * sizeof(ModelVertex));
-            found = m_deformedVertexBuffers.emplace(draw.pVertices, vertices).first;
+            return false;
         }
-        bgfx::setVertexBuffer(0, &found->second);
+        DeformedBuffer &buffer = m_deformedVertexBuffers[draw.pVertices];
+        if (buffer.owner != draw.instance || buffer.count != count)
+        {
+            if (bgfx::isValid(buffer.handle))
+            {
+                bgfx::destroy(buffer.handle);
+            }
+            buffer = {draw.instance, bgfx::createDynamicVertexBuffer(count, modelVertexLayout()), count, 0};
+        }
+        if (!bgfx::isValid(buffer.handle))
+        {
+            throw std::runtime_error("Cannot allocate animated model vertex buffer");
+        }
+        if (buffer.revision != draw.deformationRevision)
+        {
+            bgfx::update(buffer.handle, 0, bgfx::copy(draw.pVertices->data(), count * sizeof(ModelVertex)));
+            buffer.revision = draw.deformationRevision;
+        }
+        bgfx::setVertexBuffer(0, buffer.handle);
     }
     else
     {
@@ -177,6 +214,62 @@ bool ModelRenderer::bindGeometry(const Draw &draw)
     }
     bgfx::setIndexBuffer(draw.pPrimitive->indexBuffer, 0, draw.pPrimitive->indexCount);
     return true;
+}
+
+void ModelRenderer::bindSkin(const Draw &draw)
+{
+    float params[4] = {};
+    if (draw.pSkin != nullptr)
+    {
+        const ModelSkin &skin = *draw.pSkin;
+        const uint32_t count = uint32_t(skin.joints.size());
+        SkinPalette &palette = m_skinPalettes[draw.pCullMatrix];
+        if (palette.owner != draw.instance)
+        {
+            if (bgfx::isValid(palette.texture))
+            {
+                bgfx::destroy(palette.texture);
+            }
+            palette = {draw.instance, BGFX_INVALID_HANDLE, 0};
+        }
+        if (!bgfx::isValid(palette.texture))
+        {
+            if (count == 0 || count * 2 > bgfx::getCaps()->limits.maxTextureSize
+                || !bgfx::isTextureValid(0, false, 1, bgfx::TextureFormat::RGBA32F,
+                    BGFX_SAMPLER_POINT | BGFX_SAMPLER_U_CLAMP | BGFX_SAMPLER_V_CLAMP))
+            {
+                throw std::runtime_error("GPU cannot sample this model's joint palette");
+            }
+            palette.texture = bgfx::createTexture2D(4, uint16_t(count * 2), false, 1,
+                bgfx::TextureFormat::RGBA32F, BGFX_SAMPLER_POINT | BGFX_SAMPLER_U_CLAMP | BGFX_SAMPLER_V_CLAMP);
+            if (!bgfx::isValid(palette.texture))
+            {
+                throw std::runtime_error("Cannot allocate model joint palette");
+            }
+        }
+        if (palette.revision != draw.pPose->matrixRevision)
+        {
+            std::vector<ModelMatrix> matrices(count * 2);
+            for (size_t index = 0; index < count; ++index)
+            {
+                matrices[index] = multiplyModelMatrices(
+                    draw.pPose->globalMatrices[skin.joints[index]], skin.inverseBindMatrices[index]);
+                matrices[count + index] = modelNormalMatrix(matrices[index]);
+            }
+            bgfx::updateTexture2D(palette.texture, 0, 0, 0, 0, 4, uint16_t(count * 2),
+                bgfx::copy(matrices.data(), uint32_t(matrices.size() * sizeof(ModelMatrix))));
+            palette.revision = draw.pPose->matrixRevision;
+        }
+        params[0] = 1;
+        params[1] = 1.0f / (count * 2);
+        params[2] = float(count);
+        bgfx::setTexture(5, m_skinSamplerHandle, palette.texture);
+    }
+    else
+    {
+        bgfx::setTexture(5, m_skinSamplerHandle, m_whiteTextureHandle);
+    }
+    bgfx::setUniform(m_skinParamsHandle, params);
 }
 
 void ModelRenderer::submit(const Draw &draw, uint16_t viewId, const ModelRenderLighting &lighting)
@@ -299,6 +392,8 @@ void ModelRenderer::submitNodeMarkers(const ModelPose &pose, uint16_t viewId) co
             bgfx::setUniform(m_surfaceUniformHandle, surface);
             bgfx::setState(MarkerState);
             const float noOutline[4] = {};
+            bgfx::setUniform(m_skinParamsHandle, noOutline);
+            bgfx::setTexture(5, m_skinSamplerHandle, m_whiteTextureHandle);
             bgfx::setUniform(m_outlineUniformHandle, noOutline);
             bgfx::submit(viewId, m_programHandle);
         }
@@ -319,6 +414,8 @@ bool ModelRenderer::initialize(bgfx::ProgramHandle programHandle, bgfx::ProgramH
     m_shadowMatricesUniformHandle = bgfx::createUniform("u_sunShadowMatrices", bgfx::UniformType::Mat4, 2);
     m_shadowParamsUniformHandle = bgfx::createUniform("u_sunShadowParams", bgfx::UniformType::Vec4, 4);
     m_normalSamplerHandle = bgfx::createUniform("s_modelNormal", bgfx::UniformType::Sampler);
+    m_skinSamplerHandle = bgfx::createUniform("s_modelJoints", bgfx::UniformType::Sampler);
+    m_skinParamsHandle = bgfx::createUniform("u_modelSkin", bgfx::UniformType::Vec4);
     m_surfaceUniformHandle = bgfx::createUniform("u_modelSurface", bgfx::UniformType::Vec4);
     m_metallicRoughnessSamplerHandle = bgfx::createUniform("s_modelMetallicRoughness", bgfx::UniformType::Sampler);
     m_pbrUniformHandle = bgfx::createUniform("u_modelPbr", bgfx::UniformType::Vec4);
@@ -343,7 +440,8 @@ bool ModelRenderer::initialize(bgfx::ProgramHandle programHandle, bgfx::ProgramH
         bgfx::TextureFormat::RGBA8,
         BGFX_SAMPLER_U_CLAMP | BGFX_SAMPLER_V_CLAMP,
         bgfx::copy(&white, sizeof(white)));
-    const bool initialized = bgfx::isValid(m_metallicRoughnessSamplerHandle) && bgfx::isValid(m_pbrUniformHandle)
+    const bool initialized = bgfx::isValid(m_skinSamplerHandle) && bgfx::isValid(m_skinParamsHandle)
+        && bgfx::isValid(m_metallicRoughnessSamplerHandle) && bgfx::isValid(m_pbrUniformHandle)
         && bgfx::isValid(m_shadowSamplers[0]) && bgfx::isValid(m_shadowSamplers[1])
         && bgfx::isValid(m_shadowMatricesUniformHandle) && bgfx::isValid(m_shadowParamsUniformHandle)
         && bgfx::isValid(m_pointPositionsUniformHandle) && bgfx::isValid(m_pointColorsUniformHandle)
@@ -366,14 +464,15 @@ void ModelRenderer::shutdown(bool destroyGpu)
 {
     destroySunShadows(destroyGpu);
     destroyEnvironment(destroyGpu);
-    m_deformedVertexBuffers.clear();
+    destroyDeformedBuffers(destroyGpu);
     if (destroyGpu && BgfxContext::isBgfxInitialized())
     {
         for (auto &[pAsset, resources] : m_assets)
         {
             destroy(resources);
         }
-        for (const bgfx::UniformHandle handle : {m_metallicRoughnessSamplerHandle, m_pbrUniformHandle,
+        for (const bgfx::UniformHandle handle : {m_skinSamplerHandle, m_skinParamsHandle,
+                m_metallicRoughnessSamplerHandle, m_pbrUniformHandle,
                 m_pointPositionsUniformHandle, m_pointColorsUniformHandle,
                 m_shadowSamplers[0], m_shadowSamplers[1], m_shadowMatricesUniformHandle, m_shadowParamsUniformHandle,
                 m_environmentSamplerHandle, m_environmentBrdfSamplerHandle, m_environmentUniformHandle})
@@ -451,6 +550,8 @@ void ModelRenderer::shutdown(bool destroyGpu)
     m_pointPositionsUniformHandle = BGFX_INVALID_HANDLE;
     m_pointColorsUniformHandle = BGFX_INVALID_HANDLE;
     m_normalSamplerHandle = BGFX_INVALID_HANDLE;
+    m_skinSamplerHandle = BGFX_INVALID_HANDLE;
+    m_skinParamsHandle = BGFX_INVALID_HANDLE;
     m_surfaceUniformHandle = BGFX_INVALID_HANDLE;
     m_fogUniformHandle = BGFX_INVALID_HANDLE;
     m_cameraUniformHandle = BGFX_INVALID_HANDLE;
@@ -472,8 +573,30 @@ void ModelRenderer::preload(const ModelInstanceSystem &instances)
 
 void ModelRenderer::beginFrame()
 {
-    m_deformedVertexBuffers.clear();
     m_shadowParams[0][0] = 0;
+}
+
+void ModelRenderer::destroyDeformedBuffers(bool destroyGpu)
+{
+    if (destroyGpu && BgfxContext::isBgfxInitialized())
+    {
+        for (const auto &[pVertices, buffer] : m_deformedVertexBuffers)
+        {
+            if (bgfx::isValid(buffer.handle))
+            {
+                bgfx::destroy(buffer.handle);
+            }
+        }
+        for (const auto &[pMatrix, palette] : m_skinPalettes)
+        {
+            if (bgfx::isValid(palette.texture))
+            {
+                bgfx::destroy(palette.texture);
+            }
+        }
+    }
+    m_deformedVertexBuffers.clear();
+    m_skinPalettes.clear();
 }
 
 void ModelRenderer::destroySunShadows(bool destroyGpu)
@@ -521,10 +644,13 @@ void ModelRenderer::renderSunShadows(const ModelInstanceSystem &instances, uint1
         cascades[index] = modelSunShadowCascade(cameraPosition, lightDirection, ModelSunShadowRadii[index],
             caps.homogeneousDepth, caps.originBottomLeft);
     }
-    std::vector<Draw> casters = collectDraws(instances);
+    std::vector<Draw> casters = collectDraws(instances, [&](const ModelBounds &bounds)
+    {
+        return modelSunShadowIntersects(cascades.back(), bounds);
+    });
     std::erase_if(casters, [&](const Draw &draw)
     {
-        const ModelBounds *pBounds = instances.bounds(draw.instance);
+        const ModelBounds *pBounds = instances.cullingBounds(draw.instance);
         return draw.pMaterial->alphaMode == ModelAlphaMode::Blend || pBounds == nullptr
             || !modelSunShadowIntersects(cascades.back(), *pBounds);
     });
@@ -571,7 +697,7 @@ void ModelRenderer::renderSunShadows(const ModelInstanceSystem &instances, uint1
         m_shadowMatrices[index] = cascades[index].textureMatrix;
         for (const Draw &draw : casters)
         {
-            const ModelBounds *pBounds = instances.bounds(draw.instance);
+            const ModelBounds *pBounds = instances.cullingBounds(draw.instance);
             if (!modelSunShadowIntersects(cascades[index], *pBounds) || !bindGeometry(draw))
             {
                 continue;
@@ -596,9 +722,28 @@ void ModelRenderer::renderSunShadows(const ModelInstanceSystem &instances, uint1
             lightDirection[2] / std::sqrt(lengthSquared), 0}}};
 }
 
-std::vector<ModelRenderer::Draw> ModelRenderer::collectDraws(const ModelInstanceSystem &instances)
+std::vector<ModelRenderer::Draw> ModelRenderer::collectDraws(const ModelInstanceSystem &instances,
+    const std::function<bool(const ModelBounds &)> &visibleBounds)
 {
     pruneUnusedAssets();
+    std::erase_if(m_deformedVertexBuffers, [&](const auto &entry)
+    {
+        if (instances.contains(entry.second.owner))
+        {
+            return false;
+        }
+        bgfx::destroy(entry.second.handle);
+        return true;
+    });
+    std::erase_if(m_skinPalettes, [&](const auto &entry)
+    {
+        if (instances.contains(entry.second.owner))
+        {
+            return false;
+        }
+        bgfx::destroy(entry.second.texture);
+        return true;
+    });
     static const ModelMaterial defaultMaterial;
     std::vector<Draw> draws;
     for (const ModelInstanceHandle handle : instances.handles())
@@ -607,8 +752,18 @@ std::vector<ModelRenderer::Draw> ModelRenderer::collectDraws(const ModelInstance
         {
             continue;
         }
+        const ModelBounds *pBounds = instances.motionBounds(handle);
+        if (pBounds == nullptr || !pBounds->valid || (visibleBounds && !visibleBounds(*pBounds)))
+        {
+            continue;
+        }
+        pBounds = instances.cullingBounds(handle);
+        if (pBounds == nullptr || !pBounds->valid || (visibleBounds && !visibleBounds(*pBounds)))
+        {
+            continue;
+        }
         const std::shared_ptr<const ModelAsset> asset = instances.sharedAsset(handle);
-        const ModelPose *pPose = instances.pose(handle);
+        const ModelPose *pPose = instances.pose(handle, false);
         const AssetResources *pResources = prepare(asset);
         if (asset == nullptr || pPose == nullptr || pResources == nullptr)
         {
@@ -648,9 +803,12 @@ std::vector<ModelRenderer::Draw> ModelRenderer::collectDraws(const ModelInstance
                     pMaterial,
                     node.skinIndex >= 0 ? identityModelMatrix() : matrix,
                     &matrix,
-                    node.skinIndex >= 0
-                        || !asset->meshes[node.meshIndex].primitives[primitiveIndex].morphTargets.empty()
+                    !asset->meshes[node.meshIndex].primitives[primitiveIndex].morphTargets.empty()
                         ? &pPose->deformedVertices[nodeIndex][primitiveIndex] : nullptr,
+                    pPose->deformationRevision,
+                    node.skinIndex >= 0 && asset->meshes[node.meshIndex].primitives[primitiveIndex].morphTargets.empty()
+                        ? &asset->skins[node.skinIndex] : nullptr,
+                    pPose,
                     nullptr,
                     instances.outlineColor(handle),
                     0,
@@ -668,7 +826,8 @@ void ModelRenderer::render(
     const std::array<float, 3> &cameraPosition,
     const ModelRenderLighting &lighting,
     const std::function<ModelRenderLighting(const ModelBounds &)> &lightingForBounds,
-    const ModelSkyEnvironment *pSkyEnvironment)
+    const ModelSkyEnvironment *pSkyEnvironment,
+    const std::function<bool(const ModelBounds &)> &visibleBounds)
 {
     if (!bgfx::isValid(m_programHandle))
     {
@@ -677,6 +836,7 @@ void ModelRenderer::render(
     if (instances.size() == 0)
     {
         pruneUnusedAssets();
+        destroyDeformedBuffers(true);
         destroyEnvironment(true);
         return;
     }
@@ -687,11 +847,16 @@ void ModelRenderer::render(
     std::unordered_map<uint32_t, ModelRenderLighting> instanceLighting;
     std::vector<Draw> opaqueDraws;
     std::vector<Draw> transparentDraws;
-    std::vector<Draw> draws = collectDraws(instances);
+    std::vector<Draw> draws = collectDraws(instances, visibleBounds);
     const std::vector<ModelInstanceHandle> handles = instances.handles();
     const bool hasMarkers = std::any_of(handles.begin(), handles.end(), [&](ModelInstanceHandle handle)
     {
-        return instances.isVisible(handle) && instances.areNodeMarkersVisible(handle);
+        if (!instances.isVisible(handle) || !instances.areNodeMarkersVisible(handle))
+        {
+            return false;
+        }
+        const ModelBounds *pBounds = instances.cullingBounds(handle);
+        return pBounds != nullptr && (!pBounds->valid || !visibleBounds || visibleBounds(*pBounds));
     });
     if (draws.empty() && !hasMarkers)
     {
@@ -706,7 +871,7 @@ void ModelRenderer::render(
         auto found = instanceLighting.find(draw.instance.index);
         if (found == instanceLighting.end())
         {
-            const ModelBounds *pBounds = instances.bounds(draw.instance);
+            const ModelBounds *pBounds = instances.cullingBounds(draw.instance);
             found = instanceLighting.emplace(draw.instance.index,
                 lightingForBounds && pBounds != nullptr ? lightingForBounds(*pBounds) : lighting).first;
         }
@@ -753,7 +918,12 @@ void ModelRenderer::render(
     {
         if (instances.isVisible(handle) && instances.areNodeMarkersVisible(handle))
         {
-            if (const ModelPose *pPose = instances.pose(handle))
+            const ModelBounds *pBounds = instances.cullingBounds(handle);
+            if (pBounds == nullptr || (pBounds->valid && visibleBounds && !visibleBounds(*pBounds)))
+            {
+                continue;
+            }
+            if (const ModelPose *pPose = instances.pose(handle, false))
             {
                 bindSunShadows();
                 submitNodeMarkers(*pPose, viewId);
@@ -915,6 +1085,21 @@ const ModelRenderer::AssetResources *ModelRenderer::prepare(std::shared_ptr<cons
                         primitive.vertices.data(),
                         static_cast<uint32_t>(primitive.vertices.size() * sizeof(ModelVertex))),
                     layout);
+                if (!primitive.influences.empty() && primitive.morphTargets.empty())
+                {
+                    std::vector<SkinnedVertex> vertices(primitive.vertices.size());
+                    for (size_t index = 0; index < vertices.size(); ++index)
+                    {
+                        vertices[index] = {primitive.vertices[index], primitive.influences[index]};
+                    }
+                    primitiveResources.skinnedVertexBuffer = bgfx::createVertexBuffer(
+                        bgfx::copy(vertices.data(), uint32_t(vertices.size() * sizeof(SkinnedVertex))),
+                        skinnedVertexLayout());
+                    if (!bgfx::isValid(primitiveResources.skinnedVertexBuffer))
+                    {
+                        throw std::runtime_error("Cannot allocate model skin vertex buffer");
+                    }
+                }
                 primitiveResources.indexBuffer = bgfx::createIndexBuffer(
                     bgfx::copy(
                         primitive.indices.data(),
@@ -971,6 +1156,10 @@ void ModelRenderer::destroy(AssetResources &resources)
     {
         for (PrimitiveResources &primitive : mesh.primitives)
         {
+            if (bgfx::isValid(primitive.skinnedVertexBuffer))
+            {
+                bgfx::destroy(primitive.skinnedVertexBuffer);
+            }
             if (bgfx::isValid(primitive.vertexBuffer))
             {
                 bgfx::destroy(primitive.vertexBuffer);

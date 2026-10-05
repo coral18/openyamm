@@ -75,6 +75,7 @@ TEST_CASE("screenshot launch directives are read but never persisted")
             << "effect_spawn_scale=2\neffect_spawn_yaw_radians=1.5\n"
             << "effect_spawn_count=32\neffect_stats_delay_seconds=0.75\n"
             << "actor_models=true\nactor_spawn_id=502\nactor_spawn_count=3\n"
+            << "actor_models_manifest=worlds/mm6/models/sorpigal_demon_crowd.yml\n"
             << "actor_spawn_x=10\nactor_spawn_y=20\nactor_spawn_z=30\n"
             << "model_spawn_path=engine/models/fixtures/shared_model_fixture.glb\n"
             << "model_spawn_clip=bob_spin\n"
@@ -96,6 +97,7 @@ TEST_CASE("screenshot launch directives are read but never persisted")
     CHECK_EQ(settings->effectSpawnCount, 32u);
     CHECK_EQ(settings->effectStatsDelaySeconds, doctest::Approx(0.75f));
     CHECK(settings->actorModels);
+    CHECK(settings->actorModelsManifest == "worlds/mm6/models/sorpigal_demon_crowd.yml");
     CHECK_EQ(settings->actorSpawnId, 502);
     CHECK_EQ(settings->actorSpawnCount, 3u);
     const std::array<float, 3> expectedActorPosition = {10, 20, 30};
@@ -118,6 +120,7 @@ TEST_CASE("screenshot launch directives are read but never persisted")
     CHECK_EQ(reloaded->effectSpawnCount, 1u);
     CHECK_EQ(reloaded->effectStatsDelaySeconds, doctest::Approx(-1.0f));
     CHECK_FALSE(reloaded->actorModels);
+    CHECK(reloaded->actorModelsManifest.empty());
     CHECK_EQ(reloaded->actorSpawnId, 0);
     CHECK(reloaded->modelSpawnPath.empty());
     CHECK(reloaded->modelSpawnClip.empty());

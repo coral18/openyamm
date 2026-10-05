@@ -4,6 +4,7 @@
 #include "game/gameplay/ArenaRuntime.h"
 #include "game/gameplay/GenericActorDialog.h"
 #include "game/gameplay/HouseInteraction.h"
+#include "game/gameplay/NpcFollowerRuntime.h"
 #include "game/gameplay/MasteryTeacherDialog.h"
 #include "game/gameplay/ReputationRuntime.h"
 #include "game/StringUtils.h"
@@ -1150,7 +1151,7 @@ EventDialogContent buildEventDialogContent(
 
         if (pTransition != nullptr && pTransition->has_value() && (*pTransition)->travelDays > 0)
         {
-            const int travelDays = (*pTransition)->travelDays;
+            const int travelDays = hiredNpcWalkingTravelDays((*pTransition)->travelDays, eventRuntimeState);
             dialog.lines.push_back(
                 "It will take "
                 + std::to_string(travelDays)

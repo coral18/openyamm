@@ -4201,6 +4201,7 @@ void IndoorRenderer::render(
     modelLighting.environmentColor = {lightingFrame.ambient, lightingFrame.ambient, lightingFrame.ambient};
     IndoorFaceGeometryCache modelGeometryCache(
         m_worldFxSystem.models().size() != 0 ? m_pIndoorMapData->faces.size() : 0);
+    const ViewFrustum modelFrustum(viewMatrix, projectionMatrix, bgfx::getCaps()->homogeneousDepth);
     m_modelRenderer.render(
         m_worldFxSystem.models(),
         MainViewId,
@@ -4222,6 +4223,11 @@ void IndoorRenderer::render(
             selected.pointColors = lights.colors;
             selected.pointCount = uint32_t(lights.lightCount);
             return selected;
+        }, nullptr,
+        [&](const Engine::ModelBounds &bounds)
+        {
+            return modelFrustum.intersectsBounds({bounds.min[0], bounds.min[1], bounds.min[2]},
+                {bounds.max[0], bounds.max[1], bounds.max[2]});
         });
     if (collectRenderDiagnostics)
     {
@@ -12138,10 +12144,17 @@ IndoorRenderer::InspectHit IndoorRenderer::inspectAtCursor(
             [&](const RuntimeActorBillboard &actor, float &distance, bool &billboardTested) -> bool
             {
                 billboardTested = false;
-                const Engine::ModelBounds *pBounds = m_worldFxSystem.actorModelBounds(actor.actorIndex);
+                const Engine::ModelBounds *pBounds = m_worldFxSystem.actorModelCullingBounds(actor.actorIndex);
                 if (pBounds != nullptr && pBounds->valid)
                 {
                     billboardTested = true;
+                    if (!intersectRayAabb(rayOrigin, rayDirection,
+                        {pBounds->min[0], pBounds->min[1], pBounds->min[2]},
+                        {pBounds->max[0], pBounds->max[1], pBounds->max[2]}, distance))
+                    {
+                        return false;
+                    }
+                    pBounds = m_worldFxSystem.actorModelBounds(actor.actorIndex);
                     return intersectRayAabb(rayOrigin, rayDirection,
                         {pBounds->min[0], pBounds->min[1], pBounds->min[2]},
                         {pBounds->max[0], pBounds->max[1], pBounds->max[2]}, distance);

@@ -7,6 +7,19 @@ namespace OpenYAMM::Engine
 {
 namespace
 {
+void includePoint(ModelBounds &bounds, const std::array<float, 3> &point)
+{
+    if (!bounds.valid)
+    {
+        bounds = {point, point, true};
+    }
+    for (size_t axis = 0; axis < 3; ++axis)
+    {
+        bounds.min[axis] = std::min(bounds.min[axis], point[axis]);
+        bounds.max[axis] = std::max(bounds.max[axis], point[axis]);
+    }
+}
+
 std::array<float, 4> normalizedQuaternion(const std::array<float, 4> &value)
 {
     const float length = std::sqrt(
@@ -100,6 +113,201 @@ void sampleChannel(const ModelAnimationChannel &channel, float timeSeconds, Mode
 }
 }
 
+ModelDeformationBounds buildModelDeformationBounds(const ModelAsset &asset)
+{
+    ModelDeformationBounds result;
+    result.nodes.resize(asset.nodes.size());
+    for (size_t nodeIndex = 0; nodeIndex < asset.nodes.size(); ++nodeIndex)
+    {
+        const ModelNode &node = asset.nodes[nodeIndex];
+        if (node.meshIndex < 0)
+        {
+            continue;
+        }
+        std::vector<ModelJointBounds> &bounds = result.nodes[nodeIndex];
+        bounds.resize(node.skinIndex >= 0 ? asset.skins[node.skinIndex].joints.size() : 1);
+        for (ModelJointBounds &joint : bounds)
+        {
+            joint.morphs.resize(node.weights.size());
+        }
+        for (const ModelPrimitive &primitive : asset.meshes[node.meshIndex].primitives)
+        {
+            for (size_t vertex = 0; vertex < primitive.vertices.size(); ++vertex)
+            {
+                const size_t count = node.skinIndex >= 0 ? primitive.influences[vertex].weights.size() : 1;
+                for (size_t influence = 0; influence < count; ++influence)
+                {
+                    if (node.skinIndex >= 0 && primitive.influences[vertex].weights[influence] == 0)
+                    {
+                        continue;
+                    }
+                    ModelJointBounds &joint = bounds[node.skinIndex >= 0
+                        ? primitive.influences[vertex].joints[influence] : 0];
+                    includePoint(joint.base, primitive.vertices[vertex].position);
+                    for (size_t target = 0; target < primitive.morphTargets.size(); ++target)
+                    {
+                        const std::vector<std::array<float, 3>> &positions = primitive.morphTargets[target].positions;
+                        includePoint(joint.morphs[target],
+                            positions.empty() ? std::array<float, 3>{} : positions[vertex]);
+                    }
+                }
+            }
+        }
+    }
+    // Bound all possible interpolation times, rather than sampling frames and missing an intermediate rotation.
+    // Translation lengths and absolute scales compose along the hierarchy; rotation preserves lengths.
+    std::vector<float> offsets(asset.nodes.size()), scales(asset.nodes.size());
+    std::vector<std::vector<float>> morphLimits(asset.nodes.size());
+    const auto length = [](const std::array<float, 3> &point)
+    {
+        return std::sqrt(point[0] * point[0] + point[1] * point[1] + point[2] * point[2]);
+    };
+    for (size_t index = 0; index < asset.nodes.size(); ++index)
+    {
+        const ModelNode &node = asset.nodes[index];
+        offsets[index] = length(node.transform.translation);
+        scales[index] = std::max({std::abs(node.transform.scale[0]),
+            std::abs(node.transform.scale[1]), std::abs(node.transform.scale[2])});
+        if (node.usesMatrix)
+        {
+            offsets[index] = length({node.matrix[12], node.matrix[13], node.matrix[14]});
+            float squared = 0;
+            for (size_t column = 0; column < 3; ++column)
+            {
+                for (size_t row = 0; row < 3; ++row)
+                {
+                    squared += node.matrix[column * 4 + row] * node.matrix[column * 4 + row];
+                }
+            }
+            scales[index] = std::sqrt(squared); // Conservative operator norm, including authored shear.
+        }
+        morphLimits[index] = node.weights;
+        for (float &weight : morphLimits[index])
+        {
+            weight = std::abs(weight);
+        }
+    }
+    for (const ModelAnimationClip &clip : asset.clips)
+    {
+        for (const ModelAnimationChannel &channel : clip.channels)
+        {
+            for (const std::array<float, 4> &value : channel.values)
+            {
+                if (channel.target == ModelAnimationTarget::Translation)
+                {
+                    offsets[channel.nodeIndex] = std::max(offsets[channel.nodeIndex],
+                        length({value[0], value[1], value[2]}));
+                }
+                else if (channel.target == ModelAnimationTarget::Scale)
+                {
+                    scales[channel.nodeIndex] = std::max({scales[channel.nodeIndex],
+                        std::abs(value[0]), std::abs(value[1]), std::abs(value[2])});
+                }
+            }
+            for (const std::vector<float> &weights : channel.weightValues)
+            {
+                for (size_t index = 0; index < weights.size(); ++index)
+                {
+                    morphLimits[channel.nodeIndex][index] = std::max(
+                        morphLimits[channel.nodeIndex][index], std::abs(weights[index]));
+                }
+            }
+        }
+    }
+    for (uint32_t index : asset.hierarchyOrder)
+    {
+        const int parent = asset.nodes[index].parentIndex;
+        if (parent >= 0)
+        {
+            offsets[index] = offsets[parent] + scales[parent] * offsets[index];
+            scales[index] *= scales[parent];
+        }
+    }
+    for (size_t nodeIndex = 0; nodeIndex < asset.nodes.size(); ++nodeIndex)
+    {
+        const ModelNode &node = asset.nodes[nodeIndex];
+        for (size_t jointIndex = 0; jointIndex < result.nodes[nodeIndex].size(); ++jointIndex)
+        {
+            const ModelJointBounds &joint = result.nodes[nodeIndex][jointIndex];
+            if (!joint.base.valid)
+            {
+                continue;
+            }
+            ModelBounds local = joint.base;
+            for (size_t target = 0; target < joint.morphs.size(); ++target)
+            {
+                for (size_t axis = 0; axis < 3; ++axis)
+                {
+                    const float delta = morphLimits[nodeIndex][target]
+                        * std::max(std::abs(joint.morphs[target].min[axis]), std::abs(joint.morphs[target].max[axis]));
+                    local.min[axis] -= delta;
+                    local.max[axis] += delta;
+                }
+            }
+            const uint32_t index = node.skinIndex >= 0 ? asset.skins[node.skinIndex].joints[jointIndex] : nodeIndex;
+            const ModelMatrix matrix = node.skinIndex >= 0
+                ? asset.skins[node.skinIndex].inverseBindMatrices[jointIndex] : identityModelMatrix();
+            for (uint32_t corner = 0; corner < 8; ++corner)
+            {
+                const float point[3] = {corner & 1 ? local.max[0] : local.min[0],
+                    corner & 2 ? local.max[1] : local.min[1], corner & 4 ? local.max[2] : local.min[2]};
+                const float radius = length({matrix[0] * point[0] + matrix[4] * point[1]
+                        + matrix[8] * point[2] + matrix[12],
+                    matrix[1] * point[0] + matrix[5] * point[1] + matrix[9] * point[2] + matrix[13],
+                    matrix[2] * point[0] + matrix[6] * point[1] + matrix[10] * point[2] + matrix[14]});
+                result.motionRadius = std::max(result.motionRadius, offsets[index] + scales[index] * radius);
+            }
+        }
+    }
+    return result;
+}
+
+ModelBounds modelPoseBounds(const ModelAsset &asset, const ModelPose &pose, const ModelDeformationBounds &bounds)
+{
+    ModelBounds result;
+    for (size_t nodeIndex = 0; nodeIndex < asset.nodes.size(); ++nodeIndex)
+    {
+        const ModelNode &node = asset.nodes[nodeIndex];
+        if (node.meshIndex < 0 || !modelMatrixVisible(pose.globalMatrices[nodeIndex]))
+        {
+            continue;
+        }
+        for (size_t jointIndex = 0; jointIndex < bounds.nodes[nodeIndex].size(); ++jointIndex)
+        {
+            const ModelJointBounds &joint = bounds.nodes[nodeIndex][jointIndex];
+            ModelBounds local = joint.base;
+            if (!local.valid)
+            {
+                continue;
+            }
+            for (size_t target = 0; target < joint.morphs.size(); ++target)
+            {
+                const float weight = pose.morphWeights[nodeIndex][target];
+                const ModelBounds &delta = joint.morphs[target];
+                for (size_t axis = 0; axis < 3; ++axis)
+                {
+                    local.min[axis] += weight * (weight >= 0 ? delta.min[axis] : delta.max[axis]);
+                    local.max[axis] += weight * (weight >= 0 ? delta.max[axis] : delta.min[axis]);
+                }
+            }
+            const ModelMatrix matrix = node.skinIndex >= 0
+                ? multiplyModelMatrices(pose.globalMatrices[asset.skins[node.skinIndex].joints[jointIndex]],
+                    asset.skins[node.skinIndex].inverseBindMatrices[jointIndex])
+                : pose.globalMatrices[nodeIndex];
+            for (uint32_t corner = 0; corner < 8; ++corner)
+            {
+                const float point[3] = {corner & 1 ? local.max[0] : local.min[0],
+                    corner & 2 ? local.max[1] : local.min[1], corner & 4 ? local.max[2] : local.min[2]};
+                includePoint(result, {matrix[0] * point[0] + matrix[4] * point[1]
+                        + matrix[8] * point[2] + matrix[12],
+                    matrix[1] * point[0] + matrix[5] * point[1] + matrix[9] * point[2] + matrix[13],
+                    matrix[2] * point[0] + matrix[6] * point[1] + matrix[10] * point[2] + matrix[14]});
+            }
+        }
+    }
+    return result;
+}
+
 void resetModelPose(const ModelAsset &asset, ModelPose &pose)
 {
     pose.localTransforms.resize(asset.nodes.size());
@@ -149,9 +357,11 @@ void evaluateModelHierarchy(const ModelAsset &asset, const ModelMatrix &rootMatr
     }
 }
 
-void deformModelPose(const ModelAsset &asset, ModelPose &pose)
+void deformModelPose(const ModelAsset &asset, ModelPose &pose, bool deformSkins)
 {
-    // ponytail: CPU deformation suits this three-actor trial; use GPU skinning for large crowds.
+    // CPU skinning is retained for exact picking; rendering skins without morphs uses the GPU.
+    // ponytail: morphs use CPU deformation; move them to the GPU if large morph crowds become a measured cost.
+    ++pose.deformationRevision;
     pose.deformedVertices.resize(asset.nodes.size());
     for (size_t nodeIndex = 0; nodeIndex < asset.nodes.size(); ++nodeIndex)
     {
@@ -162,7 +372,7 @@ void deformModelPose(const ModelAsset &asset, ModelPose &pose)
         }
         const ModelMesh &mesh = asset.meshes[node.meshIndex];
         std::vector<ModelMatrix> joints, normals;
-        if (node.skinIndex >= 0)
+        if (node.skinIndex >= 0 && (deformSkins || !node.weights.empty()))
         {
             const ModelSkin &skin = asset.skins[node.skinIndex];
             for (size_t i = 0; i < skin.joints.size(); ++i)
@@ -176,7 +386,7 @@ void deformModelPose(const ModelAsset &asset, ModelPose &pose)
         for (size_t primitiveIndex = 0; primitiveIndex < mesh.primitives.size(); ++primitiveIndex)
         {
             const ModelPrimitive &primitive = mesh.primitives[primitiveIndex];
-            if (node.skinIndex < 0 && primitive.morphTargets.empty())
+            if (primitive.morphTargets.empty() && (node.skinIndex < 0 || !deformSkins))
             {
                 continue;
             }

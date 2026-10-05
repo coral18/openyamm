@@ -1593,6 +1593,10 @@ std::optional<GameSettings> loadGameSettings(const std::filesystem::path &path, 
             return std::nullopt;
         }
     }
+    if (const std::optional<std::string> value = getIniValue(document, "debug", "actor_models_manifest"))
+    {
+        settings.actorModelsManifest = trimCopy(*value);
+    }
     if (const std::optional<std::string> value = getIniValue(document, "debug", "actor_spawn_id"))
     {
         int parsed = 0;

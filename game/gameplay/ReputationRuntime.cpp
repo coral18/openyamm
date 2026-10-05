@@ -14,7 +14,6 @@ constexpr uint32_t PirateProfessionId = 45;
 constexpr uint32_t GypsyProfessionId = 48;
 constexpr uint32_t DuperProfessionId = 50;
 constexpr uint32_t BurglarProfessionId = 51;
-constexpr uint32_t FallenWizardProfessionId = 52;
 constexpr uint32_t MMergeGuardGroup38 = 38;
 constexpr uint32_t MMergeGuardGroup55 = 55;
 constexpr int MMergePeasantKillReputationDelta = 1;
@@ -28,7 +27,6 @@ bool professionHurtsReputation(uint32_t professionId)
         case GypsyProfessionId:
         case DuperProfessionId:
         case BurglarProfessionId:
-        case FallenWizardProfessionId:
             return true;
 
         default:
@@ -67,7 +65,11 @@ int hiredNpcReputationPenalty(const EventRuntimeState &runtimeState)
 
     for (const HiredNpcFollower &follower : runtimeState.hiredNpcFollowers)
     {
-        if (professionHurtsReputation(follower.professionId))
+        if (follower.professionId == 36)
+        {
+            penalty -= 5;
+        }
+        else if (professionHurtsReputation(follower.professionId))
         {
             penalty += 5;
         }

@@ -9640,9 +9640,10 @@ TEST_CASE("effective reputation includes OE criminal follower penalty")
     runtimeState.hiredNpcFollowers.push_back({100, 45, 0});
     runtimeState.hiredNpcFollowers.push_back({101, 51, 0});
     runtimeState.hiredNpcFollowers.push_back({102, 36, 0});
+    runtimeState.hiredNpcFollowers.push_back({103, 52, 0});
 
-    CHECK_EQ(OpenYAMM::Game::hiredNpcReputationPenalty(runtimeState), 10);
-    CHECK_EQ(OpenYAMM::Game::effectivePartyReputation(-6, &runtimeState), 4);
+    CHECK_EQ(OpenYAMM::Game::hiredNpcReputationPenalty(runtimeState), 5);
+    CHECK_EQ(OpenYAMM::Game::effectivePartyReputation(-6, &runtimeState), -1);
     CHECK_EQ(OpenYAMM::Game::reputationLabel(-25), "Saintly");
     CHECK_EQ(OpenYAMM::Game::reputationLabel(25), "Notorious");
 }

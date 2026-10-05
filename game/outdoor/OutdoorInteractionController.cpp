@@ -3371,10 +3371,17 @@ bool OutdoorInteractionController::hitTestActorBillboard(
     if (pRuntimeActor != nullptr && view.m_pOutdoorWorldRuntime != nullptr)
     {
         const size_t actorIndex = size_t(pRuntimeActor - view.m_pOutdoorWorldRuntime->mapActorState(0));
-        const Engine::ModelBounds *pBounds = view.m_worldFxSystem.actorModelBounds(actorIndex);
+        const Engine::ModelBounds *pBounds = view.m_worldFxSystem.actorModelCullingBounds(actorIndex);
         if (pBounds != nullptr && pBounds->valid)
         {
             usedBillboardHit = true;
+            if (!intersectRayAabb(rayOrigin, rayDirection,
+                {pBounds->min[0], pBounds->min[1], pBounds->min[2]},
+                {pBounds->max[0], pBounds->max[1], pBounds->max[2]}, distance))
+            {
+                return false;
+            }
+            pBounds = view.m_worldFxSystem.actorModelBounds(actorIndex);
             return intersectRayAabb(rayOrigin, rayDirection,
                 {pBounds->min[0], pBounds->min[1], pBounds->min[2]},
                 {pBounds->max[0], pBounds->max[1], pBounds->max[2]}, distance);

@@ -223,7 +223,6 @@ public:
         const ItemTable *pItemTable,
         const StandardItemEnchantTable *pStandardItemEnchantTable = nullptr,
         const SpecialItemEnchantTable *pSpecialItemEnchantTable = nullptr,
-        const EventRuntimeState *pEventRuntimeState = nullptr,
         CharacterAttackTuning attackTuning = {});
     static CharacterAttackProfile buildCharacterAttackProfile(
         const Character &character,

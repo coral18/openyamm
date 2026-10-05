@@ -1086,7 +1086,8 @@ public:
         float maxY,
         std::vector<size_t> &indices) const;
     const OutdoorFaceGeometryData *outdoorFace(size_t faceIndex) const;
-    bool hasClearOutdoorLineOfSight(const bx::Vec3 &start, const bx::Vec3 &end) const;
+    bool hasClearOutdoorLineOfSight(
+        const bx::Vec3 &start, const bx::Vec3 &end, bool includeWalkableFaces = false) const;
     size_t bloodSplatCount() const;
     const BloodSplatState *bloodSplatState(size_t splatIndex) const;
     uint64_t bloodSplatRevision() const;

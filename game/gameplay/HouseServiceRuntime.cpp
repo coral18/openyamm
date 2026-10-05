@@ -1939,7 +1939,7 @@ bool HouseServiceRuntime::tryIdentifyInventoryItem(
 
     const bool houseCanIdentify = supportsIdentify(houseEntry) && isShopItemFamilyAllowed(houseEntry, *pItemDefinition);
     const bool followerCanIdentify = pEventRuntimeState != nullptr
-        && hiredNpcCanIdentifyItemKind(*pEventRuntimeState, pItemDefinition->equipStat);
+        && hiredNpcHasProfession(pEventRuntimeState->hiredNpcFollowers, 4);
 
     if (!houseCanIdentify && !followerCanIdentify)
     {
@@ -1951,7 +1951,7 @@ bool HouseServiceRuntime::tryIdentifyInventoryItem(
         return false;
     }
 
-    const int price = PriceCalculator::itemIdentificationPrice(
+    const int price = followerCanIdentify ? 0 : PriceCalculator::itemIdentificationPrice(
         partyMerchantMember(party),
         *pItem,
         *pItemDefinition,
@@ -2064,7 +2064,7 @@ bool HouseServiceRuntime::tryRepairInventoryItem(
 
     const bool houseCanRepair = supportsRepair(houseEntry) && isShopItemFamilyAllowed(houseEntry, *pItemDefinition);
     const bool followerCanRepair = pEventRuntimeState != nullptr
-        && hiredNpcCanRepairItemKind(*pEventRuntimeState, pItemDefinition->equipStat);
+        && hiredNpcCanRepairItemKind(pEventRuntimeState->hiredNpcFollowers, pItemDefinition->equipStat);
 
     if (!houseCanRepair && !followerCanRepair)
     {
@@ -2076,7 +2076,7 @@ bool HouseServiceRuntime::tryRepairInventoryItem(
         return false;
     }
 
-    const int price = PriceCalculator::itemRepairPrice(
+    const int price = followerCanRepair ? 0 : PriceCalculator::itemRepairPrice(
         partyMerchantMember(party),
         *pItem,
         *pItemDefinition,
