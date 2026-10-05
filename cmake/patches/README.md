@@ -1,4 +1,23 @@
-# bgfx GL patches
+# bgfx patches
+
+## Direct3D 11 compressed texture updates
+
+`bgfx-d3d11-compressed-updates.patch` fixes uploads of compressed mip levels with dimensions that are not
+multiples of four. Row pitches round up to complete blocks, slice pitches count block rows, and full-mip
+updates pass a null destination box so Direct3D accepts the unaligned virtual edges. Partial updates retain
+their destination box and explicit source pitches are preserved.
+
+The Windows 1.0 package includes townsfolk mips sized 246×280 and 123×140. The upstream upload uses
+976/480-byte BC7 rows instead of 992/496 bytes, and submits nonaligned destination boxes. Rejected uploads
+leave distant sprites invisible; trilinear blending between valid and missing levels makes them translucent.
+This fixes the Direct3D backend without changing sprite shaders, source assets or the atlas format.
+
+Run `python3 tests/test_bgfx_d3d11_texture_updates.py` after configuring the desktop build. The check compiles
+the actual patched upload function against a recording Direct3D context, covering uneven/tiny mips, BC4/BC5/BC7,
+partial and pitched updates, array/cube indexing, uncompressed textures, and compressed 3D slice pitches.
+It does not replace a visual check on a Windows GPU.
+
+## GLES compressed texture updates
 
 `bgfx-gles-unpack-row-length.patch` recognizes `GL_UNPACK_ROW_LENGTH` as core functionality in GLES 3.
 Without this check, GLES 3 drivers that omit the redundant `EXT_unpack_subimage` extension use the pixel-row

@@ -1,0 +1,44 @@
+diff --git a/src/renderer_d3d11.cpp b/src/renderer_d3d11.cpp
+--- a/src/renderer_d3d11.cpp
++++ b/src/renderer_d3d11.cpp
+@@ -4928,14 +4928,17 @@ namespace bgfx
+ 		const uint16_t bpp    = blockInfo.bitsPerPixel;
+ 		const uint32_t subres = _mip + ( (layer + _side) * m_numMips);
+ 		const bool     depth  = bimg::isDepth(bimg::TextureFormat::Enum(m_textureFormat) );
++		const bool compressed = bimg::isCompressed(bimg::TextureFormat::Enum(m_textureFormat) );
+ 		uint32_t rectpitch  = _rect.m_width*bpp/8;
+-		if (bimg::isCompressed(bimg::TextureFormat::Enum(m_textureFormat) ) )
++		uint32_t rows = _rect.m_height;
++		if (compressed)
+ 		{
+-			rectpitch = (_rect.m_width / blockInfo.blockWidth)*blockInfo.blockSize;
++			rectpitch = ( (_rect.m_width + blockInfo.blockWidth - 1) / blockInfo.blockWidth)*blockInfo.blockSize;
++			rows = (_rect.m_height + blockInfo.blockHeight - 1) / blockInfo.blockHeight;
+ 		}
+ 
+ 		const uint32_t srcpitch   = UINT16_MAX == _pitch ? rectpitch : _pitch;
+-		const uint32_t slicepitch = rectpitch*_rect.m_height;
++		const uint32_t slicepitch = srcpitch*rows;
+ 
+ 		const bool convert = m_textureFormat != m_requestedFormat;
+ 
+@@ -4952,10 +4955,18 @@ namespace bgfx
+ 			box.bottom = bx::max(1u, m_height >> _mip);
+ 		}
+ 
++		// Whole compressed mips can have virtual edges that are not block aligned.
++		const bool wholeMip = box.left == 0 && box.top == 0
++			&& box.right  == bx::max(1u, m_width  >> _mip)
++			&& box.bottom == bx::max(1u, m_height >> _mip)
++			&& (TextureD3D11::Texture3D != m_type
++				|| (box.front == 0 && box.back == bx::max(1u, m_depth >> _mip) ) )
++			;
++
+ 		deviceCtx->UpdateSubresource(
+ 			  m_ptr
+ 			, subres
+-			, depth ? NULL : &box
++			, depth || (compressed && wholeMip) ? NULL : &box
+ 			, data
+ 			, srcpitch
+ 			, TextureD3D11::Texture3D == m_type ? slicepitch : 0

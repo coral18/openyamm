@@ -289,8 +289,9 @@ function(openyamm_fetch_bgfx_stack)
     openyamm_populate_dependency(bgfx bgfxSourceDir)
 
     include("${CMAKE_CURRENT_FUNCTION_LIST_DIR}/BgfxGlUniformCache.cmake")
-    openyamm_patch_bgfx_gl("${bgfxSourceDir}" bgfx-gl-uniform-cache)
-    openyamm_patch_bgfx_gl("${bgfxSourceDir}" bgfx-gles-unpack-row-length)
+    openyamm_patch_bgfx("${bgfxSourceDir}" bgfx-gl-uniform-cache)
+    openyamm_patch_bgfx("${bgfxSourceDir}" bgfx-gles-unpack-row-length)
+    openyamm_patch_bgfx("${bgfxSourceDir}" bgfx-d3d11-compressed-updates)
 
     if (NOT TARGET openyamm_bgfx_headers)
         add_library(openyamm_bgfx_headers INTERFACE)

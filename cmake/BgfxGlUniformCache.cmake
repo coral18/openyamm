@@ -1,7 +1,7 @@
 include_guard(GLOBAL)
 
 # Apply to populated trees too: FetchContent PATCH_COMMAND alone misses existing builds.
-function(openyamm_patch_bgfx_gl sourceDirectory patchName)
+function(openyamm_patch_bgfx sourceDirectory patchName)
     find_package(Git REQUIRED)
     set(patchFile "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/patches/${patchName}.patch")
     set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${patchFile}")
