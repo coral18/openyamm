@@ -1,10 +1,13 @@
 #pragma once
 
 #include "engine/models/ModelInstance.h"
+#include "engine/render/ModelEnvironment.h"
+#include "engine/render/ModelSunShadows.h"
 
 #include <bgfx/bgfx.h>
 
 #include <array>
+#include <functional>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -17,19 +20,38 @@ struct ModelRenderLighting
     std::array<float, 3> lightDirection = {-0.35f, 0.55f, 0.76f};
     float ambient = 0.35f;
     float direct = 0.65f;
+    std::array<float, 3> directColor = {1.0f, 1.0f, 1.0f};
+    std::array<float, 3> ambientColor = {1.0f, 1.0f, 1.0f};
+    std::array<float, 3> environmentColor = {};
+    std::array<float, 48> pointPositions = {};
+    std::array<float, 48> pointColors = {};
+    uint32_t pointCount = 0;
+    std::array<float, 4> fogColor = {};
+    std::array<float, 4> fogDensities = {};
+    std::array<float, 4> fogDistances = {1.0e9f, 1.0e9f, 1.0e9f, 0};
 };
 
 class ModelRenderer
 {
 public:
-    bool initialize(bgfx::ProgramHandle programHandle);
+    bool initialize(bgfx::ProgramHandle programHandle, bgfx::ProgramHandle shadowProgramHandle = BGFX_INVALID_HANDLE);
     void shutdown(bool destroyGpu);
     void preload(const ModelInstanceSystem &instances);
+    void beginFrame();
+    void renderSunShadows(const ModelInstanceSystem &instances, uint16_t firstViewId,
+        const std::array<float, 3> &cameraPosition, const std::array<float, 3> &lightDirection, bool enabled);
+    void bindSunShadows() const;
+    bool hasSunShadows() const
+    {
+        return m_shadowParams[0][0] > 0.5f;
+    }
     void render(
         const ModelInstanceSystem &instances,
         uint16_t viewId,
         const std::array<float, 3> &cameraPosition,
-        const ModelRenderLighting &lighting = {});
+        const ModelRenderLighting &lighting = {},
+        const std::function<ModelRenderLighting(const ModelBounds &)> &lightingForBounds = {},
+        const ModelSkyEnvironment *pSkyEnvironment = nullptr);
 
 private:
     struct PrimitiveResources
@@ -48,20 +70,69 @@ private:
 
     struct AssetResources
     {
+        struct Texture
+        {
+            int imageIndex = -1;
+            int semantic = 0;
+            uint8_t alphaCutoff = 0;
+            bool mips = true;
+            bgfx::TextureHandle handle = BGFX_INVALID_HANDLE;
+        };
+        struct MaterialTextures
+        {
+            bgfx::TextureHandle base = BGFX_INVALID_HANDLE;
+            bgfx::TextureHandle normal = BGFX_INVALID_HANDLE;
+            bgfx::TextureHandle metallicRoughness = BGFX_INVALID_HANDLE;
+        };
         std::shared_ptr<const ModelAsset> asset;
-        std::vector<bgfx::TextureHandle> textures;
+        std::vector<Texture> textures;
+        std::vector<MaterialTextures> materialTextures;
         std::vector<MeshResources> meshes;
     };
 
     struct Draw;
 
     const AssetResources *prepare(std::shared_ptr<const ModelAsset> asset);
+    void pruneUnusedAssets();
     void destroy(AssetResources &resources);
-    void submit(const Draw &draw, uint16_t viewId, const ModelRenderLighting &lighting) const;
+    std::vector<Draw> collectDraws(const ModelInstanceSystem &instances);
+    bool bindGeometry(const Draw &draw);
+    void submit(const Draw &draw, uint16_t viewId, const ModelRenderLighting &lighting);
     void submitNodeMarkers(const ModelPose &pose, uint16_t viewId) const;
+    void destroySunShadows(bool destroyGpu);
+    void prepareEnvironment(const ModelSkyEnvironment *pSkyEnvironment);
+    void destroyEnvironment(bool destroyGpu);
 
     bgfx::ProgramHandle m_programHandle = BGFX_INVALID_HANDLE;
+    bgfx::ProgramHandle m_shadowProgramHandle = BGFX_INVALID_HANDLE;
+    std::array<bgfx::TextureHandle, ModelSunShadowCascades> m_shadowTextures =
+        {{BGFX_INVALID_HANDLE, BGFX_INVALID_HANDLE}};
+    std::array<bgfx::FrameBufferHandle, ModelSunShadowCascades> m_shadowFramebuffers =
+        {{BGFX_INVALID_HANDLE, BGFX_INVALID_HANDLE}};
+    std::array<bgfx::UniformHandle, ModelSunShadowCascades> m_shadowSamplers =
+        {{BGFX_INVALID_HANDLE, BGFX_INVALID_HANDLE}};
+    bgfx::UniformHandle m_shadowMatricesUniformHandle = BGFX_INVALID_HANDLE;
+    bgfx::UniformHandle m_shadowParamsUniformHandle = BGFX_INVALID_HANDLE;
+    std::array<ModelMatrix, ModelSunShadowCascades> m_shadowMatrices = {};
+    std::array<std::array<float, 4>, 4> m_shadowParams = {};
+    std::unordered_map<const std::vector<ModelVertex> *, bgfx::TransientVertexBuffer> m_deformedVertexBuffers;
     bgfx::UniformHandle m_textureSamplerHandle = BGFX_INVALID_HANDLE;
+    bgfx::UniformHandle m_normalSamplerHandle = BGFX_INVALID_HANDLE;
+    bgfx::UniformHandle m_metallicRoughnessSamplerHandle = BGFX_INVALID_HANDLE;
+    bgfx::UniformHandle m_pbrUniformHandle = BGFX_INVALID_HANDLE;
+    bgfx::UniformHandle m_environmentSamplerHandle = BGFX_INVALID_HANDLE;
+    bgfx::UniformHandle m_environmentBrdfSamplerHandle = BGFX_INVALID_HANDLE;
+    bgfx::UniformHandle m_environmentUniformHandle = BGFX_INVALID_HANDLE;
+    bgfx::TextureHandle m_environmentTextureHandle = BGFX_INVALID_HANDLE;
+    bgfx::TextureHandle m_environmentBrdfTextureHandle = BGFX_INVALID_HANDLE;
+    std::string m_environmentKey;
+    float m_environmentMaxLod = 0;
+    bgfx::UniformHandle m_pointPositionsUniformHandle = BGFX_INVALID_HANDLE;
+    bgfx::UniformHandle m_pointColorsUniformHandle = BGFX_INVALID_HANDLE;
+    bgfx::UniformHandle m_surfaceUniformHandle = BGFX_INVALID_HANDLE;
+    bgfx::UniformHandle m_fogUniformHandle = BGFX_INVALID_HANDLE;
+    bgfx::UniformHandle m_cameraUniformHandle = BGFX_INVALID_HANDLE;
+    bgfx::UniformHandle m_outlineUniformHandle = BGFX_INVALID_HANDLE;
     bgfx::UniformHandle m_materialUniformHandle = BGFX_INVALID_HANDLE;
     bgfx::UniformHandle m_lightingUniformHandle = BGFX_INVALID_HANDLE;
     bgfx::UniformHandle m_normalMatrixUniformHandle = BGFX_INVALID_HANDLE;

@@ -3960,6 +3960,68 @@ TEST_CASE("mm7 global mmmerge arcomage requires deck")
     CHECK_FALSE(allowedContext.statusText.has_value());
 }
 
+TEST_CASE("dimensional travel fountains preserve Town Portal discovery and Harmondale restoration")
+{
+    const OpenYAMM::Tests::RegressionMapLoader &mapLoader = requireRegressionMapLoader();
+    std::string error;
+    const std::optional<OpenYAMM::Game::ScriptedEventProgram> ravenshoreProgram =
+        loadMm8MapOverlayProgram(OPENYAMM_SOURCE_DIR, "out02", "out02_mmmerge", error);
+    REQUIRE_MESSAGE(ravenshoreProgram.has_value(), error.c_str());
+    OpenYAMM::Game::EventRuntime eventRuntime = {};
+    OpenYAMM::Game::Party ravenshoreParty = makeScriptedRegressionParty();
+    OpenYAMM::Game::EventRuntimeState ravenshoreState = {};
+    const int goldBefore = ravenshoreParty.gold();
+    REQUIRE(eventRuntime.executeEventById(ravenshoreProgram, std::nullopt, 104, ravenshoreState, &ravenshoreParty));
+    CHECK(ravenshoreParty.hasQuestBit(302));
+    CHECK_EQ(ravenshoreParty.gold(), goldBefore);
+    CHECK(ravenshoreState.pendingDimensionDoorOverlay);
+
+    const OpenYAMM::Game::MapAssetInfo *pCastle = loadCachedIndoorMapWithCompanionOptions(
+        mapLoader.assetFileSystem,
+        mapLoader.gameDataLoader,
+        "7d29.blv",
+        OpenYAMM::Game::MapLoadPurpose::HeadlessGameplay,
+        OpenYAMM::Game::MapCompanionLoadOptions{.allowSceneYml = true, .allowLegacyCompanion = true});
+    REQUIRE(pCastle != nullptr);
+    REQUIRE(pCastle->indoorMapData.has_value());
+    REQUIRE(pCastle->indoorMapDeltaData.has_value());
+    const std::optional<OpenYAMM::Game::ScriptedEventProgram> castleProgram =
+        loadMm7MapOverlayProgram(OPENYAMM_SOURCE_DIR, "7d29", "7d29_mmmerge", error);
+    REQUIRE_MESSAGE(castleProgram.has_value(), error.c_str());
+    const std::array<size_t, 6> waterFaces = {1668, 1669, 1689, 1697, 4669, 4670};
+
+    for (size_t faceIndex : waterFaces)
+    {
+        const OpenYAMM::Game::IndoorFace &face = pCastle->indoorMapData->faces.at(faceIndex);
+        CHECK_EQ(face.cogNumber, 65031u);
+        CHECK_EQ(face.cogTriggered, 65031u);
+        CHECK_EQ(face.textureName, "7wtrtyl");
+        CHECK(OpenYAMM::Game::hasFaceAttribute(face.attributes, OpenYAMM::Game::FaceAttribute::Fluid));
+        CHECK(OpenYAMM::Game::hasFaceAttribute(face.attributes, OpenYAMM::Game::FaceAttribute::Clickable));
+        CHECK_FALSE(OpenYAMM::Game::hasFaceAttribute(face.attributes, OpenYAMM::Game::FaceAttribute::HasHint));
+    }
+    CHECK_EQ(pCastle->indoorMapData->faces.at(4229).cogTriggered, 0u);
+    CHECK_EQ(pCastle->indoorMapData->faces.at(4234).cogTriggered, 0u);
+
+    for (bool restored : {false, true})
+    {
+        OpenYAMM::Game::Party castleParty = makeScriptedRegressionParty();
+        castleParty.setQuestBit(610, restored);
+        OpenYAMM::Game::EventRuntimeState castleState = {};
+        REQUIRE(eventRuntime.buildOnLoadState(
+            castleProgram, std::nullopt, pCastle->indoorMapDeltaData, castleState, &castleParty));
+        CHECK(castleParty.hasQuestBit(718));
+        CHECK(OpenYAMM::Game::hasFaceAttribute(
+            castleState.facetSetMasks.at(65031), OpenYAMM::Game::FaceAttribute::Clickable));
+        CHECK_FALSE(castleState.textureOverrides.contains(65031));
+        castleState.namedGlobalVars["MMerge.CrossContinents.GotMainQuest"] = 1;
+        REQUIRE(eventRuntime.executeEventById(
+            castleProgram, std::nullopt, 65031, castleState, &castleParty));
+        CHECK(castleState.pendingDimensionDoorOverlay);
+        CHECK(castleParty.hasQuestBit(718));
+    }
+}
+
 TEST_CASE("mm7 castle harmondale mmmerge local quest state")
 {
     std::string error;

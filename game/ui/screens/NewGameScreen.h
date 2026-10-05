@@ -68,6 +68,8 @@ public:
     bool textInputActive() const override;
 
   private:
+    friend struct NewGameScreenTestAccess;
+
     enum class FlowStage
     {
         ContinentSelection,

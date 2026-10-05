@@ -1021,6 +1021,80 @@ void applyOutdoorFogUniforms(
 
 } // namespace
 
+void OutdoorRenderer::destroySunReceiverResources(OutdoorGameView &view)
+{
+    for (const bgfx::TextureHandle texture : view.m_directSunTextureHandles)
+    {
+        if (bgfx::isValid(texture))
+        {
+            bgfx::destroy(texture);
+        }
+    }
+    view.m_directSunTextureHandles.clear();
+}
+
+void OutdoorRenderer::bindBakedSunShadows(OutdoorGameView &view, uint32_t sunPageIndex)
+{
+    if (!view.m_modelRenderer.hasSunShadows())
+    {
+        return;
+    }
+    const OutdoorLightingData &lighting = *view.m_pOutdoorMapData->lightingData;
+    if (lighting.directSunPagesRle.empty())
+    {
+        throw std::runtime_error("Mesh-shadow receivers require v5 direct sunlight pages; migrate map lighting");
+    }
+    if (view.m_directSunTextureHandles.empty())
+    {
+        const bgfx::TextureHandle invalid = BGFX_INVALID_HANDLE;
+        view.m_directSunTextureHandles.resize(lighting.directSunPagesRle.size(), invalid);
+    }
+    const uint32_t directPage = sunPageIndex / 2;
+    bgfx::TextureHandle &handle = view.m_directSunTextureHandles.at(directPage);
+    if (!bgfx::isValid(handle))
+    {
+        const std::vector<uint32_t> pixels = lighting.decodeDirectSunPage(sunPageIndex);
+        if (pixels.empty())
+        {
+            throw std::runtime_error("Invalid mesh-shadow receiver sun page");
+        }
+        const OutdoorLightmapAtlasPage &page = lighting.atlasPages[sunPageIndex];
+        handle = createBgraTexture2D(uint16_t(page.width), uint16_t(page.height),
+            reinterpret_cast<const uint8_t *>(pixels.data()), uint32_t(pixels.size() * sizeof(uint32_t)),
+            TextureFilterProfile::Lightmap, BGFX_SAMPLER_U_CLAMP | BGFX_SAMPLER_V_CLAMP);
+        if (!bgfx::isValid(handle))
+        {
+            throw std::runtime_error("Cannot allocate mesh-shadow receiver sun page");
+        }
+    }
+    bindTexture(5, view.m_bakedSunDirectSamplerHandle, handle, TextureFilterProfile::Lightmap);
+}
+
+void OutdoorRenderer::ensureSunShadowPrograms(OutdoorGameView &view)
+{
+    if (!bgfx::isValid(view.m_outdoorTerrainShadowProgramHandle))
+    {
+        const bool baked = view.m_gameSettings.lightmaps && view.m_pOutdoorMapData->lightingData
+            && view.m_pOutdoorMapData->lightingData->hasBakedSources();
+        view.m_outdoorTerrainShadowProgramHandle = loadProgramHandle("vs_outdoor_textured_fog",
+            baked ? "fs_outdoor_terrain_baked_shadow" : "fs_outdoor_terrain_fog_shadow");
+        view.m_outdoorTexturedFogShadowProgramHandle = loadProgramHandle("vs_outdoor_textured_fog",
+            "fs_outdoor_textured_fog_shadow");
+        const bool lightmaps = view.m_gameSettings.lightmaps && view.m_pOutdoorMapData->lightingData;
+        if (lightmaps)
+        {
+            view.m_outdoorBModelShadowProgramHandle = loadProgramHandle("vs_outdoor_bmodel_lightmap",
+                baked ? "fs_outdoor_bmodel_baked_shadow" : "fs_outdoor_bmodel_lightmap");
+        }
+        if (!bgfx::isValid(view.m_outdoorTerrainShadowProgramHandle)
+            || !bgfx::isValid(view.m_outdoorTexturedFogShadowProgramHandle)
+            || (lightmaps && !bgfx::isValid(view.m_outdoorBModelShadowProgramHandle)))
+        {
+            throw std::runtime_error("Cannot load outdoor mesh-shadow receiver programs");
+        }
+    }
+}
+
 void OutdoorRenderer::applyOutdoorSurfaceUniforms(OutdoorGameView &view)
 {
     const std::array<float, 4> clip = {};
@@ -2780,7 +2854,12 @@ void OutdoorRenderer::ensureTerrainDecorations(OutdoorGameView &view, const Outd
                 view.m_gameSettings.lightmaps
                     && outdoorMapData.lightingData
                     && outdoorMapData.lightingData->hasBakedSources()
-                    ? "fs_terrain_decoration_baked" : "fs_terrain_decoration"));
+                    ? "fs_terrain_decoration_baked" : "fs_terrain_decoration"),
+            loadProgramHandle("vs_terrain_decoration",
+                view.m_gameSettings.lightmaps
+                    && outdoorMapData.lightingData
+                    && outdoorMapData.lightingData->hasBakedSources()
+                    ? "fs_terrain_decoration_baked_shadow" : "fs_terrain_decoration_shadow"));
     }
 }
 
@@ -2950,7 +3029,8 @@ bool OutdoorRenderer::initializeWorldRenderResources(
         view.m_spriteAtlasCache.setOutlineProgram(loadProgramHandle("vs_outdoor_billboard_lit", "fs_sprite_outline"));
     }
     view.m_worldFxRenderResources.setParticleProgramHandle(loadProgramHandle("vs_particle", "fs_particle"));
-    if (!view.m_modelRenderer.initialize(loadProgramHandle("vs_model", "fs_model")))
+    if (!view.m_modelRenderer.initialize(loadProgramHandle("vs_model", "fs_model"),
+            loadProgramHandle("vs_model_shadow", "fs_model_shadow")))
     {
         return false;
     }
@@ -3399,7 +3479,12 @@ void OutdoorRenderer::renderBloodSplats(
         | BGFX_STATE_WRITE_A
         | BGFX_STATE_DEPTH_TEST_LEQUAL
         | BGFX_STATE_BLEND_ALPHA);
-    bgfx::submit(viewId, view.m_outdoorTexturedFogProgramHandle);
+    if (view.m_modelRenderer.hasSunShadows())
+    {
+        view.m_modelRenderer.bindSunShadows();
+    }
+    bgfx::submit(viewId, view.m_modelRenderer.hasSunShadows()
+        ? view.m_outdoorTexturedFogShadowProgramHandle : view.m_outdoorTexturedFogProgramHandle);
 }
 
 void OutdoorRenderer::renderContextActionGeometryHighlight(OutdoorGameView &view, uint16_t viewId)
@@ -3567,14 +3652,22 @@ void OutdoorRenderer::submitResolvedBModelDrawGroup(OutdoorGameView &view,
             lightmapTexture, TextureFilterProfile::Lightmap);
         if (view.m_pOutdoorMapData->lightingData->hasBakedSources())
         {
+            bindBakedSunShadows(view, group.lightmapPageIndex);
             bindTexture(3, view.m_bakedSkySamplerHandle,
                 view.m_bmodelLightmapTextureHandles[group.lightmapPageIndex + 1],
                 TextureFilterProfile::Lightmap);
         }
     }
     bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A | BGFX_STATE_WRITE_Z | BGFX_STATE_DEPTH_TEST_LEQUAL);
-    bgfx::submit(viewId, group.usesStaticLighting
-        ? view.m_outdoorBModelLightmapProgramHandle : view.m_outdoorTexturedFogProgramHandle);
+    if (view.m_modelRenderer.hasSunShadows())
+    {
+        view.m_modelRenderer.bindSunShadows();
+    }
+    const bool meshShadows = view.m_modelRenderer.hasSunShadows();
+    const bgfx::ProgramHandle program = group.usesStaticLighting
+        ? (meshShadows ? view.m_outdoorBModelShadowProgramHandle : view.m_outdoorBModelLightmapProgramHandle)
+        : (meshShadows ? view.m_outdoorTexturedFogShadowProgramHandle : view.m_outdoorTexturedFogProgramHandle);
+    bgfx::submit(viewId, program);
 }
 
 bool OutdoorRenderer::initializeWaterResources(OutdoorGameView &view,
@@ -3703,12 +3796,18 @@ void OutdoorRenderer::renderWaterReflections(OutdoorGameView &view, const float 
                 const uint32_t page = view.m_pOutdoorMapData->lightingData->terrainPageIndex;
                 bindTexture(2, view.m_bmodelLightmapSamplerHandle, view.m_bmodelLightmapTextureHandles[page],
                     TextureFilterProfile::Lightmap);
+                bindBakedSunShadows(view, page);
                 bindTexture(3, view.m_bakedSkySamplerHandle, view.m_bmodelLightmapTextureHandles[page + 1],
                     TextureFilterProfile::Lightmap);
             }
             bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A | BGFX_STATE_WRITE_Z
                 | BGFX_STATE_DEPTH_TEST_LEQUAL);
-            bgfx::submit(reflection.worldView, view.m_outdoorTerrainFogProgramHandle);
+            if (view.m_modelRenderer.hasSunShadows())
+            {
+                view.m_modelRenderer.bindSunShadows();
+            }
+            bgfx::submit(reflection.worldView, view.m_modelRenderer.hasSunShadows()
+                ? view.m_outdoorTerrainShadowProgramHandle : view.m_outdoorTerrainFogProgramHandle);
         }
         if (view.m_showBModels)
         {
@@ -3782,8 +3881,34 @@ void OutdoorRenderer::renderWorldPasses(OutdoorGameView &view, uint16_t viewWidt
         ? &*view.m_pOutdoorMapData->lightingData
         : nullptr;
     view.m_outdoorSunlight = view.m_pOutdoorMapData != nullptr && pAtmosphereState != nullptr
-        ? buildOutdoorSunlight(*view.m_pOutdoorMapData, *pAtmosphereState)
+        ? buildOutdoorSunlight(*view.m_pOutdoorMapData, *pAtmosphereState, view.m_gameSettings.lightmaps)
         : std::array<float, 4>{0.0f, 0.0f, 0.0f, 1.0f};
+    view.m_modelRenderer.beginFrame();
+    const bool bakedSun = pLightingData != nullptr && pLightingData->hasBakedSources();
+    const std::array<float, 3> shadowLight = bakedSun ? pLightingData->sunDirection
+        : std::array<float, 3>{view.m_outdoorSunlight[0], view.m_outdoorSunlight[1], view.m_outdoorSunlight[2]};
+    const bool sunlightShadows = view.m_gameSettings.shadows && view.m_showActors && pAtmosphereState != nullptr
+        && !pAtmosphereState->underwater && !pAtmosphereState->isNight && pAtmosphereState->fogDensity < 0.999f
+        && (!bakedSun || (outdoorBakedLightingWeights(*pAtmosphereState)[0] > 0.001f
+            && view.m_gameSettings.bakedSunStrength > 0.001f))
+        && view.m_pOutdoorMapData->locationType == OutdoorLocationType::Exterior;
+    view.m_modelRenderer.renderSunShadows(view.m_worldFxSystem.models(), FirstSunShadowView,
+        {cameraPosition.x, cameraPosition.y, cameraPosition.z}, shadowLight, sunlightShadows);
+    if (!view.m_modelRenderer.hasSunShadows())
+    {
+        destroySunReceiverResources(view);
+    }
+    else
+    {
+        ensureSunShadowPrograms(view);
+    }
+    const bool meshShadows = view.m_modelRenderer.hasSunShadows();
+    const bgfx::ProgramHandle terrainProgram = meshShadows
+        ? view.m_outdoorTerrainShadowProgramHandle : view.m_outdoorTerrainFogProgramHandle;
+    const bgfx::ProgramHandle texturedProgram = meshShadows
+        ? view.m_outdoorTexturedFogShadowProgramHandle : view.m_outdoorTexturedFogProgramHandle;
+    const bgfx::ProgramHandle bModelProgram = meshShadows
+        ? view.m_outdoorBModelShadowProgramHandle : view.m_outdoorBModelLightmapProgramHandle;
     const std::vector<WorldFxLightEmitter> &dynamicLightEmitters = view.m_worldFxSystem.lightEmitters();
     const bool lightingInputsChanged =
         !view.m_outdoorLightingRuntimesInitialized || view.m_pCachedOutdoorLightingData != pLightingData ||
@@ -3906,7 +4031,7 @@ void OutdoorRenderer::renderWorldPasses(OutdoorGameView &view, uint16_t viewWidt
         }
 
         if (showTerrain && !(view.m_pOutdoorMapData != nullptr && view.m_pOutdoorMapData->noTerrain) &&
-            bgfx::isValid(view.m_outdoorTerrainFogProgramHandle) && bgfx::isValid(view.m_terrainTextureArrayHandle) &&
+            bgfx::isValid(terrainProgram) && bgfx::isValid(view.m_terrainTextureArrayHandle) &&
             bgfx::isValid(view.m_terrainTextureSamplerHandle) &&
             bgfx::isValid(view.m_terrainWaterSamplerHandle) &&
             bgfx::isValid(view.m_outdoorFxLightPositionsUniformHandle) &&
@@ -3949,12 +4074,17 @@ void OutdoorRenderer::renderWorldPasses(OutdoorGameView &view, uint16_t viewWidt
                         const uint32_t page = view.m_pOutdoorMapData->lightingData->terrainPageIndex;
                         bindTexture(2, view.m_bmodelLightmapSamplerHandle, view.m_bmodelLightmapTextureHandles[page],
                             TextureFilterProfile::Lightmap);
+                        bindBakedSunShadows(view, page);
                         bindTexture(3, view.m_bakedSkySamplerHandle, view.m_bmodelLightmapTextureHandles[page + 1],
                             TextureFilterProfile::Lightmap);
                     }
                     bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A | BGFX_STATE_WRITE_Z |
                                    BGFX_STATE_DEPTH_TEST_LEQUAL);
-                    bgfx::submit(MainViewId, view.m_outdoorTerrainFogProgramHandle);
+                    if (view.m_modelRenderer.hasSunShadows())
+                    {
+                        view.m_modelRenderer.bindSunShadows();
+                    }
+                    bgfx::submit(MainViewId, terrainProgram);
                 }
             }
             else if (bgfx::isValid(view.m_texturedTerrainVertexBufferHandle))
@@ -3975,12 +4105,17 @@ void OutdoorRenderer::renderWorldPasses(OutdoorGameView &view, uint16_t viewWidt
                     const uint32_t page = view.m_pOutdoorMapData->lightingData->terrainPageIndex;
                     bindTexture(2, view.m_bmodelLightmapSamplerHandle, view.m_bmodelLightmapTextureHandles[page],
                         TextureFilterProfile::Lightmap);
+                    bindBakedSunShadows(view, page);
                     bindTexture(3, view.m_bakedSkySamplerHandle, view.m_bmodelLightmapTextureHandles[page + 1],
                         TextureFilterProfile::Lightmap);
                 }
                 bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A | BGFX_STATE_WRITE_Z |
                                BGFX_STATE_DEPTH_TEST_LEQUAL);
-                bgfx::submit(MainViewId, view.m_outdoorTerrainFogProgramHandle);
+                if (view.m_modelRenderer.hasSunShadows())
+                {
+                    view.m_modelRenderer.bindSunShadows();
+                }
+                bgfx::submit(MainViewId, terrainProgram);
             }
         }
 
@@ -4047,11 +4182,16 @@ void OutdoorRenderer::renderWorldPasses(OutdoorGameView &view, uint16_t viewWidt
                     const uint32_t page = view.m_pOutdoorMapData->lightingData->terrainPageIndex;
                     bindTexture(2, view.m_bmodelLightmapSamplerHandle, view.m_bmodelLightmapTextureHandles[page],
                         TextureFilterProfile::Lightmap);
+                    bindBakedSunShadows(view, page);
                     bindTexture(3, view.m_bakedSkySamplerHandle, view.m_bmodelLightmapTextureHandles[page + 1],
                         TextureFilterProfile::Lightmap);
                 }
                 ensureWorldSurfaceUniforms();
-                view.m_terrainDecorations.submit(MainViewId, batch.range, view.m_elapsedTime);
+                if (view.m_modelRenderer.hasSunShadows())
+                {
+                    view.m_modelRenderer.bindSunShadows();
+                }
+                view.m_terrainDecorations.submit(MainViewId, batch.range, view.m_elapsedTime, meshShadows);
             }
         }
 
@@ -4081,7 +4221,7 @@ void OutdoorRenderer::renderWorldPasses(OutdoorGameView &view, uint16_t viewWidt
                 view.m_pOutdoorWorldRuntime != nullptr ? view.m_pOutdoorWorldRuntime->mapDeltaData() : nullptr;
             const uint64_t targetRevision = outdoorSurfaceVisualRevision(pMapDeltaData, pEventRuntimeState);
 
-            if (bgfx::isValid(view.m_outdoorTexturedFogProgramHandle) &&
+            if (bgfx::isValid(texturedProgram) &&
                 bgfx::isValid(view.m_terrainTextureSamplerHandle) &&
                 bgfx::isValid(view.m_outdoorFxLightPositionsUniformHandle) &&
                 bgfx::isValid(view.m_outdoorFxLightColorsUniformHandle) &&
@@ -4185,6 +4325,7 @@ void OutdoorRenderer::renderWorldPasses(OutdoorGameView &view, uint16_t viewWidt
                                                 TextureFilterProfile::Lightmap);
                                     if (view.m_pOutdoorMapData->lightingData->hasBakedSources())
                                     {
+                                        bindBakedSunShadows(view, group.lightmapPageIndex);
                                         bindTexture(3, view.m_bakedSkySamplerHandle,
                                             view.m_bmodelLightmapTextureHandles[group.lightmapPageIndex + 1],
                                             TextureFilterProfile::Lightmap);
@@ -4215,9 +4356,13 @@ void OutdoorRenderer::renderWorldPasses(OutdoorGameView &view, uint16_t viewWidt
                                     state |= BGFX_STATE_WRITE_Z;
                                 }
                                 bgfx::setState(state);
+                                if (view.m_modelRenderer.hasSunShadows())
+                                {
+                                    view.m_modelRenderer.bindSunShadows();
+                                }
                                 bgfx::submit(MainViewId,
-                                             group.usesStaticLighting ? view.m_outdoorBModelLightmapProgramHandle
-                                                                      : view.m_outdoorTexturedFogProgramHandle,
+                                             group.usesStaticLighting ? bModelProgram
+                                                                      : texturedProgram,
                                              0, BGFX_DISCARD_ALL);
                             }
                         }
@@ -4506,6 +4651,7 @@ void OutdoorRenderer::renderWorldPasses(OutdoorGameView &view, uint16_t viewWidt
                                         TextureFilterProfile::Lightmap);
                             if (view.m_pOutdoorMapData->lightingData->hasBakedSources())
                             {
+                                bindBakedSunShadows(view, batch.lightmapPageIndex);
                                 bindTexture(3, view.m_bakedSkySamplerHandle,
                                     view.m_bmodelLightmapTextureHandles[batch.lightmapPageIndex + 1],
                                     TextureFilterProfile::Lightmap);
@@ -4531,9 +4677,13 @@ void OutdoorRenderer::renderWorldPasses(OutdoorGameView &view, uint16_t viewWidt
                             state |= BGFX_STATE_BLEND_ALPHA;
                         }
                         bgfx::setState(state);
+                        if (view.m_modelRenderer.hasSunShadows())
+                        {
+                            view.m_modelRenderer.bindSunShadows();
+                        }
                         bgfx::submit(MainViewId,
-                                     usesStaticLighting ? view.m_outdoorBModelLightmapProgramHandle
-                                                        : view.m_outdoorTexturedFogProgramHandle,
+                                     usesStaticLighting ? bModelProgram
+                                                        : texturedProgram,
                                      0, BGFX_DISCARD_ALL);
                     }
                 }
@@ -4625,12 +4775,89 @@ void OutdoorRenderer::renderWorldPasses(OutdoorGameView &view, uint16_t viewWidt
         }
     }
 
+    const OutdoorFogParameters modelFog = buildOutdoorWorldFogParameters(
+        view.m_pOutdoorWorldRuntime, pAtmosphereState, farClipDistance);
+    Engine::ModelRenderLighting modelLighting;
+    modelLighting.lightDirection = {view.m_outdoorSunlight[0], view.m_outdoorSunlight[1], view.m_outdoorSunlight[2]};
+    modelLighting.direct = std::sqrt(modelLighting.lightDirection[0] * modelLighting.lightDirection[0]
+        + modelLighting.lightDirection[1] * modelLighting.lightDirection[1]
+        + modelLighting.lightDirection[2] * modelLighting.lightDirection[2]);
+    modelLighting.ambient = view.m_outdoorSunlight[3];
+    modelLighting.fogColor = modelFog.color;
+    modelLighting.fogDensities = modelFog.densities;
+    modelLighting.fogDistances = modelFog.distances;
+    modelLighting.environmentColor = {modelLighting.ambient, modelLighting.ambient, modelLighting.ambient};
+    std::optional<Engine::ModelSkyEnvironment> skyEnvironment;
+    if (view.m_worldFxSystem.models().size() != 0 && pAtmosphereState != nullptr && !pAtmosphereState->underwater
+        && view.m_pOutdoorMapData->locationType == OutdoorLocationType::Exterior)
+    {
+        const OutdoorGameView::SkyTextureHandle *pSky = ensureSkyTexture(view, pAtmosphereState->skyTextureName);
+        if (pSky != nullptr)
+        {
+            skyEnvironment = Engine::ModelSkyEnvironment{pSky->textureName,
+                uint16_t(pSky->physicalWidth), uint16_t(pSky->physicalHeight), float(pSky->width), float(pSky->height),
+                pSky->bgraPixels};
+        }
+    }
+    const float skyTint = pAtmosphereState != nullptr && view.m_pOutdoorWorldRuntime != nullptr
+        ? Engine::srgbToLinear(float(computeOutdoorSkyTintAbgr(*view.m_pOutdoorWorldRuntime) & 255) / 255.0f) : 1.0f;
     view.m_modelRenderer.render(
         view.m_worldFxSystem.models(),
         MainViewId,
         {cameraPosition.x, cameraPosition.y, cameraPosition.z},
-        {{view.m_outdoorSunlight[0], view.m_outdoorSunlight[1], view.m_outdoorSunlight[2]},
-            view.m_outdoorSunlight[3], 1.0f});
+        modelLighting,
+        [&](const Engine::ModelBounds &modelBounds)
+        {
+            Engine::ModelRenderLighting selected = modelLighting;
+            const bx::Vec3 center = {(modelBounds.min[0] + modelBounds.max[0]) * 0.5f,
+                (modelBounds.min[1] + modelBounds.max[1]) * 0.5f,
+                (modelBounds.min[2] + modelBounds.max[2]) * 0.5f};
+            const OutdoorLightSelectionBounds bounds = {{modelBounds.min[0], modelBounds.min[1], modelBounds.min[2]},
+                {modelBounds.max[0], modelBounds.max[1], modelBounds.max[2]}, modelBounds.valid};
+            const OutdoorSelectedFxLights lights = view.m_outdoorLightingRuntime.selectForBounds(center, bounds);
+            selected.pointCount = lights.lightCount;
+            std::copy(lights.positions.begin(), lights.positions.end(), selected.pointPositions.begin());
+            std::copy(lights.colors.begin(), lights.colors.end(), selected.pointColors.begin());
+            for (size_t index = 0; index < lights.lightCount; ++index)
+            {
+                selected.pointColors[index * 4 + 3] *= lights.params[2];
+            }
+            if (pLightingData != nullptr && pLightingData->hasBakedSources() && pAtmosphereState != nullptr)
+            {
+                const OutdoorLightingData &baked = *pLightingData;
+                if (baked.formatVersion < 4)
+                {
+                    throw std::runtime_error("3D models require v4 baked sunlight probes; regenerate map lighting");
+                }
+                const std::array<float, 3> position = {center.x, center.y, center.z};
+                const std::optional<OutdoorLightingData::Probe> probe = baked.sampleProbe(position,
+                    [&](const std::array<float, 3> &point)
+                    {
+                        return view.m_pOutdoorWorldRuntime->hasClearOutdoorLineOfSight(
+                            center, {point[0], point[1], point[2]});
+                    });
+                const std::array<std::array<float, 4>, 2> colors =
+                    outdoorBakedLightingColors(*pAtmosphereState, view.m_gameSettings);
+                selected.lightDirection = baked.sunDirection;
+                selected.direct = probe && !pAtmosphereState->underwater
+                    && view.m_pOutdoorMapData->locationType == OutdoorLocationType::Exterior
+                    ? probe->sunVisibility : 0.0f;
+                selected.ambient = 1.0f;
+                for (size_t channel = 0; channel < 3; ++channel)
+                {
+                    selected.directColor[channel] = baked.sunDirectResponse[channel] * colors[0][channel];
+                    selected.ambientColor[channel] = probe
+                        ? probe->sunIndirect[channel] * colors[0][channel] + probe->sky[channel] * colors[1][channel]
+                        : 0.25f * colors[1][channel];
+                }
+            }
+            for (size_t channel = 0; channel < 3; ++channel)
+            {
+                selected.environmentColor[channel] = selected.ambientColor[channel] * selected.ambient
+                    * (skyEnvironment ? skyTint : 0.15f);
+            }
+            return selected;
+        }, skyEnvironment ? &*skyEnvironment : nullptr);
     // Translucent spells need the actors and models behind them in the color buffer first.
     if (view.m_showSpriteObjects)
     {

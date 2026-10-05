@@ -16,6 +16,11 @@ SAMPLER2D(s_texColor, 0);
 SAMPLER2D(s_texLightmap, 2);
 uniform vec4 u_bakedTerrainBounds;
 #include "outdoor_baked_lighting.sh"
+#else
+#if SUN_SHADOWS
+#include "sun_shadows.sh"
+#endif
+uniform vec4 u_outdoorSunlight;
 #endif
 
 uniform vec4 u_fogColor;
@@ -68,6 +73,19 @@ vec3 getFxLighting(vec3 worldPosition, float sunlight)
 #if BAKED_SOURCES
     float base = 0.0;
 #else
+#if SUN_SHADOWS
+    float direct = max(sunlight - u_outdoorSunlight.w, 0.0);
+    if (u_sunShadowParams[0].x > 0.5 && direct > 0.0)
+    {
+        vec3 normal = cross(dFdx(worldPosition), dFdy(worldPosition));
+        normal *= inversesqrt(max(dot(normal, normal), 0.000001));
+        if (dot(normal, u_sunShadowParams[3].xyz) < 0.0)
+        {
+            normal = -normal;
+        }
+        sunlight -= direct * (1.0 - sunShadowVisibility(worldPosition, normal));
+    }
+#endif
     float base = u_fxLightParams.y * sunlight;
 #endif
     vec3 lighting = vec3(base, base, base);
@@ -195,7 +213,8 @@ void main()
     textureColor.rgb = mix(textureColor.rgb, u_fogColor.rgb, u_fogDensities.z);
 #if BAKED_SOURCES
     vec2 bakedUv = (v_worldPosition.xy - u_bakedTerrainBounds.xy) / u_bakedTerrainBounds.zw;
-    vec3 baked = bakedSourceLighting(texture2D(s_texLightmap, bakedUv), texture2D(s_texBakedSky, bakedUv));
+    vec3 baked = bakedShadowedSourceLighting(texture2D(s_texLightmap, bakedUv),
+        texture2D(s_texBakedSky, bakedUv), bakedUv, v_worldPosition);
     vec4 litTextureColor = vec4(bakedSurfaceColor(textureColor.rgb,
         baked + getFxLighting(v_worldPosition, 0.0)), textureColor.a);
 #else

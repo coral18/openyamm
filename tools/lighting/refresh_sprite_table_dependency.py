@@ -27,8 +27,11 @@ def sha(data):
 
 
 def dependencies(data):
-    if len(data) < 96 or data[:8] != b'OYMLIT1\0' or struct.unpack_from('<II', data, 8) != (3, 96):
-        raise ValueError('Expected a version-3 lighting sidecar')
+    if len(data) < 96 or data[:8] != b'OYMLIT1\0':
+        raise ValueError('Expected an outdoor lighting sidecar')
+    version, header = struct.unpack_from('<II', data, 8)
+    if version not in (3, 4, 5) or header != 96:
+        raise ValueError('Expected a version-3, version-4 or version-5 lighting sidecar')
     if struct.unpack_from('<I', data, 68)[0] != len(data):
         raise ValueError('Invalid lighting file size')
     if not struct.unpack_from('<I', data, 76)[0] & 1:
@@ -41,8 +44,10 @@ def dependencies(data):
         if offset != end or size > len(data)-end:
             raise ValueError('Invalid lighting page bounds')
         end += size
+    if version >= 4:
+        end += 24
     probes, count = struct.unpack_from('<II', data, end)
-    cursor = end+8+probes*36
+    cursor = end+8+probes*(52 if version >= 4 else 36)
     result = []
     for _ in range(count):
         length, value = struct.unpack_from('<IQ', data, cursor)
@@ -51,6 +56,17 @@ def dependencies(data):
             raise ValueError('Invalid lighting dependency path')
         result.append((name, value, cursor+4))
         cursor += 12+length
+    if version >= 5:
+        direct_count = struct.unpack_from('<I', data, cursor)[0]
+        cursor += 4
+        if direct_count * 2 != page_count:
+            raise ValueError('Invalid direct-sun page count')
+        for index in range(direct_count):
+            width, height, size = struct.unpack_from('<3I', data, cursor)
+            cursor += 12
+            if (width, height) != struct.unpack_from('<2I', data, page_offset+index*2*16) or size > len(data)-cursor:
+                raise ValueError('Invalid direct-sun page bounds')
+            cursor += size
     if cursor != len(data):
         raise ValueError('Invalid lighting dependency section')
     return result

@@ -66,11 +66,16 @@ struct OutdoorLightingData
     uint64_t geometryHash = 0;
     uint32_t ambientColorAbgr = 0xffffffff;
     std::vector<OutdoorLightmapAtlasPage> atlasPages;
+    // v5: one direct-only sun page per sun/sky pair. Keep it compressed until a mesh-shadow receiver needs it.
+    std::vector<std::vector<uint8_t>> directSunPagesRle;
     std::vector<std::vector<OutdoorBModelFaceLighting>> facesByBModel;
     std::vector<OutdoorAuthoredLight> authoredLights;
     bool bakedSourcePages = false;
     uint32_t terrainPageIndex = 0;
     std::array<float, 4> terrainBounds = {};
+    // v4: direction toward the baked sun and white Lambertian response at normal incidence (E / pi).
+    std::array<float, 3> sunDirection = {};
+    std::array<float, 3> sunDirectResponse = {};
     struct Dependency
     {
         std::string path;
@@ -81,6 +86,8 @@ struct OutdoorLightingData
         std::array<float, 3> position = {};
         std::array<float, 3> sun = {};
         std::array<float, 3> sky = {};
+        std::array<float, 3> sunIndirect = {};
+        float sunVisibility = 0.0f;
     };
     std::vector<Dependency> dependencies;
     std::vector<Probe> probes;
@@ -91,6 +98,7 @@ struct OutdoorLightingData
         return bakedSourcePages;
     }
     void indexProbes();
+    std::vector<uint32_t> decodeDirectSunPage(uint32_t sunPageIndex) const;
     std::optional<Probe> sampleProbe(
         const std::array<float, 3> &position,
         const std::function<bool(const std::array<float, 3> &)> &visible) const;

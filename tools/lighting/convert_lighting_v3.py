@@ -78,7 +78,7 @@ def convert(path):
     if len(data) < 96 or data[:8] != b'OYMLIT1\0':
         raise ValueError(f'{path}: invalid lighting header')
     version, header_size = struct.unpack_from('<II', data, 8)
-    if version == 3:
+    if version in (3, 4, 5):
         return False
     if version not in (1, 2) or header_size != 96:
         raise ValueError(f'{path}: unsupported lighting version {version}')

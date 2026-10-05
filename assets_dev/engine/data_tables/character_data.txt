@@ -70,9 +70,9 @@ StatsUI	Paperdoll type	Def class	Def voice	Def sex	Available at start	Body X	Bod
 69	5	10	65	0	-	0	0	pc38bod	pc38bod	none	none	none	none	none	none	none	none	none	pc38-	0	137	8038	10	Dragon Ghost (conditional portrait)
 70	2	45	67	0	-	48	-54	backdol3	LMinbod	none	LMinLhd	LMinlhu	LMinlho	LMinrhb	none	LMinlhu	LMinrhd	LMinrhu	LMin-	0	0	7030	6	Minotaur Lich
 71	2	16	59	0	-	48	-54	backdol3	ZMinbod	none	ZMinLhd	ZMinlhu	ZMinlho	ZMinrhb	none	ZMinlhu	ZMinrhd	ZMinrhu	ZMin-	0	0	7029	10	Minotaur zombie (conditional portrait)
-72	5	10	25	0	-	0	0	pc39bod	pc39bod	none	none	none	none	none	none	none	none	none	pc39-	0	137	8039	5	Black dragon
+72	5	10	25	0	x	0	0	pc39bod	pc39bod	none	none	none	none	none	none	none	none	none	pc39-	0	137	8039	5	Black dragon
 73	4	16	59	0	-	31	-46	7backdoll	dzmalbod	none	dzmalLHo	dzmalLHu	dzmalLHd	dzmalrhb	none	dzmallhu	dzmalrhd	dzmalrhu	7pc24-	0	0	7025	10	Dwarf zombie (conditional portrait)
 74	4	16	60	1	-	43	-43	7backdoll	dzfembod	none	dzfemLHd	dzfemLHu	dzfemLHo	dzfemRHb	none	dzfemlhu	dzfemRHd	dzfemRHu	7pc25-	0	0	7026	10	Dwarf zombie (conditional portrait)
-75	5	10	24	0	-	0	0	pc40bod	pc40bod	none	none	none	none	none	none	none	none	none	pc40-	0	137	8040	5	Gold Dragon
+75	5	10	24	0	x	0	0	pc40bod	pc40bod	none	none	none	none	none	none	none	none	none	pc40-	0	137	8040	5	Gold Dragon
 76	3	38	72	0	-	41	-51	backdol4	pc41bod	none	pc41LHd	pc41LHu	pc41LHo	pc41RHb	pc07lwp1	pc41lhu	pc41RHd	pc41RHu	pc41-	0	0	8041	6	Lich Troll 1
 77	3	38	59	0	-	43	-43	backdol4	pc42bod	none	pc42LHd	pc42LHu	pc42LHo	pc42RHb	pc07lwp1	pc42lhu	pc42RHd	pc42RHu	pc42-	0	0	8042	10	Zombie Troll 1

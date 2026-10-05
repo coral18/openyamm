@@ -1,0 +1,16 @@
+actors:
+  - descriptor: Demon A
+    model: worlds/mm6/models/mm6_demon.glb
+    # Match the descriptor's 179-unit collision height; glTF stands 1.707 units tall.
+    scale: 104.8623316
+    # Authoring faces glTF +Z; native actor yaw zero faces world +X.
+    yaw_offset: -1.570796327
+    clips:
+      standing: Standing
+      walking: Walk_Native
+      attack_melee: Attack
+      attack_ranged: Attack
+      hit: Hit
+      dying: Death
+      dead: Ash_Remains
+      fidget: Fidget

@@ -1,6 +1,7 @@
 #include "engine/models/ModelAsset.h"
 
 #include <cmath>
+#include <limits>
 
 namespace OpenYAMM::Engine
 {
@@ -134,4 +135,40 @@ ModelTransform gltfModelPlacement(
         .scale = {uniformScale, uniformScale, -uniformScale},
     };
 }
+float determinant3x3(const ModelMatrix &matrix)
+{
+    return matrix[0] * (matrix[5] * matrix[10] - matrix[9] * matrix[6]) -
+        matrix[4] * (matrix[1] * matrix[10] - matrix[9] * matrix[2]) +
+        matrix[8] * (matrix[1] * matrix[6] - matrix[5] * matrix[2]);
+}
+
+ModelMatrix modelNormalMatrix(const ModelMatrix &matrix)
+{
+    const float determinant = determinant3x3(matrix);
+    if (std::abs(determinant) <= std::numeric_limits<float>::epsilon())
+    {
+        return identityModelMatrix();
+    }
+
+    const float inverseDeterminant = 1.0f / determinant;
+    ModelMatrix result = {};
+    result[0] = (matrix[5] * matrix[10] - matrix[9] * matrix[6]) * inverseDeterminant;
+    result[1] = (matrix[8] * matrix[6] - matrix[4] * matrix[10]) * inverseDeterminant;
+    result[2] = (matrix[4] * matrix[9] - matrix[8] * matrix[5]) * inverseDeterminant;
+    result[4] = (matrix[9] * matrix[2] - matrix[1] * matrix[10]) * inverseDeterminant;
+    result[5] = (matrix[0] * matrix[10] - matrix[8] * matrix[2]) * inverseDeterminant;
+    result[6] = (matrix[8] * matrix[1] - matrix[0] * matrix[9]) * inverseDeterminant;
+    result[8] = (matrix[1] * matrix[6] - matrix[5] * matrix[2]) * inverseDeterminant;
+    result[9] = (matrix[4] * matrix[2] - matrix[0] * matrix[6]) * inverseDeterminant;
+    result[10] = (matrix[0] * matrix[5] - matrix[4] * matrix[1]) * inverseDeterminant;
+    result[15] = 1.0f;
+    return result;
+}
+
+
+bool modelMatrixVisible(const ModelMatrix &matrix)
+{
+    return std::abs(determinant3x3(matrix)) > std::numeric_limits<float>::epsilon();
+}
+
 }

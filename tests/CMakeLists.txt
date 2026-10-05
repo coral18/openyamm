@@ -56,6 +56,8 @@ add_executable(openyamm_unit_tests
     MapDecorationTexturesTests.cpp
     MapPresentationTests.cpp
     ModelAnimationTests.cpp
+    ModelSunShadowTests.cpp
+    ModelEnvironmentTests.cpp
     MonsterTableRegressionTests.cpp
     MobileJumpDoubleTapGestureTests.cpp
     MobileJoystickDirectionTests.cpp
@@ -100,6 +102,8 @@ add_executable(openyamm_unit_tests
     ../engine/AssetScaleTier.cpp
     ../engine/FontAsset.cpp
     ../engine/ImageAssetLoader.cpp
+    ../engine/ImageMipmaps.cpp
+    ../engine/render/ModelEnvironment.cpp
     ../engine/models/CgltfImplementation.cpp
     ../engine/models/GltfModelLoader.cpp
     ../engine/models/ModelAnimation.cpp
@@ -319,6 +323,9 @@ add_test(NAME openyamm_unit_tests COMMAND openyamm_unit_tests)
 add_executable(openyamm_runtime_tests
     UnitTestMain.cpp
     RegressionGameData.cpp
+    NewGameScreenTests.cpp
+    GameplayUiRuntimeTests.cpp
+    GameplaySpellServiceTests.cpp
     IndoorActorDetectionRuntimeTests.cpp
     IndoorActorFlyingRuntimeTests.cpp
     IndoorActorFactionRuntimeTests.cpp

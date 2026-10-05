@@ -13953,6 +13953,12 @@ bool OutdoorWorldRuntime::actorRuntimeState(size_t actorIndex, GameplayRuntimeAc
         return false;
     }
 
+    state.actorId = pActor->actorId;
+    state.yawRadians = pActor->yawRadians;
+    state.animationState = ActorAiAnimationState(pActor->animation);
+    state.animationTimeTicks = pActor->animationTimeTicks;
+    state.visualScale = pActor->shrinkRemainingSeconds > 0
+        ? std::clamp(pActor->shrinkDamageMultiplier, 0.25f, 1.0f) : 1.0f;
     state.monsterId = pActor->monsterId;
     state.mm9RudeId = pActor->mm9RudeId;
     state.mm9SourceObjectIndex = !pActor->spawnedAtRuntime

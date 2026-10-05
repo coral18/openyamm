@@ -127,6 +127,10 @@ std::string menuSettingValue(const GameSettings &settings, std::string_view id)
     {
         return std::to_string(settings.mouseSensitivity);
     }
+    if (id == "invert_mouse_y")
+    {
+        return settings.invertMouseY ? "true" : "false";
+    }
     if (id == "always_run")
     {
         return settings.alwaysRun ? "true" : "false";
@@ -461,6 +465,15 @@ bool setMenuSettingValue(GameSettings &settings, std::string_view id, const std:
             return false;
         }
         settings.mouseSensitivity = number;
+        return true;
+    }
+    if (id == "invert_mouse_y")
+    {
+        if (value != "true" && value != "false")
+        {
+            return false;
+        }
+        settings.invertMouseY = value == "true";
         return true;
     }
     if (id == "always_run")

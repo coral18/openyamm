@@ -24,6 +24,8 @@ namespace OpenYAMM::Game
 {
 class GameSession;
 class GameAudioSystem;
+class IGameplayWorldRuntime;
+class MonsterTable;
 struct PartySpellCastResult;
 
 struct WorldFxGlowBillboard
@@ -83,6 +85,12 @@ public:
         const std::string &bindingManifestPath,
         std::string &error);
     void bindNamedEffectAudio(GameAudioSystem *pAudioSystem);
+    bool configureActorModels(const Engine::AssetFileSystem &assets, const std::string &manifestPath,
+        const MonsterTable &monsters, std::string &error);
+    void syncActorModels(const IGameplayWorldRuntime &world);
+    bool hasActorModel(size_t actorIndex) const;
+    const Engine::ModelBounds *actorModelBounds(size_t actorIndex) const;
+    void setActorModelOutline(size_t actorIndex, uint32_t colorAbgr);
     void beginFrame();
     void updateParticles(float deltaSeconds, bool paused);
     void syncProjectileFx(GameSession &session, float deltaSeconds, bool refreshSpatialFx);
@@ -161,6 +169,23 @@ public:
     const std::vector<WorldFxSegmentProjectile> &segmentProjectiles() const;
 
 private:
+    struct ActorModelBinding
+    {
+        std::shared_ptr<const Engine::ModelAsset> asset;
+        std::array<uint32_t, 8> clips = {};
+        float scale = 1.0f;
+        float yawOffset = 0.0f;
+        float zOffset = 0.0f;
+    };
+    struct ActorModelInstance
+    {
+        Engine::ModelInstanceHandle handle;
+        uint32_t actorId = 0;
+        int16_t monsterId = 0;
+    };
+    bool m_actorModelsConfigured = false;
+    std::unordered_map<std::string, ActorModelBinding> m_actorModelBindings;
+    std::unordered_map<size_t, ActorModelInstance> m_actorModels;
     struct ProjectileFxTrailState
     {
         bool hasPreviousPosition = false;

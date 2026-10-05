@@ -1,4 +1,5 @@
 #include "engine/models/GltfModelLoader.h"
+#include "engine/models/ModelAnimation.h"
 
 #include "engine/AssetFileSystem.h"
 
@@ -174,8 +175,12 @@ const cgltf_accessor *findAttribute(const cgltf_primitive &primitive, cgltf_attr
 
 bool readAccessor(const cgltf_accessor &accessor, size_t index, size_t count, float *pValues)
 {
-    std::array<float, 4> values = {};
+    std::array<float, 16> values = {};
     if (count > values.size() || cgltf_accessor_read_float(&accessor, index, values.data(), count) == 0)
+    {
+        return false;
+    }
+    if (!std::all_of(values.begin(), values.begin() + count, [](float value) { return std::isfinite(value); }))
     {
         return false;
     }
@@ -337,6 +342,36 @@ bool rejectUnsupportedFeatures(const cgltf_data &data, std::string &error)
     return true;
 }
 
+bool loadMaterialTexture(const cgltf_data &data, const cgltf_texture_view &view,
+    int &imageIndex, ModelSampler &sampler, std::string &error)
+{
+    if (view.texture == nullptr)
+    {
+        return true;
+    }
+    if (view.texcoord != 0 || view.has_transform || view.texture->image == nullptr)
+    {
+        error = "material texture requires UV0, an image, and no texture transform";
+        return false;
+    }
+    imageIndex = int(cgltf_image_index(&data, view.texture->image));
+    if (view.texture->sampler != nullptr)
+    {
+        const cgltf_sampler &source = *view.texture->sampler;
+        sampler = {source.min_filter, source.mag_filter, source.wrap_s, source.wrap_t};
+    }
+    const auto validWrap = [](int value) { return value == 10497 || value == 33071 || value == 33648; };
+    if (!validWrap(sampler.wrapS) || !validWrap(sampler.wrapT)
+        || (sampler.magFilter != 0 && sampler.magFilter != 9728 && sampler.magFilter != 9729)
+        || (sampler.minFilter != 0 && sampler.minFilter != 9728 && sampler.minFilter != 9729
+            && (sampler.minFilter < 9984 || sampler.minFilter > 9987)))
+    {
+        error = "material texture has an invalid sampler";
+        return false;
+    }
+    return true;
+}
+
 bool loadMaterials(const cgltf_data &data, ModelAsset &asset, std::string &error)
 {
     asset.materials.reserve(data.materials_count);
@@ -356,6 +391,13 @@ bool loadMaterials(const cgltf_data &data, ModelAsset &asset, std::string &error
         material.name = source.name != nullptr ? source.name : "";
         material.doubleSided = source.double_sided != 0;
         material.unlit = source.unlit != 0;
+        std::copy_n(source.emissive_factor, 3, material.emissive.begin());
+        if (!loadMaterialTexture(data, source.normal_texture, material.normalImageIndex,
+                material.normalSampler, error))
+        {
+            return false;
+        }
+        material.normalScale = source.normal_texture.scale;
         material.alphaCutoff = source.alpha_cutoff;
         switch (source.alpha_mode)
         {
@@ -376,17 +418,25 @@ bool loadMaterials(const cgltf_data &data, ModelAsset &asset, std::string &error
         if (source.has_pbr_metallic_roughness)
         {
             std::copy_n(source.pbr_metallic_roughness.base_color_factor, 4, material.baseColor.begin());
-            const cgltf_texture *pTexture = source.pbr_metallic_roughness.base_color_texture.texture;
-            if (pTexture != nullptr)
+            material.metallic = source.pbr_metallic_roughness.metallic_factor;
+            material.roughness = source.pbr_metallic_roughness.roughness_factor;
+            if (!loadMaterialTexture(data, source.pbr_metallic_roughness.base_color_texture,
+                    material.imageIndex, material.baseSampler, error)
+                || !loadMaterialTexture(data, source.pbr_metallic_roughness.metallic_roughness_texture,
+                    material.metallicRoughnessImageIndex, material.metallicRoughnessSampler, error))
             {
-                if (source.pbr_metallic_roughness.base_color_texture.texcoord != 0 || pTexture->image == nullptr)
-                {
-                    error = "material " + std::to_string(materialIndex) +
-                        " uses an unsupported base-color texture binding";
-                    return false;
-                }
-                material.imageIndex = static_cast<int>(cgltf_image_index(&data, pTexture->image));
+                return false;
             }
+        }
+        const auto unitValue = [](float value) { return std::isfinite(value) && value >= 0 && value <= 1; };
+        if (!std::all_of(material.baseColor.begin(), material.baseColor.end(), unitValue)
+            || !unitValue(material.metallic) || !unitValue(material.roughness)
+            || !std::isfinite(material.alphaCutoff) || material.alphaCutoff < 0.0f
+            || !std::isfinite(material.normalScale) || material.normalScale < 0
+            || !std::all_of(material.emissive.begin(), material.emissive.end(), unitValue))
+        {
+            error = "material " + std::to_string(materialIndex) + " has invalid colour or surface factors";
+            return false;
         }
         asset.materials.push_back(std::move(material));
     }
@@ -399,13 +449,19 @@ bool loadMeshes(const cgltf_data &data, ModelAsset &asset, std::string &error)
     for (size_t meshIndex = 0; meshIndex < data.meshes_count; ++meshIndex)
     {
         const cgltf_mesh &sourceMesh = data.meshes[meshIndex];
-        if (sourceMesh.weights_count != 0)
-        {
-            error = "mesh " + std::to_string(meshIndex) + " uses unsupported morph weights";
-            return false;
-        }
         ModelMesh mesh;
         mesh.name = sourceMesh.name != nullptr ? sourceMesh.name : "";
+        const size_t targetCount = sourceMesh.primitives_count != 0 ? sourceMesh.primitives[0].targets_count : 0;
+        mesh.weights.resize(targetCount, 0.0f);
+        if (sourceMesh.weights_count != 0)
+        {
+            if (sourceMesh.weights_count != targetCount)
+            {
+                error = "mesh morph weight count differs from its target count";
+                return false;
+            }
+            std::copy_n(sourceMesh.weights, targetCount, mesh.weights.begin());
+        }
         mesh.primitives.reserve(sourceMesh.primitives_count);
         for (size_t primitiveIndex = 0; primitiveIndex < sourceMesh.primitives_count; ++primitiveIndex)
         {
@@ -416,10 +472,9 @@ bool loadMeshes(const cgltf_data &data, ModelAsset &asset, std::string &error)
                     " is not a triangle list";
                 return false;
             }
-            if (source.targets_count != 0)
+            if (source.targets_count != targetCount)
             {
-                error = "mesh " + std::to_string(meshIndex) + " primitive " + std::to_string(primitiveIndex) +
-                    " uses unsupported morph targets";
+                error = "mesh primitives have inconsistent morph target counts";
                 return false;
             }
 
@@ -442,12 +497,6 @@ bool loadMeshes(const cgltf_data &data, ModelAsset &asset, std::string &error)
                 error = "mesh " + std::to_string(meshIndex) + " has an invalid TEXCOORD_0 attribute";
                 return false;
             }
-            if (findAttribute(source, cgltf_attribute_type_joints) != nullptr ||
-                findAttribute(source, cgltf_attribute_type_weights) != nullptr)
-            {
-                error = "mesh " + std::to_string(meshIndex) + " contains unsupported skinning attributes";
-                return false;
-            }
 
             ModelPrimitive primitive;
             primitive.materialIndex = source.material != nullptr
@@ -465,6 +514,100 @@ bool loadMeshes(const cgltf_data &data, ModelAsset &asset, std::string &error)
                 }
             }
 
+            for (size_t attributeIndex = 0; attributeIndex < source.attributes_count; ++attributeIndex)
+            {
+                const cgltf_attribute &attribute = source.attributes[attributeIndex];
+                if ((attribute.type == cgltf_attribute_type_joints || attribute.type == cgltf_attribute_type_weights)
+                    && (attribute.index < 0 || attribute.index > 1))
+                {
+                    error = "model supports at most eight joint influences per vertex";
+                    return false;
+                }
+            }
+            for (int set = 0; set < 2; ++set)
+            {
+                const cgltf_accessor *pJoints = findAttribute(source, cgltf_attribute_type_joints, set);
+                const cgltf_accessor *pWeights = findAttribute(source, cgltf_attribute_type_weights, set);
+                if (pJoints == nullptr && pWeights == nullptr)
+                {
+                    continue;
+                }
+                if (pJoints == nullptr || pWeights == nullptr || pJoints->type != cgltf_type_vec4
+                    || pWeights->type != cgltf_type_vec4 || pJoints->count != pPosition->count
+                    || pWeights->count != pPosition->count || (set == 1 && primitive.influences.empty()))
+                {
+                    error = "invalid paired JOINTS/WEIGHTS accessors";
+                    return false;
+                }
+                primitive.influences.resize(pPosition->count);
+                for (size_t vertexIndex = 0; vertexIndex < pPosition->count; ++vertexIndex)
+                {
+                    std::array<float, 4> joints = {}, weights = {};
+                    if (!readAccessor(*pJoints, vertexIndex, 4, joints.data())
+                        || !readAccessor(*pWeights, vertexIndex, 4, weights.data()))
+                    {
+                        error = "unreadable joint influence data";
+                        return false;
+                    }
+                    for (size_t influence = 0; influence < 4; ++influence)
+                    {
+                        if (joints[influence] < 0 || joints[influence] > 65535
+                            || std::floor(joints[influence]) != joints[influence] || weights[influence] < 0)
+                        {
+                            error = "invalid joint index or weight";
+                            return false;
+                        }
+                        primitive.influences[vertexIndex].joints[set * 4 + influence] = uint16_t(joints[influence]);
+                        primitive.influences[vertexIndex].weights[set * 4 + influence] = weights[influence];
+                    }
+                }
+            }
+            for (const ModelVertexInfluences &influences : primitive.influences)
+            {
+                float sum = 0.0f;
+                for (float weight : influences.weights)
+                {
+                    sum += weight;
+                }
+                if (std::abs(sum - 1.0f) > 0.001f)
+                {
+                    error = "joint weights must sum to one";
+                    return false;
+                }
+            }
+            for (size_t targetIndex = 0; targetIndex < source.targets_count; ++targetIndex)
+            {
+                ModelMorphTarget target;
+                const cgltf_morph_target &sourceTarget = source.targets[targetIndex];
+                for (size_t attributeIndex = 0; attributeIndex < sourceTarget.attributes_count; ++attributeIndex)
+                {
+                    const cgltf_attribute &attribute = sourceTarget.attributes[attributeIndex];
+                    if (attribute.type != cgltf_attribute_type_position
+                        && attribute.type != cgltf_attribute_type_normal)
+                    {
+                        error = "unsupported morph target attribute";
+                        return false;
+                    }
+                    if (attribute.data == nullptr || attribute.data->type != cgltf_type_vec3
+                        || attribute.data->count != pPosition->count)
+                    {
+                        error = "invalid morph target accessor";
+                        return false;
+                    }
+                    std::vector<std::array<float, 3>> &values = attribute.type == cgltf_attribute_type_position
+                        ? target.positions : target.normals;
+                    values.resize(pPosition->count);
+                    for (size_t vertexIndex = 0; vertexIndex < pPosition->count; ++vertexIndex)
+                    {
+                        if (!readAccessor(*attribute.data, vertexIndex, 3, values[vertexIndex].data()))
+                        {
+                            error = "unreadable morph target data";
+                            return false;
+                        }
+                    }
+                }
+                primitive.morphTargets.push_back(std::move(target));
+            }
             const size_t indexCount = source.indices != nullptr ? source.indices->count : pPosition->count;
             if (indexCount % 3 != 0)
             {
@@ -496,11 +639,6 @@ bool loadNodes(const cgltf_data &data, ModelAsset &asset, std::string &error)
     for (size_t nodeIndex = 0; nodeIndex < data.nodes_count; ++nodeIndex)
     {
         const cgltf_node &source = data.nodes[nodeIndex];
-        if (source.skin != nullptr && source.mesh != nullptr)
-        {
-            error = "node " + std::to_string(nodeIndex) + " uses unsupported visible mesh skinning";
-            return false;
-        }
         if (source.has_mesh_gpu_instancing)
         {
             error = "node " + std::to_string(nodeIndex) + " uses unsupported GPU instancing";
@@ -511,6 +649,28 @@ bool loadNodes(const cgltf_data &data, ModelAsset &asset, std::string &error)
         node.name = source.name != nullptr ? source.name : "";
         node.parentIndex = source.parent != nullptr ? static_cast<int>(cgltf_node_index(&data, source.parent)) : -1;
         node.meshIndex = source.mesh != nullptr ? static_cast<int>(cgltf_mesh_index(&data, source.mesh)) : -1;
+        node.skinIndex = source.skin != nullptr ? int(cgltf_skin_index(&data, source.skin)) : -1;
+        if (node.meshIndex >= 0)
+        {
+            node.weights = asset.meshes[node.meshIndex].weights;
+        }
+        if (source.weights_count != 0)
+        {
+            if (source.weights_count != node.weights.size())
+            {
+                error = "node morph weight count differs from its mesh";
+                return false;
+            }
+            std::copy_n(source.weights, source.weights_count, node.weights.begin());
+        }
+        for (float weight : node.weights)
+        {
+            if (!std::isfinite(weight))
+            {
+                error = "non-finite default morph weight";
+                return false;
+            }
+        }
         node.usesMatrix = source.has_matrix != 0;
         if (node.usesMatrix)
         {
@@ -540,6 +700,62 @@ bool loadNodes(const cgltf_data &data, ModelAsset &asset, std::string &error)
         }
     }
     return buildHierarchy(asset, error);
+}
+
+bool loadSkins(const cgltf_data &data, ModelAsset &asset, std::string &error)
+{
+    for (size_t skinIndex = 0; skinIndex < data.skins_count; ++skinIndex)
+    {
+        const cgltf_skin &source = data.skins[skinIndex];
+        if (source.joints_count == 0 || source.joints_count > 65536
+            || (source.inverse_bind_matrices != nullptr
+                && (source.inverse_bind_matrices->type != cgltf_type_mat4
+                    || source.inverse_bind_matrices->count != source.joints_count)))
+        {
+            error = "invalid skin joints or inverse bind matrices";
+            return false;
+        }
+        ModelSkin skin;
+        skin.inverseBindMatrices.resize(source.joints_count, identityModelMatrix());
+        for (size_t joint = 0; joint < source.joints_count; ++joint)
+        {
+            skin.joints.push_back(uint32_t(cgltf_node_index(&data, source.joints[joint])));
+            if (source.inverse_bind_matrices != nullptr
+                && !readAccessor(*source.inverse_bind_matrices, joint, 16, skin.inverseBindMatrices[joint].data()))
+            {
+                error = "unreadable inverse bind matrix";
+                return false;
+            }
+        }
+        asset.skins.push_back(std::move(skin));
+    }
+    for (const ModelNode &node : asset.nodes)
+    {
+        if (node.skinIndex < 0 || node.meshIndex < 0)
+        {
+            continue;
+        }
+        for (const ModelPrimitive &primitive : asset.meshes[node.meshIndex].primitives)
+        {
+            if (primitive.influences.empty())
+            {
+                error = "skinned primitive has no joint influences";
+                return false;
+            }
+            for (const ModelVertexInfluences &influences : primitive.influences)
+            {
+                for (size_t i = 0; i < influences.joints.size(); ++i)
+                {
+                    if (influences.weights[i] > 0 && influences.joints[i] >= asset.skins[node.skinIndex].joints.size())
+                    {
+                        error = "vertex joint index exceeds its skin";
+                        return false;
+                    }
+                }
+            }
+        }
+    }
+    return true;
 }
 
 bool loadAnimations(const cgltf_data &data, ModelAsset &asset, std::string &error)
@@ -598,19 +814,25 @@ bool loadAnimations(const cgltf_data &data, ModelAsset &asset, std::string &erro
                 valueComponentCount = 3;
                 break;
             case cgltf_animation_path_type_weights:
-                error = "animation " + clip.name + " uses unsupported morph weights";
-                return false;
+                channel.target = ModelAnimationTarget::Weights;
+                valueComponentCount = asset.nodes[channel.nodeIndex].weights.size();
+                if (valueComponentCount == 0)
+                {
+                    error = "weight animation targets a node without morph targets";
+                    return false;
+                }
+                break;
             default:
                 error = "animation " + clip.name + " uses an invalid target path";
                 return false;
             }
-            if (asset.nodes[channel.nodeIndex].usesMatrix)
+            if (channel.target != ModelAnimationTarget::Weights && asset.nodes[channel.nodeIndex].usesMatrix)
             {
                 error = "animation " + clip.name + " targets matrix node " +
                     std::to_string(channel.nodeIndex) + " with TRS data";
                 return false;
             }
-            const uint64_t targetKey = static_cast<uint64_t>(channel.nodeIndex) * 4 +
+            const uint64_t targetKey = static_cast<uint64_t>(channel.nodeIndex) * 5 +
                 static_cast<uint64_t>(channel.target);
             if (!animatedTargets.insert(targetKey).second)
             {
@@ -622,13 +844,15 @@ bool loadAnimations(const cgltf_data &data, ModelAsset &asset, std::string &erro
             const cgltf_accessor *pValues = sourceChannel.sampler->output;
             if (pTimes == nullptr || pValues == nullptr || pTimes->type != cgltf_type_scalar ||
                 pTimes->component_type != cgltf_component_type_r_32f || pTimes->count == 0 ||
-                pValues->count != pTimes->count)
+                pValues->count != pTimes->count * (channel.target == ModelAnimationTarget::Weights
+                    ? valueComponentCount : 1))
             {
                 error = "animation " + clip.name + " has invalid sampler accessors";
                 return false;
             }
-            if ((valueComponentCount == 3 && pValues->type != cgltf_type_vec3) ||
-                (valueComponentCount == 4 && pValues->type != cgltf_type_vec4))
+            if (channel.target == ModelAnimationTarget::Weights ? pValues->type != cgltf_type_scalar :
+                ((valueComponentCount == 3 && pValues->type != cgltf_type_vec3) ||
+                (valueComponentCount == 4 && pValues->type != cgltf_type_vec4)))
             {
                 error = "animation " + clip.name + " has an invalid output accessor type";
                 return false;
@@ -636,10 +860,15 @@ bool loadAnimations(const cgltf_data &data, ModelAsset &asset, std::string &erro
 
             channel.times.resize(pTimes->count);
             channel.values.resize(pTimes->count);
+            if (channel.target == ModelAnimationTarget::Weights)
+            {
+                channel.weightValues.resize(pTimes->count, std::vector<float>(valueComponentCount));
+            }
             for (size_t keyIndex = 0; keyIndex < pTimes->count; ++keyIndex)
             {
                 if (!readAccessor(*pTimes, keyIndex, 1, &channel.times[keyIndex]) ||
-                    !readAccessor(*pValues, keyIndex, valueComponentCount, channel.values[keyIndex].data()))
+                    (channel.target != ModelAnimationTarget::Weights
+                        && !readAccessor(*pValues, keyIndex, valueComponentCount, channel.values[keyIndex].data())))
                 {
                     error = "animation " + clip.name + " contains unreadable keyframe data";
                     return false;
@@ -652,7 +881,10 @@ bool loadAnimations(const cgltf_data &data, ModelAsset &asset, std::string &erro
                 }
                 for (size_t component = 0; component < valueComponentCount; ++component)
                 {
-                    if (!std::isfinite(channel.values[keyIndex][component]))
+                    if (channel.target == ModelAnimationTarget::Weights
+                        ? !readAccessor(*pValues, keyIndex * valueComponentCount + component, 1,
+                            &channel.weightValues[keyIndex][component])
+                        : !std::isfinite(channel.values[keyIndex][component]))
                     {
                         error = "animation " + clip.name + " contains a non-finite keyframe value";
                         return false;
@@ -669,21 +901,27 @@ bool loadAnimations(const cgltf_data &data, ModelAsset &asset, std::string &erro
 
 void calculateStaticBounds(ModelAsset &asset)
 {
-    std::vector<ModelMatrix> globalMatrices(asset.nodes.size(), identityModelMatrix());
-    for (uint32_t nodeIndex : asset.hierarchyOrder)
+    ModelPose pose;
+    resetModelPose(asset, pose);
+    evaluateModelHierarchy(asset, identityModelMatrix(), pose);
+    deformModelPose(asset, pose);
+    for (size_t nodeIndex = 0; nodeIndex < asset.nodes.size(); ++nodeIndex)
     {
         const ModelNode &node = asset.nodes[nodeIndex];
-        globalMatrices[nodeIndex] = node.parentIndex >= 0
-            ? multiplyModelMatrices(globalMatrices[node.parentIndex], node.matrix) : node.matrix;
-        if (node.meshIndex < 0)
+        if (node.meshIndex < 0 || !modelMatrixVisible(pose.globalMatrices[nodeIndex]))
         {
             continue;
         }
-        for (const ModelPrimitive &primitive : asset.meshes[node.meshIndex].primitives)
+        const ModelMesh &mesh = asset.meshes[node.meshIndex];
+        for (size_t primitiveIndex = 0; primitiveIndex < mesh.primitives.size(); ++primitiveIndex)
         {
-            for (const ModelVertex &vertex : primitive.vertices)
+            const ModelPrimitive &primitive = mesh.primitives[primitiveIndex];
+            const std::vector<ModelVertex> &vertices = node.skinIndex >= 0 || !primitive.morphTargets.empty()
+                ? pose.deformedVertices[nodeIndex][primitiveIndex] : primitive.vertices;
+            const ModelMatrix matrix = node.skinIndex >= 0 ? identityModelMatrix() : pose.globalMatrices[nodeIndex];
+            for (const ModelVertex &vertex : vertices)
             {
-                expandBounds(asset.staticBounds, transformPoint(globalMatrices[nodeIndex], vertex.position));
+                expandBounds(asset.staticBounds, transformPoint(matrix, vertex.position));
             }
         }
     }
@@ -764,6 +1002,7 @@ ModelLoadResult GltfModelLoader::load(
         !loadMaterials(*data, *asset, result.error) ||
         !loadMeshes(*data, *asset, result.error) ||
         !loadNodes(*data, *asset, result.error) ||
+        !loadSkins(*data, *asset, result.error) ||
         !loadAnimations(*data, *asset, result.error))
     {
         return result;

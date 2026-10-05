@@ -9,6 +9,7 @@ import json
 import math
 from pathlib import Path
 import shutil
+import struct
 import subprocess
 import sys
 
@@ -27,9 +28,18 @@ def main():
                         help='Override static decoration alpha sun shadows for selected maps')
     parser.add_argument('--blender', default='blender', help='Blender executable with Cycles support')
     parser.add_argument('--install', action='store_true', help='Copy successful lighting/recipe pairs into assets_dev')
+    migration = parser.add_mutually_exclusive_group()
+    migration.add_argument('--model-probes-only', action='store_true',
+                        help='Migrate installed v3 bakes using their exact recipes; preserve surface/sprite lighting')
+    migration.add_argument('--sun-direct-only', action='store_true',
+                           help='Migrate installed v4 bakes using their exact recipes; add mesh-shadow receiver pages')
     parser.add_argument('--dry-run', action='store_true', help='List candidates without baking or writing files')
     parser.add_argument('--retry-failed', type=Path, help='Retry only failed entries from this batch report')
-    args = parser.parse_args()
+    args = parser.parse_args(sys.argv[sys.argv.index('--') + 1:] if '--' in sys.argv else None)
+    migrate = args.model_probes_only or args.sun_direct_only
+    if migrate and any(value is not None for value in
+                                     (args.samples, args.azimuth, args.decoration_shadows)):
+        parser.error('Lighting migration cannot override an installed profile')
     if args.samples is not None and args.samples < 1:
         parser.error('--samples must be positive')
     if args.azimuth is not None and not math.isfinite(args.azimuth):
@@ -37,6 +47,10 @@ def main():
 
     sources = sorted(source for world in set(args.world)
                      for source in (ROOT / 'assets_dev/worlds' / world / 'maps').glob('*.odm'))
+    if migrate:
+        sources = [source for source in sources if source.with_suffix('.bake.json').is_file()
+                   and struct.unpack_from('<I', source.with_suffix('.lighting').read_bytes(), 8)[0]
+                   == (4 if args.sun_direct_only else 3)]
     if args.retry_failed:
         try:
             previous = json.loads(args.retry_failed.read_text())['results']
@@ -48,6 +62,9 @@ def main():
             print('No failed maps to retry in the selected worlds.')
             return 0
     if not sources:
+        if migrate:
+            print('No installed bakes require the selected lighting migration.')
+            return 0
         parser.error('No native outdoor maps found in the selected worlds')
     output = args.output.resolve()
     # The producer writes the recipe before baking. Never let a failed job overwrite an installed recipe.
@@ -79,6 +96,8 @@ def main():
         map_output.mkdir(parents=True, exist_ok=True)
         authored_profile = PROFILES / f'{world}_{source.stem}.yml'
         profile = json.loads(authored_profile.read_text()) if authored_profile.is_file() else dict(template)
+        if migrate:
+            profile = json.loads(source.with_suffix('.bake.json').read_text())['profile']
         profile.update(world=world, map=source.name)
         if args.samples is not None:
             profile['samples'] = args.samples
@@ -95,6 +114,10 @@ def main():
             command = [blender, '--background', '--factory-startup', '--python-exit-code', '1',
                        '--python', str(ROOT / 'tools/lighting/bake_outdoor.py'), '--',
                        '--profile', str(profile_path), '--output', str(map_output)]
+            if args.model_probes_only:
+                command += ['--model-probes-only', str(source.with_suffix('.lighting'))]
+            if args.sun_direct_only:
+                command += ['--sun-direct-only', str(source.with_suffix('.lighting'))]
             with log_path.open('w') as log:
                 completed = subprocess.run(command, cwd=ROOT, stdout=log, stderr=subprocess.STDOUT, check=False)
             if completed.returncode != 0:

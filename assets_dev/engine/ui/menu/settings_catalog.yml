@@ -289,6 +289,12 @@ settings:
   max: 100
   unit: '%'
   desc: The response of mouse movement. Zero disables mouse look movement.
+- id: invert_mouse_y
+  section: controls
+  group: Look & movement
+  name: Invert mouse Y
+  type: toggle
+  desc: Move the mouse up to look down, and down to look up.
 - id: turn_rate
   section: controls
   group: Look & movement

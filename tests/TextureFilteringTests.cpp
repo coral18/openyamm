@@ -5,11 +5,36 @@
 #include <doctest/doctest.h>
 
 #include <cstdint>
+#include <cmath>
 #include <future>
 #include <memory>
 #include <vector>
 
 using namespace OpenYAMM::Game;
+
+TEST_CASE("Model material mipmaps average sRGB in linear space and normalize normals")
+{
+    using namespace OpenYAMM::Engine;
+    const std::vector<uint8_t> colors = {0, 0, 0, 0, 255, 255, 255, 255};
+    const std::vector<BgraMipLevel> colorLevels = prepareBgraMipChain(2, 1, colors, 0, ImageMipSemantic::Srgb);
+    REQUIRE_EQ(colorLevels.size(), 2);
+    CHECK_EQ(colorLevels.back().pixels[0], 188);
+    CHECK_EQ(colorLevels.back().pixels[3], 128);
+    CHECK(srgbToLinear(linearToSrgb(0.18f)) == doctest::Approx(0.18f));
+    const std::vector<uint8_t> normals = {255, 128, 128, 255, 128, 128, 255, 255};
+    const std::vector<BgraMipLevel> normalLevels = prepareBgraMipChain(2, 1, normals, 0, ImageMipSemantic::Normal);
+    const std::vector<uint8_t> &normal = normalLevels.back().pixels;
+    float lengthSquared = 0;
+    for (size_t channel = 0; channel < 3; ++channel)
+    {
+        const float value = normal[channel] / 127.5f - 1;
+        lengthSquared += value * value;
+    }
+    CHECK(std::sqrt(lengthSquared) == doctest::Approx(1.0f).epsilon(0.01));
+    const std::vector<uint8_t> odd = {0, 0, 0, 255, 0, 0, 0, 255, 255, 255, 255, 255};
+    CHECK_EQ(prepareBgraMipChain(3, 1, odd, 0, ImageMipSemantic::Srgb).back().pixels[0], 156);
+    CHECK(prepareBgraMipChain(2, 2, colors).empty());
+}
 
 namespace
 {

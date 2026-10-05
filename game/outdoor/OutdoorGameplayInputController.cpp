@@ -69,7 +69,7 @@ void OutdoorGameplayInputController::updateCameraFromInput(
     }
 
     const bool runWalkModifier = pKeyboardState[SDL_SCANCODE_LSHIFT] || pKeyboardState[SDL_SCANCODE_RSHIFT];
-    const bool turboSpeed = pKeyboardState[SDL_SCANCODE_LCTRL] || pKeyboardState[SDL_SCANCODE_RCTRL];
+    const bool turboSpeed = input.turboMovementHeld();
     const bool blockCameraRotation =
         overlayContext.buffInspectOverlayReadOnly().active
         || overlayContext.characterDetailOverlayReadOnly().active;

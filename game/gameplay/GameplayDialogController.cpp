@@ -3917,7 +3917,7 @@ GameplayDialogController::Result GameplayDialogController::executeActiveDialogAc
             context.eventRuntimeState.messages.push_back("That topic does not have an event yet.");
         }
 
-        if (context.eventRuntimeState.pendingWinGame)
+        if (context.eventRuntimeState.pendingWinGame || context.eventRuntimeState.pendingDimensionDoorOverlay)
         {
             result.shouldCloseActiveDialog = true;
             return result;

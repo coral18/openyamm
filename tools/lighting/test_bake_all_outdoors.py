@@ -3,6 +3,7 @@ import io
 import json
 from pathlib import Path
 import subprocess
+import struct
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -89,6 +90,38 @@ class BatchBakeTests(unittest.TestCase):
             self.assertIn('worlds/mm7/maps/', log.getvalue())
             self.assertNotIn('worlds/mm6/maps/', log.getvalue())
             self.assertNotIn('worlds/mm8/maps/', log.getvalue())
+
+    def test_direct_sun_migration_selects_v4_and_preserves_installed_profile(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            profiles = root / 'profiles'
+            profiles.mkdir()
+            (profiles / 'mm6_oute3.yml').write_text(json.dumps(dict(samples=64)))
+            installed_profile = dict(world='mm6', map='a.odm', samples=32, terrain_size=1024, azimuth=225)
+            for name, version in [('a', 4), ('b', 5), ('c', 3)]:
+                source = root / 'assets_dev/worlds/mm6/maps' / f'{name}.odm'
+                source.parent.mkdir(parents=True, exist_ok=True)
+                source.touch()
+                source.with_suffix('.lighting').write_bytes(b'OYMLIT1\0'+struct.pack('<I', version))
+                source.with_suffix('.bake.json').write_text(json.dumps(dict(profile=installed_profile)))
+
+            def producer(command, **kwargs):
+                self.assertIn('--sun-direct-only', command)
+                self.assertEqual(Path(command[-1]).stem, 'a')
+                profile = json.loads(Path(command[command.index('--profile') + 1]).read_text())
+                self.assertEqual(profile, installed_profile)
+                output = Path(command[command.index('--output') + 1])
+                (output/'a.lighting').write_bytes(b'new v5 output')
+                (output/'a.bake.json').write_text('new recipe')
+                return subprocess.CompletedProcess(command, 0)
+
+            with patch.object(batch, 'ROOT', root), patch.object(batch, 'PROFILES', profiles), \
+                    patch.object(batch.shutil, 'which', return_value='/fake/blender'), \
+                    patch.object(batch.subprocess, 'run', side_effect=producer) as run, \
+                    patch('sys.argv', ['batch', '--output', str(root/'output'), '--sun-direct-only']), \
+                    contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(batch.main(), 0)
+            self.assertEqual(run.call_count, 1)
 
 
 if __name__ == '__main__':

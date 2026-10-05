@@ -39,15 +39,45 @@ struct ModelImage
     std::vector<uint8_t> pngBytes;
 };
 
+// glTF sampler values; zero filter values request the renderer's linear mip filtering default.
+struct ModelSampler
+{
+    int minFilter = 0;
+    int magFilter = 0;
+    int wrapS = 10497;
+    int wrapT = 10497;
+};
+
 struct ModelMaterial
 {
     std::string name;
     std::array<float, 4> baseColor = {1.0f, 1.0f, 1.0f, 1.0f};
     int imageIndex = -1;
+    int normalImageIndex = -1;
+    int metallicRoughnessImageIndex = -1;
+    float metallic = 1.0f;
+    float roughness = 1.0f;
+    ModelSampler baseSampler;
+    ModelSampler normalSampler;
+    ModelSampler metallicRoughnessSampler;
+    float normalScale = 1.0f;
+    std::array<float, 3> emissive = {};
     ModelAlphaMode alphaMode = ModelAlphaMode::Opaque;
     float alphaCutoff = 0.5f;
     bool doubleSided = false;
     bool unlit = false;
+};
+
+struct ModelVertexInfluences
+{
+    std::array<uint16_t, 8> joints = {};
+    std::array<float, 8> weights = {};
+};
+
+struct ModelMorphTarget
+{
+    std::vector<std::array<float, 3>> positions;
+    std::vector<std::array<float, 3>> normals;
 };
 
 struct ModelPrimitive
@@ -55,12 +85,21 @@ struct ModelPrimitive
     std::vector<ModelVertex> vertices;
     std::vector<uint32_t> indices;
     int materialIndex = -1;
+    std::vector<ModelVertexInfluences> influences;
+    std::vector<ModelMorphTarget> morphTargets;
 };
 
 struct ModelMesh
 {
     std::string name;
     std::vector<ModelPrimitive> primitives;
+    std::vector<float> weights;
+};
+
+struct ModelSkin
+{
+    std::vector<uint32_t> joints;
+    std::vector<ModelMatrix> inverseBindMatrices;
 };
 
 struct ModelNode
@@ -69,6 +108,8 @@ struct ModelNode
     int parentIndex = -1;
     std::vector<uint32_t> childIndices;
     int meshIndex = -1;
+    int skinIndex = -1;
+    std::vector<float> weights;
     bool usesMatrix = false;
     ModelTransform transform;
     ModelMatrix matrix = {};
@@ -84,7 +125,8 @@ enum class ModelAnimationTarget
 {
     Translation,
     Rotation,
-    Scale
+    Scale,
+    Weights
 };
 
 struct ModelAnimationChannel
@@ -94,6 +136,7 @@ struct ModelAnimationChannel
     ModelAnimationInterpolation interpolation = ModelAnimationInterpolation::Linear;
     std::vector<float> times;
     std::vector<std::array<float, 4>> values;
+    std::vector<std::vector<float>> weightValues;
 };
 
 struct ModelAnimationClip
@@ -117,6 +160,7 @@ struct ModelAsset
     std::vector<ModelMaterial> materials;
     std::vector<ModelMesh> meshes;
     std::vector<ModelNode> nodes;
+    std::vector<ModelSkin> skins;
     std::vector<uint32_t> hierarchyOrder;
     std::vector<ModelAnimationClip> clips;
     std::unordered_map<std::string, uint32_t> nodeIndicesByName;
@@ -126,6 +170,10 @@ struct ModelAsset
     std::optional<uint32_t> findNode(const std::string &name) const;
     std::optional<uint32_t> findClip(const std::string &name) const;
 };
+
+float determinant3x3(const ModelMatrix &matrix);
+ModelMatrix modelNormalMatrix(const ModelMatrix &matrix);
+bool modelMatrixVisible(const ModelMatrix &matrix);
 
 ModelMatrix identityModelMatrix();
 ModelMatrix composeModelTransform(const ModelTransform &transform);

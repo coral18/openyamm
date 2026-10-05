@@ -9,8 +9,10 @@ The build script creates those zips fresh from `assets_dev/` in the staged Flatp
 `assets/*.zip` files do not have to be regenerated before building Flatpak packages.
 It validates and packages the prebuilt desktop creature atlases; authoring sources and recooking are unnecessary.
 
-Build and install locally after Flatpak, `flatpak-builder`, `ostree`, `elfutils`, and the Flatpak runtime and SDK are
-installed. `elfutils` provides the `eu-strip` and `eu-elfcompress` tools used when finalizing release binaries.
+Build and install locally after Flatpak, `flatpak-builder`, `ostree`, `elfutils`, `librsvg2-common`, and the Flatpak runtime
+and SDK are installed. `elfutils` provides the `eu-strip` and `eu-elfcompress` tools used when finalizing release binaries.
+On Ubuntu, `librsvg2-common` provides the host SVG loader used by Flatpak's icon validator; install it explicitly when
+using `--no-install-recommends`.
 
 ```sh
 packaging/flatpak/build_flatpak.sh

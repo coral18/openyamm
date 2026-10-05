@@ -137,7 +137,7 @@ public class OpenYammActivity extends SDLActivity {
     }
 
     private void disableAutoHandwriting(View view) {
-        if (view == null) {
+        if (Build.VERSION.SDK_INT < 33 || view == null) {
             return;
         }
 

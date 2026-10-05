@@ -11020,6 +11020,12 @@ bool IndoorWorldRuntime::actorRuntimeState(size_t actorIndex, GameplayRuntimeAct
         pAiState != nullptr ? &pAiState->spellEffects : nullptr;
     const bool useEffectOverride = pEffectState != nullptr && hasActiveActorSpellEffectOverride(*pEffectState);
 
+    state.actorId = pAiState != nullptr ? pAiState->actorId : uint32_t(actorIndex);
+    state.yawRadians = pAiState != nullptr ? pAiState->yawRadians : 0.0f;
+    state.animationState = pAiState != nullptr ? pAiState->animationState : ActorAiAnimationState::Standing;
+    state.animationTimeTicks = pAiState != nullptr ? pAiState->animationTimeTicks : 0.0f;
+    state.visualScale = pEffectState != nullptr && pEffectState->shrinkRemainingSeconds > 0
+        ? std::clamp(pEffectState->shrinkDamageMultiplier, 0.25f, 1.0f) : 1.0f;
     state.monsterId = resolvedMonsterId;
     state.mm9RudeId = actor.mm9RudeId;
     state.mm9SourceObjectIndex = actor.mm9SourceObjectIndex;

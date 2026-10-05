@@ -28,7 +28,6 @@ using CreationCandidate = NewGameScreen::CreationCandidate;
 constexpr const char *PcNamesTablePath = "engine/data_tables/english/pc_names.txt";
 constexpr uint32_t DefaultCreationCharacterDataId = 1;
 constexpr const char *DefaultCreationClassName = "Knight";
-constexpr const char *DefaultNewGameContinentKey = "jadame";
 constexpr uint32_t DebugGodLichCharacterDataId = 27;
 constexpr int DebugGodLichStatValue = 100;
 constexpr uint32_t CharacterCreationVoicePreviewSpeakerKey = 0x43525650u;
@@ -241,51 +240,6 @@ std::vector<std::string> splitTabLine(const std::string &line)
     }
 
     return cells;
-}
-
-bool containsUnsigned(const std::vector<uint32_t> &values, uint32_t value)
-{
-    return std::find(values.begin(), values.end(), value) != values.end();
-}
-
-bool containsCanonicalClass(const std::vector<std::string> &classNames, const std::string &className)
-{
-    const std::string canonicalClassNameToFind = canonicalClassName(className);
-
-    for (const std::string &candidate : classNames)
-    {
-        if (canonicalClassName(candidate) == canonicalClassNameToFind)
-        {
-            return true;
-        }
-    }
-
-    return false;
-}
-
-bool portraitIsExcepted(
-    const CharacterDollEntry &entry,
-    const std::vector<std::string> &portraitExceptions)
-{
-    for (const std::string &exception : portraitExceptions)
-    {
-        const std::string normalizedException = trimCopy(exception);
-
-        if (normalizedException.empty())
-        {
-            continue;
-        }
-
-        if (normalizedException == std::to_string(entry.id)
-            || normalizedException == entry.facePicturesPrefix
-            || normalizedException == entry.bodyAsset
-            || normalizedException == entry.headAsset)
-        {
-            return true;
-        }
-    }
-
-    return false;
 }
 
 uint32_t classIdNear(uint32_t currentClassId, const std::vector<uint32_t> &availableClassIds, int direction)
@@ -847,18 +801,6 @@ void NewGameScreen::rebuildCandidates()
     }
 
     const MergedCharacterSelectionTable &selectionTable = m_pGameData->mergedCharacterSelectionTable();
-    const MergedCharacterSelectionContinent *pContinent =
-        findNewGameContinent(selectionTable, m_selectedContinent.key);
-
-    if (pContinent == nullptr)
-    {
-        pContinent = findNewGameContinent(selectionTable, DefaultNewGameContinentKey);
-    }
-
-    if (pContinent == nullptr)
-    {
-        return;
-    }
 
     std::vector<const CharacterDollEntry *> characterEntries;
 
@@ -885,12 +827,6 @@ void NewGameScreen::rebuildCandidates()
 
         const uint32_t raceId = static_cast<uint32_t>(pEntry->raceId);
 
-        if (!containsUnsigned(pContinent->availableRaceIds, raceId)
-            || portraitIsExcepted(*pEntry, pContinent->portraitExceptions))
-        {
-            continue;
-        }
-
         const std::vector<std::string> *pAllowedClasses = selectionTable.allowedClassesForRaceId(raceId);
         const std::optional<std::string> raceName = selectionTable.raceNameForId(raceId);
 
@@ -901,16 +837,16 @@ void NewGameScreen::rebuildCandidates()
 
         std::vector<uint32_t> availableClassIds;
 
-        for (uint32_t classId : pContinent->availableClassIds)
+        for (const std::string &className : *pAllowedClasses)
         {
-            const std::optional<std::string> className = m_pGameData->classSkillTable().classNameForId(classId);
+            const std::optional<uint32_t> classId = m_pGameData->classSkillTable().classIdForName(className);
 
-            if (!className.has_value() || !containsCanonicalClass(*pAllowedClasses, *className))
+            if (!classId.has_value())
             {
                 continue;
             }
 
-            availableClassIds.push_back(classId);
+            availableClassIds.push_back(*classId);
         }
 
         if (availableClassIds.empty())
@@ -937,6 +873,12 @@ void NewGameScreen::rebuildCandidates()
             m_candidates.push_back(std::move(candidate));
         }
     }
+
+    const auto isDragon = [](const CreationCandidate &candidate)
+    {
+        return candidate.raceName == "Dragon";
+    };
+    std::stable_partition(std::find_if(m_candidates.begin(), m_candidates.end(), isDragon), m_candidates.end(), isDragon);
 }
 
 size_t NewGameScreen::candidateCount() const

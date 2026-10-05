@@ -3418,13 +3418,37 @@ void GameApplication::registerDebugConsoleCommands()
 
     m_debugConsole.registerCommand({
         .name = "actor",
-        .description = "Count remaining actors for one or more monster-table ids on the current map.",
-        .usage = "actor count <monster-id> [monster-id...]",
+        .description = "Count or spawn ordinary table-driven monsters on the current map.",
+        .usage = "actor count <id> [ids...] | actor spawn <id> <count> <x> <y> <z> [group]",
         .callback = [this, activeGameplayWorld, commandResult](const DebugConsole::CommandContext &context)
         {
+            if (!context.args.empty() && toLowerCopy(context.args[0]) == "spawn")
+            {
+                if (context.args.size() < 6 || context.args.size() > 7)
+                {
+                    return commandResult(false, "Usage: actor spawn <id> <count> <x> <y> <z> [group]");
+                }
+                const std::optional<int32_t> id = parseInt32Argument(context.args[1]);
+                const std::optional<int32_t> count = parseInt32Argument(context.args[2]);
+                const std::optional<float> x = parseFloatArgument(context.args[3]);
+                const std::optional<float> y = parseFloatArgument(context.args[4]);
+                const std::optional<float> z = parseFloatArgument(context.args[5]);
+                const std::optional<int32_t> group = context.args.size() == 7
+                    ? parseInt32Argument(context.args[6]) : std::optional<int32_t>(0);
+                if (!id || *id < 1 || *id > 32767 || !count || *count < 1 || *count > 128 || !group || *group < 0
+                    || !x || !y || !z || !std::isfinite(*x) || !std::isfinite(*y) || !std::isfinite(*z))
+                {
+                    return commandResult(false, "Invalid monster id, count, position or group.");
+                }
+                IGameplayWorldRuntime *pWorld = activeGameplayWorld();
+                const bool spawned = pWorld != nullptr && pWorld->summonHostileMonsterById(
+                    int16_t(*id), uint32_t(*count), *x, *y, *z, uint32_t(*group));
+                return commandResult(spawned, spawned ? "Monsters spawned." : "Monster spawn failed.");
+            }
             if (context.args.size() < 2 || toLowerCopy(context.args[0]) != "count")
             {
-                return commandResult(false, "Usage: actor count <monster-id> [monster-id...]");
+                return commandResult(false,
+                    "Usage: actor count <id> [ids...] | actor spawn <id> <count> <x> <y> <z> [group]");
             }
 
             IGameplayWorldRuntime *pWorldRuntime = activeGameplayWorld();
@@ -8246,7 +8270,7 @@ void GameApplication::updateGameplayTraceSnapshotHotkeys()
             snapshot.tickMilliseconds = SDL_GetTicks();
             snapshot.forwardHeld = forwardHeld;
             snapshot.runWalkModifierHeld = shiftHeld;
-            snapshot.turboHeld = ctrlHeld;
+            snapshot.turboHeld = inputFrame.turboMovementHeld();
             snapshot.shiftHeld = shiftHeld;
             snapshot.ctrlHeld = ctrlHeld;
             snapshot.altHeld = altHeld;
@@ -9689,6 +9713,19 @@ void GameApplication::renderFrame(int width, int height, float mouseWheelDelta, 
         const uint64_t postWorldBeginTickCount = collectFrameDiagnostics ? SDL_GetTicksNS() : 0;
         WorldFxSystem &worldFx = m_pMapSceneRuntime->kind() == SceneKind::Outdoor
             ? m_outdoorGameView.worldFxSystem() : m_indoorRenderer.worldFxSystem();
+        if (m_settings.actorModels)
+        {
+            std::string error;
+            if (!worldFx.configureActorModels(*m_pAssetFileSystem,
+                    "worlds/" + m_activeWorldManifest.id + "/models/actors.yml",
+                    m_gameDataLoader.getMonsterTable(), error))
+            {
+                std::cerr << "Actor model load failed: " << error << '\n';
+                requestApplicationQuit();
+                return;
+            }
+            worldFx.syncActorModels(*pWorldRuntime);
+        }
         m_gameSession.gameplayFxService().consumePendingWorldFxRequests(
             pWorldRuntime->eventRuntimeState(),
             worldFx,
@@ -9896,6 +9933,17 @@ void GameApplication::updateScreenshotCaptureFrame()
             std::cout << "Launch effect spawned: " << m_settings.effectSpawnId
                       << " count=" << spawned << '\n';
         }
+    }
+
+    if (!m_debugLaunchActorsSpawned && m_settings.actorSpawnId > 0)
+    {
+        m_debugLaunchActorsSpawned = true;
+        IGameplayWorldRuntime *pWorld = m_gameSession.activeWorldRuntime();
+        const bool spawned = pWorld != nullptr && pWorld->summonHostileMonsterById(m_settings.actorSpawnId,
+            m_settings.actorSpawnCount, m_settings.actorSpawnPosition[0], m_settings.actorSpawnPosition[1],
+            m_settings.actorSpawnPosition[2], 0);
+        std::cout << "Launch actor spawn: id=" << m_settings.actorSpawnId << " count=" << m_settings.actorSpawnCount
+                  << " success=" << spawned << '\n';
     }
 
     if (!m_debugLaunchModelSpawned && !m_settings.modelSpawnPath.empty())

@@ -91,6 +91,11 @@ void GameInputSystem::handleSdlEvent(const SDL_Event &event)
     }
 
 #if defined(__ANDROID__)
+    if (event.type == SDL_EVENT_MOUSE_MOTION && event.motion.which != SDL_TOUCH_MOUSEID)
+    {
+        m_mobilePointerPosition.reset();
+    }
+
     const auto findTouch =
         [this](SDL_FingerID fingerId) -> MobileTouchPoint *
         {
@@ -262,6 +267,7 @@ void GameInputSystem::updateFromEngineInput(
     std::span<const GameplayTouchControl> touchControls)
 {
     m_frame = {};
+    m_frame.turboMovementEnabled = settings.turboMovementEnabled;
     m_frame.screenWidth = screenWidth;
     m_frame.screenHeight = screenHeight;
     m_frame.mouseWheelDelta = blockGameplayInput ? 0.0f : mouseWheelDelta;
@@ -292,6 +298,14 @@ void GameInputSystem::updateFromEngineInput(
     m_frame.pointerX = pointerX;
     m_frame.pointerY = pointerY;
 
+#if defined(__ANDROID__)
+    if (m_mobilePointerPosition)
+    {
+        m_frame.pointerX = (*m_mobilePointerPosition)[0] * static_cast<float>(screenWidth);
+        m_frame.pointerY = (*m_mobilePointerPosition)[1] * static_cast<float>(screenHeight);
+    }
+#endif
+
 #if !defined(__ANDROID__)
     SDL_Window *pMouseLookWindow = SDL_GetMouseFocus();
 
@@ -320,7 +334,8 @@ void GameInputSystem::updateFromEngineInput(
 #else
     const float mouseSensitivityScale = static_cast<float>(std::clamp(settings.mouseSensitivity, 0, 100)) / 100.0f;
     m_frame.relativeMouseX = blockGameplayInput ? 0.0f : relativeMouseX * mouseSensitivityScale;
-    m_frame.relativeMouseY = blockGameplayInput ? 0.0f : relativeMouseY * mouseSensitivityScale;
+    m_frame.relativeMouseY = blockGameplayInput ? 0.0f
+        : (settings.invertMouseY ? -relativeMouseY : relativeMouseY) * mouseSensitivityScale;
 #endif
 
     const bool physicalLeftMouseButtonHeld = (mouseButtons & SDL_BUTTON_LMASK) != 0;
@@ -696,6 +711,8 @@ void GameInputSystem::updateFromEngineInput(
         m_mobilePendingHudDragRelease
         && (!useMobileGameplayTouchControls
             || touchStartsInHudZone(m_mobilePendingHudDragStartX, m_mobilePendingHudDragStartY));
+    const bool hasMobilePointerInput = inspectModifierHeld || hasHudTouch || pendingHudDragIsUiGesture
+        || m_mobilePendingHudTap || m_mobilePendingHudRelease;
 
     if (inspectModifierHeld)
     {
@@ -710,14 +727,26 @@ void GameInputSystem::updateFromEngineInput(
     }
     else if (pendingHudDragIsUiGesture)
     {
-        m_frame.pointerX = m_mobilePendingHudDragReleaseX * static_cast<float>(screenWidth);
-        m_frame.pointerY = m_mobilePendingHudDragReleaseY * static_cast<float>(screenHeight);
-        m_frame.mobileTouchDragStarted = !m_mobilePendingHudDragStartDelivered;
-        m_frame.mobileTouchDragReleased = true;
         m_frame.mobileTouchDragStartX = m_mobilePendingHudDragStartX * static_cast<float>(screenWidth);
         m_frame.mobileTouchDragStartY = m_mobilePendingHudDragStartY * static_cast<float>(screenHeight);
-        leftMouseButtonHeld = false;
-        m_mobilePendingHudDragRelease = false;
+        if (!m_mobilePendingHudDragStartDelivered)
+        {
+            // Deliver the pickup before the drop even when the whole gesture fits between frames.
+            m_frame.pointerX = m_frame.mobileTouchDragStartX;
+            m_frame.pointerY = m_frame.mobileTouchDragStartY;
+            m_frame.mobileTouchDragStarted = true;
+            m_frame.mobileTouchDragActive = true;
+            leftMouseButtonHeld = true;
+            m_mobilePendingHudDragStartDelivered = true;
+        }
+        else
+        {
+            m_frame.pointerX = m_mobilePendingHudDragReleaseX * static_cast<float>(screenWidth);
+            m_frame.pointerY = m_mobilePendingHudDragReleaseY * static_cast<float>(screenHeight);
+            m_frame.mobileTouchDragReleased = true;
+            leftMouseButtonHeld = false;
+            m_mobilePendingHudDragRelease = false;
+        }
     }
     else if (m_mobilePendingHudDragRelease)
     {
@@ -780,6 +809,13 @@ void GameInputSystem::updateFromEngineInput(
     if (hasNonHudMobileTouch && !hasHudTouch)
     {
         leftMouseButtonHeld = false;
+    }
+
+    if (hasMobilePointerInput && screenWidth > 0 && screenHeight > 0)
+    {
+        m_mobilePointerPosition = std::array<float, 2>{
+            m_frame.pointerX / static_cast<float>(screenWidth),
+            m_frame.pointerY / static_cast<float>(screenHeight)};
     }
 #else
     static_cast<void>(mobileGameplayTouchControlsEnabled);

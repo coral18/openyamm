@@ -2475,6 +2475,7 @@ void OutdoorBillboardRenderer::renderActorPreviewBillboards(
         bool mirrored = false;
         bool hovered = false;
         bool actor = false;
+        bool modelActor = false;
         bool decoration = false;
         uint32_t hoveredOutlineColorAbgr = 0;
         float x = 0.0f;
@@ -2755,6 +2756,7 @@ void OutdoorBillboardRenderer::renderActorPreviewBillboards(
             drawItem.pTexture = pTexture;
             drawItem.mirrored = resolvedTexture.mirrored;
             drawItem.actor = true;
+            drawItem.modelActor = runtimeActorIndex && view.m_worldFxSystem.hasActorModel(*runtimeActorIndex);
             drawItem.actorIndex = runtimeActorIndex.value_or(static_cast<size_t>(-1));
             const bool contextHighlighted =
                 runtimeActorIndex.has_value()
@@ -2768,6 +2770,10 @@ void OutdoorBillboardRenderer::renderActorPreviewBillboards(
                 drawItem.hovered && pRuntimeActor != nullptr
                     ? (contextHighlighted ? contextActionHighlightOutlineColor() : resolveHoveredActorOutlineColor(*pRuntimeActor))
                     : 0;
+            if (drawItem.modelActor && pReflection == nullptr)
+            {
+                view.m_worldFxSystem.setActorModelOutline(drawItem.actorIndex, drawItem.hoveredOutlineColorAbgr);
+            }
             drawItem.x = static_cast<float>(actorX);
             drawItem.y = static_cast<float>(actorY);
             drawItem.z = static_cast<float>(actorZ);
@@ -3237,7 +3243,7 @@ void OutdoorBillboardRenderer::renderActorPreviewBillboards(
         {
             const OutdoorGameView::BillboardTextureHandle *pTexture = drawItem.pTexture;
 
-            if (!drawItem.visible || pTexture == nullptr || !bgfx::isValid(pTexture->textureHandle))
+            if (drawItem.modelActor || !drawItem.visible || pTexture == nullptr || !bgfx::isValid(pTexture->textureHandle))
             {
                 return false;
             }
@@ -3256,7 +3262,7 @@ void OutdoorBillboardRenderer::renderActorPreviewBillboards(
     const auto appendDrawItemToBatch =
         [&](const BillboardDrawItem &drawItem, CombinedBillboardBatch &batch) -> bool
         {
-            if (drawItem.pTexture == nullptr || !bgfx::isValid(drawItem.pTexture->textureHandle))
+            if (drawItem.modelActor || drawItem.pTexture == nullptr || !bgfx::isValid(drawItem.pTexture->textureHandle))
             {
                 return false;
             }
@@ -3281,7 +3287,7 @@ void OutdoorBillboardRenderer::renderActorPreviewBillboards(
         {
             const OutdoorGameView::BillboardTextureHandle *pTexture = drawItem.pTexture;
 
-            if (pTexture == nullptr || !bgfx::isValid(pTexture->textureHandle))
+            if (drawItem.modelActor || pTexture == nullptr || !bgfx::isValid(pTexture->textureHandle))
             {
                 return;
             }

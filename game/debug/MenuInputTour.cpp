@@ -37,9 +37,17 @@ void MenuInputTour::update(const std::string &path, GameplayInputFrame &input, I
         event.type = SDL_EVENT_KEY_UP;
         event.key.scancode = m_releaseKey;
         event.key.key = SDL_GetKeyFromScancode(m_releaseKey, SDL_KMOD_NONE, false);
+        if (SDL_Window *pWindow = tourWindow())
+        {
+            event.key.windowID = SDL_GetWindowID(pWindow);
+        }
         if (pScreen != nullptr)
         {
             pScreen->handleSdlEvent(event);
+        }
+        else
+        {
+            SDL_PushEvent(&event);
         }
         m_releaseKey = SDL_SCANCODE_UNKNOWN;
     }
@@ -242,10 +250,19 @@ void MenuInputTour::update(const std::string &path, GameplayInputFrame &input, I
             event.type = down ? SDL_EVENT_KEY_DOWN : SDL_EVENT_KEY_UP;
             event.key.scancode = code;
             event.key.key = SDL_GetKeyFromScancode(code, SDL_KMOD_NONE, false);
+            if (SDL_Window *pWindow = tourWindow())
+            {
+                event.key.windowID = SDL_GetWindowID(pWindow);
+            }
         }
         if (pScreen != nullptr)
         {
             pScreen->handleSdlEvent(event);
+        }
+        else
+        {
+            // Gameplay/debug-console keys belong to the normal SDL event path when there is no UI screen.
+            SDL_PushEvent(&event);
         }
     }
 }

@@ -10,7 +10,7 @@ CrossContinents.Config = CrossContinents.Config or {
     ScrollChestY = 0,
     ScrollExperienceThreshold = 50001,
     IntroTopicId = 1778,
-    DimensionDoorTopicId = 1781,
+    DimensionalTravelTopicId = 10000,
     ConnectorTopicId = 1788,
     FinishTopicId = 1787,
     FinalQuestTopicId = 1785,
@@ -128,8 +128,8 @@ function CrossContinents.UpdateVerdantTopics()
 
     local continent = CrossContinents.CurrentContinent()
     local topicId = CrossContinents.Config.ContinentTopicIds[continent]
-    evt.SetNPCTopic(npcId, 0, topicId or CrossContinents.Config.DimensionDoorTopicId)
-    evt.SetNPCTopic(npcId, 1, CrossContinents.Config.DimensionDoorTopicId)
+    evt.SetNPCTopic(npcId, 3, CrossContinents.Config.DimensionalTravelTopicId)
+    evt.SetNPCTopic(npcId, 0, topicId or 0)
 
     if CrossContinents.GetVar("AllStoriesFinished", 0) ~= 0 then
         evt.SetNPCTopic(npcId, 0, CrossContinents.Config.FinishTopicId)
@@ -443,6 +443,10 @@ end)
 
 RegisterGlobalEvent(1781, "MMMerge Verdant dimension doors", function()
     CrossContinents.ExplainDimensionDoors()
+end)
+
+RegisterGlobalEvent(10000, "Verdant dimensional travel", function()
+    evt.OpenDimensionDoor()
 end)
 
 RegisterGlobalEvent(1782, "MMMerge Verdant Jadame", function()

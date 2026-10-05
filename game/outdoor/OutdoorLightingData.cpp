@@ -13,7 +13,7 @@ namespace OpenYAMM::Game
 namespace
 {
 constexpr std::array<uint8_t, 8> LightingMagic = {'O', 'Y', 'M', 'L', 'I', 'T', '1', 0};
-constexpr uint32_t LightingFormatVersion = 3;
+constexpr uint32_t LightingFormatVersion = 5;
 constexpr uint32_t LightingHeaderSize = 96;
 constexpr uint32_t LightingBakedSourcePages = 0x01;
 constexpr uint32_t LightingKnownFlags = LightingBakedSourcePages;
@@ -59,15 +59,19 @@ bool decodeRleBgra(
     size_t offset,
     size_t byteCount,
     size_t expectedPixelCount,
-    std::vector<uint32_t> &pixels)
+    std::vector<uint32_t> *pPixels)
 {
     const size_t end = offset + byteCount;
-    pixels.reserve(expectedPixelCount);
-    while (offset < end && pixels.size() < expectedPixelCount)
+    size_t decodedPixelCount = 0;
+    if (pPixels != nullptr)
+    {
+        pPixels->reserve(expectedPixelCount);
+    }
+    while (offset < end && decodedPixelCount < expectedPixelCount)
     {
         const uint8_t tag = bytes[offset++];
         const size_t spanLength = size_t(tag & 0x7f) + 1;
-        if (spanLength > expectedPixelCount - pixels.size())
+        if (spanLength > expectedPixelCount - decodedPixelCount)
         {
             return false;
         }
@@ -79,7 +83,10 @@ bool decodeRleBgra(
             }
             const uint32_t pixel = readU32(bytes, offset);
             offset += sizeof(uint32_t);
-            pixels.insert(pixels.end(), spanLength, pixel);
+            if (pPixels != nullptr)
+            {
+                pPixels->insert(pPixels->end(), spanLength, pixel);
+            }
         }
         else
         {
@@ -88,14 +95,18 @@ bool decodeRleBgra(
             {
                 return false;
             }
-            for (size_t index = 0; index < spanLength; ++index)
+            if (pPixels != nullptr)
             {
-                pixels.push_back(readU32(bytes, offset + index * sizeof(uint32_t)));
+                for (size_t index = 0; index < spanLength; ++index)
+                {
+                    pPixels->push_back(readU32(bytes, offset + index * sizeof(uint32_t)));
+                }
             }
             offset += spanBytes;
         }
+        decodedPixelCount += spanLength;
     }
-    return offset == end && pixels.size() == expectedPixelCount;
+    return offset == end && decodedPixelCount == expectedPixelCount;
 }
 
 uint64_t fnv1a64(const std::vector<uint8_t> &bytes)
@@ -142,6 +153,23 @@ size_t outdoorFaceVertexCount(const OutdoorMapData &outdoorMapData)
 uint64_t outdoorLightingContentHash(const std::vector<uint8_t> &bytes)
 {
     return fnv1a64(bytes);
+}
+
+std::vector<uint32_t> OutdoorLightingData::decodeDirectSunPage(uint32_t sunPageIndex) const
+{
+    std::vector<uint32_t> pixels;
+    if (sunPageIndex % 2 != 0 || sunPageIndex >= atlasPages.size()
+        || sunPageIndex / 2 >= directSunPagesRle.size())
+    {
+        return pixels;
+    }
+    const OutdoorLightmapAtlasPage &page = atlasPages[sunPageIndex];
+    const std::vector<uint8_t> &bytes = directSunPagesRle[sunPageIndex / 2];
+    if (!decodeRleBgra(bytes, 0, bytes.size(), size_t(page.width) * page.height, &pixels))
+    {
+        pixels.clear();
+    }
+    return pixels;
 }
 
 namespace
@@ -216,7 +244,9 @@ std::optional<OutdoorLightingData::Probe> OutdoorLightingData::sampleProbe(
         {
             result.sun[channel] += probes[index].sun[channel] * weight;
             result.sky[channel] += probes[index].sky[channel] * weight;
+            result.sunIndirect[channel] += probes[index].sunIndirect[channel] * weight;
         }
+        result.sunVisibility += probes[index].sunVisibility * weight;
         totalWeight += weight;
     }
     if (totalWeight == 0.0f)
@@ -227,7 +257,9 @@ std::optional<OutdoorLightingData::Probe> OutdoorLightingData::sampleProbe(
     {
         result.sun[channel] /= totalWeight;
         result.sky[channel] /= totalWeight;
+        result.sunIndirect[channel] /= totalWeight;
     }
+    result.sunVisibility /= totalWeight;
     return result;
 }
 
@@ -327,7 +359,7 @@ std::optional<OutdoorLightingData> OutdoorLightingDataLoader::loadFromBytes(
     const uint32_t fileSize = readU32(lightingBytes, 68);
     const uint32_t ambientColorAbgr = readU32(lightingBytes, 72);
 
-    if (version != LightingFormatVersion
+    if ((version != LightingFormatVersion && version != 4 && version != 3)
         || headerSize != LightingHeaderSize || fileSize != lightingBytes.size())
     {
         errorMessage = "unsupported outdoor lighting data header";
@@ -392,7 +424,7 @@ std::optional<OutdoorLightingData> OutdoorLightingDataLoader::loadFromBytes(
         }
 
         const size_t pixelCount = static_cast<size_t>(page.width) * page.height;
-        if (!decodeRleBgra(lightingBytes, pagePixelOffset, pagePixelBytes, pixelCount, page.pixelsBgra))
+        if (!decodeRleBgra(lightingBytes, pagePixelOffset, pagePixelBytes, pixelCount, &page.pixelsBgra))
         {
             errorMessage = "outdoor lighting atlas compression is invalid";
             return std::nullopt;
@@ -434,6 +466,35 @@ std::optional<OutdoorLightingData> OutdoorLightingDataLoader::loadFromBytes(
             }
         }
         size_t cursor = expectedPagePixelOffset;
+        if (version >= 4)
+        {
+            if (lightingBytes.size() - cursor < 24)
+            {
+                errorMessage = "truncated baked outdoor sunlight metadata";
+                return std::nullopt;
+            }
+            for (std::array<float, 3> *pValues : {&result.sunDirection, &result.sunDirectResponse})
+            {
+                for (float &value : *pValues)
+                {
+                    value = readFloat(lightingBytes, cursor);
+                    cursor += 4;
+                }
+            }
+            float directionLength = 0.0f;
+            for (float value : result.sunDirection)
+            {
+                directionLength += value * value;
+            }
+            if (!std::isfinite(directionLength) || std::abs(directionLength - 1.0f) > 0.001f
+                || result.sunDirection[2] <= 0.0f
+                || !std::all_of(result.sunDirectResponse.begin(), result.sunDirectResponse.end(),
+                    [](float value) { return std::isfinite(value) && value > 0.0f && value <= 4.0f; }))
+            {
+                errorMessage = "invalid baked outdoor sunlight metadata";
+                return std::nullopt;
+            }
+        }
         if (lightingBytes.size() - cursor < 8)
         {
             errorMessage = "truncated baked outdoor extension";
@@ -442,7 +503,7 @@ std::optional<OutdoorLightingData> OutdoorLightingDataLoader::loadFromBytes(
         const uint32_t probeCount = readU32(lightingBytes, cursor);
         const uint32_t dependencyCount = readU32(lightingBytes, cursor + 4);
         cursor += 8;
-        if (probeCount > (lightingBytes.size() - cursor) / 36 || dependencyCount > 100000)
+        if (probeCount > (lightingBytes.size() - cursor) / (version >= 4 ? 52 : 36) || dependencyCount > 100000)
         {
             errorMessage = "invalid baked outdoor extension counts";
             return std::nullopt;
@@ -470,6 +531,26 @@ std::optional<OutdoorLightingData> OutdoorLightingDataLoader::loadFromBytes(
                         [](float value) { return value >= 0.0f && value <= 4.0f; }))
                 {
                     errorMessage = "baked outdoor probe exceeds RGBM4 lighting range";
+                    return std::nullopt;
+                }
+            }
+            if (version >= 4)
+            {
+                for (float &value : probe.sunIndirect)
+                {
+                    value = readFloat(lightingBytes, cursor);
+                    cursor += 4;
+                    if (!std::isfinite(value) || value < 0.0f || value > 4.0f)
+                    {
+                        errorMessage = "invalid baked outdoor indirect sunlight probe";
+                        return std::nullopt;
+                    }
+                }
+                probe.sunVisibility = readFloat(lightingBytes, cursor);
+                cursor += 4;
+                if (!std::isfinite(probe.sunVisibility) || probe.sunVisibility < 0.0f || probe.sunVisibility > 1.0f)
+                {
+                    errorMessage = "invalid baked outdoor sunlight visibility probe";
                     return std::nullopt;
                 }
             }
@@ -501,6 +582,39 @@ std::optional<OutdoorLightingData> OutdoorLightingDataLoader::loadFromBytes(
             }
             result.dependencies.push_back({path, hash});
             cursor += length;
+        }
+        if (version >= 5)
+        {
+            if (lightingBytes.size() - cursor < 4 || readU32(lightingBytes, cursor) != pageCount / 2)
+            {
+                errorMessage = "invalid baked outdoor direct-sun page count";
+                return std::nullopt;
+            }
+            cursor += 4;
+            result.directSunPagesRle.reserve(pageCount / 2);
+            for (uint32_t pageIndex = 0; pageIndex < pageCount / 2; ++pageIndex)
+            {
+                if (lightingBytes.size() - cursor < 12)
+                {
+                    errorMessage = "truncated baked outdoor direct-sun page";
+                    return std::nullopt;
+                }
+                const uint32_t width = readU32(lightingBytes, cursor);
+                const uint32_t height = readU32(lightingBytes, cursor + 4);
+                const uint32_t byteCount = readU32(lightingBytes, cursor + 8);
+                cursor += 12;
+                const OutdoorLightmapAtlasPage &sunPage = result.atlasPages[pageIndex * 2];
+                if (width != sunPage.width || height != sunPage.height || byteCount == 0
+                    || byteCount > lightingBytes.size() - cursor
+                    || !decodeRleBgra(lightingBytes, cursor, byteCount, size_t(width) * height, nullptr))
+                {
+                    errorMessage = "invalid baked outdoor direct-sun page dimensions or compression";
+                    return std::nullopt;
+                }
+                result.directSunPagesRle.emplace_back(lightingBytes.begin() + cursor,
+                    lightingBytes.begin() + cursor + byteCount);
+                cursor += byteCount;
+            }
         }
         if (cursor != lightingBytes.size() || result.dependencies.empty())
         {

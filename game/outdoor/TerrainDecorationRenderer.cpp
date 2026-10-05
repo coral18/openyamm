@@ -56,14 +56,15 @@ std::vector<Vertex> stoneMesh()
 
 bool TerrainDecorationRenderer::initialize(
     const Engine::AssetFileSystem &assets, const TerrainDecorationConfig &config,
-    TerrainDecorationPlacement placement, bgfx::ProgramHandle program)
+    TerrainDecorationPlacement placement, bgfx::ProgramHandle program, bgfx::ProgramHandle shadowProgram)
 {
     shutdown(true);
     m_program = program;
+    m_shadowProgram = shadowProgram;
     Engine::BinaryAssetCache cache;
     std::optional<Engine::ImagePixelsBgra> texture =
         Engine::loadImageAssetPixelsBgra(assets, config.tuftTexture, cache);
-    if (!texture || placement.instances.empty() || !bgfx::isValid(program))
+    if (!texture || placement.instances.empty() || !bgfx::isValid(program) || !bgfx::isValid(shadowProgram))
     {
         std::cerr << "Terrain decorations could not initialize: " << config.tuftTexture << '\n';
         shutdown(true);
@@ -138,6 +139,10 @@ void TerrainDecorationRenderer::shutdown(bool destroyResources)
         {
             bgfx::destroy(m_program);
         }
+        if (bgfx::isValid(m_shadowProgram))
+        {
+            bgfx::destroy(m_shadowProgram);
+        }
         if (bgfx::isValid(m_instances))
         {
             bgfx::destroy(m_instances);
@@ -164,6 +169,7 @@ void TerrainDecorationRenderer::shutdown(bool destroyResources)
         }
     }
     m_program = BGFX_INVALID_HANDLE;
+    m_shadowProgram = BGFX_INVALID_HANDLE;
     m_instances = BGFX_INVALID_HANDLE;
     m_grassMesh = BGFX_INVALID_HANDLE;
     m_stoneMesh = BGFX_INVALID_HANDLE;
@@ -230,7 +236,8 @@ bool TerrainDecorationRenderer::canMerge(
         batchLights.colors == nextLights.colors && batchLights.params == nextLights.params;
 }
 
-void TerrainDecorationRenderer::submit(uint16_t viewId, const TerrainDecorationPatch &patch, float elapsedTime)
+void TerrainDecorationRenderer::submit(uint16_t viewId, const TerrainDecorationPatch &patch, float elapsedTime,
+    bool sunShadows)
 {
     const float detailDistance = patch.stone ? std::min(m_distance, 2048.0f) : m_distance;
     const float params[4] = {elapsedTime, detailDistance * 0.5f, detailDistance, 0.0f};
@@ -239,6 +246,6 @@ void TerrainDecorationRenderer::submit(uint16_t viewId, const TerrainDecorationP
     bgfx::setInstanceDataBuffer(m_instances, patch.first, patch.count);
     bgfx::setTexture(0, m_sampler, m_texture);
     bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A | BGFX_STATE_WRITE_Z | BGFX_STATE_DEPTH_TEST_LESS);
-    bgfx::submit(viewId, m_program);
+    bgfx::submit(viewId, sunShadows ? m_shadowProgram : m_program);
 }
 } // namespace OpenYAMM::Game

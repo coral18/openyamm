@@ -3,6 +3,28 @@
 Run these commands from the repository root. `build-prof` keeps release optimization and adds debug information
 for source locations and sampled call stacks. It does not enable gprof instrumentation.
 
+## Reusable approval wrapper
+
+Use `./tools/profile_game.sh` as the command-prefix approval, including for future agent runs. It delegates to
+the existing profiler and limits targets to executables named `openyamm`; attachment additionally checks ownership.
+Sandbox approval persistence is controlled by the client, not by AGENTS.md or this script.
+
+If the kernel blocks sampling, `./tools/profile_game.sh --enable-user-perf` runs only
+`sudo -n /usr/sbin/sysctl -w kernel.perf_event_paranoid=2`. This allows own-process userspace profiling until reboot.
+It does not run the game as root or install a persistent system setting. If sudo requires authentication, run
+`sudo /usr/sbin/sysctl -w kernel.perf_event_paranoid=2` once in a terminal; the wrapper never accepts a password.
+
+For an isolated desktop run, launch with `tools/run_game.sh`, wait for loaded gameplay/warmup, then read the game
+PID from its `run.json` and attach:
+
+```sh
+./tools/profile_game.sh --pid GAME_PID --warmup 0 --seconds 20 --output /tmp/sorpigal.data
+```
+
+Attachment records only that game's threads for the requested duration; it does not freeze simulation or pause
+around map changes. Keep the scene loaded. The launch mode below retains automatic gameplay gating.
+Check wrapper changes with `python3 tools/test_profile_game.py`.
+
 ## Build
 
 ```sh
@@ -26,7 +48,7 @@ FFmpeg uses the repository's separate configure/build procedure.
 ## Record New Sorpigal gameplay
 
 ```sh
-./tools/profile_game.py -- --world mm6 --map oute3.odm
+./tools/profile_game.sh -- --world mm6 --map oute3.odm
 ```
 
 This launches `build-prof/game/openyamm` with ordinary settings/assets/saves and starts perf with counters

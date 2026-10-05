@@ -1,7 +1,7 @@
 """Bake native ODM diffuse lighting with Cycles. Run using Blender's background Python.
 
 Profiles are JSON (a YAML subset). Geometry and base textures remain unchanged.
-Output is version-3 OpenYAMM lighting plus a dependency/quality report.
+Output is version-4 OpenYAMM lighting plus a dependency/quality report.
 """
 import argparse
 import csv
@@ -55,8 +55,25 @@ def main():
     parser.add_argument('--decoration-shadows', action=argparse.BooleanOptionalAction, default=None,
                         help='Bake static decoration alpha silhouettes into the sun term only')
     parser.add_argument('--preview-only', action='store_true')
+    migration = parser.add_mutually_exclusive_group()
+    migration.add_argument('--model-probes-only', type=Path,
+                        help='Extend an installed v3 bake with model lighting; retain every surface and sprite sample')
+    migration.add_argument('--sun-direct-only', type=Path,
+                           help='Extend an installed v4 bake with direct-only surface pages for moving mesh shadows')
     args = parser.parse_args(sys.argv[sys.argv.index('--') + 1:])
     profile = json.loads(args.profile.read_text())
+    retained = None
+    retained_path = args.model_probes_only or args.sun_direct_only
+    if retained_path:
+        installed_recipe = json.loads(retained_path.with_suffix('.bake.json').read_text())
+        if profile != installed_recipe['profile']:
+            raise ValueError('Probe migration must use the exact installed bake profile')
+        retained = retained_path.read_bytes()
+        expected_version = 4 if args.sun_direct_only else 3
+        if retained[:8] != b'OYMLIT1\0' or struct.unpack_from('<I', retained, 8)[0] != expected_version:
+            raise ValueError(f'Lighting migration expects a version-{expected_version} bake')
+        if any(value is not None for value in (args.azimuth, args.samples, args.decoration_shadows)):
+            raise ValueError('Lighting migration cannot override an installed profile')
     if args.azimuth is not None:
         profile['azimuth'] = args.azimuth
     if args.samples is not None:
@@ -103,6 +120,11 @@ def main():
     if profile.get('decoration_shadows', False):
         recipe_data['decoration_helper_sha256'] = hashlib.sha256(
             Path(__file__).with_name('bake_decorations.py').read_bytes()).hexdigest()
+    if retained is not None:
+        recipe_data = dict(installed_recipe)
+        stage = 'sun_direct' if args.sun_direct_only else 'model_probe'
+        recipe_data[stage+'_producer_sha256'] = hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
+        recipe_data[stage+'_backend'] = bpy.app.version_string
     (out / recipe.name).write_text(json.dumps(recipe_data, sort_keys=True, indent=2)+'\n')
     deps[str(recipe.relative_to(ROOT / 'assets_dev'))] = fnv((out / recipe.name).read_bytes())
     bpy.ops.object.select_all(action='SELECT')
@@ -168,6 +190,7 @@ def main():
 
     page_size = profile['building_page_size']
     pages = []
+    direct_pages = []
     records = []
     charts = []
     groups = {}
@@ -399,6 +422,10 @@ def main():
     if decoration_report is not None:
         stats['decoration_shadows'] = decoration_report
     for obj, (width, height) in objects:
+        if args.model_probes_only and obj.name != 'probes':
+            continue
+        if args.sun_direct_only and obj.name == 'probes':
+            continue
         target = bpy.data.images.new(obj.name, width=width, height=height, float_buffer=True)
         for mat in obj.data.materials:
             node = mat.node_tree.nodes.get('BakeTarget') or mat.node_tree.nodes.new('ShaderNodeTexImage')
@@ -412,10 +439,17 @@ def main():
         scene.render.bake.use_pass_direct = True
         scene.render.bake.use_pass_indirect = True
         scene.render.bake.margin = 0 if obj.name == 'probes' else 3
-        for term in ['sun','sky']:
+        terms = ['sun', 'sky'] if retained is None else []
+        if obj.name == 'probes':
+            terms += ['sun_direct', 'sun_indirect']
+        elif not args.model_probes_only:
+            terms += ['sun_direct']
+        for term in terms:
             for caster in decoration_objects:
-                caster.hide_render = term != 'sun'
-            sun_data.energy = profile['sun_energy'] if term == 'sun' else 0
+                caster.hide_render = not term.startswith('sun')
+            scene.render.bake.use_pass_direct = term != 'sun_indirect'
+            scene.render.bake.use_pass_indirect = term != 'sun_direct'
+            sun_data.energy = profile['sun_energy'] if term.startswith('sun') else 0
             sky.inputs[1].default_value = profile['sky_energy'] if term == 'sky' else 0
             start = time.monotonic()
             bpy.ops.object.bake(type='DIFFUSE')
@@ -424,16 +458,60 @@ def main():
             payload = rgbm(pixels)
             if obj.name == 'probes':
                 probe_values[term] = np.array([pixels[y,x,:3] for y,x in probe_texels])
+            elif term == 'sun_direct':
+                direct_pages.append((width,height,rle_bgra(payload)))
             else:
                 pages.append((width,height,rle_bgra(payload)))
             stats['bakes'].append({'object':obj.name,'term':term,'seconds':time.monotonic()-start,
                                    'max':float(pixels[:,:,:3].max())})
             print('BAKED', stats['bakes'][-1], flush=True)
         bpy.data.images.remove(target)
+    if retained is not None:
+        page_count = struct.unpack_from('<I', retained, 32)[0]
+        page_offset = struct.unpack_from('<I', retained, 48)[0]
+        offset, length = struct.unpack_from('<II', retained, page_offset + (page_count-1)*16 + 8)
+        retained_end = offset + length
+        metadata_bytes = 24 if args.sun_direct_only else 0
+        stride = 13 if args.sun_direct_only else 9
+        count, dependency_count = struct.unpack_from('<II', retained, retained_end+metadata_bytes)
+        cursor = retained_end + metadata_bytes + 8
+        old_probes = np.frombuffer(retained, dtype='<f4', count=count*stride, offset=cursor).reshape(count, stride)
+        if count != len(probe_positions) or not np.allclose(old_probes[:, :3], probe_positions, atol=.01):
+            raise ValueError('Probe migration changed receiver positions')
+        probe_values['sun'] = old_probes[:, 3:6]
+        probe_values['sky'] = old_probes[:, 6:9]
+        if args.sun_direct_only:
+            probe_values['sun_indirect'] = old_probes[:, 9:12]
+        cursor += count * stride * 4
+        old_dependencies = {}
+        for _ in range(dependency_count):
+            length, digest = struct.unpack_from('<IQ', retained, cursor)
+            cursor += 12
+            name = retained[cursor:cursor+length].decode()
+            cursor += length
+            path = ROOT / 'assets_dev' / name
+            if fnv(path.read_bytes()) != digest:
+                raise ValueError('Stale installed bake dependency: ' + name)
+            old_dependencies[name] = digest
+        if cursor != len(retained):
+            raise ValueError('Invalid installed extension length')
+        # The atlas bake keeps its provenance. Only the recipe hash and model probes change.
+        old_dependencies[str(recipe.relative_to(ROOT / 'assets_dev'))] = deps[
+            str(recipe.relative_to(ROOT / 'assets_dev'))]
+        deps = old_dependencies
     faces = b''.join(struct.pack('<QIIHHI', (r['model']<<32)|r['face'], r['model'],r['face'],r['page'],
                                 int(r['page'] != 65535), sum(len(q['uvs']) for q in records[:i]))
                      for i,r in enumerate(records))
     vertices = b''.join(struct.pack('<ffI',u,v,0xffffffff) for r in records for u,v in r['uvs'])
+    if args.sun_direct_only:
+        old_face_offset, old_vertex_offset, old_light_offset = struct.unpack_from('<3I', retained, 52)
+        if faces != retained[old_face_offset:old_vertex_offset] or vertices != retained[old_vertex_offset:old_light_offset]:
+            raise ValueError('Direct-sun migration changed installed atlas placement; reproduce its geometry recipe')
+        if len(direct_pages) * 2 != page_count:
+            raise ValueError('Direct-sun migration changed installed atlas count')
+        for index,(width,height,_) in enumerate(direct_pages):
+            if (width,height) != struct.unpack_from('<II', retained, page_offset+index*2*16):
+                raise ValueError('Direct-sun migration changed installed atlas dimensions')
     page_offset = 96
     face_offset = page_offset + len(pages)*16
     vertex_offset = face_offset + len(faces)
@@ -443,12 +521,27 @@ def main():
     for w,h,data in pages:
         page_records += struct.pack('<IIII',w,h,pixel_offset+len(payloads),len(data))
         payloads += data
-    extension = bytearray(struct.pack('<II',len(probe_positions),len(deps)))
-    for position,sun_value,sky_value in zip(probe_positions,probe_values['sun'],probe_values['sky']):
-        extension += struct.pack('<9f',*position,*sun_value,*sky_value)
+    # Cycles DIFFUSE light-only is Lambertian outgoing radiance: a unit white receiver has E / pi.
+    # Direct visibility is measured in a direct-only bake, never inferred from total sun+bounce RGB.
+    direct_response = profile['sun_energy'] / math.pi
+    horizontal_response = direct_response * toward_sun.z
+    if horizontal_response <= 0:
+        raise ValueError('Model sunlight probe bake requires positive sun elevation and energy')
+    visibility = old_probes[:, 12] if args.sun_direct_only else np.clip(
+        probe_values['sun_direct'].mean(axis=1) / horizontal_response, 0, 1)
+    extension = bytearray(struct.pack('<6fII', *toward_sun, *([direct_response]*3), len(probe_positions), len(deps)))
+    if args.sun_direct_only:
+        extension[:24] = retained[retained_end:retained_end+24]
+    for position,sun_value,sky_value,indirect,visible in zip(
+            probe_positions, probe_values['sun'], probe_values['sky'], probe_values['sun_indirect'], visibility):
+        extension += struct.pack('<13f', *position, *sun_value, *sky_value, *indirect, visible)
     for name, digest in sorted(deps.items()):
         encoded = name.encode()
         extension += struct.pack('<IQ',len(encoded),digest)+encoded
+    if not args.model_probes_only:
+        extension += struct.pack('<I',len(direct_pages))
+        for width,height,data in direct_pages:
+            extension += struct.pack('<III',width,height,len(data))+data
     total = pixel_offset + len(payloads) + len(extension)
     header = bytearray(96)
     header[:8] = b'OYMLIT1\0'
@@ -457,7 +550,28 @@ def main():
                      len(vertices)//12,0,page_offset,face_offset,vertex_offset,light_offset,pixel_offset,total)
     struct.pack_into('<II4f',header,72,0,1,-32768,32768,65024,-65024)
     output = out / (source.stem+'.lighting')
-    output.write_bytes(header+page_records+faces+vertices+payloads+extension)
+    if retained is not None:
+        prefix = bytearray(retained[:retained_end])
+        assert prefix[96:] == retained[96:retained_end]
+        probe_bytes = stride * 4
+        old_start = retained_end + metadata_bytes + 8
+        old_probe_bytes = retained[old_start:old_start+count*probe_bytes]
+        new_probe_bytes = b''.join(extension[32+i*52:32+i*52+probe_bytes] for i in range(count))
+        assert old_probe_bytes == new_probe_bytes, 'Migration changed existing sprite samples'
+        stats['retained_surface_sha256'] = hashlib.sha256(prefix[96:]).hexdigest()
+        stats['retained_sprite_probe_sha256'] = hashlib.sha256(old_probe_bytes).hexdigest()
+        struct.pack_into('<II', prefix, 8, 5 if args.sun_direct_only else 4, 96)
+        struct.pack_into('<I', prefix, 68, len(prefix) + len(extension))
+    else:
+        struct.pack_into('<I', header, 8, 5)
+        prefix = header+page_records+faces+vertices+payloads
+    output.write_bytes(prefix+extension)
+    stats['model_sun_direction'] = list(toward_sun)
+    stats['model_direct_response'] = direct_response
+    stats['model_visibility_range'] = [float(visibility.min()), float(visibility.max())]
+    stats['retained_surface_and_sprite_lighting'] = retained is not None
+    stats['direct_sun_pages'] = len(direct_pages)
+    stats['direct_sun_compressed_bytes'] = sum(len(data) for _,_,data in direct_pages)
     stats['output_bytes'] = output.stat().st_size
     stats['output_sha256'] = hashlib.sha256(output.read_bytes()).hexdigest()
     (out / 'report.json').write_text(json.dumps(stats,indent=2)+'\n')

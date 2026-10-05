@@ -1,5 +1,11 @@
 -- MMMerge supplement: Escaton's Crystal can be reused after the Conflux Key opened it once.
 
+ReplaceMapEvent(104, "Dimensional travel", function()
+    SetQBit(QBit(302)) -- Discover Ravenshore for Town Portal before opening travel.
+    MM8.OpenDimensionDoor()
+end, "Dimensional travel")
+evt.meta.map.contextActions[104] = {kind = "teleport", targetName = "Dimensional travel"}
+
 ReplaceMapEvent(504, "Enter Escaton's Crystal", function()
     evt.ForPlayer(Players.All)
 

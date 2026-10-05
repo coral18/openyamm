@@ -82,6 +82,9 @@ gameplay mouse-look and leaves simulation running; begin after loading and any s
 For walking, `action_down: forward`, followed by a `wait` and `action_up: forward`,
 holds and releases the configured gameplay action. Use these action steps for sustained gameplay input;
 raw `key_down`/`key_up` steps deliver screen keys after gameplay actions have already been resolved.
+With gameplay active, raw key steps enter the ordinary SDL event path, including the debug console. Use
+the backquote key, `text: "model pause 0"`, `key: Return`, and the backquote key again to issue a console command
+and close the console before a capture.
 
 The tour waits for frame readback before exiting;
 `exit: false` returns control to normal input. Relative output directories resolve against the tour's directory.

@@ -105,8 +105,25 @@ struct GameplayWorldItemInspectState
     bool isGold = false;
 };
 
+enum class ActorAiAnimationState : uint8_t
+{
+    Standing = 0,
+    Walking = 1,
+    AttackMelee = 2,
+    AttackRanged = 3,
+    GotHit = 4,
+    Dying = 5,
+    Dead = 6,
+    Bored = 7,
+};
+
 struct GameplayRuntimeActorState
 {
+    uint32_t actorId = 0;
+    float yawRadians = 0.0f;
+    ActorAiAnimationState animationState = ActorAiAnimationState::Standing;
+    float animationTimeTicks = 0.0f;
+    float visualScale = 1.0f;
     int16_t monsterId = 0;
     int32_t mm9RudeId = 0;
     uint32_t mm9SourceObjectIndex = 0;

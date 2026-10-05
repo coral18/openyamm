@@ -101,6 +101,7 @@ function(openyamm_compile_bgfx_shader_for_target sourcePath shaderType outputNam
             "${CMAKE_SOURCE_DIR}/game/shaders/world_clip.sh"
             "${CMAKE_SOURCE_DIR}/game/shaders/water_surface.sh"
             "${CMAKE_SOURCE_DIR}/game/shaders/outdoor_baked_lighting.sh"
+            "${CMAKE_SOURCE_DIR}/game/shaders/sun_shadows.sh"
             "${CMAKE_SOURCE_DIR}/game/shaders/outdoor_bmodel_lightmap.sh"
             "${OPENYAMM_BGFX_SOURCE_DIR}/examples/common/common.sh"
             openyamm_shaderc
@@ -445,6 +446,13 @@ function(openyamm_configure_runtime_shaders)
             "${CMAKE_SOURCE_DIR}/game/shaders/${lightmapShader}.sc"
             "${lightmapShaderType}" "${lightmapShader}.bin")
     endforeach()
+    # Ordinary scenes keep the original receiver-free programs; enable mesh receivers only with live casters.
+    foreach(shadowShader fs_outdoor_textured_fog fs_outdoor_terrain_fog fs_outdoor_bmodel_baked
+            fs_outdoor_terrain_baked fs_terrain_decoration fs_terrain_decoration_baked)
+        openyamm_compile_bgfx_shader(
+            "${CMAKE_SOURCE_DIR}/game/shaders/${shadowShader}.sc"
+            "fragment" "${shadowShader}_shadow.bin" "SUN_SHADOWS=1")
+    endforeach()
     openyamm_compile_bgfx_shader(
         "${CMAKE_SOURCE_DIR}/game/shaders/fs_outdoor_billboard_lit.sc"
         "fragment"
@@ -496,6 +504,10 @@ function(openyamm_configure_runtime_shaders)
         "${CMAKE_SOURCE_DIR}/game/shaders/fs_model.sc"
         "fragment"
         "fs_model.bin")
+    openyamm_compile_bgfx_shader(
+        "${CMAKE_SOURCE_DIR}/game/shaders/vs_model_shadow.sc" "vertex" "vs_model_shadow.bin")
+    openyamm_compile_bgfx_shader(
+        "${CMAKE_SOURCE_DIR}/game/shaders/fs_model_shadow.sc" "fragment" "fs_model_shadow.bin")
     openyamm_compile_bgfx_shader(
         "${CMAKE_SOURCE_DIR}/game/shaders/vs_spell_area_preview.sc"
         "vertex"
@@ -560,6 +572,7 @@ function(openyamm_configure_runtime_shaders)
         fs_particle.bin
         vs_model.bin
         fs_model.bin
+        vs_model_shadow.bin fs_model_shadow.bin
         vs_spell_area_preview.bin
         fs_spell_area_preview.bin
         vs_editor_preview_material.bin
@@ -567,7 +580,10 @@ function(openyamm_configure_runtime_shaders)
     )
     list(APPEND runtimeShaderNames
         vs_outdoor_bmodel_lightmap.bin fs_outdoor_bmodel_lightmap.bin
-        fs_outdoor_bmodel_baked.bin fs_outdoor_terrain_baked.bin)
+        fs_outdoor_bmodel_baked.bin fs_outdoor_terrain_baked.bin
+        fs_outdoor_textured_fog_shadow.bin fs_outdoor_terrain_fog_shadow.bin
+        fs_outdoor_bmodel_baked_shadow.bin fs_outdoor_terrain_baked_shadow.bin
+        fs_terrain_decoration_shadow.bin fs_terrain_decoration_baked_shadow.bin)
 
     # Android startup extracts exactly the shaders that this build produces.
     set_property(GLOBAL PROPERTY OPENYAMM_RUNTIME_SHADER_NAMES "${runtimeShaderNames}")

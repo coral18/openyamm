@@ -1798,13 +1798,12 @@ void GameplayPartyOverlayInputController::handleCharacterOverlayInput(
                 context.utilitySpellOverlay() = {};
             }
 
-            context.characterScreen().open = false;
-            context.characterScreen().dollJewelryOverlayOpen = false;
-            context.characterScreen().adventurersInnRosterOverlayOpen = false;
+            context.closeCharacterScreen();
             clearPendingCharacterDismiss();
             latchGameplayMenuEscape(context);
             context.interactionState().closeOverlayLatch = true;
         }
+        return;
     }
     else
     {
@@ -2649,9 +2648,7 @@ void GameplayPartyOverlayInputController::handleCharacterOverlayInput(
                 }
                 else
                 {
-                    context.characterScreen().open = false;
-                    context.characterScreen().dollJewelryOverlayOpen = false;
-                    context.characterScreen().adventurersInnRosterOverlayOpen = false;
+                    context.closeCharacterScreen();
                 }
 
                 return;

@@ -652,7 +652,8 @@ PartySpellCastResult GameplaySpellService::castSpell(
 
     PartySpellCastResult result = PartySpellSystem::castSpell(*pParty, *pWorldRuntime, *pSpellTable, effectiveRequest);
 
-    if (turnBasedRecovery && result.recoverySeconds > 0.0f)
+    if (turnBasedRecovery
+        && (result.recoverySeconds > 0.0f || result.status == PartySpellCastStatus::NotEnoughSpellPoints))
     {
         turnBasedCombatRuntime.storeMemberTurnRecovery(request.casterMemberIndex, result.recoverySeconds);
 

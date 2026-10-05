@@ -201,6 +201,7 @@ public:
     void openSpellbookOverlay();
     void openChestTransferInventoryOverlay();
     void toggleCharacterInventoryScreen();
+    void closeCharacterScreen();
     uint32_t closeActiveEventDialog();
     void closeActiveDialogForMapMove();
     void handleDialogueCloseRequest();

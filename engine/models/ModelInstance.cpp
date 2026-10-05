@@ -54,6 +54,7 @@ ModelInstanceHandle ModelInstanceSystem::create(
     Slot &slot = m_slots[index];
     slot.active = true;
     slot.visible = true;
+    slot.outlineColorAbgr = 0;
     slot.nodeMarkersVisible = false;
     slot.playing = false;
     slot.paused = false;
@@ -153,6 +154,23 @@ bool ModelInstanceSystem::setNodeMarkersVisible(ModelInstanceHandle handle, bool
     }
     pSlot->nodeMarkersVisible = visible;
     return true;
+}
+
+bool ModelInstanceSystem::setOutlineColor(ModelInstanceHandle handle, uint32_t colorAbgr)
+{
+    Slot *pSlot = find(handle);
+    if (pSlot == nullptr)
+    {
+        return false;
+    }
+    pSlot->outlineColorAbgr = colorAbgr;
+    return true;
+}
+
+uint32_t ModelInstanceSystem::outlineColor(ModelInstanceHandle handle) const
+{
+    const Slot *pSlot = find(handle);
+    return pSlot != nullptr ? pSlot->outlineColorAbgr : 0;
 }
 
 bool ModelInstanceSystem::play(ModelInstanceHandle handle, const std::string &clipName, ModelPlaybackMode mode)
@@ -255,6 +273,23 @@ void ModelInstanceSystem::update(float deltaSeconds)
         }
         evaluate(slot);
     }
+}
+
+bool ModelInstanceSystem::sample(ModelInstanceHandle handle, uint32_t clipIndex, float timeSeconds,
+    const ModelTransform &transform)
+{
+    Slot *pSlot = find(handle);
+    if (pSlot == nullptr || clipIndex >= pSlot->asset->clips.size() || !std::isfinite(timeSeconds) || timeSeconds < 0)
+    {
+        return false;
+    }
+    pSlot->clipIndex = clipIndex;
+    pSlot->clipSelected = true;
+    pSlot->playing = false;
+    pSlot->rootTransform = transform;
+    pSlot->timeSeconds = std::min(timeSeconds, pSlot->asset->clips[clipIndex].durationSeconds);
+    evaluate(*pSlot);
+    return true;
 }
 
 const ModelAsset *ModelInstanceSystem::asset(ModelInstanceHandle handle) const
@@ -376,19 +411,25 @@ void ModelInstanceSystem::evaluate(Slot &slot)
         resetModelPose(*slot.asset, slot.pose);
     }
     evaluateModelHierarchy(*slot.asset, composeModelTransform(slot.rootTransform), slot.pose);
+    deformModelPose(*slot.asset, slot.pose);
     slot.bounds = {};
     for (size_t nodeIndex = 0; nodeIndex < slot.asset->nodes.size(); ++nodeIndex)
     {
         const ModelNode &node = slot.asset->nodes[nodeIndex];
-        if (node.meshIndex < 0)
+        if (node.meshIndex < 0 || !modelMatrixVisible(slot.pose.globalMatrices[nodeIndex]))
         {
             continue;
         }
-        for (const ModelPrimitive &primitive : slot.asset->meshes[node.meshIndex].primitives)
+        const ModelMesh &mesh = slot.asset->meshes[node.meshIndex];
+        for (size_t primitiveIndex = 0; primitiveIndex < mesh.primitives.size(); ++primitiveIndex)
         {
-            for (const ModelVertex &vertex : primitive.vertices)
+            const ModelPrimitive &primitive = mesh.primitives[primitiveIndex];
+            const std::vector<ModelVertex> &vertices = node.skinIndex >= 0 || !primitive.morphTargets.empty()
+                ? slot.pose.deformedVertices[nodeIndex][primitiveIndex] : primitive.vertices;
+            const ModelMatrix matrix = node.skinIndex >= 0 ? identityModelMatrix() : slot.pose.globalMatrices[nodeIndex];
+            for (const ModelVertex &vertex : vertices)
             {
-                expandBounds(slot.bounds, slot.pose.globalMatrices[nodeIndex], vertex.position);
+                expandBounds(slot.bounds, matrix, vertex.position);
             }
         }
     }

@@ -10,6 +10,8 @@
 
 namespace OpenYAMM::Game
 {
+constexpr uint16_t FirstSunShadowView = 232;
+constexpr size_t SunShadowViews = 2;
 constexpr uint16_t FirstWaterReflectionView = 234;
 constexpr size_t MaxWaterReflections = 2;
 constexpr uint16_t WorldGradingView = 249;
@@ -147,6 +149,10 @@ constexpr std::array<uint16_t, WorldGradingView + 1> worldRenderViewOrder(bool g
 {
     std::array<uint16_t, WorldGradingView + 1> order = {};
     size_t index = 0;
+    for (uint16_t view = FirstSunShadowView; view < FirstSunShadowView + SunShadowViews; ++view)
+    {
+        order[index++] = view;
+    }
     for (uint16_t view = FirstWaterReflectionView; view < FirstWaterReflectionView + MaxWaterReflections * 2; ++view)
     {
         order[index++] = view;
@@ -159,7 +165,8 @@ constexpr std::array<uint16_t, WorldGradingView + 1> worldRenderViewOrder(bool g
     }
     for (uint16_t view = 2; view <= WorldGradingView; ++view)
     {
-        if ((view < FirstWaterReflectionView || view >= FirstWaterReflectionView + MaxWaterReflections * 2)
+        if ((view < FirstSunShadowView || view >= FirstSunShadowView + SunShadowViews)
+            && (view < FirstWaterReflectionView || view >= FirstWaterReflectionView + MaxWaterReflections * 2)
             && (!grading || view != WorldGradingView))
         {
             order[index++] = view;

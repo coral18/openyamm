@@ -5791,7 +5791,9 @@ void GameplayPartyOverlayRenderer::renderHeldInventoryItem(GameplayScreenRuntime
     const GameplayUiController::HeldInventoryItemState &heldItem = context.heldInventoryItem();
 
 #if defined(__ANDROID__)
-    if (context.currentHudScreenState() == GameplayHudScreenState::Gameplay)
+    const GameplayInputFrame *pInput = context.currentGameplayInputFrame();
+    if (context.currentHudScreenState() == GameplayHudScreenState::Gameplay
+        || (pInput != nullptr && pInput->rightMouseButton.held))
     {
         return;
     }

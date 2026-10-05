@@ -7,12 +7,14 @@ add_library(openyamm_engine
     AssetPaths.cpp
     FontAsset.cpp
     ImageAssetLoader.cpp
+    ImageMipmaps.cpp
     models/CgltfImplementation.cpp
     models/GltfModelLoader.cpp
     models/ModelAnimation.cpp
     models/ModelAsset.cpp
     models/ModelInstance.cpp
     render/ModelRenderer.cpp
+    render/ModelEnvironment.cpp
     SpriteAtlas.cpp
     EngineApplication.cpp
     scripting/LuaStateOwner.cpp

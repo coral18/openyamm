@@ -18,6 +18,7 @@ namespace OpenYAMM::Game
 class OutdoorRenderer
 {
 public:
+    static void destroySunReceiverResources(OutdoorGameView &view);
     static bool initializeWorldRenderResources(
         OutdoorGameView &view,
         const OutdoorMapData &outdoorMapData,
@@ -120,6 +121,8 @@ private:
         const OutdoorMapData &outdoorMapData,
         const std::optional<OutdoorBModelTextureSet> &outdoorBModelTextureSet);
     static void applyOutdoorSurfaceUniforms(OutdoorGameView &view);
+    static void bindBakedSunShadows(OutdoorGameView &view, uint32_t sunPageIndex);
+    static void ensureSunShadowPrograms(OutdoorGameView &view);
     static void applyOutdoorFxLightUniforms(OutdoorGameView &view, const bx::Vec3 &cameraPosition);
     static void destroyResolvedBModelDrawGroups(OutdoorGameView &view);
     static void rebuildResolvedBModelDrawGroups(OutdoorGameView &view);

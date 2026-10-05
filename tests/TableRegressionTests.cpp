@@ -242,6 +242,7 @@ TEST_CASE("settings debug startup options round trip")
     settings.skipEventCutscenes = true;
     settings.waitForLevelSprites = false;
     settings.newGameGodLich = true;
+    settings.turboMovementEnabled = false;
     settings.bolsterMonsters = true;
     settings.outdoorPathfinding = true;
     settings.monsterProjectileVisuals = OpenYAMM::Game::MonsterProjectileVisuals::Sprites;
@@ -282,6 +283,7 @@ TEST_CASE("settings debug startup options round trip")
     CHECK(loadedSettings->skipEventCutscenes);
     CHECK_FALSE(loadedSettings->waitForLevelSprites);
     CHECK(loadedSettings->newGameGodLich);
+    CHECK_FALSE(loadedSettings->turboMovementEnabled);
     CHECK(loadedSettings->bolsterMonsters);
     CHECK(loadedSettings->outdoorPathfinding);
     CHECK(loadedSettings->monsterProjectileVisuals == OpenYAMM::Game::MonsterProjectileVisuals::Sprites);

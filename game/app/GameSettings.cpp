@@ -725,6 +725,16 @@ std::optional<GameSettings> loadGameSettings(const std::filesystem::path &path, 
         }
     }
 
+    if (const std::optional<std::string> value = getIniValue(document, "controls", "invert_mouse_y"))
+    {
+        bool parsed = settings.invertMouseY;
+
+        if (parseBoolValue(*value, parsed))
+        {
+            settings.invertMouseY = parsed;
+        }
+    }
+
     if (const std::optional<std::string> value = getIniValue(document, "gameplay", "keyboard_interaction_depth"))
     {
         int parsed = settings.keyboardInteractionDepth;
@@ -1426,6 +1436,16 @@ std::optional<GameSettings> loadGameSettings(const std::filesystem::path &path, 
         }
     }
 
+    if (const std::optional<std::string> value = getIniValue(document, "debug", "turbo_movement"))
+    {
+        bool parsed = settings.turboMovementEnabled;
+
+        if (parseBoolValue(*value, parsed))
+        {
+            settings.turboMovementEnabled = parsed;
+        }
+    }
+
     if (const std::optional<std::string> value = getIniValue(document, "debug", "immortal"))
     {
         bool parsed = settings.immortal;
@@ -1565,6 +1585,47 @@ std::optional<GameSettings> loadGameSettings(const std::filesystem::path &path, 
         settings.effectStatsDelaySeconds = parsed;
     }
 
+    if (const std::optional<std::string> value = getIniValue(document, "debug", "actor_models"))
+    {
+        if (!parseBoolValue(*value, settings.actorModels))
+        {
+            error = "actor_models must be a boolean.";
+            return std::nullopt;
+        }
+    }
+    if (const std::optional<std::string> value = getIniValue(document, "debug", "actor_spawn_id"))
+    {
+        int parsed = 0;
+        if (!parseIntValue(*value, parsed) || parsed <= 0 || parsed > 32767)
+        {
+            error = "actor_spawn_id must be between 1 and 32767.";
+            return std::nullopt;
+        }
+        settings.actorSpawnId = int16_t(parsed);
+    }
+    if (const std::optional<std::string> value = getIniValue(document, "debug", "actor_spawn_count"))
+    {
+        int parsed = 0;
+        if (!parseIntValue(*value, parsed) || parsed < 1 || parsed > 128)
+        {
+            error = "actor_spawn_count must be between 1 and 128.";
+            return std::nullopt;
+        }
+        settings.actorSpawnCount = uint32_t(parsed);
+    }
+    const std::array<const char *, 3> actorPositionKeys = {"actor_spawn_x", "actor_spawn_y", "actor_spawn_z"};
+    for (size_t axis = 0; axis < actorPositionKeys.size(); ++axis)
+    {
+        if (const std::optional<std::string> value = getIniValue(document, "debug", actorPositionKeys[axis]))
+        {
+            if (!parseFloatValue(*value, settings.actorSpawnPosition[axis])
+                || !std::isfinite(settings.actorSpawnPosition[axis]))
+            {
+                error = std::string(actorPositionKeys[axis]) + " must be finite.";
+                return std::nullopt;
+            }
+        }
+    }
     if (const std::optional<std::string> value = getIniValue(document, "debug", "model_spawn_path"))
     {
         settings.modelSpawnPath = trimCopy(*value);
@@ -1670,7 +1731,8 @@ bool saveGameSettings(const std::filesystem::path &path, const GameSettings &set
         << "show_hits=" << (settings.showHits ? "true" : "false") << '\n'
         << "always_run=" << (settings.alwaysRun ? "true" : "false") << '\n'
         << "flip_on_exit=" << (settings.flipOnExit ? "true" : "false") << '\n'
-        << "mouse_sensitivity=" << std::clamp(settings.mouseSensitivity, 0, 100) << "\n\n"
+        << "mouse_sensitivity=" << std::clamp(settings.mouseSensitivity, 0, 100) << '\n'
+        << "invert_mouse_y=" << (settings.invertMouseY ? "true" : "false") << "\n\n"
         << "[gameplay]\n"
         << "keyboard_interaction_depth=" << std::clamp(settings.keyboardInteractionDepth, 32, 4096) << '\n'
         << "mouse_interaction_depth=" << std::clamp(settings.mouseInteractionDepth, 32, 4096) << '\n'
@@ -1777,6 +1839,7 @@ bool saveGameSettings(const std::filesystem::path &path, const GameSettings &set
         << "start_z=" << settings.startZ << '\n'
         << "start_flying=" << (settings.startFlying ? "true" : "false") << '\n'
         << "movement_speed_multiplier=" << settings.movementSpeedMultiplier << '\n'
+        << "turbo_movement=" << (settings.turboMovementEnabled ? "true" : "false") << '\n'
         << "immortal=" << (settings.immortal ? "true" : "false") << '\n'
         << "unlimited_mana=" << (settings.unlimitedMana ? "true" : "false") << '\n'
         << "new_game_god_lich=" << (settings.newGameGodLich ? "true" : "false") << '\n'

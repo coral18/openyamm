@@ -749,6 +749,57 @@ uint64_t fnv1a64(const std::vector<uint8_t> &bytes)
 }
 }
 
+TEST_CASE("Verdant dimensional travel topic hands off from dialogue to the travel selector")
+{
+    const OpenYAMM::Tests::RegressionGameData &gameData = requireRegressionGameData();
+    const std::filesystem::path sourceRoot = OPENYAMM_SOURCE_DIR;
+    const std::vector<uint8_t> supportBytes =
+        readBinaryFileBytes(sourceRoot / "assets_dev/engine/scripts/common/event_support.lua");
+    const std::vector<uint8_t> crossContinentsBytes =
+        readBinaryFileBytes(sourceRoot / "assets_dev/engine/events/common/cross_continents_common.lua");
+    std::string error;
+    const std::optional<OpenYAMM::Game::ScriptedEventProgram> program =
+        OpenYAMM::Game::ScriptedEventProgram::loadFromLuaText(
+            std::string(supportBytes.begin(), supportBytes.end()) + "\n"
+                + std::string(crossContinentsBytes.begin(), crossContinentsBytes.end()),
+            "@Verdant dimensional travel",
+            OpenYAMM::Game::ScriptedEventScope::Global,
+            error);
+    REQUIRE_MESSAGE(program.has_value(), error.c_str());
+    OpenYAMM::Tests::RegressionGameData verdantData = gameData;
+    verdantData.globalEventProgram = program;
+
+    for (bool storiesFinished : {false, true})
+    {
+        OpenYAMM::Tests::HouseDialogueTestHarness harness(verdantData);
+        harness.eventRuntimeState().namedGlobalVars["MMerge.CrossContinents.GotMainQuest"] = 1;
+        harness.eventRuntimeState().namedGlobalVars["MMerge.CrossContinents.GotConnectorStone"] = 1;
+        harness.eventRuntimeState().namedGlobalVars["MMerge.CrossContinents.AllStoriesFinished"] = storiesFinished;
+        harness.eventRuntimeState().activeHookContext = OpenYAMM::Game::EventRuntimeState::ActiveHookContext{};
+        harness.eventRuntimeState().activeHookContext->kind = OpenYAMM::Game::EventRuntimeHookKind::NpcEnter;
+        harness.eventRuntimeState().activeHookContext->npcId = 803;
+        OpenYAMM::Game::EventRuntime eventRuntime = {};
+        REQUIRE(eventRuntime.executeHooks(
+            std::nullopt, program, OpenYAMM::Game::EventRuntimeHookKind::NpcEnter,
+            harness.eventRuntimeState(), &harness.party()));
+        harness.eventRuntimeState().activeHookContext.reset();
+        const OpenYAMM::Game::EventDialogContent &dialog = harness.openNpcDialogue(803);
+        const std::optional<size_t> travelIndex = findActionIndexByLabel(dialog, "Dimensional travel");
+        REQUIRE(travelIndex.has_value());
+        CHECK_FALSE(dialogHasActionLabel(dialog, "Time Travel Guide"));
+        CHECK_EQ(harness.eventRuntimeState().npcTopicOverrides.at(803)[1], storiesFinished ? 1785u : 0u);
+        const OpenYAMM::Game::GameplayDialogController::Result result =
+            harness.executeActiveDialogAction(*travelIndex);
+        CHECK(result.shouldCloseActiveDialog);
+        CHECK_FALSE(result.shouldOpenPendingEventDialog);
+        CHECK(harness.eventRuntimeState().pendingDimensionDoorOverlay);
+        harness.executeAndPresent(*travelIndex);
+        CHECK(harness.uiController().eventDialog().content.actions.empty());
+        CHECK_FALSE(harness.eventRuntimeState().pendingDialogueContext.has_value());
+        CHECK(harness.eventRuntimeState().pendingDimensionDoorOverlay);
+    }
+}
+
 TEST_CASE("dread pirate stanley false report keeps multiline npc text")
 {
     const OpenYAMM::Tests::RegressionGameData &gameData = requireRegressionGameData();

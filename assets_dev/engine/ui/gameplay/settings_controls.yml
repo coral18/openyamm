@@ -361,7 +361,7 @@ elements:
     - id: SettingsControlsKeyboardButton
       anchor: top_left
       offset_x: 0.0
-      offset_y: 306.4
+      offset_y: 345.3248
       width: 118.6501
       height: 20.2667
       z_index: 10
@@ -532,10 +532,64 @@ elements:
         scale: 0.67765
         pad_x: 0.0
       notes: Controller supplies live text.
-    - id: SettingsControlsTurnRateLabel
+    - id: SettingsControlsInvertMouseYLabel
       anchor: top_left
       offset_x: 1.6
       offset_y: 156.3504
+      width: 285.9333
+      height: 14.0752
+      z_index: 10
+      visible: true
+      interactive: false
+      text:
+        value: Invert mouse Y
+        font: menu_arrus
+        color: '#eadfc6'
+        align_x: left
+        align_y: middle
+        scale: 0.74105
+        pad_x: 0.0
+    - id: SettingsControlsInvertMouseYDescription
+      anchor: top_left
+      offset_x: 1.6
+      offset_y: 172.5584
+      width: 437.3333
+      height: 11.5168
+      z_index: 10
+      visible: true
+      interactive: false
+      text:
+        value: Move the mouse up to look down, and down to look up.
+        font: menu_lucida
+        color: '#aeb5a5'
+        align_x: left
+        align_y: middle
+        scale: 0.60235
+        pad_x: 0.0
+    - id: SettingsControlsInvertMouseYControl
+      anchor: top_left
+      offset_x: 453.3333
+      offset_y: 154.1295
+      width: 70.4
+      height: 32.158
+      z_index: 10
+      visible: true
+      interactive: true
+      asset:
+        default: hud_x2/menus/omenu_toggle_off.png
+        selected: hud_x2/menus/omenu_toggle_on.png
+      text:
+        value: '{invert_mouse_y}'
+        font: menu_lucida
+        color: '#e9dcc0'
+        align_x: left
+        align_y: middle
+        scale: 0.71529
+        pad_x: 6.9333
+    - id: SettingsControlsTurnRateLabel
+      anchor: top_left
+      offset_x: 1.6
+      offset_y: 195.2752
       width: 202.2667
       height: 14.0752
       z_index: 10
@@ -552,7 +606,7 @@ elements:
     - id: SettingsControlsTurnRateDescription
       anchor: top_left
       offset_x: 1.6
-      offset_y: 172.5584
+      offset_y: 211.4832
       width: 397.2
       height: 11.5168
       z_index: 10
@@ -569,7 +623,7 @@ elements:
     - id: SettingsControlsTurnRateControl
       anchor: top_left
       offset_x: 412.8
-      offset_y: 158.4752
+      offset_y: 197.4
       width: 110.9333
       height: 23.4667
       z_index: 10
@@ -590,7 +644,7 @@ elements:
     - id: SettingsControlsAlwaysRunLabel
       anchor: top_left
       offset_x: 1.6
-      offset_y: 195.2752
+      offset_y: 234.2
       width: 158.3168
       height: 14.0752
       z_index: 10
@@ -607,7 +661,7 @@ elements:
     - id: SettingsControlsAlwaysRunDescription
       anchor: top_left
       offset_x: 1.6
-      offset_y: 211.4837
+      offset_y: 250.4085
       width: 437.3333
       height: 11.5168
       z_index: 10
@@ -624,7 +678,7 @@ elements:
     - id: SettingsControlsAlwaysRunControl
       anchor: top_left
       offset_x: 453.3333
-      offset_y: 193.0543
+      offset_y: 231.9791
       width: 70.4
       height: 32.158
       z_index: 10
@@ -646,7 +700,7 @@ elements:
     - id: SettingsControlsFlipOnExitLabel
       anchor: top_left
       offset_x: 1.6
-      offset_y: 234.2
+      offset_y: 273.1248
       width: 285.9333
       height: 14.0752
       z_index: 10
@@ -663,7 +717,7 @@ elements:
     - id: SettingsControlsFlipOnExitDescription
       anchor: top_left
       offset_x: 1.6
-      offset_y: 250.4085
+      offset_y: 289.3333
       width: 437.3333
       height: 11.5168
       z_index: 10
@@ -680,7 +734,7 @@ elements:
     - id: SettingsControlsFlipOnExitControl
       anchor: top_left
       offset_x: 453.3333
-      offset_y: 231.9796
+      offset_y: 270.9044
       width: 70.4
       height: 32.158
       z_index: 10

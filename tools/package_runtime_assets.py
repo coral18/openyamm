@@ -20,7 +20,7 @@ def lighting_archive_dependencies(assets_root):
             if len(header) != 96 or header[:8] != b"OYMLIT1\0":
                 raise ValueError(f"Invalid outdoor lighting header: {path}")
             version, header_size = struct.unpack_from("<II", header, 8)
-            if version != 3 or header_size != 96:
+            if version not in (3, 4, 5) or header_size != 96:
                 raise ValueError(f"Unsupported outdoor lighting version: {path}")
             if not struct.unpack_from("<I", header, 76)[0] & 1:
                 continue
@@ -39,10 +39,11 @@ def lighting_archive_dependencies(assets_root):
                 pixel_end += size
             stream.seek(pixel_end)
             extension = stream.read()
-        if len(extension) < 8:
+        counts_offset = 24 if version >= 4 else 0
+        if len(extension) < counts_offset + 8:
             raise ValueError(f"Missing outdoor lighting dependencies: {path}")
-        probes, dependencies = struct.unpack_from("<II", extension)
-        cursor = 8 + probes * 36
+        probes, dependencies = struct.unpack_from("<II", extension, counts_offset)
+        cursor = counts_offset + 8 + probes * (52 if version >= 4 else 36)
         for _ in range(dependencies):
             if cursor + 12 > len(extension):
                 raise ValueError(f"Truncated outdoor lighting dependency: {path}")
@@ -59,6 +60,24 @@ def lighting_archive_dependencies(assets_root):
                 if not source.is_file() or source.is_symlink():
                     raise ValueError(f"Missing archived lighting dependency: {source}")
                 entries[name] = source
+        if version >= 5:
+            if cursor + 4 > len(extension):
+                raise ValueError(f"Missing direct-sun lighting pages: {path}")
+            direct_count = struct.unpack_from("<I", extension, cursor)[0]
+            cursor += 4
+            if direct_count * 2 != page_count:
+                raise ValueError(f"Invalid direct-sun lighting page count: {path}")
+            with path.open("rb") as stream:
+                for index in range(direct_count):
+                    if cursor + 12 > len(extension):
+                        raise ValueError(f"Truncated direct-sun lighting page: {path}")
+                    width, height, size = struct.unpack_from("<III", extension, cursor)
+                    cursor += 12
+                    stream.seek(page_offset + index * 32)
+                    dimensions = struct.unpack("<II", stream.read(8))
+                    if (width, height) != dimensions or size > len(extension) - cursor:
+                        raise ValueError(f"Invalid direct-sun lighting page: {path}")
+                    cursor += size
         if cursor != len(extension):
             raise ValueError(f"Invalid outdoor lighting extension: {path}")
     return entries

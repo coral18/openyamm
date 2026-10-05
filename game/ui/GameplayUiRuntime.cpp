@@ -213,11 +213,11 @@ bool resolveDimensionDoorDestinationOverride(
     destinationOverride = {};
     destinationOverride.clearUnlockQBit = true;
     destinationOverride.clearDirection = true;
+    destinationOverride.iconName = "ui/gameplay/dimensional_travel/" + toLowerCopy(sourceDestination.iconName);
 
     if (description == "jadame")
     {
         destinationOverride.mapId = 1;
-        destinationOverride.iconName = sourceDestination.iconName;
         destinationOverride.hitX = 0;
         destinationOverride.hitY = 0;
         destinationOverride.hitWidth = 213;
@@ -228,10 +228,9 @@ bool resolveDimensionDoorDestinationOverride(
     if (description == "antagarich")
     {
         destinationOverride.mapId = 62;
-        destinationOverride.iconName = sourceDestination.iconName;
-        destinationOverride.hitX = 213;
+        destinationOverride.hitX = 427;
         destinationOverride.hitY = 0;
-        destinationOverride.hitWidth = 214;
+        destinationOverride.hitWidth = 213;
         destinationOverride.hitHeight = 480;
         return true;
     }
@@ -239,10 +238,9 @@ bool resolveDimensionDoorDestinationOverride(
     if (description == "enroth")
     {
         destinationOverride.mapId = 151;
-        destinationOverride.iconName = sourceDestination.iconName;
-        destinationOverride.hitX = 427;
+        destinationOverride.hitX = 213;
         destinationOverride.hitY = 0;
-        destinationOverride.hitWidth = 213;
+        destinationOverride.hitWidth = 214;
         destinationOverride.hitHeight = 480;
         return true;
     }
@@ -787,7 +785,7 @@ bool GameplayUiRuntime::ensureDimensionDoorDestinationsLoaded(uint32_t dayIndex,
             hasOverride ? &destinationOverride : nullptr);
     }
 
-    m_townPortalBackgroundTextureName = townPortalIconTextureName(pGroup->name);
+    m_townPortalBackgroundTextureName = "ui/gameplay/dimensional_travel/tpglobal";
     m_townPortalDestinations = std::move(destinations);
     m_townPortalDestinationsLoaded = true;
     return !m_townPortalDestinations.empty();

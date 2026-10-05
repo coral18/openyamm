@@ -35,11 +35,14 @@ public:
     bool contains(ModelInstanceHandle handle) const;
     bool setTransform(ModelInstanceHandle handle, const ModelTransform &transform);
     bool setVisible(ModelInstanceHandle handle, bool visible);
+    bool setOutlineColor(ModelInstanceHandle handle, uint32_t colorAbgr);
+    uint32_t outlineColor(ModelInstanceHandle handle) const;
     bool setNodeMarkersVisible(ModelInstanceHandle handle, bool visible);
     bool play(ModelInstanceHandle handle, const std::string &clipName, ModelPlaybackMode mode);
     bool pause(ModelInstanceHandle handle, bool paused);
     bool stop(ModelInstanceHandle handle);
     bool setTime(ModelInstanceHandle handle, float timeSeconds);
+    bool sample(ModelInstanceHandle handle, uint32_t clipIndex, float timeSeconds, const ModelTransform &transform);
     void update(float deltaSeconds);
 
     const ModelAsset *asset(ModelInstanceHandle handle) const;
@@ -61,6 +64,7 @@ private:
         uint32_t generation = 1;
         bool active = false;
         bool visible = true;
+        uint32_t outlineColorAbgr = 0;
         bool nodeMarkersVisible = false;
         bool playing = false;
         bool paused = false;

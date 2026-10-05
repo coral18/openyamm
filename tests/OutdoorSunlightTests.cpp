@@ -75,6 +75,8 @@ TEST_CASE("outdoor sunlight excludes underwater and authored polygon worlds")
     CHECK(authored[2] == 0.0f);
     CHECK(authored[3] == 1.0f);
     CHECK(outdoorBillboardBaseLight(authored) == doctest::Approx(0.85f));
+    CHECK(buildOutdoorSunlight(map, atmosphere, false)[2] > 0.0f);
+    CHECK(buildOutdoorSunlight(map, atmosphere, false)[3] == doctest::Approx(atmosphere.ambientBrightness));
 }
 
 TEST_CASE("outdoor sunlight terrain normals agree across cells on a slope")

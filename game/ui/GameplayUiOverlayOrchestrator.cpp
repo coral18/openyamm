@@ -229,8 +229,8 @@ void GameplayUiOverlayOrchestrator::renderStandardOverlays(
         recordStage(&GameplayUiOverlayFramePerformanceDiagnostics::quickReferenceNanoseconds);
         GameplayPartyOverlayRenderer::renderSpellbookOverlay(overlayContext, width, height);
         recordStage(&GameplayUiOverlayFramePerformanceDiagnostics::spellbookNanoseconds);
-        GameplayUiRenderer::renderMobileInspectButton(overlayContext, width, height);
         GameplayPartyOverlayRenderer::renderHeldInventoryItem(overlayContext, width, height);
+        GameplayUiRenderer::renderMobileInspectButton(overlayContext, width, height);
         recordStage(&GameplayUiOverlayFramePerformanceDiagnostics::heldItemNanoseconds);
         if (config.renderItemInspectOverlay)
         {

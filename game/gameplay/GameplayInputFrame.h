@@ -31,6 +31,7 @@ struct GameplayInputFrame
     bool turnBasedMovementStep = false;
     bool turnBasedPhysicsStep = false;
     float movementSpeedScale = 1.0f;
+    bool turboMovementEnabled = true;
     float mobileJoystickBaseX = 0.0f;
     float mobileJoystickBaseY = 0.0f;
     float mobileJoystickKnobX = 0.0f;
@@ -57,6 +58,12 @@ struct GameplayInputFrame
         return scancode > SDL_SCANCODE_UNKNOWN
             && scancode < SDL_SCANCODE_COUNT
             && keyboardHeld[scancode];
+    }
+
+    bool turboMovementHeld() const
+    {
+        return turboMovementEnabled
+            && (isScancodeHeld(SDL_SCANCODE_LCTRL) || isScancodeHeld(SDL_SCANCODE_RCTRL));
     }
 
     uint16_t scancodePressCount(SDL_Scancode scancode) const

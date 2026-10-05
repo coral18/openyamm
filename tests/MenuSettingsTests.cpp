@@ -49,6 +49,37 @@ TEST_CASE("menu binding reservation and equality follow native single input bind
     CHECK_FALSE(sameMenuBinding(mouseButtonInputBinding(SDL_BUTTON_LEFT), mouseButtonInputBinding(SDL_BUTTON_RIGHT)));
 }
 
+TEST_CASE("invert mouse Y defaults off and persists menu changes")
+{
+    const std::filesystem::path path = std::filesystem::temp_directory_path() / "openyamm-invert-mouse-settings.ini";
+    std::string error;
+    GameSettings settings = GameSettings::createDefault();
+    CHECK_FALSE(settings.invertMouseY);
+    CHECK(menuSettingValue(settings, "invert_mouse_y") == "false");
+
+    for (const std::string value : {"true", "false"})
+    {
+        REQUIRE(setMenuSettingValue(settings, "invert_mouse_y", value));
+        CHECK(menuSettingValue(settings, "invert_mouse_y") == value);
+        CHECK_FALSE(setMenuSettingValue(settings, "invert_mouse_y", "invalid"));
+        CHECK(menuSettingValue(settings, "invert_mouse_y") == value);
+        REQUIRE(saveGameSettings(path, settings, error));
+        const std::optional<GameSettings> loaded = loadGameSettings(path, error);
+        REQUIRE_MESSAGE(loaded.has_value(), error.c_str());
+        CHECK(menuSettingValue(*loaded, "invert_mouse_y") == value);
+    }
+
+    {
+        std::ofstream file(path);
+        file << "[controls]\nmouse_sensitivity=42\n";
+    }
+    const std::optional<GameSettings> loaded = loadGameSettings(path, error);
+    REQUIRE_MESSAGE(loaded.has_value(), error.c_str());
+    CHECK_FALSE(loaded->invertMouseY);
+    CHECK(loaded->mouseSensitivity == 42);
+    std::filesystem::remove(path);
+}
+
 TEST_CASE("enemy health menu settings validate modes and preserve other options")
 {
     GameSettings settings = GameSettings::createDefault();

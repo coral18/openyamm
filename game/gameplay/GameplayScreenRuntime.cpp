@@ -1562,23 +1562,47 @@ void GameplayScreenRuntime::openChestTransferInventoryOverlay()
 void GameplayScreenRuntime::toggleCharacterInventoryScreen()
 {
     GameplayUiController::CharacterScreenState &characterScreen = uiController().characterScreen();
-    characterScreen.open = !characterScreen.open;
-
     if (characterScreen.open)
     {
-        closeQuickReferenceOverlay();
-        characterScreen.page = GameplayUiController::CharacterPage::Inventory;
-        characterScreen.source = GameplayUiController::CharacterScreenSource::Party;
-        characterScreen.sourceIndex = partyReadOnly() != nullptr ? partyReadOnly()->activeMemberIndex() : 0;
-        characterScreen.dollJewelryOverlayOpen = false;
-        characterScreen.adventurersInnRosterOverlayOpen = false;
-        closeSpellbookOverlay();
+        closeCharacterScreen();
+        return;
     }
-    else
+
+    characterScreen.open = true;
+    closeQuickReferenceOverlay();
+    characterScreen.page = GameplayUiController::CharacterPage::Inventory;
+    characterScreen.source = GameplayUiController::CharacterScreenSource::Party;
+    characterScreen.sourceIndex = partyReadOnly() != nullptr ? partyReadOnly()->activeMemberIndex() : 0;
+    characterScreen.dollJewelryOverlayOpen = false;
+    characterScreen.adventurersInnRosterOverlayOpen = false;
+    closeSpellbookOverlay();
+}
+
+void GameplayScreenRuntime::closeCharacterScreen()
+{
+    GameplayUiController::CharacterScreenState &characterScreen = uiController().characterScreen();
+#if defined(__ANDROID__)
+    GameplayUiController::HeldInventoryItemState &heldItem = heldInventoryItem();
+    Party *pParty = party();
+    if (characterScreen.open && heldItem.active && pParty != nullptr)
     {
-        characterScreen.dollJewelryOverlayOpen = false;
-        characterScreen.adventurersInnRosterOverlayOpen = false;
+        const size_t firstMemberIndex = characterScreen.source == GameplayUiController::CharacterScreenSource::Party
+            ? characterScreen.sourceIndex : pParty->activeMemberIndex();
+        if (pParty->tryGrantInventoryItemStartingAt(firstMemberIndex, heldItem.item))
+        {
+            GameplayHeldItemController::clearHeldInventoryItem(heldItem);
+            pParty->clearHeldItemForQueries();
+        }
+        else
+        {
+            setStatusBarEvent("Pack is Full!");
+        }
     }
+#endif
+    characterScreen.open = false;
+    characterScreen.dollJewelryOverlayOpen = false;
+    characterScreen.adventurersInnRosterOverlayOpen = false;
+    resetCharacterOverlayInteractionState();
 }
 
 void GameplayScreenRuntime::handleDialogueCloseRequest()
@@ -2475,6 +2499,7 @@ void GameplayScreenRuntime::resetCharacterOverlayInteractionState()
     interactionState().characterClickLatch = false;
     interactionState().characterMemberCycleLatch = false;
     interactionState().characterPressedTarget = {};
+    interactionState().characterTouchItemDragActive = false;
 }
 
 void GameplayScreenRuntime::syncPartyConditionPortraits()

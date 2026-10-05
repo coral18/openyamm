@@ -6,6 +6,7 @@
 #include <doctest/doctest.h>
 
 #include <chrono>
+#include <cmath>
 #include <cstdint>
 #include <cstring>
 #include <filesystem>
@@ -433,6 +434,30 @@ TEST_CASE("ModelAnimation loader rejects unsupported interpolation explicitly")
     std::filesystem::remove_all(temporaryRoot);
 }
 
+TEST_CASE("ModelAnimation material factors retain defaults and reject invalid roughness")
+{
+    using namespace OpenYAMM::Engine;
+    const std::filesystem::path root = makeTemporaryRoot();
+    std::string json = fixtureGltf();
+    writeFile(root / "assets_dev/engine/models/fixture.bin", fixtureBuffer());
+    AssetFileSystem assets;
+    REQUIRE(assets.initialize(root, root / "assets_dev", AssetScaleTier::X1));
+    writeFile(root / "assets_dev/engine/models/fixture.gltf", json);
+    const ModelLoadResult defaults = GltfModelLoader().load(assets, "engine/models/fixture.gltf");
+    REQUIRE_MESSAGE(defaults, defaults.error);
+    CHECK_EQ(defaults.asset->materials[0].metallic, 1.0f);
+    CHECK_EQ(defaults.asset->materials[0].roughness, 1.0f);
+    const size_t offset = json.find("\"baseColorFactor\"");
+    REQUIRE_NE(offset, std::string::npos);
+    json.insert(offset, "\"roughnessFactor\": -0.1, ");
+    writeFile(root / "assets_dev/engine/models/fixture.gltf", json);
+    const ModelLoadResult invalid = GltfModelLoader().load(assets, "engine/models/fixture.gltf");
+    CHECK_FALSE(invalid);
+    CHECK(invalid.error.find("invalid colour or surface factors") != std::string::npos);
+    assets.shutdown();
+    std::filesystem::remove_all(root);
+}
+
 TEST_CASE("ModelAnimation loader reads GLB and packaged external buffers")
 {
     using namespace OpenYAMM::Engine;
@@ -508,4 +533,130 @@ TEST_CASE("ModelAnimation checked-in fixture covers rendering and animation cont
     const ModelMatrix *pAnimated = instances.nodeMatrix(handle, "animated_attachment");
     REQUIRE(pAnimated != nullptr);
     CHECK((*pAnimated)[13] > initialY);
+
+    const ModelLoadResult masked = GltfModelLoader().load(
+        assetFileSystem, "engine/models/fixtures/masked_emissive_fixture.glb");
+    INFO(masked.error);
+    REQUIRE(masked);
+    REQUIRE_EQ(masked.asset->materials.size(), 2);
+    CHECK_EQ(masked.asset->materials[0].alphaMode, ModelAlphaMode::Mask);
+    CHECK_EQ(masked.asset->materials[0].alphaCutoff, 0.75f);
+    CHECK_EQ(masked.asset->materials[0].emissive[0], 0.2f);
+    CHECK_EQ(masked.asset->materials[0].metallic, 0.0f);
+    CHECK_EQ(masked.asset->materials[0].roughness, 0.25f);
+    CHECK(masked.asset->materials[1].unlit);
+}
+
+TEST_CASE("ModelAnimation skinning applies inverse bind, all influences, morphs and root placement")
+{
+    using namespace OpenYAMM::Engine;
+    std::shared_ptr<ModelAsset> asset = makeAnimatedAsset();
+    asset->nodes[0].meshIndex = 0;
+    asset->nodes[0].skinIndex = 0;
+    asset->nodes[0].weights = {0};
+    ModelSkin skin;
+    skin.joints = {1, 0};
+    skin.inverseBindMatrices = {identityModelMatrix(), identityModelMatrix()};
+    skin.inverseBindMatrices[1][12] = -1;
+    asset->skins.push_back(skin);
+    ModelPrimitive primitive;
+    primitive.vertices = {{{1, 0, 0}, {0, 1, 0}, {0, 0}}};
+    ModelVertexInfluences influences;
+    influences.joints = {0, 0, 0, 0, 1, 1, 1, 1};
+    influences.weights = {0.125f, 0.125f, 0.125f, 0.125f, 0.125f, 0.125f, 0.125f, 0.125f};
+    primitive.influences.push_back(influences);
+    primitive.morphTargets.push_back({{{2, 0, 0}}, {}});
+    ModelMesh mesh;
+    mesh.primitives.push_back(primitive);
+    asset->meshes.push_back(mesh);
+    ModelAnimationChannel weights;
+    weights.nodeIndex = 0;
+    weights.target = ModelAnimationTarget::Weights;
+    weights.times = {0, 1};
+    weights.weightValues = {{0}, {1}};
+    // Move the joint, keeping its rotation fixed so the weighted translation is independently measurable.
+    asset->clips[0].channels = {asset->clips[0].channels[0], weights};
+    ModelInstanceSystem instances;
+    const ModelInstanceHandle handle = instances.create(asset);
+    ModelTransform transform;
+    transform.translation = {10, 20, 30};
+    REQUIRE(instances.sample(handle, 0, 0.5f, transform));
+    const ModelVertex &vertex = instances.pose(handle)->deformedVertices[0][0][0];
+    CHECK(vertex.position[0] == doctest::Approx(12));
+    CHECK(vertex.position[1] == doctest::Approx(20));
+    CHECK(vertex.normal[1] == doctest::Approx(1));
+    CHECK(instances.bounds(handle)->min[0] == doctest::Approx(12));
+    REQUIRE(instances.sample(handle, 0, 1, transform));
+    CHECK(instances.pose(handle)->deformedVertices[0][0][0].position[0] == doctest::Approx(13.5));
+    weights.interpolation = ModelAnimationInterpolation::Step;
+    asset->clips[0].channels[1] = weights;
+    REQUIRE(instances.sample(handle, 0, 1, transform));
+    CHECK(instances.pose(handle)->morphWeights[0][0] == doctest::Approx(1));
+}
+
+TEST_CASE("ModelAnimation MM6 demon loads all native clips and resets death visibility")
+{
+    using namespace OpenYAMM::Engine;
+    const std::filesystem::path sourceRoot = OPENYAMM_SOURCE_DIR;
+    AssetFileSystem assets;
+    REQUIRE(assets.initialize(sourceRoot, sourceRoot / "assets_dev", AssetScaleTier::X1));
+    const ModelLoadResult loaded = GltfModelLoader().load(assets, "worlds/mm6/models/mm6_demon.glb");
+    REQUIRE_MESSAGE(loaded, loaded.error);
+    REQUIRE_EQ(loaded.asset->skins.size(), 1);
+    CHECK_EQ(loaded.asset->skins[0].joints.size(), 85);
+    CHECK_EQ(loaded.asset->clips.size(), 9);
+    for (const ModelMaterial &material : loaded.asset->materials)
+    {
+        if (material.name == "Demon_Meshy_Body")
+        {
+            CHECK_EQ(material.metallic, 0.0f);
+            CHECK_EQ(material.metallicRoughnessImageIndex, 2);
+            CHECK_EQ(material.baseSampler.minFilter, 9987);
+            CHECK_EQ(material.baseSampler.wrapS, 10497);
+        }
+        else if (material.name == "Demon_Red_Iris")
+        {
+            CHECK_EQ(material.metallic, 0.0f);
+            CHECK(material.roughness == doctest::Approx(0.22f));
+        }
+    }
+    ModelInstanceSystem instances;
+    const ModelInstanceHandle handle = instances.create(loaded.asset);
+    const uint32_t body = *loaded.asset->findNode("Demon_Native_Mesh");
+    const uint32_t ash = *loaded.asset->findNode("Demon_Ash_Remains");
+    const uint32_t plume = *loaded.asset->findNode("Demon_Death_Plume");
+    const std::array<std::pair<const char *, float>, 6> nativeClips = {{{"Standing", .125f}, {"Walk_Native", 1.125f},
+        {"Attack", .75f}, {"Hit", .75f}, {"Fidget", .625f}, {"Death", 1.25f}}};
+    for (const auto &[name, duration] : nativeClips)
+    {
+        const uint32_t clip = *loaded.asset->findClip(name);
+        CHECK(loaded.asset->clips[clip].durationSeconds == doctest::Approx(duration));
+        REQUIRE(instances.sample(handle, clip, duration * .5f, gltfModelPlacement({1, 2, 3}, 0, 100)));
+        REQUIRE(instances.bounds(handle)->valid);
+        for (const auto &node : instances.pose(handle)->deformedVertices)
+        {
+            for (const auto &primitive : node)
+            {
+                for (const ModelVertex &vertex : primitive)
+                {
+                    if (!std::isfinite(vertex.position[0]) || !std::isfinite(vertex.position[1])
+                        || !std::isfinite(vertex.position[2]))
+                    {
+                        FAIL("Non-finite deformed vertex");
+                    }
+                }
+            }
+        }
+    }
+    REQUIRE(instances.sample(handle, *loaded.asset->findClip("Ash_Remains"), 0, {}));
+    CHECK_FALSE(modelMatrixVisible(*instances.nodeMatrix(handle, body)));
+    CHECK(modelMatrixVisible(*instances.nodeMatrix(handle, ash)));
+    REQUIRE(instances.sample(handle, *loaded.asset->findClip("Standing"), 0, {}));
+    CHECK(modelMatrixVisible(*instances.nodeMatrix(handle, body)));
+    CHECK_FALSE(modelMatrixVisible(*instances.nodeMatrix(handle, ash)));
+    for (float weight : instances.pose(handle)->morphWeights[plume])
+    {
+        CHECK(weight == 0.0f);
+    }
+    CHECK(instances.bounds(handle)->max[1] == doctest::Approx(1.707f).epsilon(.01));
 }

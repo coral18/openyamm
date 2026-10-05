@@ -35,19 +35,42 @@ class SpriteDeploymentTests(unittest.TestCase):
         shutil.copytree(REPO / 'assets_cooked/android/sprites_new/mm6_gob', mobile / 'mm6_gob')
         return mobile
 
-    def lighting(self, dependency='_legacy/sprites_original/tree.bmp'):
+    def lighting(self, dependency='_legacy/sprites_original/tree.bmp', version=3):
         header = bytearray(96)
         header[:8] = b'OYMLIT1\0'
-        struct.pack_into('<II', header, 8, 3, 96)
+        struct.pack_into('<II', header, 8, version, 96)
         name = dependency.encode()
-        extension = struct.pack('<IIIQ', 0, 1, len(name), 0) + name
+        extension = bytes(24) if version >= 4 else b''
+        extension += struct.pack('<II', 1, 1) + bytes(52 if version >= 4 else 36)
+        extension += struct.pack('<IQ', len(name), 0) + name
+        if version >= 5:
+            extension += struct.pack('<IIII', 1, 1, 1, 1) + b'c'
+        pages = struct.pack('<4I', 1, 1, 128, 1) + struct.pack('<4I', 1, 1, 129, 1)
+        struct.pack_into('<I', header, 32, 2)
         struct.pack_into('<I', header, 48, 96)
-        struct.pack_into('<II', header, 64, 96, 96 + len(extension))
+        struct.pack_into('<II', header, 64, 128, 130 + len(extension))
         struct.pack_into('<I', header, 76, 1)
         path = self.assets / 'worlds/mm6/maps/test.lighting'
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_bytes(header + extension)
+        path.write_bytes(header + pages + b'ab' + extension)
         return path
+
+    def test_lighting_versions_preserve_dependencies_and_validate_direct_pages(self):
+        source = self.assets / '_legacy/sprites_original/tree.bmp'
+        source.parent.mkdir(parents=True)
+        source.write_bytes(b'archived decoration')
+        for version in (3, 4, 5):
+            with self.subTest(version=version):
+                path = self.lighting(version=version)
+                self.assertEqual(PACKAGER.lighting_archive_dependencies(self.assets),
+                                 {'_legacy/sprites_original/tree.bmp': source})
+        valid = path.read_bytes()
+        for offset, value in ((-17, 2), (-13, 2), (-5, 2)):
+            broken = bytearray(valid)
+            struct.pack_into('<I', broken, len(broken) + offset, value)
+            path.write_bytes(broken)
+            with self.assertRaisesRegex(ValueError, 'Invalid direct-sun lighting'):
+                PACKAGER.lighting_archive_dependencies(self.assets)
 
     def test_runtime_is_complete_without_authoring_pngs(self):
         self.assertEqual(list(self.sprites.rglob('*.png')), [])

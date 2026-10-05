@@ -347,6 +347,7 @@ private:
     bool m_debugLaunchEffectSpawned = false;
     bool m_debugLaunchEffectStatsLogged = false;
     bool m_debugLaunchModelSpawned = false;
+    bool m_debugLaunchActorsSpawned = false;
     bool m_screenshotScheduledCaptureFired = false;
     bool m_screenshotGameplayStartTicksValid = false;
     uint64_t m_screenshotGameplayStartTicks = 0;

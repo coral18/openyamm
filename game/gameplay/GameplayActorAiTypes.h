@@ -30,18 +30,6 @@ enum class ActorAiMotionState : uint8_t
     Dead = 7,
 };
 
-enum class ActorAiAnimationState : uint8_t
-{
-    Standing = 0,
-    Walking = 1,
-    AttackMelee = 2,
-    AttackRanged = 3,
-    GotHit = 4,
-    Dying = 5,
-    Dead = 6,
-    Bored = 7,
-};
-
 enum class ActorAiMovementAction : uint8_t
 {
     None = 0,

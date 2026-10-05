@@ -111,6 +111,7 @@ struct GameSettings
     bool alwaysRun = true;
     bool flipOnExit = false;
     int mouseSensitivity = 100;
+    bool invertMouseY = false;
     ControlScheme controlScheme = ControlScheme::Modern;
     bool bloodSplats = true;
     bool coloredLights = true;
@@ -184,6 +185,7 @@ struct GameSettings
     float startZ = 0.0f;
     bool startFlying = false;
     float movementSpeedMultiplier = 1.0f;
+    bool turboMovementEnabled = true;
     bool immortal = true;
     bool unlimitedMana = true;
     bool newGameGodLich = false;
@@ -200,6 +202,10 @@ struct GameSettings
     float effectSpawnYawRadians = 0.0f;
     uint32_t effectSpawnCount = 1;
     float effectStatsDelaySeconds = -1.0f;
+    bool actorModels = false;
+    int16_t actorSpawnId = 0;
+    uint32_t actorSpawnCount = 1;
+    std::array<float, 3> actorSpawnPosition = {};
     std::string modelSpawnPath;
     std::string modelSpawnClip;
     std::array<float, 3> modelSpawnPosition = {};

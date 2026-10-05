@@ -223,100 +223,6 @@ void bleedTransparentEdgeColors(uint16_t width, uint16_t height, std::vector<uin
     }
 }
 
-std::vector<uint8_t> downsampleBgraPixels(
-    const std::vector<uint8_t> &sourcePixels,
-    uint16_t sourceWidth,
-    uint16_t sourceHeight,
-    uint16_t targetWidth,
-    uint16_t targetHeight)
-{
-    std::vector<uint8_t> targetPixels(static_cast<size_t>(targetWidth) * static_cast<size_t>(targetHeight) * 4, 0);
-
-    if (sourceWidth == 0 || sourceHeight == 0 || targetWidth == 0 || targetHeight == 0)
-    {
-        return targetPixels;
-    }
-
-    for (uint16_t targetY = 0; targetY < targetHeight; ++targetY)
-    {
-        for (uint16_t targetX = 0; targetX < targetWidth; ++targetX)
-        {
-            uint32_t blue = 0;
-            uint32_t green = 0;
-            uint32_t red = 0;
-            uint32_t alpha = 0;
-
-            for (uint16_t offsetY = 0; offsetY < 2; ++offsetY)
-            {
-                const uint16_t sourceY =
-                    std::min<uint16_t>(static_cast<uint16_t>(targetY * 2 + offsetY), sourceHeight - 1);
-
-                for (uint16_t offsetX = 0; offsetX < 2; ++offsetX)
-                {
-                    const uint16_t sourceX =
-                        std::min<uint16_t>(static_cast<uint16_t>(targetX * 2 + offsetX), sourceWidth - 1);
-                    const size_t sourceOffset =
-                        (static_cast<size_t>(sourceY) * static_cast<size_t>(sourceWidth) + sourceX) * 4;
-
-                    blue += sourcePixels[sourceOffset + 0];
-                    green += sourcePixels[sourceOffset + 1];
-                    red += sourcePixels[sourceOffset + 2];
-                    alpha += sourcePixels[sourceOffset + 3];
-                }
-            }
-
-            const size_t targetOffset =
-                (static_cast<size_t>(targetY) * static_cast<size_t>(targetWidth) + targetX) * 4;
-            targetPixels[targetOffset + 0] = static_cast<uint8_t>((blue + 2) / 4);
-            targetPixels[targetOffset + 1] = static_cast<uint8_t>((green + 2) / 4);
-            targetPixels[targetOffset + 2] = static_cast<uint8_t>((red + 2) / 4);
-            targetPixels[targetOffset + 3] = static_cast<uint8_t>((alpha + 2) / 4);
-        }
-    }
-
-    return targetPixels;
-}
-
-std::vector<BgraMipLevel> buildBgraMipLevels(
-    uint16_t width,
-    uint16_t height,
-    const uint8_t *pPixels,
-    uint32_t pixelBytes)
-{
-    std::vector<BgraMipLevel> mipLevels;
-
-    if (pPixels == nullptr || width == 0 || height == 0)
-    {
-        return mipLevels;
-    }
-
-    const size_t expectedPixelBytes = static_cast<size_t>(width) * static_cast<size_t>(height) * 4;
-
-    if (pixelBytes < expectedPixelBytes)
-    {
-        return mipLevels;
-    }
-
-    BgraMipLevel baseLevel = {};
-    baseLevel.width = width;
-    baseLevel.height = height;
-    baseLevel.pixels.assign(pPixels, pPixels + expectedPixelBytes);
-    mipLevels.push_back(std::move(baseLevel));
-
-    while (mipLevels.back().width > 1 || mipLevels.back().height > 1)
-    {
-        const BgraMipLevel &sourceLevel = mipLevels.back();
-        BgraMipLevel targetLevel = {};
-        targetLevel.width = std::max<uint16_t>(1, sourceLevel.width / 2);
-        targetLevel.height = std::max<uint16_t>(1, sourceLevel.height / 2);
-        targetLevel.pixels =
-            downsampleBgraPixels(sourceLevel.pixels, sourceLevel.width, sourceLevel.height, targetLevel.width, targetLevel.height);
-        mipLevels.push_back(std::move(targetLevel));
-    }
-
-    return mipLevels;
-}
-
 bgfx::TextureHandle createBgraTextureWithMipChain(
     uint16_t width,
     uint16_t height,
@@ -330,7 +236,7 @@ bgfx::TextureHandle createBgraTextureWithMipChain(
         return BGFX_INVALID_HANDLE;
     }
 
-    const std::vector<BgraMipLevel> mipLevels = buildBgraMipLevels(width, height, pPixels, pixelBytes);
+    const std::vector<BgraMipLevel> mipLevels = prepareBgraMipChain(width, height, std::span<const uint8_t>(pPixels, pixelBytes));
 
     if (mipLevels.empty())
     {
@@ -513,79 +419,6 @@ bgfx::TextureHandle createBgraTexture2D(
         bgraTextureUploadFormat(),
         textureFilterSamplerFlags(profile) | extraFlags,
         copyBgraTextureUploadMemory(pUploadPixels, pixelBytes));
-}
-
-void preserveBgraCutoutCoverage(
-    std::vector<uint8_t> &pixels, const std::vector<uint8_t> &referencePixels, uint8_t alphaCutoff)
-{
-    if (alphaCutoff == 0 || pixels.empty() || referencePixels.empty() ||
-        pixels.size() % 4 != 0 || referencePixels.size() % 4 != 0)
-    {
-        return;
-    }
-    uint64_t referenceCovered = 0;
-    for (size_t i = 3; i < referencePixels.size(); i += 4)
-    {
-        referenceCovered += referencePixels[i] >= alphaCutoff ? 1 : 0;
-    }
-    std::array<uint64_t, 256> histogram = {};
-    for (size_t i = 3; i < pixels.size(); i += 4)
-    {
-        ++histogram[pixels[i]];
-    }
-    const uint64_t referenceCount = referencePixels.size() / 4;
-    const uint64_t desired = referenceCovered * (pixels.size() / 4);
-    const auto errorFor = [&](uint64_t covered)
-    {
-        const uint64_t actual = covered * referenceCount;
-        return actual > desired ? actual - desired : desired - actual;
-    };
-    uint64_t covered = 0;
-    for (int alpha = alphaCutoff; alpha <= 255; ++alpha)
-    {
-        covered += histogram[alpha];
-    }
-    uint64_t bestError = errorFor(covered);
-    int bestThreshold = alphaCutoff;
-    if (errorFor(0) < bestError)
-    {
-        bestError = errorFor(0);
-        bestThreshold = 256;
-    }
-    covered = 0;
-    for (int alpha = 255; alpha >= 1; --alpha)
-    {
-        covered += histogram[alpha];
-        const uint64_t error = errorFor(covered);
-        if (error < bestError)
-        {
-            bestError = error;
-            bestThreshold = alpha;
-        }
-    }
-    if (bestThreshold == alphaCutoff)
-    {
-        return;
-    }
-    const float scale = (float(alphaCutoff) - 0.5f) / (float(bestThreshold) - 0.5f);
-    for (size_t i = 3; i < pixels.size(); i += 4)
-    {
-        pixels[i] = uint8_t(std::clamp(std::lround(pixels[i] * scale), 0L, 255L));
-    }
-}
-
-std::vector<BgraMipLevel> prepareBgraMipChain(
-    uint16_t width, uint16_t height, const std::vector<uint8_t> &pixels, uint8_t alphaCutoff)
-{
-    std::vector<BgraMipLevel> levels = buildBgraMipLevels(width, height, pixels.data(), pixels.size());
-    for (size_t index = 1; index < levels.size(); ++index)
-    {
-        if (alphaCutoff > 0)
-        {
-            preserveBgraCutoutCoverage(levels[index].pixels, pixels, alphaCutoff);
-        }
-    }
-    return levels;
 }
 
 void updateBgraTextureArrayLayer(

@@ -464,7 +464,7 @@ TEST_CASE("water reflection scissor covers visible water and distorted samples a
     CHECK(samples > 1000);
 }
 
-TEST_CASE("water reflections precede world rendering and grading precedes HUD without duplicate views")
+TEST_CASE("sunlight shadows precede water reflections and world rendering without duplicate views")
 {
     for (bool grading : {false, true})
     {
@@ -472,6 +472,10 @@ TEST_CASE("water reflections precede world rendering and grading precedes HUD wi
         const auto position = [&](uint16_t view) { return std::find(order.begin(), order.end(), view); };
         CHECK(position(0) < position(1));
         CHECK(position(1) < position(2));
+        for (uint16_t view = FirstSunShadowView; view < FirstSunShadowView + SunShadowViews; ++view)
+        {
+            CHECK(position(view) < position(FirstWaterReflectionView));
+        }
         for (uint16_t view = FirstWaterReflectionView;
             view < FirstWaterReflectionView + MaxWaterReflections * 2; ++view)
         {

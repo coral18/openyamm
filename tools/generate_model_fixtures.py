@@ -67,7 +67,7 @@ def cube_vertices() -> tuple[list[float], list[float], list[float], list[int]]:
     return positions, normals, texcoords, indices
 
 
-def build_fixture() -> tuple[bytes, bytes]:
+def build_fixture(masked_emissive: bool = False) -> tuple[bytes, bytes]:
     positions, normals, texcoords, opaque_indices = cube_vertices()
     transparent_first = len(positions) // 3
     for position, uv in zip(
@@ -174,6 +174,13 @@ def build_fixture() -> tuple[bytes, bytes]:
         "accessors": accessors,
     }
 
+    if masked_emissive:
+        document["materials"][0].update(
+            name="masked_emissive_checker", alphaMode="MASK", alphaCutoff=0.75,
+            emissiveFactor=[0.2, 0.025, 0.005],
+        )
+        document["materials"][0]["pbrMetallicRoughness"].update(metallicFactor=0, roughnessFactor=0.25)
+
     json_bytes = json.dumps(document, sort_keys=True, separators=(",", ":")).encode("utf-8")
     while len(json_bytes) % 4:
         json_bytes += b" "
@@ -199,6 +206,8 @@ def main() -> int:
     args.output_dir.mkdir(parents=True, exist_ok=True)
     glb, png = build_fixture()
     (args.output_dir / "shared_model_fixture.glb").write_bytes(glb)
+    masked_glb, _ = build_fixture(masked_emissive=True)
+    (args.output_dir / "masked_emissive_fixture.glb").write_bytes(masked_glb)
     (args.output_dir / "checker.png").write_bytes(png)
     return 0
 

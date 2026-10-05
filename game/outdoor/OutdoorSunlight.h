@@ -12,10 +12,12 @@ namespace OpenYAMM::Game
 // XYZ points toward the sun, scaled by direct intensity; W is the ambient share of base illumination.
 inline std::array<float, 4> buildOutdoorSunlight(
     const OutdoorMapData &mapData,
-    const OutdoorWorldRuntime::AtmosphereState &atmosphere)
+    const OutdoorWorldRuntime::AtmosphereState &atmosphere,
+    bool lightingDataEnabled = true)
 {
     if (mapData.sceneProfile != OutdoorSceneProfile::ClassicOdm
-        || mapData.locationType != OutdoorLocationType::Exterior || mapData.lightingData || atmosphere.underwater)
+        || mapData.locationType != OutdoorLocationType::Exterior
+        || (lightingDataEnabled && mapData.lightingData) || atmosphere.underwater)
     {
         return {0.0f, 0.0f, 0.0f, 1.0f};
     }

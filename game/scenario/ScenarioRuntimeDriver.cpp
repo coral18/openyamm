@@ -914,6 +914,8 @@ bool ScenarioRuntimeDriver::simulateMovementSegment(
     }
 
     GameplayInputFrame input = buildMovementInputFrame(command);
+    input.turboMovementEnabled = ScenarioGameApplicationAccess::gameSession(m_application)
+        .gameplayScreenRuntime().settingsSnapshot().turboMovementEnabled;
     float remainingSeconds = command.durationSeconds;
     float elapsedSeconds = 0.0f;
     pWorldRuntime->setScenarioPartyActorCollisionEnabled(command.actorCollision);

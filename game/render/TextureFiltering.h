@@ -1,5 +1,7 @@
 #pragma once
 
+#include "engine/ImageMipmaps.h"
+
 #include <bgfx/bgfx.h>
 
 #include <cstdint>
@@ -81,20 +83,9 @@ bgfx::TextureHandle createEmptyBgraTexture2D(
     TextureFilterProfile profile,
     uint64_t extraFlags = BGFX_TEXTURE_NONE);
 
-// Adjust only alpha so a reduced cutout retains the closest representable reference coverage.
-void preserveBgraCutoutCoverage(
-    std::vector<uint8_t> &pixels, const std::vector<uint8_t> &referencePixels, uint8_t alphaCutoff);
-
-struct BgraMipLevel
-{
-    uint16_t width = 0;
-    uint16_t height = 0;
-    std::vector<uint8_t> pixels;
-};
-
-// CPU-only preparation, reusable across repeated uploads of an animation frame.
-std::vector<BgraMipLevel> prepareBgraMipChain(
-    uint16_t width, uint16_t height, const std::vector<uint8_t> &pixels, uint8_t alphaCutoff = 0);
+using Engine::BgraMipLevel;
+using Engine::prepareBgraMipChain;
+using Engine::preserveBgraCutoutCoverage;
 void updateBgraTextureArrayLayer(
     bgfx::TextureHandle texture, uint16_t layer, const std::vector<BgraMipLevel> &levels);
 

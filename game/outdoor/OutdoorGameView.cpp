@@ -3137,6 +3137,7 @@ bool OutdoorGameView::initialize(
         if (m_pOutdoorMapData->lightingData->hasBakedSources())
         {
             m_bakedSkySamplerHandle = bgfx::createUniform("s_texBakedSky", bgfx::UniformType::Sampler);
+            m_bakedSunDirectSamplerHandle = bgfx::createUniform("s_texBakedSunDirect", bgfx::UniformType::Sampler);
             m_bakedLightingUniformHandle = bgfx::createUniform("u_bakedLighting", bgfx::UniformType::Vec4, 2);
             m_bakedTerrainBoundsUniformHandle = bgfx::createUniform("u_bakedTerrainBounds", bgfx::UniformType::Vec4);
         }
@@ -3194,7 +3195,8 @@ bool OutdoorGameView::initialize(
             && !bgfx::isValid(m_bmodelLightmapSamplerHandle))
         || (m_gameSettings.lightmaps && m_pOutdoorMapData->lightingData
             && m_pOutdoorMapData->lightingData->hasBakedSources()
-            && (!bgfx::isValid(m_bakedSkySamplerHandle) || !bgfx::isValid(m_bakedLightingUniformHandle)
+            && (!bgfx::isValid(m_bakedSkySamplerHandle) || !bgfx::isValid(m_bakedSunDirectSamplerHandle)
+                || !bgfx::isValid(m_bakedLightingUniformHandle)
                 || !bgfx::isValid(m_bakedTerrainBoundsUniformHandle))))
     {
         std::cerr << "OutdoorGameView failed to create bgfx resources.\n";
@@ -3743,6 +3745,9 @@ void OutdoorGameView::shutdown()
         m_worldFxRenderResources.reset();
         m_outdoorTexturedFogProgramHandle = BGFX_INVALID_HANDLE;
         m_outdoorTerrainFogProgramHandle = BGFX_INVALID_HANDLE;
+        m_outdoorTexturedFogShadowProgramHandle = BGFX_INVALID_HANDLE;
+        m_outdoorTerrainShadowProgramHandle = BGFX_INVALID_HANDLE;
+        m_outdoorBModelShadowProgramHandle = BGFX_INVALID_HANDLE;
         m_outdoorBModelLightmapProgramHandle = BGFX_INVALID_HANDLE;
         m_outdoorForcePerspectiveProgramHandle = BGFX_INVALID_HANDLE;
         m_bloodSplatVertexBufferHandle = BGFX_INVALID_HANDLE;
@@ -3750,11 +3755,13 @@ void OutdoorGameView::shutdown()
         m_bloodSplatTextureHandle = BGFX_INVALID_HANDLE;
         m_forcePerspectiveSolidTextureHandle = BGFX_INVALID_HANDLE;
         m_bmodelLightmapTextureHandles.clear();
+        m_directSunTextureHandles.clear();
         m_bmodelWhiteLightmapTextureHandle = BGFX_INVALID_HANDLE;
         m_terrainTextureSamplerHandle = BGFX_INVALID_HANDLE;
         m_terrainWaterSamplerHandle = BGFX_INVALID_HANDLE;
         m_bmodelLightmapSamplerHandle = BGFX_INVALID_HANDLE;
         m_bakedSkySamplerHandle = BGFX_INVALID_HANDLE;
+        m_bakedSunDirectSamplerHandle = BGFX_INVALID_HANDLE;
         m_bakedLightingUniformHandle = BGFX_INVALID_HANDLE;
         m_bakedTerrainBoundsUniformHandle = BGFX_INVALID_HANDLE;
         m_outdoorBillboardAmbientUniformHandle = BGFX_INVALID_HANDLE;
@@ -3844,6 +3851,15 @@ void OutdoorGameView::shutdown()
 
     ParticleRenderer::shutdownResources(m_worldFxRenderResources);
 
+    for (bgfx::ProgramHandle *pProgram : {&m_outdoorTerrainShadowProgramHandle,
+        &m_outdoorTexturedFogShadowProgramHandle, &m_outdoorBModelShadowProgramHandle})
+    {
+        if (bgfx::isValid(*pProgram))
+        {
+            bgfx::destroy(*pProgram);
+            *pProgram = BGFX_INVALID_HANDLE;
+        }
+    }
     if (bgfx::isValid(m_outdoorTerrainFogProgramHandle))
     {
         bgfx::destroy(m_outdoorTerrainFogProgramHandle);
@@ -3874,6 +3890,7 @@ void OutdoorGameView::shutdown()
         m_terrainTextureArrayHandle = BGFX_INVALID_HANDLE;
     }
 
+    OutdoorRenderer::destroySunReceiverResources(*this);
     for (bgfx::TextureHandle textureHandle : m_bmodelLightmapTextureHandles)
     {
         if (bgfx::isValid(textureHandle))
@@ -3914,7 +3931,8 @@ void OutdoorGameView::shutdown()
     }
 
     for (bgfx::UniformHandle *pHandle :
-        {&m_bakedSkySamplerHandle, &m_bakedLightingUniformHandle, &m_bakedTerrainBoundsUniformHandle})
+        {&m_bakedSkySamplerHandle, &m_bakedSunDirectSamplerHandle,
+            &m_bakedLightingUniformHandle, &m_bakedTerrainBoundsUniformHandle})
     {
         if (bgfx::isValid(*pHandle))
         {

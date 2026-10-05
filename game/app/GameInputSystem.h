@@ -7,6 +7,7 @@
 
 #include <array>
 #include <cstdint>
+#include <optional>
 #include <span>
 #include <string>
 
@@ -67,6 +68,7 @@ private:
     };
 
     GameplayInputFrame m_frame = {};
+    std::optional<std::array<float, 2>> m_mobilePointerPosition;
     std::string m_pendingTextInput;
     std::array<uint16_t, SDL_SCANCODE_COUNT> m_pendingKeyboardPressCounts = {};
     std::array<bool, SDL_SCANCODE_COUNT> m_previousKeyboardHeld = {};

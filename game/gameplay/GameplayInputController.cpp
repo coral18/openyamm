@@ -232,9 +232,7 @@ void GameplayInputController::handleStandardUiHotkeys(
 
         if (characterScreenOpen)
         {
-            context.characterScreen().open = false;
-            context.characterScreen().dollJewelryOverlayOpen = false;
-            context.characterScreen().adventurersInnRosterOverlayOpen = false;
+            context.closeCharacterScreen();
             context.interactionState().menuToggleLatch = true;
             return;
         }

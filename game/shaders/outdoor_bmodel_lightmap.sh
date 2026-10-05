@@ -98,8 +98,8 @@ void main()
 
 #if BAKED_SOURCES
     textureColor.rgb = mix(textureColor.rgb, u_fogColor.rgb, u_fogDensities.z);
-    vec3 staticLighting = bakedSourceLighting(texture2D(s_texLightmap, v_lightmapUv),
-                                              texture2D(s_texBakedSky, v_lightmapUv));
+    vec3 staticLighting = bakedShadowedSourceLighting(texture2D(s_texLightmap, v_lightmapUv),
+        texture2D(s_texBakedSky, v_lightmapUv), v_lightmapUv, v_worldPosition);
     vec4 litTextureColor = vec4(bakedSurfaceColor(textureColor.rgb,
         staticLighting + getFxLighting(v_worldPosition)), textureColor.a);
 #else

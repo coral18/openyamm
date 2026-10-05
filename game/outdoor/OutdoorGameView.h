@@ -701,6 +701,9 @@ private:
     bgfx::ProgramHandle m_outdoorLitBillboardProgramHandle;
     bgfx::ProgramHandle m_outdoorTexturedFogProgramHandle;
     bgfx::ProgramHandle m_outdoorTerrainFogProgramHandle;
+    bgfx::ProgramHandle m_outdoorTexturedFogShadowProgramHandle = BGFX_INVALID_HANDLE;
+    bgfx::ProgramHandle m_outdoorTerrainShadowProgramHandle = BGFX_INVALID_HANDLE;
+    bgfx::ProgramHandle m_outdoorBModelShadowProgramHandle = BGFX_INVALID_HANDLE;
     TerrainDecorationRenderer m_terrainDecorations;
     WaterRenderer m_waterRenderer;
     bgfx::UniformHandle m_worldClipPlaneUniformHandle = BGFX_INVALID_HANDLE;
@@ -721,11 +724,13 @@ private:
     bgfx::TextureHandle m_bloodSplatTextureHandle;
     bgfx::TextureHandle m_forcePerspectiveSolidTextureHandle;
     std::vector<bgfx::TextureHandle> m_bmodelLightmapTextureHandles;
+    std::vector<bgfx::TextureHandle> m_directSunTextureHandles;
     bgfx::TextureHandle m_bmodelWhiteLightmapTextureHandle;
     bgfx::UniformHandle m_terrainTextureSamplerHandle;
     bgfx::UniformHandle m_terrainWaterSamplerHandle;
     bgfx::UniformHandle m_bmodelLightmapSamplerHandle;
     bgfx::UniformHandle m_bakedSkySamplerHandle = BGFX_INVALID_HANDLE;
+    bgfx::UniformHandle m_bakedSunDirectSamplerHandle = BGFX_INVALID_HANDLE;
     bgfx::UniformHandle m_bakedLightingUniformHandle = BGFX_INVALID_HANDLE;
     bgfx::UniformHandle m_bakedTerrainBoundsUniformHandle = BGFX_INVALID_HANDLE;
     bgfx::UniformHandle m_outdoorBillboardAmbientUniformHandle;

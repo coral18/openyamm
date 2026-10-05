@@ -1797,3 +1797,4 @@ its own."		End deliver Fire Resistance Scrolls quest	654. James		James
 1793	Friend!				Breach find friends topic
 1794	Runaway Chaos				Runaway Chaos	1092
 1795
+10000	Dimensional travel				Verdant	803

@@ -1,7 +1,9 @@
 # Native baked outdoor lighting
 
-The ClassicOdm renderer loads version-3 `.lighting` sidecars. New Sorpigal and Ravenshore have
-generated data in their world `maps/` directories. This retains native geometry, textures, collision,
+The ClassicOdm renderer loads version-3/4/5 `.lighting` sidecars. All 42 installed MM6/MM7/MM8 outdoor bakes
+are version 5, retaining the original surface/sprite illumination and adding explicit model sun probes
+and direct-only receiver pages for animated mesh shadows. See [the binary contract](FORMAT.md).
+This retains native geometry, textures, collision,
 events and animated sprites. See [the implementation plan](../../../docs/BAKED_OUTDOOR_LIGHTING_IMPLEMENTATION.md)
 and [validation status](STATUS.md) for completed checks and remaining acceptance work.
 
@@ -86,7 +88,7 @@ placeholder materials. The resolved file paths are recorded as bake dependencies
 found no unresolved face or terrain names in the 12 failed maps after this fix; full retry bake results
 remain to be checked. Run focused tests with:
 
-Version 3 is the only runtime format. To migrate installed legacy MM6–MM9 sidecars once, including a
+Versions 3 and 4 are supported runtime formats. To migrate installed legacy MM6–MM9 sidecars once, including a
 linear-light 2048-to-1024 terrain conversion for paired bakes, run:
 
 ```sh

@@ -20,6 +20,17 @@ namespace
 constexpr int MinimumWindowAspectWidth = 4;
 constexpr int MinimumWindowAspectHeight = 3;
 
+int64_t framePercentileMicroseconds(std::vector<uint64_t> &values, size_t percentile)
+{
+    if (values.empty())
+    {
+        return -1;
+    }
+    const size_t index = (values.size() - 1) * percentile / 100;
+    std::nth_element(values.begin(), values.begin() + index, values.end());
+    return int64_t(values[index] / 1000);
+}
+
 #if defined(__ANDROID__)
 constexpr Sint64 AndroidInputTypeClassText = 0x00000001;
 constexpr Sint64 AndroidInputTypeTextVariationVisiblePassword = 0x00000090;
@@ -462,6 +473,9 @@ int EngineApplication::run() const
     uint64_t fpsWindowSizeNanoseconds = 0;
     uint64_t fpsRenderCallbackNanoseconds = 0;
     uint64_t fpsBgfxFrameNanoseconds = 0;
+    std::vector<uint64_t> cpuFrameTimes;
+    std::vector<uint64_t> gpuFrameTimes;
+    uint32_t lastGpuFrameNumber = UINT32_MAX;
     const auto syncManagedTextInput = [this, &pWindow]()
     {
         if (!m_textInputActiveCallback)
@@ -628,6 +642,15 @@ int EngineApplication::run() const
             {
                 fpsBgfxFrameNanoseconds += frameBgfxFrameNanoseconds;
                 fpsLoopNanoseconds += frameLoopNanoseconds;
+                cpuFrameTimes.push_back(frameLoopNanoseconds);
+                const bgfx::Stats *pStats = bgfx::getStats();
+                if (pStats != nullptr && pStats->gpuTimerFreq > 0 && pStats->gpuTimeEnd > pStats->gpuTimeBegin
+                    && pStats->gpuFrameNum != lastGpuFrameNumber)
+                {
+                    gpuFrameTimes.push_back(uint64_t(double(pStats->gpuTimeEnd - pStats->gpuTimeBegin)
+                        / double(pStats->gpuTimerFreq) * 1000000000.0));
+                    lastGpuFrameNumber = pStats->gpuFrameNum;
+                }
             }
 
             if (logFrameHitches && frameLoopNanoseconds >= hitchThresholdNanoseconds)
@@ -703,7 +726,22 @@ int EngineApplication::run() const
                               << " avg_bgfx_frame_us=" << nanosecondsToMicroseconds(averageNanoseconds(
                                   fpsBgfxFrameNanoseconds,
                                   fpsSampleFrameCount))
+                              << " cpu_p50_us=" << framePercentileMicroseconds(cpuFrameTimes, 50)
+                              << " cpu_p95_us=" << framePercentileMicroseconds(cpuFrameTimes, 95)
+                              << " gpu_samples=" << gpuFrameTimes.size()
+                              << " gpu_p50_us=" << framePercentileMicroseconds(gpuFrameTimes, 50)
+                              << " gpu_p95_us=" << framePercentileMicroseconds(gpuFrameTimes, 95)
                               << '\n';
+                    const bgfx::Stats *pStats = bgfx::getStats();
+                    if (pStats != nullptr)
+                    {
+                        std::cout << "[GpuFrameResources] draws=" << pStats->numDraw
+                                  << " texture_bytes=" << pStats->textureMemoryUsed
+                                  << " target_bytes=" << pStats->rtMemoryUsed
+                                  << " transient_vb_bytes=" << pStats->transientVbUsed << '\n';
+                    }
+                    cpuFrameTimes.clear();
+                    gpuFrameTimes.clear();
                 }
 
                 fpsSampleSeconds = 0.0f;

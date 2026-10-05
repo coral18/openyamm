@@ -7462,6 +7462,164 @@ int HeadlessGameplayDiagnostics::runRegressionSuite(
             }
         };
 
+    runCase("mm6_demon_actor_models_keep_simulation_and_death_rules", [&](std::string &failure)
+    {
+        if (!gameDataLoader.loadMapByFileNameForHeadlessGameplay(assetFileSystem, "oute3.odm"))
+        {
+            failure = "could not load New Sorpigal";
+            return false;
+        }
+        RegressionScenario scenario;
+        if (!initializeRegressionScenario(gameDataLoader, *gameDataLoader.getSelectedMap(), scenario))
+        {
+            failure = "could not initialize New Sorpigal";
+            return false;
+        }
+        const size_t first = scenario.world.mapActorCount();
+        if (!scenario.world.summonHostileMonsterById(502, 3, -9728, -11919, 161, 0)
+            || scenario.world.mapActorCount() != first + 3)
+        {
+            failure = "normal monster factory did not spawn three demons";
+            return false;
+        }
+        WorldFxSystem fx;
+        if (!fx.configureActorModels(assetFileSystem, "worlds/mm6/models/actors.yml",
+                gameDataLoader.getMonsterTable(), failure))
+        {
+            return false;
+        }
+        fx.syncActorModels(scenario.world);
+        if (fx.models().size() != 3)
+        {
+            failure = "three ordinary actors did not acquire three model instances";
+            return false;
+        }
+        const OutdoorWorldRuntime::Snapshot initial = scenario.world.snapshot();
+        for (size_t index = first; index < first + 3; ++index)
+        {
+            const OutdoorWorldRuntime::MapActorState *pActor = scenario.world.mapActorState(index);
+            if (pActor->monsterId != 502 || !pActor->hostileToParty || pActor->currentHp != 100
+                || pActor->radius != 65 || pActor->height != 179 || !fx.actorModelBounds(index)->valid)
+            {
+                failure = "demon data or model bounds differ from the ordinary actor";
+                return false;
+            }
+        }
+        // Force each presentation state without advancing AI; synchronization must never mutate the simulation.
+        for (int animation = 0; animation < 8; ++animation)
+        {
+            OutdoorWorldRuntime::Snapshot pose = initial;
+            for (size_t index = first; index < first + 3; ++index)
+            {
+                pose.mapActors[index].animation = OutdoorWorldRuntime::ActorAnimation(animation);
+                pose.mapActors[index].animationTimeTicks = 32;
+            }
+            scenario.world.restoreSnapshot(pose);
+            fx.syncActorModels(scenario.world);
+            fx.updateParticles(0.2f, false);
+            for (size_t index = first; index < first + 3; ++index)
+            {
+                const OutdoorWorldRuntime::MapActorState *pActor = scenario.world.mapActorState(index);
+                if (pActor->animationTimeTicks != 32 || pActor->preciseX != pose.mapActors[index].preciseX
+                    || pActor->preciseY != pose.mapActors[index].preciseY || pActor->currentHp != 100)
+                {
+                    failure = "presentation advanced or changed an actor";
+                    return false;
+                }
+            }
+        }
+        scenario.world.restoreSnapshot(initial);
+        scenario.world.applyPartyAttackToMapActor(first, 1, -9728, -11319, 161);
+        fx.syncActorModels(scenario.world);
+        GameplayRuntimeActorState hit;
+        scenario.world.actorRuntimeState(first, hit);
+        if (hit.animationState != ActorAiAnimationState::GotHit)
+        {
+            failure = "ordinary damage did not enter the hit animation";
+            return false;
+        }
+        scenario.world.applyPartyAttackToMapActor(first, 10000, -9728, -11319, 161);
+        scenario.world.updateMapActors(1.0f / 128, -9728, -11319, 161);
+        fx.syncActorModels(scenario.world);
+        GameplayRuntimeActorState dying;
+        scenario.world.actorRuntimeState(first, dying);
+        if (dying.animationState != ActorAiAnimationState::Dying || !fx.hasActorModel(first))
+        {
+            failure = "death did not retain the animated model";
+            return false;
+        }
+        for (int tick = 0; tick < 256; ++tick)
+        {
+            scenario.world.updateMapActors(1.0f / 128, -9728, -11319, 161);
+        }
+        fx.syncActorModels(scenario.world);
+        if (fx.hasActorModel(first) || fx.models().size() != 2)
+        {
+            failure = "NoCorpse demon remained visible after the native death timer";
+            return false;
+        }
+        scenario.world.restoreSnapshot(initial);
+        fx.syncActorModels(scenario.world);
+        if (fx.models().size() != 3)
+        {
+            failure = "restoring actors did not recreate their derived model instances";
+            return false;
+        }
+        fx.reset();
+        if (fx.models().size() != 0 || fx.hasActorModel(first))
+        {
+            failure = "map reset retained actor models";
+            return false;
+        }
+        return true;
+    });
+
+    runCase("mm6_demon_actor_models_indoor_binding", [&](std::string &failure)
+    {
+        if (!gameDataLoader.loadMapByFileNameForHeadlessGameplay(assetFileSystem, "6d07.blv"))
+        {
+            failure = "could not load the New Sorpigal temple";
+            return false;
+        }
+        IndoorRegressionScenario scenario;
+        if (!initializeIndoorRegressionScenario(gameDataLoader, *gameDataLoader.getSelectedMap(), scenario))
+        {
+            failure = "could not initialize the temple";
+            return false;
+        }
+        const size_t first = scenario.world.mapActorCount();
+        if (!scenario.world.summonHostileMonsterById(502, 3, 0, 0, 0, 0))
+        {
+            failure = "indoor factory could not summon demons";
+            return false;
+        }
+        WorldFxSystem fx;
+        if (!fx.configureActorModels(assetFileSystem, "worlds/mm6/models/actors.yml",
+                gameDataLoader.getMonsterTable(), failure))
+        {
+            return false;
+        }
+        fx.syncActorModels(scenario.world);
+        for (size_t index = first; index < first + 3; ++index)
+        {
+            GameplayRuntimeActorState state;
+            if (!scenario.world.actorRuntimeState(index, state) || state.monsterId != 502
+                || !fx.hasActorModel(index) || !fx.actorModelBounds(index)->valid)
+            {
+                failure = "indoor demon did not receive a model bound to the same actor";
+                return false;
+            }
+            const IndoorWorldRuntime::MapActorAiState *pAi = scenario.world.mapActorAiState(index);
+            if (pAi == nullptr || state.animationTimeTicks != pAi->animationTimeTicks
+                || state.animationState != pAi->animationState || state.yawRadians != pAi->yawRadians)
+            {
+                failure = "indoor presentation did not expose the native AI pose clock";
+                return false;
+            }
+        }
+        return fx.models().size() == 3;
+    });
+
     for (bool indoors : {false, true})
     {
         for (bool doorway : {false, true})

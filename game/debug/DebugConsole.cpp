@@ -333,6 +333,7 @@ void DebugConsole::setDebugToggleStates(bool immortal, bool unlimitedMana, bool 
 void DebugConsole::setEnabled(bool enabled)
 {
     m_enabled = enabled;
+    m_focusCommandInput = enabled;
     m_scrollToBottom = true;
 }
 

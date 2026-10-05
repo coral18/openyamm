@@ -74,6 +74,8 @@ TEST_CASE("screenshot launch directives are read but never persisted")
             << "effect_spawn_x=1\neffect_spawn_y=2\neffect_spawn_z=3\n"
             << "effect_spawn_scale=2\neffect_spawn_yaw_radians=1.5\n"
             << "effect_spawn_count=32\neffect_stats_delay_seconds=0.75\n"
+            << "actor_models=true\nactor_spawn_id=502\nactor_spawn_count=3\n"
+            << "actor_spawn_x=10\nactor_spawn_y=20\nactor_spawn_z=30\n"
             << "model_spawn_path=engine/models/fixtures/shared_model_fixture.glb\n"
             << "model_spawn_clip=bob_spin\n"
             << "model_spawn_x=4\nmodel_spawn_y=5\nmodel_spawn_z=6\n"
@@ -93,6 +95,11 @@ TEST_CASE("screenshot launch directives are read but never persisted")
     CHECK(settings->effectSpawnYawRadians == 1.5f);
     CHECK_EQ(settings->effectSpawnCount, 32u);
     CHECK_EQ(settings->effectStatsDelaySeconds, doctest::Approx(0.75f));
+    CHECK(settings->actorModels);
+    CHECK_EQ(settings->actorSpawnId, 502);
+    CHECK_EQ(settings->actorSpawnCount, 3u);
+    const std::array<float, 3> expectedActorPosition = {10, 20, 30};
+    CHECK(settings->actorSpawnPosition == expectedActorPosition);
     CHECK(settings->modelSpawnPath == "engine/models/fixtures/shared_model_fixture.glb");
     CHECK(settings->modelSpawnClip == "bob_spin");
     const std::array<float, 3> expectedModelPosition = {4.0f, 5.0f, 6.0f};
@@ -110,6 +117,8 @@ TEST_CASE("screenshot launch directives are read but never persisted")
     CHECK(reloaded->effectSpawnId.empty());
     CHECK_EQ(reloaded->effectSpawnCount, 1u);
     CHECK_EQ(reloaded->effectStatsDelaySeconds, doctest::Approx(-1.0f));
+    CHECK_FALSE(reloaded->actorModels);
+    CHECK_EQ(reloaded->actorSpawnId, 0);
     CHECK(reloaded->modelSpawnPath.empty());
     CHECK(reloaded->modelSpawnClip.empty());
     CHECK_FALSE(reloaded->modelSpawnMarkers);

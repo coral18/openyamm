@@ -9,6 +9,9 @@
 #include "game/party/PartySpellSystem.h"
 #include "game/party/SpellIds.h"
 #include "game/tables/ObjectTable.h"
+#include "game/tables/MonsterTable.h"
+#include "engine/AssetFileSystem.h"
+#include <yaml-cpp/yaml.h>
 
 #include <algorithm>
 #include <cmath>
@@ -282,6 +285,9 @@ void WorldFxSystem::reset()
     m_namedSoundInstances.clear();
     m_namedEffectLibrary.clear();
     m_namedEffectResources.clear();
+    m_actorModels.clear();
+    m_actorModelBindings.clear();
+    m_actorModelsConfigured = false;
     m_models.clear();
     m_modelAssets.clear();
     m_glowBillboards.clear();
@@ -293,6 +299,173 @@ void WorldFxSystem::reset()
     m_seenImpactIds.clear();
     m_projectileImpactEffectRebinds.clear();
     m_attachedImpactEffects.clear();
+}
+
+bool WorldFxSystem::configureActorModels(const Engine::AssetFileSystem &assets, const std::string &manifestPath,
+    const MonsterTable &monsters, std::string &error)
+{
+    if (m_actorModelsConfigured)
+    {
+        return true;
+    }
+    const std::optional<std::string> text = assets.readTextFile(manifestPath);
+    if (!text)
+    {
+        m_actorModelsConfigured = true;
+        return true; // Worlds without a model binding keep their native presentation.
+    }
+    std::unordered_map<std::string, ActorModelBinding> bindings;
+    try
+    {
+        const YAML::Node document = YAML::Load(*text);
+        if (!document["actors"].IsSequence())
+        {
+            error = "actor model manifest requires an actors sequence: " + manifestPath;
+            return false;
+        }
+        constexpr std::array<const char *, 8> StateNames = {
+            "standing", "walking", "attack_melee", "attack_ranged", "hit", "dying", "dead", "fidget"};
+        for (const YAML::Node &entry : document["actors"])
+        {
+            const std::string descriptor = entry["descriptor"].as<std::string>();
+            if (monsters.findByInternalName(descriptor) == nullptr || bindings.contains(descriptor))
+            {
+                error = "unknown or duplicate actor model descriptor: " + descriptor;
+                return false;
+            }
+            const Engine::ModelLoadResult loaded = m_modelAssets.load(assets, entry["model"].as<std::string>());
+            if (!loaded)
+            {
+                error = loaded.error;
+                return false;
+            }
+            ActorModelBinding binding;
+            binding.asset = loaded.asset;
+            binding.scale = entry["scale"].as<float>();
+            binding.yawOffset = entry["yaw_offset"].as<float>(0.0f);
+            binding.zOffset = entry["z_offset"].as<float>(0.0f);
+            if (!std::isfinite(binding.scale) || binding.scale <= 0 || !std::isfinite(binding.yawOffset)
+                || !std::isfinite(binding.zOffset))
+            {
+                error = "invalid actor model placement: " + descriptor;
+                return false;
+            }
+            for (size_t i = 0; i < StateNames.size(); ++i)
+            {
+                const std::string clipName = entry["clips"][StateNames[i]].as<std::string>();
+                const std::optional<uint32_t> clip = binding.asset->findClip(clipName);
+                if (!clip)
+                {
+                    error = "actor model clip not found: " + clipName;
+                    return false;
+                }
+                binding.clips[i] = *clip;
+            }
+            bindings.emplace(descriptor, std::move(binding));
+        }
+    }
+    catch (const YAML::Exception &exception)
+    {
+        error = manifestPath + ": " + exception.what();
+        return false;
+    }
+    m_actorModelBindings = std::move(bindings);
+    m_actorModelsConfigured = true;
+    return true;
+}
+
+void WorldFxSystem::syncActorModels(const IGameplayWorldRuntime &world)
+{
+    if (m_actorModelBindings.empty())
+    {
+        return;
+    }
+    std::unordered_set<size_t> retained;
+    const MonsterTable *pMonsters = world.monsterTable();
+    for (size_t index = 0; pMonsters != nullptr && index < world.mapActorCount(); ++index)
+    {
+        GameplayRuntimeActorState state;
+        if (!world.actorRuntimeState(index, state) || state.isInvisible)
+        {
+            continue;
+        }
+        const MonsterEntry *pMonster = pMonsters->findById(state.monsterId);
+        if (pMonster == nullptr)
+        {
+            continue;
+        }
+        const auto bindingIterator = m_actorModelBindings.find(pMonster->internalName);
+        if (bindingIterator == m_actorModelBindings.end())
+        {
+            continue;
+        }
+        const ActorModelBinding &binding = bindingIterator->second;
+        auto instance = m_actorModels.find(index);
+        if (instance != m_actorModels.end()
+            && (instance->second.actorId != state.actorId || instance->second.monsterId != state.monsterId))
+        {
+            m_models.destroy(instance->second.handle);
+            m_actorModels.erase(instance);
+            instance = m_actorModels.end();
+        }
+        if (instance == m_actorModels.end())
+        {
+            const Engine::ModelInstanceHandle handle = m_models.create(binding.asset);
+            instance = m_actorModels.emplace(index, ActorModelInstance{handle, state.actorId, state.monsterId}).first;
+        }
+        retained.insert(index);
+        m_models.setOutlineColor(instance->second.handle, 0);
+        const size_t animationIndex = size_t(state.animationState);
+        if (animationIndex >= binding.clips.size())
+        {
+            continue;
+        }
+        const uint32_t clip = binding.clips[animationIndex];
+        float time = std::max(state.animationTimeTicks, 0.0f) / 128.0f;
+        const float duration = binding.asset->clips[clip].durationSeconds;
+        if ((state.animationState == ActorAiAnimationState::Standing
+                || state.animationState == ActorAiAnimationState::Walking) && duration > 0)
+        {
+            time = std::fmod(time, duration);
+        }
+        const Engine::ModelTransform transform = Engine::gltfModelPlacement(
+            {state.preciseX, state.preciseY, state.preciseZ + binding.zOffset},
+            state.yawRadians + binding.yawOffset,
+            binding.scale * state.visualScale * (pMonster->height > 0 ? float(state.height) / pMonster->height : 1.0f));
+        m_models.sample(instance->second.handle, clip, time, transform);
+    }
+    for (auto iterator = m_actorModels.begin(); iterator != m_actorModels.end();)
+    {
+        if (!retained.contains(iterator->first))
+        {
+            m_models.destroy(iterator->second.handle);
+            iterator = m_actorModels.erase(iterator);
+        }
+        else
+        {
+            ++iterator;
+        }
+    }
+}
+
+bool WorldFxSystem::hasActorModel(size_t actorIndex) const
+{
+    return m_actorModels.contains(actorIndex);
+}
+
+const Engine::ModelBounds *WorldFxSystem::actorModelBounds(size_t actorIndex) const
+{
+    const auto iterator = m_actorModels.find(actorIndex);
+    return iterator != m_actorModels.end() ? m_models.bounds(iterator->second.handle) : nullptr;
+}
+
+void WorldFxSystem::setActorModelOutline(size_t actorIndex, uint32_t colorAbgr)
+{
+    const auto iterator = m_actorModels.find(actorIndex);
+    if (iterator != m_actorModels.end())
+    {
+        m_models.setOutlineColor(iterator->second.handle, colorAbgr);
+    }
 }
 
 size_t WorldFxSystem::NamedSoundKeyHash::operator()(const NamedSoundKey &key) const

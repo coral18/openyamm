@@ -258,6 +258,21 @@ void GameplayHudInputController::handlePartyPortraitInput(
         }
     }
 
+    if (config.touchItemReleased)
+    {
+        context.interactionState().partyPortraitClickLatch = false;
+        context.interactionState().partyPortraitPressedIndex.reset();
+        context.interactionState().overlayPersonalBuffClickLatch = false;
+        context.interactionState().overlayPersonalBuffPressedIndex.reset();
+        const std::optional<size_t> memberIndex = context.resolvePartyPortraitIndexAtPoint(
+            config.screenWidth, config.screenHeight, config.pointerX, config.pointerY);
+        if (memberIndex && context.heldInventoryItem().active)
+        {
+            activatePartyPortrait(context, *memberIndex, config);
+        }
+        return;
+    }
+
     const HudPointerState pointerState = {
         config.pointerX,
         config.pointerY,

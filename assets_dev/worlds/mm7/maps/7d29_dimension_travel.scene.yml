@@ -1,0 +1,13 @@
+format_version: 1
+kind: indoor_scene_overlay
+source:
+  geometry_file: 7d29.blv
+initial_state:
+  # Courtyard water only; restoration texture groups retain their existing ids.
+  face_attribute_overrides:
+    - {face_index: 1668, legacy_attributes: 0x02000110, cog_number: 65031, cog_triggered: 65031}
+    - {face_index: 1669, legacy_attributes: 0x02000110, cog_number: 65031, cog_triggered: 65031}
+    - {face_index: 1689, legacy_attributes: 0x02000110, cog_number: 65031, cog_triggered: 65031}
+    - {face_index: 1697, legacy_attributes: 0x02000110, cog_number: 65031, cog_triggered: 65031}
+    - {face_index: 4669, legacy_attributes: 0x02000110, cog_number: 65031, cog_triggered: 65031}
+    - {face_index: 4670, legacy_attributes: 0x02000110, cog_number: 65031, cog_triggered: 65031}

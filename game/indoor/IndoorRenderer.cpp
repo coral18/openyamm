@@ -4194,11 +4194,35 @@ void IndoorRenderer::render(
     }
 
     const uint64_t modelBeginTickCount = collectRenderDiagnostics ? SDL_GetTicksNS() : 0;
+    m_modelRenderer.beginFrame();
+    Engine::ModelRenderLighting modelLighting;
+    modelLighting.ambient = lightingFrame.ambient;
+    modelLighting.direct = 0.0f;
+    modelLighting.environmentColor = {lightingFrame.ambient, lightingFrame.ambient, lightingFrame.ambient};
+    IndoorFaceGeometryCache modelGeometryCache(
+        m_worldFxSystem.models().size() != 0 ? m_pIndoorMapData->faces.size() : 0);
     m_modelRenderer.render(
         m_worldFxSystem.models(),
         MainViewId,
         {eye.x, eye.y, eye.z},
-        {{-0.35f, 0.55f, 0.76f}, 0.55f, 0.45f});
+        modelLighting,
+        [&](const Engine::ModelBounds &modelBounds)
+        {
+            Engine::ModelRenderLighting selected = modelLighting;
+            const bx::Vec3 center = {(modelBounds.min[0] + modelBounds.max[0]) * 0.5f,
+                (modelBounds.min[1] + modelBounds.max[1]) * 0.5f,
+                (modelBounds.min[2] + modelBounds.max[2]) * 0.5f};
+            const int16_t sector = findIndoorSectorForPoint(
+                *m_pIndoorMapData, m_renderVertices, center, &modelGeometryCache).value_or(-1);
+            const IndoorLightSelectionBounds bounds = {{modelBounds.min[0], modelBounds.min[1], modelBounds.min[2]},
+                {modelBounds.max[0], modelBounds.max[1], modelBounds.max[2]}, modelBounds.valid};
+            const IndoorDrawLightSet lights = IndoorLightingRuntime::selectDrawLightSetForBounds(
+                lightingFrame, center, viewForward, sector, -1, bounds, pLightingStats, nullptr, true);
+            selected.pointPositions = lights.positions;
+            selected.pointColors = lights.colors;
+            selected.pointCount = uint32_t(lights.lightCount);
+            return selected;
+        });
     if (collectRenderDiagnostics)
     {
         m_indoorPerformanceDiagnostics.renderParticleNanoseconds += SDL_GetTicksNS() - modelBeginTickCount;
@@ -7936,6 +7960,14 @@ void IndoorRenderer::renderActorPreviewBillboards(
 
     for (const BillboardDrawItem &drawItem : drawItems)
     {
+        if (m_worldFxSystem.hasActorModel(drawItem.actorIndex))
+        {
+            if (pReflection == nullptr)
+            {
+                m_worldFxSystem.setActorModelOutline(drawItem.actorIndex, drawItem.hoveredOutlineColorAbgr);
+            }
+            continue;
+        }
         const SpriteFrameEntry &frame = *drawItem.pFrame;
         const BillboardTextureHandle &texture = *drawItem.pTexture;
         const float spriteScale = std::max(frame.scale * drawItem.heightScale, 0.01f);
@@ -12106,6 +12138,15 @@ IndoorRenderer::InspectHit IndoorRenderer::inspectAtCursor(
             [&](const RuntimeActorBillboard &actor, float &distance, bool &billboardTested) -> bool
             {
                 billboardTested = false;
+                const Engine::ModelBounds *pBounds = m_worldFxSystem.actorModelBounds(actor.actorIndex);
+                if (pBounds != nullptr && pBounds->valid)
+                {
+                    billboardTested = true;
+                    return intersectRayAabb(rayOrigin, rayDirection,
+                        {pBounds->min[0], pBounds->min[1], pBounds->min[2]},
+                        {pBounds->max[0], pBounds->max[1], pBounds->max[2]}, distance);
+                }
+
                 const IndoorWorldRuntime::MapActorAiState *pActorAiState =
                     m_pSceneRuntime != nullptr
                         ? m_pSceneRuntime->worldRuntime().mapActorAiState(actor.actorIndex)
@@ -13043,8 +13084,7 @@ void IndoorRenderer::updateCameraFromInput(
     const bx::Vec3 right = {sinYaw, -cosYaw, 0.0f};
     const bool runWalkModifier =
         pKeyboardState[SDL_SCANCODE_LSHIFT] || pKeyboardState[SDL_SCANCODE_RSHIFT];
-    const bool turboPressed =
-        pKeyboardState[SDL_SCANCODE_LCTRL] || pKeyboardState[SDL_SCANCODE_RCTRL];
+    const bool turboPressed = input.turboMovementHeld();
     const bool jumpPressed = input.action(KeyboardAction::Jump).held;
     const bool jumpRequested = allowWorldInput && jumpPressed && !m_jumpHeld;
     m_jumpHeld = jumpPressed;
