@@ -397,7 +397,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install --no-install-recommends -y elfutils flatpak flatpak-builder ostree \
-            libgl1-mesa-dev libx11-dev libxext-dev python3
+            librsvg2-common libgl1-mesa-dev libx11-dev libxext-dev python3
 
       - name: Build Flatpak bundle
         env:
