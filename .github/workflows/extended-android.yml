@@ -20,8 +20,8 @@ jobs:
     timeout-minutes: 240
     env:
       CMAKE_BUILD_PARALLEL_LEVEL: 4
-      OPENYAMM_ANDROID_VERSION_NAME: 0.1.0-bootstrap
-      OPENYAMM_ANDROID_VERSION_CODE: 101
+      OPENYAMM_ANDROID_VERSION_NAME: 0.1.1-bootstrap
+      OPENYAMM_ANDROID_VERSION_CODE: 102
 
     steps:
       - name: Check out sources
@@ -46,6 +46,8 @@ jobs:
             /tools/SpriteAtlasEncode.h
             /tools/cook_sprite_atlases.py
             /tools/package_runtime_assets.py
+            /tools/verify_extended_apk.py
+            /tests/test_extended_apk.py
             /assets_cooked/android/sprites_new/
             /assets_dev/_legacy/sprites_original/
             /assets_dev/engine/
@@ -64,6 +66,32 @@ jobs:
             android/*.gradle
             android/gradle.properties
             android/app/*.gradle
+
+      - name: Cache bootstrap debug signing key
+        uses: actions/cache@v4
+        with:
+          path: ~/.android/debug.keystore
+          key: openyamm-extended-bootstrap-debug-keystore-v1
+
+      - name: Test APK content validation
+        run: python3 tests/test_extended_apk.py
+
+      - name: Cache official release baseline
+        uses: actions/cache@v4
+        with:
+          path: build/extended-bootstrap/OpenYAMM-1.0-android-arm64.apk
+          key: openyamm-official-1.0-76938005894690ff636be14677b4b0eb9f6f29e91e7237ce4d9bfc36b3662b47
+
+      - name: Fetch and verify official 1.0 baseline
+        run: |
+          git fetch --filter=blob:none https://github.com/pjasicek/openyamm.git tag 1.0
+          baseline="build/extended-bootstrap/OpenYAMM-1.0-android-arm64.apk"
+          if [[ ! -s "$baseline" ]]; then
+            mkdir -p build/extended-bootstrap
+            curl --fail --location --retry 3 --output "$baseline" \
+              'https://cloud.jasicek.net/s/7jyKBnEMDSJRSSp/download?path=%2Freleases%2F1.0%2F37285202150-1&files=OpenYAMM-1.0-android-arm64.apk'
+          fi
+          echo "76938005894690ff636be14677b4b0eb9f6f29e91e7237ce4d9bfc36b3662b47  $baseline" | sha256sum --check
 
       - name: Install host build dependencies
         run: |
@@ -110,6 +138,15 @@ jobs:
           sha256sum dist/OpenYAMM-Extended-bootstrap-android-arm64.apk > dist/OpenYAMM-Extended-bootstrap-android-arm64.apk.sha256
           ls -lh dist/
 
+      - name: Verify APK identity, signature and runtime assets
+        run: |
+          apk="dist/OpenYAMM-Extended-bootstrap-android-arm64.apk"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$apk"
+          python3 tools/verify_extended_apk.py "$apk" \
+            --aapt "$ANDROID_HOME/build-tools/35.0.0/aapt" \
+            --baseline-apk build/extended-bootstrap/OpenYAMM-1.0-android-arm64.apk \
+            --report dist/extended-apk-verification.json
+
       - name: Upload APK
         uses: actions/upload-artifact@v7
         with:
@@ -118,5 +155,15 @@ jobs:
             dist/OpenYAMM-Extended-bootstrap-android-arm64.apk
             dist/OpenYAMM-Extended-bootstrap-android-arm64.apk.sha256
           if-no-files-found: error
-          retention-days: 1
+          retention-days: 7
           compression-level: 0
+
+      - name: Upload verification report
+        uses: actions/upload-artifact@v7
+        with:
+          name: openyamm-extended-bootstrap-verification
+          path: |
+            dist/extended-apk-verification.json
+            dist/OpenYAMM-Extended-bootstrap-android-arm64.apk.sha256
+          if-no-files-found: error
+          retention-days: 7

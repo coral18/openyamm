@@ -5,7 +5,7 @@ script_dir=$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 repo_root=$(CDPATH= cd -- "${script_dir}/.." && pwd)
 
 java_home=${JAVA_HOME:-/usr/lib/jvm/java-17-openjdk-amd64}
-package_name=${OPENYAMM_ANDROID_PACKAGE:-org.openyamm.android}
+package_name=${OPENYAMM_ANDROID_PACKAGE:-org.openyamm.extended}
 keystore_path=${OPENYAMM_ANDROID_KEYSTORE:-"${script_dir}/keystores/openyamm-release.jks"}
 key_alias=${OPENYAMM_ANDROID_KEY_ALIAS:-openyamm}
 key_dname=${OPENYAMM_ANDROID_KEY_DNAME:-"CN=OpenYAMM, O=OpenYAMM, C=US"}

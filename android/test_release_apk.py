@@ -30,11 +30,13 @@ def main():
     parser.add_argument("--timeout", type=int, default=180)
     parser.add_argument("--resume-cycles", type=int, default=3,
                         help="Test Home, task switching and screen off/on without restarting the game")
+    parser.add_argument("--package", default="org.openyamm.extended")
+    parser.add_argument("--log-tag", default="OpenYAMM-Extended")
     args = parser.parse_args()
     if args.resume_cycles < 0:
         parser.error("--resume-cycles must be nonnegative")
     args.output.mkdir(parents=True, exist_ok=True)
-    package = "org.openyamm.android"
+    package = args.package
     storage = "/sdcard/Android/data/" + package + "/files"
 
     def adb(*command, check=True):
@@ -51,7 +53,7 @@ def main():
     adb("shell", "settings", "put", "secure", "immersive_mode_confirmations", "confirmed")
 
     def launch():
-        adb("shell", "am", "start", "-n", package + "/.OpenYammActivity")
+        adb("shell", "am", "start", "-n", package + "/org.openyamm.android.OpenYammActivity")
 
     def capture_rendered_screen(name):
         screenshot = adb("exec-out", "screencap", "-p")
@@ -130,7 +132,7 @@ def main():
             time.sleep(2)
             # Settings initialization can reopen the trace file during a new game;
             # logcat retains the completed renderer initialization marker.
-            text = adb("logcat", "-d", "-v", "brief", "-s", "OpenYAMM").decode(errors="replace")
+            text = adb("logcat", "-d", "-v", "brief", "-s", args.log_tag).decode(errors="replace")
             lines = text.splitlines()
             loaded = any(
                 ("load_game_applied " if args.save else "map_loaded ") in line

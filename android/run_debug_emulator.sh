@@ -5,7 +5,7 @@ script_dir=$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 repo_root=$(CDPATH= cd -- "${script_dir}/.." && pwd)
 
 avd_name=${OPENYAMM_AVD_NAME:-openyamm_api35}
-package_name=${OPENYAMM_ANDROID_PACKAGE:-org.openyamm.android}
+package_name=${OPENYAMM_ANDROID_PACKAGE:-org.openyamm.extended}
 java_home=${JAVA_HOME:-/usr/lib/jvm/java-17-openjdk-amd64}
 emulator_partition_mb=${OPENYAMM_EMULATOR_PARTITION_MB:-16384}
 emulator_wipe_data=${OPENYAMM_EMULATOR_WIPE_DATA:-0}
@@ -89,7 +89,7 @@ fi
 
 device_serial()
 {
-    "${adb_bin}" devices | awk 'NR > 1 && $2 == "device" { print $1; exit }'
+    "${adb_bin}" devices | awk 'NR > 1 && $1 ~ /^emulator-/ && $2 == "device" { print $1; exit }'
 }
 
 wait_for_boot()
@@ -167,4 +167,4 @@ echo "Launching ${package_name}..."
 "${adb_bin}" -s "${serial}" shell monkey -p "${package_name}" 1 >/dev/null
 
 echo "Following logs. Press Ctrl-C to stop."
-"${adb_bin}" -s "${serial}" logcat -v time -s OpenYAMM SDL AndroidRuntime DEBUG libc
+"${adb_bin}" -s "${serial}" logcat -v time -s OpenYAMM-Extended SDL AndroidRuntime DEBUG libc

@@ -2,7 +2,7 @@
 
 This Android project builds an SDL3-based OpenYAMM APK.
 
-- Debug builds include `arm64-v8a` and `x86_64` for emulator testing.
+- Extended bootstrap debug builds include only `arm64-v8a`.
 - Release builds include only `arm64-v8a` for production sideloading.
 - APK assets are mounted from the installed APK. Large runtime asset packages are not extracted to app storage.
 
@@ -36,7 +36,7 @@ android/app/build/outputs/apk/debug/app-debug.apk
 
 Android builds package `android/settings.ini` as the first-launch settings profile. The installed app copies that
 profile to its app-specific external `settings.ini` only when the file is missing. Saves and settings are stored under
-`Android/data/org.openyamm.android/files/`, where they can be copied through USB file transfer. Android may restrict
+`Android/data/org.openyamm.extended/files/`, where they can be copied through USB file transfer. Android may restrict
 on-device file managers from browsing this directory, and uninstalling the app removes it. Profile-version migrations
 update Android-required defaults without replacing user-adjustable settings.
 
@@ -147,8 +147,33 @@ On Windows PowerShell, use:
 [Convert]::ToBase64String([IO.File]::ReadAllBytes("android\keystores\openyamm-release.jks"))
 ```
 
-Keep the keystore and secrets backed up. Every published update for `org.openyamm.android` must use the same signing
+Keep the keystore and secrets backed up. Every published update for `org.openyamm.extended` must use the same signing
 key; replacing it requires users to uninstall the existing app before installing the new build.
+
+## Extended bootstrap
+
+The installed application ID is `org.openyamm.extended`; the Java namespace remains `org.openyamm.android`.
+The activity component is `org.openyamm.extended/org.openyamm.android.OpenYammActivity`.
+This allows installation beside the official game and keeps settings and saves in separate app storage.
+There is no save import or migration yet.
+
+The bootstrap changes only Knight's health per level from 5 to 6; base health remains 35.
+The launcher label is `OpenYAMM Extended`, and logcat uses `OpenYAMM-Extended` with an explicit bootstrap marker.
+
+`.github/workflows/extended-android.yml` builds a debug-signed ARM64 APK without upstream secrets.
+It verifies the APK signature, application ID, resolved activity, ABI, shaders, native marker and packaged Knight row.
+Runtime entry sizes and CRCs are compared with the checksum-pinned official 1.0 APK; only source-declared changes
+since tag `1.0` are accepted. Repacking continues to use the upstream packaging tool and prebuilt Android sprites.
+The APK, checksum and a separate small verification artifact are retained for seven days.
+
+CI caches its bootstrap debug key for subsequent test builds. A cache miss may produce a different key;
+this is not a stable public-release signing solution. Test runners do not automatically uninstall on key mismatch.
+The earlier bootstrap APK used an uncached debug key and may not accept this APK as an in-place update.
+
+Use an optimized x86_64 release build with `android/run_release_emulator.sh` for emulator checks.
+The ARM64 bootstrap is intended for a physical ARM64 phone. `test_release_apk.py` defaults to the Extended
+package and log tag and still refuses physical devices because it replaces emulator settings.
+For the official game on a disposable emulator, explicitly pass `--package org.openyamm.android --log-tag OpenYAMM`.
 
 ### Cooked creature textures
 

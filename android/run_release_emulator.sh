@@ -5,12 +5,12 @@ script_dir=$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 repo_root=$(CDPATH= cd -- "${script_dir}/.." && pwd)
 
 avd_name=${OPENYAMM_AVD_NAME:-openyamm_api35}
-package_name=${OPENYAMM_ANDROID_PACKAGE:-org.openyamm.android}
+package_name=${OPENYAMM_ANDROID_PACKAGE:-org.openyamm.extended}
 java_home=${JAVA_HOME:-/usr/lib/jvm/java-17-openjdk-amd64}
 emulator_partition_mb=${OPENYAMM_EMULATOR_PARTITION_MB:-16384}
 emulator_wipe_data=${OPENYAMM_EMULATOR_WIPE_DATA:-0}
 build_release_apk=${OPENYAMM_BUILD_RELEASE_APK:-1}
-uninstall_on_signature_mismatch=${OPENYAMM_ANDROID_UNINSTALL_ON_SIGNATURE_MISMATCH:-1}
+uninstall_on_signature_mismatch=${OPENYAMM_ANDROID_UNINSTALL_ON_SIGNATURE_MISMATCH:-0}
 repack_assets=${OPENYAMM_REPACK_ASSETS:-0}
 force_landscape=${OPENYAMM_EMULATOR_LANDSCAPE:-1}
 follow_logs=${OPENYAMM_ANDROID_FOLLOW_LOGS:-1}
@@ -307,4 +307,4 @@ if [[ "${follow_logs}" != "1" ]]; then
 fi
 
 echo "Following logs. Press Ctrl-C to stop."
-"${adb_bin}" -s "${serial}" logcat -v time -s OpenYAMM SDL AndroidRuntime DEBUG libc
+"${adb_bin}" -s "${serial}" logcat -v time -s OpenYAMM-Extended SDL AndroidRuntime DEBUG libc
