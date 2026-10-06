@@ -175,6 +175,25 @@ The ARM64 bootstrap is intended for a physical ARM64 phone. `test_release_apk.py
 package and log tag and still refuses physical devices because it replaces emulator settings.
 For the official game on a disposable emulator, explicitly pass `--package org.openyamm.android --log-tag OpenYAMM`.
 
+### Physical-device installation retries
+
+On the tested POCO/HyperOS phone, enable `Install via USB` in Developer options, keep the display unlocked,
+and accept the separate Extended installation prompt. That prompt can close after roughly twelve seconds.
+Wireless ADB pairing alone does not grant installation approval.
+
+For a large APK, stage it once so an installer retry does not repeat the full transfer:
+
+```bash
+adb -s DEVICE_SERIAL push dist/OpenYAMM-Extended-bootstrap-android-arm64.apk /data/local/tmp/openyamm-extended-bootstrap.apk
+adb -s DEVICE_SERIAL shell pm install -r /data/local/tmp/openyamm-extended-bootstrap.apk
+```
+
+Wait for `Success`; after a rejected prompt, repeat only the second command while watching the phone.
+After success, remove the temporary copy with
+`adb -s DEVICE_SERIAL shell rm -f /data/local/tmp/openyamm-extended-bootstrap.apk`.
+The tested transfer took 85.8 seconds at 39.3 MB/s; speed depends on the connection. This procedure retains
+the application's data and never uninstalls the official package. Do not clear data or uninstall as a shortcut.
+
 ### Cooked creature textures
 
 `android/repack_runtime_assets.sh` validates the prebuilt Android ETC2/EAC packages in

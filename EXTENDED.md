@@ -69,14 +69,28 @@ The signed APK and compact verification report are separate artifacts; APK reten
 A focused native check compiled the actual table parser and health calculation: Knight base HP remains 35,
 HP/level is 6, Champion remains 8; at Endurance 14 without Bodybuilding, level 1 gives 41 HP and level 2 gives 47.
 This is code/data verification, not a claim of leveling the Knight on the phone or running the full test suite.
-The POCO wireless ADB connection works (Android 16, ARM64). The first install attempt reached Android's installer,
-which rejected it with `INSTALL_FAILED_USER_RESTRICTED: Install canceled by user`. The Extended package was not
-installed, so startup/MM7/resume acceptance is pending the user's device-side installation permission.
+The POCO wireless ADB connection works (Android 16, ARM64). Installation succeeded after the user enabled
+`Install via USB` and accepted Xiaomi's separate installation prompt. Failed attempts showed the prompt closing
+after about 12 seconds. Staging the verified APK once in `/data/local/tmp` allowed retrying the installer without
+another full transfer: `adb push` took 85.8 seconds at 39.3 MB/s, and the staged file matched the candidate SHA256.
+The temporary APK was removed after installation.
+
+Physical-device smoke checks passed: version 0.1.1-bootstrap/code 102, separate Extended app/data directory,
+native Extended startup marker, rendered menu, MM7 `7out01.odm` loaded with `initialize_view=true`, and inspected
+engine-native terrain/HUD capture. A Home/return cycle retained the same process and rendered gameplay again.
+The user independently confirmed the game started. Local evidence is retained in ignored
+`build/extended-bootstrap/phone/` (menu, gameplay capture, trace and resume result).
+
+This was a temporary seeded MM7 smoke session, not a full campaign, leveling or performance test. Xiaomi rejects
+ADB touch injection with `INJECT_EVENTS` disabled, so the physical Knight level-up check remains unperformed;
+Knight progression has the packaged-table and focused native-formula evidence above. No input-permission bypass
+was attempted. The original Extended settings were restored byte-for-byte and the ordinary menu reopened.
 
 Only read operations were issued against official app files. Its installed APK path, settings and two named saves
 remain unchanged. Its autosave changed at 09:42:30 local time, before the Extended installation attempt started;
 do not claim all files match the earlier 09:29 inventory. A fresh pre-install hash inventory is kept locally for
-comparison after the permitted install. Never restore or overwrite the user's official autosave.
+comparison after the permitted install. The official APK path and all four files matched this fresh inventory
+after the successful Extended install and gameplay test. Never restore or overwrite the user's official autosave.
 
 For the phone: install Extended, open MM7, create a Knight, check level-up health progression, then reopen the
 official game and confirm its existing saves/settings. Do not use the disposable-emulator script on the phone.
