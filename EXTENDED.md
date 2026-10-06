@@ -59,14 +59,45 @@ explicitly retained archived lighting dependencies. Local inventory comparison f
 The verified upstream packaging path can therefore remain authoritative; no extra binary payload is committed.
 Current upstream has asset changes since 1.0, including lighting and travel; parity permits those declared changes.
 
-Previous bootstrap commit `d1232df` built successfully in Actions run `37421718314`, but compilation alone does not
-establish device acceptance. The new gate checks packaged identity, signature, ARM64, shaders, marker, Knight data
-and release-content parity. No phone was connected at the start of this continuation. Device acceptance stays open
-until there is actual installation/gameplay evidence. APK/report results are recorded after the candidate CI run.
+Candidate `14a4060` passed [Actions run 37429447979](https://github.com/coral18/openyamm/actions/runs/37429447979).
+The verified APK is 3,535,123,017 bytes, with SHA256
+`1539c959faf23982807dc3e0e5c4cda44aa104a6af4d5ee0ff0dcf8408c4bd64`. Both CI and local checks verify identity,
+ARM64-only libraries, 47 shaders, the native Extended marker, Knight data and release-content parity. The APK has
+50,939 engine/world entries; changes from the 50,930-entry baseline correspond to declared source changes.
+The signed APK and compact verification report are separate artifacts; APK retention is seven days.
+
+A focused native check compiled the actual table parser and health calculation: Knight base HP remains 35,
+HP/level is 6, Champion remains 8; at Endurance 14 without Bodybuilding, level 1 gives 41 HP and level 2 gives 47.
+This is code/data verification, not a claim of leveling the Knight on the phone or running the full test suite.
+The POCO wireless ADB connection works (Android 16, ARM64). The first install attempt reached Android's installer,
+which rejected it with `INSTALL_FAILED_USER_RESTRICTED: Install canceled by user`. The Extended package was not
+installed, so startup/MM7/resume acceptance is pending the user's device-side installation permission.
+
+Only read operations were issued against official app files. Its installed APK path, settings and two named saves
+remain unchanged. Its autosave changed at 09:42:30 local time, before the Extended installation attempt started;
+do not claim all files match the earlier 09:29 inventory. A fresh pre-install hash inventory is kept locally for
+comparison after the permitted install. Never restore or overwrite the user's official autosave.
 
 For the phone: install Extended, open MM7, create a Knight, check level-up health progression, then reopen the
 official game and confirm its existing saves/settings. Do not use the disposable-emulator script on the phone.
 The debug APK is explicitly the bootstrap deliverable; use release builds for later UX/performance evaluation.
+
+## Iteration performance
+
+Measured candidate CI stages: source checkout 337 seconds, official baseline fetch/verification 139 seconds,
+host configuration 83 seconds, host tool compilation 119 seconds, runtime packaging 124 seconds and Android
+build 620 seconds. Gradle dependencies, the checksum-pinned official baseline and debug signing key are cached.
+Native object files and generated runtime packages are not yet cached across runners.
+
+Per the user's 2026-10-06 instruction, finish this candidate through the already started Android flow. Subsequent
+iterations in this session start with local Windows development/tests on this PC, keeping build directories and
+existing assets rather than re-downloading or rebuilding them. For later Android iterations, retain native build
+outputs or add compiler caching with versioned toolchain keys, and reuse unchanged runtime packages. The existing
+Gradle assets task already declares inputs/outputs, so preserving its directory lets unchanged inputs skip work.
+Data-only tests should investigate the existing `[assets] root` setting for an external development asset root
+before repackaging a full 3.5 GB APK; verify Android mounting, completeness and isolation before relying on it.
+Native changes still require a verified APK update. These are
+next-iteration decisions, not optimizations measured or validated by the present candidate.
 
 ## Next milestone: Mod Loader v1
 
@@ -79,3 +110,14 @@ Continue with Class/Promotion Registry, Trait Registry, typed patch provenance, 
 Adventurers Knight prototype. Expand into the remaining classes, Adventure Framework, bounty, travel encounters,
 world state, the shared World Database/Atlas, Journal, Randomizer, NG+, Hub and community SDK. Introduce shared
 data contracts early when a dependency requires them; the order is not rigid.
+
+Verified upstream integration points at the bootstrap continuation:
+
+- `engine/AssetFileSystem.*`: mounted content, package enumeration and shared asset lookup.
+- `game/content/ContentManifest.*`: existing `world.yml` parsing, dependencies, QBit/ID ranges and table contributions.
+  This is a world manifest, not an already implemented Mod Loader. Preserve its existing filename/contract.
+- `game/data/GameDataLoader.cpp`: mounted package validation and class table loading before gameplay consumes them.
+- `game/tables/ClassMultiplierTable.*` and `ClassSkillTable.*`: resource progression, skill caps, metadata and
+  promotion/race rules. Add patch support at the existing table/registry boundary.
+- `game/maps/SaveGame.*`: required-content-package schema validation already exists. Extend it for enabled mod
+  identity/version/state rather than starting a separate save format.

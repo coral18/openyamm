@@ -179,7 +179,7 @@ TEST_CASE("class multiplier table drives promoted class resource progression")
     REQUIRE(pDarkArchMage != nullptr);
     REQUIRE(pHighPriest != nullptr);
     REQUIRE(pMasterWizard != nullptr);
-    CHECK_EQ(pKnight->healthPerLevel, 5);
+    CHECK_EQ(pKnight->healthPerLevel, 6);
     CHECK_EQ(pChampion->healthPerLevel, 8);
     CHECK_EQ(pDragon->healthPerLevel, 10);
     CHECK_EQ(pGreatWyrm->healthPerLevel, 10);
