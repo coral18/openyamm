@@ -320,13 +320,16 @@ std::optional<std::vector<uint8_t>> loadTexturePixelsBgra(
     int &height)
 {
     const std::string lowerPath = toLowerCopy(path);
+    constexpr std::array<uint8_t, 8> pngSignature = {137, 80, 78, 71, 13, 10, 26, 10};
+    const bool pngBytes = bytes.size() >= pngSignature.size()
+        && std::equal(pngSignature.begin(), pngSignature.end(), bytes.begin());
 
-    if (lowerPath.size() >= 4 && lowerPath.substr(lowerPath.size() - 4) == ".pcx")
+    if (!pngBytes && lowerPath.size() >= 4 && lowerPath.substr(lowerPath.size() - 4) == ".pcx")
     {
         return decodePcxPixelsBgra(bytes, width, height);
     }
 
-    if (lowerPath.size() >= 4 && lowerPath.substr(lowerPath.size() - 4) == ".png")
+    if (pngBytes || (lowerPath.size() >= 4 && lowerPath.substr(lowerPath.size() - 4) == ".png"))
     {
         Engine::ImageDecodeOptions decodeOptions = {};
         decodeOptions.applyMagentaTransparencyKey = true;

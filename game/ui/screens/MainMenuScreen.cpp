@@ -275,9 +275,17 @@ void MainMenuScreen::drawHome()
             quit();
         }
     }
+    if (m_actions.atlas && button("extended-atlas", m_paused ? canvasRect(304.5333f, 425, 244.2667f, 28)
+                                                             : canvasRect(587.7333f, 437, 182.4f, 28),
+                                  "Interactive Atlas"))
+    {
+        if (m_actions.atlas())
+            return;
+        m_status = "The Atlas package could not be loaded. Check the game log.";
+    }
     if (!m_status.empty())
     {
-        const Rect status = m_paused ? canvasRect(310, 416, 420, 35) : canvasRect(563.2f, 438, 231.4667f, 28);
+        const Rect status = m_paused ? canvasRect(25, 416, 260, 35) : canvasRect(25, 435, 540, 35);
         textInRect(status, m_status, "menu_lucida", 11);
     }
 }

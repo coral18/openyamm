@@ -25,6 +25,7 @@
 #include "game/tables/MergedBaseTables.h"
 #include "game/tables/NpcDialogTable.h"
 #include "game/tables/SpellTable.h"
+#include "game/world/WorldDatabase.h"
 #include "game/party/Party.h"
 #include "game/party/SpellIds.h"
 #include "game/tables/RosterTable.h"
@@ -4116,6 +4117,12 @@ GameplayDialogController::PresentPendingDialogResult GameplayDialogController::p
 
     result.dialogOpened = true;
     result.resolvedContext = *context.eventRuntimeState.pendingDialogueContext;
+    if (originalContext.kind == DialogueContextKind::HouseService)
+        context.eventRuntimeState.namedGlobalVars[WorldDatabase::houseDiscoveryKey(originalContext.sourceId)] = 1;
+    if (originalContext.hostHouseId != 0)
+        context.eventRuntimeState.namedGlobalVars[WorldDatabase::houseDiscoveryKey(originalContext.hostHouseId)] = 1;
+    if (originalContext.kind == DialogueContextKind::NpcTalk)
+        context.eventRuntimeState.namedGlobalVars[WorldDatabase::npcDiscoveryKey(originalContext.sourceId)] = 1;
     playIndoorExitReactionIfNeeded(context, originalContext, result.wasDialogAlreadyActive);
     return result;
 }

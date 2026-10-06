@@ -372,16 +372,18 @@ public:
         MapAssetLoadSharedCache *pSharedCache = nullptr
     ) const;
 
+    // Shared package-aware geometry lookup for read-only world tools such as the Atlas.
+    static std::optional<std::string> findAssetPath(
+        const Engine::AssetFileSystem &assetFileSystem,
+        const std::string &worldId,
+        const std::string &fileName
+    );
+
 private:
     static std::string toLower(const std::string &value);
     static std::optional<std::string> findAssetPathInDirectory(
         const Engine::AssetFileSystem &assetFileSystem,
         const std::string &directoryPath,
-        const std::string &fileName
-    );
-    static std::optional<std::string> findAssetPath(
-        const Engine::AssetFileSystem &assetFileSystem,
-        const std::string &worldId,
         const std::string &fileName
     );
     static std::optional<std::string> findCompanionAssetPath(

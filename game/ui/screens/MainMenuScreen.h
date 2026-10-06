@@ -18,6 +18,7 @@ class MainMenuScreen : public MenuDesignScreen
     struct Actions
     {
         Action newGame, loadGame, saveGame, quit, resume, mainMenu;
+        std::function<bool()> atlas;
         std::function<bool(const std::filesystem::path &)> continueGame;
         std::function<bool(const GameSettings &, bool, std::string &)> applySettings;
     };

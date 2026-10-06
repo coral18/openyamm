@@ -220,6 +220,7 @@ private:
     bool quickLoadFromPath(const std::filesystem::path &path, bool initializeView);
     void openMainMenuScreen();
     void openMenuScreen(bool paused);
+    bool openAtlasScreen(bool paused);
     void openPauseMenuScreen();
     void openSaveGameScreen();
     void resumeMenuGameplay();

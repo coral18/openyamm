@@ -28,6 +28,7 @@
 #include "game/ui/screens/LoadGameScreen.h"
 #include "game/ui/screens/LoadingOverlayScreen.h"
 #include "game/ui/screens/MainMenuScreen.h"
+#include "game/ui/screens/AtlasScreen.h"
 #include "game/ui/screens/NewGameScreen.h"
 #include "game/ui/screens/WinGameScreen.h"
 #include "engine/BgfxContext.h"
@@ -7386,6 +7387,13 @@ bool GameApplication::loadCurrentSessionMap(
     }
 
     timingLogger.stage(initializeView ? "runtime and view initialized" : "runtime initialized");
+    if (const MapStatsEntry *map = m_gameDataRepository.mapStats().findByFileName(m_gameSession.currentMapFileName()))
+    {
+        const auto key = WorldDatabase::mapDiscoveryKey(*map);
+        m_gameSession.setNamedGlobalVar(key, 1);
+        if (m_pMapSceneRuntime != nullptr && m_pMapSceneRuntime->eventRuntimeState() != nullptr)
+            m_pMapSceneRuntime->eventRuntimeState()->namedGlobalVars[key] = 1;
+    }
     const std::string sceneKind =
         m_pMapSceneRuntime != nullptr ? sceneKindName(m_pMapSceneRuntime->kind()) : "none";
     std::string poseDetails;
@@ -8798,6 +8806,7 @@ void GameApplication::openMenuScreen(bool paused)
     actions.quit = [this]() { requestApplicationQuit(); };
     actions.resume = [this]() { resumeMenuGameplay(); };
     actions.mainMenu = [this]() { openMainMenuScreen(); };
+    actions.atlas = [this, paused]() { return openAtlasScreen(paused); };
     actions.continueGame = [this](const std::filesystem::path &path)
     { return ensureCommonGameDataLoaded() && loadSessionFromPath(path); };
     actions.applySettings = [this](const GameSettings &settings, bool persist, std::string &error)
@@ -8826,6 +8835,56 @@ void GameApplication::openMenuScreen(bool paused)
         m_deferredMainMenuChildWarmupStage = m_mainMenuChildScreensPrepared ? 0 : 1;
     }
     m_screenManager.setActiveScreen(std::move(pScreen));
+}
+
+bool GameApplication::openAtlasScreen(bool paused)
+{
+    if (m_pAssetFileSystem == nullptr || !ensureCommonGameDataLoaded())
+        return false;
+    WorldKnowledge knowledge;
+    if (paused)
+    {
+        knowledge.variables = m_gameSession.namedGlobalVars();
+        if (m_pMapSceneRuntime != nullptr && m_pMapSceneRuntime->eventRuntimeState() != nullptr)
+            for (const auto &[key, value] : m_pMapSceneRuntime->eventRuntimeState()->namedGlobalVars)
+                knowledge.variables[key] = value;
+        for (const auto &[file, state] : m_gameSession.outdoorWorldStates())
+            knowledge.visitedMaps.insert(toLowerCopy(file));
+        for (const auto &[file, state] : m_gameSession.indoorSceneStates())
+            knowledge.visitedMaps.insert(toLowerCopy(file));
+        const auto collectFloorPlan = [&knowledge](const std::string &file, const IndoorSceneRuntime::Snapshot &state)
+        {
+            if (!state.mapDeltaData)
+                return;
+            WorldFloorPlanKnowledge plan;
+            plan.visibleOutlines = state.mapDeltaData->visibleOutlines;
+            plan.faceAttributes = state.mapDeltaData->faceAttributes;
+            if (state.eventRuntimeState)
+                for (size_t i = 0; i < plan.faceAttributes.size(); ++i)
+                    if (state.eventRuntimeState->hasFacetInvisibleOverride(static_cast<uint32_t>(i)))
+                        plan.invisibleFaces.insert(static_cast<uint32_t>(i));
+            knowledge.floorPlans[toLowerCopy(file)] = std::move(plan);
+        };
+        for (const auto &[file, state] : m_gameSession.indoorSceneStates())
+            collectFloorPlan(file, state);
+        if (m_pMapSceneRuntime != nullptr && m_pMapSceneRuntime->kind() == SceneKind::Indoor)
+            collectFloorPlan(m_gameSession.currentMapFileName(),
+                static_cast<IndoorSceneRuntime *>(m_pMapSceneRuntime.get())->snapshot());
+        knowledge.visitedMaps.insert(toLowerCopy(m_gameSession.currentMapFileName()));
+    }
+    try
+    {
+        auto screen = std::make_unique<AtlasScreen>(*m_pAssetFileSystem, m_gameDataRepository, std::move(knowledge),
+            [this, paused]() { openMenuScreen(paused); }, paused, &m_gameAudioSystem);
+        screen->setFontSettings(m_settings.fonts);
+        m_screenManager.setActiveScreen(std::move(screen));
+        return true;
+    }
+    catch (const std::exception &error)
+    {
+        std::cerr << "Atlas package could not be loaded: " << error.what() << '\n';
+        return false;
+    }
 }
 
 void GameApplication::openSaveGameScreen()

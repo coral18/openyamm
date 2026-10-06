@@ -2,6 +2,8 @@
 
 ## Product contract
 
+The native MM7 Interactive Atlas prototype and Windows iteration workflow are described in [ATLAS.md](ATLAS.md).
+
 Build an upstream-compatible fork that improves playing MM6–MM8, supports large mods and installable community
 worlds, and hosts the flagship `Adventurers` overhaul. Preserve classic Might & Magic, with MM7 as the gameplay
 foundation and selected ideas from MM6/MM8/MM9. Core supplies APIs and capabilities; mods own gameplay decisions.

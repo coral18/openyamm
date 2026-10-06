@@ -42,6 +42,7 @@ add_executable(openyamm_unit_tests
     InventoryEquipRegressionTests.cpp
     LegacyLuaExportTests.cpp
     MapStatsRegressionTests.cpp
+    WorldDatabaseTests.cpp
     MapDeltaDataTests.cpp
     MM7MechanicsRuntimeTests.cpp
     MercenaryRecruitmentRuntimeTests.cpp
@@ -227,6 +228,8 @@ add_executable(openyamm_unit_tests
     ../game/mm9/Mm9MapTransition.cpp
     ../game/mm9/Mm9TeacherSchedule.cpp
     ../game/tables/MapStats.cpp
+    ../game/world/WorldDatabase.cpp
+    ../game/world/WorldFloorPlan.cpp
     ../game/tables/NpcDialogTable.cpp
     ../game/tables/ObjectTable.cpp
     ../game/tables/PortraitEnums.cpp

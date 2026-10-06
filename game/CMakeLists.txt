@@ -23,6 +23,9 @@ add_library(openyamm_game STATIC
     debug/ScreenshotTour.cpp
     debug/MenuInputTour.cpp
     data/GameDataRepository.cpp
+    world/WorldDatabase.cpp
+    world/WorldFloorPlan.cpp
+    ui/screens/AtlasScreen.cpp
     app/GameSession.cpp
     audio/GameAudioSystem.cpp
     tables/ChestTable.cpp
