@@ -12,6 +12,10 @@ did not include a declared reuse license; a future import of its authored materi
 - Off-map dungeon plans projected from the engine's actual geometry. Discovery respects saved outline bits,
   seen faces and runtime invisible-face overrides; Guide renders the authored visible outlines.
 - Case-insensitive search and typed filters. Trainer names and topics come from the game's NPC/topic tables.
+- The default discovery list excludes routes. Use Travel to see routes, labelled with departure direction,
+  origin and duration. Distinct map exits remain separate even when they lead to the same destination.
+  The continent overview lists discovered regions/dungeons; a selected region lists local discoveries under
+  `Discovered here`, rather than implying that it lists the party's entire journey.
 - Default Discovery Mode; opt-in Guide Mode is a read-only view of the same index.
 - Successful map loads record discoveries; actual opened house/NPC dialogue records encountered services/residents.
 - Existing visited-map snapshots reveal locations from older saves. Older saves do not retroactively mark every
@@ -89,7 +93,7 @@ All 4,439 MM6 and 4,043 MM8 package entries also matched the verified APK.
 
 Focused doctest coverage exercises discovery before search, Guide Mode without side effects, canonical-table
 references, region grouping, cross-world exclusion, route visibility and invalid/duplicate/cyclic presentation.
-It also loads the actual canonical source tables and resolves MM7 Sword trainers. Nine cases / 119 assertions pass,
+It also loads the actual canonical source tables and resolves MM7 Sword trainers. Ten cases / 163 assertions pass,
 including MSB-first dungeon/region reveal bits, partial/full precedence, empty exploration, mirrored projections,
 arrow octants, dungeon marker projection, invisible geometry, invalid indices and extreme coordinates.
 
@@ -107,3 +111,10 @@ position/camera pose facing north, plus live White Cliff Cave in Discovery/Guide
 All native tours resumed gameplay. Fog is uploaded once per selected region; the paused view reads the party
 position and exploration snapshot without mutating either. MM7 outdoor maps use their native world-to-image
 projection; new worlds with alternate presentation catalogs need corresponding Atlas presentation integration.
+
+The duplicated-discovery regression reproduces Harmondale -> Tularean Forest -> Avlee using canonical travel
+tables: each local discovery query returns its region once, the continent returns three distinct regions, and
+Travel preserves the two genuine exits with distinct labels. Unknown destinations remain filtered before search.
+A native Windows tour loaded a copy of the reported Avlee autosave in a separate working directory, checked
+both regional lists, Travel, the continent overview and return to gameplay. The original save's SHA256 was
+unchanged; all test output and settings stayed in the separate test directory.

@@ -42,7 +42,21 @@ std::string WorldDatabase::npcDiscoveryKey(uint32_t id)
 std::string WorldRecord::name() const
 {
     if (kind == WorldRecordKind::Travel)
-        return destination->name;
+    {
+        if (walkingEdge)
+        {
+            const char *direction = "";
+            switch (*walkingEdge)
+            {
+            case MapBoundaryEdge::North: direction = "north"; break;
+            case MapBoundaryEdge::South: direction = "south"; break;
+            case MapBoundaryEdge::East: direction = "east"; break;
+            case MapBoundaryEdge::West: direction = "west"; break;
+            }
+            return std::string("Walk ") + direction + " to " + destination->name;
+        }
+        return house->type + " to " + destination->name;
+    }
     if (kind == WorldRecordKind::Trainer)
         return npc->name + " - " + teacher->note;
     if (kind == WorldRecordKind::Npc)
@@ -132,6 +146,7 @@ WorldDatabase::WorldDatabase(const MapStats &maps, const HouseTable &houses, con
             travel.kind = WorldRecordKind::Travel;
             travel.map = &map;
             travel.walkingRoute = &*transition;
+            travel.walkingEdge = edges[edge];
             travel.destination = destination;
             m_records.push_back(std::move(travel));
         }
@@ -235,13 +250,14 @@ bool WorldDatabase::visible(const WorldRecord &record, const WorldKnowledge &kno
 }
 
 std::vector<const WorldRecord *> WorldDatabase::query(const WorldKnowledge &knowledge, bool guide,
-    const std::string &search, std::optional<WorldRecordKind> kind, const std::string &withinMap) const
+    const std::string &search, std::optional<WorldRecordKind> kind, const std::string &withinMap, bool includeTravel) const
 {
     std::vector<const WorldRecord *> result;
     const auto needle = toLowerCopy(search);
     for (const auto &record : m_records)
     {
-        if (!visible(record, knowledge, guide) || (kind && record.kind != *kind))
+        if ((!includeTravel && record.kind == WorldRecordKind::Travel)
+            || !visible(record, knowledge, guide) || (kind && record.kind != *kind))
             continue;
         if (!withinMap.empty() && mapId(*record.map) != withinMap && record.parentId != withinMap)
             continue;

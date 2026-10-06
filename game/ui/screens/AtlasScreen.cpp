@@ -173,7 +173,10 @@ void AtlasScreen::drawScreen(float)
     }
     if (const auto *map = m_world.find(m_map))
         textInRect(canvasRect(168, 89, 403, 25), map->name(), "fondamento", 14);
-    textInRect(canvasRect(589, 89, 233, 25), m_guide ? "All recorded locations" : "Your party's discoveries", "menu_lucida", 11);
+    const std::string listHeading = m_filter == WorldRecordKind::Travel ? "Known routes"
+        : m_map.empty() ? (m_guide ? "All recorded locations" : "Your party's discoveries")
+        : (m_guide ? "Locations and residents here" : "Discovered here");
+    textInRect(canvasRect(589, 89, 233, 25), listHeading, "menu_lucida", 11);
     drawMap();
     drawList();
     drawDetails();
@@ -340,9 +343,13 @@ void AtlasScreen::drawPartyArrow(const WorldRecord &map, const Rect &image, cons
 void AtlasScreen::drawList()
 {
     const Rect viewport = canvasRect(588, 121, 235, 270);
-    auto records = m_world.query(m_knowledge, m_guide, m_search, m_filter, m_map);
+    auto records = m_world.query(m_knowledge, m_guide, m_search, m_filter, m_map,
+                                 m_filter == WorldRecordKind::Travel);
     if (m_map.empty() && m_search.empty() && !m_filter)
-        std::erase_if(records, [](const WorldRecord *record) { return !record->position; });
+        std::erase_if(records, [](const WorldRecord *record)
+        {
+            return !record->position || (record->kind != WorldRecordKind::Region && record->kind != WorldRecordKind::Dungeon);
+        });
     scrollViewport(viewport, records.size() * 38 * designScale(), m_scroll, 38);
     setDesignClip(viewport);
     for (size_t i = 0; i < records.size(); ++i)
@@ -358,8 +365,10 @@ void AtlasScreen::drawList()
             outline(row, 0xff8dc5e1u);
         textInRect({row.x + 7 * designScale(), row.y + 2 * designScale(), row.width - 14 * designScale(), 18 * designScale()},
             record.name(), "menu_arrus", 12);
-        const std::string subtitle = std::string(WorldDatabase::kindName(record.kind))
-            + (record.house != nullptr ? " - " + record.map->name : "");
+        const std::string subtitle = record.kind == WorldRecordKind::Travel
+            ? "From " + record.map->name + " - " + std::to_string(record.walkingRoute
+                ? record.walkingRoute->travelDays : record.route->travelDays) + " days"
+            : std::string(WorldDatabase::kindName(record.kind)) + (record.house != nullptr ? " - " + record.map->name : "");
         textInRect({row.x + 7 * designScale(), row.y + 19 * designScale(), row.width - 14 * designScale(), 12 * designScale()},
             subtitle, "menu_lucida", 9, 0xffa9bbb7u);
     }

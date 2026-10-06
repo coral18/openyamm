@@ -14,6 +14,18 @@ using namespace OpenYAMM::Game;
 
 namespace
 {
+std::vector<std::vector<std::string>> canonicalRows(const std::string &name)
+{
+    std::ifstream file(std::string(OPENYAMM_SOURCE_DIR) + "/assets_dev/engine/data_tables/" + name);
+    REQUIRE(file.is_open());
+    const std::string text{std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>()};
+    const auto table = OpenYAMM::Engine::TextTable::parseTabSeparated(text);
+    REQUIRE(table.has_value());
+    std::vector<std::vector<std::string>> result;
+    for (size_t i = 0; i < table->getRowCount(); ++i) result.push_back(table->getRow(i));
+    return result;
+}
+
 std::vector<std::string> mapRow(int id, const std::string &name, const std::string &file, const std::string &world,
                                 int area = 0)
 {
@@ -72,29 +84,18 @@ TEST_CASE("world database filters undiscovered information before search")
 
 TEST_CASE("world database indexes canonical MM7 maps residents and trainers")
 {
-    const auto rows = [](const std::string &name)
-    {
-        std::ifstream file(std::string(OPENYAMM_SOURCE_DIR) + "/assets_dev/engine/data_tables/" + name);
-        REQUIRE(file.is_open());
-        const std::string text{std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>()};
-        const auto table = OpenYAMM::Engine::TextTable::parseTabSeparated(text);
-        REQUIRE(table.has_value());
-        std::vector<std::vector<std::string>> result;
-        for (size_t i = 0; i < table->getRowCount(); ++i) result.push_back(table->getRow(i));
-        return result;
-    };
     MapStats maps;
     HouseTable houses;
     NpcDialogTable npcs;
     MergedTeacherTopicTable teachers;
-    REQUIRE(maps.loadFromRows(rows("map_stats.txt")));
-    REQUIRE(maps.applyOutdoorNavigationRows(rows("map_navigation.txt")));
+    REQUIRE(maps.loadFromRows(canonicalRows("map_stats.txt")));
+    REQUIRE(maps.applyOutdoorNavigationRows(canonicalRows("map_navigation.txt")));
     MergedOutdoorTravelTable outdoorTravels;
-    REQUIRE(outdoorTravels.loadFromRows(rows("outdoor_travels.txt")));
+    REQUIRE(outdoorTravels.loadFromRows(canonicalRows("outdoor_travels.txt")));
     REQUIRE(maps.applyMergedOutdoorTravels(outdoorTravels));
-    REQUIRE(houses.loadFromRows(rows("house_data.txt")));
-    REQUIRE(npcs.loadNpcRows(rows("npc.txt")));
-    REQUIRE(teachers.loadFromRows(rows("teacher_topics.txt")));
+    REQUIRE(houses.loadFromRows(canonicalRows("house_data.txt")));
+    REQUIRE(npcs.loadNpcRows(canonicalRows("npc.txt")));
+    REQUIRE(teachers.loadFromRows(canonicalRows("teacher_topics.txt")));
     WorldDatabase database(maps, houses, npcs, teachers, "mm7");
     CHECK(database.query({}, true, "", WorldRecordKind::Region).size() == 13);
     CHECK(database.query({}, true, "", WorldRecordKind::Dungeon).size() > 50);
@@ -107,6 +108,55 @@ TEST_CASE("world database indexes canonical MM7 maps residents and trainers")
         CHECK(trainer->map->worldId == "mm7");
         CHECK(trainer->house == houses.get(trainer->npc->houseId));
     }
+}
+
+TEST_CASE("world database separates MM7 discoveries from distinct walking routes")
+{
+    MapStats maps;
+    REQUIRE(maps.loadFromRows(canonicalRows("map_stats.txt")));
+    MergedOutdoorTravelTable outdoorTravels;
+    REQUIRE(outdoorTravels.loadFromRows(canonicalRows("outdoor_travels.txt")));
+    REQUIRE(maps.applyMergedOutdoorTravels(outdoorTravels));
+    HouseTable houses;
+    NpcDialogTable npcs;
+    MergedTeacherTopicTable teachers;
+    WorldDatabase database(maps, houses, npcs, teachers, "mm7");
+    WorldKnowledge knowledge;
+    // Reproduce the reported journey without inventing building/NPC discoveries.
+    knowledge.visitedMaps = {"7out02.odm", "7out04.odm", "out14.odm"};
+    const auto regions = database.query(knowledge, false, "", WorldRecordKind::Region);
+    REQUIRE(regions.size() == 3);
+    CHECK(regions[0]->name() == "Avlee");
+    CHECK(regions[1]->name() == "Harmondale");
+    CHECK(regions[2]->name() == "The Tularean Forest");
+
+    for (const auto &file : {"7out02.odm", "out14.odm"})
+    {
+        const auto *map = maps.findByFileName(file);
+        REQUIRE(map != nullptr);
+        const auto scope = WorldDatabase::mapId(*map);
+        // Two genuine exits used to masquerade as duplicate discovered regions.
+        CHECK(database.query(knowledge, false, "", {}, scope).size() == 3);
+        const auto local = database.query(knowledge, false, "", {}, scope, false);
+        REQUIRE(local.size() == 1);
+        CHECK(local.front()->map == map);
+        CHECK(local.front()->kind == WorldRecordKind::Region);
+        CHECK(database.query(knowledge, false, "Tularean", {}, scope, false).empty());
+
+        const auto routes = database.query(knowledge, false, "", WorldRecordKind::Travel, scope);
+        REQUIRE(routes.size() == 2);
+        CHECK(routes[0]->id != routes[1]->id);
+        CHECK(routes[0]->name() != routes[1]->name());
+        CHECK(routes[0]->walkingEdge != routes[1]->walkingEdge);
+        for (const auto *route : routes)
+        {
+            CHECK(route->destination == maps.findByFileName("7out04.odm"));
+            CHECK(route->name().starts_with("Walk "));
+            CHECK((route->walkingRoute->travelDays == 5 || route->walkingRoute->travelDays == 7));
+        }
+    }
+    knowledge.visitedMaps.erase("7out04.odm");
+    CHECK(database.query(knowledge, false, "", WorldRecordKind::Travel).empty());
 }
 
 TEST_CASE("world database hides travel destinations until both ends are known")

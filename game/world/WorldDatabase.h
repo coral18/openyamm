@@ -35,6 +35,7 @@ struct WorldRecord
     const MergedTeacherTopicEntry *teacher = nullptr;
     const HouseEntry::TransportRoute *route = nullptr;
     const MapEdgeTransition *walkingRoute = nullptr;
+    std::optional<MapBoundaryEdge> walkingEdge;
     const MapStatsEntry *destination = nullptr;
     std::optional<std::pair<float, float>> position;
 
@@ -66,7 +67,7 @@ public:
     const WorldRecord *find(const std::string &id) const;
     std::vector<const WorldRecord *> query(const WorldKnowledge &knowledge, bool guide,
         const std::string &search = {}, std::optional<WorldRecordKind> kind = {},
-        const std::string &withinMap = {}) const;
+        const std::string &withinMap = {}, bool includeTravel = true) const;
     bool visible(const WorldRecord &record, const WorldKnowledge &knowledge, bool guide) const;
 
     static std::string mapId(const MapStatsEntry &map);
