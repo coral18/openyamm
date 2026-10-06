@@ -11,36 +11,36 @@ mat4 modelJointMatrix(float joint)
         texture2DLod(s_modelJoints, vec2(0.875, y), 0.0));
 }
 
-vec3 modelSkinnedPosition(vec3 position)
+vec3 modelSkinnedPosition(vec3 position, vec4 indices, vec4 weights, vec4 extraIndices, vec4 extraWeights)
 {
-    vec3 result = vec3(0.0);
+    vec3 result = vec3_splat(0.0);
     for (int index = 0; index < 4; ++index)
     {
-        if (a_weight[index] > 0.0)
+        if (weights[index] > 0.0)
         {
-            result += a_weight[index] * mul(modelJointMatrix(a_indices[index]), vec4(position, 1.0)).xyz;
+            result += weights[index] * mul(modelJointMatrix(indices[index]), vec4(position, 1.0)).xyz;
         }
-        if (a_texcoord3[index] > 0.0)
+        if (extraWeights[index] > 0.0)
         {
-            result += a_texcoord3[index] * mul(modelJointMatrix(a_texcoord1[index]), vec4(position, 1.0)).xyz;
+            result += extraWeights[index] * mul(modelJointMatrix(extraIndices[index]), vec4(position, 1.0)).xyz;
         }
     }
     return result;
 }
 
-vec3 modelSkinnedNormal(vec3 normal)
+vec3 modelSkinnedNormal(vec3 normal, vec4 indices, vec4 weights, vec4 extraIndices, vec4 extraWeights)
 {
-    vec3 result = vec3(0.0);
+    vec3 result = vec3_splat(0.0);
     for (int index = 0; index < 4; ++index)
     {
-        if (a_weight[index] > 0.0)
+        if (weights[index] > 0.0)
         {
-            result += a_weight[index] * mul(modelJointMatrix(a_indices[index] + u_modelSkin.z),
+            result += weights[index] * mul(modelJointMatrix(indices[index] + u_modelSkin.z),
                 vec4(normal, 0.0)).xyz;
         }
-        if (a_texcoord3[index] > 0.0)
+        if (extraWeights[index] > 0.0)
         {
-            result += a_texcoord3[index] * mul(modelJointMatrix(a_texcoord1[index] + u_modelSkin.z),
+            result += extraWeights[index] * mul(modelJointMatrix(extraIndices[index] + u_modelSkin.z),
                 vec4(normal, 0.0)).xyz;
         }
     }

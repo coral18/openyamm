@@ -10,11 +10,11 @@ uniform vec4 u_modelCamera;
 
 void main()
 {
-    v_worldPosition = u_modelSkin.x > 0.5 ? modelSkinnedPosition(a_position)
+    v_worldPosition = u_modelSkin.x > 0.5 ? modelSkinnedPosition(a_position, a_indices, a_weight, a_texcoord1, a_texcoord3)
         : mul(u_model[0], vec4(a_position, 1.0)).xyz;
     gl_Position = mul(u_viewProj, vec4(v_worldPosition, 1.0));
     v_texcoord0 = a_texcoord0;
-    v_worldNormal = u_modelSkin.x > 0.5 ? modelSkinnedNormal(a_normal)
+    v_worldNormal = u_modelSkin.x > 0.5 ? modelSkinnedNormal(a_normal, a_indices, a_weight, a_texcoord1, a_texcoord3)
         : mul(u_modelNormalMatrix, vec4(a_normal, 0.0)).xyz;
     if (u_modelOutline.w > 0.5)
     {
