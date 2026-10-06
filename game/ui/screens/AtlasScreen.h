@@ -22,6 +22,7 @@ private:
     void drawScreen(float deltaSeconds) override;
     void select(const WorldRecord &record);
     void drawMap();
+    void drawPartyArrow(const WorldRecord &map, const Rect &image, const WorldFloorPlanRaster *floorPlan);
     void drawList();
     void drawDetails();
 
@@ -40,6 +41,8 @@ private:
     std::string m_floorPlanKey;
     WorldFloorPlanRaster m_floorPlan;
     bgfx::TextureHandle m_floorPlanTexture = BGFX_INVALID_HANDLE;
+    std::string m_fogMap;
+    bgfx::TextureHandle m_fogTexture = BGFX_INVALID_HANDLE;
     bool m_dragging = false;
     float m_dragX = 0, m_dragY = 0;
 };

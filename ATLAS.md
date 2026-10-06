@@ -16,6 +16,11 @@ did not include a declared reuse license; a future import of its authored materi
 - Successful map loads record discoveries; actual opened house/NPC dialogue records encountered services/residents.
 - Existing visited-map snapshots reveal locations from older saves. Older saves do not retroactively mark every
   resident as met. Opening the atlas, searching and switching modes never award discoveries.
+- Outdoor Discovery maps use the same saved 88x88 full/partial reveal masks as the engine Map Book. Unknown
+  areas are opaque black, partial exploration is dimmed; missing masks never reveal an entire region. Guide
+  hides this overlay without writing discoveries. Zoom/pan transform both art and fog together.
+- Current party position and heading use the same MAPDIR arrow sprites/octants as the minimap. Markers are
+  restricted to the active region/dungeon, including Guide Mode. Paused Atlas opens on the current location.
 - Zoom, drag, search input, native button focus and scroll controls. Entry in main menu and pause menu.
 
 `game/world/WorldDatabase` indexes **references** to `MapStats`, `HouseTable`, `NpcDialogTable` and
@@ -38,7 +43,7 @@ Unknown services are filtered before search; routes require both endpoint maps t
 This slice is not the complete external guide port. Precise building/POI coordinates, quest chains, chests, monsters, wells, obelisks, teleport links, Barrows connections, alchemy/spell
 reference pages and trackers remain to be added through shared game/world data. Explored dungeon maps and player
 notes continue to use the existing Map Book. Dungeon plans currently project all elevations together; floor
-selection, party position and annotations are not yet shown in the Atlas. The index currently describes authored residents and teaching topics;
+selection and annotations are not yet shown in the Atlas. The index currently describes authored residents and teaching topics;
 runtime NPC relocation/topic overrides and information learned from books or rumours require additional shared
 discovery/data integration. The Android implementation uses shared native code but this slice has not yet been
 built or physically tested on Android/controller hardware.
@@ -84,8 +89,9 @@ All 4,439 MM6 and 4,043 MM8 package entries also matched the verified APK.
 
 Focused doctest coverage exercises discovery before search, Guide Mode without side effects, canonical-table
 references, region grouping, cross-world exclusion, route visibility and invalid/duplicate/cyclic presentation.
-It also loads the actual canonical source tables and resolves MM7 Sword trainers. Seven cases / 96 assertions pass,
-including MSB-first dungeon reveal bits, invisible geometry, invalid indices and extreme coordinates.
+It also loads the actual canonical source tables and resolves MM7 Sword trainers. Nine cases / 119 assertions pass,
+including MSB-first dungeon/region reveal bits, partial/full precedence, empty exploration, mirrored projections,
+arrow octants, dungeon marker projection, invisible geometry, invalid indices and extreme coordinates.
 
 Windows Release compilation succeeded. Engine-owned captures verified the overview, Harmondale map, trainer filter
 and `Grand Master Sword` search, plus White Cliff Cave geometry and zoom, using native OpenGL on AMD hardware.
@@ -95,3 +101,9 @@ only discovered Harmondale in Discovery Mode and resumed gameplay. A live White 
 only the explored entrance chamber in Discovery Mode and resumed the same dungeon. Missing/invalid presentation
 packages are reported in the menu and log without aborting the game. Captures/logs live outside Git in the isolated
 runtime and ignored build directory. This does not constitute a complete guide-content audit or Android test.
+
+The regional fog/marker check used live Harmondale exploration, zoom, Guide -> Discovery, and a second
+position/camera pose facing north, plus live White Cliff Cave in Discovery/Guide with its party arrow.
+All native tours resumed gameplay. Fog is uploaded once per selected region; the paused view reads the party
+position and exploration snapshot without mutating either. MM7 outdoor maps use their native world-to-image
+projection; new worlds with alternate presentation catalogs need corresponding Atlas presentation integration.

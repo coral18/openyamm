@@ -56,6 +56,9 @@ WorldFloorPlanRaster buildWorldFloorPlan(const IndoorMapData &map,
     constexpr double padding = 24;
     const double scale = std::min((raster.width - 2 * padding) / std::max(1.0, maxX - minX),
                                   (raster.height - 2 * padding) / std::max(1.0, maxY - minY));
+    raster.centerX = (minX + maxX) / 2;
+    raster.centerY = (minY + maxY) / 2;
+    raster.pixelsPerWorldUnit = scale;
     const auto project = [&](const IndoorVertex &vertex)
     {
         return std::pair{int(std::lround(raster.width / 2.0 + (vertex.x - (minX + maxX) / 2) * scale)),
@@ -77,5 +80,10 @@ WorldFloorPlanRaster buildWorldFloorPlan(const IndoorMapData &map,
         }
     }
     return raster;
+}
+std::pair<float, float> WorldFloorPlanRaster::worldToUv(float x, float y) const
+{
+    return {float(0.5 + (x - centerX) * pixelsPerWorldUnit / width),
+            float(0.5 - (y - centerY) * pixelsPerWorldUnit / height)};
 }
 } // namespace OpenYAMM::Game

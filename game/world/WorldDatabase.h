@@ -2,6 +2,7 @@
 
 #include "game/tables/HouseTable.h"
 #include "game/world/WorldFloorPlan.h"
+#include "game/world/WorldMapExploration.h"
 #include "game/tables/MapStats.h"
 #include "game/tables/MergedBaseTables.h"
 #include "game/tables/NpcDialogTable.h"
@@ -47,6 +48,8 @@ struct WorldKnowledge
     // Existing map snapshots provide visited locations for campaigns saved before discovery tracking.
     std::unordered_set<std::string> visitedMaps;
     std::unordered_map<std::string, WorldFloorPlanKnowledge> floorPlans;
+    std::unordered_map<std::string, WorldRegionMapKnowledge> regionMaps;
+    std::optional<WorldPartyMapPosition> partyPosition;
     bool knows(const WorldRecord &record) const;
 };
 

@@ -2,6 +2,7 @@
 #include "game/data/GameDataRepository.h"
 #include "game/StringUtils.h"
 #include "game/maps/MapAssetLoader.h"
+#include "game/ui/GameplayMinimapTransform.h"
 
 #include <yaml-cpp/yaml.h>
 #include <algorithm>
@@ -46,12 +47,22 @@ AtlasScreen::AtlasScreen(const Engine::AssetFileSystem &assets, const GameDataRe
               "mm7", loadPresentation(assets)), m_close(std::move(close)), m_paused(paused)
 {
     loadDesign("menu/main_menu");
+    if (m_knowledge.partyPosition)
+        for (const auto &record : m_world.records())
+            if ((record.kind == WorldRecordKind::Region || record.kind == WorldRecordKind::Dungeon)
+                && toLowerCopy(record.map->fileName) == m_knowledge.partyPosition->mapFileName)
+            {
+                select(record);
+                break;
+            }
 }
 
 AtlasScreen::~AtlasScreen()
 {
     if (bgfx::isValid(m_floorPlanTexture))
         bgfx::destroy(m_floorPlanTexture);
+    if (bgfx::isValid(m_fogTexture))
+        bgfx::destroy(m_fogTexture);
 }
 
 AppMode AtlasScreen::mode() const { return m_paused ? AppMode::PauseMenu : AppMode::MainMenu; }
@@ -109,8 +120,10 @@ void AtlasScreen::drawScreen(float)
     if (button("atlas-mode", canvasRect(526, 17, 177, 27), m_guide ? "Guide Mode: ON" : "Discovery Mode"))
     {
         m_guide = !m_guide;
-        m_selected.clear();
-        m_map.clear();
+        if (const auto *selected = m_world.find(m_selected); selected && !m_world.visible(*selected, m_knowledge, m_guide))
+            m_selected.clear();
+        if (const auto *map = m_world.find(m_map); map && !m_world.visible(*map, m_knowledge, m_guide))
+            m_map.clear();
         m_scroll = 0;
         m_zoom = 1;
         m_panX = m_panY = 0;
@@ -235,6 +248,25 @@ void AtlasScreen::drawMap()
         drawTextureHandle(m_floorPlanTexture, image);
     else
         drawTexture(texture, image);
+    if (map != nullptr && !dungeon && !m_guide)
+    {
+        if (m_fogMap != map->id)
+        {
+            m_fogMap = map->id;
+            if (bgfx::isValid(m_fogTexture))
+                bgfx::destroy(m_fogTexture);
+            const auto knowledge = m_knowledge.regionMaps.find(toLowerCopy(map->map->fileName));
+            const auto fog = buildWorldRegionFog(knowledge == m_knowledge.regionMaps.end()
+                ? WorldRegionMapKnowledge{} : knowledge->second, GameplayMinimapState{});
+            m_fogTexture = bgfx::createTexture2D(WorldRegionFog::Size, WorldRegionFog::Size, false, 1,
+                bgfx::TextureFormat::BGRA8, BGFX_SAMPLER_U_CLAMP | BGFX_SAMPLER_V_CLAMP
+                    | BGFX_SAMPLER_MIN_POINT | BGFX_SAMPLER_MAG_POINT | BGFX_SAMPLER_MIP_POINT,
+                bgfx::copy(fog.pixelsBgra.data(), uint32_t(fog.pixelsBgra.size())));
+        }
+        drawTextureHandle(m_fogTexture, image);
+    }
+    if (map != nullptr)
+        drawPartyArrow(*map, image, floorPlan);
     bool markerHovered = false;
     if (map == nullptr)
     {
@@ -279,6 +311,30 @@ void AtlasScreen::drawMap()
     setDesignClip(std::nullopt);
     if (button("atlas-zoom-out", canvasRect(490, 357, 30, 27), "-")) m_zoom = std::max(1.0f, m_zoom - 0.25f);
     if (button("atlas-zoom-in", canvasRect(527, 357, 30, 27), "+")) m_zoom = std::min(3.0f, m_zoom + 0.25f);
+}
+
+void AtlasScreen::drawPartyArrow(const WorldRecord &map, const Rect &image, const WorldFloorPlanRaster *floorPlan)
+{
+    if (!m_knowledge.partyPosition || toLowerCopy(map.map->fileName) != m_knowledge.partyPosition->mapFileName)
+        return;
+    const auto &party = *m_knowledge.partyPosition;
+    std::pair<float, float> uv;
+    if (floorPlan != nullptr)
+        uv = floorPlan->worldToUv(party.x, party.y);
+    else
+    {
+        const auto point = gameplayMinimapWorldToUv(GameplayMinimapState{}, party.x, party.y);
+        uv = {point.x, point.y};
+    }
+    if (uv.first < 0 || uv.first > 1 || uv.second < 0 || uv.second > 1)
+        return;
+    const std::string arrow = "MAPDIR" + std::to_string(gameplayMinimapArrowIndex(party.yawRadians) + 1);
+    if (const auto size = textureSize(arrow))
+    {
+        const float width = 20 * designScale(), height = width * size->height / std::max(1.0f, size->width);
+        drawTexture(arrow, {image.x + uv.first * image.width - width / 2,
+                            image.y + uv.second * image.height - height / 2, width, height});
+    }
 }
 
 void AtlasScreen::drawList()

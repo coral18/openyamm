@@ -2,6 +2,7 @@
 #include "game/world/WorldDatabase.h"
 #include "engine/TextTable.h"
 #include "game/FaceEnums.h"
+#include "game/ui/GameplayMinimapTransform.h"
 #include "game/indoor/IndoorMapData.h"
 
 #include <fstream>
@@ -198,4 +199,57 @@ TEST_CASE("world database dungeon plan respects reveal bits and hidden faces")
     map.vertices[0].x = std::numeric_limits<int>::min();
     map.faces[1].attributes = 0;
     CHECK(buildWorldFloorPlan(map, {}, true).outlineCount == 4);
+}
+
+TEST_CASE("world database outdoor fog shares saved exploration without revealing empty maps")
+{
+    GameplayMinimapState projection;
+    WorldRegionMapKnowledge knowledge;
+    const auto alpha = [](const WorldRegionFog &fog, int x, int y)
+    { return fog.pixelsBgra[size_t(y * WorldRegionFog::Size + x) * 4 + 3]; };
+    auto hidden = buildWorldRegionFog(knowledge, projection);
+    REQUIRE(hidden.pixelsBgra.size() == WorldRegionFog::Size * WorldRegionFog::Size * 4);
+    CHECK(alpha(hidden, 0, 0) == 255);
+    CHECK(alpha(hidden, 87, 87) == 255);
+    knowledge.fullyRevealedCells = {0x80};
+    knowledge.partiallyRevealedCells = {0xc0};
+    auto fog = buildWorldRegionFog(knowledge, projection);
+    CHECK(alpha(fog, 0, 0) == 0); // Fully revealed wins over partially revealed.
+    CHECK(alpha(fog, 1, 0) == 144);
+    CHECK(alpha(fog, 2, 0) == 255);
+    CHECK(knowledge.fullyRevealedCells == std::vector<uint8_t>{0x80});
+    projection.flipU = true;
+    auto flipped = buildWorldRegionFog(knowledge, projection);
+    CHECK(alpha(flipped, 87, 0) == 0);
+    CHECK(alpha(flipped, 86, 0) == 144);
+    CHECK(alpha(flipped, 0, 0) == 255);
+    projection.flipU = false;
+    projection.flipV = false;
+    CHECK(alpha(buildWorldRegionFog(knowledge, projection), 0, 87) == 0);
+    projection.revealEntireMap = true; // Atlas still requires actual discoveries even if art allows a full map.
+    CHECK(alpha(buildWorldRegionFog({}, projection), 0, 0) == 255);
+}
+
+TEST_CASE("world database party marker follows minimap direction and dungeon projection")
+{
+    constexpr float pi = std::numbers::pi_v<float>;
+    CHECK(gameplayMinimapArrowIndex(0) == 7);
+    CHECK(gameplayMinimapArrowIndex(pi / 2) == 1);
+    CHECK(gameplayMinimapArrowIndex(pi) == 3);
+    CHECK(gameplayMinimapArrowIndex(-pi / 2) == 5);
+    CHECK(gameplayMinimapArrowIndex(2 * pi) == 7);
+    const auto northWest = gameplayMinimapWorldToUv({}, -32768, 32768);
+    CHECK(northWest.x == 0);
+    CHECK(northWest.y == 0);
+    IndoorMapData map;
+    map.vertices = {{-100, -100, 0}, {100, 100, 0}};
+    map.faces.resize(2);
+    map.outlines = {{0, 1, 0, 1}};
+    const auto plan = buildWorldFloorPlan(map, {}, true);
+    const auto center = plan.worldToUv(0, 0);
+    CHECK(center.first == doctest::Approx(0.5));
+    CHECK(center.second == doctest::Approx(0.5));
+    const auto northEast = plan.worldToUv(100, 100);
+    CHECK(northEast.first > center.first);
+    CHECK(northEast.second < center.second);
 }

@@ -4,9 +4,22 @@
 #include "game/ui/GameplayOverlayTypes.h"
 
 #include <algorithm>
+#include <cmath>
+#include <numbers>
 
 namespace OpenYAMM::Game
 {
+// Shared MAPDIR sprite selection for the minimap, Map Book and Interactive Atlas.
+inline int gameplayMinimapArrowIndex(float yawRadians)
+{
+    constexpr float pi = std::numbers::pi_v<float>;
+    float yaw = std::fmod(yawRadians, pi * 2);
+    if (yaw < 0)
+        yaw += pi * 2;
+    const int octant = int(std::floor((yaw + pi * 0.125f) / (pi * 0.25f))) % 8;
+    return (octant + 7) % 8;
+}
+
 struct GameplayMinimapPoint
 {
     float x = 0.0f;

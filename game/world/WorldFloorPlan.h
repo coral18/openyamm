@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <vector>
+#include <utility>
 
 #include <unordered_set>
 
@@ -22,6 +23,8 @@ struct WorldFloorPlanRaster
     int width = 1024;
     int height = 768;
     size_t outlineCount = 0;
+    double centerX = 0, centerY = 0, pixelsPerWorldUnit = 0;
+    std::pair<float, float> worldToUv(float x, float y) const;
     std::vector<uint8_t> pixelsBgra;
 };
 

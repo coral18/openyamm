@@ -8870,6 +8870,18 @@ bool GameApplication::openAtlasScreen(bool paused)
         if (m_pMapSceneRuntime != nullptr && m_pMapSceneRuntime->kind() == SceneKind::Indoor)
             collectFloorPlan(m_gameSession.currentMapFileName(),
                 static_cast<IndoorSceneRuntime *>(m_pMapSceneRuntime.get())->snapshot());
+        for (const auto &[file, state] : m_gameSession.outdoorWorldStates())
+            knowledge.regionMaps[toLowerCopy(file)] = {state.fullyRevealedCells, state.partiallyRevealedCells};
+        if (m_pMapSceneRuntime != nullptr && m_pMapSceneRuntime->kind() == SceneKind::Outdoor
+            && m_pOutdoorWorldRuntime != nullptr)
+        {
+            const auto state = m_pOutdoorWorldRuntime->snapshot();
+            knowledge.regionMaps[toLowerCopy(m_gameSession.currentMapFileName())] =
+                {state.fullyRevealedCells, state.partiallyRevealedCells};
+        }
+        if (const auto *runtime = m_gameSession.activeWorldRuntime())
+            knowledge.partyPosition = WorldPartyMapPosition{toLowerCopy(m_gameSession.currentMapFileName()),
+                runtime->partyX(), runtime->partyY(), runtime->gameplayCameraYawRadians()};
         knowledge.visitedMaps.insert(toLowerCopy(m_gameSession.currentMapFileName()));
     }
     try
