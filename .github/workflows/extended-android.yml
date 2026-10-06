@@ -1,0 +1,94 @@
+name: Extended Android bootstrap
+
+on:
+  push:
+    branches:
+      - extended/bootstrap-android
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  android:
+    name: Build OpenYAMM Extended Android APK
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240
+    env:
+      CMAKE_BUILD_PARALLEL_LEVEL: 4
+      OPENYAMM_ANDROID_VERSION_NAME: 0.1.0-bootstrap
+      OPENYAMM_ANDROID_VERSION_CODE: 101
+
+    steps:
+      - name: Check out sources
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+          cache-dependency-path: |
+            android/*.gradle
+            android/gradle.properties
+            android/app/*.gradle
+
+      - name: Install host build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y ninja-build libgl1-mesa-dev libx11-dev libxext-dev
+
+      - name: Configure host tools
+        run: >-
+          cmake -S . -B build -G Ninja
+          -DCMAKE_BUILD_TYPE=Release
+          -DOPENYAMM_BUILD_DESKTOP_EXECUTABLE=OFF
+          -DOPENYAMM_BUILD_TESTS=OFF
+          -DOPENYAMM_BUILD_EDITOR=OFF
+          -DOPENYAMM_BUILD_TOOLS=OFF
+          -DSDL_ALSA=OFF
+          -DSDL_JACK=OFF
+          -DSDL_KMSDRM=OFF
+          -DSDL_PIPEWIRE=OFF
+          -DSDL_PULSEAUDIO=OFF
+          -DSDL_SNDIO=OFF
+          -DSDL_UNIX_CONSOLE_BUILD=ON
+          -DSDL_WAYLAND=OFF
+          -DSDL_X11=OFF
+
+      - name: Build host shader compiler and sprite cooker
+        run: |
+          cmake --build build --target openyamm_shaderc --parallel 4
+          cmake --build build --target openyamm_sprite_atlas_cook --parallel 4
+
+      - name: Repack Android runtime assets
+        run: android/repack_runtime_assets.sh
+
+      - name: Build debug APK
+        run: |
+          chmod +x android/gradlew
+          android/gradlew :app:assembleDebug
+
+      - name: Prepare artifact
+        run: |
+          source_apk="android/app/build/outputs/apk/debug/app-debug.apk"
+          test -s "$source_apk"
+          mkdir -p dist
+          cp "$source_apk" dist/OpenYAMM-Extended-bootstrap-android-arm64.apk
+          sha256sum dist/OpenYAMM-Extended-bootstrap-android-arm64.apk > dist/OpenYAMM-Extended-bootstrap-android-arm64.apk.sha256
+          ls -lh dist/
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v7
+        with:
+          name: openyamm-extended-bootstrap-android
+          path: |
+            dist/OpenYAMM-Extended-bootstrap-android-arm64.apk
+            dist/OpenYAMM-Extended-bootstrap-android-arm64.apk.sha256
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
