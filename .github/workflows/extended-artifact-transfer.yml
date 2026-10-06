@@ -1,0 +1,102 @@
+name: Extended APK transfer parts
+
+on:
+  push:
+    branches: [extended/artifact-transfer]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  transfer:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Download verified bootstrap APK
+        uses: actions/download-artifact@v8
+        with:
+          github-token: ${{ github.token }}
+          run-id: 37429447979
+          name: openyamm-extended-bootstrap-android
+          path: source
+
+      - name: Verify and split APK for bounded downloads
+        run: |
+          apk="source/OpenYAMM-Extended-bootstrap-android-arm64.apk"
+          echo "1539c959faf23982807dc3e0e5c4cda44aa104a6af4d5ee0ff0dcf8408c4bd64  $apk" | sha256sum --check
+          mkdir parts
+          split --bytes=480M --numeric-suffixes=0 --suffix-length=2 "$apk" parts/apk.part.
+          test "$(find parts -type f | wc -l)" -eq 8
+      - name: Upload APK part 00
+        uses: actions/upload-artifact@v7
+        with:
+          name: extended-bootstrap-part-00
+          path: parts/apk.part.00
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 1
+
+      - name: Upload APK part 01
+        uses: actions/upload-artifact@v7
+        with:
+          name: extended-bootstrap-part-01
+          path: parts/apk.part.01
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 1
+
+      - name: Upload APK part 02
+        uses: actions/upload-artifact@v7
+        with:
+          name: extended-bootstrap-part-02
+          path: parts/apk.part.02
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 1
+
+      - name: Upload APK part 03
+        uses: actions/upload-artifact@v7
+        with:
+          name: extended-bootstrap-part-03
+          path: parts/apk.part.03
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 1
+
+      - name: Upload APK part 04
+        uses: actions/upload-artifact@v7
+        with:
+          name: extended-bootstrap-part-04
+          path: parts/apk.part.04
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 1
+
+      - name: Upload APK part 05
+        uses: actions/upload-artifact@v7
+        with:
+          name: extended-bootstrap-part-05
+          path: parts/apk.part.05
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 1
+
+      - name: Upload APK part 06
+        uses: actions/upload-artifact@v7
+        with:
+          name: extended-bootstrap-part-06
+          path: parts/apk.part.06
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 1
+
+      - name: Upload APK part 07
+        uses: actions/upload-artifact@v7
+        with:
+          name: extended-bootstrap-part-07
+          path: parts/apk.part.07
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 1
