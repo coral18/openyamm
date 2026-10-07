@@ -261,6 +261,41 @@ TEST_CASE("AssetFileSystem keeps legacy fallback and enumerates package aliases"
     std::filesystem::remove_all(temporaryRoot);
 }
 
+TEST_CASE("AssetFileSystem mod namespace prefers installed files and excludes world-local impostors")
+{
+    using namespace OpenYAMM::Engine;
+    const std::filesystem::path temporaryRoot = makeTemporaryRoot();
+    const std::filesystem::path assetRoot = temporaryRoot / "assets";
+    writeZipFile(assetRoot / "assets.zip", {{"mods/example/mod.yaml", "bundled-mod"}});
+    writeZipFile(assetRoot / "worlds/mm7.zip", {
+        {"mods/example/mod.yaml", "world-impostor"}, {"mods/impostor/mod.yaml", "world-only"}
+    });
+    writeTextFile(temporaryRoot / "mods/example/mod.yaml", "installed-mod");
+    writeTextFile(temporaryRoot / "mods/profile.yaml", "enabled: []");
+    writeTextFile(temporaryRoot / "mods/engine/data_tables/test.txt", "cannot-replace-core");
+    {
+        struct WorkingDirectory
+        {
+            std::filesystem::path previous = std::filesystem::current_path();
+            ~WorkingDirectory() { std::filesystem::current_path(previous); }
+        } restoreWorkingDirectory;
+        std::filesystem::current_path(temporaryRoot);
+        AssetFileSystem fs;
+        REQUIRE(fs.initialize(temporaryRoot, assetRoot, AssetScaleTier::X1, "mm7"));
+        CHECK(fs.readTextFile("mods/example/mod.yaml") == std::optional<std::string>("installed-mod"));
+        CHECK(fs.readTextFile("mods/profile.yaml") == std::optional<std::string>("enabled: []"));
+        CHECK_FALSE(fs.exists("mods/impostor/mod.yaml"));
+        CHECK_FALSE(fs.exists("engine/data_tables/test.txt"));
+        const auto entries = fs.enumerate("mods");
+        CHECK(std::find(entries.begin(), entries.end(), "impostor") == entries.end());
+        // Missing installed files expose the same canonical bundled path, never a world alias.
+        std::filesystem::remove(temporaryRoot / "mods/example/mod.yaml");
+        fs.refreshLookupCache();
+        CHECK(fs.readTextFile("mods/example/mod.yaml") == std::optional<std::string>("bundled-mod"));
+    }
+    std::filesystem::remove_all(temporaryRoot);
+}
+
 TEST_CASE("AssetFileSystem mounts generated runtime zip package sets")
 {
     const std::filesystem::path temporaryRoot = makeTemporaryRoot();

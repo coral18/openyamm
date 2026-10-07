@@ -15,7 +15,7 @@ Druid	20	2	10	3	Mixed
 GreatDruid	20	3	10	4	Mixed
 Warlock	20	4	10	5	Mixed
 ArchDruid	20	4	10	5	Mixed
-Knight	35	6	0	0	None
+Knight	35	5	0	0	None
 Cavalier	35	7	0	0	None
 BlackKnight	35	8	0	0	None
 Champion	35	8	0	0	None

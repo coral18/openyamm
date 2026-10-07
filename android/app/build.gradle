@@ -194,6 +194,7 @@ def registerOpenYammApkAssetsTask = { taskName, nativeBuildTaskName, shaderBuild
 
         inputs.files(packagedAssetRoots.collect { it.zip })
         inputs.files(openYammLicenseFiles)
+        inputs.dir(file("${rootDir}/../mods"))
         inputs.file(file("${rootDir}/settings.ini"))
         inputs.files(shaderBuildDirectories.collect { shaderBuildDirectory ->
             fileTree(shaderBuildDirectory) {
@@ -236,6 +237,11 @@ def registerOpenYammApkAssetsTask = { taskName, nativeBuildTaskName, shaderBuild
             copy {
                 from(file("${rootDir}/settings.ini"))
                 into(generatedAssetsRoot)
+            }
+
+            copy {
+                from(file("${rootDir}/../mods"))
+                into(file("${generatedAssetsRoot}/mods"))
             }
 
             copy {

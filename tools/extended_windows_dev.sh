@@ -58,6 +58,9 @@ start_seconds=$SECONDS
 "$native_bash" "$(wslpath -w "$command_file")" > "$log" 2>&1 || { tail -35 "$log"; exit 1; }
 # Small source-data overlay: iterate on tables/presentation without recooking multi-GB packages.
 if [[ "$mode" == build && -d "$dev_root/runtime/assets" ]]; then
+    # Install examples once; subsequent builds preserve the user's edited mods and profile.
+    mkdir -p "$dev_root/runtime/mods"
+    rsync -a --ignore-existing "$repo_root/mods/" "$dev_root/runtime/mods/"
     python3 - "$repo_root" "$dev_root" <<'PY_OVERLAY'
 from pathlib import Path
 import os, sys, tempfile, zipfile

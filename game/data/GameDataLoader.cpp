@@ -1547,6 +1547,7 @@ bool GameDataLoader::loadInternal(
     bool loadInitialMap)
 {
     m_activeWorldId = normalizeWorldId(assetFileSystem.getActiveWorldId());
+    m_modPlan = {};
     m_loadedTables.clear();
     m_selectedMap.reset();
     m_selectedMapRenderSourcePixelsReleased = false;
@@ -1904,6 +1905,11 @@ const ItemTable &GameDataLoader::getItemTable() const
 const std::unordered_map<std::string, uint32_t> &GameDataLoader::getLoadedContentPackageSchemas() const
 {
     return m_loadedContentPackageSchemas;
+}
+
+const ModLoadPlan &GameDataLoader::getLoadedMods() const
+{
+    return m_modPlan;
 }
 
 const StandardItemEnchantTable &GameDataLoader::getStandardItemEnchantTable() const
@@ -3206,6 +3212,26 @@ bool GameDataLoader::loadClassMultiplierTable(const Engine::AssetFileSystem &ass
         std::cerr << "Failed to apply class metadata table\n";
         return false;
     }
+
+    std::vector<WorldManifest> worlds;
+    std::string error;
+    if (!loadMountedWorldManifests(assetFileSystem, worlds, error)
+        || !loadModPlan(assetFileSystem, worlds, m_modPlan, error)
+        || !applyModClassPatches(m_modPlan, m_classMultiplierTable, error))
+    {
+        std::cerr << "Mod loading failed: " << error << '\n';
+        return false;
+    }
+    for (const ModManifest &mod : m_modPlan.mods)
+    {
+        m_loadedContentPackageSchemas[modSavePackageId(mod)] = 1;
+    }
+    for (const ModPatchProvenance &change : m_modPlan.provenance)
+    {
+        std::cout << "Mod patch " << change.modId << ": " << change.classId << '.' << change.path
+                  << ' ' << change.before << " -> " << change.after << '\n';
+    }
+    std::cout << "Loaded " << m_modPlan.mods.size() << (m_modPlan.mods.size() == 1 ? " mod\n" : " mods\n");
 
     return true;
 }

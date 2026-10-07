@@ -614,6 +614,14 @@ bool AssetFileSystem::initialize(
         }
     }
 
+    // User-installed mods live beside settings/saves, mounted only in their own namespace.
+    const std::filesystem::path localMods = std::filesystem::current_path() / "mods";
+    if (std::filesystem::is_directory(localMods) && !mountSearchRootAt(localMods, "/mods", false))
+    {
+        shutdown();
+        return false;
+    }
+
     if (!loadIconPackagePolicy())
     {
         shutdown();
@@ -1654,7 +1662,8 @@ std::vector<std::string> AssetFileSystem::resolveVirtualPathCandidates(const std
     std::vector<std::string> resolvedPaths;
     std::unordered_set<std::string> knownPaths;
     const std::string normalizedPath = normalizeVirtualPath(virtualPath);
-    const bool packageQualified = normalizedPath.starts_with("engine/") || normalizedPath.starts_with("worlds/");
+    const bool packageQualified = normalizedPath.starts_with("engine/") || normalizedPath.starts_with("worlds/")
+        || normalizedPath == "mods" || normalizedPath.starts_with("mods/");
     if (!m_iconPackages.empty())
     {
         std::string package;
@@ -1763,6 +1772,12 @@ std::vector<std::string> AssetFileSystem::expandAndroidApkAssetCandidates(const 
 
     if (!m_androidApkAssetRoot || virtualPath.empty())
     {
+        return candidates;
+    }
+
+    if (virtualPath == "mods" || virtualPath.starts_with("mods/"))
+    {
+        candidates.emplace_back("assets/" + virtualPath);
         return candidates;
     }
 

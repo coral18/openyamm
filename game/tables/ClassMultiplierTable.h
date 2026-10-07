@@ -16,6 +16,9 @@ enum class ClassManaMode
     Level,
 };
 
+enum class ClassProgressionField { BaseHealth, HealthPerLevel };
+enum class ClassPatchOperation { Set, AddNumber };
+
 struct ClassMultiplierEntry
 {
     uint32_t classId = 0;
@@ -37,6 +40,8 @@ public:
     bool applyClassExtraRows(const std::vector<std::vector<std::string>> &rows);
     const ClassMultiplierEntry *get(const std::string &className) const;
     const std::unordered_map<std::string, ClassMultiplierEntry> &entries() const;
+    bool patchProgression(const std::string &className, ClassProgressionField field,
+        ClassPatchOperation operation, int value, int &before, int &after, std::string &error);
 
 private:
     std::unordered_map<std::string, ClassMultiplierEntry> m_entries;

@@ -8,6 +8,7 @@ add_executable(openyamm_unit_tests
     ArenaRuntimeTests.cpp
     ChestRegressionTests.cpp
     ContentManifestTests.cpp
+    ModLoaderTests.cpp
     EffectSystemTests.cpp
     EffectDefinitionLoaderTests.cpp
     HouseDialogueRegressionTests.cpp
@@ -122,6 +123,7 @@ add_executable(openyamm_unit_tests
     ../game/audio/GameAudioSystem.cpp
     ../game/audio/SoundCatalog.cpp
     ../game/content/ContentManifest.cpp
+    ../game/content/ModLoader.cpp
     ../game/content/ContentTableComposer.cpp
     ../game/data/ActorNameResolver.cpp
     ../game/data/GameDataLoader.cpp

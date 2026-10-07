@@ -106,6 +106,7 @@ add_library(openyamm_game STATIC
     pathfinding/PathPlanner.cpp
     audio/HouseVideoPlayer.cpp
     content/ContentManifest.cpp
+    content/ModLoader.cpp
     content/ContentTableComposer.cpp
     items/InventoryItemUseRuntime.cpp
     items/InventoryItemMixingRuntime.cpp

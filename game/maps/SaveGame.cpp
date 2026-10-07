@@ -3890,6 +3890,15 @@ std::unordered_map<std::string, uint32_t> collectRequiredContentPackages(
 {
     std::unordered_map<std::string, uint32_t> result;
 
+    // Mods can change rules without adding persistent items. Preserve every active mod's identity/version.
+    for (const auto &[id, schema] : loadedPackageSchemas)
+    {
+        if (id.starts_with("mods/"))
+        {
+            result[id] = schema;
+        }
+    }
+
     for (uint32_t itemId : persistentSaveItemIds(data))
     {
         const ItemDefinition *pDefinition = itemTable.get(itemId);
@@ -3935,7 +3944,9 @@ bool validateRequiredContentPackages(
 
         if (foundPackage == loadedPackageSchemas.end())
         {
-            error = "save requires missing content package '" + packageId + "'";
+            error = packageId.starts_with("mods/")
+                ? "Save requires mod " + packageId.substr(5) + " (missing, disabled or a different version)"
+                : "save requires missing content package '" + packageId + "'";
             return false;
         }
 

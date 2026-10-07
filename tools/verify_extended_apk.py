@@ -11,7 +11,7 @@ import zipfile
 
 
 OFFICIAL_SHA256 = "76938005894690ff636be14677b4b0eb9f6f29e91e7237ce4d9bfc36b3662b47"
-RUNTIME_PREFIXES = ("assets/engine/", "assets/worlds/")
+RUNTIME_PREFIXES = ("assets/engine/", "assets/worlds/", "assets/mods/")
 
 
 def sha256(path):
@@ -34,6 +34,8 @@ def runtime_index(archive):
 
 
 def asset_path(source):
+    if source.startswith("mods/"):
+        return "assets/" + source
     if source.startswith("assets_cooked/android/sprites_new/"):
         return "assets/engine/sprites_new/" + source.removeprefix("assets_cooked/android/sprites_new/")
     if source.startswith(("assets_dev/engine/", "assets_dev/worlds/")):
@@ -55,7 +57,7 @@ def compare_runtime(baseline, candidate, changed, deleted):
 def declared_changes(repo, baseline_ref):
     output = subprocess.check_output(
         ["git", "diff", "--name-status", "--no-renames", baseline_ref, "--",
-         "assets_dev", "assets_cooked/android/sprites_new"], cwd=repo, text=True,
+         "assets_dev", "assets_cooked/android/sprites_new", "mods"], cwd=repo, text=True,
     )
     changed, deleted = set(), set()
     for line in output.splitlines():
@@ -96,7 +98,7 @@ def verify(apk_path, aapt, baseline_apk=None, baseline_ref="1.0"):
             raise ValueError(f"Expected only arm64-v8a, found {abis}")
         required = {"lib/arm64-v8a/libmain.so", "lib/arm64-v8a/libSDL3.so",
                     "assets/engine/data_tables/class_multipliers.txt", "assets/engine/events/Global.lua",
-                    "assets/worlds/mm7/maps/7out01.odm", "assets/settings.ini"}
+                    "assets/worlds/mm7/maps/7out01.odm", "assets/settings.ini", "assets/mods/karol-test/mod.yaml"}
         if not required <= names:
             raise ValueError(f"Missing required APK entries: {sorted(required - names)}")
         profile = json.loads(apk.read("assets/engine/sprite_texture_profile.json"))
@@ -110,10 +112,14 @@ def verify(apk_path, aapt, baseline_apk=None, baseline_ref="1.0"):
             raise ValueError("Native library is missing the Extended build marker")
         rows = apk.read("assets/engine/data_tables/class_multipliers.txt").decode().splitlines()
         knight_rows = [row.split("\t") for row in rows if row.startswith("Knight\t")]
-        if len(knight_rows) != 1 or knight_rows[0][1:] != ["35", "6", "0", "0", "None"]:
-            raise ValueError("Packaged Knight must have base HP 35 and HP per level 6")
+        if len(knight_rows) != 1 or knight_rows[0][1:] != ["35", "5", "0", "0", "None"]:
+            raise ValueError("Base Knight must have HP 35 and HP per level 5; the +1 belongs to karol.test")
+        expected_mod = Path(__file__).resolve().parents[1] / "mods/karol-test/mod.yaml"
+        if apk.read("assets/mods/karol-test/mod.yaml") != expected_mod.read_bytes():
+            raise ValueError("Packaged karol.test must match its declared source manifest")
         report.update({"abis": abis, "shader_count": len(shaders),
-                       "knight": {"base_health": 35, "health_per_level": 6}})
+                       "knight": {"base_health": 35, "base_health_per_level": 5},
+                       "test_mod": {"id": "karol.test", "version": "0.1.0"}})
         candidate = runtime_index(apk)
     if baseline_apk:
         if sha256(baseline_apk) != OFFICIAL_SHA256:
@@ -137,7 +143,7 @@ def main():
     report = verify(args.apk, args.aapt, args.baseline_apk, args.baseline_ref)
     args.report.parent.mkdir(parents=True, exist_ok=True)
     args.report.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
-    print(f"Verified Extended ARM64 APK: Knight HP/level=6, {report['shader_count']} shaders")
+    print(f"Verified Extended ARM64 APK: base Knight HP/level=5, karol.test packaged, {report['shader_count']} shaders")
     if "runtime_comparison" in report:
         comparison = report["runtime_comparison"]
         print(f"Release 1.0 parity: {comparison['baseline_entries']} entries checked, "

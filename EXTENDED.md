@@ -115,12 +115,13 @@ before repackaging a full 3.5 GB APK; verify Android mounting, completeness and 
 Native changes still require a verified APK update. These are
 next-iteration decisions, not optimizations measured or validated by the present candidate.
 
-## Next milestone: Mod Loader v1
+## Mod Loader v1
 
-After bootstrap acceptance, load `mods/karol-test/mod.yaml`, log `Found mod karol.test 0.1.0` and `Loaded 1 mod`.
-Reject duplicate IDs, missing dependencies, cycles and QBit collisions. Then apply Knight HP/level +1 through
-a typed class patch without changing the base TXT. Keep the bootstrap data modification temporary and move it
-to that test mod once the loader and patch semantics exist.
+Implemented on `extended/mod-loader-v1`; see [Mod Loader contract and usage](MODDING.md).
+`mods/karol-test/mod.yaml` now supplies Knight HP/level +1 through a typed class patch. The base TXT is restored
+to 5, with the same effective 6 when the example is enabled. Profiles select active mods, dependencies/order and
+QBit collisions are validated, and saves retain required mod versions. Windows is the verified iteration target;
+the earlier APK/bootstrap measurements above describe their historical candidate, not this new build.
 
 Continue with Class/Promotion Registry, Trait Registry, typed patch provenance, Lua gameplay events and the
 Adventurers Knight prototype. Expand into the remaining classes, Adventure Framework, bounty, travel encounters,

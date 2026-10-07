@@ -38,6 +38,7 @@ jobs:
             /cmake/
             /engine/
             /game/
+            /mods/
             /android/
             /packaging/licenses/
             /tools/openyamm_shaderc_stubs.cpp

@@ -1,0 +1,4 @@
+# Copy to profile.yaml beside the installed mod directories. Changes take effect after restarting the game.
+# Use enabled: [] for an unmodified gameplay profile.
+enabled:
+  - karol.test

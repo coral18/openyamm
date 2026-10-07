@@ -6,6 +6,7 @@
 #include <cctype>
 #include <cstdlib>
 #include <utility>
+#include <limits>
 
 namespace OpenYAMM::Game
 {
@@ -188,5 +189,29 @@ const ClassMultiplierEntry *ClassMultiplierTable::get(const std::string &classNa
 const std::unordered_map<std::string, ClassMultiplierEntry> &ClassMultiplierTable::entries() const
 {
     return m_entries;
+}
+
+bool ClassMultiplierTable::patchProgression(const std::string &className, ClassProgressionField field,
+    ClassPatchOperation operation, int value, int &before, int &after, std::string &error)
+{
+    error.clear();
+    const auto entry = m_entries.find(canonicalClassName(className));
+    if (entry == m_entries.end())
+    {
+        error = "Unknown class: " + className;
+        return false;
+    }
+    int &property = field == ClassProgressionField::BaseHealth
+        ? entry->second.baseHealth : entry->second.healthPerLevel;
+    const int64_t result = operation == ClassPatchOperation::Set ? int64_t(value) : int64_t(property) + value;
+    if (result < 0 || result > std::numeric_limits<int>::max())
+    {
+        error = "Class health progression must remain a non-negative integer within the engine range";
+        return false;
+    }
+    before = property;
+    after = int(result);
+    property = after;
+    return true;
 }
 }

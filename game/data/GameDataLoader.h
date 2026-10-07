@@ -1,6 +1,7 @@
 #pragma once
 
 #include "engine/AssetFileSystem.h"
+#include "game/content/ModLoader.h"
 #include "game/arcomage/ArcomageTypes.h"
 #include "game/tables/AwardTable.h"
 #include "game/tables/ChestTable.h"
@@ -94,6 +95,7 @@ public:
     const SpellTable &getSpellTable() const;
     const ItemTable &getItemTable() const;
     const std::unordered_map<std::string, uint32_t> &getLoadedContentPackageSchemas() const;
+    const ModLoadPlan &getLoadedMods() const;
     const StandardItemEnchantTable &getStandardItemEnchantTable() const;
     const SpecialItemEnchantTable &getSpecialItemEnchantTable() const;
     const ChestTable &getChestTable() const;
@@ -238,6 +240,7 @@ private:
     SpellTable m_spellTable;
     ItemTable m_itemTable;
     std::unordered_map<std::string, uint32_t> m_loadedContentPackageSchemas = {{"engine", 1}};
+    ModLoadPlan m_modPlan;
     StandardItemEnchantTable m_standardItemEnchantTable;
     SpecialItemEnchantTable m_specialItemEnchantTable;
     ChestTable m_chestTable;

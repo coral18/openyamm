@@ -1,0 +1,12 @@
+schema_version: 1
+id: karol.test
+name: Karol's Knight test
+version: 0.1.0
+patches:
+  - target:
+      type: class
+      id: engine.knight
+    operations:
+      - op: add_number
+        path: progression.hp_per_level
+        value: 1
