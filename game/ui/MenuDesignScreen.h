@@ -30,7 +30,7 @@ class MenuDesignScreen : public MenuScreenBase
                     float logicalSize = 12, uint32_t color = 0xffc6dfeau, bool centered = false);
     bool action(const std::string &id, bool enabled = true, const std::string &text = {});
     bool button(const std::string &id, const Rect &rect, const std::string &text, const std::string &skin = "button",
-                bool enabled = true, bool selected = false);
+                bool enabled = true, bool selected = false, const Rect *pVisualRect = nullptr);
     void skin(const std::string &name, const Rect &rect, bool sliced = false, float padding = 0);
     void outline(const Rect &rect, uint32_t color);
     void confirm(const std::string &title, const std::string &body, std::vector<std::string> choices,

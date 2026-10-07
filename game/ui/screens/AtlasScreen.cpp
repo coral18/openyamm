@@ -288,11 +288,13 @@ bool AtlasScreen::drawLocationMarkers(const WorldRecord &map, const Rect &image,
         const char *label = dungeon ? "D" : trainer != pin.records.end() ? "T" : "B";
         const std::string caption = pin.sites > 1 ? std::to_string(pin.sites) + " locations - select to inspect"
             : pPrimary->name();
-        const Rect marker{pin.x - 12 * designScale(), pin.y - 12 * designScale(),
-                          24 * designScale(), 24 * designScale()};
+        const Rect marker{pin.x - 6 * designScale(), pin.y - 6 * designScale(),
+                          12 * designScale(), 12 * designScale()};
+        const Rect hitArea{pin.x - 12 * designScale(), pin.y - 12 * designScale(),
+                           24 * designScale(), 24 * designScale()};
         const std::string buttonId = "atlas-site-" + pin.id;
-        hovered = hovered || pointerInside(marker);
-        if (button(buttonId, marker, pin.sites > 1 ? std::to_string(pin.sites) : label, "button_square"))
+        hovered = hovered || pointerInside(hitArea);
+        if (button(buttonId, hitArea, "", "button_square", true, false, &marker))
         {
             if (dungeon && pin.records.size() == 1)
             {
@@ -305,8 +307,10 @@ bool AtlasScreen::drawLocationMarkers(const WorldRecord &map, const Rect &image,
             m_selected = pPrimary->id;
             m_scroll = 0;
         }
+        textInRect(marker, pin.sites > 1 ? std::to_string(pin.sites) : label, "menu_lucida", 8,
+                   0xffc6dfeau, true);
         outline(marker, trainer != pin.records.end() ? 0xff96c798u : dungeon ? 0xff8dc5e1u : 0xff8dc8dfu);
-        if (pointerInside(marker) || focused(buttonId))
+        if (pointerInside(hitArea) || focused(buttonId))
         {
             Rect text{pin.x - 105 * designScale(), pin.y - 35 * designScale(),
                       210 * designScale(), 20 * designScale()};
@@ -414,17 +418,18 @@ void AtlasScreen::drawMap()
                 continue;
             const float x = image.x + region.position->first * image.width;
             const float y = image.y + region.position->second * image.height;
-            const Rect marker{x - 14 * designScale(), y - 14 * designScale(), 28 * designScale(), 28 * designScale()};
-            markerHovered = markerHovered || pointerInside(marker);
-            if (button("atlas-pin-" + region.id, marker, "", "button_square"))
+            const Rect marker{x - 5 * designScale(), y - 5 * designScale(), 10 * designScale(), 10 * designScale()};
+            const Rect hitArea{x - 14 * designScale(), y - 14 * designScale(), 28 * designScale(), 28 * designScale()};
+            markerHovered = markerHovered || pointerInside(hitArea);
+            if (button("atlas-pin-" + region.id, hitArea, "", "button_square", true, false, &marker))
             {
                 select(region);
                 setDesignClip(std::nullopt);
                 return;
             }
-            drawEllipseOutline({x - 4 * designScale(), y - 4 * designScale(), 8 * designScale(), 8 * designScale()},
-                               2 * designScale(), 0xff8dc5e1u);
-            if (pointerInside(marker) || focused("atlas-pin-" + region.id))
+            drawEllipseOutline({x - 2 * designScale(), y - 2 * designScale(), 4 * designScale(), 4 * designScale()},
+                               designScale(), 0xff8dc5e1u);
+            if (pointerInside(hitArea) || focused("atlas-pin-" + region.id))
             {
                 Rect caption{x - 80 * designScale(), y - 36 * designScale(), 160 * designScale(), 20 * designScale()};
                 caption.x = std::clamp(caption.x, viewport.x, viewport.x + viewport.width - caption.width);

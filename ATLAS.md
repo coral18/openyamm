@@ -28,6 +28,8 @@ did not include a declared reuse license; a future import of its authored materi
 - Outdoor maps display clickable building (`B`), trainer (`T`) and dungeon-entrance (`D`) markers. Nearby doors
   form numbered groups; clicking a group narrows the list, and its heading clears that selection. Filters and
   search apply to both the list and markers. Single dungeon markers open the existing floor-plan view.
+  Region badges use 12 logical pixels and continent badges 10; their unchanged 24/28-pixel hit areas retain
+  comfortable pointer/touch selection. Marker glyphs use the small reading font; party-arrow size is unchanged.
 - Buildings require a real visit and trainers require meeting their resident. Dungeon entrances require the
   exact entrance cell to be fully explored, not merely dimly revealed. Learning an entrance never grants its
   interior map or reveals other entrances. Guide Mode shows authored markers without changing discoveries.
@@ -155,3 +157,8 @@ unvisited interior in Discovery Mode. The tour resumed gameplay. Tests used sepa
 no original save was overwritten.
 The rebuilt native Windows executable also fully loaded New Sorpigal (MM6) and Dagger Wound Island (MM8),
 including their event programs, after the shared loader extraction. Both checks exited successfully.
+
+The compact-marker refinement was compiled and visually checked in native Windows gameplay: Harmondale and Avlee,
+region zoom, continent overview, Discovery/Guide and return to gameplay. Clicking outside a badge's visible border
+but inside its retained hit area selected the correct group. Eight engine-owned captures remain in the isolated
+`atlas-small-markers-20261007` directory outside Git.

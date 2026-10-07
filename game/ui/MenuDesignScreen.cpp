@@ -408,7 +408,7 @@ void MenuDesignScreen::setDesignClip(const std::optional<Rect> &rect)
 }
 
 bool MenuDesignScreen::button(const std::string &id, const Rect &rect, const std::string &text, const std::string &name,
-                              bool enabled, bool selected)
+                              bool enabled, bool selected, const Rect *pVisualRect)
 {
     const bool available = enabled && (!modalOpen() || m_drawingConfirmation);
     if (available)
@@ -439,17 +439,18 @@ bool MenuDesignScreen::button(const std::string &id, const Rect &rect, const std
         }
     }
     const bool standard = name.starts_with("button");
+    const Rect &visualRect = pVisualRect != nullptr ? *pVisualRect : rect;
     const std::string state = !enabled ? "disabled" : pressed ? "pressed" : hovered ? "hover" : "default";
     // Toggle artwork includes the checkbox; scale the whole plate together rather than stretching its centre.
     const bool sliced = name != "toggle_on" && name != "toggle_off";
-    skin(name + (standard ? "_" + state : selected ? "_selected" : ""), rect, sliced, standard ? 6 : 0);
+    skin(name + (standard ? "_" + state : selected ? "_selected" : ""), visualRect, sliced, standard ? 6 : 0);
     if (m_keyboardFocus && m_focus == id && available)
     {
-        outline(rect, 0xff8dc5e1u);
+        outline(visualRect, 0xff8dc5e1u);
     }
     if (!text.empty())
     {
-        Rect textRect = rect;
+        Rect textRect = visualRect;
         textRect.x += 5 * designScale();
         textRect.width -= 10 * designScale();
         textInRect(textRect, text, "fondamento", name == "button_square" ? 11.7f : 13.8667f,
