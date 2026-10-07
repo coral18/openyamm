@@ -13,12 +13,12 @@
 11	11	Weapon Shop	65	235	Hunter's Lodge	Jared	Blacksmith	0527	0	0	0	2	1		21			6	18	0	0	0	0
 12	12	Weapon Shop	68	233	The Hallowed Sword	Charles	Blacksmith	0516	0	0	0	4	2		28			6	18	0	0	0	0
 13	13	Weapon Shop	69	231	Blades of Spite	Spite	Blacksmith	0512	0	0	0	4	2		28			18	6	0	0	0	0
-14	14	Weapon Shop	71	234	The Blooded Dagger	Chos	Blacksmith	0514	0	0	0	3	1.5		14			18	6	0	0	0	0
-15	15	Weapon Shop	74	230	Vander's Blades & Bows	Vander	Blacksmith	0536	0	0	0	3	1.5		21			6	18	0	0	0	0
-16	16	Weapon Shop	75	235	The Knocked Bow	Robin	Blacksmith	0527	0	0	0	3	1.5		21			6	18	0	0	0	0
+14	14	Weapon Shop	69	234	The Blooded Dagger	Chos	Blacksmith	0514	0	0	0	3	1.5		14			18	6	0	0	0	0
+15	15	Weapon Shop	72	230	Vander's Blades & Bows	Vander	Blacksmith	0536	0	0	0	3	1.5		21			6	18	0	0	0	0
+16	16	Weapon Shop	73	235	The Knocked Bow	Robin	Blacksmith	0527	0	0	0	3	1.5		21			6	18	0	0	0	0
 17	17	Weapon Shop	100	232	The Balanced Axe	Ulther	Blacksmith	0491	0	0	0	2.5	1		14			6	18	0	0	0	0
 18	18	Weapon Shop	82	230	Swords Inc.	Robert	Blacksmith	0536	0	0	0	2.5	1		21			6	18	0	0	0	0
-19	19	Weapon Shop	74	230	Alloyed Weapons	Tarin	Blacksmith	0536	0	0	0	3	1.5		21			6	18	0	0	0	0
+19	19	Weapon Shop	72	230	Alloyed Weapons	Tarin	Blacksmith	0536	0	0	0	3	1.5		21			6	18	0	0	0	0
 20	20	Weapon Shop	0	230	The Best Defense	Madden	Blacksmith	0536	0	0	0	1.5	1		7			6	18	0	0	0	0
 21	21	Weapon Shop	0	230	Ironwood Spears	Smythe	Blacksmith	0536	0	0	0	1.5	1		7			6	18	0	0	0	0
 22	22	Weapon Shop	151	371	The Knife Shoppe	Caine	Blacksmith	0051	0	0	0	1.5	1	L2 Dagger	2	Weapon Shop gets:		6	18	0	0	0	
@@ -53,12 +53,12 @@
 51	16	Armor Shop	65	179	Buckskins and Bucklers	Sable	Armorsmith	0541	0	0	0	2	1		21			6	18	0	0	0	0
 52	17	Armor Shop	68	177	Armor of Honor	Cuthbert	Armorsmith	1498	0	0	0	4	2		28			6	18	0	0	0	0
 53	18	Armor Shop	69	175	Shields of Malice	Malice	Armorsmith	0514	0	0	0	4	2		28			18	6	0	0	0	0
-54	19	Armor Shop	71	178	The Tannery	Case	Armorsmith	0515	0	0	0	3	1.5		14			18	6	0	0	0	0
-55	20	Armor Shop	74	174	The Missing Link	Brand	Armorsmith	0537	0	0	0	3	1.5		21			6	18	0	0	0	0
-56	21	Armor Shop	75	179	Avlee Outpost	Tarence	Armorsmith	0541	0	0	0	3	1.5		21			6	18	0	0	0	0
+54	19	Armor Shop	69	178	The Tannery	Case	Armorsmith	0515	0	0	0	3	1.5		14			18	6	0	0	0	0
+55	20	Armor Shop	72	174	The Missing Link	Brand	Armorsmith	0537	0	0	0	3	1.5		21			6	18	0	0	0	0
+56	21	Armor Shop	73	179	Avlee Outpost	Tarence	Armorsmith	0541	0	0	0	3	1.5		21			6	18	0	0	0	0
 57	22	Armor Shop	100	176	The Polished Pauldron	Arthur	Armorsmith	0491	0	0	0	2.5	1		14			6	18	0	0	0	0
 58	23	Armor Shop	82	174	Thel's Armor and Shields	Thel	Armorsmith	0537	0	0	0	2.5	1		21			6	18	0	0	0	0
-59	24	Armor Shop	74	174	Alloyed Armor and Shields	Elmo	Armorsmith	0537	0	0	0	3	1.5		21			6	18	0	0	0	0
+59	24	Armor Shop	72	174	Alloyed Armor and Shields	Elmo	Armorsmith	0537	0	0	0	3	1.5		21			6	18	0	0	0	0
 60	25	Armor Shop	0	174	The Greenwood Forge	Laric	Armorsmith	0537	0	0	0	1.5	1		7			6	18	0	0	0	0
 61	26	Armor Shop	0	174	The Thrown Gauntlet	Murgen	Armorsmith	0537	0	0	0	1.5	1		7			6	18	0	0	0	0
 62	27	Armor Shop	151	448	The Common Defense	Harry	Armorsmith	1037	0	0	0	1.5	1	"L2 Leat,shd,Helm or Gaunt"	2	Armor Shop gets:		6	18	0	0	0	
@@ -91,7 +91,7 @@
 89	14	Magic Shop	67	197	Artifacts & Antiquities	Sionell	Magician	0506	0	0	0	3	1.5		28			6	18	0	0	0	0
 90	15	Magic Shop	68	197	Esoteric Indulgences	Bernard	Magician	0506	0	0	0	4	2		28			6	18	0	0	0	0
 91	16	Magic Shop	69	195	Eldritch Influences	No'mead	Magician	0509	0	0	0	4	2		28			18	6	0	0	0	0
-92	17	Magic Shop	71	198	Arcane Items	Lazlo	Magician	1502	0	0	0	3	1.5		21			18	6	0	0	0	0
+92	17	Magic Shop	69	198	Arcane Items	Lazlo	Magician	1502	0	0	0	3	1.5		21			18	6	0	0	0	0
 93	18	Magic Shop	100	196	Delicate Things	Dozer	Magician	0490	0	0	0	2.5	1.5		14			6	18	0	0	0	0
 94	19	Magic Shop	0	194	Rings & Relics	Kirby	Magician	0529	0	0	0	1.5	1		7			6	18	0	0	0	0
 95	20	Magic Shop	0	194	Mystical Forces	One-Eye	Magician	0529	0	0	0	1.5	1		7			6	18	0	0	0	0
@@ -130,7 +130,7 @@
 128	1	Fire Guild	62	240	Initiate Guild of Fire	Sethric	Guildmaster	0538	0	0	0	2	1		14			6	18	0	0	0	0
 129	2	Fire Guild	63	240	Adept Guild of Fire	Jani	Guildmaster	0538	0	0	0	3	1.5		14			6	18	0	0	0	0
 130	3	Fire Guild	65	240	Master Guild of Fire	Halion	Guildmaster	0538	0	0	0	4	2		28			6	18	0	0	0	0
-131	4	Fire Guild	71	240	Paramount Guild of Fire	Rohan	Guildmaster	0538	0	0	0	5	2.5		28			18	6	0	0	0	0
+131	4	Fire Guild	69	240	Paramount Guild of Fire	Rohan	Guildmaster	0538	0	0	0	5	2.5		28			18	6	0	0	0	0
 132	5	Fire Guild	150	423	Initiate Guild of Fire	Marton 	Guildmaster	0047	0	0	0	2	1	Skill = Learning	2			6	18	0	0	0	
 133	7	Fire Guild	144	423	Adept Guild of Fire	Dennis 	Guildmaster	0047	0	0	0	3	1	Skill = Learning	2	Magic Guilds Get:		6	18	0	0	0	
 134	1	Air Guild	62	236	Initiate Guild of Air	Jenny	Guildmaster	0851	0	0	0	2	1		14			6	18	0	0	0	0
@@ -142,7 +142,7 @@
 140	1	Water Guild	63	244	Initiate Guild of Water	Ullen	Guildmaster	0518	0	0	0	2	1		14			6	18	0	0	0	0
 141	2	Water Guild	65	244	Adept Guild of Water	Arthra	Guildmaster	0518	0	0	0	3	1.5		14			6	18	0	0	0	0
 142	3	Water Guild	67	244	Master Guild of Water	Lund	Guildmaster	0518	0	0	0	4	2		28			6	18	0	0	0	0
-143	4	Water Guild	70	244	Paramount Guild of Water	Faolain	Guildmaster	0518	0	0	0	5	2.5		28			6	18	0	0	0	0
+143	4	Water Guild	68	244	Paramount Guild of Water	Faolain	Guildmaster	0518	0	0	0	5	2.5		28			6	18	0	0	0	0
 144	5	Water Guild	150	426	Initiate Guild of Water	Ellis 	Guildmaster	0046	0	0	0	2	1	Skill = Learning	2	"""(Skill)"""	(see list B)	6	18	0	0	0	
 145	7	Water Guild	144	426	Adept Guild of Water	Terrance 	Guildmaster	0046	0	0	0	3	1	Skill = Learning	2			6	18	0	0	0	
 146	1	Earth Guild	63	239	Initiate Guild of Earth	Pebble	Guildmaster	0526	0	0	0	2	1		14			6	18	0	0	0	0
@@ -159,14 +159,14 @@
 157	7	Spirit Guild	144	431	Adept Guild of Spirit	Glenna	Guildmaster	0193	0	0	0	3	1	Skill = Meditation	2			6	18	0	0	0	
 158	1	Mind Guild	63	242	Initiate Guild of Mind	Lyric	Guildmaster	0786	0	0	0	2	1		14			6	18	0	0	0	0
 159	2	Mind Guild	64	242	Adept Guild of Mind	Agatha	Guildmaster	0786	0	0	0	3	1.5		14			6	18	0	0	0	0
-160	3	Mind Guild	74	242	Master Guild of Mind	Sevrin	Guildmaster	0786	0	0	0	4	2		28			6	18	0	0	0	0
-161	4	Mind Guild	75	242	Paramount Guild of Mind	Regina	Guildmaster	0786	0	0	0	5	2.5		28			6	18	0	0	0	0
+160	3	Mind Guild	72	242	Master Guild of Mind	Sevrin	Guildmaster	0786	0	0	0	4	2		28			6	18	0	0	0	0
+161	4	Mind Guild	73	242	Paramount Guild of Mind	Regina	Guildmaster	0786	0	0	0	5	2.5		28			6	18	0	0	0	0
 162	5	Mind Guild	148	432	Initiate Guild of Mind	Cloud 	Guildmaster	0392	0	0	0	2	1	Skill = Meditation	2			6	18	0	0	0	
 163	7	Mind Guild	144	432	Adept Guild of Mind	Penelope	Guildmaster	0392	0	0	0	3	1	Skill = Meditation	2			6	18	0	0	0	
 164	1	Body Guild	62	237	Initiate Guild of Body	Standish	Guildmaster	1496	0	0	0	2	1		14			6	18	0	0	0	0
 165	2	Body Guild	63	237	Adept Guild of Body	Jerald	Guildmaster	1496	0	0	0	3	1.5		14			6	18	0	0	0	0
 166	3	Body Guild	64	237	Master Guild of Body	Ubrecht	Guildmaster	1496	0	0	0	4	2		28			6	18	0	0	0	0
-167	4	Body Guild	75	237	Paramount Guild of Body	Aramis	Guildmaster	1496	0	0	0	5	2.5		28			6	18	0	0	0	0
+167	4	Body Guild	73	237	Paramount Guild of Body	Aramis	Guildmaster	1496	0	0	0	5	2.5		28			6	18	0	0	0	0
 168	5	Body Guild	148	433	Initiate Guild of Body	Karla	Guildmaster	1034	0	0	0	2	1	Skill = Meditation	2			6	18	0	0	0	
 169	7	Body Guild	144	433	Adept Guild of Body	Veronica	Guildmaster	1034	0	0	0	3	1	Skill = Meditation	2			6	18	0	0	0	
 170	3	Light Guild	5	156	Guild of Light	Sheivi	Scribe	1115	0	0	0	5	2.5		28	"4,7,10,11"		6	18	0	0	0	0
@@ -246,11 +246,11 @@
 244	17	Tavern	67	209	Familiar Place	Bismor	Innkeep	1500	0	0	0	14	1					5	2	0	0	0	0
 245	18	Tavern	68	209	The Blessed Brew	Joseph	Innkeep	1500	0	0	0	30	1.5					5	2	0	0	0	0
 246	19	Tavern	69	207	The Vampyre Lounge 	Paul	Innkeep	1511	0	0	0	30	1.5					17	14	0	0	0	0
-247	20	Tavern	70	206	The Laughing Monk	Winston	Innkeep	0535	0	0	0	6	1					5	2	0	0	0	0
-248	21	Tavern	71	210	Fortune's Folly	Phillepe	Innkeep	1519	0	0	0	60	2					17	14	0	0	0	0
-249	22	Tavern	72	208	Miner's Only	Irving	Innkeep	0485	0	0	0	18	1					5	2	0	0	0	0
-250	23	Tavern	74	206	The Loyal Mercenary	Karl	Innkeep	0535	0	0	0	20	1.5					5	2	0	0	0	0
-251	24	Tavern	75	211	The Potted Pixie	Conor	Innkeep	0524	0	0	0	20	1.5					5	2	0	0	0	0
+247	20	Tavern	68	206	The Laughing Monk	Winston	Innkeep	0535	0	0	0	6	1					5	2	0	0	0	0
+248	21	Tavern	69	210	Fortune's Folly	Phillepe	Innkeep	1519	0	0	0	60	2					17	14	0	0	0	0
+249	22	Tavern	70	208	Miner's Only	Irving	Innkeep	0485	0	0	0	18	1					5	2	0	0	0	0
+250	23	Tavern	72	206	The Loyal Mercenary	Karl	Innkeep	0535	0	0	0	20	1.5					5	2	0	0	0	0
+251	24	Tavern	73	211	The Potted Pixie	Conor	Innkeep	0524	0	0	0	20	1.5					5	2	0	0	0	0
 252	25	Tavern	100	208	Grogg's Grog	Grogg	Innkeep	0485	0	0	0	20	1.5					5	2	0	0	0	0
 253	26	Tavern	0	206	Knightly Pursuits	Michael	Innkeep	0535	0	0	0	6	1					8	2	0	0	0	0
 254	27	Tavern	0	206	The Last Resort	Shamus	Innkeep	0535	0	0	0	6	1					8	2	0	0	0	0
@@ -290,8 +290,8 @@
 288	8	Bank	65	191	Nature's Stockpile	Bremen	Banker	0541	0	0	0	1	1					6	18	0	0	0	0
 289	9	Bank	68	189	Material Wealth	Riyan	Banker	1501	0	0	0	1	1					6	18	0	0	0	0
 290	10	Bank	69	187	Frozen Assets	Greed	Banker	0513	0	0	0	1	1					18	6	0	0	0	0
-291	11	Bank	74	186	The Depository	Tharpe	Banker	1555	0	0	0	1	1					6	18	0	0	0	0
-292	12	Bank	75	191	Halls of Gold	Daniv	Banker	0541	0	0	0	1	1					6	18	0	0	0	0
+291	11	Bank	72	186	The Depository	Tharpe	Banker	1555	0	0	0	1	1					6	18	0	0	0	0
+292	12	Bank	73	191	Halls of Gold	Daniv	Banker	0541	0	0	0	1	1					6	18	0	0	0	0
 293	13	Bank	100	188	Mineral Wealth	Rialt	Banker	0486	0	0	0	1	1					6	18	0	0	0	0
 294	14	Bank	0	186	Placeholder	Placeholder	Banker	1555	0	0	0	1	1					6	18	0	0	0	0
 295	15	Bank	0	186	Placeholder	Placeholder	Banker	1555	0	0	0	1	1					6	18	0	0	0	0
@@ -317,9 +317,9 @@
 315	13	Temple	67	215	Temple of Light	Reginald	Healer	0505	0	0	0	40	1.5		0			1	24	0	0	0	0
 316	14	Temple	68	215	Temple of Light	Bethyn	Healer	0505	0	0	0	50	2		0			1	24	0	0	0	0
 317	15	Temple	69	213	Temple of Dark	Zevah	Healer	0506	0	0	0	50	2		2			13	12	0	0	0	0
-318	16	Temple	71	216	Offerings and Blessings	Murray	Healer	1523	0	0	0	99.99	2.5		2			13	12	0	0	0	0
-319	17	Temple	74	366	The Order of Tatalia	Theresa	Healer	1516	0	0	0	30	1.5		0			1	24	0	0	0	0
-320	18	Temple	75	217	Temple of Tranquility	Simon	Healer	0523	0	0	0	30	1.5		0			1	24	0	0	0	0
+318	16	Temple	69	216	Offerings and Blessings	Murray	Healer	1523	0	0	0	99.99	2.5		2			13	12	0	0	0	0
+319	17	Temple	72	366	The Order of Tatalia	Theresa	Healer	1516	0	0	0	30	1.5		0			1	24	0	0	0	0
+320	18	Temple	73	217	Temple of Tranquility	Simon	Healer	0523	0	0	0	30	1.5		0			1	24	0	0	0	0
 321	19	Temple	100	214	Temple of Stone	Edwin	Healer	0488	0	0	0	40	1.5		0			1	24	0	0	0	0
 322	20	Temple	82	366	Sanctuary	Rusina	Healer	1516	0	0	0	5	1		0			1	24	0	0	0	0
 323	21	Temple	0	212	Holy Ground	Belle	Healer	0510	0	0	0	1.5	1		0			1	24	0	0	0	0
@@ -387,7 +387,7 @@
 385	45	Dungeon Ent	69	317	Castle Gloaming	Placeholder			0	0	0	1.5				1		6	18	0	0	0	0
 386	46	Dungeon Ent	68	314	Castle Lambent	Placeholder			0	0	0	1.5				1		6	18	0	0	0	0
 387	47	Dungeon Ent	62	300	Temple of the Moon	Placeholder			0	0	0	1.5						6	18	0	0	0	0
-388	48	Dungeon Ent	72	328	Barrow				0	0	0	1.5								0	0		
+388	48	Dungeon Ent	70	328	Barrow				0	0	0	1.5								0	0		
 389	49	Dungeon Ent	62	301	Dragon's Lair	Placeholder			0	0	0	1.5						6	18	0	0	0	0
 390	50	Dungeon Ent	63	302	Castle Harmondale	Placeholder			0	0	0	1.5						6	18	0	0	0	0
 391	51	Dungeon Ent	63	303	White Cliff Caves	Placeholder			0	0	0	1.5						6	18	0	0	0	0
@@ -403,18 +403,18 @@
 401	61	Dungeon Ent	68	316	Temple of the Light	Placeholder			0	0	0	1.5						6	18	0	0	0	0
 402	62	Dungeon Ent	69	318	Breeding Zone	Placeholder			0	0	0	1.5						6	18	0	0	0	0
 403	63	Dungeon Ent	69	319	Temple of the Dark	Placeholder			0	0	0	1.5						6	18	0	0	0	0
-404	64	Dungeon Ent	70	320	Grand Temple of the Moon	Placeholder			0	0	0	1.5						6	18	0	0	0	0
-405	65	Dungeon Ent	70	321	Grand Temple of the Sun	Placeholder			0	0	0	1.5						6	18	0	0	0	0
-406	66	Dungeon Ent	71	322	Thunderfist Mountain	Placeholder			0	0	0	1.5						6	18	0	0	0	0
-407	67	Dungeon Ent	71	323	The Maze	Placeholder			0	0	0	1.5						6	18	0	0	0	0
-408	68	Dungeon Ent	72	327	Stone City	Placeholder			0	0	0	1.5						6	18	0	0	0	0
-409	69	Dungeon Ent	73	329	Colony Zod	Placeholder			0	0	0	1.5						6	18	0	0	0	0
-410	70	Dungeon Ent	74	333	Mercenary Guild	Placeholder			0	0	0	1.5						6	18	0	0	0	0
-411	71	Dungeon Ent	74	334	Tidewater Caverns	Placeholder			0	0	0	1.5						6	18	0	0	0	0
-412	72	Dungeon Ent	74	335	Wine Cellar	Placeholder			0	0	0	1.5						6	18	0	0	0	0
-413	73	Dungeon Ent	75	336	Titan's Stronghold	Placeholder			0	0	0	1.5						6	18	0	0	0	0
-414	74	Dungeon Ent	75	337	Temple of Baa	Placeholder			0	0	0	1.5						6	18	0	0	0	0
-415	75	Dungeon Ent	75	338	Hall under the Hill	Placeholder			0	0	0	1.5						6	18	0	0	0	0
+404	64	Dungeon Ent	68	320	Grand Temple of the Moon	Placeholder			0	0	0	1.5						6	18	0	0	0	0
+405	65	Dungeon Ent	68	321	Grand Temple of the Sun	Placeholder			0	0	0	1.5						6	18	0	0	0	0
+406	66	Dungeon Ent	69	322	Thunderfist Mountain	Placeholder			0	0	0	1.5						6	18	0	0	0	0
+407	67	Dungeon Ent	69	323	The Maze	Placeholder			0	0	0	1.5						6	18	0	0	0	0
+408	68	Dungeon Ent	70	327	Stone City	Placeholder			0	0	0	1.5						6	18	0	0	0	0
+409	69	Dungeon Ent	71	329	Colony Zod	Placeholder			0	0	0	1.5						6	18	0	0	0	0
+410	70	Dungeon Ent	72	333	Mercenary Guild	Placeholder			0	0	0	1.5						6	18	0	0	0	0
+411	71	Dungeon Ent	72	334	Tidewater Caverns	Placeholder			0	0	0	1.5						6	18	0	0	0	0
+412	72	Dungeon Ent	72	335	Wine Cellar	Placeholder			0	0	0	1.5						6	18	0	0	0	0
+413	73	Dungeon Ent	73	336	Titan's Stronghold	Placeholder			0	0	0	1.5						6	18	0	0	0	0
+414	74	Dungeon Ent	73	337	Temple of Baa	Placeholder			0	0	0	1.5						6	18	0	0	0	0
+415	75	Dungeon Ent	73	338	Hall under the Hill	Placeholder			0	0	0	1.5						6	18	0	0	0	0
 416	76	Dungeon Ent	76	339	The Lincoln	Placeholder			0	0	0	1.5						6	18	0	0	0	0
 417	77	Dungeon Ent	151	480	Goblinwatch				0	0	0	0	1							0	0	Need 	Enter
 418	78	Dungeon Ent	148	406	Temple of Baa				0	0	0	0	1							0	0		Enter
@@ -465,8 +465,8 @@
 463	12	Stables	65	205	Hu's Stallions	Hu	Stablemaster	0697	0	0	0	3	1					6	18	0	0	0	0
 464	13	Stables	66	201	Faithful Steeds	Jasper	Stablemaster	0508	0	0	0	5	1					18	6	0	0	0	0
 465	14	Stables	67	203	Crystal Caravans	Erwin	Stablemaster	1501	0	0	0	5	1					6	18	0	0	0	0
-466	15	Stables	74	200	Dry Saddles	William	Stablemaster	0917	0	0	0	10	1					6	18	0	0	0	0
-467	16	Stables	75	205	Plush Coaches	Warren	Stablemaster	0697	0	0	0	10	1					6	18	0	0	0	0
+466	15	Stables	72	200	Dry Saddles	William	Stablemaster	0917	0	0	0	10	1					6	18	0	0	0	0
+467	16	Stables	73	205	Plush Coaches	Warren	Stablemaster	0697	0	0	0	10	1					6	18	0	0	0	0
 468	17	Stables	0	200	Placeholder	Lisha	Stablemaster	0917	0	0	0	1.5	1					6	18	0	0	0	0
 469	18	Stables	0	200	Placeholder	Faile	Stablemaster	0917	0	0	0	1.5	1					6	18	0	0	0	0
 470	19	Stables	151	414	New Sorpigal Coach Company	Aaron	Stablemaster	0068	0	0	0	1		-	-			5	18	0	0	0	
@@ -488,11 +488,11 @@
 486	8	Boats	64	192	Lady Catherine	Christopher	Captain	0890	0	0	0	2	1					6	18	0	0	0	0
 487	9	Boats	65	192	Sea Sprite	Halsey	Captain	0890	0	0	0	2	1					6	18	0	0	0	0
 488	10	Boats	67	192	Enchantress	Adric	Captain	0890	0	0	0	5	1					6	18	0	0	0	0
-489	11	Boats	70	192	Sacred Sails	Deckert	Captain	0890	0	0	0	10	1					6	18	0	0	0	0
-490	12	Boats	72	192	Dauntless	Jaymes	Captain	0890	0	0	0	1.5	1					6	18	0	0	0	0
-491	13	Boats	74	192	Narwhale	Leer	Captain	0890	0	0	0	5	1					6	18	0	0	0	0
-492	14	Boats	75	192	Wind Runner	Yarin	Captain	0890	0	0	0	5	1					6	18	0	0	0	0
-493	15	Boats	70	192	Mist Flyer	Maxwell	Captain	0890	0	0	0	10	1					6	18	0	0	0	0
+489	11	Boats	68	192	Sacred Sails	Deckert	Captain	0890	0	0	0	10	1					6	18	0	0	0	0
+490	12	Boats	70	192	Dauntless	Jaymes	Captain	0890	0	0	0	1.5	1					6	18	0	0	0	0
+491	13	Boats	72	192	Narwhale	Leer	Captain	0890	0	0	0	5	1					6	18	0	0	0	0
+492	14	Boats	73	192	Wind Runner	Yarin	Captain	0890	0	0	0	5	1					6	18	0	0	0	0
+493	15	Boats	68	192	Mist Flyer	Maxwell	Captain	0890	0	0	0	10	1					6	18	0	0	0	0
 494	16	Boats	0	192	Placeholder	Placeholder	Captain	0890	0	0	0	1.5	1					6	18	0	0	0	0
 495	17	Boats	0	192	Placeholder	Placeholder	Captain	0890	0	0	0	1.5	1					6	18	0	0	0	0
 496	18	Boats	151	415	Odyssey	Bryan	Captain	0381	0	0	0	2	1	-	-			5	18	0	0	0	
@@ -985,71 +985,71 @@
 983	476	House	66	288	Undershadow's Home				0	0	0	1.5				115				0	0		
 984	477	House	66	289	Slicer's House				0	0	0	1.5				115				0	0		
 985	478	House	66	288	Falk Residence				0	0	0	1.5				115				0	0		
-986	479	House	70	246	Caverhill Residence				0	0	0	1.5								0	0		
-987	480	House	70	247	Crane Residence				0	0	0	1.5								0	0		
-988	481	House	70	248	Smithson Residence				0	0	0	1.5								0	0		
-989	482	House	74	246	Riverstone House				0	0	0	1.5								0	0		
-990	483	House	71	291	Whitesky Residence				0	0	0	1.5				118				0	0		
-991	484	House	71	292	Elmo's House				0	0	0	1.5				118				0	0		
-992	485	House	71	291	Hostel				0	0	0	1.5				118				0	0		
-993	486	House	71	292	Hostel				0	0	0	1.5				118				0	0		
-994	487	House	71	291	Hostel				0	0	0	1.5				118				0	0		
-995	488	House	71	294	Evander's Home				0	0	0	1.5				121				0	0		
-996	489	House	71	295	Anwyn Residence				0	0	0	1.5				121				0	0		
-997	490	House	71	294	Silk's Home				0	0	0	1.5				121				0	0		
-998	491	House	71	295	Hostel				0	0	0	1.5				121				0	0		
-999	492	House	71	294	Hostel				0	0	0	1.5				121				0	0		
-1000	493	House	71	295	Hostel				0	0	0	1.5				121				0	0		
-1001	494	House	71	294	Hostel				0	0	0	1.5				121				0	0		
-1002	495	House	71	297	Dusk's Home				0	0	0	1.5				124				0	0		
-1003	496	House	71	298	Hostel				0	0	0	1.5				124				0	0		
-1004	497	House	71	299	Hostel				0	0	0	1.5				124				0	0		
-1005	498	House	74	246	Greydawn Residence				0	0	0	1.5								0	0		
-1006	499	House	74	247	Stormeye's House				0	0	0	1.5								0	0		
-1007	500	House	74	248	Bremen Residence				0	0	0	1.5								0	0		
-1008	501	House	75	255	Brightspear Residence				0	0	0	1.5				82				0	0		
-1009	502	House	75	256	Holden Residence				0	0	0	1.5				82				0	0		
+986	479	House	68	246	Caverhill Residence				0	0	0	1.5								0	0		
+987	480	House	68	247	Crane Residence				0	0	0	1.5								0	0		
+988	481	House	68	248	Smithson Residence				0	0	0	1.5								0	0		
+989	482	House	72	246	Riverstone House				0	0	0	1.5								0	0		
+990	483	House	69	291	Whitesky Residence				0	0	0	1.5				118				0	0		
+991	484	House	69	292	Elmo's House				0	0	0	1.5				118				0	0		
+992	485	House	69	291	Hostel				0	0	0	1.5				118				0	0		
+993	486	House	69	292	Hostel				0	0	0	1.5				118				0	0		
+994	487	House	69	291	Hostel				0	0	0	1.5				118				0	0		
+995	488	House	69	294	Evander's Home				0	0	0	1.5				121				0	0		
+996	489	House	69	295	Anwyn Residence				0	0	0	1.5				121				0	0		
+997	490	House	69	294	Silk's Home				0	0	0	1.5				121				0	0		
+998	491	House	69	295	Hostel				0	0	0	1.5				121				0	0		
+999	492	House	69	294	Hostel				0	0	0	1.5				121				0	0		
+1000	493	House	69	295	Hostel				0	0	0	1.5				121				0	0		
+1001	494	House	69	294	Hostel				0	0	0	1.5				121				0	0		
+1002	495	House	69	297	Dusk's Home				0	0	0	1.5				124				0	0		
+1003	496	House	69	298	Hostel				0	0	0	1.5				124				0	0		
+1004	497	House	69	299	Hostel				0	0	0	1.5				124				0	0		
+1005	498	House	72	246	Greydawn Residence				0	0	0	1.5								0	0		
+1006	499	House	72	247	Stormeye's House				0	0	0	1.5								0	0		
+1007	500	House	72	248	Bremen Residence				0	0	0	1.5								0	0		
+1008	501	House	73	255	Brightspear Residence				0	0	0	1.5				82				0	0		
+1009	502	House	73	256	Holden Residence				0	0	0	1.5				82				0	0		
 1010	503	House	0	173				0640	0	0	0	1.5				82				0	0		
 1011	504	House	0	173				0640	0	0	0	1.5				82				0	0		
 1012	505	House	0	173				0640	0	0	0	1.5				82				0	0		
 1013	506	House	0	173				0640	0	0	0	1.5				82				0	0		
-1014	507	House	75	258	Featherwind Residence				0	0	0	1.5				85				0	0		
-1015	508	House	75	259	Ravenhair Residence				0	0	0	1.5				85				0	0		
-1016	509	House	75	258	Jillian's House				0	0	0	1.5				85				0	0		
-1017	510	House	75	259	Greenstorm Residence				0	0	0	1.5				85				0	0		
+1014	507	House	73	258	Featherwind Residence				0	0	0	1.5				85				0	0		
+1015	508	House	73	259	Ravenhair Residence				0	0	0	1.5				85				0	0		
+1016	509	House	73	258	Jillian's House				0	0	0	1.5				85				0	0		
+1017	510	House	73	259	Greenstorm Residence				0	0	0	1.5				85				0	0		
 1018	511	House	0	173				0640	0	0	0	1.5				85				0	0		
 1019	512	House	0	173				0640	0	0	0	1.5				85				0	0		
-1020	513	House	75	261	Snick House				0	0	0	1.5				88				0	0		
-1021	514	House	75	262	Infernon's House				0	0	0	1.5				88				0	0		
-1022	515	House	75	263	Deerhunter Residence				0	0	0	1.5				88				0	0		
-1023	516	House	75	261	Swiftfoot's House				0	0	0	1.5				88				0	0		
+1020	513	House	73	261	Snick House				0	0	0	1.5				88				0	0		
+1021	514	House	73	262	Infernon's House				0	0	0	1.5				88				0	0		
+1022	515	House	73	263	Deerhunter Residence				0	0	0	1.5				88				0	0		
+1023	516	House	73	261	Swiftfoot's House				0	0	0	1.5				88				0	0		
 1024	517	House	0	173				0640	0	0	0	1.5				88				0	0		
-1025	518	House	74	246	Steele Residence				0	0	0	1.5				73				0	0		
-1026	519	House	74	247	Conscience Home				0	0	0	1.5				73				0	0		
-1027	520	House	74	248	Everil's House				0	0	0	1.5				73				0	0		
+1025	518	House	72	246	Steele Residence				0	0	0	1.5				73				0	0		
+1026	519	House	72	247	Conscience Home				0	0	0	1.5				73				0	0		
+1027	520	House	72	248	Everil's House				0	0	0	1.5				73				0	0		
 1028	521	House	0	173				0640	0	0	0	1.5				73				0	0		
 1029	522	House	0	173				0640	0	0	0	1.5				73				0	0		
-1030	523	House	74	246	Tricia's House				0	0	0	1.5				73				0	0		
-1031	524	House	74	247	Isram's House				0	0	0	1.5				73				0	0		
-1032	525	House	74	248	Stonecleaver Residence				0	0	0	1.5				73				0	0		
+1030	523	House	72	246	Tricia's House				0	0	0	1.5				73				0	0		
+1031	524	House	72	247	Isram's House				0	0	0	1.5				73				0	0		
+1032	525	House	72	248	Stonecleaver Residence				0	0	0	1.5				73				0	0		
 1033	526	House	0	173				0640	0	0	0	1.5				73				0	0		
-1034	527	House	74	246	Calindra's Home				0	0	0	1.5				73				0	0		
-1035	528	House	74	247	Brother Bombah's				0	0	0	1.5				73				0	0		
-1036	529	House	74	248	Redding Residence				0	0	0	1.5				73				0	0		
+1034	527	House	72	246	Calindra's Home				0	0	0	1.5				73				0	0		
+1035	528	House	72	247	Brother Bombah's				0	0	0	1.5				73				0	0		
+1036	529	House	72	248	Redding Residence				0	0	0	1.5				73				0	0		
 1037	530	House	0	173				0640	0	0	0	1.5				73				0	0		
-1038	531	House	74	246	Fist's House				0	0	0	1.5				73				0	0		
-1039	532	House	74	247	Wacko's				0	0	0	1.5				73				0	0		
-1040	533	House	74	248	Weldric's Home				0	0	0	1.5				76				0	0		
+1038	531	House	72	246	Fist's House				0	0	0	1.5				73				0	0		
+1039	532	House	72	247	Wacko's				0	0	0	1.5				73				0	0		
+1040	533	House	72	248	Weldric's Home				0	0	0	1.5				76				0	0		
 1041	534	House	0	173				0640	0	0	0	1.5				76				0	0		
-1042	535	House	74	249	Visconti Residence				0	0	0	1.5				76				0	0		
-1043	536	House	74	250	Arin Residence				0	0	0	1.5				76				0	0		
+1042	535	House	72	249	Visconti Residence				0	0	0	1.5				76				0	0		
+1043	536	House	72	250	Arin Residence				0	0	0	1.5				76				0	0		
 1044	537	House	0	173				0640	0	0	0	1.5				76				0	0		
 1045	538	House	0	173				0640	0	0	0	1.5				76				0	0		
-1046	539	House	74	249	Sampson Residence				0	0	0	1.5				76				0	0		
+1046	539	House	72	249	Sampson Residence				0	0	0	1.5				76				0	0		
 1047	540	House	0	173				0640	0	0	0	1.5				76				0	0		
-1048	541	House	74	252	Taren's House				0	0	0	1.5				79				0	0		
-1049	542	House	74	253	Moore Residence				0	0	0	1.5				79				0	0		
-1050	543	House	74	253	Rothham's House				0	0	0	1.5				79				0	0		
+1048	541	House	72	252	Taren's House				0	0	0	1.5				79				0	0		
+1049	542	House	72	253	Moore Residence				0	0	0	1.5				79				0	0		
+1050	543	House	72	253	Rothham's House				0	0	0	1.5				79				0	0		
 1051	544	House	100	264	Keenedge Residence				0	0	0	1.5				91				0	0		
 1052	545	House	100	265	Seline's House				0	0	0	1.5				91				0	0		
 1053	546	House	100	264	Welman Residence				0	0	0	1.5				91				0	0		
@@ -1139,23 +1139,23 @@
 1137	630	House	67	274	Watershed Residence				0	0	0	1.5								0	0		
 1138	631	House	67	276	Hollyfield Residence				0	0	0	1.5								0	0		
 1139	632	House	67	277	Sweet Residence				0	0	0	1.5								0	0		
-1140	633	House	75	255	Tempus' House				0	0	0	1.5								0	0		
-1141	634	House	75	256	Kaine's				0	0	0	1.5								0	0		
-1142	635	House	75	255	Apple Residence				0	0	0	1.5								0	0		
-1143	636	House	71	297	Roggen Residence				0	0	0	1.5								0	0		
-1144	637	House	71	298	Elzbet's House				0	0	0	1.5								0	0		
-1145	638	House	71	299	Aznog's Place				0	0	0	1.5								0	0		
-1146	639	House	71	294	Hollis' Home				0	0	0	1.5								0	0		
-1147	640	House	71	295	Lanshee's House				0	0	0	1.5								0	0		
-1148	641	House	71	294	Neldon Residence				0	0	0	1.5								0	0		
-1149	642	House	71	295	Hawthorne Residence				0	0	0	1.5								0	0		
-1150	643	House	73	250	Lasiter's Home				0	0	0	1.5								0	0		
-1151	644	House	72	264	Dallia's Home				0	0	0	1.5								0	0		
-1152	645	House	72	267	Gemstone Residence				0	0	0	1.5								0	0		
-1153	646	House	72	270	Feldspar's Home				0	0	0	1.5								0	0		
-1154	647	House	72	267	Fissure Residence				0	0	0	1.5								0	0		
-1155	648	House	72	267	Garnet House				0	0	0	1.5								0	0		
-1156	649	House	72	270	Rivenrock Residence				0	0	0	1.5								0	0		
+1140	633	House	73	255	Tempus' House				0	0	0	1.5								0	0		
+1141	634	House	73	256	Kaine's				0	0	0	1.5								0	0		
+1142	635	House	73	255	Apple Residence				0	0	0	1.5								0	0		
+1143	636	House	69	297	Roggen Residence				0	0	0	1.5								0	0		
+1144	637	House	69	298	Elzbet's House				0	0	0	1.5								0	0		
+1145	638	House	69	299	Aznog's Place				0	0	0	1.5								0	0		
+1146	639	House	69	294	Hollis' Home				0	0	0	1.5								0	0		
+1147	640	House	69	295	Lanshee's House				0	0	0	1.5								0	0		
+1148	641	House	69	294	Neldon Residence				0	0	0	1.5								0	0		
+1149	642	House	69	295	Hawthorne Residence				0	0	0	1.5								0	0		
+1150	643	House	71	250	Lasiter's Home				0	0	0	1.5								0	0		
+1151	644	House	70	264	Dallia's Home				0	0	0	1.5								0	0		
+1152	645	House	70	267	Gemstone Residence				0	0	0	1.5								0	0		
+1153	646	House	70	270	Feldspar's Home				0	0	0	1.5								0	0		
+1154	647	House	70	267	Fissure Residence				0	0	0	1.5								0	0		
+1155	648	House	70	267	Garnet House				0	0	0	1.5								0	0		
+1156	649	House	70	270	Rivenrock Residence				0	0	0	1.5								0	0		
 1157	650	House	90	279	Thomas Grey				0	0	0	1.5								0	0		
 1158	651	House	109	254	Alice Hargreaves				0	0	0	1.5								0	0		
 1159	652	House	0	173				0640	0	0	0	0								0	0		
@@ -1575,9 +1575,9 @@
 1573	10	Training	65	229	The Proving Grounds	Claudius	Instructor	0687	0	0	0	25	1				25	6	18	0	0	0	0
 1574	11	Training	68	227	Trial of Honor	Nero	Instructor	1524	0	0	0	30	1.5				200	6	18	0	0	0	0
 1575	12	Training	69	225	Perdition's Flame	Kahn	Instructor	1514	0	0	0	30	1.5				200	18	6	0	0	0	0
-1576	13	Training	71	228	Applied Instruction	Augustus	Instructor	1521	0	0	0	50	2.5				No Max	18	6	0	0	0	0
-1577	14	Training	74	224	Training Essentials	Vespasian	Instructor	0530	0	0	0	40	2				50	6	18	0	0	0	0
-1578	15	Training	75	229	Avlee Gymnaisium	Justinian	Instructor	0687	0	0	0	80	2				50	6	18	0	0	0	0
+1576	13	Training	69	228	Applied Instruction	Augustus	Instructor	1521	0	0	0	50	2.5				No Max	18	6	0	0	0	0
+1577	14	Training	72	224	Training Essentials	Vespasian	Instructor	0530	0	0	0	40	2				50	6	18	0	0	0	0
+1578	15	Training	73	229	Avlee Gymnaisium	Justinian	Instructor	0687	0	0	0	80	2				50	6	18	0	0	0	0
 1579	16	Training	100	226	War College	Angus	Instructor	0487	0	0	0	40	3				100	6	18	0	0	0	0
 1580	17	Training	62	224	Placeholder	Constantine	Instructor	0530	0	0	0	1.5	1					6	18	0	0	0	0
 1581	18	Training	62	224	Placeholder	Constantine	Instructor	0530	0	0	0	1.5	1					6	18	0	0	0	0

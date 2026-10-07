@@ -4379,6 +4379,101 @@ bool GameDataLoader::loadInitialMap(const Engine::AssetFileSystem &assetFileSyst
     return loadSelectedMap(assetFileSystem, entries.front().id, mapLoadPurpose);
 }
 
+bool GameDataLoader::loadEventPrograms(const Engine::AssetFileSystem &assetFileSystem,
+    MapAssetInfo &map, std::string &error)
+{
+    error.clear();
+    map.localEventProgram.reset();
+    map.globalEventProgram.reset();
+    const std::string localScriptBaseName = mapScriptBaseName(map.map.fileName);
+    std::string resolvedSupportLuaPath;
+    const std::optional<std::string> supportLuaSource = readFirstExistingText(
+        assetFileSystem,
+        buildLuaSupportPathCandidates(),
+        resolvedSupportLuaPath);
+    std::string resolvedWorldCommonLuaPath;
+    const std::optional<std::string> worldCommonLuaSource = readExistingTexts(
+        assetFileSystem,
+        buildLuaWorldCommonPathCandidates(map.map.worldId),
+        resolvedWorldCommonLuaPath);
+    const std::vector<std::filesystem::path> localLuaSidecarCandidates =
+        buildLuaScriptSidecarPathCandidates(
+            localScriptBaseName,
+            assetFileSystem.resolvePhysicalPath(map.geometryPath),
+            map.scenePath ? assetFileSystem.resolvePhysicalPath(*map.scenePath) : std::nullopt);
+
+    {
+        std::string resolvedLuaPath;
+        std::optional<std::string> luaSource =
+            readFirstExistingPhysicalText(localLuaSidecarCandidates, resolvedLuaPath);
+
+        if (!luaSource)
+        {
+            luaSource = readFirstExistingText(
+                assetFileSystem,
+                buildLuaScriptPathCandidates(localScriptBaseName, false),
+                resolvedLuaPath
+            );
+        }
+
+        if (luaSource)
+        {
+            const std::string mapLuaSource = appendLuaScriptOverlays(
+                assetFileSystem,
+                localScriptBaseName,
+                *luaSource,
+                resolvedLuaPath);
+            const std::string combinedLuaSource =
+                prependLuaSupport(supportLuaSource, worldCommonLuaSource, mapLuaSource);
+            std::optional<ScriptedEventProgram> program = ScriptedEventProgram::loadFromLuaText(
+                combinedLuaSource,
+                "@" + resolvedLuaPath,
+                ScriptedEventScope::Map,
+                error);
+
+            if (!program)
+            {
+                error = "Failed to load local event Lua: " + resolvedLuaPath + ": " + error;
+                return false;
+            }
+
+            map.localEventProgram = std::move(program);
+        }
+    }
+
+    {
+        std::string resolvedLuaPath;
+        const std::optional<std::string> luaSource = readFirstExistingText(
+            assetFileSystem,
+            buildLuaScriptPathCandidates("Global", true),
+            resolvedLuaPath
+        );
+
+        if (luaSource)
+        {
+            const std::string globalLuaSource =
+                appendLuaGlobalScriptOverlays(assetFileSystem, *luaSource, resolvedLuaPath);
+            const std::string combinedLuaSource =
+                prependLuaSupport(supportLuaSource, worldCommonLuaSource, globalLuaSource);
+            std::optional<ScriptedEventProgram> program = ScriptedEventProgram::loadFromLuaText(
+                combinedLuaSource,
+                "@" + resolvedLuaPath,
+                ScriptedEventScope::Global,
+                error);
+
+            if (!program)
+            {
+                error = "Failed to load global event Lua: " + resolvedLuaPath + ": " + error;
+                return false;
+            }
+
+            map.globalEventProgram = std::move(program);
+        }
+    }
+
+    return true;
+}
+
 bool GameDataLoader::loadSelectedMap(
     const Engine::AssetFileSystem &assetFileSystem,
     int mapId,
@@ -4425,96 +4520,13 @@ bool GameDataLoader::loadSelectedMap(
     applyMergedContinentSettingsToSelectedMap(assetFileSystem);
     timingLogger.stage("continent settings applied");
 
-    const std::string localScriptBaseName = mapScriptBaseName(selectedMap->fileName);
-    std::string resolvedSupportLuaPath;
-    const std::optional<std::string> supportLuaSource = readFirstExistingText(
-        assetFileSystem,
-        buildLuaSupportPathCandidates(),
-        resolvedSupportLuaPath);
-    std::string resolvedWorldCommonLuaPath;
-    const std::optional<std::string> worldCommonLuaSource = readExistingTexts(
-        assetFileSystem,
-        buildLuaWorldCommonPathCandidates(selectedMap->worldId),
-        resolvedWorldCommonLuaPath);
-    const std::vector<std::filesystem::path> localLuaSidecarCandidates =
-        buildLuaScriptSidecarPathCandidates(
-            localScriptBaseName,
-            assetFileSystem.resolvePhysicalPath(m_selectedMap->geometryPath),
-            m_selectedMap->scenePath ? assetFileSystem.resolvePhysicalPath(*m_selectedMap->scenePath) : std::nullopt);
-    timingLogger.stage("lua support sources resolved");
-
+    std::string eventError;
+    if (!loadEventPrograms(assetFileSystem, *m_selectedMap, eventError))
     {
-        std::string resolvedLuaPath;
-        std::optional<std::string> luaSource =
-            readFirstExistingPhysicalText(localLuaSidecarCandidates, resolvedLuaPath);
-
-        if (!luaSource)
-        {
-            luaSource = readFirstExistingText(
-                assetFileSystem,
-                buildLuaScriptPathCandidates(localScriptBaseName, false),
-                resolvedLuaPath
-            );
-        }
-
-        if (luaSource)
-        {
-            std::string error;
-            const std::string mapLuaSource = appendLuaScriptOverlays(
-                assetFileSystem,
-                localScriptBaseName,
-                *luaSource,
-                resolvedLuaPath);
-            const std::string combinedLuaSource =
-                prependLuaSupport(supportLuaSource, worldCommonLuaSource, mapLuaSource);
-            std::optional<ScriptedEventProgram> program = ScriptedEventProgram::loadFromLuaText(
-                combinedLuaSource,
-                "@" + resolvedLuaPath,
-                ScriptedEventScope::Map,
-                error);
-
-            if (!program)
-            {
-                std::cerr << "Failed to load local event Lua: " << resolvedLuaPath << ": " << error << '\n';
-                return false;
-            }
-
-            m_selectedMap->localEventProgram = std::move(program);
-        }
+        std::cerr << eventError << '\n';
+        return false;
     }
-    timingLogger.stage("local lua loaded");
-
-    {
-        std::string resolvedLuaPath;
-        const std::optional<std::string> luaSource = readFirstExistingText(
-            assetFileSystem,
-            buildLuaScriptPathCandidates("Global", true),
-            resolvedLuaPath
-        );
-
-        if (luaSource)
-        {
-            std::string error;
-            const std::string globalLuaSource =
-                appendLuaGlobalScriptOverlays(assetFileSystem, *luaSource, resolvedLuaPath);
-            const std::string combinedLuaSource =
-                prependLuaSupport(supportLuaSource, worldCommonLuaSource, globalLuaSource);
-            std::optional<ScriptedEventProgram> program = ScriptedEventProgram::loadFromLuaText(
-                combinedLuaSource,
-                "@" + resolvedLuaPath,
-                ScriptedEventScope::Global,
-                error);
-
-            if (!program)
-            {
-                std::cerr << "Failed to load global event Lua: " << resolvedLuaPath << ": " << error << '\n';
-                return false;
-            }
-
-            m_selectedMap->globalEventProgram = std::move(program);
-        }
-    }
-    timingLogger.stage("global lua loaded");
+    timingLogger.stage("event lua loaded");
 
     normalizeMapFaceHintOnlyAttributes(
         *m_selectedMap,

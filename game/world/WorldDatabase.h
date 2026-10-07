@@ -13,7 +13,20 @@
 
 namespace OpenYAMM::Game
 {
+struct OutdoorMapData;
+class ScriptedEventProgram;
 enum class WorldRecordKind { Region, Dungeon, House, Npc, Trainer, Travel };
+
+// A physical interaction site in map geometry, referring to an existing house or dungeon record.
+// Several faces of the same door share one site; distinct doors remain separate.
+struct WorldMapLocation
+{
+    std::string id;
+    std::string mapId;
+    std::string recordId;
+    uint16_t eventId = 0;
+    float x = 0, y = 0;
+};
 
 // Presentation metadata only. Names, services, requirements and schedules belong to the game tables.
 struct WorldMapPresentation
@@ -69,6 +82,11 @@ public:
         const std::string &search = {}, std::optional<WorldRecordKind> kind = {},
         const std::string &withinMap = {}, bool includeTravel = true) const;
     bool visible(const WorldRecord &record, const WorldKnowledge &knowledge, bool guide) const;
+    void indexMapLocations(const OutdoorMapData &map, const ScriptedEventProgram &events);
+    const std::vector<WorldMapLocation> &locations() const;
+    bool locationVisible(const WorldMapLocation &location, const WorldKnowledge &knowledge, bool guide) const;
+    std::vector<const WorldRecord *> recordsAtLocation(const WorldMapLocation &location,
+        const WorldKnowledge &knowledge, bool guide) const;
 
     static std::string mapId(const MapStatsEntry &map);
     static std::string mapDiscoveryKey(const MapStatsEntry &map);
@@ -79,5 +97,6 @@ public:
 private:
     std::vector<WorldRecord> m_records;
     std::unordered_map<std::string, size_t> m_byId;
+    std::vector<WorldMapLocation> m_locations;
 };
 } // namespace OpenYAMM::Game

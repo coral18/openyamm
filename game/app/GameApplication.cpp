@@ -8887,7 +8887,9 @@ bool GameApplication::openAtlasScreen(bool paused)
     try
     {
         auto screen = std::make_unique<AtlasScreen>(*m_pAssetFileSystem, m_gameDataRepository, std::move(knowledge),
-            [this, paused]() { openMenuScreen(paused); }, paused, &m_gameAudioSystem);
+            [this, paused]() { openMenuScreen(paused); }, paused, &m_gameAudioSystem,
+            paused && m_gameDataLoader.getSelectedMap() ? &*m_gameDataLoader.getSelectedMap() : nullptr,
+            paused && m_pMapSceneRuntime != nullptr ? &m_pMapSceneRuntime->party() : nullptr);
         screen->setFontSettings(m_settings.fonts);
         m_screenManager.setActiveScreen(std::move(screen));
         return true;

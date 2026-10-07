@@ -1,5 +1,7 @@
 #include "game/ui/screens/AtlasScreen.h"
 #include "game/data/GameDataRepository.h"
+#include "game/data/GameDataLoader.h"
+#include "game/gameplay/MasteryTeacherDialog.h"
 #include "game/StringUtils.h"
 #include "game/maps/MapAssetLoader.h"
 #include "game/ui/GameplayMinimapTransform.h"
@@ -8,6 +10,7 @@
 #include <algorithm>
 #include <filesystem>
 #include <stdexcept>
+#include <iostream>
 
 namespace OpenYAMM::Game
 {
@@ -41,12 +44,19 @@ std::vector<WorldMapPresentation> loadPresentation(const Engine::AssetFileSystem
 } // namespace
 
 AtlasScreen::AtlasScreen(const Engine::AssetFileSystem &assets, const GameDataRepository &data,
-    WorldKnowledge knowledge, std::function<void()> close, bool paused, GameAudioSystem *audio)
+    WorldKnowledge knowledge, std::function<void()> close, bool paused, GameAudioSystem *audio,
+    const MapAssetInfo *pCurrentMap, const Party *pParty)
     : MenuDesignScreen(assets, paused, audio), m_knowledge(std::move(knowledge)),
       m_world(data.mapStats(), data.houseTable(), data.npcDialogTable(), data.mergedTeacherTopicTable(),
-              "mm7", loadPresentation(assets)), m_close(std::move(close)), m_paused(paused)
+              "mm7", loadPresentation(assets)), m_data(data), m_pParty(pParty),
+      m_close(std::move(close)), m_paused(paused)
 {
     loadDesign("menu/main_menu");
+    if (pCurrentMap != nullptr && pCurrentMap->outdoorMapData && pCurrentMap->localEventProgram)
+    {
+        m_world.indexMapLocations(*pCurrentMap->outdoorMapData, *pCurrentMap->localEventProgram);
+        m_indexedMaps.insert(WorldDatabase::mapId(pCurrentMap->map));
+    }
     if (m_knowledge.partyPosition)
         for (const auto &record : m_world.records())
             if ((record.kind == WorldRecordKind::Region || record.kind == WorldRecordKind::Dungeon)
@@ -108,6 +118,7 @@ void AtlasScreen::select(const WorldRecord &record)
         m_panX = m_panY = m_scroll = 0;
         m_search.clear();
         m_filter.reset();
+        m_siteSelection.clear();
     }
 }
 
@@ -127,6 +138,7 @@ void AtlasScreen::drawScreen(float)
         m_scroll = 0;
         m_zoom = 1;
         m_panX = m_panY = 0;
+        m_siteSelection.clear();
     }
     if (button("atlas-close", canvasRect(716, 17, 107, 27), "Back")
         || (!m_suppressEscape && !m_searchEditing && keyPressed(SDL_SCANCODE_ESCAPE)))
@@ -160,6 +172,7 @@ void AtlasScreen::drawScreen(float)
         {
             m_filter = filters[i].second;
             m_scroll = 0;
+            m_siteSelection.clear();
         }
         if (m_filter == filters[i].second)
             outline(rect, 0xff8dc5e1u);
@@ -168,18 +181,142 @@ void AtlasScreen::drawScreen(float)
     {
         m_map.clear();
         m_selected.clear();
+        m_siteSelection.clear();
         m_zoom = 1;
         m_panX = m_panY = m_scroll = 0;
     }
     if (const auto *map = m_world.find(m_map))
+    {
         textInRect(canvasRect(168, 89, 403, 25), map->name(), "fondamento", 14);
-    const std::string listHeading = m_filter == WorldRecordKind::Travel ? "Known routes"
+        if (map->kind == WorldRecordKind::Region)
+            textInRect(canvasRect(375, 94, 195, 16), "B Buildings   T Trainers   D Dungeons",
+                       "menu_lucida", 8, 0xffc6dfeau);
+    }
+    indexKnownRegions();
+    const std::string listHeading = !m_siteSelection.empty() ? "Selected markers (clear)"
+        : m_filter == WorldRecordKind::Travel ? (m_guide ? "All recorded routes" : "Known routes")
         : m_map.empty() ? (m_guide ? "All recorded locations" : "Your party's discoveries")
         : (m_guide ? "Locations and residents here" : "Discovered here");
-    textInRect(canvasRect(589, 89, 233, 25), listHeading, "menu_lucida", 11);
+    if (m_siteSelection.empty())
+        textInRect(canvasRect(589, 89, 233, 25), listHeading, "menu_lucida", 11);
+    else if (button("atlas-clear-sites", canvasRect(589, 89, 233, 25), listHeading))
+    {
+        m_siteSelection.clear();
+        m_scroll = 0;
+    }
     drawMap();
     drawList();
     drawDetails();
+}
+
+void AtlasScreen::indexKnownRegions()
+{
+    for (const WorldRecord &record : m_world.records())
+    {
+        if (record.kind != WorldRecordKind::Region || !m_world.visible(record, m_knowledge, m_guide)
+            || !m_indexedMaps.insert(record.id).second)
+            continue;
+        try
+        {
+            auto map = MapAssetLoader().load(assetFileSystem(), *record.map,
+                m_data.monsterTable(), m_data.objectTable(), MapLoadPurpose::HeadlessGameplay);
+            std::string error;
+            if (!map || !map->outdoorMapData || !GameDataLoader::loadEventPrograms(assetFileSystem(), *map, error)
+                || !map->localEventProgram)
+                throw std::runtime_error(error.empty() ? "Missing geometry or event metadata" : error);
+            m_world.indexMapLocations(*map->outdoorMapData, *map->localEventProgram);
+        }
+        catch (const std::exception &error)
+        {
+            m_locationError = "Some map markers are unavailable in this content package.";
+            std::cerr << "World locations could not be indexed for " << record.map->fileName
+                      << ": " << error.what() << '\n';
+        }
+    }
+}
+
+bool AtlasScreen::drawLocationMarkers(const WorldRecord &map, const Rect &image, const Rect &viewport)
+{
+    struct Pin
+    {
+        std::string id;
+        float x = 0, y = 0;
+        size_t sites = 0;
+        std::vector<const WorldRecord *> records;
+    };
+    std::vector<Pin> pins;
+    const float spacing = 26 * designScale();
+    for (const WorldMapLocation &location : m_world.locations())
+    {
+        if (location.mapId != map.id || !m_world.locationVisible(location, m_knowledge, m_guide))
+            continue;
+        auto records = m_world.recordsAtLocation(location, m_knowledge, m_guide);
+        std::erase_if(records, [this](const WorldRecord *pRecord)
+        { return (m_filter && pRecord->kind != *m_filter)
+            || (!m_search.empty()
+                && toLowerCopy(pRecord->searchText()).find(toLowerCopy(m_search)) == std::string::npos); });
+        if (records.empty())
+            continue;
+        const auto uv = gameplayMinimapWorldToUv({}, location.x, location.y);
+        const float x = image.x + uv.x * image.width, y = image.y + uv.y * image.height;
+        if (x < viewport.x || x > viewport.x + viewport.width || y < viewport.y || y > viewport.y + viewport.height)
+            continue;
+        auto pin = std::find_if(pins.begin(), pins.end(), [&](const Pin &other)
+        { return std::hypot(x - other.x, y - other.y) < spacing; });
+        if (pin == pins.end())
+        {
+            pins.push_back({location.id, x, y, 0, {}});
+            pin = std::prev(pins.end());
+        }
+        pin->x = (pin->x * pin->sites + x) / (pin->sites + 1);
+        pin->y = (pin->y * pin->sites + y) / (pin->sites + 1);
+        ++pin->sites;
+        for (const WorldRecord *pRecord : records)
+            if (std::find(pin->records.begin(), pin->records.end(), pRecord) == pin->records.end())
+                pin->records.push_back(pRecord);
+    }
+    bool hovered = false;
+    for (const Pin &pin : pins)
+    {
+        const auto trainer = std::find_if(pin.records.begin(), pin.records.end(), [](const WorldRecord *pRecord)
+        { return pRecord->kind == WorldRecordKind::Trainer; });
+        const auto house = std::find_if(pin.records.begin(), pin.records.end(), [](const WorldRecord *pRecord)
+        { return pRecord->kind == WorldRecordKind::House; });
+        const WorldRecord *pPrimary = trainer != pin.records.end() ? *trainer
+            : house != pin.records.end() ? *house : pin.records.front();
+        const bool dungeon = pPrimary->kind == WorldRecordKind::Dungeon;
+        const char *label = dungeon ? "D" : trainer != pin.records.end() ? "T" : "B";
+        const std::string caption = pin.sites > 1 ? std::to_string(pin.sites) + " locations - select to inspect"
+            : pPrimary->name();
+        const Rect marker{pin.x - 12 * designScale(), pin.y - 12 * designScale(),
+                          24 * designScale(), 24 * designScale()};
+        const std::string buttonId = "atlas-site-" + pin.id;
+        hovered = hovered || pointerInside(marker);
+        if (button(buttonId, marker, pin.sites > 1 ? std::to_string(pin.sites) : label, "button_square"))
+        {
+            if (dungeon && pin.records.size() == 1)
+            {
+                select(*pPrimary);
+                return true;
+            }
+            m_siteSelection.clear();
+            for (const WorldRecord *pRecord : pin.records)
+                m_siteSelection.insert(pRecord->id);
+            m_selected = pPrimary->id;
+            m_scroll = 0;
+        }
+        outline(marker, trainer != pin.records.end() ? 0xff96c798u : dungeon ? 0xff8dc5e1u : 0xff8dc8dfu);
+        if (pointerInside(marker) || focused(buttonId))
+        {
+            Rect text{pin.x - 105 * designScale(), pin.y - 35 * designScale(),
+                      210 * designScale(), 20 * designScale()};
+            text.x = std::clamp(text.x, viewport.x, viewport.x + viewport.width - text.width);
+            text.y = std::max(text.y, viewport.y);
+            drawSolidRect(text, 0xed100e09u);
+            textInRect(text, caption, "menu_arrus", 11, 0xffc6dfeau, true);
+        }
+    }
+    return hovered;
 }
 
 void AtlasScreen::drawMap()
@@ -268,9 +405,7 @@ void AtlasScreen::drawMap()
         }
         drawTextureHandle(m_fogTexture, image);
     }
-    if (map != nullptr)
-        drawPartyArrow(*map, image, floorPlan);
-    bool markerHovered = false;
+    bool markerHovered = map != nullptr && !dungeon ? drawLocationMarkers(*map, image, viewport) : false;
     if (map == nullptr)
     {
         for (const auto &region : m_world.records())
@@ -299,6 +434,8 @@ void AtlasScreen::drawMap()
             }
         }
     }
+    if (map != nullptr)
+        drawPartyArrow(*map, image, floorPlan);
     if (leftMouseJustPressed() && pointerInside(viewport) && !markerHovered)
     {
         m_dragging = true;
@@ -345,6 +482,8 @@ void AtlasScreen::drawList()
     const Rect viewport = canvasRect(588, 121, 235, 270);
     auto records = m_world.query(m_knowledge, m_guide, m_search, m_filter, m_map,
                                  m_filter == WorldRecordKind::Travel);
+    if (!m_siteSelection.empty())
+        std::erase_if(records, [this](const WorldRecord *pRecord) { return !m_siteSelection.contains(pRecord->id); });
     if (m_map.empty() && m_search.empty() && !m_filter)
         std::erase_if(records, [](const WorldRecord *record)
         {
@@ -397,11 +536,22 @@ void AtlasScreen::drawDetails()
         }
         if (record->teacher != nullptr)
         {
-            if (record->teacher->requiredSkill != 0)
-                text += " | Skill " + std::to_string(record->teacher->requiredSkill);
-            if (record->teacher->requiredGold != 0)
-                text += " | " + std::to_string(record->teacher->requiredGold) + " gold";
-            text += "\nPromotion and other training requirements are checked by the trainer.";
+            if (m_pParty != nullptr)
+            {
+                const auto evaluation = evaluateMasteryTeacherTopic(record->teacher->topicId, *m_pParty,
+                    m_data.classSkillTable(), m_data.npcDialogTable(), &m_data.mergedTeacherTopicTable());
+                if (evaluation)
+                    text += " | " + std::to_string(evaluation->cost) + " gold\nSelected character: "
+                        + evaluation->displayText;
+            }
+            else
+            {
+                if (record->teacher->requiredSkill != 0)
+                    text += " | Skill " + std::to_string(record->teacher->requiredSkill);
+                if (record->teacher->requiredGold != 0)
+                    text += " | " + std::to_string(record->teacher->requiredGold) + " gold";
+                text += "\nSelect a party in-game to check its training requirements.";
+            }
         }
         if (record->route != nullptr)
         {
@@ -420,6 +570,8 @@ void AtlasScreen::drawDetails()
                 text += " | Water access required";
         }
     }
+    if (!m_locationError.empty())
+        text += "\n" + m_locationError;
     textInRect(canvasRect(34, 407, 778, 43), text, "menu_arrus", 12);
 }
 } // namespace OpenYAMM::Game

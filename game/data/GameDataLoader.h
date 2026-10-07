@@ -68,6 +68,8 @@ public:
     bool loadCommonForGameplay(const Engine::AssetFileSystem &assetFileSystem);
     bool loadForGameplay(const Engine::AssetFileSystem &assetFileSystem);
     bool loadForHeadlessGameplay(const Engine::AssetFileSystem &assetFileSystem);
+    // Shared metadata load for gameplay and read-only world tools, including support and map overlays.
+    static bool loadEventPrograms(const Engine::AssetFileSystem &assets, MapAssetInfo &map, std::string &error);
     bool loadMapById(const Engine::AssetFileSystem &assetFileSystem, int mapId);
     bool loadMapByIdForGameplay(const Engine::AssetFileSystem &assetFileSystem, int mapId);
     bool loadMapByIdForHeadlessGameplay(const Engine::AssetFileSystem &assetFileSystem, int mapId);

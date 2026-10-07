@@ -25,6 +25,14 @@ did not include a declared reuse license; a future import of its authored materi
   hides this overlay without writing discoveries. Zoom/pan transform both art and fog together.
 - Current party position and heading use the same MAPDIR arrow sprites/octants as the minimap. Markers are
   restricted to the active region/dungeon, including Guide Mode. Paused Atlas opens on the current location.
+- Outdoor maps display clickable building (`B`), trainer (`T`) and dungeon-entrance (`D`) markers. Nearby doors
+  form numbered groups; clicking a group narrows the list, and its heading clears that selection. Filters and
+  search apply to both the list and markers. Single dungeon markers open the existing floor-plan view.
+- Buildings require a real visit and trainers require meeting their resident. Dungeon entrances require the
+  exact entrance cell to be fully explored, not merely dimly revealed. Learning an entrance never grants its
+  interior map or reveals other entrances. Guide Mode shows authored markers without changing discoveries.
+- Paused trainer details reuse the gameplay training evaluator for the selected character, including price,
+  class/promotion limits and skill requirements. This inspection never trains a character or spends gold.
 - Zoom, drag, search input, native button focus and scroll controls. Entry in main menu and pause menu.
 
 `game/world/WorldDatabase` indexes **references** to `MapStats`, `HouseTable`, `NpcDialogTable` and
@@ -38,18 +46,35 @@ illustrated continent artwork are approximate; they are not gameplay coordinates
 Dungeon grouping uses the existing `areaId` plus the presentation's area definitions. Locations without declared
 parent metadata remain searchable rather than being assigned a guessed parent.
 
+`WorldMapLocations` derives outdoor door positions from interactive geometry and explicit event context metadata,
+then links those sites to the existing house/dungeon records. Shared vertices are deduplicated; distinct models
+and decorations remain separate sites. No hand-maintained coordinates or copied guide dataset is introduced.
+The Atlas reuses `GameDataLoader::loadEventPrograms`, including world common scripts and sorted overlays, and loads
+geometry without render textures. Each known outdoor region is indexed once per Atlas opening; Guide can index
+all regions. Missing geometry/metadata reports a content-package error instead of fabricating coordinates.
+
+The canonical house table had stale geography for six MM7 regions after the map registry numbering changed.
+The 114 affected rows now use the canonical map IDs; 90 correspond to active outdoor house-entry events.
+All 13 MM7 outdoor event files were checked against their house references with no remaining map mismatch.
+`Dungeon Ent` transition cards are excluded from the building index. The explicit Harmondale world overlay
+`7out02_zz_extended.lua` restores Castle Harmondale's destination metadata after the MMMerge event replacement;
+it changes neither the generated event script nor its gameplay handler.
+
 Discoveries use `openyamm.discovery.*` integer keys in the existing session/runtime named-variable store, whose
 serialization is already supported by saves. No save version bump or separate atlas save file is introduced.
 Unknown services are filtered before search; routes require both endpoint maps to be known in Discovery Mode.
 
 ## Remaining guide coverage
 
-This slice is not the complete external guide port. Precise building/POI coordinates, quest chains, chests, monsters, wells, obelisks, teleport links, Barrows connections, alchemy/spell
+This slice is not the complete external guide port. Quest chains, chests, monsters, wells, obelisks, teleport links,
+Barrows connections, alchemy/spell
 reference pages and trackers remain to be added through shared game/world data. Explored dungeon maps and player
 notes continue to use the existing Map Book. Dungeon plans currently project all elevations together; floor
 selection and annotations are not yet shown in the Atlas. The index currently describes authored residents and teaching topics;
 runtime NPC relocation/topic overrides and information learned from books or rumours require additional shared
-discovery/data integration. The Android implementation uses shared native code but this slice has not yet been
+discovery/data integration. Conditional or dynamically moved entrances require corresponding runtime metadata;
+separate doors using one event within the same outdoor model currently share a site. The Android implementation
+uses shared native code but this slice has not yet been
 built or physically tested on Android/controller hardware.
 
 ## Windows iteration
@@ -72,7 +97,8 @@ engine image decoder already does. MM7 region images in the official package use
 
 All world packages must be present: MM7 baked lighting references qualified MM8 textures. Keep the large runtime
 packages outside Git. After a successful build the script updates only the small local overlay
-`runtime/assets/assets.zip`, supplying the Extended Knight table and Atlas presentation from source. Other overlay
+`runtime/assets/assets.zip`, supplying the Extended Knight table, canonical house geography, Atlas presentation
+and explicit Harmondale metadata overlay from source. Other overlay
 entries are preserved; the multi-GB base packages are not rewritten. Production packaging must include the source metadata.
 
 ### Payload provenance
@@ -93,9 +119,11 @@ All 4,439 MM6 and 4,043 MM8 package entries also matched the verified APK.
 
 Focused doctest coverage exercises discovery before search, Guide Mode without side effects, canonical-table
 references, region grouping, cross-world exclusion, route visibility and invalid/duplicate/cyclic presentation.
-It also loads the actual canonical source tables and resolves MM7 Sword trainers. Ten cases / 163 assertions pass,
+It also loads the actual canonical source tables and resolves MM7 Sword trainers. Twelve cases / 205 assertions pass,
 including MSB-first dungeon/region reveal bits, partial/full precedence, empty exploration, mirrored projections,
-arrow octants, dungeon marker projection, invisible geometry, invalid indices and extreme coordinates.
+arrow octants, dungeon marker projection, invisible geometry, invalid indices and extreme coordinates. Door tests
+cover authored metadata, real world-space positions, repeated triangles, separate sites, idempotent reindexing,
+hidden/invalid/cross-world entries, visited services, trainer privacy and exact entrance-cell discovery.
 
 Windows Release compilation succeeded. Engine-owned captures verified the overview, Harmondale map, trainer filter
 and `Grand Master Sword` search, plus White Cliff Cave geometry and zoom, using native OpenGL on AMD hardware.
@@ -118,3 +146,12 @@ Travel preserves the two genuine exits with distinct labels. Unknown destination
 A native Windows tour loaded a copy of the reported Avlee autosave in a separate working directory, checked
 both regional lists, Travel, the continent overview and return to gameplay. The original save's SHA256 was
 unchanged; all test output and settings stayed in the separate test directory.
+
+The outdoor-marker check used real Harmondale door interactions to enter Tempered Steel and meet Chadric, then
+saved and loaded the resulting discoveries in a fresh native process. The Atlas displayed only the encountered
+services, retained the fog, and evaluated Grand Master Sword for the active Cleric. Native captures checked both
+Harmondale entrances, clustered markers, Avlee and Tularean Forest geography, and Guide floor plans versus an empty
+unvisited interior in Discovery Mode. The tour resumed gameplay. Tests used separate settings/save directories;
+no original save was overwritten.
+The rebuilt native Windows executable also fully loaded New Sorpigal (MM6) and Dagger Wound Island (MM8),
+including their event programs, after the shared loader extraction. Both checks exited successfully.

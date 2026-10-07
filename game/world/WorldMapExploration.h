@@ -29,4 +29,5 @@ struct WorldRegionFog
 
 WorldRegionFog buildWorldRegionFog(const WorldRegionMapKnowledge &knowledge,
     const GameplayMinimapState &projection);
+bool worldRegionPointExplored(const WorldRegionMapKnowledge &knowledge, float worldX, float worldY);
 } // namespace OpenYAMM::Game

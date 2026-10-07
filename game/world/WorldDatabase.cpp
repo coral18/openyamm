@@ -153,6 +153,9 @@ WorldDatabase::WorldDatabase(const MapStats &maps, const HouseTable &houses, con
     }
     for (const auto &[id, house] : houses.entries())
     {
+        // Transition cards are presentation for MoveToMap, not enterable houses or shops.
+        if (toLowerCopy(house.type) == "dungeon ent")
+            continue;
         const auto *map = maps.findById(house.mapId);
         if (map == nullptr || map->worldId != worldId)
             continue;
@@ -230,7 +233,19 @@ bool WorldDatabase::visible(const WorldRecord &record, const WorldKnowledge &kno
 {
     if (guide)
         return true;
-    if (!knowledge.knows(record))
+    bool known = knowledge.knows(record);
+    if (!known && record.kind == WorldRecordKind::Dungeon)
+        for (const WorldMapLocation &location : m_locations)
+        {
+            if (location.recordId != record.id)
+                continue;
+            const WorldRecord *pSource = find(location.mapId);
+            const auto exploration = knowledge.regionMaps.find(toLowerCopy(pSource->map->fileName));
+            if (knowledge.knows(*pSource) && exploration != knowledge.regionMaps.end()
+                && worldRegionPointExplored(exploration->second, location.x, location.y))
+                known = true;
+        }
+    if (!known)
         return false;
     // A visited dungeon can be known without knowledge of its containing region. For located services,
     // require knowledge of the containing map so search cannot disclose an undiscovered location.
@@ -260,7 +275,13 @@ std::vector<const WorldRecord *> WorldDatabase::query(const WorldKnowledge &know
             || !visible(record, knowledge, guide) || (kind && record.kind != *kind))
             continue;
         if (!withinMap.empty() && mapId(*record.map) != withinMap && record.parentId != withinMap)
-            continue;
+        {
+            const bool locatedHere = std::any_of(m_locations.begin(), m_locations.end(),
+                [&](const WorldMapLocation &location)
+                { return location.recordId == record.id && location.mapId == withinMap; });
+            if (!locatedHere)
+                continue;
+        }
         if (!needle.empty() && toLowerCopy(record.searchText()).find(needle) == std::string::npos)
             continue;
         result.push_back(&record);

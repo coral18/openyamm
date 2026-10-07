@@ -4,6 +4,8 @@
 #include "game/FaceEnums.h"
 #include "game/ui/GameplayMinimapTransform.h"
 #include "game/indoor/IndoorMapData.h"
+#include "game/outdoor/OutdoorMapData.h"
+#include "game/events/ScriptedEventProgram.h"
 
 #include <fstream>
 #include <iterator>
@@ -96,7 +98,12 @@ TEST_CASE("world database indexes canonical MM7 maps residents and trainers")
     REQUIRE(houses.loadFromRows(canonicalRows("house_data.txt")));
     REQUIRE(npcs.loadNpcRows(canonicalRows("npc.txt")));
     REQUIRE(teachers.loadFromRows(canonicalRows("teacher_topics.txt")));
+    CHECK(houses.get(56)->mapId == maps.findByFileName("out14.odm")->id); // Avlee Outpost.
+    CHECK(houses.get(247)->mapId == maps.findByFileName("out09.odm")->id); // Evenmorn Island.
+    CHECK(houses.get(54)->mapId == maps.findByFileName("out10.odm")->id); // Mount Nighon.
+    CHECK(houses.get(409)->mapId == maps.findByFileName("out12.odm")->id); // Colony Zod transition.
     WorldDatabase database(maps, houses, npcs, teachers, "mm7");
+    CHECK(database.find("mm7:house/409") == nullptr); // Dungeon transition cards are not building discoveries.
     CHECK(database.query({}, true, "", WorldRecordKind::Region).size() == 13);
     CHECK(database.query({}, true, "", WorldRecordKind::Dungeon).size() > 50);
     CHECK(database.query({}, true, "", WorldRecordKind::Travel).size() > 10);
@@ -302,4 +309,100 @@ TEST_CASE("world database party marker follows minimap direction and dungeon pro
     const auto northEast = plan.worldToUv(100, 100);
     CHECK(northEast.first > center.first);
     CHECK(northEast.second < center.second);
+}
+
+TEST_CASE("world database locates real doors without revealing unvisited services")
+{
+    Fixture f;
+    auto database = f.database();
+    std::string error;
+    const auto program = ScriptedEventProgram::loadFromLuaText(R"lua(
+        evt.map[3] = function() end
+        evt.map[4] = function() end
+        evt.map[5] = function() end
+        evt.map[6] = function() end
+        evt.map[7] = function() end
+        evt.meta.map.contextActions = {
+            [3] = { kind = "enter_house", source = "opcode", houseId = 11 },
+            [4] = { kind = "enter_dungeon", source = "script", targetMap = "7D21.BLV" },
+            [5] = { kind = "enter_dungeon", source = "opcode", targetMap = "7d21.blv", hidden = true },
+            [6] = { kind = "enter_house", source = "opcode", houseId = 9999 },
+            [7] = { kind = "travel", source = "opcode", targetMap = "out01.odm" }
+        }
+    )lua", "@door-test", ScriptedEventScope::Map, error);
+    REQUIRE_MESSAGE(program.has_value(), error);
+    OutdoorMapData map;
+    map.fileName = "7out02.odm";
+    map.worldId = "mm7";
+    map.bmodels.resize(2);
+    map.bmodels[0].positionX = 999; // ODM vertices already use world coordinates.
+    map.bmodels[0].vertices = {{-200, 100, 0}, {0, 100, 0}, {0, 100, 100}, {-200, 100, 100}};
+    OutdoorBModelFace face;
+    face.cogTriggeredNumber = 3;
+    face.vertexIndices = {0, 1, 2, 65535};
+    map.bmodels[0].faces.push_back(face);
+    face.vertexIndices = {0, 2, 3};
+    map.bmodels[0].faces.push_back(face); // Second triangle must not create a duplicate pin.
+    map.bmodels[1] = map.bmodels[0]; // A different physical door remains a distinct site.
+    OutdoorEntity entry;
+    entry.eventIdSecondary = 4;
+    entry.x = 12000; entry.y = 8000;
+    map.entities.push_back(entry);
+    for (uint16_t event : {5, 6, 7})
+    {
+        entry.eventIdSecondary = event;
+        map.entities.push_back(entry);
+    }
+    database.indexMapLocations(map, *program);
+    REQUIRE(database.locations().size() == 3);
+    CHECK(database.locations()[0].x == -100);
+    CHECK(database.locations()[0].y == 100);
+    CHECK(database.locations()[0].id != database.locations()[1].id);
+    database.indexMapLocations(map, *program); // Reindex is idempotent.
+    REQUIRE(database.locations().size() == 3);
+    const auto &shop = database.locations()[0];
+    const auto &cave = database.locations()[2];
+    const auto *caveRecord = database.find(cave.recordId);
+    REQUIRE(caveRecord != nullptr);
+    WorldKnowledge knowledge;
+    knowledge.visitedMaps.insert("7out02.odm");
+    CHECK_FALSE(database.locationVisible(shop, knowledge, false));
+    CHECK_FALSE(database.locationVisible(cave, knowledge, false));
+    CHECK_FALSE(database.visible(*caveRecord, knowledge, false));
+    CHECK(database.query(knowledge, false, "Sword").empty());
+    CHECK(database.locationVisible(shop, knowledge, true));
+    CHECK(database.recordsAtLocation(shop, knowledge, true).size() == 3);
+    CHECK(knowledge.variables.empty());
+
+    knowledge.regionMaps["7out02.odm"].fullyRevealedCells.assign(88 * 88 / 8, 255);
+    CHECK(database.locationVisible(cave, knowledge, false));
+    CHECK(database.visible(*caveRecord, knowledge, false));
+    CHECK(database.query(knowledge, false, "Cave", WorldRecordKind::Dungeon, shop.mapId).size() == 1);
+    CHECK_FALSE(database.locationVisible(shop, knowledge, false)); // Terrain exploration does not meet NPCs.
+    CHECK(knowledge.floorPlans.empty()); // Knowing an entrance never grants its interior plan.
+    knowledge.variables[WorldDatabase::houseDiscoveryKey(11)] = 1;
+    CHECK(database.locationVisible(shop, knowledge, false));
+    CHECK(database.recordsAtLocation(shop, knowledge, false).size() == 1);
+    knowledge.variables[WorldDatabase::npcDiscoveryKey(42)] = 1;
+    CHECK(database.recordsAtLocation(shop, knowledge, false).size() == 3);
+    knowledge.visitedMaps.clear();
+    CHECK_FALSE(database.locationVisible(shop, knowledge, false));
+    CHECK_FALSE(database.locationVisible(cave, knowledge, false));
+    CHECK(database.query(knowledge, false, "Sword").empty());
+}
+
+TEST_CASE("world database entrance discovery requires full exploration of the correct cell")
+{
+    WorldRegionMapKnowledge knowledge;
+    CHECK_FALSE(worldRegionPointExplored(knowledge, -32768, 32768));
+    knowledge.partiallyRevealedCells = {0xc0};
+    CHECK_FALSE(worldRegionPointExplored(knowledge, -32768, 32768));
+    knowledge.fullyRevealedCells = {0x80};
+    CHECK(worldRegionPointExplored(knowledge, -32768, 32768));
+    CHECK_FALSE(worldRegionPointExplored(knowledge, -31000, 32768));
+    CHECK_FALSE(worldRegionPointExplored(knowledge, 0, 0));
+    CHECK_FALSE(worldRegionPointExplored(knowledge, std::numeric_limits<float>::quiet_NaN(), 0));
+    CHECK_FALSE(worldRegionPointExplored(knowledge, 32769, 0));
+    knowledge.fullyRevealedCells.assign(88 * 88 / 8, 255);
+    CHECK(worldRegionPointExplored(knowledge, 32768, -32768));
 }
