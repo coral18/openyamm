@@ -137,8 +137,10 @@ the requirement on the next save. Disabling a mod does not rewrite existing save
 
 This is the manifest/resolver and health-patch slice, not the finished mod platform. Lua entrypoints, mod state APIs,
 arbitrary asset overrides, an in-game manager, hot reload and downloadable ZIP installation are future work.
-The Atlas currently remains native Core UI. Its World Database/discovery state will remain shared when the optional
-Atlas module and UI registration mechanism are added; this loader alone does not yet make the Atlas switchable.
+The Atlas uses the optional native UI module `openyamm.interactive-atlas`; its manifest is under
+`mods/interactive-atlas`. A profile can disable it. Its `save_required: false` presentation manifest does not own
+QBits or gameplay patches. World discovery, monster observations and personal map annotations remain shared Core
+save state and survive disabling the Atlas. See [ATLAS.md](ATLAS.md) for implementation and native validation.
 
 ## Validation
 

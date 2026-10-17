@@ -12,6 +12,7 @@
 #include <filesystem>
 #include <stdexcept>
 #include <iostream>
+#include <cmath>
 
 namespace OpenYAMM::Game
 {
@@ -26,14 +27,15 @@ std::string initialAtlasWorld(const Engine::AssetFileSystem &assets, const MapAs
 
 AtlasScreen::AtlasScreen(const Engine::AssetFileSystem &assets, const GameDataRepository &data,
     WorldKnowledge knowledge, std::function<void()> close, bool paused, GameAudioSystem *audio,
-    const MapAssetInfo *pCurrentMap, const Party *pParty)
+    const MapAssetInfo *pCurrentMap, const Party *pParty, NoteWriter writeNote)
     : MenuDesignScreen(assets, paused, audio), m_knowledge(std::move(knowledge)),
       m_presentation(loadWorldAtlasPresentation(assets, initialAtlasWorld(assets, pCurrentMap))),
       m_world(data.mapStats(), data.houseTable(), data.npcDialogTable(), data.mergedTeacherTopicTable(),
               m_presentation.worldId, m_presentation.maps), m_data(data), m_pParty(pParty),
-      m_close(std::move(close)), m_paused(paused)
+      m_writeNote(std::move(writeNote)), m_close(std::move(close)), m_paused(paused)
 {
     loadDesign("menu/main_menu");
+    m_world.indexMapNotes(m_knowledge);
     for (const std::string &file : assets.enumerate("engine/world/atlas"))
         if (std::filesystem::path(file).extension() == ".yml")
             m_availableWorlds.push_back(std::filesystem::path(file).stem().string());
@@ -112,36 +114,100 @@ void AtlasScreen::onExit() { setTextEditing(false); }
 
 void AtlasScreen::handleSdlEvent(const SDL_Event &event)
 {
-    if (!m_searchEditing)
+    if (m_placingNote && event.type == SDL_EVENT_KEY_DOWN && event.key.scancode == SDL_SCANCODE_ESCAPE)
+    {
+        m_placingNote = false;
+        m_suppressEscape = true;
         return;
+    }
+    if (!m_searchEditing && !m_noteEditorOpen)
+        return;
+    std::string &text = m_noteEditorOpen ? m_noteDraft.text : m_search;
     if (event.type == SDL_EVENT_TEXT_INPUT)
     {
-        if (m_search.size() < 128)
-            m_search += event.text.text;
+        const std::string input = event.text.text;
+        if (text.size() + input.size() <= (m_noteEditorOpen ? 512u : 128u))
+            text += input;
         m_scroll = 0;
     }
     if (event.type == SDL_EVENT_KEY_DOWN)
     {
-        if (event.key.scancode == SDL_SCANCODE_BACKSPACE && !m_search.empty())
+        if (event.key.scancode == SDL_SCANCODE_BACKSPACE && !text.empty())
         {
-            // Erase a complete UTF-8 code point.
-            size_t start = m_search.size() - 1;
-            while (start > 0 && (static_cast<unsigned char>(m_search[start]) & 0xc0) == 0x80)
+            size_t start = text.size() - 1;
+            while (start > 0 && (static_cast<unsigned char>(text[start]) & 0xc0) == 0x80)
                 --start;
-            m_search.erase(start);
+            text.erase(start);
             m_scroll = 0;
         }
-        if (event.key.scancode == SDL_SCANCODE_RETURN || event.key.scancode == SDL_SCANCODE_ESCAPE)
+        if (event.key.scancode == SDL_SCANCODE_ESCAPE)
         {
+            if (m_noteEditorOpen)
+                closeNoteEditor();
             m_searchEditing = false;
             setTextEditing(false);
             m_suppressEscape = true;
         }
+        else if (event.key.scancode == SDL_SCANCODE_RETURN && !m_noteEditorOpen)
+        {
+            m_searchEditing = false;
+            setTextEditing(false);
+        }
     }
+}
+
+void AtlasScreen::closeNoteEditor()
+{
+    m_noteEditorOpen = false;
+    m_noteError.clear();
+    setTextEditing(false);
+}
+
+void AtlasScreen::saveNote(bool remove)
+{
+    m_noteDraft.remove = remove;
+    if (!m_writeNote || !m_writeNote(m_noteDraft, m_noteError))
+        return;
+    auto &notes = m_knowledge.notes[toLowerCopy(m_noteDraft.mapFileName)];
+    std::erase_if(notes, [this](const WorldMapNote &note) { return note.value.id == m_noteDraft.id; });
+    if (!remove)
+        notes.push_back({{m_noteDraft.id, m_noteDraft.x, m_noteDraft.y,
+                         m_noteDraft.mapFileName, m_noteDraft.text, true}, true});
+    m_world.indexMapNotes(m_knowledge);
+    m_selectedFeature = remove ? "" : m_map + "/note/" + std::to_string(m_noteDraft.id);
+    m_featureView = true;
+    m_filter.reset(); m_search.clear(); m_siteSelection.clear(); m_scroll = 0;
+    closeNoteEditor();
+}
+
+void AtlasScreen::drawNoteEditor()
+{
+    textInRect(canvasRect(80, 87, 690, 35), "Map note", "fondamento", 23, 0xffbcddeeu);
+    const WorldRecord *pMap = m_world.find(m_map);
+    textInRect(canvasRect(80, 125, 690, 25), (pMap != nullptr ? pMap->name() : "Map") + " | "
+        + std::to_string(m_noteDraft.x) + ", " + std::to_string(m_noteDraft.y), "menu_lucida", 11);
+    const Rect field = canvasRect(80, 160, 690, 125);
+    drawSolidRect(field, 0xff18160fu); outline(field, 0xff8dc5e1u);
+    if (button("atlas-note-text", field, "", "text_field"))
+        setTextEditing(true);
+    setDesignClip(field);
+    textInRect(canvasRect(88, 165, 674, 115), m_noteDraft.text + "_", "menu_arrus", 12,
+               0xffc6dfeau, false, true);
+    setDesignClip(std::nullopt);
+    textInRect(canvasRect(80, 287, 690, 32), m_noteError.empty()
+        ? "Your notes are shared with the Map Book. Escape cancels changes." : m_noteError,
+        "menu_lucida", 11);
+    if (button("atlas-note-save", canvasRect(80, 330, 155, 30), "Save note"))
+        saveNote(false);
+    if (button("atlas-note-cancel", canvasRect(260, 330, 155, 30), "Cancel"))
+        closeNoteEditor();
+    if (m_noteDraft.id != 0 && button("atlas-note-delete", canvasRect(615, 330, 155, 30), "Delete note"))
+        saveNote(true);
 }
 
 void AtlasScreen::select(const WorldRecord &record)
 {
+    m_placingNote = false;
     m_selectedFeature.clear();
     m_selected = record.id;
     const std::string destination = WorldDatabase::mapId(*record.map);
@@ -175,6 +241,7 @@ std::string AtlasScreen::regionTexture(const WorldRecord &record) const
 
 void AtlasScreen::selectWorld(const std::string &worldId)
 {
+    m_placingNote = false;
     if (worldId == m_presentation.worldId)
         return;
     try
@@ -183,6 +250,7 @@ void AtlasScreen::selectWorld(const std::string &worldId)
         WorldDatabase world(m_data.mapStats(), m_data.houseTable(), m_data.npcDialogTable(),
                             m_data.mergedTeacherTopicTable(), worldId, presentation.maps);
         m_world = std::move(world);
+        m_world.indexMapNotes(m_knowledge);
         m_selectedFeature.clear();
         m_referenceDirty = true;
         m_referenceSelected.clear();
@@ -210,6 +278,11 @@ void AtlasScreen::drawScreen(float)
     beginDesign("Atlas");
     drawSolidRect({0, 0, float(frameWidth()), float(frameHeight())}, 0xff100e09u);
     skin("frame", canvasRect(8, 8, 837, 464), true);
+    if (m_noteEditorOpen)
+    {
+        drawNoteEditor();
+        return;
+    }
     textInRect(canvasRect(25, 15, 245, 30), "Interactive Atlas", "fondamento", 20, 0xffbcddeeu);
     for (size_t i = 0; i < m_availableWorlds.size(); ++i)
         if (button("atlas-catalog-" + m_availableWorlds[i], canvasRect(285 + i * 115, 17, 105, 27),
@@ -220,6 +293,7 @@ void AtlasScreen::drawScreen(float)
         }
     if (button("atlas-reference", canvasRect(205, 17, 70, 27), m_referenceOpen ? "Map" : "Guidebook"))
     {
+        m_placingNote = false;
         m_referenceOpen = !m_referenceOpen;
         m_referenceDirty = true;
         m_search.clear();
@@ -300,7 +374,8 @@ void AtlasScreen::drawScreen(float)
     {
         textInRect(canvasRect(168, 89, 403, 25), map->name(), "fondamento", 14);
         if (m_featureView)
-            textInRect(canvasRect(375, 94, 195, 16), "C Chests W Water S Shrines O Obelisks P Passages M Monsters",
+            textInRect(canvasRect(375, 94, 195, 16),
+                       "C Chests W Water S Shrines O Obelisks P Passages M Monsters N Notes",
                        "menu_lucida", 7, 0xffc6dfeau);
         else if (map->kind == WorldRecordKind::Region)
             textInRect(canvasRect(375, 94, 195, 16), "B Buildings   T Trainers   D Dungeons",
@@ -311,19 +386,33 @@ void AtlasScreen::drawScreen(float)
         : m_filter == WorldRecordKind::Travel ? (m_guide ? "All recorded routes" : "Known routes")
         : m_map.empty() ? (m_guide ? "All recorded locations" : "Your party's discoveries")
         : (m_guide ? "Locations and residents here" : "Discovered here");
+    const WorldRecord *pNoteMap = m_world.find(m_map);
+    const bool canAddNote = m_writeNote && pNoteMap != nullptr
+        && m_knowledge.visitedMaps.contains(toLowerCopy(pNoteMap->map->fileName));
     if (m_siteSelection.empty())
-        textInRect(canvasRect(589, 89, 233, 25), listHeading, "menu_lucida", 11);
-    else if (button("atlas-clear-sites", canvasRect(589, 89, 233, 25), listHeading))
+        textInRect(canvasRect(589, 89, canAddNote ? 115 : 233, 25), listHeading, "menu_lucida", 11);
+    else if (button("atlas-clear-sites", canvasRect(589, 89, canAddNote ? 115 : 233, 25), listHeading))
     {
         m_siteSelection.clear();
         m_scroll = 0;
     }
+    if (canAddNote && button("atlas-new-note", canvasRect(711, 89, 110, 25),
+                             m_placingNote ? "Cancel pin" : "Add note"))
+    {
+        m_placingNote = !m_placingNote;
+        m_searchEditing = false;
+        setTextEditing(false);
+    }
+    if (m_placingNote)
+        textInRect(canvasRect(34, 407, 778, 43), "Click or tap the map to place your note. Escape cancels.",
+                   "menu_arrus", 12);
     drawMap();
     if (m_featureView)
         drawFeatureList();
     else
         drawList();
-    drawDetails();
+    if (!m_placingNote)
+        drawDetails();
 }
 
 void AtlasScreen::indexKnownRegions()
@@ -545,7 +634,7 @@ void AtlasScreen::drawMap()
         drawTextureHandle(m_fogTexture, image);
     }
     bool markerHovered = false;
-    if (map != nullptr)
+    if (map != nullptr && !m_placingNote)
         markerHovered = m_featureView ? drawFeatureMarkers(*map, image, viewport, floorPlan)
             : !dungeon && drawLocationMarkers(*map, image, viewport);
     if (map == nullptr)
@@ -605,7 +694,22 @@ void AtlasScreen::drawMap()
     }
     if (map != nullptr)
         drawPartyArrow(*map, image, floorPlan);
-    if (leftMouseJustPressed() && pointerInside(viewport) && !markerHovered)
+    if (m_placingNote && map != nullptr && leftMouseJustPressed()
+        && pointerInside(viewport) && pointerInside(image)
+        && !pointerInside(canvasRect(490, 357, 67, 27)))
+    {
+        const float u = (mouseX() - image.x) / image.width, v = (mouseY() - image.y) / image.height;
+        const auto point = floorPlan != nullptr ? floorPlan->uvToWorld(u, v) : [&]()
+        {
+            const GameplayMinimapPoint world = gameplayMinimapUvToWorld({}, u, v);
+            return std::pair{world.x, world.y};
+        }();
+        m_noteDraft = {map->map->fileName, 0, int32_t(std::lround(point.first)),
+                       int32_t(std::lround(point.second)), {}, false};
+        m_noteError.clear(); m_placingNote = false; m_noteEditorOpen = true; m_dragging = false;
+        setTextEditing(true);
+    }
+    else if (!m_noteEditorOpen && leftMouseJustPressed() && pointerInside(viewport) && !markerHovered)
     {
         m_dragging = true;
         m_dragX = mouseX(); m_dragY = mouseY();
@@ -740,7 +844,7 @@ bool AtlasScreen::drawFeatureMarkers(const WorldRecord &map, const Rect &image, 
             m_selectedFeature = feature.id;
             m_scroll = 0;
         }
-        const char *labels[] = {"C", "W", "S", "O", "P", "M"};
+        const char *labels[] = {"C", "W", "S", "O", "P", "M", "N"};
         textInRect(marker, pin.features.size() > 1 ? std::to_string(pin.features.size()) : labels[size_t(feature.kind)],
                    "menu_lucida", 7, 0xffc6dfeau, true);
         outline(marker, selected ? 0xff99d3eeu : 0xff8dc5e1u);
@@ -954,9 +1058,10 @@ void AtlasScreen::drawDetails()
         { return pFeature->id == m_selectedFeature
             && (m_siteSelection.empty() || m_siteSelection.contains(pFeature->id)); });
         std::string text = "Select a site to inspect it. "
-            "C Chests, W Wells/Fountains, S Shrines, O Obelisks, P Passages, M Monsters.";
+            "C Chests, W Wells/Fountains, S Shrines, O Obelisks, P Passages, M Monsters, N Notes.";
         const WorldRecord *pDestination = nullptr;
         int16_t creatureId = 0;
+        const WorldMapFeature *pNote = nullptr;
         if (selected != features.end())
         {
             const WorldMapFeature &feature = **selected;
@@ -974,6 +1079,12 @@ void AtlasScreen::drawDetails()
             }
             else if (feature.kind == WorldMapFeatureKind::Chest)
                 text += "\nContainers at this interaction: " + std::to_string(feature.chestIds.size());
+            else if (feature.kind == WorldMapFeatureKind::Note)
+            {
+                text += feature.userNote ? "\nYour note" : "\nRecorded by the party";
+                if (feature.userNote && m_writeNote)
+                    pNote = &feature;
+            }
             else if (feature.monster)
             {
                 const WorldMonsterFeature &monster = *feature.monster;
@@ -989,8 +1100,17 @@ void AtlasScreen::drawDetails()
         }
         if (!m_locationError.empty())
             text += "\n" + m_locationError;
-        textInRect(canvasRect(34, 407, pDestination != nullptr || creatureId > 0 ? 625 : 778, 43),
+        textInRect(canvasRect(34, 407, pDestination != nullptr || creatureId > 0 || pNote != nullptr ? 625 : 778, 43),
                    text, "menu_arrus", 11);
+        if (pNote != nullptr && button("atlas-edit-note", canvasRect(669, 416, 145, 28), "Edit note"))
+        {
+            const WorldRecord *pMap = m_world.find(pNote->mapId);
+            m_noteDraft = {pMap->map->fileName, pNote->noteId, int32_t(pNote->site.x), int32_t(pNote->site.y),
+                           pNote->title, false};
+            m_noteError.clear(); m_noteEditorOpen = true;
+            m_searchEditing = false;
+            setTextEditing(true);
+        }
         if (creatureId > 0 && button("atlas-feature-creature", canvasRect(669, 416, 145, 28), "Creature details"))
         {
             m_referenceOpen = true;

@@ -25,6 +25,7 @@ struct WorldFloorPlanRaster
     size_t outlineCount = 0;
     double centerX = 0, centerY = 0, pixelsPerWorldUnit = 0;
     std::pair<float, float> worldToUv(float x, float y) const;
+    std::pair<float, float> uvToWorld(float u, float v) const;
     std::vector<uint8_t> pixelsBgra;
 };
 

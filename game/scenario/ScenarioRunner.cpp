@@ -6889,6 +6889,21 @@ bool runAssert(
         }
     }
 
+    if (const YAML::Node count = step.payload["map_refill_count"])
+    {
+        if (!count.IsScalar() || !context.eventRuntimeStateLoaded)
+        {
+            failures.push_back(stepLocation(step) + ": map_refill_count requires a scalar and loaded map state");
+            success = false;
+        }
+        else
+        {
+            success = recordScenarioAssertion(context, step, "map_refill_count",
+                std::to_string(count.as<int32_t>()),
+                std::to_string(context.eventRuntimeState.processedMapRespawnCount), failures) && success;
+        }
+    }
+
     success = assertInventoryAnyMember(context, step, failures) && success;
     success = assertInventoryList(context, step, failures) && success;
     success = assertEquippedItems(context, step, failures) && success;

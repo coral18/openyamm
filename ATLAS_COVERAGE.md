@@ -31,7 +31,7 @@ tables, and do not bundle its HTML, JS, translated prose, generated illustration
 | Classes and skill caps | Active class definitions and exact-rank trainer links | Same shared registry | Race overrides, promotion relationships and comparison chart |
 | Recruitable companions | Shared merged roster reference | Roster biography/stats and recruited-only Discovery | Recruitment locations/conditions and current recruitment state |
 | Arcomage/Arena tracking | Existing campaign counters and linked taverns | Existing campaign counters and linked taverns | Visual checklist polish and wider save-state audit |
-| Custom markers and notes | Existing Map Book only | Existing Map Book only | Native Atlas integration and namespaced persistence |
+| Custom markers and notes | Native place/edit/delete with shared Map Book state | Same shared notes and canonical snapshot ownership | Marker styles, richer editing and Android/controller checks |
 | Optional Atlas mod | Profile-controlled native UI module | Same shared module | Launcher toggles and wider device checks |
 | Localization parity | Current engine language | Current engine language | Integrate engine localization; no copied guide translation bundle |
 

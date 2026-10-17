@@ -5,6 +5,7 @@
 #include "game/world/WorldMapExploration.h"
 #include "game/world/WorldMapFeatures.h"
 #include "game/world/WorldMonsterKnowledge.h"
+#include "game/world/WorldMapNotes.h"
 #include "game/tables/MapStats.h"
 #include "game/tables/MergedBaseTables.h"
 #include "game/tables/NpcDialogTable.h"
@@ -69,6 +70,7 @@ struct WorldKnowledge
     std::unordered_set<uint32_t> autonoteIds;
     std::unordered_map<std::string, std::unordered_set<std::string>> interactedSites;
     std::unordered_map<std::string, std::vector<WorldMonsterObservation>> monsterObservations;
+    std::unordered_map<std::string, std::vector<WorldMapNote>> notes;
     bool knows(const WorldRecord &record) const;
 };
 
@@ -94,6 +96,7 @@ public:
                           const std::vector<WorldMonsterObservation> &observations = {});
     void indexMapMonsters(const MapStatsEntry &map, const IndoorMapData &geometry, const MonsterTable &monsters,
                           const std::vector<WorldMonsterObservation> &observations = {});
+    void indexMapNotes(const WorldKnowledge &knowledge);
     const std::vector<WorldMapLocation> &locations() const;
     const std::vector<WorldMapFeature> &features() const;
     bool featureVisible(const WorldMapFeature &feature, const WorldKnowledge &knowledge, bool guide) const;

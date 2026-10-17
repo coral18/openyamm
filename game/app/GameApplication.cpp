@@ -1,3 +1,5 @@
+#include "game/world/WorldMapKnowledge.h"
+#include "game/maps/MapSnapshotLookup.h"
 #include "game/app/GameApplication.h"
 #include "game/gameplay/SavePreviewImage.h"
 
@@ -1323,46 +1325,6 @@ bool timedMapRespawnDue(
         && currentLocationDay - locationInfo.lastRespawnDay >= map.respawnIntervalDays;
 }
 
-const OutdoorWorldRuntime::Snapshot *findSavedOutdoorWorldState(
-    const GameSession &session,
-    const MapAssetInfo &mapAssetInfo)
-{
-    const std::unordered_map<std::string, OutdoorWorldRuntime::Snapshot> &states = session.outdoorWorldStates();
-    std::unordered_map<std::string, OutdoorWorldRuntime::Snapshot>::const_iterator stateIt = states.end();
-
-    if (!mapAssetInfo.map.canonicalId.empty())
-    {
-        stateIt = states.find(mapAssetInfo.map.canonicalId);
-    }
-
-    if (stateIt == states.end())
-    {
-        stateIt = states.find(mapAssetInfo.map.fileName);
-    }
-
-    return stateIt != states.end() ? &stateIt->second : nullptr;
-}
-
-const IndoorSceneRuntime::Snapshot *findSavedIndoorSceneState(
-    const GameSession &session,
-    const MapAssetInfo &mapAssetInfo)
-{
-    const std::unordered_map<std::string, IndoorSceneRuntime::Snapshot> &states = session.indoorSceneStates();
-    std::unordered_map<std::string, IndoorSceneRuntime::Snapshot>::const_iterator stateIt = states.end();
-
-    if (!mapAssetInfo.map.canonicalId.empty())
-    {
-        stateIt = states.find(mapAssetInfo.map.canonicalId);
-    }
-
-    if (stateIt == states.end())
-    {
-        stateIt = states.find(mapAssetInfo.map.fileName);
-    }
-
-    return stateIt != states.end() ? &stateIt->second : nullptr;
-}
-
 bool savedSelectedMapStateNeedsFreshAssets(
     const GameSession &session,
     const MapAssetInfo &mapAssetInfo,
@@ -1370,14 +1332,15 @@ bool savedSelectedMapStateNeedsFreshAssets(
 {
     if (mapAssetInfo.outdoorMapData)
     {
-        const OutdoorWorldRuntime::Snapshot *pSnapshot = findSavedOutdoorWorldState(session, mapAssetInfo);
+        const OutdoorWorldRuntime::Snapshot *pSnapshot =
+            findMapSnapshot(session.outdoorWorldStates(), mapAssetInfo.map);
         return pSnapshot != nullptr
             && timedMapRespawnDue(mapAssetInfo.map, pSnapshot->locationInfo, currentLocationDay);
     }
 
     if (mapAssetInfo.indoorMapData)
     {
-        const IndoorSceneRuntime::Snapshot *pSnapshot = findSavedIndoorSceneState(session, mapAssetInfo);
+        const IndoorSceneRuntime::Snapshot *pSnapshot = findMapSnapshot(session.indoorSceneStates(), mapAssetInfo.map);
         return pSnapshot != nullptr
             && pSnapshot->mapDeltaData
             && timedMapRespawnDue(
@@ -6740,7 +6703,7 @@ bool GameApplication::initializeSelectedMapRuntime(bool initializeView)
 
         const int32_t currentMapDay = currentLocationDay(m_gameSession.gameMinutes());
         const OutdoorWorldRuntime::Snapshot *pSavedOutdoorState =
-            findSavedOutdoorWorldState(m_gameSession, *selectedMap);
+            findMapSnapshot(m_gameSession.outdoorWorldStates(), selectedMap->map);
         const bool outdoorTimedRespawn =
             pSavedOutdoorState != nullptr
                 && timedMapRespawnDue(selectedMap->map, pSavedOutdoorState->locationInfo, currentMapDay);
@@ -6825,6 +6788,10 @@ bool GameApplication::initializeSelectedMapRuntime(bool initializeView)
                     previousOutdoorProcessedRespawnCount;
             }
         }
+        if (!restoreSavedOutdoorState && pSavedOutdoorState != nullptr && pSavedOutdoorState->eventRuntimeState
+            && outdoorTimeSnapshot.eventRuntimeState)
+            restoreWorldMapKnowledgeAfterRefill(*pSavedOutdoorState->eventRuntimeState,
+                                               *outdoorTimeSnapshot.eventRuntimeState);
         m_pOutdoorWorldRuntime->restoreSnapshot(outdoorTimeSnapshot);
         if (!m_loadingSavedGameRuntime)
         {
@@ -6966,7 +6933,7 @@ bool GameApplication::initializeSelectedMapRuntime(bool initializeView)
                 : pIndoorActorSpriteFrameTable;
         const int32_t currentMapDay = currentLocationDay(m_gameSession.gameMinutes());
         const IndoorSceneRuntime::Snapshot *pSavedIndoorState =
-            findSavedIndoorSceneState(m_gameSession, *selectedMap);
+            findMapSnapshot(m_gameSession.indoorSceneStates(), selectedMap->map);
         const bool indoorTimedRespawn =
             pSavedIndoorState != nullptr
             && pSavedIndoorState->mapDeltaData
@@ -7061,6 +7028,10 @@ bool GameApplication::initializeSelectedMapRuntime(bool initializeView)
                     previousIndoorProcessedRespawnCount;
             }
         }
+        if (!restoreSavedIndoorState && pSavedIndoorState != nullptr && pSavedIndoorState->eventRuntimeState
+            && indoorTimeSnapshot.eventRuntimeState)
+            restoreWorldMapKnowledgeAfterRefill(*pSavedIndoorState->eventRuntimeState,
+                                               *indoorTimeSnapshot.eventRuntimeState);
         pIndoorSceneRuntime->restoreSnapshot(indoorTimeSnapshot);
         if (!m_loadingSavedGameRuntime)
         {
@@ -8852,6 +8823,7 @@ bool GameApplication::openAtlasScreen(bool paused)
         const auto collectSites = [&knowledge](const std::string &file, const EventRuntimeState &state)
         {
             knowledge.monsterObservations[toLowerCopy(file)] = worldMonsterObservations(state);
+            knowledge.notes[toLowerCopy(file)] = worldMapNotes(state, file);
             for (const auto &[key, value] : state.namedMapVars)
                 if (value > 0 && key.starts_with("openyamm.discovery.site/"))
                     knowledge.interactedSites[toLowerCopy(file)].insert(key);
@@ -8866,20 +8838,6 @@ bool GameApplication::openAtlasScreen(bool paused)
                 if (const auto value = variables.find(note.noteBit); value != variables.end() && value->second != 0)
                     knowledge.autonoteIds.insert(note.noteBit >> 16);
         }
-        for (const auto &[file, state] : m_gameSession.outdoorWorldStates())
-        {
-            knowledge.visitedMaps.insert(toLowerCopy(file));
-            if (state.eventRuntimeState)
-                collectSites(file, *state.eventRuntimeState);
-        }
-        for (const auto &[file, state] : m_gameSession.indoorSceneStates())
-        {
-            knowledge.visitedMaps.insert(toLowerCopy(file));
-            if (state.eventRuntimeState)
-                collectSites(file, *state.eventRuntimeState);
-        }
-        if (m_pMapSceneRuntime != nullptr && m_pMapSceneRuntime->eventRuntimeState() != nullptr)
-            collectSites(m_gameSession.currentMapFileName(), *m_pMapSceneRuntime->eventRuntimeState());
         const auto collectFloorPlan = [&knowledge](const std::string &file, const IndoorSceneRuntime::Snapshot &state)
         {
             if (!state.mapDeltaData)
@@ -8893,13 +8851,29 @@ bool GameApplication::openAtlasScreen(bool paused)
                         plan.invisibleFaces.insert(static_cast<uint32_t>(i));
             knowledge.floorPlans[toLowerCopy(file)] = std::move(plan);
         };
-        for (const auto &[file, state] : m_gameSession.indoorSceneStates())
-            collectFloorPlan(file, state);
+        for (const MapStatsEntry &map : m_gameDataRepository.mapStats().getEntries())
+        {
+            if (const auto *pState = findMapSnapshot(m_gameSession.outdoorWorldStates(), map))
+            {
+                knowledge.visitedMaps.insert(toLowerCopy(map.fileName));
+                if (pState->eventRuntimeState)
+                    collectSites(map.fileName, *pState->eventRuntimeState);
+                knowledge.regionMaps[toLowerCopy(map.fileName)] =
+                    {pState->fullyRevealedCells, pState->partiallyRevealedCells};
+            }
+            if (const auto *pState = findMapSnapshot(m_gameSession.indoorSceneStates(), map))
+            {
+                knowledge.visitedMaps.insert(toLowerCopy(map.fileName));
+                if (pState->eventRuntimeState)
+                    collectSites(map.fileName, *pState->eventRuntimeState);
+                collectFloorPlan(map.fileName, *pState);
+            }
+        }
+        if (m_pMapSceneRuntime != nullptr && m_pMapSceneRuntime->eventRuntimeState() != nullptr)
+            collectSites(m_gameSession.currentMapFileName(), *m_pMapSceneRuntime->eventRuntimeState());
         if (m_pMapSceneRuntime != nullptr && m_pMapSceneRuntime->kind() == SceneKind::Indoor)
             collectFloorPlan(m_gameSession.currentMapFileName(),
                 static_cast<IndoorSceneRuntime *>(m_pMapSceneRuntime.get())->snapshot());
-        for (const auto &[file, state] : m_gameSession.outdoorWorldStates())
-            knowledge.regionMaps[toLowerCopy(file)] = {state.fullyRevealedCells, state.partiallyRevealedCells};
         if (m_pMapSceneRuntime != nullptr && m_pMapSceneRuntime->kind() == SceneKind::Outdoor
             && m_pOutdoorWorldRuntime != nullptr)
         {
@@ -8917,7 +8891,26 @@ bool GameApplication::openAtlasScreen(bool paused)
         auto screen = std::make_unique<AtlasScreen>(*m_pAssetFileSystem, m_gameDataRepository, std::move(knowledge),
             [this, paused]() { openMenuScreen(paused); }, paused, &m_gameAudioSystem,
             paused && m_gameDataLoader.getSelectedMap() ? &*m_gameDataLoader.getSelectedMap() : nullptr,
-            paused && m_pMapSceneRuntime != nullptr ? &m_pMapSceneRuntime->party() : nullptr);
+            paused && m_pMapSceneRuntime != nullptr ? &m_pMapSceneRuntime->party() : nullptr,
+            paused ? AtlasScreen::NoteWriter{[this](WorldMapNoteEdit &edit, std::string &error)
+            {
+                if (toLowerCopy(edit.mapFileName) == toLowerCopy(m_gameSession.currentMapFileName())
+                    && m_pMapSceneRuntime != nullptr && m_pMapSceneRuntime->eventRuntimeState() != nullptr)
+                    return editWorldMapNote(*m_pMapSceneRuntime->eventRuntimeState(),
+                                            m_gameSession.currentMapFileName(), edit, error);
+                const MapStatsEntry *pMap = m_gameDataRepository.mapStats().findByFileName(edit.mapFileName);
+                if (pMap != nullptr)
+                {
+                    if (auto *pState = findMapSnapshot(m_gameSession.outdoorWorldStates(), *pMap);
+                        pState != nullptr && pState->eventRuntimeState)
+                        return editWorldMapNote(*pState->eventRuntimeState, pMap->fileName, edit, error);
+                    if (auto *pState = findMapSnapshot(m_gameSession.indoorSceneStates(), *pMap);
+                        pState != nullptr && pState->eventRuntimeState)
+                        return editWorldMapNote(*pState->eventRuntimeState, pMap->fileName, edit, error);
+                }
+                error = "Visit this map before adding notes.";
+                return false;
+            }} : AtlasScreen::NoteWriter{});
         screen->setFontSettings(m_settings.fonts);
         m_screenManager.setActiveScreen(std::move(screen));
         return true;

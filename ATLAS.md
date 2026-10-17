@@ -22,9 +22,12 @@ community guide's complete content has been integrated yet.
   planes, their dungeon maps and Plane Between Planes are searchable. The developer Tutorial map remains searchable
   in Guide but is not positioned on the playable-world overview.
 - Region/dungeon selection, resident NPCs, buildings, mastery trainers, walking routes and transport schedules.
-- Sites layer for physical chests, wells/fountains, shrines, obelisks and declared passages/teleports.
+- Sites layer for physical chests, wells/fountains, shrines, obelisks, declared passages/teleports,
+  authored encounter areas, last-observed creatures and saved map notes.
   Search and clustered small markers work on regional images and dungeon plans; declared map links open the
   connected Atlas page without moving the party.
+- Player notes can be placed on a visited map, edited or deleted in the native Atlas. They reuse the Map Book
+  note state and remain independent of fog. Automatic trainer notes are indexed as read-only records.
 - Off-map dungeon plans projected from the engine's actual geometry. Discovery respects saved outline bits,
   seen faces and runtime invisible-face overrides; Guide renders the authored visible outlines.
 - Case-insensitive search and typed filters. Trainer names and topics come from the game's NPC/topic tables.
@@ -298,3 +301,59 @@ encounter refactor. Windows Release native GPU tours cover observed-only sites, 
 remaining hidden after Guide browsing, authored encounters in both worlds and return to gameplay. Captures stay
 outside Git in `atlas-monster-ui-20261017`. This checkpoint does not establish Android/controller validation or
 complete the full Atlas feature matrix.
+
+### Personal map annotations, 2026-10-17
+
+`WorldMapNotes` reads and edits the existing `EventRuntimeState::runtimeMapNotes`; there is no second annotation
+save format. Both the Map Book and Atlas consume those records. Active automatic notes, including trainer notes,
+are read-only in the Atlas. New user notes get an unused ID in the upper uint32 half and a namespaced map-local
+ownership key, `openyamm.map-notes.user/<id>`. Allocation skips occupied IDs and ownership keys. Edits/deletes
+validate ownership and map scope before changing state; empty, oversized or NUL-containing text is rejected.
+A delete removes both the note and its ownership key. The UTF-8 input buffer is bounded to 512 bytes.
+
+The owning live map or saved snapshot supplies map identity explicitly. `EventRuntimeState::mapFileName` is runtime
+context, deliberately absent from serialized snapshots, so it cannot authorize historical-note edits. Current-map
+edits update its live event state; historical-map edits update that map's existing authoritative snapshot.
+`findMapSnapshot` centralizes the existing canonical-first, legacy-filename lookup used by actual map loading.
+Atlas knowledge collection uses that same owner for notes, observations, fog and floor plans, rather than displaying
+or editing an alias while gameplay restores a different canonical record. It never merges conflicting snapshots. Adding notes never
+creates a visited-map snapshot, reveals terrain, marks a service as visited or changes gameplay content. Unvisited
+maps and the campaign-free main-menu Guide have no note editor. Known maps can be annotated in either mode.
+
+The native Add note action selects a point on the displayed regional image or dungeon floor plan. World coordinates
+are calculated through the same projection used to render markers, including inverse dungeon projection. A native
+text editor supports save, cancel and delete. The Sites view labels note pins with N, searches their text and opens
+user-owned records for editing. Non-note indexing preserves the independently owned note layer. Guide browsing alone
+still writes no campaign discoveries. Marker style choices, richer text editing, Android/controller validation and
+broader device/content auditing remain future work.
+
+Map refills retain map annotations and namespaced Core discoveries/observations, including last-known creature
+positions; they do not restore gameplay map variables, opened chests or trap state. The same preservation hook is
+used for outdoor refills and indoor/one-visit resets. Last-observed creature pins remain historical knowledge until
+the party actually observes those actors again.
+
+The native review also exposed an exception-lifetime problem: application GPU resources could outlive the bgfx
+context if a frame callback threw. The engine now runs its shutdown callback before context destruction on that
+path as well as normal exit. Active-screen rendering also balances its deferred-switch scope when rendering throws.
+Native input-tour step logs flush immediately so the original failing action is visible in captured process logs.
+
+Twenty-six World Database cases / 1201 assertions passed with AddressSanitizer and UndefinedBehaviorSanitizer,
+covering note ownership and collision rejection, map scope without serialized runtime context, conflicting legacy
+aliases, independent site-layer indexing, inverse dungeon projection and knowledge retention without gameplay-state
+retention on refill. The Windows Release target built successfully. Faithful map-lifecycle regressions passed for
+MM6, MM7 and MM8. Native Windows tours exercised create/edit/delete/cancel in MM8, notes on current and historical
+MM7/MM8 maps, quicksave and Map Book sharing. A fresh process loaded a note-bearing save with Atlas disabled,
+showed the same text in Map Book and showed a pause menu without Atlas. Original campaigns were not used as outputs.
+
+Additional faithful processes loaded the note-bearing MM7/MM8 saves, actually entered each annotated historical map,
+then saved/reloaded that visit and verified ownership persistence. A controlled MM8 scenario advanced 700 days and
+verified that both the indoor and outdoor maps truly refilled (`map_refill_count` changed from 0 to 1) while both
+notes survived. The read-only scenario assertion observes the runtime's processed refill count. Deleted/canceled
+text was absent from the resulting saves. A deliberately invalid native tour with Atlas still open returned the
+original error and exit code 1 after orderly resource cleanup, rather than the previous shutdown access violation.
+All native captures/logs and generated fixture saves stay outside Git under `atlas-notes-*-20261017`,
+`atlas-notes-restore-20261017` and `atlas-exception-cleanup-20261017`. Android/device checks remain outstanding.
+
+Fresh native UI processes also reopened the canonical note-bearing saves in both worlds, displayed the saved region
+and historical-map text, edited the historical note and saved it again. This validates Atlas reads/edits against the
+same canonical snapshot that actual map entry restores, including saves where the legacy filename alias differs.

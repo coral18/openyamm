@@ -14,10 +14,11 @@ class Party;
 class AtlasScreen : public MenuDesignScreen
 {
 public:
+    using NoteWriter = std::function<bool(WorldMapNoteEdit &, std::string &)>;
     AtlasScreen(const Engine::AssetFileSystem &assets, const GameDataRepository &data,
                 WorldKnowledge knowledge, std::function<void()> close, bool paused,
                 GameAudioSystem *audio = nullptr, const MapAssetInfo *pCurrentMap = nullptr,
-                const Party *pParty = nullptr);
+                const Party *pParty = nullptr, NoteWriter writeNote = {});
     ~AtlasScreen() override;
     AppMode mode() const override;
     void handleSdlEvent(const SDL_Event &event) override;
@@ -39,6 +40,9 @@ private:
     void drawDetails();
     void drawReference();
     void rebuildReference();
+    void drawNoteEditor();
+    void saveNote(bool remove);
+    void closeNoteEditor();
 
     WorldKnowledge m_knowledge;
     WorldAtlasPresentation m_presentation;
@@ -54,6 +58,10 @@ private:
     float m_referenceScroll = 0, m_referenceDetailScroll = 0, m_referenceContentHeight = 0;
     std::unordered_set<std::string> m_indexedMaps, m_siteSelection;
     std::string m_locationError;
+    NoteWriter m_writeNote;
+    WorldMapNoteEdit m_noteDraft;
+    std::string m_noteError;
+    bool m_noteEditorOpen = false, m_placingNote = false;
     bool m_featureView = false;
     std::string m_selectedFeature;
     std::function<void()> m_close;

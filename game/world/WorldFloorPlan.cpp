@@ -86,4 +86,11 @@ std::pair<float, float> WorldFloorPlanRaster::worldToUv(float x, float y) const
     return {float(0.5 + (x - centerX) * pixelsPerWorldUnit / width),
             float(0.5 - (y - centerY) * pixelsPerWorldUnit / height)};
 }
+std::pair<float, float> WorldFloorPlanRaster::uvToWorld(float u, float v) const
+{
+    if (pixelsPerWorldUnit <= 0)
+        return {float(centerX), float(centerY)};
+    return {float(centerX + (u - 0.5) * width / pixelsPerWorldUnit),
+            float(centerY - (v - 0.5) * height / pixelsPerWorldUnit)};
+}
 } // namespace OpenYAMM::Game

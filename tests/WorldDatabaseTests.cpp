@@ -1,3 +1,5 @@
+#include "game/world/WorldMapKnowledge.h"
+#include "game/maps/MapSnapshotLookup.h"
 #include "doctest/doctest.h"
 #include "game/world/WorldDatabase.h"
 #include "game/world/WorldAtlasPresentation.h"
@@ -83,6 +85,174 @@ MonsterTable atlasMonsters()
     return monsters;
 }
 } // namespace
+
+TEST_CASE("world map user notes reuse map-local notes without replacing script-owned records")
+{
+    EventRuntimeState state;
+    state.mapFileName = "7out02.odm";
+    state.runtimeMapNotes[3101] = {3101, 4, 5, state.mapFileName, "Sword - Master", true};
+    WorldMapNoteEdit edit{"7OUT02.ODM", 0, 123, -456, "  Własna notatka  ", false};
+    std::string error;
+    REQUIRE(editWorldMapNote(state, state.mapFileName, edit, error));
+    CHECK(error.empty());
+    CHECK(edit.id == UINT32_MAX);
+    CHECK(edit.text == "Własna notatka");
+    REQUIRE(worldMapNotes(state, state.mapFileName).size() == 2);
+    CHECK_FALSE(worldMapNotes(state, state.mapFileName)[0].userOwned);
+    CHECK(worldMapNotes(state, state.mapFileName)[1].userOwned);
+    CHECK(state.runtimeMapNotes.at(edit.id).x == 123);
+    CHECK(state.runtimeMapNotes.at(edit.id).y == -456);
+    edit.text = "Po zmianie";
+    REQUIRE(editWorldMapNote(state, state.mapFileName, edit, error));
+    CHECK(state.runtimeMapNotes.at(edit.id).text == "Po zmianie");
+    CHECK(state.runtimeMapNotes.size() == 2);
+    edit.remove = true;
+    REQUIRE(editWorldMapNote(state, state.mapFileName, edit, error));
+    CHECK(state.runtimeMapNotes.size() == 1);
+    CHECK(state.runtimeMapNotes.at(3101).text == "Sword - Master");
+    CHECK(state.namedMapVars.empty());
+}
+
+TEST_CASE("world map note edits reject foreign maps and ownership before changing saved data")
+{
+    EventRuntimeState state;
+    state.mapFileName = "out01.odm";
+    state.runtimeMapNotes[UINT32_MAX] = {UINT32_MAX, 1, 2, state.mapFileName, "Foreign", true};
+    state.namedMapVars["openyamm.map-notes.user/4294967294"] = 1; // Unavailable ID, no active record.
+    std::string error;
+    WorldMapNoteEdit edit{state.mapFileName, UINT32_MAX, 3, 4, "Overwrite", false};
+    CHECK_FALSE(editWorldMapNote(state, state.mapFileName, edit, error));
+    CHECK(state.runtimeMapNotes.at(UINT32_MAX).text == "Foreign");
+    edit.id = 0;
+    REQUIRE(editWorldMapNote(state, state.mapFileName, edit, error));
+    CHECK(edit.id == UINT32_MAX - 2);
+    edit.mapFileName = "d05.blv";
+    CHECK_FALSE(editWorldMapNote(state, state.mapFileName, edit, error));
+    edit.mapFileName = state.mapFileName;
+    for (const std::string &invalid : {std::string("  "), std::string(513, 'a'), std::string("a\0b", 3)})
+    {
+        edit.text = invalid;
+        CHECK_FALSE(editWorldMapNote(state, state.mapFileName, edit, error));
+        CHECK(state.runtimeMapNotes.at(edit.id).text == "Overwrite");
+    }
+    CHECK(state.runtimeMapNotes.size() == 2);
+    state.runtimeMapNotes[12] = {12, 1, 2, "d05.blv", "Other map", true};
+    state.runtimeMapNotes[13] = {13, 1, 2, state.mapFileName, "Inactive", false};
+    CHECK(worldMapNotes(state, state.mapFileName).size() == 2);
+}
+
+TEST_CASE("world map notes use the owning snapshot scope when ephemeral runtime context is absent")
+{
+    EventRuntimeState restored;
+    CHECK(restored.mapFileName.empty());
+    WorldMapNoteEdit edit{"d05.blv", 0, 100, 200, "Dungeon note after reload", false};
+    std::string error;
+    REQUIRE(editWorldMapNote(restored, "d05.blv", edit, error));
+    REQUIRE(worldMapNotes(restored, "d05.blv").size() == 1);
+    CHECK(worldMapNotes(restored, "out01.odm").empty());
+    edit.text = "Must not cross map boundaries";
+    CHECK_FALSE(editWorldMapNote(restored, "out01.odm", edit, error));
+    CHECK(restored.runtimeMapNotes.at(edit.id).text == "Dungeon note after reload");
+    CHECK(restored.mapFileName.empty());
+}
+
+TEST_CASE("atlas note edits use the canonical snapshot instead of a stale filename alias")
+{
+    MapStatsEntry map;
+    map.fileName = "d05.blv"; map.canonicalId = "mm8/map/d05";
+    std::unordered_map<std::string, EventRuntimeState> states;
+    states[map.fileName].runtimeMapNotes[3101] = {3101, 0, 0, map.fileName, "Stale alias", true};
+    states[map.canonicalId] = {};
+    EventRuntimeState *pState = findMapSnapshot(states, map);
+    REQUIRE(pState == &states.at(map.canonicalId));
+    WorldMapNoteEdit edit{map.fileName, 0, 100, 200, "Canonical note", false};
+    std::string error;
+    REQUIRE(editWorldMapNote(*pState, map.fileName, edit, error));
+    REQUIRE(worldMapNotes(*findMapSnapshot(states, map), map.fileName).size() == 1);
+    CHECK(worldMapNotes(*findMapSnapshot(states, map), map.fileName)[0].value.text == "Canonical note");
+    CHECK(states.at(map.fileName).runtimeMapNotes.size() == 1);
+    CHECK(states.at(map.fileName).runtimeMapNotes.at(3101).text == "Stale alias");
+    const auto &savedStates = states;
+    CHECK(findMapSnapshot(savedStates, map) == &savedStates.at(map.canonicalId));
+    states.erase(map.canonicalId);
+    CHECK(findMapSnapshot(states, map) == &states.at(map.fileName));
+    states.clear();
+    CHECK(findMapSnapshot(states, map) == nullptr);
+    map.canonicalId.clear();
+    states[""] = {}; states[map.fileName] = {};
+    CHECK(findMapSnapshot(states, map) == &states.at(map.fileName));
+}
+
+TEST_CASE("map refills preserve party knowledge without restoring cleared gameplay state")
+{
+    EventRuntimeState previous, refilled;
+    WorldMapNoteEdit edit{"d05.blv", 0, 100, 200, "My dungeon note", false};
+    std::string error;
+    REQUIRE(editWorldMapNote(previous, "d05.blv", edit, error));
+    previous.runtimeMapNotes[3101] = {3101, 1, 2, "d05.blv", "Sword - Master", true};
+    previous.namedMapVars["openyamm.discovery.site/surface/1/event/5"] = 1;
+    recordWorldMonsterObservation(previous, {1, 11, 30, 40, 50, true, 500});
+    previous.mapVars[0] = 99;
+    previous.openedChestIds.push_back(42);
+    previous.namedMapVars["gameplay.trap"] = 99;
+    refilled.mapVars[0] = 2;
+    refilled.namedMapVars["gameplay.trap"] = 2;
+    restoreWorldMapKnowledgeAfterRefill(previous, refilled);
+    REQUIRE(worldMapNotes(refilled, "d05.blv").size() == 2);
+    CHECK(worldMapNotes(refilled, "d05.blv")[1].userOwned);
+    CHECK(refilled.namedMapVars.at("openyamm.discovery.site/surface/1/event/5") == 1);
+    REQUIRE(worldMonsterObservations(refilled).size() == 1);
+    CHECK(worldMonsterObservations(refilled)[0].dead);
+    CHECK(refilled.mapVars[0] == 2);
+    CHECK(refilled.openedChestIds.empty());
+    CHECK(refilled.namedMapVars.at("gameplay.trap") == 2);
+}
+
+TEST_CASE("world map notes are indexed without revealing terrain or deleting other site layers")
+{
+    Fixture fixture;
+    WorldDatabase database = fixture.database();
+    EventRuntimeState state;
+    state.mapFileName = "7out02.odm";
+    WorldMapNoteEdit edit{state.mapFileName, 0, 1200, -500, "My secret camp", false};
+    std::string error;
+    REQUIRE(editWorldMapNote(state, state.mapFileName, edit, error));
+    WorldKnowledge knowledge;
+    knowledge.notes[state.mapFileName] = worldMapNotes(state, state.mapFileName);
+    database.indexMapNotes(knowledge);
+    CHECK(database.queryFeatures(knowledge, false, "secret").empty());
+    REQUIRE(database.queryFeatures(knowledge, true, "secret").size() == 1);
+    knowledge.visitedMaps.insert(state.mapFileName);
+    const auto features = database.queryFeatures(knowledge, false, "secret");
+    REQUIRE(features.size() == 1);
+    CHECK(features[0]->userNote);
+    CHECK(features[0]->noteId == edit.id);
+    CHECK(knowledge.regionMaps.empty());
+    CHECK(knowledge.variables.empty());
+    std::string programError;
+    const auto program = ScriptedEventProgram::loadFromLuaText("return {}", "notes-test",
+        ScriptedEventScope::Map, programError);
+    REQUIRE(program.has_value());
+    OutdoorMapData geometry;
+    geometry.worldId = "mm7"; geometry.fileName = state.mapFileName;
+    database.indexMapLocations(geometry, *program);
+    REQUIRE(database.queryFeatures(knowledge, false, "secret").size() == 1);
+    database.indexMapNotes(knowledge);
+    CHECK(database.queryFeatures(knowledge, false, "secret").size() == 1);
+}
+
+TEST_CASE("atlas dungeon note projection reverses the rendered floor-plan transform")
+{
+    WorldFloorPlanRaster plan;
+    plan.centerX = 5000; plan.centerY = -3000; plan.pixelsPerWorldUnit = 0.03;
+    for (const auto point : {std::pair{5000.f, -3000.f}, std::pair{-1000.f, 2000.f}, std::pair{12000.f, -7000.f}})
+    {
+        const auto uv = plan.worldToUv(point.first, point.second);
+        const auto restored = plan.uvToWorld(uv.first, uv.second);
+        CHECK(restored.first == doctest::Approx(point.first).epsilon(0.00001));
+        CHECK(restored.second == doctest::Approx(point.second).epsilon(0.00001));
+    }
+}
 
 TEST_CASE("world encounter definitions share slot tier and difficulty encoding with gameplay")
 {

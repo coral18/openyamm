@@ -47,7 +47,9 @@ void WorldDatabase::indexMapLocations(const OutdoorMapData &map, const ScriptedE
                                pSource->id, pTarget->id, eventId, float(x), float(y)});
     };
     const auto sites = worldInteractionSites(map);
-    std::erase_if(m_features, [pSource](const WorldMapFeature &feature) { return feature.mapId == pSource->id; });
+    std::erase_if(m_features, [pSource](const WorldMapFeature &feature)
+    { return feature.mapId == pSource->id && feature.kind != WorldMapFeatureKind::Monster
+        && feature.kind != WorldMapFeatureKind::Note; });
     auto features = buildWorldMapFeatures(pSource->id, sites, events);
     m_features.insert(m_features.end(), features.begin(), features.end());
     for (const WorldInteractionSite &site : sites)
@@ -63,7 +65,9 @@ void WorldDatabase::indexMapLocations(const MapStatsEntry &map, const IndoorMapD
     const WorldRecord *pSource = find(id);
     if (pSource == nullptr || pSource->kind != WorldRecordKind::Dungeon)
         return;
-    std::erase_if(m_features, [&id](const WorldMapFeature &feature) { return feature.mapId == id; });
+    std::erase_if(m_features, [&id](const WorldMapFeature &feature)
+    { return feature.mapId == id && feature.kind != WorldMapFeatureKind::Monster
+        && feature.kind != WorldMapFeatureKind::Note; });
     auto features = buildWorldMapFeatures(id, worldInteractionSites(geometry), events);
     m_features.insert(m_features.end(), features.begin(), features.end());
 }
@@ -95,6 +99,36 @@ void WorldDatabase::indexMapMonsters(const MapStatsEntry &map, const IndoorMapDa
     replaceMapMonsterFeatures(map, buildWorldEncounterFeatures(map, geometry, monsters), monsters, observations);
 }
 
+void WorldDatabase::indexMapNotes(const WorldKnowledge &knowledge)
+{
+    std::erase_if(m_features, [](const WorldMapFeature &feature)
+    { return feature.kind == WorldMapFeatureKind::Note; });
+    for (const WorldRecord &map : m_records)
+    {
+        if (map.kind != WorldRecordKind::Region && map.kind != WorldRecordKind::Dungeon)
+            continue;
+        const auto found = knowledge.notes.find(toLowerCopy(map.map->fileName));
+        if (found == knowledge.notes.end())
+            continue;
+        for (const WorldMapNote &note : found->second)
+        {
+            if (!note.value.active || note.value.text.empty()
+                || toLowerCopy(note.value.mapFileName) != toLowerCopy(map.map->fileName))
+                continue;
+            WorldMapFeature feature;
+            feature.id = map.id + "/note/" + std::to_string(note.value.id);
+            feature.mapId = map.id;
+            feature.site = {"note/" + std::to_string(note.value.id), 0,
+                float(note.value.x), float(note.value.y), 0};
+            feature.kind = WorldMapFeatureKind::Note;
+            feature.title = note.value.text;
+            feature.noteId = note.value.id;
+            feature.userNote = note.userOwned;
+            m_features.push_back(std::move(feature));
+        }
+    }
+}
+
 bool WorldDatabase::featureVisible(const WorldMapFeature &feature, const WorldKnowledge &knowledge, bool guide) const
 {
     const WorldRecord *pMap = find(feature.mapId);
@@ -102,6 +136,8 @@ bool WorldDatabase::featureVisible(const WorldMapFeature &feature, const WorldKn
         return false;
     if (guide)
         return true;
+    if (feature.kind == WorldMapFeatureKind::Note)
+        return knowledge.visitedMaps.contains(toLowerCopy(pMap->map->fileName));
     if (feature.kind == WorldMapFeatureKind::Monster)
         return feature.monster && feature.monster->observed;
     const std::string file = toLowerCopy(pMap->map->fileName);
