@@ -237,6 +237,8 @@ add_executable(openyamm_unit_tests
     ../game/world/WorldFloorPlan.cpp
     ../game/world/WorldMapExploration.cpp
     ../game/world/WorldMapLocations.cpp
+    ../game/world/WorldInteractionSites.cpp
+    ../game/world/WorldMapFeatures.cpp
     ../game/tables/NpcDialogTable.cpp
     ../game/tables/ObjectTable.cpp
     ../game/tables/PortraitEnums.cpp

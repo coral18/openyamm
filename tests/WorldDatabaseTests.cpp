@@ -7,6 +7,7 @@
 #include "game/indoor/IndoorMapData.h"
 #include "game/outdoor/OutdoorMapData.h"
 #include "game/events/ScriptedEventProgram.h"
+#include "game/events/EventRuntime.h"
 
 #include <fstream>
 #include <iterator>
@@ -63,6 +64,127 @@ struct Fixture
     WorldDatabase database() const { return WorldDatabase(maps, houses, npcs, teachers, "mm7", layout); }
 };
 } // namespace
+
+TEST_CASE("world database sites distinguish connected faces from reused event objects")
+{
+    IndoorMapData map;
+    map.vertices = {{0, 0, 0}, {10, 0, 0}, {10, 10, 0}, {0, 10, 0},
+                    {100, 100, 0}, {110, 100, 0}, {100, 110, 0}};
+    map.faces.resize(4);
+    map.faces[0].vertexIndices = {0, 1, 2};
+    map.faces[1].vertexIndices = {0, 2, 3};
+    map.faces[2].vertexIndices = {4, 5, 6};
+    map.faces[3].vertexIndices = {65535};
+    for (auto &face : map.faces)
+        face.cogTriggered = 10;
+    auto sites = worldInteractionSites(map);
+    REQUIRE(sites.size() == 2);
+    CHECK(sites[0].x == doctest::Approx(5));
+    CHECK(sites[0].faceIds.size() == 2);
+    CHECK(sites[1].x == doctest::Approx(103.3333));
+    CHECK(sites[1].faceIds.size() == 1);
+    map.faces[2].attributes = faceAttributeBit(FaceAttribute::Invisible);
+    CHECK(worldInteractionSites(map).size() == 1);
+    OutdoorMapData outdoor;
+    outdoor.bmodels.resize(1);
+    outdoor.bmodels[0].vertices = {{0, 0, 0}, {10, 0, 0}, {10, 10, 0},
+        {0, 0, 0}, {10, 10, 0}, {0, 10, 0}, {100, 100, 0}, {110, 100, 0}, {100, 110, 0}};
+    outdoor.bmodels[0].faces.resize(3);
+    outdoor.bmodels[0].faces[0].vertexIndices = {0, 1, 2};
+    outdoor.bmodels[0].faces[1].vertexIndices = {3, 4, 5}; // Same physical seam, separate vertex indices.
+    outdoor.bmodels[0].faces[2].vertexIndices = {6, 7, 8};
+    for (auto &face : outdoor.bmodels[0].faces)
+        face.cogTriggeredNumber = 10;
+    sites = worldInteractionSites(outdoor);
+    REQUIRE(sites.size() == 2);
+    CHECK(sites[0].faceIds.size() == 2);
+    CHECK(sites[0].x == doctest::Approx(5));
+    CHECK(sites[0].id == "bmodel/0/surface/0");
+    CHECK(sites[1].id == "bmodel/0/surface/2");
+}
+
+TEST_CASE("world database feature layers use event metadata and gate discoveries before search")
+{
+    Fixture f;
+    auto database = f.database();
+    std::string error;
+    const auto program = ScriptedEventProgram::loadFromLuaText(R"lua(
+        for i = 10, 15 do evt.map[i] = function() end end
+        evt.meta.map.hint = { [10] = "Chest", [11] = "Fountain", [12] = "Obelisk", [13] = "Passage" }
+        evt.meta.map.contextActions = {
+            [10] = { kind = "open_chest", source = "opcode", chestIds = {0} },
+            [11] = { kind = "fountain", source = "title" },
+            [12] = { kind = "obelisk", source = "title" },
+            [13] = { kind = "passage", source = "opcode", targetMap = "7d21.blv" },
+            [14] = { kind = "open_chest", source = "opcode", chestIds = {1}, hidden = true },
+            [15] = { kind = "open_chest", source = "opcode" }
+        }
+    )lua", "@sites-test", ScriptedEventScope::Map, error);
+    REQUIRE_MESSAGE(program.has_value(), error);
+    IndoorMapData geometry;
+    geometry.entities.resize(7);
+    for (size_t i = 0; i < geometry.entities.size(); ++i)
+    {
+        geometry.entities[i].eventIdSecondary = uint16_t(10 + i);
+        geometry.entities[i].x = 100 * int(i);
+    }
+    geometry.entities[6].eventIdSecondary = 10; // A second chest using the same event stays undiscovered.
+    const MapStatsEntry &map = *f.maps.findById(95);
+    database.indexMapLocations(map, geometry, *program);
+    CHECK(database.features().size() == 5);
+    CHECK(database.queryFeatures({}, true).size() == 5);
+    CHECK(database.queryFeatures({}, false).empty());
+    WorldKnowledge knowledge;
+    knowledge.visitedMaps.insert("7d21.blv");
+    CHECK(database.queryFeatures(knowledge, false, "Chest").empty());
+    EventRuntimeState state;
+    recordWorldSiteDiscovery(state, 10, "decoration/0");
+    recordWorldSiteDiscovery(state, 0, "decoration/6");
+    REQUIRE(state.namedMapVars.size() == 1);
+    knowledge.interactedSites["7d21.blv"].insert(state.namedMapVars.begin()->first);
+    const auto found = database.queryFeatures(knowledge, false, "chest");
+    REQUIRE(found.size() == 1);
+    CHECK(found[0]->site.id == "decoration/0");
+    CHECK(found[0]->chestIds == std::vector<uint32_t>{0});
+    CHECK(database.queryFeatures(knowledge, false, "Obelisk").empty());
+    CHECK(database.queryFeatures(knowledge, true, "Obelisk").size() == 1);
+    CHECK(knowledge.interactedSites.at("7d21.blv").size() == 1);
+    database.indexMapLocations(map, geometry, *program);
+    CHECK(database.features().size() == 5);
+}
+
+TEST_CASE("world database feature visibility follows outdoor cells and indoor surfaces without remote leaks")
+{
+    Fixture f;
+    const auto database = f.database();
+    WorldMapFeature feature;
+    feature.mapId = WorldDatabase::mapId(*f.maps.findById(95));
+    feature.site = {"surface/0", 10, 0, 0, 0, {0, 1}};
+    WorldKnowledge knowledge;
+    knowledge.visitedMaps.insert("7d21.blv");
+    CHECK_FALSE(database.featureVisible(feature, knowledge, false));
+    knowledge.floorPlans["7d21.blv"].faceAttributes = {faceAttributeBit(FaceAttribute::SeenByParty), 0};
+    CHECK(database.featureVisible(feature, knowledge, false));
+    knowledge.floorPlans["7d21.blv"].invisibleFaces.insert(0);
+    CHECK_FALSE(database.featureVisible(feature, knowledge, false));
+    CHECK(database.featureVisible(feature, knowledge, true));
+    knowledge.interactedSites["7out02.odm"].insert(worldSiteDiscoveryKey(10, "surface/1"));
+    CHECK_FALSE(database.featureVisible(feature, knowledge, false));
+    knowledge.interactedSites["7d21.blv"].insert(worldSiteDiscoveryKey(10, "surface/1"));
+    CHECK(database.featureVisible(feature, knowledge, false));
+    feature.site = {"surface/2", 10, 0, 0, 0, {2}};
+    CHECK_FALSE(database.featureVisible(feature, knowledge, false));
+    feature.mapId = WorldDatabase::mapId(*f.maps.findById(63));
+    feature.site = {"decoration/0", 10, -32768, 32768};
+    CHECK_FALSE(database.featureVisible(feature, knowledge, false));
+    knowledge.regionMaps["7out02.odm"].partiallyRevealedCells = {0x80};
+    CHECK_FALSE(database.featureVisible(feature, knowledge, false));
+    knowledge.regionMaps["7out02.odm"].fullyRevealedCells = {0x80};
+    CHECK(database.featureVisible(feature, knowledge, false));
+    feature.site.x += 1024;
+    CHECK_FALSE(database.featureVisible(feature, knowledge, false));
+    CHECK(knowledge.regionMaps.at("7out02.odm").partiallyRevealedCells == std::vector<uint8_t>{0x80});
+}
 
 TEST_CASE("world database filters undiscovered information before search")
 {

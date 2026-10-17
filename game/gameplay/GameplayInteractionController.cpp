@@ -13,6 +13,7 @@
 #include "game/items/ItemRuntime.h"
 #include "game/party/SpellIds.h"
 #include "game/tables/ItemTable.h"
+#include "game/world/WorldMapFeatures.h"
 
 #include <SDL3/SDL_timer.h>
 
@@ -729,6 +730,21 @@ bool tryActivateWorldHit(
             && tryActivateWorldItem(*pRuntime, *pWorldRuntime, hit.worldItem->worldItemIndex);
     }
 
+    if (hit.eventTarget && hit.eventTarget->contextActionMetadata && !hit.eventTarget->contextActionMetadata->hidden)
+    {
+        const GameplayEventTargetHit &target = *hit.eventTarget;
+        const uint16_t eventId = target.targetKind == GameplayWorldEventTargetKind::Surface
+            ? target.triggeredEventId : target.eventIdSecondary;
+        std::string siteId;
+        if (target.targetKind == GameplayWorldEventTargetKind::Surface)
+            siteId = pWorldRuntime->isIndoorMap() ? "surface/" + std::to_string(target.targetIndex)
+                : "bmodel/" + std::to_string(target.targetIndex) + "/surface/" + std::to_string(target.secondaryIndex);
+        else if (target.targetKind == GameplayWorldEventTargetKind::Entity
+                 || target.targetKind == GameplayWorldEventTargetKind::Decoration)
+            siteId = "decoration/" + std::to_string(target.targetIndex);
+        if (EventRuntimeState *pState = pWorldRuntime->eventRuntimeState())
+            recordWorldSiteDiscovery(*pState, eventId, siteId);
+    }
     return pWorldRuntime->activateWorldHit(hit);
 }
 

@@ -29,6 +29,8 @@ add_library(openyamm_game STATIC
     world/WorldFloorPlan.cpp
     world/WorldMapExploration.cpp
     world/WorldMapLocations.cpp
+    world/WorldInteractionSites.cpp
+    world/WorldMapFeatures.cpp
     ui/screens/AtlasScreen.cpp
     app/GameSession.cpp
     audio/GameAudioSystem.cpp

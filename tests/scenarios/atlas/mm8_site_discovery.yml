@@ -1,0 +1,24 @@
+id: atlas.mm8_site_discovery
+title: Atlas physical-site discovery survives save and load
+world: mm8
+mode: faithful
+tags: [mm8, atlas, discovery, save]
+steps:
+  - new_game_flow:
+      start_map: out01.odm
+  - press_interact:
+      pose: {x: 6500, y: 9896, z: 864, yaw: 0, pitch: 0}
+      expect:
+        kind: event_target
+        triggered_event: 101
+        can_activate: true
+  - assert:
+      named_map_var_changed:
+        name: openyamm.discovery.site/bmodel/22/surface/33/event/101
+        value: 1
+  - save_game: atlas-site
+  - load_game: atlas-site
+  - assert:
+      named_map_var_changed:
+        name: openyamm.discovery.site/bmodel/22/surface/33/event/101
+        value: 1

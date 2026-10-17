@@ -31,6 +31,9 @@ private:
     void drawMap();
     void indexKnownRegions();
     bool drawLocationMarkers(const WorldRecord &map, const Rect &image, const Rect &viewport);
+    bool drawFeatureMarkers(const WorldRecord &map, const Rect &image, const Rect &viewport,
+                            const WorldFloorPlanRaster *pFloorPlan);
+    void drawFeatureList();
     void drawPartyArrow(const WorldRecord &map, const Rect &image, const WorldFloorPlanRaster *floorPlan);
     void drawList();
     void drawDetails();
@@ -51,6 +54,8 @@ private:
     float m_referenceScroll = 0, m_referenceDetailScroll = 0, m_referenceContentHeight = 0;
     std::unordered_set<std::string> m_indexedMaps, m_siteSelection;
     std::string m_locationError;
+    bool m_featureView = false;
+    std::string m_selectedFeature;
     std::function<void()> m_close;
     bool m_paused = false;
     bool m_guide = false;

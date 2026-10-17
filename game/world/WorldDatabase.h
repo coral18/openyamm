@@ -3,6 +3,7 @@
 #include "game/tables/HouseTable.h"
 #include "game/world/WorldFloorPlan.h"
 #include "game/world/WorldMapExploration.h"
+#include "game/world/WorldMapFeatures.h"
 #include "game/tables/MapStats.h"
 #include "game/tables/MergedBaseTables.h"
 #include "game/tables/NpcDialogTable.h"
@@ -65,6 +66,7 @@ struct WorldKnowledge
     std::unordered_map<std::string, WorldRegionMapKnowledge> regionMaps;
     std::optional<WorldPartyMapPosition> partyPosition;
     std::unordered_set<uint32_t> autonoteIds;
+    std::unordered_map<std::string, std::unordered_set<std::string>> interactedSites;
     bool knows(const WorldRecord &record) const;
 };
 
@@ -84,7 +86,13 @@ public:
         const std::string &withinMap = {}, bool includeTravel = true) const;
     bool visible(const WorldRecord &record, const WorldKnowledge &knowledge, bool guide) const;
     void indexMapLocations(const OutdoorMapData &map, const ScriptedEventProgram &events);
+    void indexMapLocations(const MapStatsEntry &map, const IndoorMapData &geometry,
+                           const ScriptedEventProgram &events);
     const std::vector<WorldMapLocation> &locations() const;
+    const std::vector<WorldMapFeature> &features() const;
+    bool featureVisible(const WorldMapFeature &feature, const WorldKnowledge &knowledge, bool guide) const;
+    std::vector<const WorldMapFeature *> queryFeatures(const WorldKnowledge &knowledge, bool guide,
+        const std::string &search = {}, const std::string &withinMap = {}) const;
     bool locationVisible(const WorldMapLocation &location, const WorldKnowledge &knowledge, bool guide) const;
     std::vector<const WorldRecord *> recordsAtLocation(const WorldMapLocation &location,
         const WorldKnowledge &knowledge, bool guide) const;
@@ -99,5 +107,6 @@ private:
     std::vector<WorldRecord> m_records;
     std::unordered_map<std::string, size_t> m_byId;
     std::vector<WorldMapLocation> m_locations;
+    std::vector<WorldMapFeature> m_features;
 };
 } // namespace OpenYAMM::Game

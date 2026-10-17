@@ -22,6 +22,9 @@ community guide's complete content has been integrated yet.
   planes, their dungeon maps and Plane Between Planes are searchable. The developer Tutorial map remains searchable
   in Guide but is not positioned on the playable-world overview.
 - Region/dungeon selection, resident NPCs, buildings, mastery trainers, walking routes and transport schedules.
+- Sites layer for physical chests, wells/fountains, shrines, obelisks and declared passages/teleports.
+  Search and clustered small markers work on regional images and dungeon plans; declared map links open the
+  connected Atlas page without moving the party.
 - Off-map dungeon plans projected from the engine's actual geometry. Discovery respects saved outline bits,
   seen faces and runtime invisible-face overrides; Guide renders the authored visible outlines.
 - Case-insensitive search and typed filters. Trainer names and topics come from the game's NPC/topic tables.
@@ -82,15 +85,16 @@ Unknown services are filtered before search; routes require both endpoint maps t
 
 ## Remaining guide coverage
 
-This slice is not the complete external guide port. Quest chains, chests, monsters, wells, obelisks, teleport links,
-Barrows connections, item/ingredient sources, guild availability and companion recruitment locations
-remain to be added through shared game/world data. The native guidebook below now covers reference pages and
-campaign trackers. Explored dungeon maps and player
-notes continue to use the existing Map Book. Dungeon plans currently project all elevations together; floor
+This slice is not the complete external guide port. Quest chains, monster groups, site effects/loot/open state,
+conditional teleport destinations, Barrows connection graphs, item/ingredient sources, guild availability and
+companion recruitment locations remain to be added through shared game/world data. The native guidebook below
+now covers reference pages and campaign trackers. Player notes remain editable in the existing Map Book.
+Dungeon plans currently project all elevations together; floor
 selection and annotations are not yet shown in the Atlas. The index currently describes authored residents and teaching topics;
 runtime NPC relocation/topic overrides and information learned from books or rumours require additional shared
-discovery/data integration. Conditional or dynamically moved entrances require corresponding runtime metadata;
-separate doors using one event within the same outdoor model currently share a site. The Android implementation
+discovery/data integration. Conditional or dynamically moved entrances require corresponding runtime metadata.
+Sites currently cover explicit map-local event bindings; inherited decoration/global-event bindings need their
+runtime resolver exposed to the index. The Android implementation
 uses shared native code but this slice has not yet been
 built or physically tested on Android/controller hardware.
 
@@ -232,3 +236,35 @@ it off. A faithful new-game scenario saved with both `karol.test` and Atlas enab
 Atlas disabled loaded that save. Required-content metadata retained `karol.test@0.1.0` and excluded the optional
 Atlas module. Original campaigns/settings were not used as test outputs. Android packaging already copies the
 mod directory; its verifier now requires the Atlas manifest and MM8 catalog, but no new APK was built for this slice.
+
+### Physical sites checkpoint, 2026-10-17
+
+`WorldInteractionSites` extracts physical event sites from the loaded BLV/ODM geometry. Connected faces sharing
+an event form one site; coincident vertex positions across mesh seams are deduplicated. Disconnected objects
+using the same event remain separate, including within one outdoor model. Decorations retain their own source
+indices. Invisible faces and invalid vertex references are excluded. The same extractor now supplies entrance
+pins and the new `WorldMapFeatures` index; there is no copied guide coordinate table.
+
+The Sites filter indexes chests, water sources, shrines, obelisks and connections from the existing Lua context
+metadata. Hidden metadata is excluded in both modes. Outdoors, only fully revealed terrain cells reveal sites;
+partial fog does not. Indoors, a seen interactive face or a recorded interaction reveals that physical site.
+Invisible unseen surfaces stay private. An interaction with one reused event does not discover its other objects.
+The shared interaction controller writes namespaced site keys into existing map-local save variables; Atlas
+browsing/search/Guide never writes those keys. No save-format change is needed.
+
+Declared connections link to known maps in Discovery and to available catalog maps in Guide. These are metadata
+links, not a claim to evaluate every conditional Lua branch or the current state of a teleporter. An empty target
+is shown as not mapped rather than guessed to be a local teleport. A Barrow I -> Barrow V page transition was checked
+natively, but a complete Barrows graph
+and conditional-route evaluation remain on the coverage checklist. Site details currently show type and container
+count, not exact loot, refill/open state or the effect of every well.
+
+Sixteen World Database tests / 1062 assertions passed, including the previous discovery/entrance regressions,
+connected geometry with split vertex indices, duplicate events at separate objects, invalid/invisible faces,
+partial/full exploration and filtering before search. Two faithful runtime scenarios under `tests/scenarios/atlas`
+exercise actual MM8 interaction picking, then save/load site knowledge: a Dagger Wound well and an Abandoned
+Temple chest, with an untouched chest remaining unknown. Native Windows tours checked MM7/MM8 Sites, filtering,
+Obelisk details, dungeon chest/passage pins, connected pages and resumed gameplay. A separate native run loaded the
+indoor scenario save, showed the one known chest, switched to the full Guide catalog and restored the single
+Discovery entry. Its empty floor plan is expected for that headless fixture, which does not render exploration
+outlines. Captures remain outside Git under `atlas-sites-20261017` and `atlas-indoor-sites-20261017`.

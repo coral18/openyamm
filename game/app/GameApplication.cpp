@@ -8849,20 +8849,35 @@ bool GameApplication::openAtlasScreen(bool paused)
     WorldKnowledge knowledge;
     if (paused)
     {
+        const auto collectSites = [&knowledge](const std::string &file, const EventRuntimeState &state)
+        {
+            for (const auto &[key, value] : state.namedMapVars)
+                if (value > 0 && key.starts_with("openyamm.discovery.site/"))
+                    knowledge.interactedSites[toLowerCopy(file)].insert(key);
+        };
         knowledge.variables = m_gameSession.namedGlobalVars();
         if (m_pMapSceneRuntime != nullptr && m_pMapSceneRuntime->eventRuntimeState() != nullptr)
         {
             for (const auto &[key, value] : m_pMapSceneRuntime->eventRuntimeState()->namedGlobalVars)
                 knowledge.variables[key] = value;
             const auto &variables = m_pMapSceneRuntime->eventRuntimeState()->variables;
+            collectSites(m_gameSession.currentMapFileName(), *m_pMapSceneRuntime->eventRuntimeState());
             for (const JournalAutonoteEntry &note : m_gameDataRepository.journalAutonoteTable().entries())
                 if (const auto value = variables.find(note.noteBit); value != variables.end() && value->second != 0)
                     knowledge.autonoteIds.insert(note.noteBit >> 16);
         }
         for (const auto &[file, state] : m_gameSession.outdoorWorldStates())
+        {
             knowledge.visitedMaps.insert(toLowerCopy(file));
+            if (state.eventRuntimeState)
+                collectSites(file, *state.eventRuntimeState);
+        }
         for (const auto &[file, state] : m_gameSession.indoorSceneStates())
+        {
             knowledge.visitedMaps.insert(toLowerCopy(file));
+            if (state.eventRuntimeState)
+                collectSites(file, *state.eventRuntimeState);
+        }
         const auto collectFloorPlan = [&knowledge](const std::string &file, const IndoorSceneRuntime::Snapshot &state)
         {
             if (!state.mapDeltaData)

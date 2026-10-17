@@ -1,0 +1,34 @@
+id: atlas.mm8_indoor_site_discovery
+title: Indoor Atlas discovery records the touched chest without revealing another chest
+world: mm8
+mode: faithful
+tags: [mm8, atlas, discovery, save, indoor]
+steps:
+  - new_game_flow:
+      start_map: out01.odm
+  - load_map:
+      map: d05.blv
+  - press_interact:
+      pose: {x: 10000, y: 3604, z: -512, yaw: 0, pitch: -0.29}
+      expect:
+        kind: event_target
+        triggered_event: 100
+        can_activate: true
+  - assert:
+      named_map_var_changed:
+        name: openyamm.discovery.site/surface/3872/event/100
+        value: 1
+  - assert:
+      named_map_var_changed:
+        name: openyamm.discovery.site/surface/1745/event/81
+        value: 0
+  - save_game: atlas-indoor-site
+  - load_game: atlas-indoor-site
+  - assert:
+      named_map_var_changed:
+        name: openyamm.discovery.site/surface/3872/event/100
+        value: 1
+  - assert:
+      named_map_var_changed:
+        name: openyamm.discovery.site/surface/1745/event/81
+        value: 0

@@ -22,8 +22,9 @@ tables, and do not bundle its HTML, JS, translated prose, generated illustration
 | Trainer requirements and prices | Shared gameplay evaluator | Shared gameplay evaluator | Race-specific class/skill comparison |
 | Walking and scheduled transport | Existing table index | Existing table index | Visual route links and neighboring-region navigation |
 | Quest giver/objective/return chains | Not integrated | Not integrated | Shared quest/location relationships and discovery gating |
-| Chests, monster groups, wells, obelisks | Not integrated | Not integrated | Geometry/event-backed point layers and details |
-| Teleports and special connections | Not integrated | Not integrated | Gate/discovery semantics and Barrows/Regna connection views |
+| Chests, wells, shrines, obelisks | Event-backed Sites layer | Event-backed Sites layer | Effects, loot/open state, inherited decoration events and wider content audit |
+| Monster groups | Not integrated | Not integrated | Authored and dynamic encounters without leaking unseen groups |
+| Teleports and special connections | Declared map links with native navigation | Declared map links with native navigation | Conditional destinations, Gate semantics and Barrows/Regna connection graphs |
 | Items, artifacts and equipment reference | Shared ItemTable view | Shared ItemTable view | Item-source relationships, icons and richer comparisons |
 | Alchemy recipes and ingredients | Native recursive recipe view | Native recursive recipe view | Broader canonical-content audit and ingredient-source links |
 | Spellbook reference and guild links | Shared SpellTable view | Shared SpellTable view | Guild availability and map links |

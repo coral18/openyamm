@@ -1,11 +1,11 @@
 #include "game/world/WorldDatabase.h"
 #include "game/events/ScriptedEventProgram.h"
 #include "game/outdoor/OutdoorMapData.h"
+#include "game/indoor/IndoorMapData.h"
 #include "game/FaceEnums.h"
 #include "game/StringUtils.h"
 
 #include <algorithm>
-#include <map>
 
 namespace OpenYAMM::Game
 {
@@ -46,39 +46,83 @@ void WorldDatabase::indexMapLocations(const OutdoorMapData &map, const ScriptedE
         m_locations.push_back({pSource->id + "/site/" + site + "/event/" + std::to_string(eventId),
                                pSource->id, pTarget->id, eventId, float(x), float(y)});
     };
-    for (size_t i = 0; i < map.bmodels.size(); ++i)
-    {
-        const OutdoorBModel &model = map.bmodels[i];
-        // Group the vertices of each interactive door, not the building's bounding box.
-        std::map<uint16_t, std::vector<uint16_t>> verticesByEvent;
-        for (const OutdoorBModelFace &face : model.faces)
-            if (face.cogTriggeredNumber != 0 && (face.attributes & faceAttributeBit(FaceAttribute::Invisible)) == 0)
-                for (uint16_t vertex : face.vertexIndices)
-                    if (vertex < model.vertices.size())
-                        verticesByEvent[face.cogTriggeredNumber].push_back(vertex);
-        for (auto &[eventId, vertices] : verticesByEvent)
-        {
-            std::sort(vertices.begin(), vertices.end());
-            vertices.erase(std::unique(vertices.begin(), vertices.end()), vertices.end());
-            double x = 0, y = 0;
-            for (uint16_t vertex : vertices)
-            {
-                x += model.vertices[vertex].x;
-                y += model.vertices[vertex].y;
-            }
-            if (!vertices.empty())
-                add("bmodel/" + std::to_string(i), eventId, x / vertices.size(), y / vertices.size());
-        }
-    }
-    for (size_t i = 0; i < map.entities.size(); ++i)
-    {
-        const OutdoorEntity &entity = map.entities[i];
-        if (entity.scriptEventId() != 0)
-            add("decoration/" + std::to_string(i), entity.scriptEventId(), entity.x, entity.y);
-    }
+    const auto sites = worldInteractionSites(map);
+    std::erase_if(m_features, [pSource](const WorldMapFeature &feature) { return feature.mapId == pSource->id; });
+    auto features = buildWorldMapFeatures(pSource->id, sites, events);
+    m_features.insert(m_features.end(), features.begin(), features.end());
+    for (const WorldInteractionSite &site : sites)
+        add(site.id, site.eventId, site.x, site.y);
 }
 
 const std::vector<WorldMapLocation> &WorldDatabase::locations() const { return m_locations; }
+
+void WorldDatabase::indexMapLocations(const MapStatsEntry &map, const IndoorMapData &geometry,
+                                     const ScriptedEventProgram &events)
+{
+    const std::string id = mapId(map);
+    const WorldRecord *pSource = find(id);
+    if (pSource == nullptr || pSource->kind != WorldRecordKind::Dungeon)
+        return;
+    std::erase_if(m_features, [&id](const WorldMapFeature &feature) { return feature.mapId == id; });
+    auto features = buildWorldMapFeatures(id, worldInteractionSites(geometry), events);
+    m_features.insert(m_features.end(), features.begin(), features.end());
+}
+
+const std::vector<WorldMapFeature> &WorldDatabase::features() const { return m_features; }
+
+bool WorldDatabase::featureVisible(const WorldMapFeature &feature, const WorldKnowledge &knowledge, bool guide) const
+{
+    const WorldRecord *pMap = find(feature.mapId);
+    if (pMap == nullptr)
+        return false;
+    if (guide)
+        return true;
+    const std::string file = toLowerCopy(pMap->map->fileName);
+    if (const auto known = knowledge.interactedSites.find(file); known != knowledge.interactedSites.end())
+    {
+        if (known->second.contains(worldSiteDiscoveryKey(feature.site.eventId, feature.site.id)))
+            return true;
+        for (uint32_t face : feature.site.faceIds)
+            if (known->second.contains(worldSiteDiscoveryKey(feature.site.eventId,
+                feature.site.surfacePrefix + "surface/" + std::to_string(face))))
+                return true;
+    }
+    if (pMap->kind == WorldRecordKind::Region)
+    {
+        const auto exploration = knowledge.regionMaps.find(file);
+        return exploration != knowledge.regionMaps.end()
+            && worldRegionPointExplored(exploration->second, feature.site.x, feature.site.y);
+    }
+    const auto exploration = knowledge.floorPlans.find(file);
+    if (exploration != knowledge.floorPlans.end())
+        for (uint32_t face : feature.site.faceIds)
+            if (face < exploration->second.faceAttributes.size()
+                && !exploration->second.invisibleFaces.contains(face)
+                && !hasFaceAttribute(exploration->second.faceAttributes[face], FaceAttribute::Invisible)
+                && hasFaceAttribute(exploration->second.faceAttributes[face], FaceAttribute::SeenByParty))
+                return true;
+    return false;
+}
+
+std::vector<const WorldMapFeature *> WorldDatabase::queryFeatures(const WorldKnowledge &knowledge, bool guide,
+    const std::string &search, const std::string &withinMap) const
+{
+    const std::string query = toLowerCopy(search);
+    std::vector<const WorldMapFeature *> result;
+    for (const WorldMapFeature &feature : m_features)
+    {
+        const WorldRecord *pMap = find(feature.mapId);
+        if (pMap == nullptr || (!withinMap.empty() && feature.mapId != withinMap)
+            || !featureVisible(feature, knowledge, guide))
+            continue;
+        const std::string text = feature.title + " " + worldMapFeatureKindName(feature.kind) + " " + pMap->name();
+        if (query.empty() || toLowerCopy(text).find(query) != std::string::npos)
+            result.push_back(&feature);
+    }
+    std::sort(result.begin(), result.end(), [](const WorldMapFeature *a, const WorldMapFeature *b)
+    { return a->title < b->title || (a->title == b->title && a->id < b->id); });
+    return result;
+}
 
 bool WorldDatabase::locationVisible(const WorldMapLocation &location, const WorldKnowledge &knowledge, bool guide) const
 {

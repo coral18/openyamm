@@ -77,6 +77,11 @@ AtlasScreen::AtlasScreen(const Engine::AssetFileSystem &assets, const GameDataRe
         m_world.indexMapLocations(*pCurrentMap->outdoorMapData, *pCurrentMap->localEventProgram);
         m_indexedMaps.insert(WorldDatabase::mapId(pCurrentMap->map));
     }
+    else if (pCurrentMap != nullptr && pCurrentMap->indoorMapData && pCurrentMap->localEventProgram)
+    {
+        m_world.indexMapLocations(pCurrentMap->map, *pCurrentMap->indoorMapData, *pCurrentMap->localEventProgram);
+        m_indexedMaps.insert(WorldDatabase::mapId(pCurrentMap->map));
+    }
     if (m_knowledge.partyPosition)
         for (const auto &record : m_world.records())
             if ((record.kind == WorldRecordKind::Region || record.kind == WorldRecordKind::Dungeon)
@@ -130,6 +135,7 @@ void AtlasScreen::handleSdlEvent(const SDL_Event &event)
 
 void AtlasScreen::select(const WorldRecord &record)
 {
+    m_selectedFeature.clear();
     m_selected = record.id;
     const std::string destination = WorldDatabase::mapId(*record.map);
     if (m_map != destination)
@@ -170,6 +176,7 @@ void AtlasScreen::selectWorld(const std::string &worldId)
         WorldDatabase world(m_data.mapStats(), m_data.houseTable(), m_data.npcDialogTable(),
                             m_data.mergedTeacherTopicTable(), worldId, presentation.maps);
         m_world = std::move(world);
+        m_selectedFeature.clear();
         m_referenceDirty = true;
         m_referenceSelected.clear();
         m_referenceScroll = m_referenceDetailScroll = 0;
@@ -257,13 +264,15 @@ void AtlasScreen::drawScreen(float)
         {"All", {}}, {"Regions", WorldRecordKind::Region}, {"Dungeons", WorldRecordKind::Dungeon},
         {"Buildings", WorldRecordKind::House}, {"NPCs", WorldRecordKind::Npc},
         {"Trainers", WorldRecordKind::Trainer}, {"Travel", WorldRecordKind::Travel}};
-    for (int i = 0; i < 7; ++i)
+    for (int i = 0; i < 8; ++i)
     {
-        const Rect rect = canvasRect(312 + i * 73, 53, 69, 28);
-        if (button("atlas-filter-" + std::to_string(i), rect, filters[i].first,
-                   "button", true, m_filter == filters[i].second))
+        const Rect rect = canvasRect(312 + i * 64, 53, 61, 28);
+        if (button("atlas-filter-" + std::to_string(i), rect, i == 7 ? "Sites" : filters[i].first,
+                   "button", true, i == 7 ? m_featureView : !m_featureView && m_filter == filters[i].second))
         {
-            m_filter = filters[i].second;
+            m_featureView = i == 7;
+            m_filter = i == 7 ? std::nullopt : filters[i].second;
+            m_selectedFeature.clear();
             m_trainerMastery = 0;
             m_scroll = 0;
             m_siteSelection.clear();
@@ -275,6 +284,7 @@ void AtlasScreen::drawScreen(float)
     {
         m_map.clear();
         m_selected.clear();
+        m_selectedFeature.clear();
         m_siteSelection.clear();
         m_zoom = 1;
         m_panX = m_panY = m_scroll = 0;
@@ -282,7 +292,10 @@ void AtlasScreen::drawScreen(float)
     if (const auto *map = m_world.find(m_map))
     {
         textInRect(canvasRect(168, 89, 403, 25), map->name(), "fondamento", 14);
-        if (map->kind == WorldRecordKind::Region)
+        if (m_featureView)
+            textInRect(canvasRect(375, 94, 195, 16), "C Chests  W Water  S Shrines  O Obelisks  P Passages",
+                       "menu_lucida", 7, 0xffc6dfeau);
+        else if (map->kind == WorldRecordKind::Region)
             textInRect(canvasRect(375, 94, 195, 16), "B Buildings   T Trainers   D Dungeons",
                        "menu_lucida", 8, 0xffc6dfeau);
     }
@@ -299,7 +312,10 @@ void AtlasScreen::drawScreen(float)
         m_scroll = 0;
     }
     drawMap();
-    drawList();
+    if (m_featureView)
+        drawFeatureList();
+    else
+        drawList();
     drawDetails();
 }
 
@@ -307,7 +323,9 @@ void AtlasScreen::indexKnownRegions()
 {
     for (const WorldRecord &record : m_world.records())
     {
-        if (record.kind != WorldRecordKind::Region || !m_world.visible(record, m_knowledge, m_guide)
+        if ((record.kind != WorldRecordKind::Region
+             && (record.kind != WorldRecordKind::Dungeon || record.id != m_map))
+            || !m_world.visible(record, m_knowledge, m_guide)
             || !m_indexedMaps.insert(record.id).second)
             continue;
         try
@@ -315,10 +333,15 @@ void AtlasScreen::indexKnownRegions()
             auto map = MapAssetLoader().load(assetFileSystem(), *record.map,
                 m_data.monsterTable(), m_data.objectTable(), MapLoadPurpose::HeadlessGameplay);
             std::string error;
-            if (!map || !map->outdoorMapData || !GameDataLoader::loadEventPrograms(assetFileSystem(), *map, error)
+            if (!map || !GameDataLoader::loadEventPrograms(assetFileSystem(), *map, error)
                 || !map->localEventProgram)
                 throw std::runtime_error(error.empty() ? "Missing geometry or event metadata" : error);
-            m_world.indexMapLocations(*map->outdoorMapData, *map->localEventProgram);
+            if (map->outdoorMapData)
+                m_world.indexMapLocations(*map->outdoorMapData, *map->localEventProgram);
+            else if (map->indoorMapData)
+                m_world.indexMapLocations(map->map, *map->indoorMapData, *map->localEventProgram);
+            else
+                throw std::runtime_error("Missing map geometry");
         }
         catch (const std::exception &error)
         {
@@ -506,7 +529,10 @@ void AtlasScreen::drawMap()
         }
         drawTextureHandle(m_fogTexture, image);
     }
-    bool markerHovered = map != nullptr && !dungeon ? drawLocationMarkers(*map, image, viewport) : false;
+    bool markerHovered = false;
+    if (map != nullptr)
+        markerHovered = m_featureView ? drawFeatureMarkers(*map, image, viewport, floorPlan)
+            : !dungeon && drawLocationMarkers(*map, image, viewport);
     if (map == nullptr)
     {
         for (const auto &region : m_world.records())
@@ -650,6 +676,111 @@ void AtlasScreen::drawList()
                    "menu_arrus", 14, 0xffc6dfeau, true);
 }
 
+bool AtlasScreen::drawFeatureMarkers(const WorldRecord &map, const Rect &image, const Rect &viewport,
+                                    const WorldFloorPlanRaster *pFloorPlan)
+{
+    struct Pin
+    {
+        float x = 0, y = 0;
+        std::vector<const WorldMapFeature *> features;
+    };
+    std::vector<Pin> pins;
+    for (const WorldMapFeature *pFeature : m_world.queryFeatures(m_knowledge, m_guide, m_search, map.id))
+    {
+        const auto point = pFloorPlan != nullptr ? pFloorPlan->worldToUv(pFeature->site.x, pFeature->site.y)
+            : [&]()
+            {
+                const auto uv = gameplayMinimapWorldToUv({}, pFeature->site.x, pFeature->site.y);
+                return std::pair{uv.x, uv.y};
+            }();
+        const float x = image.x + point.first * image.width, y = image.y + point.second * image.height;
+        if (x < viewport.x || x > viewport.x + viewport.width || y < viewport.y || y > viewport.y + viewport.height)
+            continue;
+        auto pin = std::find_if(pins.begin(), pins.end(), [&](const Pin &other)
+        { return std::hypot(x - other.x, y - other.y) < 22 * designScale(); });
+        if (pin == pins.end())
+        {
+            pins.push_back({x, y, {}});
+            pin = std::prev(pins.end());
+        }
+        pin->features.push_back(pFeature);
+    }
+    bool hovered = false;
+    for (const Pin &pin : pins)
+    {
+        const WorldMapFeature &feature = *pin.features.front();
+        const Rect marker{pin.x - 5 * designScale(), pin.y - 5 * designScale(),
+                          10 * designScale(), 10 * designScale()};
+        const Rect hit{pin.x - 12 * designScale(), pin.y - 12 * designScale(),
+                       24 * designScale(), 24 * designScale()};
+        const std::string id = "atlas-feature-pin-" + feature.id;
+        const bool selected = std::any_of(pin.features.begin(), pin.features.end(),
+            [this](const WorldMapFeature *pFeature) { return pFeature->id == m_selectedFeature; });
+        hovered = hovered || pointerInside(hit);
+        if (button(id, hit, "", "button_square", true, selected, &marker))
+        {
+            m_siteSelection.clear();
+            for (const WorldMapFeature *pFeature : pin.features)
+                m_siteSelection.insert(pFeature->id);
+            m_selectedFeature = feature.id;
+            m_scroll = 0;
+        }
+        const char *labels[] = {"C", "W", "S", "O", "P"};
+        textInRect(marker, pin.features.size() > 1 ? std::to_string(pin.features.size()) : labels[size_t(feature.kind)],
+                   "menu_lucida", 7, 0xffc6dfeau, true);
+        outline(marker, selected ? 0xff99d3eeu : 0xff8dc5e1u);
+        if (pointerInside(hit) || focused(id))
+        {
+            Rect caption{pin.x - 100 * designScale(), pin.y - 28 * designScale(),
+                         200 * designScale(), 19 * designScale()};
+            caption.x = std::clamp(caption.x, viewport.x, viewport.x + viewport.width - caption.width);
+            caption.y = std::max(caption.y, viewport.y);
+            drawSolidRect(caption, 0xed100e09u);
+            textInRect(caption, pin.features.size() > 1 ? std::to_string(pin.features.size()) + " sites"
+                : feature.title, "menu_arrus", 11, 0xffc6dfeau, true);
+        }
+    }
+    return hovered;
+}
+
+void AtlasScreen::drawFeatureList()
+{
+    const Rect viewport = canvasRect(588, 121, 235, 270);
+    auto features = m_world.queryFeatures(m_knowledge, m_guide, m_search, m_map);
+    if (!m_siteSelection.empty())
+        std::erase_if(features, [this](const WorldMapFeature *pFeature)
+        { return !m_siteSelection.contains(pFeature->id); });
+    scrollViewport(viewport, features.size() * 38 * designScale(), m_scroll, 38);
+    setDesignClip(viewport);
+    for (size_t i = 0; i < features.size(); ++i)
+    {
+        const Rect row{viewport.x, viewport.y + i * 38 * designScale() - m_scroll,
+                       viewport.width - 12 * designScale(), 34 * designScale()};
+        if (row.y + row.height < viewport.y || row.y > viewport.y + viewport.height)
+            continue;
+        const WorldMapFeature &feature = *features[i];
+        if (button("atlas-feature-" + feature.id, row, "", "button", true, m_selectedFeature == feature.id))
+        {
+            m_selectedFeature = feature.id;
+            m_map = feature.mapId;
+            m_panX = m_panY = 0; m_zoom = 1;
+        }
+        textInRect({row.x + 7 * designScale(), row.y, row.width - 14 * designScale(), 18 * designScale()},
+                   feature.title, "menu_arrus", 12);
+        const WorldRecord *pMap = m_world.find(feature.mapId);
+        textInRect({row.x + 7 * designScale(), row.y + 19 * designScale(),
+                    row.width - 14 * designScale(), 12 * designScale()},
+                   std::string(worldMapFeatureKindName(feature.kind)) + " - " + pMap->name(),
+                   "menu_lucida", 9, 0xffa9bbb7u);
+    }
+    revealFocus(viewport, m_scroll);
+    setDesignClip(std::nullopt);
+    if (features.empty())
+        textInRect(viewport, m_guide ? "No matching sites in the indexed maps. Select a dungeon to index its sites."
+            : "No discovered sites here. Explore the region or interact with objects in the dungeon.",
+            "menu_arrus", 13, 0xffc6dfeau, true);
+}
+
 void AtlasScreen::rebuildReference()
 {
     const WorldGuideSource source{&m_data.itemTable(), &m_data.spellTable(), &m_data.classMultiplierTable(),
@@ -749,6 +880,7 @@ void AtlasScreen::drawReference()
                 if (link.kind == WorldGuideLink::Kind::Trainer)
                 {
                     m_referenceOpen = false;
+                    m_featureView = false;
                     m_map.clear(); m_siteSelection.clear(); m_selected.clear();
                     m_filter = WorldRecordKind::Trainer;
                     m_trainerMastery = link.mastery;
@@ -761,6 +893,7 @@ void AtlasScreen::drawReference()
                         pLocation != nullptr && m_world.visible(*pLocation, m_knowledge, m_guide))
                     {
                         m_referenceOpen = false;
+                        m_featureView = false;
                         m_search.clear(); m_filter.reset(); m_trainerMastery = 0;
                         m_siteSelection.clear();
                         select(*pLocation);
@@ -797,6 +930,43 @@ void AtlasScreen::drawDetails()
 {
     const Rect details = canvasRect(25, 403, 798, 52);
     outline(details, 0xff597284u);
+    if (m_featureView)
+    {
+        const auto features = m_world.queryFeatures(m_knowledge, m_guide, {}, m_map);
+        const auto selected = std::find_if(features.begin(), features.end(), [this](const WorldMapFeature *pFeature)
+        { return pFeature->id == m_selectedFeature; });
+        std::string text = "Select a site to inspect it. "
+            "C Chests, W Wells/Fountains, S Shrines, O Obelisks, P Passages.";
+        const WorldRecord *pDestination = nullptr;
+        if (selected != features.end())
+        {
+            const WorldMapFeature &feature = **selected;
+            text = feature.title + " | " + worldMapFeatureKindName(feature.kind);
+            if (feature.kind == WorldMapFeatureKind::Connection)
+            {
+                for (const WorldRecord &record : m_world.records())
+                    if ((record.kind == WorldRecordKind::Region || record.kind == WorldRecordKind::Dungeon)
+                        && toLowerCopy(record.map->fileName) == toLowerCopy(feature.targetMap)
+                        && m_world.visible(record, m_knowledge, m_guide))
+                        pDestination = &record;
+                text += feature.targetMap.empty() ? "\nDestination not mapped"
+                    : pDestination != nullptr ? "\nDeclared connection: " + pDestination->name()
+                    : m_guide ? "\nDestination outside this catalog" : "\nDestination undiscovered";
+            }
+            else if (feature.kind == WorldMapFeatureKind::Chest)
+                text += "\nContainers at this interaction: " + std::to_string(feature.chestIds.size());
+        }
+        if (!m_locationError.empty())
+            text += "\n" + m_locationError;
+        textInRect(canvasRect(34, 407, pDestination != nullptr ? 625 : 778, 43), text, "menu_arrus", 11);
+        if (pDestination != nullptr && button("atlas-feature-destination", canvasRect(669, 416, 145, 28),
+                                             "Open connected map"))
+        {
+            select(*pDestination);
+            m_siteSelection.clear();
+        }
+        return;
+    }
     const auto *record = m_world.find(m_selected);
     std::string text = m_guide ? "Guide Mode reveals the database without changing your discoveries."
         : "Only visited places and encountered residents are shown. Guide Mode reveals the reference database.";
