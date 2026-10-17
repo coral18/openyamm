@@ -19,8 +19,9 @@ class MergedReagentSettingTable;
 class RosterTable;
 class HouseTable;
 class MapStats;
+class MonsterTable;
 
-enum class WorldGuideSection { Items, Spells, Classes, Alchemy, Companions, Progress };
+enum class WorldGuideSection { Items, Spells, Classes, Alchemy, Companions, Progress, Monsters };
 
 // A read-only view of the loaded game registries, never a second set of content definitions.
 struct WorldGuideSource
@@ -37,6 +38,7 @@ struct WorldGuideSource
     const HouseTable *pHouses = nullptr;
     const MapStats *pMaps = nullptr;
     std::string worldId;
+    const MonsterTable *pMonsters = nullptr;
 };
 
 struct WorldGuideKnowledge
@@ -47,6 +49,7 @@ struct WorldGuideKnowledge
     std::array<int32_t, 4> arenaWins{};
     uint32_t arcomageWinCount = 0, arcomageLossCount = 0;
     bool hasParty = false;
+    std::unordered_set<int16_t> monsters;
 };
 
 struct WorldGuideLink

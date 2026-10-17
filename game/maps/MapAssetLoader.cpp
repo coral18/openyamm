@@ -1,3 +1,4 @@
+#include "game/gameplay/MapEncounterDefinition.h"
 #include "game/render/WaterCoverage.h"
 #include "game/render/WaterAppearance.h"
 #include "game/data/ActorNameResolver.h"
@@ -2763,74 +2764,12 @@ std::optional<OutdoorSpriteObjectCollisionSet> buildOutdoorSpriteObjectCollision
 std::optional<std::string> resolveMonsterNameForSpawn(const MapStatsEntry &map, uint16_t typeId, uint16_t index)
 {
     if (typeId != 3)
-    {
         return std::nullopt;
-    }
-
-    if (index >= 1 && index <= 3)
-    {
-        const MapEncounterInfo *pEncounter = nullptr;
-
-        if (index == 1)
-        {
-            pEncounter = &map.encounter1;
-        }
-        else if (index == 2)
-        {
-            pEncounter = &map.encounter2;
-        }
-        else
-        {
-            pEncounter = &map.encounter3;
-        }
-
-        if (pEncounter != nullptr && !pEncounter->monsterName.empty())
-        {
-            return pEncounter->monsterName + " A";
-        }
-    }
-
-    if (index >= 4 && index <= 12)
-    {
-        const int encounterSlot = ((index - 4) % 3) + 1;
-        const char tierSuffix = static_cast<char>('A' + ((index - 4) / 3));
-        const MapEncounterInfo *pEncounter = nullptr;
-
-        if (encounterSlot == 1)
-        {
-            pEncounter = &map.encounter1;
-        }
-        else if (encounterSlot == 2)
-        {
-            pEncounter = &map.encounter2;
-        }
-        else
-        {
-            pEncounter = &map.encounter3;
-        }
-
-        if (pEncounter != nullptr && !pEncounter->monsterName.empty())
-        {
-            return pEncounter->monsterName + " " + std::string(1, tierSuffix);
-        }
-    }
-
-    return std::nullopt;
-}
-
-const MapEncounterInfo *mapEncounterInfoBySlot(const MapStatsEntry &map, int encounterSlot)
-{
-    switch (encounterSlot)
-    {
-        case 1:
-            return &map.encounter1;
-        case 2:
-            return &map.encounter2;
-        case 3:
-            return &map.encounter3;
-        default:
-            return nullptr;
-    }
+    const EncounterSpawnDescriptor descriptor = resolveEncounterSpawnDescriptor(index);
+    const MapEncounterInfo *pEncounter = mapEncounterInfo(map, descriptor.encounterSlot);
+    if (pEncounter == nullptr || pEncounter->monsterName.empty())
+        return std::nullopt;
+    return pEncounter->monsterName + " " + (descriptor.fixedTier == '\0' ? 'A' : descriptor.fixedTier);
 }
 
 int16_t resolveMapDeltaActorMonsterId(const MapDeltaActor &actor)
@@ -2950,7 +2889,7 @@ void appendEncounterSlotTierTextures(
     const MonsterTable &monsterTable,
     int encounterSlot)
 {
-    const MapEncounterInfo *pEncounter = mapEncounterInfoBySlot(map, encounterSlot);
+    const MapEncounterInfo *pEncounter = mapEncounterInfo(map, encounterSlot);
 
     if (pEncounter == nullptr)
     {

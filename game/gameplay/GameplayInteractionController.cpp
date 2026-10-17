@@ -14,6 +14,7 @@
 #include "game/party/SpellIds.h"
 #include "game/tables/ItemTable.h"
 #include "game/world/WorldMapFeatures.h"
+#include "game/world/WorldMonsterKnowledge.h"
 
 #include <SDL3/SDL_timer.h>
 
@@ -730,6 +731,8 @@ bool tryActivateWorldHit(
             && tryActivateWorldItem(*pRuntime, *pWorldRuntime, hit.worldItem->worldItemIndex);
     }
 
+    if (hit.kind == GameplayWorldHitKind::Actor && hit.actor)
+        recordWorldActorObservation(*pWorldRuntime, hit.actor->actorIndex);
     if (hit.eventTarget && hit.eventTarget->contextActionMetadata && !hit.eventTarget->contextActionMetadata->hidden)
     {
         const GameplayEventTargetHit &target = *hit.eventTarget;
@@ -896,6 +899,8 @@ void executePartyAttack(
         return;
     }
 
+    if (currentHit.kind == GameplayWorldHitKind::Actor && currentHit.actor)
+        recordWorldActorObservation(*pWorldRuntime, currentHit.actor->actorIndex);
     TurnBasedCombatRuntime &turnBasedCombatRuntime = runtime.turnBasedCombatRuntime();
     if (turnBasedCombatRuntime.active())
     {
@@ -1067,6 +1072,8 @@ GameplayInteractionController::HoverStateResult GameplayInteractionController::u
     if (shouldRefreshHover)
     {
         payload = pWorldRuntime->refreshWorldHover(input.hoverRequest);
+        if (payload.worldHit.kind == GameplayWorldHitKind::Actor && payload.worldHit.actor)
+            recordWorldActorObservation(*pWorldRuntime, payload.worldHit.actor->actorIndex);
         result.refreshed = true;
     }
     else

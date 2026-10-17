@@ -1,3 +1,4 @@
+#include "game/gameplay/MapEncounterDefinition.h"
 #include "game/outdoor/OutdoorWorldRuntime.h"
 #include "game/gameplay/ActorVocalizationRules.h"
 #include "game/audio/ActorAudioRules.h"
@@ -700,14 +701,6 @@ uint32_t monsterActorAttackSeed(
         ^ salt;
 }
 
-constexpr std::array<std::array<int, 3>, 6> EncounterDifficultyTierWeights = {{
-    {{100, 0, 0}},
-    {{90, 8, 2}},
-    {{70, 20, 10}},
-    {{50, 30, 20}},
-    {{30, 40, 30}},
-    {{10, 50, 40}},
-}};
 constexpr float GroundSnapHeight = 1.0f;
 constexpr float OeNonFlyingActorRadius = 40.0f;
 constexpr float ActorUpdateStepSeconds = 1.0f / 128.0f;
@@ -2793,26 +2786,6 @@ std::vector<int> parseCsvIntegers(const std::optional<std::string> &note)
     return values;
 }
 
-const MapEncounterInfo *getEncounterInfo(const MapStatsEntry &map, int encounterSlot)
-{
-    if (encounterSlot == 1)
-    {
-        return &map.encounter1;
-    }
-
-    if (encounterSlot == 2)
-    {
-        return &map.encounter2;
-    }
-
-    if (encounterSlot == 3)
-    {
-        return &map.encounter3;
-    }
-
-    return nullptr;
-}
-
 int16_t resolveMapActorMonsterId(const MapDeltaActor &actor)
 {
     if (actor.monsterInfoId > 0)
@@ -3782,33 +3755,6 @@ void applyGameplayActorSpellEffectState(
     actor.hasDetectedParty = state.hasDetectedParty;
 }
 
-struct EncounterSpawnDescriptor
-{
-    int encounterSlot = 0;
-    char fixedTier = '\0';
-};
-
-std::string encounterPictureBase(const MapEncounterInfo &encounter);
-
-EncounterSpawnDescriptor resolveEncounterSpawnDescriptor(uint16_t index)
-{
-    EncounterSpawnDescriptor descriptor = {};
-
-    if (index >= 1 && index <= 3)
-    {
-        descriptor.encounterSlot = index;
-        return descriptor;
-    }
-
-    if (index >= 4 && index <= 12)
-    {
-        descriptor.encounterSlot = static_cast<int>((index - 4) % 3) + 1;
-        descriptor.fixedTier = static_cast<char>('A' + (index - 4) / 3);
-    }
-
-    return descriptor;
-}
-
 const MonsterTable::MonsterStatsEntry *resolveEncounterMonsterStats(
     const MapStatsEntry &map,
     const MonsterTable &monsterTable,
@@ -3816,7 +3762,7 @@ const MonsterTable::MonsterStatsEntry *resolveEncounterMonsterStats(
     char tierLetter
 )
 {
-    const MapEncounterInfo *pEncounter = getEncounterInfo(map, encounterSlot);
+    const MapEncounterInfo *pEncounter = mapEncounterInfo(map, encounterSlot);
 
     if (pEncounter == nullptr)
     {
@@ -3846,7 +3792,7 @@ char resolveEncounterTierLetter(
         return fixedTier;
     }
 
-    const MapEncounterInfo *pEncounter = getEncounterInfo(map, encounterSlot);
+    const MapEncounterInfo *pEncounter = mapEncounterInfo(map, encounterSlot);
 
     if (pEncounter == nullptr)
     {
@@ -3854,7 +3800,7 @@ char resolveEncounterTierLetter(
     }
 
     const int difficulty = std::clamp(pEncounter->difficulty, 0, 5);
-    const std::array<int, 3> &weights = EncounterDifficultyTierWeights[difficulty];
+    const std::array<int, 3> &weights = encounterTierWeights(difficulty);
     const int aWeight = weights[0];
     const int bWeight = weights[1];
     const int totalWeight = std::max(1, aWeight + bWeight + weights[2]);
@@ -3887,7 +3833,7 @@ uint32_t resolveEncounterSpawnCount(
         return countOverride;
     }
 
-    const MapEncounterInfo *pEncounter = getEncounterInfo(map, encounterSlot);
+    const MapEncounterInfo *pEncounter = mapEncounterInfo(map, encounterSlot);
 
     if (pEncounter == nullptr)
     {
@@ -4457,11 +4403,6 @@ char tierLetterForSummonLevel(uint32_t level)
     return static_cast<char>('A' + (clampedLevel - 1u));
 }
 
-std::string encounterPictureBase(const MapEncounterInfo &encounter)
-{
-    return encounter.pictureName.empty() ? encounter.monsterName : encounter.pictureName;
-}
-
 OutdoorWorldRuntime::SpawnPointState buildSpawnPointState(
     const MapStatsEntry &map,
     const MonsterTable &monsterTable,
@@ -4488,7 +4429,7 @@ OutdoorWorldRuntime::SpawnPointState buildSpawnPointState(
     state.isFixedTier = descriptor.fixedTier != '\0';
     state.fixedTier = descriptor.fixedTier;
 
-    const MapEncounterInfo *pEncounter = getEncounterInfo(map, descriptor.encounterSlot);
+    const MapEncounterInfo *pEncounter = mapEncounterInfo(map, descriptor.encounterSlot);
 
     if (pEncounter == nullptr)
     {

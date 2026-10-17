@@ -239,6 +239,8 @@ add_executable(openyamm_unit_tests
     ../game/world/WorldMapLocations.cpp
     ../game/world/WorldInteractionSites.cpp
     ../game/world/WorldMapFeatures.cpp
+    ../game/world/WorldMonsterKnowledge.cpp
+    ../game/gameplay/MapEncounterDefinition.cpp
     ../game/tables/NpcDialogTable.cpp
     ../game/tables/ObjectTable.cpp
     ../game/tables/PortraitEnums.cpp

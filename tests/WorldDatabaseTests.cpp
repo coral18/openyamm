@@ -8,6 +8,8 @@
 #include "game/outdoor/OutdoorMapData.h"
 #include "game/events/ScriptedEventProgram.h"
 #include "game/events/EventRuntime.h"
+#include "game/gameplay/MapEncounterDefinition.h"
+#include "game/tables/MonsterTable.h"
 
 #include <fstream>
 #include <iterator>
@@ -63,7 +65,110 @@ struct Fixture
     }
     WorldDatabase database() const { return WorldDatabase(maps, houses, npcs, teachers, "mm7", layout); }
 };
+
+MonsterTable atlasMonsters()
+{
+    std::vector<std::vector<std::string>> rows;
+    for (int i = 0; i < 3; ++i)
+    {
+        std::vector<std::string> row(38, "0");
+        row[0] = std::to_string(11 + i);
+        row[1] = row[2] = "Test Goblin " + std::string(1, char('A' + i));
+        row[3] = "5"; row[4] = "40"; row[7].clear();
+        row[10] = "short"; row[11] = "normal"; row[17] = "Physical"; row[18] = "2d4";
+        rows.push_back(row);
+    }
+    MonsterTable monsters;
+    REQUIRE(monsters.loadStatsFromRows(rows));
+    return monsters;
+}
 } // namespace
+
+TEST_CASE("world encounter definitions share slot tier and difficulty encoding with gameplay")
+{
+    for (uint16_t i = 1; i <= 12; ++i)
+    {
+        const auto descriptor = resolveEncounterSpawnDescriptor(i);
+        CHECK(descriptor.encounterSlot == (i <= 3 ? int(i) : int((i - 4) % 3) + 1));
+        CHECK(descriptor.fixedTier == (i <= 3 ? '\0' : char('A' + (i - 4) / 3)));
+    }
+    CHECK(resolveEncounterSpawnDescriptor(0).encounterSlot == 0);
+    CHECK(resolveEncounterSpawnDescriptor(13).encounterSlot == 0);
+    CHECK(resolveEncounterSpawnDescriptor(UINT16_MAX).encounterSlot == 0);
+    CHECK(encounterTierWeights(0) == std::array<int, 3>{100, 0, 0});
+    CHECK(encounterTierWeights(-1) == encounterTierWeights(0));
+    CHECK(encounterTierWeights(10) == encounterTierWeights(5));
+    MapStatsEntry map{};
+    CHECK(mapEncounterInfo(map, 0) == nullptr);
+    CHECK(mapEncounterInfo(map, 1) == &map.encounter1);
+    CHECK(mapEncounterInfo(map, 3) == &map.encounter3);
+    CHECK(mapEncounterInfo(map, 4) == nullptr);
+}
+
+TEST_CASE("world monster layers hide authored populations and retain only last observed positions")
+{
+    Fixture f;
+    auto database = f.database();
+    MonsterTable monsters = atlasMonsters();
+    MapStatsEntry map = *f.maps.findById(63);
+    map.encounter1.monsterName = "Test Goblin";
+    map.encounter1.pictureName = "Test Goblin";
+    map.encounter1.minCount = 4; map.encounter1.maxCount = 2;
+    OutdoorMapData geometry;
+    geometry.spawns = {{1000, 2000, 0, 128, 3, 1}, {3000, 4000, 0, 64, 3, 10},
+                       {0, 0, 0, 0, 2, 1}, {0, 0, 0, 0, 3, 13}};
+    const auto authored = buildWorldEncounterFeatures(map, geometry, monsters);
+    REQUIRE(authored.size() == 2);
+    REQUIRE(authored[0].monster.has_value());
+    CHECK(authored[0].monster->definitions == std::vector<int16_t>{11}); // Difficulty zero permits only A.
+    CHECK(authored[1].monster->definitions == std::vector<int16_t>{13}); // Explicit C bypasses weights.
+    CHECK(authored[0].monster->minCount == 2);
+    CHECK(authored[0].monster->maxCount == 4);
+    map.encounter1.difficulty = 3;
+    CHECK(buildWorldEncounterFeatures(map, geometry, monsters)[0].monster->definitions.size() == 3);
+    WorldKnowledge knowledge;
+    knowledge.regionMaps["7out02.odm"].fullyRevealedCells.assign(88 * 88 / 8, 255);
+    database.indexMapMonsters(map, geometry, monsters);
+    CHECK(database.queryFeatures(knowledge, false, "Goblin").empty()); // A fully explored region is not a census.
+    EventRuntimeState state;
+    recordWorldMonsterObservation(state, {42, 12, 100, 200, 300, false, 540});
+    const auto observations = worldMonsterObservations(state);
+    REQUIRE(observations.size() == 1);
+    database.indexMapMonsters(map, geometry, monsters, observations);
+    const auto known = database.queryFeatures(knowledge, false, "Goblin");
+    REQUIRE(known.size() == 1);
+    CHECK(known[0]->site.x == 100);
+    CHECK(known[0]->monster->observed);
+    CHECK_FALSE(known[0]->monster->dead);
+    CHECK(database.queryFeatures(knowledge, true, "Goblin").size() == 3);
+    geometry.spawns[0].x = 9000; // Unseen world data cannot move the last observation.
+    database.indexMapMonsters(map, geometry, monsters, observations);
+    CHECK(database.queryFeatures(knowledge, false, "Goblin")[0]->site.x == 100);
+    CHECK(worldMonsterObservations(state)[0].x == 100); // Browsing never rewrites knowledge.
+    recordWorldMonsterObservation(state, {42, 12, 150, 250, 300, true, 600});
+    const auto updated = worldMonsterObservations(state);
+    REQUIRE(updated.size() == 1);
+    CHECK(updated[0].x == 150);
+    CHECK(updated[0].dead);
+}
+
+TEST_CASE("world monster knowledge ignores incomplete invalid and noncanonical observation records")
+{
+    EventRuntimeState state;
+    state.namedMapVars["openyamm.discovery.monster/0/type"] = 11;
+    state.namedMapVars["openyamm.discovery.monster/bad/type"] = 11;
+    CHECK(worldMonsterObservations(state).empty());
+    recordWorldMonsterObservation(state, {0, 11, 10, 20, 30, false, 100});
+    REQUIRE(worldMonsterObservations(state).size() == 1);
+    CHECK(worldMonsterObservations(state)[0].actorId == 0);
+    recordWorldMonsterObservation(state, {1, -1, 0, 0, 0, false, 100});
+    recordWorldMonsterObservation(state, {2, 11, 0, 0, 0, false, -1});
+    CHECK(worldMonsterObservations(state).size() == 1);
+    for (const char *suffix : {"type", "x", "y", "z", "dead", "time"})
+        state.namedMapVars[std::string("openyamm.discovery.monster/00/") + suffix]
+            = state.namedMapVars.at(std::string("openyamm.discovery.monster/0/") + suffix);
+    CHECK(worldMonsterObservations(state).size() == 1);
+}
 
 TEST_CASE("world database sites distinguish connected faces from reused event objects")
 {

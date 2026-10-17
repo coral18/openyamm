@@ -8,6 +8,7 @@
 #include "game/tables/PotionNoteTable.h"
 #include "game/tables/HouseTable.h"
 #include "game/tables/MapStats.h"
+#include "game/tables/MonsterTable.h"
 #include "engine/TextTable.h"
 
 #include <doctest/doctest.h>
@@ -16,6 +17,28 @@
 #include <iterator>
 
 using namespace OpenYAMM::Game;
+
+TEST_CASE("world guide bestiary filters unknown definitions before exposing their stats")
+{
+    std::vector<std::string> known(38, "0"), unknown(38, "0");
+    known[0] = "1"; known[1] = "Goblin"; known[2] = "Goblin A"; known[4] = "40";
+    unknown[0] = "2"; unknown[1] = "Secret Dragon"; unknown[2] = "Dragon A"; unknown[4] = "999";
+    MonsterTable monsters;
+    REQUIRE(monsters.loadStatsFromRows({known, unknown}));
+    WorldGuideSource source;
+    source.pMonsters = &monsters;
+    WorldGuideKnowledge knowledge;
+    CHECK(buildWorldGuide(source, WorldGuideSection::Monsters, knowledge, false).empty());
+    knowledge.monsters.insert(1);
+    const auto discovered = buildWorldGuide(source, WorldGuideSection::Monsters, knowledge, false);
+    REQUIRE(discovered.size() == 1);
+    CHECK(discovered[0].title == "Goblin");
+    CHECK(discovered[0].details.find("HP: 40") != std::string::npos);
+    CHECK(discovered[0].details.find("Secret Dragon") == std::string::npos);
+    CHECK(discovered[0].details.find("Special attack: 0") == std::string::npos);
+    CHECK(buildWorldGuide(source, WorldGuideSection::Monsters, knowledge, true).size() == 2);
+    CHECK(knowledge.monsters.size() == 1);
+}
 
 namespace
 {

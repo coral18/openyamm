@@ -1,3 +1,4 @@
+#include "game/gameplay/MapEncounterDefinition.h"
 #include "game/indoor/IndoorWorldRuntime.h"
 #include "game/gameplay/ActorVocalizationRules.h"
 #include "game/audio/ActorAudioRules.h"
@@ -1041,15 +1042,6 @@ constexpr float IndoorProjectileBounceFactor = IndoorWorldItemBounceFactor;
 constexpr float IndoorProjectileBounceStopVelocity = IndoorWorldItemBounceStopVelocity;
 constexpr float IndoorProjectileGroundDamping = IndoorWorldItemGroundDamping;
 constexpr float IndoorProjectileSettledHorizontalSpeedSquared = IndoorWorldItemRestingHorizontalSpeedSquared;
-constexpr std::array<std::array<int, 3>, 6> IndoorEncounterDifficultyTierWeights = {{
-    {{100, 0, 0}},
-    {{90, 8, 2}},
-    {{70, 20, 10}},
-    {{50, 30, 20}},
-    {{30, 40, 30}},
-    {{10, 50, 40}},
-}};
-
 bool indoorProjectileShouldSettle(const GameplayProjectileService::ProjectileState &projectile)
 {
     if ((projectile.objectFlags & ObjectDescBounce) == 0)
@@ -1115,46 +1107,6 @@ struct IndoorProjectileCollisionCandidate
     float distanceSquared = std::numeric_limits<float>::max();
 };
 
-struct IndoorEncounterSpawnDescriptor
-{
-    int encounterSlot = 0;
-    char fixedTier = '\0';
-};
-
-const MapEncounterInfo *getIndoorEncounterInfo(const MapStatsEntry &map, int encounterSlot)
-{
-    switch (encounterSlot)
-    {
-        case 1:
-            return &map.encounter1;
-        case 2:
-            return &map.encounter2;
-        case 3:
-            return &map.encounter3;
-        default:
-            return nullptr;
-    }
-}
-
-IndoorEncounterSpawnDescriptor resolveIndoorEncounterSpawnDescriptor(uint16_t index)
-{
-    IndoorEncounterSpawnDescriptor descriptor = {};
-
-    if (index >= 1 && index <= 3)
-    {
-        descriptor.encounterSlot = index;
-        return descriptor;
-    }
-
-    if (index >= 4 && index <= 12)
-    {
-        descriptor.encounterSlot = static_cast<int>((index - 4) % 3) + 1;
-        descriptor.fixedTier = static_cast<char>('A' + (index - 4) / 3);
-    }
-
-    return descriptor;
-}
-
 char resolveIndoorEncounterTierLetter(
     const MapStatsEntry &map,
     int encounterSlot,
@@ -1166,7 +1118,7 @@ char resolveIndoorEncounterTierLetter(
         return fixedTier;
     }
 
-    const MapEncounterInfo *pEncounter = getIndoorEncounterInfo(map, encounterSlot);
+    const MapEncounterInfo *pEncounter = mapEncounterInfo(map, encounterSlot);
 
     if (pEncounter == nullptr)
     {
@@ -1174,7 +1126,7 @@ char resolveIndoorEncounterTierLetter(
     }
 
     const int difficulty = std::clamp(pEncounter->difficulty, 0, 5);
-    const std::array<int, 3> &weights = IndoorEncounterDifficultyTierWeights[difficulty];
+    const std::array<int, 3> &weights = encounterTierWeights(difficulty);
     const int totalWeight = std::max(1, weights[0] + weights[1] + weights[2]);
     std::mt19937 rng(seed);
     const int roll = std::uniform_int_distribution<int>(0, totalWeight - 1)(rng);
@@ -1198,7 +1150,7 @@ uint32_t resolveIndoorEncounterSpawnCount(
     uint32_t sessionSeed,
     uint32_t salt)
 {
-    const MapEncounterInfo *pEncounter = getIndoorEncounterInfo(map, encounterSlot);
+    const MapEncounterInfo *pEncounter = mapEncounterInfo(map, encounterSlot);
 
     if (pEncounter == nullptr)
     {
@@ -1762,11 +1714,6 @@ char tierLetterForSummonLevel(uint32_t level)
 {
     const uint32_t clampedLevel = std::clamp(level, 1u, 3u);
     return static_cast<char>('A' + (clampedLevel - 1u));
-}
-
-std::string encounterPictureBase(const MapEncounterInfo &encounter)
-{
-    return encounter.pictureName.empty() ? encounter.monsterName : encounter.pictureName;
 }
 
 uint32_t defaultActorAttributes(bool hostileToParty)
@@ -17337,8 +17284,8 @@ void IndoorWorldRuntime::materializeInitialMonsterSpawns()
             continue;
         }
 
-        const IndoorEncounterSpawnDescriptor descriptor =
-            resolveIndoorEncounterSpawnDescriptor(spawn.index);
+        const EncounterSpawnDescriptor descriptor =
+            resolveEncounterSpawnDescriptor(spawn.index);
 
         if (descriptor.encounterSlot <= 0)
         {
@@ -17366,7 +17313,7 @@ void IndoorWorldRuntime::materializeInitialMonsterSpawns()
                 descriptor.encounterSlot,
                 descriptor.fixedTier,
                 tierSeed);
-            const MapEncounterInfo *pEncounter = getIndoorEncounterInfo(*m_map, descriptor.encounterSlot);
+            const MapEncounterInfo *pEncounter = mapEncounterInfo(*m_map, descriptor.encounterSlot);
 
             if (pEncounter == nullptr)
             {

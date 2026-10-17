@@ -70,6 +70,31 @@ void WorldDatabase::indexMapLocations(const MapStatsEntry &map, const IndoorMapD
 
 const std::vector<WorldMapFeature> &WorldDatabase::features() const { return m_features; }
 
+void WorldDatabase::replaceMapMonsterFeatures(const MapStatsEntry &map, std::vector<WorldMapFeature> features,
+    const MonsterTable &monsters, const std::vector<WorldMonsterObservation> &observations)
+{
+    const std::string id = mapId(map);
+    if (find(id) == nullptr)
+        return;
+    std::erase_if(m_features, [&id](const WorldMapFeature &feature)
+    { return feature.mapId == id && feature.kind == WorldMapFeatureKind::Monster; });
+    auto observed = buildWorldObservedMonsterFeatures(id, observations, monsters);
+    features.insert(features.end(), observed.begin(), observed.end());
+    m_features.insert(m_features.end(), features.begin(), features.end());
+}
+
+void WorldDatabase::indexMapMonsters(const MapStatsEntry &map, const OutdoorMapData &geometry,
+    const MonsterTable &monsters, const std::vector<WorldMonsterObservation> &observations)
+{
+    replaceMapMonsterFeatures(map, buildWorldEncounterFeatures(map, geometry, monsters), monsters, observations);
+}
+
+void WorldDatabase::indexMapMonsters(const MapStatsEntry &map, const IndoorMapData &geometry,
+    const MonsterTable &monsters, const std::vector<WorldMonsterObservation> &observations)
+{
+    replaceMapMonsterFeatures(map, buildWorldEncounterFeatures(map, geometry, monsters), monsters, observations);
+}
+
 bool WorldDatabase::featureVisible(const WorldMapFeature &feature, const WorldKnowledge &knowledge, bool guide) const
 {
     const WorldRecord *pMap = find(feature.mapId);
@@ -77,6 +102,8 @@ bool WorldDatabase::featureVisible(const WorldMapFeature &feature, const WorldKn
         return false;
     if (guide)
         return true;
+    if (feature.kind == WorldMapFeatureKind::Monster)
+        return feature.monster && feature.monster->observed;
     const std::string file = toLowerCopy(pMap->map->fileName);
     if (const auto known = knowledge.interactedSites.find(file); known != knowledge.interactedSites.end())
     {

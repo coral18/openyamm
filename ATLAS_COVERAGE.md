@@ -23,7 +23,7 @@ tables, and do not bundle its HTML, JS, translated prose, generated illustration
 | Walking and scheduled transport | Existing table index | Existing table index | Visual route links and neighboring-region navigation |
 | Quest giver/objective/return chains | Not integrated | Not integrated | Shared quest/location relationships and discovery gating |
 | Chests, wells, shrines, obelisks | Event-backed Sites layer | Event-backed Sites layer | Effects, loot/open state, inherited decoration events and wider content audit |
-| Monster groups | Not integrated | Not integrated | Authored and dynamic encounters without leaking unseen groups |
+| Monster groups and Bestiary | Authored encounter areas and last-observed actors | Same shared index and observed-only Bestiary | Placed/scripted actors, named overrides, automatic visibility discovery and variant/source links |
 | Teleports and special connections | Declared map links with native navigation | Declared map links with native navigation | Conditional destinations, Gate semantics and Barrows/Regna connection graphs |
 | Items, artifacts and equipment reference | Shared ItemTable view | Shared ItemTable view | Item-source relationships, icons and richer comparisons |
 | Alchemy recipes and ingredients | Native recursive recipe view | Native recursive recipe view | Broader canonical-content audit and ingredient-source links |

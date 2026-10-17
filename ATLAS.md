@@ -268,3 +268,33 @@ Obelisk details, dungeon chest/passage pins, connected pages and resumed gamepla
 indoor scenario save, showed the one known chest, switched to the full Guide catalog and restored the single
 Discovery entry. Its empty floor plan is expected for that headless fixture, which does not render exploration
 outlines. Captures remain outside Git under `atlas-sites-20261017` and `atlas-indoor-sites-20261017`.
+
+### Monster knowledge checkpoint, 2026-10-17
+
+Sites now includes monster encounter areas derived from native map spawn points and the loaded MapStats and
+MonsterTable definitions. The engine and Atlas share encounter-slot decoding, picture-base selection and tier
+weights; the runtime keeps its existing random rolls and spawn counts. Invalid/empty groups are omitted, fixed tiers
+remain fixed, and difficulty-zero groups expose only their possible A tier. Guide labels are reference count ranges,
+not live population counts. This covers authored spawn points, not all placed/scripted or individually named actors.
+
+Discovery never reveals an unknown encounter group merely because terrain was explored. Actual actor picks during
+hover, interaction or attack record stable actor ID, base creature definition, last observed coordinates, alive/dead
+state and game time in existing map-local save variables. Cached hover does not track hidden movement. Last-known
+pins read those saved observations, never the current positions of unseen actors. This first implementation observes
+picked/targeted actors; merely rendering a distant actor does not yet create an observation.
+
+The Guidebook has an observed-only Bestiary in Discovery and the loaded monster catalog in Guide. Entries show base
+HP/AC/experience, attacks, spells, resistances and loot parameters, with an explicit distinction from runtime scaling
+and effects. Monster sites link to their first creature definition. Variant navigation, individually named overrides,
+portraits, comprehensive placed/scripted actor sources and broader content auditing remain on the coverage checklist.
+Guide browsing does not change the party's knowledge. The native filter highlight and footer now follow the active
+Sites/search selection, including when a previous selection falls outside the new search.
+
+Nineteen World Database cases / 1125 assertions passed. Seven Guidebook cases / 108 assertions also passed, including Bestiary privacy.
+The faithful `tests/scenarios/atlas/mm8_monster_observation.yml` picks a real Dagger Wound actor, verifies exact known
+coordinates and an untouched actor's unknown state, saves, changes map to verify namespace isolation, reloads and
+checks the original observations. Existing faithful map-lifecycle scenarios passed for MM6, MM7 and MM8 after the
+encounter refactor. Windows Release native GPU tours cover observed-only sites, creature details, unknown dragons
+remaining hidden after Guide browsing, authored encounters in both worlds and return to gameplay. Captures stay
+outside Git in `atlas-monster-ui-20261017`. This checkpoint does not establish Android/controller validation or
+complete the full Atlas feature matrix.

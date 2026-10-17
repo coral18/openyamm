@@ -38,6 +38,9 @@ AtlasScreen::AtlasScreen(const Engine::AssetFileSystem &assets, const GameDataRe
         if (std::filesystem::path(file).extension() == ".yml")
             m_availableWorlds.push_back(std::filesystem::path(file).stem().string());
     m_referenceKnowledge.recipes = m_knowledge.autonoteIds;
+    for (const auto &[file, observations] : m_knowledge.monsterObservations)
+        for (const WorldMonsterObservation &observation : observations)
+            m_referenceKnowledge.monsters.insert(observation.monsterId);
     if (m_pParty != nullptr)
     {
         m_referenceKnowledge.hasParty = true;
@@ -75,11 +78,15 @@ AtlasScreen::AtlasScreen(const Engine::AssetFileSystem &assets, const GameDataRe
     if (pCurrentMap != nullptr && pCurrentMap->outdoorMapData && pCurrentMap->localEventProgram)
     {
         m_world.indexMapLocations(*pCurrentMap->outdoorMapData, *pCurrentMap->localEventProgram);
+        m_world.indexMapMonsters(pCurrentMap->map, *pCurrentMap->outdoorMapData, m_data.monsterTable(),
+            m_knowledge.monsterObservations[toLowerCopy(pCurrentMap->map.fileName)]);
         m_indexedMaps.insert(WorldDatabase::mapId(pCurrentMap->map));
     }
     else if (pCurrentMap != nullptr && pCurrentMap->indoorMapData && pCurrentMap->localEventProgram)
     {
         m_world.indexMapLocations(pCurrentMap->map, *pCurrentMap->indoorMapData, *pCurrentMap->localEventProgram);
+        m_world.indexMapMonsters(pCurrentMap->map, *pCurrentMap->indoorMapData, m_data.monsterTable(),
+            m_knowledge.monsterObservations[toLowerCopy(pCurrentMap->map.fileName)]);
         m_indexedMaps.insert(WorldDatabase::mapId(pCurrentMap->map));
     }
     if (m_knowledge.partyPosition)
@@ -277,7 +284,7 @@ void AtlasScreen::drawScreen(float)
             m_scroll = 0;
             m_siteSelection.clear();
         }
-        if (m_filter == filters[i].second)
+        if (i == 7 ? m_featureView : !m_featureView && m_filter == filters[i].second)
             outline(rect, 0xff8dc5e1u);
     }
     if (button("atlas-world", canvasRect(25, 89, 132, 25), m_presentation.name, "button", true, m_map.empty()))
@@ -293,7 +300,7 @@ void AtlasScreen::drawScreen(float)
     {
         textInRect(canvasRect(168, 89, 403, 25), map->name(), "fondamento", 14);
         if (m_featureView)
-            textInRect(canvasRect(375, 94, 195, 16), "C Chests  W Water  S Shrines  O Obelisks  P Passages",
+            textInRect(canvasRect(375, 94, 195, 16), "C Chests W Water S Shrines O Obelisks P Passages M Monsters",
                        "menu_lucida", 7, 0xffc6dfeau);
         else if (map->kind == WorldRecordKind::Region)
             textInRect(canvasRect(375, 94, 195, 16), "B Buildings   T Trainers   D Dungeons",
@@ -337,9 +344,17 @@ void AtlasScreen::indexKnownRegions()
                 || !map->localEventProgram)
                 throw std::runtime_error(error.empty() ? "Missing geometry or event metadata" : error);
             if (map->outdoorMapData)
+            {
                 m_world.indexMapLocations(*map->outdoorMapData, *map->localEventProgram);
+                m_world.indexMapMonsters(map->map, *map->outdoorMapData, m_data.monsterTable(),
+                    m_knowledge.monsterObservations[toLowerCopy(map->map.fileName)]);
+            }
             else if (map->indoorMapData)
+            {
                 m_world.indexMapLocations(map->map, *map->indoorMapData, *map->localEventProgram);
+                m_world.indexMapMonsters(map->map, *map->indoorMapData, m_data.monsterTable(),
+                    m_knowledge.monsterObservations[toLowerCopy(map->map.fileName)]);
+            }
             else
                 throw std::runtime_error("Missing map geometry");
         }
@@ -725,7 +740,7 @@ bool AtlasScreen::drawFeatureMarkers(const WorldRecord &map, const Rect &image, 
             m_selectedFeature = feature.id;
             m_scroll = 0;
         }
-        const char *labels[] = {"C", "W", "S", "O", "P"};
+        const char *labels[] = {"C", "W", "S", "O", "P", "M"};
         textInRect(marker, pin.features.size() > 1 ? std::to_string(pin.features.size()) : labels[size_t(feature.kind)],
                    "menu_lucida", 7, 0xffc6dfeau, true);
         outline(marker, selected ? 0xff99d3eeu : 0xff8dc5e1u);
@@ -786,7 +801,7 @@ void AtlasScreen::rebuildReference()
     const WorldGuideSource source{&m_data.itemTable(), &m_data.spellTable(), &m_data.classMultiplierTable(),
         &m_data.classSkillTable(), &m_data.mergedPotionSettingTable(), &m_data.mergedReagentSettingTable(),
         &m_data.potionMixingTable(), &m_data.potionNoteTable(), &m_data.rosterTable(),
-        &m_data.houseTable(), &m_data.mapStats(), m_presentation.worldId};
+        &m_data.houseTable(), &m_data.mapStats(), m_presentation.worldId, &m_data.monsterTable()};
     m_referenceEntries = buildWorldGuide(source, m_referenceSection, m_referenceKnowledge, m_guide);
     m_referenceDirty = false;
 }
@@ -796,9 +811,10 @@ void AtlasScreen::drawReference()
     const std::pair<const char *, WorldGuideSection> sections[] = {
         {"Items", WorldGuideSection::Items}, {"Spells", WorldGuideSection::Spells},
         {"Classes", WorldGuideSection::Classes}, {"Alchemy", WorldGuideSection::Alchemy},
-        {"Companions", WorldGuideSection::Companions}, {"Progress", WorldGuideSection::Progress}};
+        {"Companions", WorldGuideSection::Companions}, {"Progress", WorldGuideSection::Progress},
+        {"Bestiary", WorldGuideSection::Monsters}};
     for (size_t i = 0; i < std::size(sections); ++i)
-        if (button("atlas-ref-section-" + std::to_string(i), canvasRect(25 + i * 133, 53, 126, 28),
+        if (button("atlas-ref-section-" + std::to_string(i), canvasRect(25 + i * 114, 53, 107, 28),
                    sections[i].first, "button", true, m_referenceSection == sections[i].second))
         {
             m_referenceSection = sections[i].second;
@@ -922,7 +938,8 @@ void AtlasScreen::drawReference()
             : "Select a record to inspect its details.", "menu_arrus", 13, 0xffc6dfeau, true);
     textInRect(canvasRect(34, 407, 778, 43), m_guide
         ? "Reference definitions follow the loaded game tables, including enabled mods."
-        : "Discovery shows encountered items, learned spells, current classes, known recipes and recruited companions.",
+        : "Discovery shows encountered items, learned spells, current classes, known recipes, "
+          "recruited companions and observed monsters.",
         "menu_arrus", 11);
 }
 
@@ -932,12 +949,14 @@ void AtlasScreen::drawDetails()
     outline(details, 0xff597284u);
     if (m_featureView)
     {
-        const auto features = m_world.queryFeatures(m_knowledge, m_guide, {}, m_map);
+        const auto features = m_world.queryFeatures(m_knowledge, m_guide, m_search, m_map);
         const auto selected = std::find_if(features.begin(), features.end(), [this](const WorldMapFeature *pFeature)
-        { return pFeature->id == m_selectedFeature; });
+        { return pFeature->id == m_selectedFeature
+            && (m_siteSelection.empty() || m_siteSelection.contains(pFeature->id)); });
         std::string text = "Select a site to inspect it. "
-            "C Chests, W Wells/Fountains, S Shrines, O Obelisks, P Passages.";
+            "C Chests, W Wells/Fountains, S Shrines, O Obelisks, P Passages, M Monsters.";
         const WorldRecord *pDestination = nullptr;
+        int16_t creatureId = 0;
         if (selected != features.end())
         {
             const WorldMapFeature &feature = **selected;
@@ -955,10 +974,32 @@ void AtlasScreen::drawDetails()
             }
             else if (feature.kind == WorldMapFeatureKind::Chest)
                 text += "\nContainers at this interaction: " + std::to_string(feature.chestIds.size());
+            else if (feature.monster)
+            {
+                const WorldMonsterFeature &monster = *feature.monster;
+                if (monster.observed)
+                    text += std::string("\nLast observed: ") + (monster.dead ? "defeated" : "alive")
+                        + " | Day " + std::to_string(monster.gameMinutes / (24 * 60) + 1);
+                else
+                    text += "\nAuthored group: " + std::to_string(monster.minCount) + " - "
+                        + std::to_string(monster.maxCount) + " creatures. Not a live population count.";
+                if (!monster.definitions.empty())
+                    creatureId = monster.definitions.front();
+            }
         }
         if (!m_locationError.empty())
             text += "\n" + m_locationError;
-        textInRect(canvasRect(34, 407, pDestination != nullptr ? 625 : 778, 43), text, "menu_arrus", 11);
+        textInRect(canvasRect(34, 407, pDestination != nullptr || creatureId > 0 ? 625 : 778, 43),
+                   text, "menu_arrus", 11);
+        if (creatureId > 0 && button("atlas-feature-creature", canvasRect(669, 416, 145, 28), "Creature details"))
+        {
+            m_referenceOpen = true;
+            m_referenceSection = WorldGuideSection::Monsters;
+            m_referenceSelected = std::to_string(creatureId);
+            m_referenceDirty = true;
+            m_search.clear();
+            m_referenceScroll = m_referenceDetailScroll = m_referenceContentHeight = 0;
+        }
         if (pDestination != nullptr && button("atlas-feature-destination", canvasRect(669, 416, 145, 28),
                                              "Open connected map"))
         {

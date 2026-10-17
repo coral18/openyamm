@@ -1,0 +1,71 @@
+id: atlas.mm8_monster_observation
+title: Atlas actual actor observation survives save and load
+world: mm8
+mode: faithful
+steps:
+- new_game_flow:
+    start_map: out01.odm
+- press_interact:
+    pose:
+      x: 3240
+      y: 7960
+      z: 544
+      yaw: 0
+      pitch: -0.4
+    expect:
+      kind: actor
+      actor_index: 0
+      can_activate: true
+- assert:
+    named_map_var_changed:
+      name: openyamm.discovery.monster/0/type
+      value: 3
+- assert:
+    named_map_var_changed:
+      name: openyamm.discovery.monster/0/x
+      value: 3440
+- assert:
+    named_map_var_changed:
+      name: openyamm.discovery.monster/0/y
+      value: 7960
+- assert:
+    named_map_var_changed:
+      name: openyamm.discovery.monster/0/dead
+      value: 0
+- assert:
+    named_map_var_changed:
+      name: openyamm.discovery.monster/1/type
+      value: 0
+- save_game: atlas-monster
+- load_map:
+    map: d05.blv
+- assert:
+    named_map_var_changed:
+      name: openyamm.discovery.monster/0/type
+      value: 0
+- load_game: atlas-monster
+- assert:
+    named_map_var_changed:
+      name: openyamm.discovery.monster/0/type
+      value: 3
+- assert:
+    named_map_var_changed:
+      name: openyamm.discovery.monster/0/x
+      value: 3440
+- assert:
+    named_map_var_changed:
+      name: openyamm.discovery.monster/0/y
+      value: 7960
+- assert:
+    named_map_var_changed:
+      name: openyamm.discovery.monster/0/dead
+      value: 0
+- assert:
+    named_map_var_changed:
+      name: openyamm.discovery.monster/1/type
+      value: 0
+tags:
+- mm8
+- atlas
+- discovery
+- save

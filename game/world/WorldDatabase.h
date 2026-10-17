@@ -4,6 +4,7 @@
 #include "game/world/WorldFloorPlan.h"
 #include "game/world/WorldMapExploration.h"
 #include "game/world/WorldMapFeatures.h"
+#include "game/world/WorldMonsterKnowledge.h"
 #include "game/tables/MapStats.h"
 #include "game/tables/MergedBaseTables.h"
 #include "game/tables/NpcDialogTable.h"
@@ -67,6 +68,7 @@ struct WorldKnowledge
     std::optional<WorldPartyMapPosition> partyPosition;
     std::unordered_set<uint32_t> autonoteIds;
     std::unordered_map<std::string, std::unordered_set<std::string>> interactedSites;
+    std::unordered_map<std::string, std::vector<WorldMonsterObservation>> monsterObservations;
     bool knows(const WorldRecord &record) const;
 };
 
@@ -88,6 +90,10 @@ public:
     void indexMapLocations(const OutdoorMapData &map, const ScriptedEventProgram &events);
     void indexMapLocations(const MapStatsEntry &map, const IndoorMapData &geometry,
                            const ScriptedEventProgram &events);
+    void indexMapMonsters(const MapStatsEntry &map, const OutdoorMapData &geometry, const MonsterTable &monsters,
+                          const std::vector<WorldMonsterObservation> &observations = {});
+    void indexMapMonsters(const MapStatsEntry &map, const IndoorMapData &geometry, const MonsterTable &monsters,
+                          const std::vector<WorldMonsterObservation> &observations = {});
     const std::vector<WorldMapLocation> &locations() const;
     const std::vector<WorldMapFeature> &features() const;
     bool featureVisible(const WorldMapFeature &feature, const WorldKnowledge &knowledge, bool guide) const;
@@ -104,6 +110,8 @@ public:
     static const char *kindName(WorldRecordKind kind);
 
 private:
+    void replaceMapMonsterFeatures(const MapStatsEntry &map, std::vector<WorldMapFeature> features,
+        const MonsterTable &monsters, const std::vector<WorldMonsterObservation> &observations);
     std::vector<WorldRecord> m_records;
     std::unordered_map<std::string, size_t> m_byId;
     std::vector<WorldMapLocation> m_locations;

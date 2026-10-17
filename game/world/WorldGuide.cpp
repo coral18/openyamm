@@ -9,6 +9,7 @@
 #include "game/tables/RosterTable.h"
 #include "game/tables/HouseTable.h"
 #include "game/tables/MapStats.h"
+#include "game/tables/MonsterTable.h"
 
 #include <algorithm>
 #include <functional>
@@ -69,7 +70,45 @@ std::vector<WorldGuideEntry> buildWorldGuide(const WorldGuideSource &source, Wor
         const ItemDefinition *pItem = source.pItems != nullptr ? source.pItems->get(id) : nullptr;
         return pItem != nullptr ? pItem->name : "Item " + std::to_string(id);
     };
-    if (section == WorldGuideSection::Items && source.pItems != nullptr)
+    if (section == WorldGuideSection::Monsters && source.pMonsters != nullptr)
+    {
+        for (const auto &[id, monster] : source.pMonsters->statsEntries())
+        {
+            if (id <= 0 || id > INT16_MAX || monster.name.empty()
+                || (!guide && !knowledge.monsters.contains(int16_t(id))))
+                continue;
+            const auto damage = [](const MonsterTable::MonsterStatsEntry::DamageProfile &profile)
+            { return std::to_string(profile.diceRolls) + "d" + std::to_string(profile.diceSides)
+                + " + " + std::to_string(profile.bonus); };
+            WorldGuideEntry entry{std::to_string(id), monster.name};
+            entry.details = monster.name + "\nLevel: " + std::to_string(monster.level)
+                + " | HP: " + std::to_string(monster.hitPoints) + " | AC: " + std::to_string(monster.armorClass)
+                + "\nExperience: " + std::to_string(monster.experience)
+                + "\n\nAttack: " + monster.attack1Type + " " + damage(monster.attack1Damage);
+            if (monster.attack2Chance > 0)
+                entry.details += "\nSecond attack (" + std::to_string(monster.attack2Chance) + "%): "
+                    + monster.attack2Type + " " + damage(monster.attack2Damage);
+            if (monster.hasSpell1)
+                entry.details += "\nSpell: " + monster.spell1Name;
+            if (monster.hasSpell2)
+                entry.details += "\nSpell: " + monster.spell2Name;
+            if (monster.specialAttackKind != MonsterSpecialAttackKind::None)
+                entry.details += "\nSpecial attack: " + monster.specialAttackDescriptor;
+            entry.details += "\n\nResistances\nFire " + std::to_string(monster.fireResistance)
+                + " | Air " + std::to_string(monster.airResistance) + " | Water "
+                + std::to_string(monster.waterResistance) + " | Earth " + std::to_string(monster.earthResistance)
+                + "\nMind " + std::to_string(monster.mindResistance) + " | Spirit "
+                + std::to_string(monster.spiritResistance) + " | Body " + std::to_string(monster.bodyResistance)
+                + "\nLight " + std::to_string(monster.lightResistance) + " | Dark "
+                + std::to_string(monster.darkResistance) + " | Physical " + std::to_string(monster.physicalResistance)
+                + "\n\nLoot\nGold: " + std::to_string(monster.loot.goldDiceRolls) + "d"
+                + std::to_string(monster.loot.goldDiceSides) + "\nItem chance: "
+                + std::to_string(monster.loot.itemChance) + "% | Item level: " + std::to_string(monster.loot.itemLevel)
+                + "\n\nShared base definition. Runtime scaling and effects may change these values.";
+            result.push_back(std::move(entry));
+        }
+    }
+    else if (section == WorldGuideSection::Items && source.pItems != nullptr)
     {
         for (const ItemDefinition &item : source.pItems->entries())
         {
