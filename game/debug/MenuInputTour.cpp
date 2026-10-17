@@ -140,7 +140,7 @@ void MenuInputTour::update(const std::string &path, GameplayInputFrame &input, I
         return;
     }
     const Step &step = m_steps[m_index++];
-    std::cout << "Menu tour: " << m_index << ' ' << step.kind << ' ' << step.text << '\n';
+    std::cout << "Menu tour: " << m_index << ' ' << step.kind << ' ' << step.text << std::endl;
     m_nextTicks = SDL_GetTicks() + 350;
     if (step.kind == "pause")
     {

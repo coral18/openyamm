@@ -9628,7 +9628,15 @@ void GameApplication::renderFrame(int width, int height, float mouseWheelDelta, 
         }
         const bool renderedMainMenu = pActiveScreen->mode() == AppMode::MainMenu;
         m_screenManager.beginActiveScreenRender();
-        pActiveScreen->renderFrame(width, height, m_gameInputSystem.frame(), deltaSeconds);
+        try
+        {
+            pActiveScreen->renderFrame(width, height, m_gameInputSystem.frame(), deltaSeconds);
+        }
+        catch (...)
+        {
+            m_screenManager.endActiveScreenRender();
+            throw;
+        }
         m_screenManager.endActiveScreenRender();
         if (renderedMainMenu && m_mainMenuRenderedFrameCount < std::numeric_limits<uint32_t>::max())
         {

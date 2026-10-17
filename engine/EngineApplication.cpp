@@ -305,6 +305,31 @@ void invokeShutdownCallback(const EngineApplication::ShutdownCallback &shutdownC
         shutdownCallback();
     }
 }
+
+class ApplicationShutdownGuard
+{
+public:
+    ApplicationShutdownGuard(const EngineApplication::ShutdownCallback &callback,
+        SDL_Window *&pWindow, BgfxContext *&pContext)
+        : m_callback(callback), m_pWindow(pWindow), m_pContext(pContext)
+    {
+    }
+
+    ApplicationShutdownGuard(const ApplicationShutdownGuard &) = delete;
+    ApplicationShutdownGuard &operator=(const ApplicationShutdownGuard &) = delete;
+
+    ~ApplicationShutdownGuard()
+    {
+        invokeShutdownCallback(m_callback);
+        m_pWindow = nullptr;
+        m_pContext = nullptr;
+    }
+
+private:
+    const EngineApplication::ShutdownCallback &m_callback;
+    SDL_Window *&m_pWindow;
+    BgfxContext *&m_pContext;
+};
 }
 
 EngineApplication::EngineApplication(
@@ -413,9 +438,10 @@ int EngineApplication::run() const
         return 1;
     }
 
+    // Release application-owned GPU resources before the local bgfx context, including exception unwinding.
+    const ApplicationShutdownGuard shutdownGuard(m_shutdownCallback, m_pRunningWindow, m_pRunningContext);
     if (m_renderSetupCallback && !m_renderSetupCallback())
     {
-        invokeShutdownCallback(m_shutdownCallback);
         return 1;
     }
 
@@ -761,10 +787,6 @@ int EngineApplication::run() const
         SDL_StopTextInput(pWindow.get());
     }
 
-    invokeShutdownCallback(m_shutdownCallback);
-
-    m_pRunningWindow = nullptr;
-    m_pRunningContext = nullptr;
     return 0;
 }
 
