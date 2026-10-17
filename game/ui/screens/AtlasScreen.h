@@ -3,6 +3,7 @@
 #include "game/ui/MenuDesignScreen.h"
 #include "game/world/WorldDatabase.h"
 #include "game/world/WorldAtlasPresentation.h"
+#include "game/world/WorldGuide.h"
 
 namespace OpenYAMM::Game
 {
@@ -33,6 +34,8 @@ private:
     void drawPartyArrow(const WorldRecord &map, const Rect &image, const WorldFloorPlanRaster *floorPlan);
     void drawList();
     void drawDetails();
+    void drawReference();
+    void rebuildReference();
 
     WorldKnowledge m_knowledge;
     WorldAtlasPresentation m_presentation;
@@ -40,6 +43,12 @@ private:
     std::vector<std::string> m_availableWorlds;
     const GameDataRepository &m_data;
     const Party *m_pParty = nullptr;
+    WorldGuideKnowledge m_referenceKnowledge;
+    std::vector<WorldGuideEntry> m_referenceEntries;
+    WorldGuideSection m_referenceSection = WorldGuideSection::Items;
+    bool m_referenceOpen = false, m_referenceDirty = true;
+    std::string m_referenceSelected;
+    float m_referenceScroll = 0, m_referenceDetailScroll = 0, m_referenceContentHeight = 0;
     std::unordered_set<std::string> m_indexedMaps, m_siteSelection;
     std::string m_locationError;
     std::function<void()> m_close;
@@ -49,6 +58,7 @@ private:
     bool m_suppressEscape = false;
     std::string m_search, m_selected, m_map;
     std::optional<WorldRecordKind> m_filter;
+    uint32_t m_trainerMastery = 0;
     float m_scroll = 0;
     float m_zoom = 1;
     float m_panX = 0, m_panY = 0;

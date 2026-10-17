@@ -5,6 +5,7 @@
 #include "game/StringUtils.h"
 #include "game/maps/MapAssetLoader.h"
 #include "game/ui/GameplayMinimapTransform.h"
+#include "game/events/EvtEnums.h"
 
 #include <yaml-cpp/yaml.h>
 #include <algorithm>
@@ -36,6 +37,41 @@ AtlasScreen::AtlasScreen(const Engine::AssetFileSystem &assets, const GameDataRe
     for (const std::string &file : assets.enumerate("engine/world/atlas"))
         if (std::filesystem::path(file).extension() == ".yml")
             m_availableWorlds.push_back(std::filesystem::path(file).stem().string());
+    m_referenceKnowledge.recipes = m_knowledge.autonoteIds;
+    if (m_pParty != nullptr)
+    {
+        m_referenceKnowledge.hasParty = true;
+        m_referenceKnowledge.arcomageWinCount = m_pParty->arcomageWinCount();
+        m_referenceKnowledge.arcomageLossCount = m_pParty->arcomageLossCount();
+        for (size_t i = 0; i < m_referenceKnowledge.arenaWins.size(); ++i)
+            m_referenceKnowledge.arenaWins[i] = m_pParty->eventVariableValue(uint16_t(EvtVariable::ArenaWinsPage) + i);
+        for (const auto &[id, house] : m_data.houseTable().entries())
+        {
+            const std::string key = WorldDatabase::houseDiscoveryKey(id);
+            if (m_knowledge.variables.contains(key) && m_knowledge.variables.at(key) > 0)
+                m_referenceKnowledge.houses.insert(id);
+            if (m_pParty->hasArcomageWinAt(id))
+            {
+                m_referenceKnowledge.arcomageWins.insert(id);
+                // A saved first victory proves the tavern was visited, including in older saves.
+                m_knowledge.variables[key] = 1;
+            }
+        }
+        for (const ItemDefinition &item : m_data.itemTable().entries())
+            if (m_pParty->hasEverOwnedItem(item.itemId) || m_pParty->hasItemAnywhere(item.itemId))
+                m_referenceKnowledge.items.insert(item.itemId);
+        for (size_t i = 0; i < m_pParty->memberCount(); ++i)
+            if (const Character *pMember = m_pParty->member(i))
+            {
+                m_referenceKnowledge.classes.insert(canonicalClassName(pMember->className));
+                for (const SpellEntry &spell : m_data.spellTable().entries())
+                    if (pMember->knowsSpell(uint32_t(spell.id)))
+                        m_referenceKnowledge.spells.insert(uint32_t(spell.id));
+            }
+        for (const RosterEntry *pMember : m_data.rosterTable().getEntriesSortedById())
+            if (m_pParty->hasRosterMember(pMember->id))
+                m_referenceKnowledge.roster.insert(pMember->id);
+    }
     if (pCurrentMap != nullptr && pCurrentMap->outdoorMapData && pCurrentMap->localEventProgram)
     {
         m_world.indexMapLocations(*pCurrentMap->outdoorMapData, *pCurrentMap->localEventProgram);
@@ -95,6 +131,14 @@ void AtlasScreen::handleSdlEvent(const SDL_Event &event)
 void AtlasScreen::select(const WorldRecord &record)
 {
     m_selected = record.id;
+    const std::string destination = WorldDatabase::mapId(*record.map);
+    if (m_map != destination)
+    {
+        m_map = destination;
+        m_zoom = 1;
+        m_panX = m_panY = m_scroll = 0;
+        m_siteSelection.clear();
+    }
     if (record.kind == WorldRecordKind::Region || record.kind == WorldRecordKind::Dungeon)
     {
         m_map = record.id;
@@ -126,7 +170,11 @@ void AtlasScreen::selectWorld(const std::string &worldId)
         WorldDatabase world(m_data.mapStats(), m_data.houseTable(), m_data.npcDialogTable(),
                             m_data.mergedTeacherTopicTable(), worldId, presentation.maps);
         m_world = std::move(world);
+        m_referenceDirty = true;
+        m_referenceSelected.clear();
+        m_referenceScroll = m_referenceDetailScroll = 0;
         m_presentation = std::move(presentation);
+        m_trainerMastery = 0;
         m_indexedMaps.clear();
         m_siteSelection.clear();
         m_map.clear(); m_selected.clear(); m_search.clear();
@@ -156,9 +204,21 @@ void AtlasScreen::drawScreen(float)
             selectWorld(m_availableWorlds[i]);
             return;
         }
+    if (button("atlas-reference", canvasRect(205, 17, 70, 27), m_referenceOpen ? "Map" : "Guidebook"))
+    {
+        m_referenceOpen = !m_referenceOpen;
+        m_referenceDirty = true;
+        m_search.clear();
+        m_referenceScroll = m_referenceDetailScroll = 0;
+        m_searchEditing = false;
+        setTextEditing(false);
+    }
     if (button("atlas-mode", canvasRect(526, 17, 177, 27), m_guide ? "Guide Mode: ON" : "Discovery Mode"))
     {
         m_guide = !m_guide;
+        m_referenceDirty = true;
+        m_referenceSelected.clear();
+        m_referenceScroll = m_referenceDetailScroll = 0;
         if (const auto *selected = m_world.find(m_selected); selected && !m_world.visible(*selected, m_knowledge, m_guide))
             m_selected.clear();
         if (const auto *map = m_world.find(m_map); map && !m_world.visible(*map, m_knowledge, m_guide))
@@ -175,6 +235,11 @@ void AtlasScreen::drawScreen(float)
         return;
     }
     m_suppressEscape = false;
+    if (m_referenceOpen)
+    {
+        drawReference();
+        return;
+    }
     const Rect search = canvasRect(25, 53, 274, 28);
     if (m_searchEditing && (keyPressed(SDL_SCANCODE_TAB) || (leftMouseJustPressed() && !pointerInside(search))))
     {
@@ -199,6 +264,7 @@ void AtlasScreen::drawScreen(float)
                    "button", true, m_filter == filters[i].second))
         {
             m_filter = filters[i].second;
+            m_trainerMastery = 0;
             m_scroll = 0;
             m_siteSelection.clear();
         }
@@ -281,6 +347,7 @@ bool AtlasScreen::drawLocationMarkers(const WorldRecord &map, const Rect &image,
         auto records = m_world.recordsAtLocation(location, m_knowledge, m_guide);
         std::erase_if(records, [this](const WorldRecord *pRecord)
         { return (m_filter && pRecord->kind != *m_filter)
+            || (m_trainerMastery != 0 && pRecord->teacher != nullptr && pRecord->teacher->mastery != m_trainerMastery)
             || (!m_search.empty()
                 && toLowerCopy(pRecord->searchText()).find(toLowerCopy(m_search)) == std::string::npos); });
         if (records.empty())
@@ -544,6 +611,9 @@ void AtlasScreen::drawList()
     const Rect viewport = canvasRect(588, 121, 235, 270);
     auto records = m_world.query(m_knowledge, m_guide, m_search, m_filter, m_map,
                                  m_filter == WorldRecordKind::Travel);
+    if (m_trainerMastery != 0)
+        std::erase_if(records, [this](const WorldRecord *pRecord)
+        { return pRecord->teacher != nullptr && pRecord->teacher->mastery != m_trainerMastery; });
     if (!m_siteSelection.empty())
         std::erase_if(records, [this](const WorldRecord *pRecord) { return !m_siteSelection.contains(pRecord->id); });
     if (m_map.empty() && m_search.empty() && !m_filter)
@@ -578,6 +648,149 @@ void AtlasScreen::drawList()
     if (records.empty())
         textInRect(viewport, m_guide ? "No matching records." : "No matching discoveries.\nVisit places and meet their residents to reveal them.",
                    "menu_arrus", 14, 0xffc6dfeau, true);
+}
+
+void AtlasScreen::rebuildReference()
+{
+    const WorldGuideSource source{&m_data.itemTable(), &m_data.spellTable(), &m_data.classMultiplierTable(),
+        &m_data.classSkillTable(), &m_data.mergedPotionSettingTable(), &m_data.mergedReagentSettingTable(),
+        &m_data.potionMixingTable(), &m_data.potionNoteTable(), &m_data.rosterTable(),
+        &m_data.houseTable(), &m_data.mapStats(), m_presentation.worldId};
+    m_referenceEntries = buildWorldGuide(source, m_referenceSection, m_referenceKnowledge, m_guide);
+    m_referenceDirty = false;
+}
+
+void AtlasScreen::drawReference()
+{
+    const std::pair<const char *, WorldGuideSection> sections[] = {
+        {"Items", WorldGuideSection::Items}, {"Spells", WorldGuideSection::Spells},
+        {"Classes", WorldGuideSection::Classes}, {"Alchemy", WorldGuideSection::Alchemy},
+        {"Companions", WorldGuideSection::Companions}, {"Progress", WorldGuideSection::Progress}};
+    for (size_t i = 0; i < std::size(sections); ++i)
+        if (button("atlas-ref-section-" + std::to_string(i), canvasRect(25 + i * 133, 53, 126, 28),
+                   sections[i].first, "button", true, m_referenceSection == sections[i].second))
+        {
+            m_referenceSection = sections[i].second;
+            m_referenceSelected.clear(); m_search.clear();
+            m_referenceDirty = true;
+            m_referenceScroll = m_referenceDetailScroll = 0;
+        }
+    if (m_referenceDirty)
+        rebuildReference();
+    const Rect search = canvasRect(25, 89, 245, 25);
+    if (m_searchEditing && (keyPressed(SDL_SCANCODE_TAB) || (leftMouseJustPressed() && !pointerInside(search))))
+    {
+        m_searchEditing = false;
+        setTextEditing(false);
+    }
+    if (button("atlas-ref-search", search, "", "text_field"))
+    {
+        m_searchEditing = true;
+        setTextEditing(true);
+    }
+    textInRect(canvasRect(32, 91, 229, 20), m_search.empty() ? "Search this section..." : m_search,
+               "menu_lucida", 11);
+    textInRect(canvasRect(285, 89, 535, 25), m_presentation.name + " - active game data", "fondamento", 14);
+    const Rect list = canvasRect(25, 121, 245, 270), details = canvasRect(285, 121, 535, 270);
+    drawSolidRect(list, 0xff18160fu); outline(list, 0xff597284u);
+    drawSolidRect(details, 0xff18160fu); outline(details, 0xff597284u);
+    std::vector<const WorldGuideEntry *> entries;
+    for (const WorldGuideEntry &entry : m_referenceEntries)
+        if (m_search.empty() || toLowerCopy(entry.title + " " + entry.details).find(toLowerCopy(m_search))
+            != std::string::npos)
+            entries.push_back(&entry);
+    if (!m_search.empty())
+        std::stable_sort(entries.begin(), entries.end(), [this](const WorldGuideEntry *a, const WorldGuideEntry *b)
+        {
+            const std::string query = toLowerCopy(m_search);
+            return (toLowerCopy(a->title).find(query) != std::string::npos)
+                > (toLowerCopy(b->title).find(query) != std::string::npos);
+        });
+    const float rowHeight = 33 * designScale();
+    scrollViewport(list, entries.size() * rowHeight, m_referenceScroll);
+    setDesignClip(list);
+    for (size_t i = 0; i < entries.size(); ++i)
+    {
+        const Rect row{list.x + 3 * designScale(), list.y + i * rowHeight - m_referenceScroll,
+                       list.width - 7 * designScale(), rowHeight - 2 * designScale()};
+        if (row.y + row.height < list.y || row.y > list.y + list.height)
+            continue;
+        const WorldGuideEntry &entry = *entries[i];
+        if (button("atlas-ref-entry-" + entry.id, row, "", "button", true, m_referenceSelected == entry.id))
+        {
+            m_referenceSelected = entry.id;
+            m_referenceDetailScroll = m_referenceContentHeight = 0;
+        }
+        textInRect({row.x + 6 * designScale(), row.y, row.width - 12 * designScale(), row.height},
+                   entry.title, "menu_arrus", 12);
+        if (m_referenceSelected == entry.id)
+            outline(row, 0xff8dc5e1u);
+    }
+    setDesignClip(std::nullopt);
+    const auto selected = std::find_if(entries.begin(), entries.end(),
+        [this](const WorldGuideEntry *pEntry) { return pEntry->id == m_referenceSelected; });
+    if (selected != entries.end())
+    {
+        const WorldGuideEntry &entry = **selected;
+        scrollViewport(details, m_referenceContentHeight, m_referenceDetailScroll);
+        setDesignClip(details);
+        const Rect text{details.x + 8 * designScale(), details.y + 8 * designScale() - m_referenceDetailScroll,
+                        details.width - 24 * designScale(), 50000 * designScale()};
+        float height = 0;
+        textInRect(text, entry.details, "menu_arrus", 12, 0xffc6dfeau, false, true, &height);
+        float y = text.y + height + 12 * designScale();
+        for (size_t i = 0; i < entry.links.size(); ++i)
+        {
+            const WorldGuideLink &link = entry.links[i];
+            const Rect row{text.x, y, text.width, 26 * designScale()};
+            if (row.y + row.height >= details.y && row.y <= details.y + details.height
+                && button("atlas-ref-link-" + std::to_string(i), row, link.label))
+            {
+                if (link.kind == WorldGuideLink::Kind::Trainer)
+                {
+                    m_referenceOpen = false;
+                    m_map.clear(); m_siteSelection.clear(); m_selected.clear();
+                    m_filter = WorldRecordKind::Trainer;
+                    m_trainerMastery = link.mastery;
+                    m_search = link.target;
+                    m_scroll = 0;
+                }
+                else if (link.kind == WorldGuideLink::Kind::Location)
+                {
+                    if (const WorldRecord *pLocation = m_world.find(link.target);
+                        pLocation != nullptr && m_world.visible(*pLocation, m_knowledge, m_guide))
+                    {
+                        m_referenceOpen = false;
+                        m_search.clear(); m_filter.reset(); m_trainerMastery = 0;
+                        m_siteSelection.clear();
+                        select(*pLocation);
+                    }
+                }
+                else
+                {
+                    m_referenceSection = link.kind == WorldGuideLink::Kind::Item
+                        ? WorldGuideSection::Items : WorldGuideSection::Alchemy;
+                    m_referenceSelected = link.target;
+                    m_referenceDirty = true;
+                    m_search.clear();
+                    m_referenceScroll = m_referenceDetailScroll = m_referenceContentHeight = 0;
+                }
+                setDesignClip(std::nullopt);
+                return;
+            }
+            y += 29 * designScale();
+        }
+        m_referenceContentHeight = height + (entry.links.size() * 29 + 24) * designScale();
+        setDesignClip(std::nullopt);
+    }
+    else
+        textInRect(details, entries.empty() ? (m_guide ? "No records in this section."
+            : "Nothing known yet. Guide Mode opens the full reference catalog.")
+            : "Select a record to inspect its details.", "menu_arrus", 13, 0xffc6dfeau, true);
+    textInRect(canvasRect(34, 407, 778, 43), m_guide
+        ? "Reference definitions follow the loaded game tables, including enabled mods."
+        : "Discovery shows encountered items, learned spells, current classes, known recipes and recruited companions.",
+        "menu_arrus", 11);
 }
 
 void AtlasScreen::drawDetails()

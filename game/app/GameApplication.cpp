@@ -8807,6 +8807,9 @@ void GameApplication::openMenuScreen(bool paused)
     actions.resume = [this]() { resumeMenuGameplay(); };
     actions.mainMenu = [this]() { openMainMenuScreen(); };
     actions.atlas = [this, paused]() { return openAtlasScreen(paused); };
+    actions.atlasAvailable = [this]()
+    { return m_commonGameDataLoaded && modUiModuleEnabled(m_gameDataLoader.getLoadedMods(),
+                                                         "openyamm.interactive-atlas"); };
     actions.continueGame = [this](const std::filesystem::path &path)
     { return ensureCommonGameDataLoaded() && loadSessionFromPath(path); };
     actions.applySettings = [this](const GameSettings &settings, bool persist, std::string &error)
@@ -8841,13 +8844,21 @@ bool GameApplication::openAtlasScreen(bool paused)
 {
     if (m_pAssetFileSystem == nullptr || !ensureCommonGameDataLoaded())
         return false;
+    if (!modUiModuleEnabled(m_gameDataLoader.getLoadedMods(), "openyamm.interactive-atlas"))
+        return false;
     WorldKnowledge knowledge;
     if (paused)
     {
         knowledge.variables = m_gameSession.namedGlobalVars();
         if (m_pMapSceneRuntime != nullptr && m_pMapSceneRuntime->eventRuntimeState() != nullptr)
+        {
             for (const auto &[key, value] : m_pMapSceneRuntime->eventRuntimeState()->namedGlobalVars)
                 knowledge.variables[key] = value;
+            const auto &variables = m_pMapSceneRuntime->eventRuntimeState()->variables;
+            for (const JournalAutonoteEntry &note : m_gameDataRepository.journalAutonoteTable().entries())
+                if (const auto value = variables.find(note.noteBit); value != variables.end() && value->second != 0)
+                    knowledge.autonoteIds.insert(note.noteBit >> 16);
+        }
         for (const auto &[file, state] : m_gameSession.outdoorWorldStates())
             knowledge.visitedMaps.insert(toLowerCopy(file));
         for (const auto &[file, state] : m_gameSession.indoorSceneStates())

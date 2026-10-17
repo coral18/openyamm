@@ -12,6 +12,8 @@ community guide's complete content has been integrated yet.
 
 ## Working slice
 
+- Optional native UI module provided by `mods/interactive-atlas/mod.yaml`, enabled through the normal mod profile.
+  Disabling it removes the Atlas menu entry and preserves shared discoveries and save compatibility.
 - Interactive Antagarich overview and all 13 outdoor region images from the existing game packages.
 - Separate MM7/MM8 catalog buttons in the native Atlas; opening from gameplay selects its current world.
   Switching the viewed catalog does not travel, change the party, activate another world package or award discoveries.
@@ -81,8 +83,9 @@ Unknown services are filtered before search; routes require both endpoint maps t
 ## Remaining guide coverage
 
 This slice is not the complete external guide port. Quest chains, chests, monsters, wells, obelisks, teleport links,
-Barrows connections, alchemy/spell
-reference pages and trackers remain to be added through shared game/world data. Explored dungeon maps and player
+Barrows connections, item/ingredient sources, guild availability and companion recruitment locations
+remain to be added through shared game/world data. The native guidebook below now covers reference pages and
+campaign trackers. Explored dungeon maps and player
 notes continue to use the existing Map Book. Dungeon plans currently project all elevations together; floor
 selection and annotations are not yet shown in the Atlas. The index currently describes authored residents and teaching topics;
 runtime NPC relocation/topic overrides and information learned from books or rumours require additional shared
@@ -190,3 +193,42 @@ outside Git. MM6 Castle Alamos and MM7 Harmondale full-load regressions also pas
 
 Native UI tours support `pause: true` while gameplay is active. This invokes the existing pause-menu entry point
 without depending on Windows foreground focus or injecting system keyboard input. Normal game input is unchanged.
+
+### Native guidebook checkpoint, 2026-10-17
+
+The Atlas header opens a native Guidebook with searchable Items, Spells, Classes, Alchemy, Companions and Progress
+sections. `WorldGuide` derives read-only entries directly from loaded tables; it does not contain a copied guide
+database. Class HP/progression reflects typed mod patches. Mastery links translate the class's mastery enum into
+the exact teacher-topic rank before searching the selected world. Normal mastery has no advanced trainer link.
+Race overrides and a cross-class chart remain future work.
+
+Discovery filters before search: encountered items, learned spells, current party classes, known recipe autonotes
+and recruited roster members. Guide Mode reads all definitions without recording discoveries. Shared merged
+definitions deliberately remain the same when browsing either world. Companions currently show starting roster
+definitions and biography, not their current position or recruitment quest conditions.
+
+Alchemy uses the runtime reagent, potion-mixing and recipe-note tables. It chooses one minimum-reagent path,
+orders intermediate steps, accumulates repeated raw ingredients and shows direct formula alternatives. Unreachable
+cycles, self recipes, failure/no-mix outcomes and excessive expansion cannot create an infinite plan. Discovery
+can show a learned direct formula even when the preceding reagent recipes are not known.
+
+Progress reads existing Arcomage first-win/totals and four Arena difficulty counters. Tavern rules and geography
+come from the same loaded house/map tables as actual play. Discovery hides unexplored taverns; a saved first
+victory is also evidence that the party visited that tavern. Counts explicitly distinguish the selected world's
+taverns from shared campaign totals. Tavern links select their actual containing region. No tracker state is
+written or invented by the Atlas.
+
+Six guidebook tests / 99 assertions passed, including canonical MM7/MM8 tavern rules, privacy, unchanged campaign
+knowledge, exact trainer-rank conversion, modded Knight HP and recursive alchemy counts. Windows Release builds and
+native tours checked the reference layouts, learned-spell/item filtering, Knight HP/level 6, recipes and ingredient
+quantities, roster biographies, Progress, tavern-to-map navigation and return to gameplay. Captures are outside Git
+under `atlas-guide-20261017`. The full feature matrix remains in [ATLAS_COVERAGE.md](ATLAS_COVERAGE.md); this checkpoint
+does not complete the interactive-guide integration or establish Android/controller validation.
+
+The optional-module checkpoint adds manifest-driven native UI activation and `save_required: false` for
+presentation-only mods. Gameplay patches and QBit ownership cannot opt out of save requirements. Seven Mod Loader
+tests / 133 assertions pass; Windows tours verified the Atlas menu entry with the module on and its absence with
+it off. A faithful new-game scenario saved with both `karol.test` and Atlas enabled, then a separate process with
+Atlas disabled loaded that save. Required-content metadata retained `karol.test@0.1.0` and excluded the optional
+Atlas module. Original campaigns/settings were not used as test outputs. Android packaging already copies the
+mod directory; its verifier now requires the Atlas manifest and MM8 catalog, but no new APK was built for this slice.

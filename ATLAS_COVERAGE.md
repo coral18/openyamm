@@ -19,18 +19,19 @@ tables, and do not bundle its HTML, JS, translated prose, generated illustration
 | Discovery fog and current party arrow | Implemented | Implemented | Wider dungeon/device checks |
 | Dungeon plans from engine geometry | Implemented | Implemented | Elevation selection, annotations and special connection views |
 | Buildings, resident NPCs, trainers | Implemented | Implemented | Runtime relocation and conditional-event coverage |
-| Trainer requirements and prices | Shared gameplay evaluator | Shared gameplay evaluator | Class/skill comparison with links to matching trainers |
+| Trainer requirements and prices | Shared gameplay evaluator | Shared gameplay evaluator | Race-specific class/skill comparison |
 | Walking and scheduled transport | Existing table index | Existing table index | Visual route links and neighboring-region navigation |
 | Quest giver/objective/return chains | Not integrated | Not integrated | Shared quest/location relationships and discovery gating |
 | Chests, monster groups, wells, obelisks | Not integrated | Not integrated | Geometry/event-backed point layers and details |
 | Teleports and special connections | Not integrated | Not integrated | Gate/discovery semantics and Barrows/Regna connection views |
-| Items, artifacts and equipment reference | Not integrated | Not integrated | Shared ItemTable view and item-source relationships |
-| Alchemy recipes and ingredients | Not integrated | Not integrated | Shared mixing/reagent graph, intermediate recipes |
-| Spellbook reference and guild links | Not integrated | Not integrated | Shared SpellTable view and guild availability |
-| Recruitable companions | Not applicable as an MM7 guide section | Not integrated | Roster details and recruitment locations/state |
-| Arcomage/Arena tracking | Not integrated | Not integrated | Existing party state, linked taverns and arena records |
+| Items, artifacts and equipment reference | Shared ItemTable view | Shared ItemTable view | Item-source relationships, icons and richer comparisons |
+| Alchemy recipes and ingredients | Native recursive recipe view | Native recursive recipe view | Broader canonical-content audit and ingredient-source links |
+| Spellbook reference and guild links | Shared SpellTable view | Shared SpellTable view | Guild availability and map links |
+| Classes and skill caps | Active class definitions and exact-rank trainer links | Same shared registry | Race overrides, promotion relationships and comparison chart |
+| Recruitable companions | Shared merged roster reference | Roster biography/stats and recruited-only Discovery | Recruitment locations/conditions and current recruitment state |
+| Arcomage/Arena tracking | Existing campaign counters and linked taverns | Existing campaign counters and linked taverns | Visual checklist polish and wider save-state audit |
 | Custom markers and notes | Existing Map Book only | Existing Map Book only | Native Atlas integration and namespaced persistence |
-| Optional Atlas mod | Still built-in | Still built-in | UI module registration and profile-controlled activation |
+| Optional Atlas mod | Profile-controlled native UI module | Same shared module | Launcher toggles and wider device checks |
 | Localization parity | Current engine language | Current engine language | Integrate engine localization; no copied guide translation bundle |
 
 Completion requires the missing native functions, data validation against the active game packages, meaningful

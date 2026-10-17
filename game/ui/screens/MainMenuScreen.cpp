@@ -275,7 +275,8 @@ void MainMenuScreen::drawHome()
             quit();
         }
     }
-    if (m_actions.atlas && button("extended-atlas", m_paused ? canvasRect(304.5333f, 425, 244.2667f, 28)
+    if (m_actions.atlas && m_actions.atlasAvailable && m_actions.atlasAvailable()
+        && button("extended-atlas", m_paused ? canvasRect(304.5333f, 425, 244.2667f, 28)
                                                              : canvasRect(587.7333f, 437, 182.4f, 28),
                                   "Interactive Atlas"))
     {

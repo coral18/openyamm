@@ -203,3 +203,34 @@ TEST_CASE("mod loader saves active identities even without mod items and rejects
     save.requiredContentPackages.clear(); // Legacy saves retain their existing compatibility.
     CHECK(validateRequiredContentPackages(save, items, houses, {{id, 1}}, error));
 }
+
+TEST_CASE("mod loader activates optional native UI modules only through the selected profile")
+{
+    const ModManifest atlas = manifest("openyamm.interactive-atlas",
+        "ui_modules: [openyamm.interactive-atlas]\nsave_required: false\n");
+    const ModManifest gameplay = manifest("karol.test", patch);
+    ModLoadPlan plan;
+    std::string error;
+    REQUIRE(resolveModPlan({atlas, gameplay}, {}, {}, plan, error));
+    CHECK(modUiModuleEnabled(plan, "openyamm.interactive-atlas"));
+    CHECK_FALSE(atlas.saveRequired);
+    CHECK(gameplay.saveRequired);
+    REQUIRE(resolveModPlan({atlas, gameplay}, "enabled: [karol.test]", {}, plan, error));
+    CHECK_FALSE(modUiModuleEnabled(plan, "openyamm.interactive-atlas"));
+    REQUIRE(resolveModPlan({atlas, gameplay}, "enabled: []", {}, plan, error));
+    CHECK_FALSE(modUiModuleEnabled(plan, "openyamm.interactive-atlas"));
+    ModManifest duplicate = atlas;
+    duplicate.id = "other.atlas";
+    CHECK_FALSE(resolveModPlan({atlas, duplicate}, {}, {}, plan, error));
+    CHECK(error.find("Duplicate native UI module") != std::string::npos);
+    REQUIRE(resolveModPlan({atlas, duplicate}, "enabled: [other.atlas]", {}, plan, error));
+    CHECK(modUiModuleEnabled(plan, "openyamm.interactive-atlas"));
+    for (const std::string &invalid : {"save_required: false\n" + patch,
+        std::string("save_required: false\nqbits: {begin: 10000, end: 10001}\n"),
+        std::string("save_required: maybe\n"), std::string("ui_modules: [unknown.module]\n")})
+    {
+        CHECK_FALSE(parseModManifest("schema_version: 1\nid: test.mod\nversion: 0.1.0\n" + invalid,
+            "test/mod.yaml", error));
+        CHECK_FALSE(error.empty());
+    }
+}

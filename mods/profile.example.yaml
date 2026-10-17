@@ -2,3 +2,4 @@
 # Use enabled: [] for an unmodified gameplay profile.
 enabled:
   - karol.test
+  - openyamm.interactive-atlas

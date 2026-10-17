@@ -3224,7 +3224,8 @@ bool GameDataLoader::loadClassMultiplierTable(const Engine::AssetFileSystem &ass
     }
     for (const ModManifest &mod : m_modPlan.mods)
     {
-        m_loadedContentPackageSchemas[modSavePackageId(mod)] = 1;
+        if (mod.saveRequired)
+            m_loadedContentPackageSchemas[modSavePackageId(mod)] = 1;
     }
     for (const ModPatchProvenance &change : m_modPlan.provenance)
     {

@@ -27,6 +27,7 @@ copy [profile.example.yaml](mods/profile.example.yaml) to `mods/profile.yaml`:
 ```yaml
 enabled:
   - karol.test
+  - openyamm.interactive-atlas
 ```
 
 To disable all installed mods:
@@ -72,6 +73,33 @@ containing a dot; versions are numeric `MAJOR.MINOR.PATCH`, with no leading zero
 Dependency versions are compared numerically. Unknown/duplicate fields, malformed values, duplicate installed IDs,
 missing dependencies, active conflicts and cycles fail loading with a specific log message. Installed manifests
 are validated even if a profile disables them; dependency/conflict/range resolution applies only to active mods.
+
+### Optional native UI modules
+
+The bundled `openyamm.interactive-atlas` mod activates the shared native Atlas using:
+
+```yaml
+schema_version: 1
+id: openyamm.interactive-atlas
+version: 0.2.0
+save_required: false
+ui_modules:
+  - openyamm.interactive-atlas
+```
+
+Remove its ID from an explicit profile to hide the Atlas entry in both main and pause menus. Restart to apply the
+profile. Core retains shared discovery tracking and world APIs; disabling the UI does not erase discoveries.
+An explicit profile from an older build must add the Atlas ID to enable it. With no profile, all installed mods
+are enabled as before. The development wrapper installs its manifest without overwriting existing profiles.
+
+`ui_modules` selects native modules supported by this engine version; v1 accepts only
+`openyamm.interactive-atlas`. Unknown or duplicate active module providers are errors. This is native UI
+activation through a manifest, not arbitrary UI scripting or a DLL interface.
+
+`save_required` defaults to `true`. A `false` module may not declare gameplay patches or QBit ownership. Its
+identity is excluded from required-content metadata, so a campaign saved with the Atlas enabled can load with
+it disabled. Gameplay mods remain required, including `karol.test`. Existing required-content checks remain
+unchanged. Future stateful/scripted mods need an explicit compatibility contract before being made optional.
 
 QBit ranges are inclusive, start at 10000 or higher, and must fit signed 32-bit engine IDs. Overlap between active
 mods or with any mounted world's declared range is rejected. Declaring a range reserves it; this version does not

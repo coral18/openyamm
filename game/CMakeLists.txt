@@ -25,6 +25,7 @@ add_library(openyamm_game STATIC
     data/GameDataRepository.cpp
     world/WorldDatabase.cpp
     world/WorldAtlasPresentation.cpp
+    world/WorldGuide.cpp
     world/WorldFloorPlan.cpp
     world/WorldMapExploration.cpp
     world/WorldMapLocations.cpp

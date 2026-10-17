@@ -43,6 +43,8 @@ struct ModManifest
     std::vector<std::string> loadAfter;
     std::vector<ContentIdRangeDefinition> idRanges;
     std::vector<ModClassPatch> classPatches;
+    std::vector<std::string> uiModules;
+    bool saveRequired = true;
 };
 
 struct ModPatchProvenance
@@ -69,4 +71,5 @@ bool loadModPlan(const Engine::AssetFileSystem &assets, const std::vector<WorldM
 // Transactional: a bad patch leaves both the table and plan's provenance unchanged.
 bool applyModClassPatches(ModLoadPlan &plan, ClassMultiplierTable &table, std::string &error);
 std::string modSavePackageId(const ModManifest &mod);
+bool modUiModuleEnabled(const ModLoadPlan &plan, const std::string &moduleId);
 }

@@ -44,6 +44,7 @@ add_executable(openyamm_unit_tests
     LegacyLuaExportTests.cpp
     MapStatsRegressionTests.cpp
     WorldDatabaseTests.cpp
+    WorldGuideTests.cpp
     MapDeltaDataTests.cpp
     MM7MechanicsRuntimeTests.cpp
     MercenaryRecruitmentRuntimeTests.cpp
@@ -232,6 +233,7 @@ add_executable(openyamm_unit_tests
     ../game/tables/MapStats.cpp
     ../game/world/WorldDatabase.cpp
     ../game/world/WorldAtlasPresentation.cpp
+    ../game/world/WorldGuide.cpp
     ../game/world/WorldFloorPlan.cpp
     ../game/world/WorldMapExploration.cpp
     ../game/world/WorldMapLocations.cpp

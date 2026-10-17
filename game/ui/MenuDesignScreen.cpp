@@ -267,7 +267,7 @@ void MenuDesignScreen::drawDesign()
 }
 
 void MenuDesignScreen::textInRect(const Rect &rect, const std::string &text, const std::string &font, float logicalSize,
-                                  uint32_t color, bool centered)
+                                 uint32_t color, bool centered, bool topAligned, float *pContentHeight)
 {
     const int faceHeight = std::max(1, fontHeight(font));
     float scale = designScale() * logicalSize / faceHeight;
@@ -317,7 +317,9 @@ void MenuDesignScreen::textInRect(const Rect &rect, const std::string &text, con
     }
     const float glyphHeight = logicalSize * designScale();
     const float blockHeight = glyphHeight + (lines.empty() ? 0 : lines.size() - 1) * lineHeight;
-    float y = rect.y + std::max(0.0f, (rect.height - blockHeight) / 2);
+    if (pContentHeight != nullptr)
+        *pContentHeight = blockHeight;
+    float y = rect.y + (topAligned ? 0 : std::max(0.0f, (rect.height - blockHeight) / 2));
     for (const std::string &line : lines)
     {
         if (y + glyphHeight > rect.y + rect.height + 3 * designScale())

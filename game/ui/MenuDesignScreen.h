@@ -27,7 +27,8 @@ class MenuDesignScreen : public MenuScreenBase
     float designScale() const;
     void label(const std::string &id, const std::string &text, uint32_t color = 0, float offsetY = 0);
     void textInRect(const Rect &rect, const std::string &text, const std::string &font = "menu_arrus",
-                    float logicalSize = 12, uint32_t color = 0xffc6dfeau, bool centered = false);
+                    float logicalSize = 12, uint32_t color = 0xffc6dfeau, bool centered = false,
+                    bool topAligned = false, float *pContentHeight = nullptr);
     bool action(const std::string &id, bool enabled = true, const std::string &text = {});
     bool button(const std::string &id, const Rect &rect, const std::string &text, const std::string &skin = "button",
                 bool enabled = true, bool selected = false, const Rect *pVisualRect = nullptr);

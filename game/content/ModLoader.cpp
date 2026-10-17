@@ -117,7 +117,7 @@ std::optional<ModManifest> parseModManifest(const std::string &text, const std::
     {
         const YAML::Node root = YAML::Load(text);
         fields(root, {"schema_version", "id", "version", "name", "dependencies", "conflicts", "load_after",
-                      "qbits", "patches"});
+                      "qbits", "patches", "ui_modules", "save_required"});
         require(root["schema_version"] && root["schema_version"].as<int>() == 1, "Unsupported mod schema_version");
         ModManifest mod;
         mod.source = source;
@@ -127,6 +127,15 @@ std::optional<ModManifest> parseModManifest(const std::string &text, const std::
         mod.name = root["name"] ? scalar(root["name"]) : mod.id;
         mod.conflicts = ids(root["conflicts"]);
         mod.loadAfter = ids(root["load_after"]);
+        mod.uiModules = ids(root["ui_modules"]);
+        for (const std::string &moduleId : mod.uiModules)
+            require(moduleId == "openyamm.interactive-atlas", "Unknown native UI module: " + moduleId);
+        if (root["save_required"])
+        {
+            const std::string value = scalar(root["save_required"]);
+            require(value == "true" || value == "false", "save_required must be true or false");
+            mod.saveRequired = value == "true";
+        }
         const YAML::Node dependencies = root["dependencies"];
         if (dependencies)
         {
@@ -197,6 +206,8 @@ std::optional<ModManifest> parseModManifest(const std::string &text, const std::
                 }
             }
         }
+        require(mod.saveRequired || (mod.classPatches.empty() && mod.idRanges.empty()),
+            "A mod with gameplay patches or QBits must be required by saves");
         return mod;
     }
     catch (const std::exception &exception)
@@ -234,9 +245,17 @@ bool resolveModPlan(const std::vector<ModManifest> &installed, const std::option
             }
         }
         const std::set<std::string> active(selected.begin(), selected.end());
+        std::map<std::string, std::string> uiModuleOwners;
         for (const std::string &id : selected)
         {
             require(available.contains(id), "Profile enables missing mod: " + id);
+            for (const std::string &moduleId : available.at(id)->uiModules)
+            {
+                const auto previous = uiModuleOwners.find(moduleId);
+                require(previous == uiModuleOwners.end(), "Duplicate native UI module: " + moduleId
+                    + " from " + (previous == uiModuleOwners.end() ? "" : previous->second) + " and " + id);
+                uiModuleOwners.emplace(moduleId, id);
+            }
         }
         std::map<std::string, std::set<std::string>> prerequisites;
         std::vector<std::pair<std::string, ContentIdRangeDefinition>> ranges;
@@ -397,5 +416,11 @@ bool applyModClassPatches(ModLoadPlan &plan, ClassMultiplierTable &table, std::s
 std::string modSavePackageId(const ModManifest &mod)
 {
     return "mods/" + mod.id + "@" + mod.version.text();
+}
+
+bool modUiModuleEnabled(const ModLoadPlan &plan, const std::string &moduleId)
+{
+    return std::any_of(plan.mods.begin(), plan.mods.end(), [&moduleId](const ModManifest &mod)
+    { return std::find(mod.uiModules.begin(), mod.uiModules.end(), moduleId) != mod.uiModules.end(); });
 }
 }

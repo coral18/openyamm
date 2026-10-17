@@ -98,7 +98,8 @@ def verify(apk_path, aapt, baseline_apk=None, baseline_ref="1.0"):
             raise ValueError(f"Expected only arm64-v8a, found {abis}")
         required = {"lib/arm64-v8a/libmain.so", "lib/arm64-v8a/libSDL3.so",
                     "assets/engine/data_tables/class_multipliers.txt", "assets/engine/events/Global.lua",
-                    "assets/worlds/mm7/maps/7out01.odm", "assets/settings.ini", "assets/mods/karol-test/mod.yaml"}
+                    "assets/worlds/mm7/maps/7out01.odm", "assets/settings.ini", "assets/mods/karol-test/mod.yaml",
+                    "assets/mods/interactive-atlas/mod.yaml", "assets/engine/world/atlas/mm8.yml"}
         if not required <= names:
             raise ValueError(f"Missing required APK entries: {sorted(required - names)}")
         profile = json.loads(apk.read("assets/engine/sprite_texture_profile.json"))
@@ -114,9 +115,11 @@ def verify(apk_path, aapt, baseline_apk=None, baseline_ref="1.0"):
         knight_rows = [row.split("\t") for row in rows if row.startswith("Knight\t")]
         if len(knight_rows) != 1 or knight_rows[0][1:] != ["35", "5", "0", "0", "None"]:
             raise ValueError("Base Knight must have HP 35 and HP per level 5; the +1 belongs to karol.test")
-        expected_mod = Path(__file__).resolve().parents[1] / "mods/karol-test/mod.yaml"
-        if apk.read("assets/mods/karol-test/mod.yaml") != expected_mod.read_bytes():
-            raise ValueError("Packaged karol.test must match its declared source manifest")
+        for directory in ("karol-test", "interactive-atlas"):
+            path = f"mods/{directory}/mod.yaml"
+            expected_mod = Path(__file__).resolve().parents[1] / path
+            if apk.read("assets/" + path) != expected_mod.read_bytes():
+                raise ValueError(f"Packaged {directory} must match its declared source manifest")
         report.update({"abis": abis, "shader_count": len(shaders),
                        "knight": {"base_health": 35, "base_health_per_level": 5},
                        "test_mod": {"id": "karol.test", "version": "0.1.0"}})

@@ -64,6 +64,7 @@ struct WorldKnowledge
     std::unordered_map<std::string, WorldFloorPlanKnowledge> floorPlans;
     std::unordered_map<std::string, WorldRegionMapKnowledge> regionMaps;
     std::optional<WorldPartyMapPosition> partyPosition;
+    std::unordered_set<uint32_t> autonoteIds;
     bool knows(const WorldRecord &record) const;
 };
 
