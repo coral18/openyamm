@@ -24,7 +24,7 @@ SDL_Window *tourWindow()
 } // namespace
 
 void MenuInputTour::update(const std::string &path, GameplayInputFrame &input, IScreen *pScreen,
-                           ScreenshotCaptureService &captures)
+                           ScreenshotCaptureService &captures, const std::function<void()> &requestPause)
 {
     if (path.empty() ||
         (m_loaded && m_index == m_steps.size() && !m_release && !m_exit && m_releaseKey == SDL_SCANCODE_UNKNOWN))
@@ -79,6 +79,11 @@ void MenuInputTour::update(const std::string &path, GameplayInputFrame &input, I
             else if (kind == "wait" || kind == "wheel")
             {
                 step.seconds = value.as<float>();
+            }
+            else if (kind == "pause")
+            {
+                if (!value.as<bool>())
+                    throw std::runtime_error("Menu tour pause must be true");
             }
             else if (kind == "key" || kind == "key_down" || kind == "key_up" || kind == "text" || kind == "capture" ||
                      kind == "expect" || kind == "action" || kind == "action_down" || kind == "action_up")
@@ -137,7 +142,13 @@ void MenuInputTour::update(const std::string &path, GameplayInputFrame &input, I
     const Step &step = m_steps[m_index++];
     std::cout << "Menu tour: " << m_index << ' ' << step.kind << ' ' << step.text << '\n';
     m_nextTicks = SDL_GetTicks() + 350;
-    if (step.kind == "wait")
+    if (step.kind == "pause")
+    {
+        if (pScreen != nullptr || !requestPause)
+            throw std::runtime_error("Menu tour pause requires active gameplay");
+        requestPause();
+    }
+    else if (step.kind == "wait")
     {
         m_nextTicks = SDL_GetTicks() + uint64_t(std::max(0.0f, step.seconds) * 1000);
     }

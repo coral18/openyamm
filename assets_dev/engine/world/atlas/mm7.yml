@@ -2,6 +2,8 @@
 # on the game's existing Antagrich artwork, not points of interest or gameplay coordinates.
 schema: 1
 world: mm7
+name: Antagarich
+overview_texture: antagrich.png
 maps:
   - {file: 7out01.odm, area: 1, position: [0.16, 0.22]}
   - {file: 7out02.odm, area: 2, position: [0.67, 0.62]}

@@ -231,6 +231,7 @@ add_executable(openyamm_unit_tests
     ../game/mm9/Mm9TeacherSchedule.cpp
     ../game/tables/MapStats.cpp
     ../game/world/WorldDatabase.cpp
+    ../game/world/WorldAtlasPresentation.cpp
     ../game/world/WorldFloorPlan.cpp
     ../game/world/WorldMapExploration.cpp
     ../game/world/WorldMapLocations.cpp

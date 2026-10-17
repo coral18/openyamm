@@ -1,13 +1,24 @@
-# Native Interactive Atlas, first vertical slice
+# Native Interactive Atlas: MM7 and MM8
 
 Reference: [hulululuh's MM7 interactive world-map guide](https://www.reddit.com/r/MightAndMagic/comments/1ww8pq0/i_made_an_interactive_world_map_guide_for_might/).
 This is an original native implementation using OpenYAMM's renderer, menus and game data. The reference HTML,
 JavaScript, SVG floor plans, translated descriptions and embedded artwork are not bundled. The downloaded guide
 did not include a declared reuse license; a future import of its authored material requires an appropriate license.
 
+The later [MM8 community guide](https://www.reddit.com/r/MightAndMagic/comments/1x7x7ok/simon_found_a_map_of_jadame_i_made_it_clickable/)
+is also a behavioral reference, not a bundled HTML application. Its downloaded archive contains one HTML file
+without a declared reuse license. See [the explicit coverage/completion checklist](ATLAS_COVERAGE.md): neither
+community guide's complete content has been integrated yet.
+
 ## Working slice
 
 - Interactive Antagarich overview and all 13 outdoor region images from the existing game packages.
+- Separate MM7/MM8 catalog buttons in the native Atlas; opening from gameplay selects its current world.
+  Switching the viewed catalog does not travel, change the party, activate another world package or award discoveries.
+- Jadame region maps and an original schematic continent overview assembled from existing regional artwork.
+  Discovery shows only known locations without full-map thumbnails; Guide shows the reference maps. The elemental
+  planes, their dungeon maps and Plane Between Planes are searchable. The developer Tutorial map remains searchable
+  in Guide but is not positioned on the playable-world overview.
 - Region/dungeon selection, resident NPCs, buildings, mastery trainers, walking routes and transport schedules.
 - Off-map dungeon plans projected from the engine's actual geometry. Discovery respects saved outline bits,
   seen faces and runtime invisible-face overrides; Guide renders the authored visible outlines.
@@ -42,7 +53,8 @@ did not include a declared reuse license; a future import of its authored materi
 Map IDs reuse the canonical IDs already supplied by the engine. Temporary legacy house/NPC IDs use the existing
 merged numeric IDs; richer package IDs can replace these as the upstream registries evolve.
 
-`assets_dev/engine/world/atlas/mm7.yml` supplies presentation only: region anchors and area groupings. Names,
+`assets_dev/engine/world/atlas/mm7.yml` and `mm8.yml` supply presentation only: world names, overview style, region
+anchors and dungeon groupings. Names,
 trainer topics, shop metadata, destinations and schedules stay in their authoritative tables. Anchors on the
 illustrated continent artwork are approximate; they are not gameplay coordinates or precise points of interest.
 Dungeon grouping uses the existing `areaId` plus the presentation's area definitions. Locations without declared
@@ -162,3 +174,19 @@ The compact-marker refinement was compiled and visually checked in native Window
 region zoom, continent overview, Discovery/Guide and return to gameplay. Clicking outside a badge's visible border
 but inside its retained hit area selected the correct group. Eight engine-owned captures remain in the isolated
 `atlas-small-markers-20261007` directory outside Git.
+
+The 2026-10-17 MM8 checkpoint adds `WorldAtlasPresentation` and package-qualified region images so Jadame can be
+viewed while Antagarich is the active gameplay world, and vice versa. A source-data audit corrected 24 MM6 dungeon
+records missing `world_id`; 23 have packaged MM6 geometry and one is a legacy pending entry. These records no longer
+pollute the MM8 index. Other table columns were preserved. The Windows overlay now includes the canonical map table.
+
+Thirteen focused tests / 1018 assertions passed, including the actual MM8 catalog, 14 outdoor records (one Tutorial),
+47 dungeon records, canonical trainer links, parent links and isolation from MM7 discoveries. Native Windows checks
+loaded a fresh saved MM8 campaign and captured Discovery fog/arrow, Guide markers and trainer requirements,
+Ravenshore, the Chapel of Eep floor plan, both catalog switches and resumed gameplay. A second native tour loaded
+a copy of the user's earlier Avlee save, checked secondary-world art, zero MM8 discoveries and the three distinct
+MM7 regions after returning from Guide. Captures remain under `atlas-mm8-20261017` and `atlas-mm7-mm8-cross-20261017`
+outside Git. MM6 Castle Alamos and MM7 Harmondale full-load regressions also passed.
+
+Native UI tours support `pause: true` while gameplay is active. This invokes the existing pause-menu entry point
+without depending on Windows foreground focus or injecting system keyboard input. Normal game input is unchanged.

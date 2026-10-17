@@ -1,5 +1,6 @@
 #include "doctest/doctest.h"
 #include "game/world/WorldDatabase.h"
+#include "game/world/WorldAtlasPresentation.h"
 #include "engine/TextTable.h"
 #include "game/FaceEnums.h"
 #include "game/ui/GameplayMinimapTransform.h"
@@ -115,6 +116,47 @@ TEST_CASE("world database indexes canonical MM7 maps residents and trainers")
         CHECK(trainer->map->worldId == "mm7");
         CHECK(trainer->house == houses.get(trainer->npc->houseId));
     }
+}
+
+TEST_CASE("world database MM8 catalog preserves canonical records and isolates party discoveries")
+{
+    std::ifstream file(std::string(OPENYAMM_SOURCE_DIR) + "/assets_dev/engine/world/atlas/mm8.yml");
+    REQUIRE(file.is_open());
+    const std::string text{std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>()};
+    const auto presentation = parseWorldAtlasPresentation(text, "mm8");
+    CHECK(presentation.name == "Jadame");
+    CHECK(presentation.overviewTexture.empty());
+    MapStats maps;
+    HouseTable houses;
+    NpcDialogTable npcs;
+    MergedTeacherTopicTable teachers;
+    REQUIRE(maps.loadFromRows(canonicalRows("map_stats.txt")));
+    REQUIRE(houses.loadFromRows(canonicalRows("house_data.txt")));
+    REQUIRE(npcs.loadNpcRows(canonicalRows("npc.txt")));
+    REQUIRE(teachers.loadFromRows(canonicalRows("teacher_topics.txt")));
+    WorldDatabase mm8(maps, houses, npcs, teachers, "mm8", presentation.maps);
+    CHECK(mm8.query({}, true, "", WorldRecordKind::Region).size() == 14);
+    CHECK(mm8.query({}, true, "", WorldRecordKind::Dungeon).size() == 47);
+    CHECK(mm8.query({}, false).empty());
+    WorldKnowledge knowledge;
+    knowledge.visitedMaps = {"7out02.odm"};
+    CHECK(mm8.query(knowledge, false).empty());
+    knowledge.visitedMaps.insert("out01.odm");
+    const auto discovered = mm8.query(knowledge, false, "", WorldRecordKind::Region);
+    REQUIRE(discovered.size() == 1);
+    CHECK(discovered[0]->map == maps.findByFileName("out01.odm"));
+    for (const auto &record : mm8.records())
+        CHECK(record.map->worldId == "mm8");
+    const auto trainers = mm8.query({}, true, "Sword", WorldRecordKind::Trainer);
+    REQUIRE(!trainers.empty());
+    CHECK(trainers[0]->teacher == teachers.get(trainers[0]->teacher->topicId));
+    CHECK(mm8.find(WorldDatabase::mapId(*maps.findByFileName("d05.blv")))->parentId
+        == WorldDatabase::mapId(*maps.findByFileName("out01.odm")));
+    CHECK(mm8.find(WorldDatabase::mapId(*maps.findByFileName("d27.blv")))->parentId
+        == WorldDatabase::mapId(*maps.findByFileName("elema.odm")));
+    CHECK_THROWS(parseWorldAtlasPresentation(text, "mm7"));
+    CHECK_THROWS(parseWorldAtlasPresentation("schema: 1\nworld: mm8\nname: Jadame\nmaps:"
+        "\n  - {file: out01.odm, position: [.nan, 0]}\n", "mm8"));
 }
 
 TEST_CASE("world database separates MM7 discoveries from distinct walking routes")

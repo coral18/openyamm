@@ -180,30 +180,30 @@
 177	Supreme Temple of Baa	6t6.blv	0	0	0	672	0	0	4	4	6	10	90	0	10	Cleric	Cleric	4	 3-5	Demon	Demon	1	 2-3	ElemFire	ElemFire	3	 2-4	50	0	Chris	0	0	-
 178	Superior Temple of Baa	6t7.blv	0	0	0	672	0	0	4	4	6	10	70	20	10	Cleric	Cleric	5	 3-6	Druidess	Druidess	4	 3-6	Sorcerer	Sorcerer	3	 3-6	50	0	Tony	0	0	-
 179	Temple of the Snake	6t8.blv	0	0	0	672	0	0	5	5	6	10	100	0	0	BMedusa	BMedusa	5	 2-5	PeasantM1	PeasantM1	3	 1-1	DragonCover	DragonCover	1	 1-1	49	0	Chris	0	0	-
-180	Castle Alamos	cd1.blv	0	0	0	672	0	0	5	5	6	10	10	80	10	Sorcerer	Sorcerer	4	 2-3	Barbarian	Barbarian	5	 3-5	ElemAir	ElemAir	4	 2-3	49	0	Bruce	0	0	-
-181	Castle Darkmoor	cd2.blv	0	0	0	672	0	0	5	5	6	10	10	10	80	BLich	BLich	4	 2-4	BBeholder	BBeholder	3	 2-4	Ogre	Ogre	5	 2-4	49	0	Tony	0	0	-
-182	Castle Kriegspire	cd3.blv	0	0	0	672	0	0	6	6	6	10	80	20	0	BMinotaur	BMinotaur	4	 2-4	Cockatrice	Cockatrice	5	 3-4	BDragonFly	BDragonFly	4	 2-3	49	0	Bruce	0	0	-
-183	Free Haven Sewer	sewer.blv	0	0	0	672	0	0	4	2	6	10	30	30	40	BRat	BRat	5	 3-5	Cleric	Cleric	3	 2-4	BThief	BThief	5	 2-4	44	0	???	0	0	-
-184	Tomb of VARN	pyramid.blv	0	0	0	672	0	0	8	8	6	10	100	0	0	Jackalman	Jackalman	4	 3-4	BGenie	BGenie	4	 2-3	BRobot	BRobot	1	 1-2	46	0	Bruce	0	0	-
-185	Oracle of Enroth	oracle.blv	0	0	0	672	0	0	0	0	6	10	0	0	0	PeasantM1	PeasantM1	1	 1-4	0	0	1	 1-4	0	0	1	 1-4	46	0	Tony	0	0	-
-186	Control Center	sci-fi.blv	0	0	0	672	0	0	5	8	6	10	100	0	0	BRobot	BRobot	2	 1-3	0	0	1	 1-4	0	0	1	 1-4	46	0	Tony	0	0	-
-187	The Hive	hive.blv	0	0	0	7	0	0	10	10	6	10	50	50	0	Demon	Demon	5	 2-4	DemonFly	DemonFly	5	 2-4	DemonQueen	DemonQueen	1	 1-1	40	0	Bruce	0	0	-
-188	The Arena	zarena.blv	0	0	0	1	0	0	1	1	6	0	0	0	0	0	0	1	 1-1	0	0	1	 1-4	0	0	1	 1-4	45	0		0	0	-
-189	Dragon's Lair	zddb01.blv	0	0	0	672	0	0	1	1	6	10	0	0	0	DragonCover	DragonCover	2	 1-2	0	0	1	 1-4	0	0	1	 1-4	42	0		0	0	-
-190	pending	zddb02.blv	0	0	0	672	0	0	1	1	6	0	0	0	0	0	0	1	 1-1	0	0	1	 1-4	0	0	1	 1-4	42	0		0	0	-
-191	pending	zddb03.blv	0	0	0	672	0	0	1	1	6	0	0	0	0	0	0	1	 1-1	0	0	1	 1-4	0	0	1	 1-4	42	0		0	0	-
-192	pending	zddb04.blv	0	0	0	672	0	0	1	1	6	0	0	0	0	0	0	1	 1-1	0	0	1	 1-4	0	0	1	 1-4	42	0		0	0	-
-193	pending	zddb05.blv	0	0	0	672	0	0	1	1	6	0	0	0	0	0	0	1	 1-1	0	0	1	 1-4	0	0	1	 1-4	42	0		0	0	-
-194	pending	zddb06.blv	0	0	0	672	0	0	1	1	6	0	0	0	0	0	0	1	 1-1	0	0	1	 1-4	0	0	1	 1-4	42	0		0	0	-
-195	pending	zddb07.blv	0	0	0	672	0	0	1	1	6	0	0	0	0	0	0	1	 1-1	0	0	1	 1-4	0	0	1	 1-4	42	0		0	0	-
-196	pending	zddb08.blv	0	0	0	672	0	0	1	1	6	0	0	0	0	0	0	1	 1-1	0	0	1	 1-4	0	0	1	 1-4	42	0		0	0	-
-197	pending	zddb09.blv	0	0	0	672	0	0	1	1	6	0	0	0	0	0	0	1	 1-1	0	0	1	 1-4	0	0	1	 1-4	42	0		0	0	-
-198	pending	zddb10.blv	0	0	0	672	0	0	1	1	6	0	0	0	0	0	0	1	 1-1	0	0	1	 1-4	0	0	1	 1-4	42	0		0	0	-
-199	pending	zdtl01.blv	0	0	0	672	0	0	1	1	6	0	0	0	0	0	0	1	 1-1	0	0	1	 1-4	0	0	1	 1-4	42	0		0	0	-
-200	pending	zdtl02.blv	0	0	0	672	0	0	1	1	6	0	0	0	0	0	0	1	 1-1	0	0	1	 1-4	0	0	1	 1-4	42	0		0	0	-
-201	pending	zdwj01.blv	0	0	0	672	0	0	1	1	6	0	0	0	0	0	0	1	 1-1	0	0	1	 1-4	0	0	1	 1-4	42	0		0	0	-
-202	Devil Outpost	zdwj02.blv	0	0	0	672	0	0	1	1	6	10	0	0	0	Demon	Demon	2	 2-3	0	0	1	 1-4	0	0	1	 1-4	42	0		0	0	-
-203	New World Computing	znwc.blv	0	0	0	7	0	0	1	1	6	0	0	0	0	0	0	1	 1-1	0	0	1	 1-4	0	0	1	 1-4	37	0		0	0	-
+180	Castle Alamos	cd1.blv	0	0	0	672	0	0	5	5	6	10	10	80	10	Sorcerer	Sorcerer	4	 2-3	Barbarian	Barbarian	5	 3-5	ElemAir	ElemAir	4	 2-3	49	0	Bruce	0	0	-	mm6
+181	Castle Darkmoor	cd2.blv	0	0	0	672	0	0	5	5	6	10	10	10	80	BLich	BLich	4	 2-4	BBeholder	BBeholder	3	 2-4	Ogre	Ogre	5	 2-4	49	0	Tony	0	0	-	mm6
+182	Castle Kriegspire	cd3.blv	0	0	0	672	0	0	6	6	6	10	80	20	0	BMinotaur	BMinotaur	4	 2-4	Cockatrice	Cockatrice	5	 3-4	BDragonFly	BDragonFly	4	 2-3	49	0	Bruce	0	0	-	mm6
+183	Free Haven Sewer	sewer.blv	0	0	0	672	0	0	4	2	6	10	30	30	40	BRat	BRat	5	 3-5	Cleric	Cleric	3	 2-4	BThief	BThief	5	 2-4	44	0	???	0	0	-	mm6
+184	Tomb of VARN	pyramid.blv	0	0	0	672	0	0	8	8	6	10	100	0	0	Jackalman	Jackalman	4	 3-4	BGenie	BGenie	4	 2-3	BRobot	BRobot	1	 1-2	46	0	Bruce	0	0	-	mm6
+185	Oracle of Enroth	oracle.blv	0	0	0	672	0	0	0	0	6	10	0	0	0	PeasantM1	PeasantM1	1	 1-4	0	0	1	 1-4	0	0	1	 1-4	46	0	Tony	0	0	-	mm6
+186	Control Center	sci-fi.blv	0	0	0	672	0	0	5	8	6	10	100	0	0	BRobot	BRobot	2	 1-3	0	0	1	 1-4	0	0	1	 1-4	46	0	Tony	0	0	-	mm6
+187	The Hive	hive.blv	0	0	0	7	0	0	10	10	6	10	50	50	0	Demon	Demon	5	 2-4	DemonFly	DemonFly	5	 2-4	DemonQueen	DemonQueen	1	 1-1	40	0	Bruce	0	0	-	mm6
+188	The Arena	zarena.blv	0	0	0	1	0	0	1	1	6	0	0	0	0	0	0	1	 1-1	0	0	1	 1-4	0	0	1	 1-4	45	0		0	0	-	mm6
+189	Dragon's Lair	zddb01.blv	0	0	0	672	0	0	1	1	6	10	0	0	0	DragonCover	DragonCover	2	 1-2	0	0	1	 1-4	0	0	1	 1-4	42	0		0	0	-	mm6
+190	pending	zddb02.blv	0	0	0	672	0	0	1	1	6	0	0	0	0	0	0	1	 1-1	0	0	1	 1-4	0	0	1	 1-4	42	0		0	0	-	mm6
+191	pending	zddb03.blv	0	0	0	672	0	0	1	1	6	0	0	0	0	0	0	1	 1-1	0	0	1	 1-4	0	0	1	 1-4	42	0		0	0	-	mm6
+192	pending	zddb04.blv	0	0	0	672	0	0	1	1	6	0	0	0	0	0	0	1	 1-1	0	0	1	 1-4	0	0	1	 1-4	42	0		0	0	-	mm6
+193	pending	zddb05.blv	0	0	0	672	0	0	1	1	6	0	0	0	0	0	0	1	 1-1	0	0	1	 1-4	0	0	1	 1-4	42	0		0	0	-	mm6
+194	pending	zddb06.blv	0	0	0	672	0	0	1	1	6	0	0	0	0	0	0	1	 1-1	0	0	1	 1-4	0	0	1	 1-4	42	0		0	0	-	mm6
+195	pending	zddb07.blv	0	0	0	672	0	0	1	1	6	0	0	0	0	0	0	1	 1-1	0	0	1	 1-4	0	0	1	 1-4	42	0		0	0	-	mm6
+196	pending	zddb08.blv	0	0	0	672	0	0	1	1	6	0	0	0	0	0	0	1	 1-1	0	0	1	 1-4	0	0	1	 1-4	42	0		0	0	-	mm6
+197	pending	zddb09.blv	0	0	0	672	0	0	1	1	6	0	0	0	0	0	0	1	 1-1	0	0	1	 1-4	0	0	1	 1-4	42	0		0	0	-	mm6
+198	pending	zddb10.blv	0	0	0	672	0	0	1	1	6	0	0	0	0	0	0	1	 1-1	0	0	1	 1-4	0	0	1	 1-4	42	0		0	0	-	mm6
+199	pending	zdtl01.blv	0	0	0	672	0	0	1	1	6	0	0	0	0	0	0	1	 1-1	0	0	1	 1-4	0	0	1	 1-4	42	0		0	0	-	mm6
+200	pending	zdtl02.blv	0	0	0	672	0	0	1	1	6	0	0	0	0	0	0	1	 1-1	0	0	1	 1-4	0	0	1	 1-4	42	0		0	0	-	mm6
+201	pending	zdwj01.blv	0	0	0	672	0	0	1	1	6	0	0	0	0	0	0	1	 1-1	0	0	1	 1-4	0	0	1	 1-4	42	0		0	0	-	mm6
+202	Devil Outpost	zdwj02.blv	0	0	0	672	0	0	1	1	6	10	0	0	0	Demon	Demon	2	 2-3	0	0	1	 1-4	0	0	1	 1-4	42	0		0	0	-	mm6
+203	New World Computing	znwc.blv	0	0	0	7	0	0	1	1	6	0	0	0	0	0	0	1	 1-1	0	0	1	 1-4	0	0	1	 1-4	37	0		0	0	-	mm6
 204	The Breach	Breach.odm	0	0	0	-1	0	0	1	7	6	0	100	0	0	Will ' O Wisp	Will ' O Wisp	1	 1-1	0	0	1	 1-4	0	0	1	 1-4	37	0		0	0	-
 205	The Breach	BrAlvar.odm	0	0	2	-1	0	0	2	7	6	80	10	10	80	Fire Elemental	Fire Elemental	5	 1-3	ATroll	ATroll	5	 1-3	Cactus	Cactus	1	 1-3	3	PSYCHOTIC		0	0	-
 206	Basement of the Breach	BrBase.blv	0	0	0	1	0	0	0	1	1	50	100	0	0	Cactus	Cactus	1	 1-3	0	0	1	 1-4	0	0	1	 1-4	42	0		0	0	-

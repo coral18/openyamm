@@ -1553,7 +1553,8 @@ bgfx::TextureHandle MenuScreenBase::ensureDynamicTexture(
 
 std::optional<std::string> MenuScreenBase::resolveTexturePath(const std::string &textureName)
 {
-    if (textureName.starts_with("hud_x2/"))
+    if (textureName.starts_with("hud_x2/") || textureName.starts_with("worlds/")
+        || textureName.starts_with("engine/"))
     {
         return m_pAssetFileSystem->resolveExistingFilePath(textureName);
     }

@@ -1,0 +1,66 @@
+# Native schematic overview using existing regional artwork, not the community guide's illustrated map.
+# Anchors describe broad geography only; game records and event geometry supply all content and door locations.
+schema: 1
+world: mm8
+name: Jadame
+maps:
+  - {file: out01.odm, position: [0.72, 0.70]}
+  - {file: out02.odm, position: [0.46, 0.43]}
+  - {file: out03.odm, position: [0.46, 0.15]}
+  - {file: out04.odm, position: [0.72, 0.15]}
+  - {file: out05.odm, position: [0.22, 0.40]}
+  - {file: out06.odm, position: [0.72, 0.43]}
+  - {file: out07.odm, position: [0.22, 0.15]}
+  - {file: out08.odm, position: [0.22, 0.70]}
+  - {file: out13.odm, position: [0.46, 0.70]}
+  - {file: elema.odm, position: [0.92, 0.15]}
+  - {file: eleme.blv, position: [0.92, 0.32]}
+  - {file: elemf.odm, position: [0.92, 0.49]}
+  - {file: elemw.odm, position: [0.92, 0.66]}
+  - {file: pbp.odm, position: [0.92, 0.83]}
+# Parent links from the game's declared map-entry metadata. Individual entrance pins retain all sources.
+  - {file: d05.blv, parent: out01.odm}
+  - {file: d06.blv, parent: out01.odm}
+  - {file: d07.blv, parent: out02.odm}
+  - {file: d08.blv, parent: out02.odm}
+  - {file: d09.blv, parent: out02.odm}
+  - {file: d10.blv, parent: out02.odm}
+  - {file: d11.blv, parent: out03.odm}
+  - {file: d12.blv, parent: out03.odm}
+  - {file: d13.blv, parent: out04.odm}
+  - {file: d14.blv, parent: out04.odm}
+  - {file: d15.blv, parent: out04.odm}
+  - {file: d16.blv, parent: out05.odm}
+  - {file: d17.blv, parent: out05.odm}
+  - {file: d18.blv, parent: out05.odm}
+  - {file: d19.blv, parent: out06.odm}
+  - {file: d20.blv, parent: out06.odm}
+  - {file: d21.blv, parent: out06.odm}
+  - {file: d22.blv, parent: out07.odm}
+  - {file: d23.blv, parent: out07.odm}
+  - {file: d24.blv, parent: out08.odm}
+  - {file: d25.blv, parent: out08.odm}
+  - {file: d26.blv, parent: out08.odm}
+  - {file: d27.blv, parent: elema.odm}
+  - {file: d28.blv, parent: out02.odm}
+  - {file: d29.blv, parent: elemf.odm}
+  - {file: d30.blv, parent: elemf.odm}
+  - {file: d31.blv, parent: out13.odm}
+  - {file: d32.blv, parent: out13.odm}
+  - {file: d33.blv, parent: out13.odm}
+  - {file: d34.blv, parent: out13.odm}
+  - {file: d35.blv, parent: pbp.odm}
+  - {file: d36.blv, parent: pbp.odm}
+  - {file: d37.blv, parent: pbp.odm}
+  - {file: d38.blv, parent: pbp.odm}
+  - {file: d39.blv, parent: pbp.odm}
+  - {file: d40.blv, parent: out01.odm}
+  - {file: d41.blv, parent: out03.odm}
+  - {file: d43.blv, parent: out07.odm}
+  - {file: d44.blv, parent: out05.odm}
+  - {file: d45.blv, parent: out02.odm}
+  - {file: d46.blv, parent: out08.odm}
+  - {file: d47.blv, parent: out13.odm}
+  - {file: d48.blv, parent: out04.odm}
+  - {file: d49.blv, parent: out06.odm}
+  - {file: d50.blv, parent: pbp.odm}

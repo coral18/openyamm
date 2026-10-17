@@ -24,6 +24,7 @@ add_library(openyamm_game STATIC
     debug/MenuInputTour.cpp
     data/GameDataRepository.cpp
     world/WorldDatabase.cpp
+    world/WorldAtlasPresentation.cpp
     world/WorldFloorPlan.cpp
     world/WorldMapExploration.cpp
     world/WorldMapLocations.cpp

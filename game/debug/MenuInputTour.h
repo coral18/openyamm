@@ -3,6 +3,7 @@
 #include "game/gameplay/GameplayInputFrame.h"
 
 #include <filesystem>
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -16,7 +17,7 @@ class MenuInputTour
 {
   public:
     void update(const std::string &path, GameplayInputFrame &input, IScreen *pScreen,
-                ScreenshotCaptureService &captures);
+                ScreenshotCaptureService &captures, const std::function<void()> &requestPause = {});
 
   private:
     struct Step

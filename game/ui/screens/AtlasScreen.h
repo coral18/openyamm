@@ -2,6 +2,7 @@
 
 #include "game/ui/MenuDesignScreen.h"
 #include "game/world/WorldDatabase.h"
+#include "game/world/WorldAtlasPresentation.h"
 
 namespace OpenYAMM::Game
 {
@@ -24,6 +25,8 @@ public:
 private:
     void drawScreen(float deltaSeconds) override;
     void select(const WorldRecord &record);
+    void selectWorld(const std::string &worldId);
+    std::string regionTexture(const WorldRecord &record) const;
     void drawMap();
     void indexKnownRegions();
     bool drawLocationMarkers(const WorldRecord &map, const Rect &image, const Rect &viewport);
@@ -32,7 +35,9 @@ private:
     void drawDetails();
 
     WorldKnowledge m_knowledge;
+    WorldAtlasPresentation m_presentation;
     WorldDatabase m_world;
+    std::vector<std::string> m_availableWorlds;
     const GameDataRepository &m_data;
     const Party *m_pParty = nullptr;
     std::unordered_set<std::string> m_indexedMaps, m_siteSelection;

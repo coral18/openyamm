@@ -16,30 +16,10 @@ namespace OpenYAMM::Game
 {
 namespace
 {
-std::vector<WorldMapPresentation> loadPresentation(const Engine::AssetFileSystem &assets)
+std::string initialAtlasWorld(const Engine::AssetFileSystem &assets, const MapAssetInfo *pCurrentMap)
 {
-    const auto text = assets.readTextFile("world/atlas/mm7.yml");
-    if (!text)
-        throw std::runtime_error("Missing MM7 atlas presentation package");
-    const auto root = YAML::Load(*text);
-    if (root["schema"].as<int>() != 1 || root["world"].as<std::string>() != "mm7")
-        throw std::runtime_error("Unsupported atlas presentation schema");
-    std::vector<WorldMapPresentation> result;
-    for (const auto &node : root["maps"])
-    {
-        WorldMapPresentation map;
-        map.fileName = node["file"].as<std::string>();
-        map.areaId = node["area"].as<int>(0);
-        map.parentFileName = node["parent"].as<std::string>("");
-        if (node["position"])
-        {
-            if (!node["position"].IsSequence() || node["position"].size() != 2)
-                throw std::runtime_error("Invalid atlas map position");
-            map.position = {node["position"][0].as<float>(), node["position"][1].as<float>()};
-        }
-        result.push_back(std::move(map));
-    }
-    return result;
+    const std::string world = pCurrentMap != nullptr ? pCurrentMap->map.worldId : assets.getActiveWorldId();
+    return assets.exists("engine/world/atlas/" + world + ".yml") ? world : "mm7";
 }
 } // namespace
 
@@ -47,11 +27,15 @@ AtlasScreen::AtlasScreen(const Engine::AssetFileSystem &assets, const GameDataRe
     WorldKnowledge knowledge, std::function<void()> close, bool paused, GameAudioSystem *audio,
     const MapAssetInfo *pCurrentMap, const Party *pParty)
     : MenuDesignScreen(assets, paused, audio), m_knowledge(std::move(knowledge)),
+      m_presentation(loadWorldAtlasPresentation(assets, initialAtlasWorld(assets, pCurrentMap))),
       m_world(data.mapStats(), data.houseTable(), data.npcDialogTable(), data.mergedTeacherTopicTable(),
-              "mm7", loadPresentation(assets)), m_data(data), m_pParty(pParty),
+              m_presentation.worldId, m_presentation.maps), m_data(data), m_pParty(pParty),
       m_close(std::move(close)), m_paused(paused)
 {
     loadDesign("menu/main_menu");
+    for (const std::string &file : assets.enumerate("engine/world/atlas"))
+        if (std::filesystem::path(file).extension() == ".yml")
+            m_availableWorlds.push_back(std::filesystem::path(file).stem().string());
     if (pCurrentMap != nullptr && pCurrentMap->outdoorMapData && pCurrentMap->localEventProgram)
     {
         m_world.indexMapLocations(*pCurrentMap->outdoorMapData, *pCurrentMap->localEventProgram);
@@ -122,12 +106,56 @@ void AtlasScreen::select(const WorldRecord &record)
     }
 }
 
+std::string AtlasScreen::regionTexture(const WorldRecord &record) const
+{
+    const std::string base = "worlds/" + record.map->worldId + "/icons/"
+        + std::filesystem::path(record.map->fileName).stem().string();
+    for (const char *pExtension : {".png", ".bmp", ".pcx"})
+        if (assetFileSystem().exists(base + pExtension))
+            return base + pExtension;
+    return base;
+}
+
+void AtlasScreen::selectWorld(const std::string &worldId)
+{
+    if (worldId == m_presentation.worldId)
+        return;
+    try
+    {
+        WorldAtlasPresentation presentation = loadWorldAtlasPresentation(assetFileSystem(), worldId);
+        WorldDatabase world(m_data.mapStats(), m_data.houseTable(), m_data.npcDialogTable(),
+                            m_data.mergedTeacherTopicTable(), worldId, presentation.maps);
+        m_world = std::move(world);
+        m_presentation = std::move(presentation);
+        m_indexedMaps.clear();
+        m_siteSelection.clear();
+        m_map.clear(); m_selected.clear(); m_search.clear();
+        m_filter.reset();
+        m_floorPlanKey.clear(); m_fogMap.clear(); m_locationError.clear();
+        m_zoom = 1;
+        m_panX = m_panY = m_scroll = 0;
+        m_dragging = false;
+    }
+    catch (const std::exception &error)
+    {
+        m_locationError = "Could not open the selected world's atlas.";
+        std::cerr << "Atlas catalog error: " << error.what() << '\n';
+    }
+}
+
 void AtlasScreen::drawScreen(float)
 {
     beginDesign("Atlas");
     drawSolidRect({0, 0, float(frameWidth()), float(frameHeight())}, 0xff100e09u);
     skin("frame", canvasRect(8, 8, 837, 464), true);
-    textInRect(canvasRect(25, 15, 325, 30), "Interactive Atlas - Antagarich", "fondamento", 20, 0xffbcddeeu);
+    textInRect(canvasRect(25, 15, 245, 30), "Interactive Atlas", "fondamento", 20, 0xffbcddeeu);
+    for (size_t i = 0; i < m_availableWorlds.size(); ++i)
+        if (button("atlas-catalog-" + m_availableWorlds[i], canvasRect(285 + i * 115, 17, 105, 27),
+                   m_availableWorlds[i], "button", true, m_presentation.worldId == m_availableWorlds[i]))
+        {
+            selectWorld(m_availableWorlds[i]);
+            return;
+        }
     if (button("atlas-mode", canvasRect(526, 17, 177, 27), m_guide ? "Guide Mode: ON" : "Discovery Mode"))
     {
         m_guide = !m_guide;
@@ -177,7 +205,7 @@ void AtlasScreen::drawScreen(float)
         if (m_filter == filters[i].second)
             outline(rect, 0xff8dc5e1u);
     }
-    if (button("atlas-world", canvasRect(25, 89, 132, 25), "Antagarich", "button", true, m_map.empty()))
+    if (button("atlas-world", canvasRect(25, 89, 132, 25), m_presentation.name, "button", true, m_map.empty()))
     {
         m_map.clear();
         m_selected.clear();
@@ -330,8 +358,8 @@ void AtlasScreen::drawMap()
     outline(viewport, 0xff597284u);
     const WorldRecord *map = m_world.find(m_map);
     const bool dungeon = map != nullptr && map->kind == WorldRecordKind::Dungeon;
-    const std::string texture = map == nullptr ? "antagrich.png"
-        : std::filesystem::path(map->map->fileName).stem().string();
+    const bool schematic = map == nullptr && m_presentation.overviewTexture.empty();
+    const std::string texture = map == nullptr ? m_presentation.overviewTexture : regionTexture(*map);
     const WorldFloorPlanRaster *floorPlan = nullptr;
     std::optional<TextureSize> size;
     std::string floorPlanKey;
@@ -370,6 +398,8 @@ void AtlasScreen::drawMap()
         }
         size = TextureSize{float(floorPlan->width), float(floorPlan->height)};
     }
+    else if (schematic)
+        size = TextureSize{1000, 600};
     else
         size = textureSize(texture);
     if (!size)
@@ -390,7 +420,7 @@ void AtlasScreen::drawMap()
     setDesignClip(viewport);
     if (floorPlan != nullptr)
         drawTextureHandle(m_floorPlanTexture, image);
-    else
+    else if (!schematic)
         drawTexture(texture, image);
     if (map != nullptr && !dungeon && !m_guide)
     {
@@ -418,8 +448,34 @@ void AtlasScreen::drawMap()
                 continue;
             const float x = image.x + region.position->first * image.width;
             const float y = image.y + region.position->second * image.height;
+            float tileHeight = 50;
+            if (schematic)
+            {
+                for (const WorldRecord &other : m_world.records())
+                    if (other.position && other.id != region.id && m_world.visible(other, m_knowledge, m_guide)
+                        && std::abs(other.position->first - region.position->first) < 0.08f)
+                    {
+                        const float distance = std::abs(other.position->second - region.position->second)
+                            * image.height / designScale();
+                        tileHeight = std::min(tileHeight, std::max(16.0f, distance - 18));
+                    }
+                const Rect tile{x - 33 * designScale(), y - tileHeight / 2 * designScale(),
+                                66 * designScale(), tileHeight * designScale()};
+                if (m_guide && region.kind == WorldRecordKind::Region)
+                {
+                    const std::string regionalTexture = regionTexture(region);
+                    if (textureSize(regionalTexture))
+                        drawTexture(regionalTexture, tile);
+                }
+                outline(tile, 0xff597284u);
+                textInRect({tile.x - 15 * designScale(), tile.y + tile.height,
+                            tile.width + 30 * designScale(), 16 * designScale()}, region.name(),
+                           "menu_lucida", 8, 0xffc6dfeau, true);
+            }
             const Rect marker{x - 5 * designScale(), y - 5 * designScale(), 10 * designScale(), 10 * designScale()};
-            const Rect hitArea{x - 14 * designScale(), y - 14 * designScale(), 28 * designScale(), 28 * designScale()};
+            const Rect hitArea{x - (schematic ? 33 : 14) * designScale(),
+                               y - (schematic ? tileHeight / 2 : 14) * designScale(),
+                               (schematic ? 66 : 28) * designScale(), (schematic ? tileHeight : 28) * designScale()};
             markerHovered = markerHovered || pointerInside(hitArea);
             if (button("atlas-pin-" + region.id, hitArea, "", "button_square", true, false, &marker))
             {
@@ -454,8 +510,9 @@ void AtlasScreen::drawMap()
     if (!leftMouseDown())
         m_dragging = false;
     setDesignClip(std::nullopt);
-    if (button("atlas-zoom-out", canvasRect(490, 357, 30, 27), "-")) m_zoom = std::max(1.0f, m_zoom - 0.25f);
-    if (button("atlas-zoom-in", canvasRect(527, 357, 30, 27), "+")) m_zoom = std::min(3.0f, m_zoom + 0.25f);
+    const float zoomX = schematic ? 34 : 490;
+    if (button("atlas-zoom-out", canvasRect(zoomX, 357, 30, 27), "-")) m_zoom = std::max(1.0f, m_zoom - 0.25f);
+    if (button("atlas-zoom-in", canvasRect(zoomX + 37, 357, 30, 27), "+")) m_zoom = std::min(3.0f, m_zoom + 0.25f);
 }
 
 void AtlasScreen::drawPartyArrow(const WorldRecord &map, const Rect &image, const WorldFloorPlanRaster *floorPlan)

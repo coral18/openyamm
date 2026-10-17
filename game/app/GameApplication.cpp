@@ -9558,7 +9558,12 @@ void GameApplication::renderFrame(int width, int height, float mouseWheelDelta, 
         mobileInspectControlEnabled,
         touchControls);
     m_menuInputTour.update(m_settings.menuInputTourPath, m_gameInputSystem.frame(), m_screenManager.activeScreen(),
-                           m_screenshotCaptureService);
+                           m_screenshotCaptureService, [this]()
+                           {
+                               if (m_gameSession.activeWorldRuntime() == nullptr)
+                                   throw std::runtime_error("Cannot pause before gameplay is loaded");
+                               openMenuScreen(true);
+                           });
     m_gameSession.bindCurrentGameplayInputFrame(&m_gameInputSystem.frame());
     recordFrameDiagnostics(m_framePerformanceDiagnostics.inputNanoseconds, inputBeginTickCount);
 
