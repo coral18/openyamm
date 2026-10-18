@@ -1126,74 +1126,6 @@ bool tryOpenAdventurersInnOverlay(GameplayDialogController::Context &context, ui
     return true;
 }
 
-std::optional<uint32_t> masteryTeacherTopicIdForNpc(
-    const NpcDialogTable &npcDialogTable,
-    const EventRuntimeState &eventRuntimeState,
-    const Party *pParty,
-    const MergedTeacherTopicTable *pTeacherTopicTable,
-    uint32_t npcId)
-{
-    EventRuntimeState npcRuntimeState = eventRuntimeState;
-
-    if (pParty != nullptr)
-    {
-        pParty->applyGlobalNpcStateTo(npcRuntimeState);
-    }
-
-    const auto overrideIt = npcRuntimeState.npcTopicOverrides.find(npcId);
-    const std::unordered_map<uint32_t, uint32_t> *pTopicOverrides =
-        overrideIt != npcRuntimeState.npcTopicOverrides.end() ? &overrideIt->second : nullptr;
-    const std::vector<NpcDialogTable::ResolvedTopic> topics = npcDialogTable.getTopicsForNpc(npcId, pTopicOverrides);
-
-    for (const NpcDialogTable::ResolvedTopic &topic : topics)
-    {
-        if (isMasteryTeacherTopic(topic.id, pTeacherTopicTable))
-        {
-            return topic.id;
-        }
-    }
-
-    return std::nullopt;
-}
-
-void registerTrainerNotesForNpc(
-    EventRuntimeState &eventRuntimeState,
-    const NpcDialogTable &npcDialogTable,
-    uint32_t npcId,
-    const MergedTeacherAutonoteTable *pTeacherAutonoteTable,
-    const MergedTeacherTopicTable *pTeacherTopicTable,
-    const MapStatsEntry *pCurrentMap,
-    const MergedBolsterMapTable *pBolsterMapTable,
-    const IGameplayWorldRuntime *pWorldRuntime,
-    const Party *pParty)
-{
-    EventRuntimeState npcRuntimeState = eventRuntimeState;
-
-    if (pParty != nullptr)
-    {
-        pParty->applyGlobalNpcStateTo(npcRuntimeState);
-    }
-
-    const auto overrideIt = npcRuntimeState.npcTopicOverrides.find(npcId);
-    const std::unordered_map<uint32_t, uint32_t> *pTopicOverrides =
-        overrideIt != npcRuntimeState.npcTopicOverrides.end() ? &overrideIt->second : nullptr;
-    const std::vector<NpcDialogTable::ResolvedTopic> topics = npcDialogTable.getTopicsForNpc(npcId, pTopicOverrides);
-
-    for (const NpcDialogTable::ResolvedTopic &topic : topics)
-    {
-        tryRegisterTrainerNote(
-            eventRuntimeState,
-            topic.id,
-            npcId,
-            pTeacherAutonoteTable,
-            pTeacherTopicTable,
-            pCurrentMap,
-            pBolsterMapTable,
-            pWorldRuntime,
-            pParty);
-    }
-}
-
 const HouseEntry *pendingHouseEntry(
     const EventRuntimeState::PendingDialogueContext &context,
     const HouseTable *pHouseTable)
@@ -4045,33 +3977,6 @@ GameplayDialogController::PresentPendingDialogResult GameplayDialogController::p
         context.pContinentSettingTable
     ));
 
-    if (context.eventRuntimeState.pendingDialogueContext.has_value()
-        && context.eventRuntimeState.pendingDialogueContext->kind == DialogueContextKind::NpcTalk
-        && context.pNpcDialogTable != nullptr
-        && context.pParty != nullptr)
-    {
-        const std::optional<uint32_t> masteryTopicId = masteryTeacherTopicIdForNpc(
-            *context.pNpcDialogTable,
-            context.eventRuntimeState,
-            context.pParty,
-            context.pTeacherTopicTable,
-            context.eventRuntimeState.pendingDialogueContext->sourceId);
-
-        if (masteryTopicId.has_value())
-        {
-            registerTrainerNotesForNpc(
-                context.eventRuntimeState,
-                *context.pNpcDialogTable,
-                context.eventRuntimeState.pendingDialogueContext->sourceId,
-                context.pTeacherAutonoteTable,
-                context.pTeacherTopicTable,
-                context.pCurrentMap,
-                context.pBolsterMapTable,
-                context.pWorldRuntime,
-                context.pParty);
-        }
-    }
-
     if (!context.activeEventDialog.isActive)
     {
         context.eventRuntimeState.pendingDialogueContext.reset();
@@ -4121,8 +4026,30 @@ GameplayDialogController::PresentPendingDialogResult GameplayDialogController::p
         context.eventRuntimeState.namedGlobalVars[WorldDatabase::houseDiscoveryKey(originalContext.sourceId)] = 1;
     if (originalContext.hostHouseId != 0)
         context.eventRuntimeState.namedGlobalVars[WorldDatabase::houseDiscoveryKey(originalContext.hostHouseId)] = 1;
-    if (originalContext.kind == DialogueContextKind::NpcTalk)
-        context.eventRuntimeState.namedGlobalVars[WorldDatabase::npcDiscoveryKey(originalContext.sourceId)] = 1;
+    const EventRuntimeState::PendingDialogueContext &observedContext = result.resolvedContext;
+    if (observedContext.kind == DialogueContextKind::NpcTalk)
+    {
+        context.eventRuntimeState.namedGlobalVars[WorldDatabase::npcDiscoveryKey(observedContext.sourceId)] = 1;
+        if (!context.eventRuntimeState.dialogueState.currentOffer)
+        {
+            std::vector<uint32_t> teacherTopics;
+            for (const EventDialogAction &action : context.activeEventDialog.actions)
+            {
+                if (action.kind == EventDialogActionKind::MasteryTeacherOffer)
+                {
+                    teacherTopics.push_back(action.id);
+                    if (context.pParty != nullptr && context.pNpcDialogTable != nullptr)
+                    {
+                        tryRegisterTrainerNote(context.eventRuntimeState, action.id, observedContext.sourceId,
+                            context.pTeacherAutonoteTable, context.pTeacherTopicTable, context.pCurrentMap,
+                            context.pBolsterMapTable, context.pWorldRuntime, context.pParty);
+                    }
+                }
+            }
+            recordWorldNpcObservation(context.eventRuntimeState, observedContext.sourceId,
+                observedContext.hostHouseId, teacherTopics);
+        }
+    }
     playIndoorExitReactionIfNeeded(context, originalContext, result.wasDialogAlreadyActive);
     return result;
 }

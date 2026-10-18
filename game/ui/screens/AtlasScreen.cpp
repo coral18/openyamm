@@ -23,6 +23,12 @@ std::string initialAtlasWorld(const Engine::AssetFileSystem &assets, const MapAs
     const std::string world = pCurrentMap != nullptr ? pCurrentMap->map.worldId : assets.getActiveWorldId();
     return assets.exists("engine/world/atlas/" + world + ".yml") ? world : "mm7";
 }
+WorldNpcState atlasNpcState(const GameDataRepository &data, const WorldKnowledge &knowledge,
+    bool guide, bool hasParty)
+{
+    return guide || !hasParty ? knowledge.currentNpcs
+        : worldObservedNpcs(data.npcDialogTable(), data.mergedTeacherTopicTable(), knowledge.variables);
+}
 } // namespace
 
 AtlasScreen::AtlasScreen(const Engine::AssetFileSystem &assets, const GameDataRepository &data,
@@ -31,7 +37,8 @@ AtlasScreen::AtlasScreen(const Engine::AssetFileSystem &assets, const GameDataRe
     : MenuDesignScreen(assets, paused, audio), m_knowledge(std::move(knowledge)),
       m_presentation(loadWorldAtlasPresentation(assets, initialAtlasWorld(assets, pCurrentMap))),
       m_world(data.mapStats(), data.houseTable(), data.npcDialogTable(), data.mergedTeacherTopicTable(),
-              m_presentation.worldId, m_presentation.maps), m_data(data), m_pParty(pParty),
+              m_presentation.worldId, m_presentation.maps, atlasNpcState(data, m_knowledge, false, pParty != nullptr)),
+      m_data(data), m_pParty(pParty),
       m_writeNote(std::move(writeNote)), m_close(std::move(close)), m_paused(paused)
 {
     loadDesign("menu/main_menu");
@@ -251,6 +258,17 @@ std::string AtlasScreen::regionTexture(const WorldRecord &record) const
     return base;
 }
 
+void AtlasScreen::rebuildWorld()
+{
+    m_world = WorldDatabase(m_data.mapStats(), m_data.houseTable(), m_data.npcDialogTable(),
+        m_data.mergedTeacherTopicTable(), m_presentation.worldId, m_presentation.maps,
+        atlasNpcState(m_data, m_knowledge, m_guide, m_pParty != nullptr));
+    m_world.indexMapNotes(m_knowledge);
+    indexQuestLocations();
+    m_indexedMaps.clear();
+    m_floorPlanKey.clear();
+}
+
 void AtlasScreen::selectWorld(const std::string &worldId)
 {
     m_placingNote = false;
@@ -260,7 +278,8 @@ void AtlasScreen::selectWorld(const std::string &worldId)
     {
         WorldAtlasPresentation presentation = loadWorldAtlasPresentation(assetFileSystem(), worldId);
         WorldDatabase world(m_data.mapStats(), m_data.houseTable(), m_data.npcDialogTable(),
-                            m_data.mergedTeacherTopicTable(), worldId, presentation.maps);
+                            m_data.mergedTeacherTopicTable(), worldId, presentation.maps,
+                            atlasNpcState(m_data, m_knowledge, m_guide, m_pParty != nullptr));
         m_world = std::move(world);
         m_world.indexMapNotes(m_knowledge);
         m_selectedFeature.clear();
@@ -317,10 +336,15 @@ void AtlasScreen::drawScreen(float)
     if (button("atlas-mode", canvasRect(526, 17, 177, 27), m_guide ? "Guide Mode: ON" : "Discovery Mode"))
     {
         m_guide = !m_guide;
+        rebuildWorld();
+        if (const WorldRecord *pSelected = m_world.find(m_selected);
+            pSelected != nullptr && pSelected->npc != nullptr && m_world.visible(*pSelected, m_knowledge, m_guide))
+            select(*pSelected);
         m_referenceDirty = true;
         m_referenceSelected.clear();
         m_referenceScroll = m_referenceDetailScroll = 0;
-        if (const auto *selected = m_world.find(m_selected); selected && !m_world.visible(*selected, m_knowledge, m_guide))
+        if (const auto *selected = m_world.find(m_selected);
+            selected == nullptr || !m_world.visible(*selected, m_knowledge, m_guide))
             m_selected.clear();
         if (const auto *map = m_world.find(m_map); map && !m_world.visible(*map, m_knowledge, m_guide))
             m_map.clear();
@@ -469,7 +493,8 @@ void AtlasScreen::indexKnownRegions()
     }
 }
 
-bool AtlasScreen::drawLocationMarkers(const WorldRecord &map, const Rect &image, const Rect &viewport)
+bool AtlasScreen::drawLocationMarkers(const WorldRecord &map, const Rect &image, const Rect &viewport,
+    const WorldFloorPlanRaster *pFloorPlan)
 {
     struct Pin
     {
@@ -492,8 +517,13 @@ bool AtlasScreen::drawLocationMarkers(const WorldRecord &map, const Rect &image,
                 && toLowerCopy(pRecord->searchText()).find(toLowerCopy(m_search)) == std::string::npos); });
         if (records.empty())
             continue;
-        const auto uv = gameplayMinimapWorldToUv({}, location.x, location.y);
-        const float x = image.x + uv.x * image.width, y = image.y + uv.y * image.height;
+        const auto point = pFloorPlan != nullptr ? pFloorPlan->worldToUv(location.x, location.y)
+            : [&]()
+            {
+                const auto uv = gameplayMinimapWorldToUv({}, location.x, location.y);
+                return std::pair{uv.x, uv.y};
+            }();
+        const float x = image.x + point.first * image.width, y = image.y + point.second * image.height;
         if (x < viewport.x || x > viewport.x + viewport.width || y < viewport.y || y > viewport.y + viewport.height)
             continue;
         auto pin = std::find_if(pins.begin(), pins.end(), [&](const Pin &other)
@@ -649,7 +679,7 @@ void AtlasScreen::drawMap()
     bool markerHovered = false;
     if (map != nullptr && !m_placingNote)
         markerHovered = m_featureView ? drawFeatureMarkers(*map, image, viewport, floorPlan)
-            : !dungeon && drawLocationMarkers(*map, image, viewport);
+            : drawLocationMarkers(*map, image, viewport, floorPlan);
     if (map == nullptr)
     {
         for (const auto &region : m_world.records())
@@ -941,7 +971,7 @@ void AtlasScreen::rebuildReference()
         &m_data.classSkillTable(), &m_data.mergedPotionSettingTable(), &m_data.mergedReagentSettingTable(),
         &m_data.potionMixingTable(), &m_data.potionNoteTable(), &m_data.rosterTable(),
         &m_data.houseTable(), &m_data.mapStats(), m_presentation.worldId, &m_data.monsterTable(),
-        &m_data.journalQuestTable(), &m_data.npcDialogTable()};
+        &m_data.journalQuestTable(), &m_data.npcDialogTable(), &m_world, &m_knowledge};
     m_referenceEntries = buildWorldGuide(source, m_referenceSection, m_referenceKnowledge, m_guide);
     m_referenceDirty = false;
 }
@@ -1170,6 +1200,8 @@ void AtlasScreen::drawDetails()
     if (record != nullptr)
     {
         text = record->name();
+        if (record->lastObservedNpc)
+            text += " | Last encountered here";
         if (record->house != nullptr)
         {
             text += " | " + record->map->name + " | " + record->house->type;

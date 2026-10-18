@@ -31,7 +31,8 @@ private:
     std::string regionTexture(const WorldRecord &record) const;
     void drawMap();
     void indexKnownRegions();
-    bool drawLocationMarkers(const WorldRecord &map, const Rect &image, const Rect &viewport);
+    bool drawLocationMarkers(const WorldRecord &map, const Rect &image, const Rect &viewport,
+        const WorldFloorPlanRaster *pFloorPlan);
     bool drawFeatureMarkers(const WorldRecord &map, const Rect &image, const Rect &viewport,
                             const WorldFloorPlanRaster *pFloorPlan);
     void drawFeatureList();
@@ -41,6 +42,7 @@ private:
     void drawReference();
     void rebuildReference();
     void indexQuestLocations();
+    void rebuildWorld();
     void drawNoteEditor();
     void saveNote(bool remove);
     void closeNoteEditor();

@@ -6,6 +6,7 @@
 #include "game/world/WorldMapFeatures.h"
 #include "game/world/WorldMonsterKnowledge.h"
 #include "game/world/WorldMapNotes.h"
+#include "game/world/WorldNpcKnowledge.h"
 #include "game/tables/MapStats.h"
 #include "game/tables/MergedBaseTables.h"
 #include "game/tables/NpcDialogTable.h"
@@ -55,6 +56,8 @@ struct WorldRecord
     const MapStatsEntry *destination = nullptr;
     std::optional<std::pair<float, float>> position;
 
+    std::optional<std::string> npcName;
+    bool lastObservedNpc = false;
     std::string name() const;
     std::string searchText() const;
 };
@@ -72,6 +75,7 @@ struct WorldKnowledge
     std::unordered_map<std::string, std::unordered_set<std::string>> interactedSites;
     std::unordered_map<std::string, std::vector<WorldMonsterObservation>> monsterObservations;
     std::unordered_map<std::string, std::vector<WorldMapNote>> notes;
+    WorldNpcState currentNpcs;
     bool knows(const WorldRecord &record) const;
 };
 
@@ -82,7 +86,7 @@ class WorldDatabase
 public:
     WorldDatabase(const MapStats &maps, const HouseTable &houses, const NpcDialogTable &npcs,
                   const MergedTeacherTopicTable &teachers, const std::string &worldId,
-                  const std::vector<WorldMapPresentation> &presentation = {});
+                  const std::vector<WorldMapPresentation> &presentation = {}, const WorldNpcState &npcsState = {});
 
     const std::vector<WorldRecord> &records() const;
     const WorldRecord *find(const std::string &id) const;
@@ -114,6 +118,8 @@ public:
     static const char *kindName(WorldRecordKind kind);
 
 private:
+    void indexMapSites(const WorldRecord &source, const std::vector<WorldInteractionSite> &sites,
+        const ScriptedEventProgram &events);
     void replaceMapMonsterFeatures(const MapStatsEntry &map, std::vector<WorldMapFeature> features,
         const MonsterTable &monsters, const std::vector<WorldMonsterObservation> &observations);
     std::vector<WorldRecord> m_records;

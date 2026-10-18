@@ -6889,6 +6889,54 @@ bool runAssert(
         }
     }
 
+    if (const YAML::Node note = step.payload["map_note"])
+    {
+        if (!note.IsMap() || !note["id"] || !note["id"].IsScalar()
+            || !note["active"] || !note["active"].IsScalar() || !context.eventRuntimeStateLoaded)
+        {
+            failures.push_back(stepLocation(step) + ": map_note requires id, active and loaded map state");
+            success = false;
+        }
+        else
+        {
+            const uint32_t id = note["id"].as<uint32_t>();
+            const auto found = context.eventRuntimeState.runtimeMapNotes.find(id);
+            const bool active = found != context.eventRuntimeState.runtimeMapNotes.end() && found->second.active;
+            success = recordScenarioAssertion(context, step, "map_note[" + std::to_string(id) + "]",
+                boolText(note["active"].as<bool>()), boolText(active), failures) && success;
+        }
+    }
+
+    if (const YAML::Node npc = step.payload["npc_house"])
+    {
+        if (!npc.IsMap() || !npc["npc_id"] || !npc["npc_id"].IsScalar()
+            || !npc["house_id"] || !npc["house_id"].IsScalar())
+        {
+            failures.push_back(stepLocation(step) + ": npc_house requires npc_id and house_id");
+            success = false;
+        }
+        else
+        {
+            const uint32_t id = npc["npc_id"].as<uint32_t>();
+            EventRuntimeState state;
+            state.npcHouseOverrides = context.eventRuntimeState.npcHouseOverrides;
+            context.party.applyGlobalNpcStateTo(state);
+            const NpcEntry *pNpc = context.gameDataLoader.getNpcDialogTable().getNpc(id);
+            const auto house = state.npcHouseOverrides.find(id);
+            if (pNpc == nullptr && house == state.npcHouseOverrides.end())
+            {
+                failures.push_back(stepLocation(step) + ": unknown npc_house source " + std::to_string(id));
+                success = false;
+            }
+            else
+            {
+                const uint32_t actual = house != state.npcHouseOverrides.end() ? house->second : pNpc->houseId;
+                success = recordScenarioAssertion(context, step, "npc_house[" + std::to_string(id) + "]",
+                    std::to_string(npc["house_id"].as<uint32_t>()), std::to_string(actual), failures) && success;
+            }
+        }
+    }
+
     if (const YAML::Node count = step.payload["map_refill_count"])
     {
         if (!count.IsScalar() || !context.eventRuntimeStateLoaded)

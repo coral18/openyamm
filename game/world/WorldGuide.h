@@ -22,6 +22,8 @@ class MapStats;
 class MonsterTable;
 class JournalQuestTable;
 class NpcDialogTable;
+class WorldDatabase;
+struct WorldKnowledge;
 
 enum class WorldGuideSection { Items, Spells, Classes, Alchemy, Companions, Progress, Monsters, Quests };
 
@@ -43,6 +45,8 @@ struct WorldGuideSource
     const MonsterTable *pMonsters = nullptr;
     const JournalQuestTable *pQuests = nullptr;
     const NpcDialogTable *pNpcs = nullptr;
+    const WorldDatabase *pWorld = nullptr;
+    const WorldKnowledge *pWorldKnowledge = nullptr;
 };
 
 struct WorldGuideKnowledge

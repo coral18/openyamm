@@ -6,6 +6,7 @@
 #include "game/StringUtils.h"
 
 #include <algorithm>
+#include <cmath>
 
 namespace OpenYAMM::Game
 {
@@ -19,6 +20,13 @@ void WorldDatabase::indexMapLocations(const OutdoorMapData &map, const ScriptedE
     if (pSource == nullptr)
         return;
 
+    indexMapSites(*pSource, worldInteractionSites(map), events);
+}
+
+void WorldDatabase::indexMapSites(const WorldRecord &source, const std::vector<WorldInteractionSite> &sites,
+    const ScriptedEventProgram &events)
+{
+    const WorldRecord *pSource = &source;
     std::erase_if(m_locations, [pSource](const WorldMapLocation &location) { return location.mapId == pSource->id; });
     const auto target = [&](uint16_t eventId) -> const WorldRecord *
     {
@@ -31,7 +39,8 @@ void WorldDatabase::indexMapLocations(const OutdoorMapData &map, const ScriptedE
                 && record.kind == WorldRecordKind::House && record.house->id == *metadata->houseId
                 && record.map == pSource->map)
                 return &record;
-            if (metadata->kind == "enter_dungeon" && metadata->targetMap
+            if (pSource->kind == WorldRecordKind::Region
+                && metadata->kind == "enter_dungeon" && metadata->targetMap
                 && record.kind == WorldRecordKind::Dungeon
                 && toLowerCopy(record.map->fileName) == toLowerCopy(*metadata->targetMap))
                 return &record;
@@ -41,12 +50,14 @@ void WorldDatabase::indexMapLocations(const OutdoorMapData &map, const ScriptedE
     const auto add = [&](const std::string &site, uint16_t eventId, double x, double y)
     {
         const WorldRecord *pTarget = target(eventId);
-        if (pTarget == nullptr || x < -32768 || x > 32768 || y < -32768 || y > 32768)
+        if (pTarget == nullptr || !std::isfinite(x) || !std::isfinite(y))
+            return;
+        if (pSource->kind == WorldRecordKind::Region
+            && (x < -32768 || x > 32768 || y < -32768 || y > 32768))
             return;
         m_locations.push_back({pSource->id + "/site/" + site + "/event/" + std::to_string(eventId),
                                pSource->id, pTarget->id, eventId, float(x), float(y)});
     };
-    const auto sites = worldInteractionSites(map);
     std::erase_if(m_features, [pSource](const WorldMapFeature &feature)
     { return feature.mapId == pSource->id && feature.kind != WorldMapFeatureKind::Monster
         && feature.kind != WorldMapFeatureKind::Note; });
@@ -65,11 +76,7 @@ void WorldDatabase::indexMapLocations(const MapStatsEntry &map, const IndoorMapD
     const WorldRecord *pSource = find(id);
     if (pSource == nullptr || pSource->kind != WorldRecordKind::Dungeon)
         return;
-    std::erase_if(m_features, [&id](const WorldMapFeature &feature)
-    { return feature.mapId == id && feature.kind != WorldMapFeatureKind::Monster
-        && feature.kind != WorldMapFeatureKind::Note; });
-    auto features = buildWorldMapFeatures(id, worldInteractionSites(geometry), events);
-    m_features.insert(m_features.end(), features.begin(), features.end());
+    indexMapSites(*pSource, worldInteractionSites(geometry), events);
 }
 
 const std::vector<WorldMapFeature> &WorldDatabase::features() const { return m_features; }

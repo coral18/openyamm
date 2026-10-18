@@ -1,4 +1,5 @@
 #include "game/world/WorldGuide.h"
+#include "game/world/WorldDatabase.h"
 #include "game/tables/ClassMultiplierTable.h"
 #include "game/tables/ClassSkillTable.h"
 #include "game/tables/SpellTable.h"
@@ -343,4 +344,57 @@ TEST_CASE("world guide quest relationships resolve against the current shared co
             kind == "map" ? "world.mm7.map.7d29" : "4294967295", "journal"}}));
         CHECK_FALSE(quests.validateLocations(maps, npcs, houses, items));
     }
+}
+
+TEST_CASE("world guide quest contacts link only to the selected current or observed NPC index")
+{
+    MapStats maps;
+    REQUIRE(maps.loadFromRows(guideTableRows("map_stats.txt")));
+    HouseTable houses;
+    REQUIRE(houses.loadFromRows(guideTableRows("house_data.txt")));
+    NpcDialogTable npcs;
+    REQUIRE(npcs.loadNpcRows(guideTableRows("npc.txt")));
+    JournalQuestTable quests;
+    REQUIRE(quests.loadFromRows({{"10000", "Ask the Butler", "", ""}}));
+    REQUIRE(quests.loadLocationRows({{"10000", "mm7", "objective", "npc", "397", "journal"}}));
+    MergedTeacherTopicTable teachers;
+    WorldNpcState current;
+    current.houses[397] = 1169;
+    current.names[397] = "Current name";
+    WorldDatabase guideWorld(maps, houses, npcs, teachers, "mm7", {}, current);
+    WorldGuideSource source;
+    WorldKnowledge locationKnowledge;
+    source.worldId = "mm7"; source.pQuests = &quests; source.pNpcs = &npcs;
+    source.pWorld = &guideWorld; source.pWorldKnowledge = &locationKnowledge;
+    WorldGuideKnowledge knowledge;
+    knowledge.quests.insert(10000);
+    const auto guide = buildWorldGuide(source, WorldGuideSection::Quests, knowledge, true);
+    REQUIRE(guide.size() == 1);
+    REQUIRE(guide[0].links.size() == 1);
+    CHECK(guide[0].links[0].target == "mm7:npc/397");
+    CHECK(guide[0].details.find("Current name") != std::string::npos);
+    CHECK_FALSE(guide[0].links[0].informed);
+    // Quest knowledge alone never tells the party the NPC's secret current residence.
+    locationKnowledge.variables[WorldDatabase::npcDiscoveryKey(397)] = 1;
+    locationKnowledge.variables[worldNpcHouseKey(397)] = 240;
+    locationKnowledge.variables["openyamm.discovery.world.mm7.map.7d29"] = 1;
+    const auto hidden = buildWorldGuide(source, WorldGuideSection::Quests, knowledge, false);
+    REQUIRE(hidden.size() == 1);
+    CHECK(hidden[0].links.empty());
+    CHECK(hidden[0].details.find("Current name") == std::string::npos);
+    WorldNpcState observed;
+    observed.observedOnly = true;
+    observed.houses[397] = 240;
+    observed.topics[397] = {};
+    WorldDatabase knownWorld(maps, houses, npcs, teachers, "mm7", {}, observed);
+    source.pWorld = &knownWorld;
+    locationKnowledge.variables[WorldDatabase::npcDiscoveryKey(397)] = 1;
+    locationKnowledge.variables["openyamm.discovery.world.mm7.map.7out02"] = 1;
+    const auto met = buildWorldGuide(source, WorldGuideSection::Quests, knowledge, false);
+    REQUIRE(met.size() == 1);
+    REQUIRE(met[0].links.size() == 1);
+    CHECK(met[0].links[0].target == "mm7:npc/397");
+    CHECK_FALSE(met[0].links[0].informed);
+    CHECK(met[0].details.find("Butler") != std::string::npos);
+    CHECK(knownWorld.find(met[0].links[0].target)->house->id == 240);
 }

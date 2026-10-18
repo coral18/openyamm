@@ -1,0 +1,49 @@
+id: atlas.mm7_npc_relocation
+world: mm7
+mode: hybrid
+title: Controlled castle quest fixture tests actual Butler relocation and remembered residence
+steps:
+- new_game_flow: {start_map: 7out02.odm}
+- note: Scavenger completion is a controlled prerequisite; this does not test the scavenger quest.
+- setup_shortcut: {kind: set_qbit, id: 519}
+- save_game: completed-scavenger-fixture
+- load_game: completed-scavenger-fixture
+- press_interact:
+    pose: {x: -18068, y: 12480, z: 448, yaw: 3.1415927, pitch: 0}
+    expect: {kind: event_target, triggered_event: 301, can_activate: true}
+- assert: {qbit_set: [587, 644], npc_house: {npc_id: 397, house_id: 240}}
+- press_action: {action: cancel_dialog}
+- press_interact:
+    pose: {x: -5184, y: 13420, z: 0, yaw: -1.5707963, pitch: 0}
+    expect: {kind: event_target, triggered_event: 15, can_activate: true}
+- select_topic: {kind: house_resident, action_id: 397}
+- assert:
+    named_global_var_changed: {name: openyamm.discovery.npc/397/house, value: 240}
+- save_game: npc-observed
+- load_game: npc-observed
+- note: The completed castle combat flag is controlled; the original reward and relocation event must execute.
+- setup_shortcut: {kind: set_qbit, id: 647}
+- save_game: cleared-castle-fixture
+- load_game: cleared-castle-fixture
+- press_interact:
+    pose: {x: -5184, y: 13420, z: 0, yaw: -1.5707963, pitch: 0}
+    expect: {kind: event_target, triggered_event: 15, can_activate: true}
+- select_topic: {kind: house_resident, action_id: 397}
+- select_topic: {kind: npc_topic, action_id: 856}
+- assert:
+    qbit_clear: [587]
+    qbit_set: [658]
+    npc_house: {npc_id: 397, house_id: 1169}
+    named_global_var_changed: {name: openyamm.discovery.npc/397/house, value: 240}
+- save_game: npc-relocated
+- load_game: npc-relocated
+- assert:
+    npc_house: {npc_id: 397, house_id: 1169}
+    named_global_var_changed: {name: openyamm.discovery.npc/397/house, value: 240}
+- load_map: {map: out14.odm}
+- assert: {npc_house: {npc_id: 397, house_id: 1169}}
+- load_map: {map: 7out02.odm}
+- assert:
+    npc_house: {npc_id: 397, house_id: 1169}
+    named_global_var_changed: {name: openyamm.discovery.npc/397/house, value: 240}
+- save_game: npc-relocated-other-map

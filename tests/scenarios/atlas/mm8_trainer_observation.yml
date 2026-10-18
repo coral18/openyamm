@@ -1,0 +1,19 @@
+id: atlas.mm8_trainer_observation
+world: mm8
+mode: faithful
+steps:
+- new_game_flow: {start_map: out01.odm}
+- press_interact:
+    pose: {x: -11348, y: -3240, z: 0, yaw: 0, pitch: 0}
+    expect: {kind: event_target, triggered_event: 23, can_activate: true}
+- select_topic: {kind: house_resident, action_id: 127}
+- assert:
+    named_global_var_changed: {name: openyamm.discovery.npc/127/house, value: 804}
+- assert:
+    named_global_var_changed: {name: openyamm.discovery.npc/127/teacher/315, value: 1}
+- assert: {map_note: {id: 1105, active: true}}
+- save_game: trainer-observed
+- load_game: trainer-observed
+- assert:
+    named_global_var_changed: {name: openyamm.discovery.npc/127/teacher/315, value: 1}
+- assert: {map_note: {id: 1105, active: true}}

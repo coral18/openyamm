@@ -395,3 +395,88 @@ active/history labels, quest navigation to still-fully-fogged Ravenshore and Gui
 isolated campaigns are under the local Windows development directory `atlas-quests-20261018/`; they are not bundled
 in Git. Scenarios are retained under `tests/scenarios/atlas/*_quest_knowledge.yml`. Android remains unverified for
 this checkpoint.
+
+### Current and observed NPC locations, 2026-10-18
+
+The shared World Database now accepts a derived `WorldNpcState` instead of assuming that every NPC still lives
+in its base-table residence. Guide uses canonical Party NPC overrides plus current-map presentation state;
+it applies changed residence/topic slots/name and unavailable status. Its records keep pointers to the loaded
+registries and copy presentation overrides by value, so moving/copying an index does not leave dangling NPC pointers.
+Sparse topic resolution is shared with ordinary dialogue and does not allocate/walk up to the largest slot index.
+
+Discovery uses actual dialogue observations: `openyamm.discovery.npc/<id>/house` and
+`openyamm.discovery.npc/<id>/teacher/<topic>`. Only offers presented in the NPC dialogue are recorded. Observation
+uses the resolved dialogue context, covering automatic single-resident house dialogue as well as selected occupants.
+Opening a training confirmation does not refresh the main dialogue's observed offers.
+Automatic Map Book trainer notes now use the same visible offers, closing a path that could disclose a hidden
+trainer even when the Atlas list correctly hid it. The old double copy of the full event state per NPC dialogue
+was removed along with that ungated note-registration path. Zero-valued retired offer keys
+propagate through the existing global-state merge. A remote/actor dialogue with no host house records no residence.
+No save-format change or generated Lua edit is required; knowledge is recorded even when the optional Atlas UI is off.
+
+The Discovery index keeps the last encountered residence/offers when the NPC secretly moves or changes topics.
+The shared query layer independently checks observed house and teaching offer, so passing a current index to a
+Discovery query cannot disclose a new residence or a hidden new training topic. Guide rebuilds from current state;
+switching back restores the observed index without writing discoveries. Quest contact links use the selected index
+and require knowledge of the residence; a named quest contact alone does not award a current NPC address.
+
+Existing saves remain readable. Their older boolean NPC discovery flags remain intact, but cannot prove where an
+NPC was met: meet the contact again to record a location/offer. Existing Map Book trainer notes remain available.
+Historical runtime-generated names and roaming/generated NPC placements are not yet a complete knowledge system.
+
+Indoor house/service doors now use the same physical-site index as outdoor buildings. Their markers project through
+the dungeon floor-plan transform, including NPC and trainer occupants. Existing connection features keep their own
+exploration gating; this does not introduce a shortcut around dungeon fog or conditional travel.
+
+#### Canonical physical-location repairs
+
+82 `house_data.txt` map references were corrected against both packaged base event metadata and actual interactive
+geometry. Only the map-ID column changed; other fields, IDs, stock rules, schedules and original TSV formatting were
+preserved. Repairs include Stone City (18), Celeste (21), the Pit (21), Castle Harmondale's throne room and MM8 interior
+venues in the Merchant House, Smuggler's Cove, faction headquarters and elemental prisons. These are shared content
+repairs, not Atlas-only aliases. The Castle Harmondale throne room previously pointed at Emerald Island.
+
+The repeatable content audit checks 137 supplied MM7/MM8 maps and 673 physical house IDs using the actual text-table,
+Lua-metadata and geometry readers. Legacy `Dungeon Ent` transition/movie cards are not treated as usable venues.
+One shared Adventurer's Inn service (1607, used on both Dagger Wound and Ravenshore) still needs multiple physical
+placements; it is reported rather than assigned an arbitrary new map. Conditional services whose exported metadata
+selects a construction/movie-card branch need richer event metadata and remain part of the completion work.
+
+To prepare the data-only cache from a full runtime payload, without duplicating graphics/audio:
+
+```bash
+python3 tools/prepare_atlas_audit.py --assets /path/to/runtime/assets
+OPENYAMM_ATLAS_AUDIT_ROOT="$PWD/build/atlas-audit" \
+  ./build/tests/openyamm_unit_tests --source-file='*WorldDatabaseTests.cpp,*WorldGuideTests.cpp'
+```
+
+The cache tool respects package overlay priority, verifies reused file hashes and records package/entry provenance.
+It extracted 322 files / 102.6 MiB locally. A repeat refreshed zero files and took less than one second; the manifest
+also prevents removed package entries from surviving as stale audit inputs. This cache is not a launchable runtime.
+The audit covers packaged base metadata tied to physical sites, not all conditional outcomes or unprovided maps.
+
+#### Validation
+
+Windows Release compiled successfully. Focused ASan/UBSan coverage passed 46 cases / 3,450 assertions, including the
+packaged-content audit, high sparse topic slots, index ownership, full-range house IDs, legacy knowledge behavior,
+current/observed privacy, quest links and indoor service positions. The existing external image-decoder vptr exclusion
+in the focused sanitizer harness remains as described in the quest checkpoint.
+
+Native scenarios under `tests/scenarios/atlas/` visited the actual Clan Leader's Hall and trainer house in MM8,
+recorded visible training offers and verified save/load. A separate Talimere encounter verified automatic NPC
+selection. The MM7 relocation scenario deliberately supplies scavenger/combat prerequisite flags as a controlled
+hybrid fixture; it then uses the real castle entrance, tavern door, Butler reward event and Party relocation state.
+It verifies the move from house 240 to 1169, keeps the last-met address at 240, and checks save/load and map changes.
+It does not claim to test the full scavenger quest or castle combat.
+
+Native AMD/OpenGL captures verified the tavern in Discovery, the throne-room marker in Guide, the return to the
+remembered tavern, quest contact links and observed-only MM8 Bow training. Reloading a quicksave made after Atlas
+browsing preserved both addresses and did not discover the Dwarf King. MM6/MM7/MM8 map lifecycle regressions passed.
+Isolated campaigns/captures live in the local Windows development directory `atlas-npcs-20261018/`; user campaigns
+and official installation data were not used as test-write targets. Android/controller validation remains pending.
+
+The additional paired trainer-note regression uses the QA-only fixture under `tests/fixtures/atlas/`: a real
+`CanShowTopic(315)` overlay hides Expert Bow. The real house/teacher interaction records no offer and creates no
+map note 1105; the unchanged-runtime control records both. Both checks include save/load. The fixture preparer
+creates an isolated package view with hard-linked unchanged large archives and a private mutable overlay ZIP;
+original package contents remain unchanged. Native MM6/MM7/MM8 quest-dialogue save/load regressions also passed.

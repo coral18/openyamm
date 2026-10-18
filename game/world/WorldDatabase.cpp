@@ -3,6 +3,7 @@
 #include "game/maps/MapIdentity.h"
 
 #include <algorithm>
+#include <bit>
 #include <cmath>
 #include <stdexcept>
 
@@ -58,9 +59,9 @@ std::string WorldRecord::name() const
         return house->type + " to " + destination->name;
     }
     if (kind == WorldRecordKind::Trainer)
-        return npc->name + " - " + teacher->note;
+        return npcName.value_or(npc->name) + " - " + teacher->note;
     if (kind == WorldRecordKind::Npc)
-        return npc->name;
+        return npcName.value_or(npc->name);
     if (kind == WorldRecordKind::House)
         return house->name.empty() ? house->buildingName : house->name;
     return map->name;
@@ -81,7 +82,15 @@ bool WorldKnowledge::knows(const WorldRecord &record) const
     if (informedRecords.contains(record.id))
         return true;
     if (record.kind == WorldRecordKind::Npc || record.kind == WorldRecordKind::Trainer)
-        return discovered(*this, WorldDatabase::npcDiscoveryKey(record.npc->id));
+    {
+        const auto house = variables.find(worldNpcHouseKey(record.npc->id));
+        if (record.house == nullptr || house == variables.end()
+            || std::bit_cast<uint32_t>(house->second) != record.house->id)
+            return false;
+        return discovered(*this, WorldDatabase::npcDiscoveryKey(record.npc->id))
+            && (record.teacher == nullptr
+                || discovered(*this, worldNpcTeacherKey(record.npc->id, record.teacher->topicId)));
+    }
     if (record.kind == WorldRecordKind::House || (record.kind == WorldRecordKind::Travel && record.house != nullptr))
         return discovered(*this, WorldDatabase::houseDiscoveryKey(record.house->id));
     return discovered(*this, WorldDatabase::mapDiscoveryKey(*record.map))
@@ -90,7 +99,7 @@ bool WorldKnowledge::knows(const WorldRecord &record) const
 
 WorldDatabase::WorldDatabase(const MapStats &maps, const HouseTable &houses, const NpcDialogTable &npcs,
     const MergedTeacherTopicTable &teachers, const std::string &worldId,
-    const std::vector<WorldMapPresentation> &presentation)
+    const std::vector<WorldMapPresentation> &presentation, const WorldNpcState &npcsState)
 {
     std::unordered_map<std::string, const WorldMapPresentation *> layouts;
     std::unordered_map<int, const MapStatsEntry *> areas;
@@ -182,18 +191,24 @@ WorldDatabase::WorldDatabase(const MapStats &maps, const HouseTable &houses, con
             travel.destination = destination;
             m_records.push_back(std::move(travel));
         }
-        for (uint32_t npcId : npcs.getNpcIdsForHouse(id))
+        for (uint32_t npcId : npcs.getNpcIdsForHouse(id, &npcsState.houses))
         {
             const NpcEntry *npc = npcs.getNpc(npcId);
-            if (npc == nullptr)
+            if (npc == nullptr || npcsState.unavailable.contains(npcId)
+                || (npcsState.observedOnly && !npcsState.houses.contains(npcId)))
                 continue;
             WorldRecord resident = record;
             resident.id = worldId + ":npc/" + std::to_string(npcId);
             resident.parentId = record.id;
             resident.kind = WorldRecordKind::Npc;
             resident.npc = npc;
+            resident.lastObservedNpc = npcsState.observedOnly;
+            if (const auto name = npcsState.names.find(npcId); name != npcsState.names.end())
+                resident.npcName = name->second;
             m_records.push_back(resident);
-            for (uint32_t topicId : npc->topicIds)
+            const auto topics = npcsState.topics.find(npcId);
+            const std::vector<uint32_t> &topicIds = topics != npcsState.topics.end() ? topics->second : npc->topicIds;
+            for (uint32_t topicId : topicIds)
             {
                 if (const auto *teacher = teachers.get(topicId))
                 {

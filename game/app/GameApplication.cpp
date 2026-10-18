@@ -8828,6 +8828,18 @@ bool GameApplication::openAtlasScreen(bool paused)
                 if (value > 0 && key.starts_with("openyamm.discovery.site/"))
                     knowledge.interactedSites[toLowerCopy(file)].insert(key);
         };
+        // Party state is the canonical cross-map source; current-map presentation overrides are local.
+        EventRuntimeState npcState;
+        if (m_pMapSceneRuntime != nullptr && m_pMapSceneRuntime->eventRuntimeState() != nullptr)
+        {
+            const EventRuntimeState &live = *m_pMapSceneRuntime->eventRuntimeState();
+            npcState.npcHouseOverrides = live.npcHouseOverrides;
+            npcState.npcTopicOverrides = live.npcTopicOverrides;
+            npcState.npcNameOverrides = live.npcNameOverrides;
+            npcState.unavailableNpcIds = live.unavailableNpcIds;
+            m_pMapSceneRuntime->party().applyGlobalNpcStateTo(npcState);
+        }
+        knowledge.currentNpcs = worldCurrentNpcs(m_gameDataRepository.npcDialogTable(), npcState);
         knowledge.variables = m_gameSession.namedGlobalVars();
         if (m_pMapSceneRuntime != nullptr && m_pMapSceneRuntime->eventRuntimeState() != nullptr)
         {

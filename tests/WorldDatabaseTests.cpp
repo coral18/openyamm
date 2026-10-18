@@ -4,6 +4,11 @@
 #include "game/world/WorldDatabase.h"
 #include "game/world/WorldAtlasPresentation.h"
 #include "engine/TextTable.h"
+#include <filesystem>
+#include <cstdlib>
+#include <map>
+#include <set>
+#include <yaml-cpp/yaml.h>
 #include "game/FaceEnums.h"
 #include "game/ui/GameplayMinimapTransform.h"
 #include "game/indoor/IndoorMapData.h"
@@ -479,6 +484,8 @@ TEST_CASE("world database filters undiscovered information before search")
     CHECK(database.query(knowledge, false, "blade").size() == 1);
     CHECK(database.query(knowledge, false, "Sword").empty());
     knowledge.variables[WorldDatabase::npcDiscoveryKey(42)] = 1;
+    knowledge.variables[worldNpcHouseKey(42)] = 11;
+    knowledge.variables[worldNpcTeacherKey(42, 305)] = 1;
     CHECK(database.query(knowledge, false, "sWoRd", WorldRecordKind::Trainer).size() == 1);
 }
 
@@ -649,6 +656,8 @@ TEST_CASE("world database does not disclose service location without knowledge o
     const auto database = f.database();
     WorldKnowledge knowledge;
     knowledge.variables[WorldDatabase::npcDiscoveryKey(42)] = 1;
+    knowledge.variables[worldNpcHouseKey(42)] = 11;
+    knowledge.variables[worldNpcTeacherKey(42, 305)] = 1;
     CHECK(database.query(knowledge, false, "Sword").empty());
     knowledge.variables[WorldDatabase::mapDiscoveryKey(*f.maps.findById(63))] = 1;
     CHECK(database.query(knowledge, false, "Sword").size() == 1);
@@ -823,6 +832,8 @@ TEST_CASE("world database locates real doors without revealing unvisited service
     CHECK(database.locationVisible(shop, knowledge, false));
     CHECK(database.recordsAtLocation(shop, knowledge, false).size() == 1);
     knowledge.variables[WorldDatabase::npcDiscoveryKey(42)] = 1;
+    knowledge.variables[worldNpcHouseKey(42)] = 11;
+    knowledge.variables[worldNpcTeacherKey(42, 305)] = 1;
     CHECK(database.recordsAtLocation(shop, knowledge, false).size() == 3);
     knowledge.visitedMaps.clear();
     CHECK_FALSE(database.locationVisible(shop, knowledge, false));
@@ -867,4 +878,258 @@ TEST_CASE("world database informed quest locations reveal no terrain or unrelate
     knowledge.informedRecords.insert(pRegion->id);
     CHECK(world.query(knowledge, false, "Blade's End").size() == 1);
     CHECK(world.query(knowledge, false, "Townsaver").empty());
+}
+
+TEST_CASE("world database NPCs use current relocation topic and availability overrides in Guide")
+{
+    Fixture fixture;
+    std::vector<std::string> house(24);
+    house[0] = "12"; house[2] = "House"; house[3] = "63"; house[5] = "New residence";
+    REQUIRE(fixture.houses.loadFromRows({house}));
+    REQUIRE(fixture.teachers.loadFromRows({{"TopicId", "Notes", "SkillId", "Mastery", "TextId"},
+        {"305", "Grand Master Sword", "1", "3", "305"}, {"306", "Master Axe", "3", "2", "306"}}));
+    EventRuntimeState state;
+    state.npcHouseOverrides[42] = 12;
+    state.npcTopicOverrides[42][0] = 306;
+    state.npcNameOverrides[42] = "Changed NPC name";
+    WorldNpcState current = worldCurrentNpcs(fixture.npcs, state);
+    WorldDatabase world(fixture.maps, fixture.houses, fixture.npcs, fixture.teachers, "mm7", {}, current);
+    const WorldRecord *pNpc = world.find("mm7:npc/42");
+    REQUIRE(pNpc != nullptr);
+    CHECK(pNpc->house->id == 12);
+    CHECK(pNpc->parentId == "mm7:house/12");
+    CHECK(pNpc->name() == "Changed NPC name");
+    CHECK_FALSE(pNpc->lastObservedNpc);
+    CHECK(world.find("mm7:npc/42/trainer/305") == nullptr);
+    REQUIRE(world.find("mm7:npc/42/trainer/306") != nullptr);
+    // The record keeps external table pointers and value-owned overrides through a move/copy of the index.
+    WorldDatabase copied = world;
+    world = fixture.database();
+    CHECK(copied.find("mm7:npc/42")->name() == "Changed NPC name");
+    state.unavailableNpcIds.insert(42);
+    current = worldCurrentNpcs(fixture.npcs, state);
+    WorldDatabase unavailable(fixture.maps, fixture.houses, fixture.npcs, fixture.teachers, "mm7", {}, current);
+    CHECK(unavailable.find("mm7:npc/42") == nullptr);
+    state.unavailableNpcIds.clear();
+    state.npcHouseOverrides[42] = 0;
+    current = worldCurrentNpcs(fixture.npcs, state);
+    WorldDatabase removed(fixture.maps, fixture.houses, fixture.npcs, fixture.teachers, "mm7", {}, current);
+    CHECK(removed.find("mm7:npc/42") == nullptr);
+}
+
+TEST_CASE("world database NPC discovery is last observed rather than a secret current address")
+{
+    Fixture fixture;
+    EventRuntimeState state;
+    recordWorldNpcObservation(state, 42, 11, {305});
+    state.npcHouseOverrides[42] = 0;
+    state.npcTopicOverrides[42][0] = 0;
+    state.npcNameOverrides[42] = "Secret identity";
+    const WorldNpcState observed = worldObservedNpcs(fixture.npcs, fixture.teachers, state.namedGlobalVars);
+    WorldDatabase world(fixture.maps, fixture.houses, fixture.npcs, fixture.teachers, "mm7", {}, observed);
+    const WorldRecord *pNpc = world.find("mm7:npc/42");
+    REQUIRE(pNpc != nullptr);
+    CHECK(pNpc->name() == "Townsaver");
+    CHECK(pNpc->house->id == 11);
+    CHECK(pNpc->lastObservedNpc);
+    CHECK(world.find("mm7:npc/42/trainer/305") != nullptr);
+    CHECK(fixture.npcs.getNpc(42)->houseId == 11);
+    // A new actual meeting updates known topics and address, including removal of a teacher offer.
+    recordWorldNpcObservation(state, 42, 11, {});
+    CHECK(state.namedGlobalVars.at("openyamm.discovery.npc/42/teacher/305") == 0);
+    const WorldNpcState updated = worldObservedNpcs(fixture.npcs, fixture.teachers, state.namedGlobalVars);
+    WorldDatabase metAgain(fixture.maps, fixture.houses, fixture.npcs, fixture.teachers, "mm7", {}, updated);
+    REQUIRE(metAgain.find("mm7:npc/42") != nullptr);
+    CHECK(metAgain.find("mm7:npc/42/trainer/305") == nullptr);
+    recordWorldNpcObservation(state, 42, 0, {305});
+    const WorldNpcState remote = worldObservedNpcs(fixture.npcs, fixture.teachers, state.namedGlobalVars);
+    WorldDatabase noAddress(fixture.maps, fixture.houses, fixture.npcs, fixture.teachers, "mm7", {}, remote);
+    CHECK(noAddress.find("mm7:npc/42") == nullptr);
+}
+
+TEST_CASE("world database old NPC discovery flags do not invent a last met address")
+{
+    Fixture fixture;
+    std::unordered_map<std::string, int32_t> legacy{{WorldDatabase::npcDiscoveryKey(42), 1}};
+    const WorldNpcState observed = worldObservedNpcs(fixture.npcs, fixture.teachers, legacy);
+    CHECK(observed.observedOnly);
+    CHECK(observed.houses.empty());
+    WorldDatabase world(fixture.maps, fixture.houses, fixture.npcs, fixture.teachers, "mm7", {}, observed);
+    CHECK(world.query(WorldKnowledge{}, true, "Townsaver").empty());
+    EventRuntimeState state;
+    recordWorldNpcObservation(state, 42, UINT32_MAX, {});
+    const WorldNpcState fullRange = worldObservedNpcs(fixture.npcs, fixture.teachers, state.namedGlobalVars);
+    CHECK(fullRange.houses.at(42) == UINT32_MAX);
+    CHECK_THROWS_AS(recordWorldNpcObservation(state, 0, 11, {}), std::invalid_argument);
+}
+
+TEST_CASE("NPC topic resolution preserves sparse slot overrides without walking absent slots")
+{
+    Fixture fixture;
+    const std::unordered_map<uint32_t, uint32_t> overrides{{0, 0}, {UINT32_MAX, 306}, {3, 307}};
+    CHECK(fixture.npcs.getTopicIdsForNpc(42, &overrides) == std::vector<uint32_t>{307, 306});
+    CHECK(fixture.npcs.getTopicIdsForNpc(42) == std::vector<uint32_t>{305});
+    CHECK(fixture.npcs.getTopicIdsForNpc(1000000, &overrides).empty());
+}
+
+TEST_CASE("world database packaged houses agree with base event metadata and physical geometry")
+{
+    const char *pRoot = std::getenv("OPENYAMM_ATLAS_AUDIT_ROOT");
+    if (pRoot == nullptr)
+    {
+        MESSAGE("Packaged-content audit requires OPENYAMM_ATLAS_AUDIT_ROOT from tools/prepare_atlas_audit.py.");
+        return;
+    }
+    const std::filesystem::path root(pRoot);
+    const YAML::Node manifest = YAML::LoadFile((root / "manifest.json").string());
+    REQUIRE(manifest["format"].as<int>() == 1);
+    REQUIRE(manifest["scope"].as<std::string>() == "atlas-mm7-mm8-base-locations");
+    const auto read = [&root, &manifest](const std::string &virtualPath) -> std::optional<std::string>
+    {
+        if (!manifest["files"][virtualPath]) return std::nullopt;
+        std::ifstream file(root / virtualPath, std::ios::binary);
+        REQUIRE_MESSAGE(file.is_open(), virtualPath);
+        return std::string{std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>()};
+    };
+    const auto support = read("engine/scripts/common/event_support.lua");
+    REQUIRE(support.has_value());
+    const auto rows = [&read](const std::string &file)
+    {
+        const auto text = read("engine/data_tables/" + file);
+        REQUIRE(text.has_value());
+        const auto table = OpenYAMM::Engine::TextTable::parseTabSeparated(*text);
+        REQUIRE(table.has_value());
+        std::vector<std::vector<std::string>> result;
+        for (size_t i = 0; i < table->getRowCount(); ++i)
+            result.push_back(table->getRow(i));
+        return result;
+    };
+    MapStats maps; HouseTable houses;
+    REQUIRE(maps.loadFromRows(rows("map_stats.txt")));
+    const auto houseRows = rows("house_data.txt");
+    REQUIRE(houses.loadFromRows(houseRows));
+    std::set<uint32_t> transitionCards;
+    for (const auto &row : houseRows)
+    {
+        if (row.size() > 2 && row[2] == "Dungeon Ent")
+            transitionCards.insert(uint32_t(std::stoul(row[0])));
+    }
+    std::map<uint32_t, std::set<int>> locations;
+    size_t auditedMaps = 0;
+    for (const std::string &world : {"mm7", "mm8"})
+    {
+        for (const MapStatsEntry &map : maps.getEntries())
+        {
+            if (map.worldId != world) continue;
+            const std::string prefix = "worlds/" + world + "/";
+            const auto lua = read(prefix + "events/maps/"
+                + std::filesystem::path(map.fileName).stem().string() + ".lua");
+            const auto binary = read(prefix + "maps/" + map.fileName);
+            if (!lua || !binary) continue; // Only maps supplied in this package revision are audited.
+            const std::vector<uint8_t> bytes(binary->begin(), binary->end());
+            ++auditedMaps;
+            std::string error;
+            const auto program = ScriptedEventProgram::loadFromLuaText(*support + "\n" + *lua, map.fileName,
+                ScriptedEventScope::Map, error);
+            REQUIRE_MESSAGE(program.has_value(), (map.fileName + ": " + error));
+            std::vector<WorldInteractionSite> sites;
+            if (std::filesystem::path(map.fileName).extension() == ".odm")
+            {
+                const auto geometry = OutdoorMapDataLoader().loadFromBytes(bytes);
+                REQUIRE_MESSAGE(geometry.has_value(), map.fileName);
+                sites = worldInteractionSites(*geometry);
+            }
+            else
+            {
+                const auto geometry = IndoorMapDataLoader().loadFromBytes(bytes);
+                REQUIRE_MESSAGE(geometry.has_value(), map.fileName);
+                sites = worldInteractionSites(*geometry);
+            }
+            for (const WorldInteractionSite &site : sites)
+            {
+                const auto action = program->getContextActionMetadata(site.eventId);
+                if (action && action->kind == "enter_house" && action->houseId)
+                    locations[*action->houseId].insert(map.id);
+            }
+        }
+    }
+    REQUIRE(auditedMaps > 80);
+    REQUIRE(locations.size() > 300);
+    size_t ambiguous = 0;
+    for (const auto &[id, actual] : locations)
+    {
+        // Unlabelled legacy transition/movie cards are deliberately not loaded as usable venues.
+        if (transitionCards.contains(id)) continue;
+        const HouseEntry *pHouse = houses.get(id);
+        REQUIRE_MESSAGE(pHouse != nullptr, id);
+        if (actual.size() != 1)
+        {
+            ++ambiguous;
+            continue; // Shared services need multiple location records, not an arbitrary single-map repair.
+        }
+        INFO("House ", id, " ", pHouse->name);
+        CHECK(pHouse->mapId == uint32_t(*actual.begin()));
+    }
+    MESSAGE("Audited ", auditedMaps, " maps, ", locations.size(), " physical house IDs; ",
+        ambiguous, " shared service requires multiple locations.");
+}
+
+TEST_CASE("world database indoor services locate resident NPCs and trainers on the floor plan")
+{
+    Fixture fixture;
+    std::vector<std::string> room(24);
+    room[0] = "11"; room[2] = "House"; room[3] = "95"; room[5] = "Council room";
+    REQUIRE(fixture.houses.loadFromRows({room}));
+    WorldDatabase world = fixture.database();
+    IndoorMapData geometry;
+    geometry.entities.resize(1);
+    geometry.entities[0].x = 50000; geometry.entities[0].y = 60000;
+    geometry.entities[0].eventIdSecondary = 10;
+    std::string error;
+    const auto program = ScriptedEventProgram::loadFromLuaText(R"lua(
+        evt.map[10] = function() end
+        evt.meta.map.contextActions = {
+            [10] = { kind = "enter_house", source = "opcode", houseId = 11 }
+        }
+    )lua", "@indoor-service", ScriptedEventScope::Map, error);
+    REQUIRE_MESSAGE(program.has_value(), error);
+    const MapStatsEntry &map = *fixture.maps.findById(95);
+    world.indexMapLocations(map, geometry, *program);
+    REQUIRE(world.locations().size() == 1);
+    const WorldMapLocation &location = world.locations()[0];
+    CHECK(location.mapId == "world.mm7.map.7d21");
+    CHECK(location.recordId == "mm7:house/11");
+    CHECK(location.x == 50000); // Indoor projection is not limited by the outdoor terrain coordinate range.
+    CHECK(location.y == 60000);
+    CHECK(world.recordsAtLocation(location, {}, true).size() == 3);
+    CHECK_FALSE(world.locationVisible(location, {}, false));
+    WorldKnowledge known;
+    known.visitedMaps.insert("7d21.blv");
+    known.variables[WorldDatabase::houseDiscoveryKey(11)] = 1;
+    known.variables[WorldDatabase::npcDiscoveryKey(42)] = 1;
+    known.variables[worldNpcHouseKey(42)] = 11;
+    known.variables[worldNpcTeacherKey(42, 305)] = 1;
+    CHECK(world.locationVisible(location, known, false));
+    CHECK(world.recordsAtLocation(location, known, false).size() == 3);
+    world.indexMapLocations(map, geometry, *program);
+    CHECK(world.locations().size() == 1);
+}
+
+TEST_CASE("world database shared discovery queries reject secret current NPC locations and teaching offers")
+{
+    Fixture fixture;
+    WorldKnowledge knowledge;
+    knowledge.variables[WorldDatabase::mapDiscoveryKey(*fixture.maps.findById(63))] = 1;
+    knowledge.variables[WorldDatabase::npcDiscoveryKey(42)] = 1;
+    const WorldDatabase base = fixture.database();
+    CHECK(base.query(knowledge, false, "", WorldRecordKind::Npc).empty());
+    knowledge.variables[worldNpcHouseKey(42)] = 11;
+    CHECK(base.query(knowledge, false, "", WorldRecordKind::Npc).size() == 1);
+    CHECK(base.query(knowledge, false, "", WorldRecordKind::Trainer).empty());
+    knowledge.variables[worldNpcTeacherKey(42, 305)] = 1;
+    CHECK(base.query(knowledge, false, "", WorldRecordKind::Trainer).size() == 1);
+    knowledge.variables[worldNpcHouseKey(42)] = 12;
+    CHECK(base.query(knowledge, false, "", WorldRecordKind::Npc).empty());
+    CHECK(base.query(knowledge, false, "", WorldRecordKind::Trainer).empty());
+    CHECK(base.query(knowledge, true, "", WorldRecordKind::Npc).size() == 1);
 }

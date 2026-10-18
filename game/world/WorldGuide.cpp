@@ -1,4 +1,5 @@
 #include "game/world/WorldGuide.h"
+#include "game/world/WorldDatabase.h"
 #include "game/tables/ItemTable.h"
 #include "game/tables/SpellTable.h"
 #include "game/tables/ClassMultiplierTable.h"
@@ -110,7 +111,16 @@ std::vector<WorldGuideEntry> buildWorldGuide(const WorldGuideSource &source, Wor
                 {
                     const NpcEntry *pNpc = source.pNpcs->getNpc(uint32_t(std::stoul(location.target)));
                     if (pNpc != nullptr) name = pNpc->name;
-                    // NPC residence can change through events. Do not infer a quest location from its base house.
+                    // The selected world index distinguishes current and last-observed NPC locations.
+                    if (source.pWorld != nullptr && source.pWorldKnowledge != nullptr)
+                    {
+                        const WorldRecord *pContact = source.pWorld->find(source.worldId + ":npc/" + location.target);
+                        if (pContact != nullptr && source.pWorld->visible(*pContact, *source.pWorldKnowledge, guide))
+                        {
+                            name = pContact->name();
+                            target = pContact->id;
+                        }
+                    }
                 }
                 else if (location.kind == JournalQuestLocation::Kind::House && source.pHouses != nullptr)
                 {
@@ -139,7 +149,8 @@ std::vector<WorldGuideEntry> buildWorldGuide(const WorldGuideSource &source, Wor
                     if (!target.empty() && (kind != WorldGuideLink::Kind::Item || guide
                         || knowledge.items.contains(uint32_t(std::stoul(location.target)))))
                     {
-                        entry.links.push_back({kind, role + ": " + name, target, 0, location.disclosed});
+                        entry.links.push_back({kind, role + ": " + name, target, 0,
+                            location.disclosed && location.kind != JournalQuestLocation::Kind::Npc});
                     }
                 }
             }

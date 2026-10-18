@@ -1,0 +1,15 @@
+id: atlas.mm8_npc_observation
+world: mm8
+mode: faithful
+steps:
+- new_game_flow: {start_map: out01.odm}
+- press_interact:
+    pose: {x: 9407, y: 6200, z: 1007, yaw: 1.5707963, pitch: 0}
+    expect: {kind: event_target, triggered_event: 197, can_activate: true}
+- select_topic: {kind: house_resident, action_id: 2}
+- assert:
+    named_global_var_changed: {name: openyamm.discovery.npc/2/house, value: 212}
+- save_game: npc-observed
+- load_game: npc-observed
+- assert:
+    named_global_var_changed: {name: openyamm.discovery.npc/2/house, value: 212}
