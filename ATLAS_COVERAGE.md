@@ -20,7 +20,7 @@ tables, and do not bundle its HTML, JS, translated prose, generated illustration
 | Dungeon plans from engine geometry | Implemented | Implemented | Elevation selection, annotations and special connection views |
 | Buildings, resident NPCs, trainers | Current/observed residents, indoor service markers | Same shared index | Conditional venues, shared-service placements and generated/roaming NPCs |
 | Trainer requirements and prices | Gameplay evaluator and observed offers | Same shared evaluator | Race-specific class/skill comparison and conditional eligibility audit |
-| Walking and scheduled transport | Existing table index | Existing table index | Visual route links and neighboring-region navigation |
+| Walking and scheduled transport | Directed walking graph, quest gates and destination navigation | Same shared graph/navigation | Scripted transport overrides, observed schedules, prices and transport route graphics |
 | Quest giver/objective/return chains | Shared registry, 26 quests and conditional clues | Shared registry, 35 quests and conditional clues | Complete campaign relationships, remaining conditional stages and potential residences |
 | Chests, wells, shrines, obelisks | Event-backed Sites layer | Event-backed Sites layer | Effects, loot/open state, inherited decoration events and wider content audit |
 | Monster groups and Bestiary | Authored encounter areas and last-observed actors | Same shared index and observed-only Bestiary | Placed/scripted actors, named overrides, automatic visibility discovery and variant/source links |

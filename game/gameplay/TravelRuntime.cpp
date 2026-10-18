@@ -2,11 +2,19 @@
 
 #include "game/gameplay/GameplayRuntimeInterfaces.h"
 #include "game/party/Party.h"
+#include "game/tables/MapStats.h"
 
 #include <algorithm>
 
 namespace OpenYAMM::Game
 {
+bool walkingTravelQuestRequirementsMet(const MapEdgeTransition &transition,
+    const std::function<bool(uint32_t)> &hasQuestBit)
+{
+    return transition.requiredQuestBitsAny.empty()
+        || std::any_of(transition.requiredQuestBitsAny.begin(), transition.requiredQuestBitsAny.end(), hasQuestBit);
+}
+
 void applyTravelDaysSideEffects(
     Party &party,
     IGameplayWorldRuntime *pWorldRuntime,

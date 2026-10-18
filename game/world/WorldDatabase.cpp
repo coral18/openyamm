@@ -1,6 +1,7 @@
 #include "game/world/WorldDatabase.h"
 #include "game/StringUtils.h"
 #include "game/maps/MapIdentity.h"
+#include "game/gameplay/TravelRuntime.h"
 
 #include <algorithm>
 #include <bit>
@@ -250,6 +251,8 @@ bool WorldDatabase::visible(const WorldRecord &record, const WorldKnowledge &kno
 {
     if (guide)
         return true;
+    if (!walkingRouteUnlocked(record, knowledge))
+        return false;
     bool known = knowledge.knows(record);
     if (!known && record.kind == WorldRecordKind::Dungeon)
         for (const WorldMapLocation &location : m_locations)
@@ -279,6 +282,37 @@ bool WorldDatabase::visible(const WorldRecord &record, const WorldKnowledge &kno
             return false;
     }
     return true;
+}
+
+bool WorldDatabase::walkingRouteUnlocked(const WorldRecord &record, const WorldKnowledge &knowledge) const
+{
+    return record.walkingRoute == nullptr || walkingTravelQuestRequirementsMet(*record.walkingRoute,
+        [&knowledge](uint32_t bit) { return knowledge.questBits.contains(bit); });
+}
+
+std::vector<WorldWalkingLink> WorldDatabase::walkingLinks(const WorldKnowledge &knowledge, bool guide) const
+{
+    std::vector<WorldWalkingLink> result;
+    const auto anchor = [this](const WorldRecord *pMap) -> const WorldRecord *
+    {
+        // The constructor validates the parent graph; no synthetic map anchors are invented.
+        while (pMap != nullptr && !pMap->position && !pMap->parentId.empty())
+            pMap = find(pMap->parentId);
+        return pMap != nullptr && pMap->position ? pMap : nullptr;
+    };
+    for (const WorldRecord &record : m_records)
+    {
+        if (record.walkingRoute == nullptr || !visible(record, knowledge, guide))
+            continue;
+        const WorldRecord *pSource = anchor(find(mapId(*record.map)));
+        const WorldRecord *pDestination = anchor(find(mapId(*record.destination)));
+        if (pSource == nullptr || pDestination == nullptr || pSource == pDestination
+            || !visible(*pSource, knowledge, guide) || !visible(*pDestination, knowledge, guide))
+            continue;
+        result.push_back({record.id, pSource->id, pDestination->id, *pSource->position,
+            *pDestination->position, !walkingRouteUnlocked(record, knowledge)});
+    }
+    return result;
 }
 
 std::vector<const WorldRecord *> WorldDatabase::query(const WorldKnowledge &knowledge, bool guide,

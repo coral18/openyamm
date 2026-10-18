@@ -539,3 +539,38 @@ the original stage flag cleared; Guide toggles preserve each view's knowledge. N
 save/load regressions also passed. Isolated records are under the local Windows development directory
 `atlas-clues-20261018/`. No generated scripts, save-format version or user campaign files changed. Android and
 controller verification remains pending.
+
+### Directed walking routes and destination navigation, 2026-10-18
+
+The continent overview's Travel filter now draws directional walking links from the active MapStats edge
+definitions. Distinct exits remain distinct: Harmondale's north/east paths to Tularean Forest keep their own
+durations and arrows. Reverse connections are evaluated independently. Selected routes are highlighted while
+the overview stays open; `View destination` opens the corresponding native Atlas map without travelling there.
+The same destination navigation is available on existing scheduled-transport reference cards.
+
+WorldDatabase supplies a read-only walking graph from canonical map records and existing presentation anchors.
+Both endpoints and their anchors must be known in Discovery. Missing anchors do not create invented coordinates;
+the route remains available in the list. No regional terrain, resident or service knowledge is awarded by browsing
+the graph or following its destination link. Guide-to-Discovery switches preserve these boundaries.
+
+Walking quest eligibility now uses one shared TravelRuntime predicate in both the actual outdoor boundary
+transition and the World Database. The existing ANY-of-QBits behavior is preserved. Locked walking links remain
+Guide-only, with the selected route reporting its quest requirement. Avlee's Shoals entry and the separate return
+exits retain their canonical asymmetry. Surface requirements, including water access, remain separately displayed
+and enforced by the existing travel runtime; a quest-unlocked line is not a claim that every surface condition
+is satisfied at the party's current position.
+
+This graph covers walking transitions. Boats/coaches still use the earlier reference index; scripted destination
+overrides, observed schedules, prices, route graphics and dynamic availability need further integration. It does
+not yet replace that remaining work with an inferred or simulated transport timetable. Teleports, Barrows and
+Regna graphs retain their separate remaining requirements in the coverage matrix.
+
+Focused ASan/UBSan coverage passed 51 cases / 3,680 assertions. The canonical MM7/MM8 datasets check endpoint
+privacy, distinct directional exits, the three alternative Shoals unlock bits, unrelated flags, missing anchors
+and world separation. Windows Release compiled successfully. A faithful native scenario walked into the actual
+north Harmondale boundary, opened its travel confirmation and reached Tularean Forest through the normal handler.
+The visit/save fixtures used for Atlas UI capture do not claim to perform those journeys themselves.
+
+Native AMD/OpenGL captures checked both worlds' known/Guide graphs, selected directions, destination navigation,
+retained regional fog and return to gameplay. Isolated runs are retained in the local Windows development
+directory `atlas-travel-20261018/`. Android/controller validation and complete Atlas coverage remain pending.

@@ -98,24 +98,6 @@ bool canOfferMapTransition(
     return !moveState.supportOnWater;
 }
 
-bool transitionQuestRequirementsMet(const Party &party, const MapEdgeTransition &transition)
-{
-    if (transition.requiredQuestBitsAny.empty())
-    {
-        return true;
-    }
-
-    for (uint32_t qbit : transition.requiredQuestBitsAny)
-    {
-        if (party.hasQuestBit(qbit))
-        {
-            return true;
-        }
-    }
-
-    return false;
-}
-
 int32_t roundedOutdoorCoordinate(float value)
 {
     return static_cast<int32_t>(std::lround(value));
@@ -468,7 +450,8 @@ OutdoorSceneRuntime::AdvanceFrameResult OutdoorSceneRuntime::advanceFrame(
             && pTransition->has_value()
             && !(*pTransition)->destinationMapFileName.empty()
             && canOfferMapTransition(*m_pPartyRuntime, moveState, **pTransition)
-            && transitionQuestRequirementsMet(m_pPartyRuntime->party(), **pTransition))
+            && walkingTravelQuestRequirementsMet(**pTransition,
+                [this](uint32_t bit) { return m_pPartyRuntime->party().hasQuestBit(bit); }))
         {
             EventRuntimeState::PendingDialogueContext context = {};
             context.kind = DialogueContextKind::MapTransition;

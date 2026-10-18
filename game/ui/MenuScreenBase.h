@@ -133,6 +133,7 @@ protected:
     void preloadLayoutAssets(const UiLayoutManager &layoutManager);
     void setClipRect(const std::optional<Rect> &rect);
     void drawSolidRect(const Rect &rect, uint32_t colorAbgr);
+    void drawLine(float x1, float y1, float x2, float y2, float thickness, uint32_t colorAbgr);
     void drawEllipseOutline(const Rect &rect, float thickness, uint32_t colorAbgr);
 
   private:

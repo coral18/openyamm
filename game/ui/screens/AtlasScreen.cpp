@@ -29,6 +29,10 @@ WorldNpcState atlasNpcState(const GameDataRepository &data, const WorldKnowledge
     return guide || !hasParty ? knowledge.currentNpcs
         : worldObservedNpcs(data.npcDialogTable(), data.mergedTeacherTopicTable(), knowledge.variables);
 }
+std::string atlasTravelDays(int64_t days)
+{
+    return std::to_string(days) + (days == 1 ? " day" : " days");
+}
 } // namespace
 
 AtlasScreen::AtlasScreen(const Engine::AssetFileSystem &assets, const GameDataRepository &data,
@@ -52,6 +56,13 @@ AtlasScreen::AtlasScreen(const Engine::AssetFileSystem &assets, const GameDataRe
             m_referenceKnowledge.monsters.insert(observation.monsterId);
     if (m_pParty != nullptr)
     {
+        const MapBoundaryEdge edges[] = {MapBoundaryEdge::North, MapBoundaryEdge::South,
+            MapBoundaryEdge::East, MapBoundaryEdge::West};
+        for (const MapStatsEntry &map : m_data.mapStats().getEntries())
+            for (MapBoundaryEdge edge : edges)
+                if (const auto &route = *map.edgeTransition(edge); route)
+                    for (uint32_t bit : route->requiredQuestBitsAny)
+                        if (m_pParty->hasQuestBit(bit)) m_knowledge.questBits.insert(bit);
         for (const JournalQuestEntry &quest : m_data.journalQuestTable().entries())
         {
             if (m_data.journalQuestTable().isVisible(quest, *m_pParty))
@@ -239,6 +250,8 @@ void AtlasScreen::select(const WorldRecord &record)
     m_placingNote = false;
     m_selectedFeature.clear();
     m_selected = record.id;
+    if (record.kind == WorldRecordKind::Travel && m_map.empty())
+        return;
     const std::string destination = WorldDatabase::mapId(*record.map);
     if (m_map != destination)
     {
@@ -428,6 +441,8 @@ void AtlasScreen::drawScreen(float)
             textInRect(canvasRect(375, 94, 195, 16), "B Buildings   T Trainers   D Dungeons",
                        "menu_lucida", 8, 0xffc6dfeau);
     }
+    if (m_map.empty() && m_filter == WorldRecordKind::Travel)
+        textInRect(canvasRect(168, 89, 403, 25), "Walking links - arrows show direction", "menu_lucida", 11);
     indexKnownRegions();
     const std::string listHeading = !m_siteSelection.empty() ? "Selected markers (clear)"
         : m_filter == WorldRecordKind::Travel ? (m_guide ? "All recorded routes" : "Known routes")
@@ -598,6 +613,43 @@ bool AtlasScreen::drawLocationMarkers(const WorldRecord &map, const Rect &image,
     return hovered;
 }
 
+void AtlasScreen::drawWalkingLinks(const Rect &image)
+{
+    const std::vector<WorldWalkingLink> links = m_world.walkingLinks(m_knowledge, m_guide);
+    for (size_t i = 0; i < links.size(); ++i)
+    {
+        const WorldWalkingLink &link = links[i];
+        size_t rank = 0, count = 0;
+        for (size_t j = 0; j < links.size(); ++j)
+            if ((links[j].sourceId == link.sourceId && links[j].destinationId == link.destinationId)
+                || (links[j].sourceId == link.destinationId && links[j].destinationId == link.sourceId))
+            {
+                if (j < i) ++rank;
+                ++count;
+            }
+        float x1 = image.x + link.source.first * image.width;
+        float y1 = image.y + link.source.second * image.height;
+        float x2 = image.x + link.destination.first * image.width;
+        float y2 = image.y + link.destination.second * image.height;
+        const float length = std::hypot(x2 - x1, y2 - y1);
+        if (length < designScale()) continue;
+        const float dx = (x2 - x1) / length, dy = (y2 - y1) / length;
+        const float side = link.sourceId < link.destinationId ? 1.0f : -1.0f;
+        const float lane = (float(rank) - (float(count) - 1) / 2) * 5 * designScale() * side;
+        x1 -= dy * lane; x2 -= dy * lane;
+        y1 += dx * lane; y2 += dx * lane;
+        const bool selected = m_selected == link.recordId;
+        const uint32_t color = selected ? 0xff8dc5e1u : link.locked ? 0xff53698bu : 0xff91a990u;
+        drawLine(x1, y1, x2, y2, (selected ? 2.5f : 1.2f) * designScale(), color);
+        const float tipX = x1 + (x2 - x1) * 0.62f, tipY = y1 + (y2 - y1) * 0.62f;
+        const float arrow = (selected ? 7.0f : 5.0f) * designScale();
+        drawLine(tipX, tipY, tipX - dx * arrow - dy * arrow / 2,
+            tipY - dy * arrow + dx * arrow / 2, designScale(), color);
+        drawLine(tipX, tipY, tipX - dx * arrow + dy * arrow / 2,
+            tipY - dy * arrow - dx * arrow / 2, designScale(), color);
+    }
+}
+
 void AtlasScreen::drawMap()
 {
     const Rect viewport = canvasRect(25, 121, 544, 270);
@@ -692,6 +744,8 @@ void AtlasScreen::drawMap()
             : drawLocationMarkers(*map, image, viewport, floorPlan);
     if (map == nullptr)
     {
+        if (m_filter == WorldRecordKind::Travel)
+            drawWalkingLinks(image);
         for (const auto &region : m_world.records())
         {
             if (!region.position || !m_world.visible(region, m_knowledge, m_guide))
@@ -835,8 +889,8 @@ void AtlasScreen::drawList()
         textInRect({row.x + 7 * designScale(), row.y + 2 * designScale(), row.width - 14 * designScale(), 18 * designScale()},
             record.name(), "menu_arrus", 12);
         const std::string subtitle = record.kind == WorldRecordKind::Travel
-            ? "From " + record.map->name + " - " + std::to_string(record.walkingRoute
-                ? record.walkingRoute->travelDays : record.route->travelDays) + " days"
+            ? "From " + record.map->name + " - " + atlasTravelDays(record.walkingRoute
+                ? record.walkingRoute->travelDays : int64_t(record.route->travelDays))
             : std::string(WorldDatabase::kindName(record.kind)) + (record.house != nullptr ? " - " + record.map->name : "");
         textInRect({row.x + 7 * designScale(), row.y + 19 * designScale(), row.width - 14 * designScale(), 12 * designScale()},
             subtitle, "menu_lucida", 9, 0xffa9bbb7u);
@@ -1239,7 +1293,7 @@ void AtlasScreen::drawDetails()
         }
         if (record->route != nullptr)
         {
-            text += " | " + std::to_string(record->route->travelDays) + " days | ";
+            text += " | " + atlasTravelDays(record->route->travelDays) + " | ";
             const char *days[] = {"Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"};
             for (size_t day = 0; day < 7; ++day)
                 if (record->route->daysAvailable[day]) text += std::string(days[day]) + " ";
@@ -1248,14 +1302,28 @@ void AtlasScreen::drawDetails()
         if (record->walkingRoute != nullptr)
         {
             text += " | Walking from " + record->map->name + " | "
-                + std::to_string(record->walkingRoute->travelDays) + " days";
-            if (!record->walkingRoute->requiredQuestBitsAny.empty()) text += " | Quest unlock required";
+                + atlasTravelDays(record->walkingRoute->travelDays);
+            if (!record->walkingRoute->requiredQuestBitsAny.empty())
+                text += m_pParty == nullptr ? " | Quest requirement"
+                    : m_world.walkingRouteUnlocked(*record, m_knowledge) ? " | Quest requirement met"
+                        : " | Locked by quest requirement";
             if (record->walkingRoute->requiredOriginSurface == MapTransitionSurfaceRequirement::Water)
                 text += " | Water access required";
         }
     }
     if (!m_locationError.empty())
         text += "\n" + m_locationError;
-    textInRect(canvasRect(34, 407, 778, 43), text, "menu_arrus", 12);
+    float textWidth = 778;
+    if (record != nullptr && record->kind == WorldRecordKind::Travel && record->destination != nullptr)
+    {
+        const WorldRecord *pDestination = m_world.find(WorldDatabase::mapId(*record->destination));
+        if (pDestination != nullptr && m_world.visible(*pDestination, m_knowledge, m_guide))
+        {
+            textWidth = 619;
+            if (button("atlas-route-destination", canvasRect(669, 416, 145, 28), "View destination"))
+                select(*pDestination);
+        }
+    }
+    textInRect(canvasRect(34, 407, textWidth, 43), text, "menu_arrus", 12);
 }
 } // namespace OpenYAMM::Game

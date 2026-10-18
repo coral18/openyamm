@@ -62,6 +62,13 @@ struct WorldRecord
     std::string searchText() const;
 };
 
+struct WorldWalkingLink
+{
+    std::string recordId, sourceId, destinationId;
+    std::pair<float, float> source, destination;
+    bool locked = false;
+};
+
 struct WorldKnowledge
 {
     std::unordered_map<std::string, int32_t> variables;
@@ -76,6 +83,7 @@ struct WorldKnowledge
     std::unordered_map<std::string, std::vector<WorldMonsterObservation>> monsterObservations;
     std::unordered_map<std::string, std::vector<WorldMapNote>> notes;
     WorldNpcState currentNpcs;
+    std::unordered_set<uint32_t> questBits;
     bool knows(const WorldRecord &record) const;
 };
 
@@ -94,6 +102,8 @@ public:
         const std::string &search = {}, std::optional<WorldRecordKind> kind = {},
         const std::string &withinMap = {}, bool includeTravel = true) const;
     bool visible(const WorldRecord &record, const WorldKnowledge &knowledge, bool guide) const;
+    bool walkingRouteUnlocked(const WorldRecord &record, const WorldKnowledge &knowledge) const;
+    std::vector<WorldWalkingLink> walkingLinks(const WorldKnowledge &knowledge, bool guide) const;
     void indexMapLocations(const OutdoorMapData &map, const ScriptedEventProgram &events);
     void indexMapLocations(const MapStatsEntry &map, const IndoorMapData &geometry,
                            const ScriptedEventProgram &events);

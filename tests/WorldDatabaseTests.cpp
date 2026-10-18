@@ -612,6 +612,101 @@ TEST_CASE("world database separates MM7 discoveries from distinct walking routes
     CHECK(database.query(knowledge, false, "", WorldRecordKind::Travel).empty());
 }
 
+TEST_CASE("world database walking graph preserves directed exits and canonical quest locks")
+{
+    MapStats maps;
+    REQUIRE(maps.loadFromRows(canonicalRows("map_stats.txt")));
+    MergedOutdoorTravelTable travels;
+    REQUIRE(travels.loadFromRows(canonicalRows("outdoor_travels.txt")));
+    REQUIRE(maps.applyMergedOutdoorTravels(travels));
+    std::ifstream file(std::string(OPENYAMM_SOURCE_DIR) + "/assets_dev/engine/world/atlas/mm7.yml");
+    REQUIRE(file.is_open());
+    const std::string yaml{std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>()};
+    const WorldAtlasPresentation presentation = parseWorldAtlasPresentation(yaml, "mm7");
+    HouseTable houses;
+    NpcDialogTable npcs;
+    MergedTeacherTopicTable teachers;
+    WorldDatabase world(maps, houses, npcs, teachers, "mm7", presentation.maps);
+    WorldKnowledge knowledge;
+    knowledge.visitedMaps = {"7out02.odm", "7out04.odm"};
+    const auto links = world.walkingLinks(knowledge, false);
+    REQUIRE(links.size() == 3);
+    std::unordered_set<std::string> distinct;
+    for (const WorldWalkingLink &link : links)
+    {
+        CHECK(distinct.insert(link.recordId).second);
+        const WorldRecord *pRoute = world.find(link.recordId);
+        REQUIRE(pRoute != nullptr);
+        CHECK(link.source == *world.find(link.sourceId)->position);
+        CHECK(link.destination == *world.find(link.destinationId)->position);
+        CHECK_FALSE(link.locked);
+        CHECK(pRoute->map->worldId == "mm7");
+        CHECK(pRoute->destination->worldId == "mm7");
+    }
+    knowledge.visitedMaps.erase("7out04.odm");
+    CHECK(world.walkingLinks(knowledge, false).empty());
+    knowledge.visitedMaps = {"out14.odm", "7out15.odm"};
+    const auto lockedLinks = world.walkingLinks(knowledge, false);
+    const auto entersShoals = [](const WorldWalkingLink &link)
+    { return link.sourceId == "world.mm7.map.out14" && link.destinationId == "world.mm7.map.7out15"; };
+    CHECK(std::none_of(lockedLinks.begin(), lockedLinks.end(), entersShoals));
+    const auto guide = world.walkingLinks(knowledge, true);
+    const auto shoals = std::find_if(guide.begin(), guide.end(), entersShoals);
+    REQUIRE(shoals != guide.end());
+    CHECK(shoals->locked);
+    const WorldRecord *pRoute = world.find(shoals->recordId);
+    REQUIRE(pRoute != nullptr);
+    CHECK(pRoute->walkingRoute->requiredOriginSurface == MapTransitionSurfaceRequirement::Water);
+    // The game accepts any one of the suit-related bits, not all three.
+    for (uint32_t bit : {642, 643, 783})
+    {
+        knowledge.questBits = {bit};
+        const auto unlocked = world.walkingLinks(knowledge, false);
+        const auto entrance = std::find_if(unlocked.begin(), unlocked.end(), entersShoals);
+        REQUIRE(entrance != unlocked.end());
+        CHECK(entrance->recordId == shoals->recordId);
+        CHECK_FALSE(entrance->locked);
+    }
+    knowledge.questBits = {999};
+    const auto unrelated = world.walkingLinks(knowledge, false);
+    CHECK(std::none_of(unrelated.begin(), unrelated.end(), entersShoals));
+    CHECK(knowledge.questBits == std::unordered_set<uint32_t>{999});
+    CHECK(knowledge.visitedMaps.size() == 2);
+    WorldDatabase noPresentation(maps, houses, npcs, teachers, "mm7");
+    CHECK(noPresentation.walkingLinks(knowledge, true).empty());
+    CHECK_FALSE(noPresentation.query(knowledge, true, "", WorldRecordKind::Travel).empty());
+}
+
+TEST_CASE("world database MM8 walking graph uses active navigation without disclosing unknown regions")
+{
+    MapStats maps;
+    REQUIRE(maps.loadFromRows(canonicalRows("map_stats.txt")));
+    REQUIRE(maps.applyOutdoorNavigationRows(canonicalRows("map_navigation.txt")));
+    std::ifstream file(std::string(OPENYAMM_SOURCE_DIR) + "/assets_dev/engine/world/atlas/mm8.yml");
+    REQUIRE(file.is_open());
+    const std::string yaml{std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>()};
+    const WorldAtlasPresentation presentation = parseWorldAtlasPresentation(yaml, "mm8");
+    HouseTable houses;
+    NpcDialogTable npcs;
+    MergedTeacherTopicTable teachers;
+    WorldDatabase world(maps, houses, npcs, teachers, "mm8", presentation.maps);
+    WorldKnowledge knowledge;
+    knowledge.visitedMaps = {"out02.odm", "out03.odm", "7out03.odm"};
+    const auto links = world.walkingLinks(knowledge, false);
+    REQUIRE(links.size() == 2);
+    for (const WorldWalkingLink &link : links)
+    {
+        const WorldRecord *pRoute = world.find(link.recordId);
+        REQUIRE(pRoute != nullptr);
+        CHECK(pRoute->map->worldId == "mm8");
+        CHECK(pRoute->destination->worldId == "mm8");
+        CHECK(pRoute->walkingRoute->travelDays == 1);
+    }
+    knowledge.visitedMaps.erase("out03.odm");
+    CHECK(world.walkingLinks(knowledge, false).empty());
+    CHECK_FALSE(world.walkingLinks(knowledge, true).empty());
+}
+
 TEST_CASE("world database hides travel destinations until both ends are known")
 {
     Fixture f;

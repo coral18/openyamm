@@ -1,0 +1,13 @@
+id: atlas.mm7_travel_knowledge
+title: Atlas walking routes use visited regions without discovering unrelated venues
+world: mm7
+mode: faithful
+steps:
+- new_game_flow: {start_map: 7out02.odm}
+- load_map: {map: 7out04.odm}
+- load_map: {map: out14.odm}
+- save_game: visited-route-regions
+- load_game: visited-route-regions
+- assert:
+    map: out14.odm
+    named_global_var_changed: {name: openyamm.discovery.npc/397, value: 0}
