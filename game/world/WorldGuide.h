@@ -23,6 +23,7 @@ class MonsterTable;
 class JournalQuestTable;
 class NpcDialogTable;
 class WorldDatabase;
+class MergedCharacterSelectionTable;
 struct WorldKnowledge;
 
 enum class WorldGuideSection { Items, Spells, Classes, Alchemy, Companions, Progress, Monsters, Quests };
@@ -47,6 +48,7 @@ struct WorldGuideSource
     const NpcDialogTable *pNpcs = nullptr;
     const WorldDatabase *pWorld = nullptr;
     const WorldKnowledge *pWorldKnowledge = nullptr;
+    const MergedCharacterSelectionTable *pCharacterSelection = nullptr;
 };
 
 struct WorldGuideKnowledge
@@ -61,11 +63,12 @@ struct WorldGuideKnowledge
     std::unordered_set<uint32_t> quests, activeQuests;
     std::unordered_set<uint32_t> questBits;
     std::unordered_set<std::string> questLocations;
+    std::unordered_set<uint32_t> races;
 };
 
 struct WorldGuideLink
 {
-    enum class Kind { Trainer, Alchemy, Item, Location, Spell };
+    enum class Kind { Trainer, Alchemy, Item, Location, Spell, Class };
     Kind kind = Kind::Item;
     std::string label;
     std::string target;

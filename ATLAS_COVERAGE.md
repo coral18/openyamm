@@ -19,7 +19,7 @@ tables, and do not bundle its HTML, JS, translated prose, generated illustration
 | Discovery fog and current party arrow | Implemented | Implemented | Wider dungeon/device checks |
 | Dungeon plans from engine geometry | Implemented | Implemented | Elevation selection, annotations and special connection views |
 | Buildings, resident NPCs, trainers | Current/observed residents, indoor service markers | Same shared index | Conditional venues, shared-service placements and generated/roaming NPCs |
-| Trainer requirements and prices | Gameplay evaluator and observed offers | Same shared evaluator | Race-specific class/skill comparison and conditional eligibility audit |
+| Trainer requirements and prices | Gameplay evaluator, observed offers and race-specific mastery comparisons | Same shared evaluator | Conditional eligibility audit and starting-skill/race-selection checks |
 | Walking and scheduled transport | Directed walking/coach/boat graph, departure pins, last-offered schedules/fare/duration, live local overrides and destination navigation | Same shared knowledge/navigation | Remote scripted timetable references, availability forecasting and arrival-point links |
 | Quest giver/objective/return chains | Shared registry, 26 quests and conditional clues | Shared registry, 35 quests and conditional clues | Complete campaign relationships, remaining conditional stages and potential residences |
 | Chests, wells, shrines, obelisks | Event-backed Sites layer | Event-backed Sites layer | Effects, loot/open state, inherited decoration events and wider content audit |
@@ -28,7 +28,7 @@ tables, and do not bundle its HTML, JS, translated prose, generated illustration
 | Items, artifacts and equipment reference | Shared ItemTable view | Shared ItemTable view | Item-source relationships, icons and richer comparisons |
 | Alchemy recipes and ingredients | Native recursive recipe view | Native recursive recipe view | Broader canonical-content audit and ingredient-source links |
 | Spellbook reference and guild links | Spell/book navigation and eligible guild links from shared stock rules | Same shared rules and discovery filtering | Observed shelves, access/learning eligibility and conditional venue audit |
-| Classes and skill caps | Active class definitions and exact-rank trainer links | Same shared registry | Race overrides, promotion relationships and comparison chart |
+| Classes and skill caps | Race mastery differences, promotion growth comparisons and exact-rank trainer searches | Same shared registry | Promotion quest/branch conditions, starting choices, comparison grid and class-history discoveries |
 | Recruitable companions | Shared merged roster reference | Roster biography/stats and recruited-only Discovery | Recruitment locations/conditions and current recruitment state |
 | Arcomage/Arena tracking | Existing campaign counters and linked taverns | Existing campaign counters and linked taverns | Visual checklist polish and wider save-state audit |
 | Custom markers and notes | Native place/edit/delete with shared Map Book state | Same shared notes and canonical snapshot ownership | Marker styles, richer editing and Android/controller checks |

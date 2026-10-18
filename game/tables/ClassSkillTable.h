@@ -56,6 +56,8 @@ public:
     std::optional<std::string> classNameForId(uint32_t classId) const;
     bool classIdIsAtLeast(uint32_t currentClassId, uint32_t minimumClassId) const;
     bool hasClass(const std::string &className) const;
+    // Read-only progression relationships from the loaded registry, without legacy name guesses.
+    std::vector<std::string> promotionClassNamesFromMetadata(const std::string &className) const;
 
 private:
     struct RaceSkillRule
@@ -69,7 +71,6 @@ private:
         int32_t exceptionCode = 0;
     };
 
-    std::vector<std::string> promotionClassNamesFromMetadata(const std::string &className) const;
     const ClassMetadataEntry *metadataForClass(const std::string &className) const;
     uint32_t classKindForClass(const std::string &className) const;
     uint32_t manaModeForClass(const std::string &className) const;

@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cstdlib>
+#include <limits>
 #include <utility>
 
 namespace OpenYAMM::Game
@@ -547,6 +548,10 @@ std::vector<std::string> ClassSkillTable::promotionClassNamesFromMetadata(const 
 
     std::vector<std::string> result;
     const ClassMetadataEntry &source = classIt->second;
+    if (source.promotionStep == std::numeric_limits<uint32_t>::max())
+    {
+        return {};
+    }
 
     for (const auto &[candidateClassName, candidate] : m_classMetadata)
     {

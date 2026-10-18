@@ -392,6 +392,7 @@ public:
     const std::vector<std::string> *allowedClassesForRaceId(uint32_t raceId) const;
     const std::vector<MergedCharacterSelectionContinent> &continents() const;
     std::optional<std::string> raceNameForId(uint32_t raceId) const;
+    const std::unordered_map<uint32_t, std::string> &raceNames() const;
     size_t raceCount() const;
 
 private:

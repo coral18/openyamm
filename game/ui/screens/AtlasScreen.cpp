@@ -120,6 +120,7 @@ AtlasScreen::AtlasScreen(const Engine::AssetFileSystem &assets, const GameDataRe
             if (const Character *pMember = m_pParty->member(i))
             {
                 m_referenceKnowledge.classes.insert(canonicalClassName(pMember->className));
+                m_referenceKnowledge.races.insert(pMember->raceId);
                 for (const SpellEntry &spell : m_data.spellTable().entries())
                     if (pMember->knowsSpell(uint32_t(spell.id)))
                         m_referenceKnowledge.spells.insert(uint32_t(spell.id));
@@ -1089,7 +1090,8 @@ void AtlasScreen::rebuildReference()
         &m_data.classSkillTable(), &m_data.mergedPotionSettingTable(), &m_data.mergedReagentSettingTable(),
         &m_data.potionMixingTable(), &m_data.potionNoteTable(), &m_data.rosterTable(),
         &m_data.houseTable(), &m_data.mapStats(), m_presentation.worldId, &m_data.monsterTable(),
-        &m_data.journalQuestTable(), &m_data.npcDialogTable(), &m_world, &m_knowledge};
+        &m_data.journalQuestTable(), &m_data.npcDialogTable(), &m_world, &m_knowledge,
+        &m_data.mergedCharacterSelectionTable()};
     m_referenceEntries = buildWorldGuide(source, m_referenceSection, m_referenceKnowledge, m_guide);
     const auto selected = std::find_if(m_referenceEntries.begin(), m_referenceEntries.end(),
         [this](const WorldGuideEntry &entry) { return entry.id == m_referenceSelected; });
@@ -1210,6 +1212,7 @@ void AtlasScreen::drawReference()
                 else
                 {
                     m_referenceSection = link.kind == WorldGuideLink::Kind::Spell ? WorldGuideSection::Spells
+                        : link.kind == WorldGuideLink::Kind::Class ? WorldGuideSection::Classes
                         : link.kind == WorldGuideLink::Kind::Item ? WorldGuideSection::Items
                         : WorldGuideSection::Alchemy;
                     m_referenceSelected = link.target;

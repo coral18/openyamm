@@ -694,3 +694,40 @@ development directory. Android/controller testing and complete campaign coverage
 Native AMD/OpenGL checks cover book-to-spell navigation with the selected list row visible, visited/unvisited
 guild source lists, Guide-to-Discovery privacy, the reverse book link, guild-map navigation with retained fog
 and return to gameplay. Known-book fixtures remain isolated copies; original campaigns are not test targets.
+
+### Race mastery and promotion comparisons, 2026-10-18
+
+Class reference pages now compare race-adjusted mastery limits with the base class through the existing
+`ClassSkillTable::getEffectiveCap` evaluator. Race IDs/names come from the loaded character-selection registry;
+the read-only enumeration supports sparse mod IDs rather than assuming a built-in race count or contiguous IDs.
+A changed cap gets an exact teacher-rank search link. These links search the existing trainer index, not grant a
+rank or assert that a teacher for every racial ability exists.
+
+Discovery uses only classes and races represented in the current party. Guide includes the full loaded registry.
+Inspecting an unfamiliar class/race or following a Guide link does not add it to Discovery, change party members
+or modify their skills. Persistent history of earlier classes/races remains future work; old saves still receive
+the same current-party view.
+
+The class registry exposes its existing metadata-only next-tier query. Earlier-tier links invert those same
+relationships, while next-tier links compare base HP/SP and per-level growth using the current, potentially
+patched class definitions. The query does not invent a legacy named promotion if metadata is absent, and the
+maximum unsigned progression step cannot wrap into a false edge to a base class. Promotion references are family
+relationships, not permission to promote: campaign quests, branch choices, racial transformations and character
+creation restrictions still apply and are not inferred from the reference.
+
+Native class links use the shared reference navigation and scroll the selected target into view. The global
+merged registry is the same while browsing MM7 or MM8; this does not replace its mechanics with vanilla campaign
+rules. A full comparison grid, starting choices and links to actual promotion quest conditions remain open.
+
+Focused ASan/UBSan validation passed 60 cases / 4,061 assertions. Native Windows focused tests passed 64 cases /
+4,142 assertions, including the existing race-cap, class-kind exception, warrior/mana-mode exception and character
+creation-choice regressions. Added tests use a custom class family and race ID 97, verify discovery privacy,
+exact teacher-topic ranks, promotion growth after typed HP patching, reverse family links and overflow boundaries.
+Canonical table checks cover the Knight/Cavalier branches and the actual Human Learning modifier. Native GPU
+records use isolated copies of the previous MM7/MM8 fixture saves under `atlas-classes-20261018/`; Android/controller
+checks and complete Atlas coverage remain pending.
+
+Native AMD/OpenGL tours in both worlds verified the Human Cleric modifier, exact-rank trainer search, navigation
+Cleric -> Priest -> Priest of the Light, selected-row scrolling, and Guide -> Discovery returning to the sole
+current Cleric entry. Both tours resumed the same gameplay session; they do not perform promotion quests or
+change the character's class.

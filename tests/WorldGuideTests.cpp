@@ -264,6 +264,130 @@ TEST_CASE("world guide reflects patched class progression and links exact master
     CHECK(classes.get("Knight")->healthPerLevel == 6);
 }
 
+TEST_CASE("world guide class comparisons use sparse mod races and registry promotions without leaking unknown paths")
+{
+    ClassMultiplierTable classes;
+    REQUIRE(classes.loadFromRows({{"Class", "HP", "HP/level", "SP", "SP/level", "Mana"},
+        {"CinderNovice", "20", "3", "5", "1", "Intellect"},
+        {"CinderAdept", "25", "5", "8", "2", "Intellect"},
+        {"Unrelated", "80", "9", "0", "0", "None"}}));
+    ClassSkillTable skills;
+    REQUIRE(skills.loadCapsFromRows({{"Skill", "CinderNovice", "CinderAdept", "Unrelated"},
+        {"Learning", "B", "E", "-"}, {"Sword", "M", "G", "G"}}));
+    REQUIRE(skills.loadClassMetadataFromRows({{"#", "Kind", "Step", "Note"},
+        {"0", "77", "0", "CinderNovice"}, {"1", "77", "1", "CinderAdept"},
+        {"2", "88", "1", "Unrelated"}}));
+    MergedRaceSkillTable racial;
+    MergedCharacterSelectionTable selection;
+    std::string error;
+    REQUIRE(racial.loadFromYaml("rules:\n- {race: Windborn, race_id: 97, skill: Learning, add: 1}\n", error));
+    REQUIRE(skills.applyRaceSkillOverrides(racial));
+    REQUIRE(selection.loadFromYaml("race_class_availability:\n"
+        "- {race: Human, race_id: 0, classes: [CinderNovice]}\n"
+        "- {race: Windborn, race_id: 97, classes: [CinderNovice]}\n"
+        "new_game_continents:\n- {name: Testland, available_class_ids: [0], available_race_ids: [0,97]}\n", error));
+    CHECK(selection.raceNames().size() == 2);
+    CHECK(selection.raceNames().at(97) == "Windborn");
+    WorldGuideSource source;
+    source.pClasses = &classes; source.pSkills = &skills; source.pCharacterSelection = &selection;
+    WorldGuideKnowledge knowledge;
+    knowledge.classes.insert("CinderNovice"); knowledge.races.insert(0);
+    const auto discovered = buildWorldGuide(source, WorldGuideSection::Classes, knowledge, false);
+    REQUIRE(discovered.size() == 1);
+    CHECK(discovered.front().details.find("Windborn") == std::string::npos);
+    CHECK(discovered.front().details.find("CinderAdept") == std::string::npos);
+    CHECK(std::none_of(discovered.front().links.begin(), discovered.front().links.end(),
+        [](const WorldGuideLink &link) { return link.kind == WorldGuideLink::Kind::Class; }));
+    const auto guide = buildWorldGuide(source, WorldGuideSection::Classes, knowledge, true);
+    const auto novice = std::find_if(guide.begin(), guide.end(),
+        [](const WorldGuideEntry &entry) { return entry.id == "CinderNovice"; });
+    REQUIRE(novice != guide.end());
+    CHECK(novice->details.find("Windborn mastery differences") != std::string::npos);
+    CHECK(novice->details.find("Learning: Normal -> Expert") != std::string::npos);
+    CHECK(novice->details.find("CinderAdept: base HP +5, HP/level +2, base SP +3, SP/level +1") != std::string::npos);
+    REQUIRE(novice->links.back().kind == WorldGuideLink::Kind::Class);
+    CHECK(novice->links.back().target == "CinderAdept");
+    CHECK(std::none_of(novice->links.begin(), novice->links.end(),
+        [](const WorldGuideLink &link) { return link.target == "Unrelated"; }));
+    const auto adept = std::find_if(guide.begin(), guide.end(),
+        [](const WorldGuideEntry &entry) { return entry.id == "CinderAdept"; });
+    REQUIRE(adept != guide.end());
+    CHECK(adept->links.back().label == "Earlier tier: CinderNovice");
+    CHECK(knowledge.classes == std::unordered_set<std::string>{"CinderNovice"});
+    CHECK(knowledge.races == std::unordered_set<uint32_t>{0});
+    knowledge.races.insert(97);
+    const auto knownRace = buildWorldGuide(source, WorldGuideSection::Classes, knowledge, false);
+    CHECK(knownRace.front().details.find("Windborn mastery differences") != std::string::npos);
+    const auto raceTrainer = std::find_if(knownRace.front().links.begin(), knownRace.front().links.end(),
+        [](const WorldGuideLink &link) { return link.label.starts_with("Windborn:"); });
+    REQUIRE(raceTrainer != knownRace.front().links.end());
+    CHECK(raceTrainer->kind == WorldGuideLink::Kind::Trainer);
+    CHECK(raceTrainer->target == "Learning");
+    CHECK(raceTrainer->mastery == 1); // Expert teacher-topic rank, not SkillMastery::Expert's numeric value.
+    knowledge.classes.insert("CinderAdept");
+    int before = 0, after = 0;
+    REQUIRE(classes.patchProgression("CinderAdept", ClassProgressionField::HealthPerLevel,
+        ClassPatchOperation::AddNumber, 1, before, after, error));
+    const auto patched = buildWorldGuide(source, WorldGuideSection::Classes, knowledge, false);
+    const auto patchedNovice = std::find_if(patched.begin(), patched.end(),
+        [](const WorldGuideEntry &entry) { return entry.id == "CinderNovice"; });
+    REQUIRE(patchedNovice != patched.end());
+    CHECK(patchedNovice->details.find("HP/level +3") != std::string::npos);
+}
+
+TEST_CASE("world class promotion references do not invent legacy paths or wrap overflowing steps")
+{
+    ClassSkillTable skills;
+    CHECK(skills.promotionClassNamesFromMetadata("Knight").empty());
+    REQUIRE(skills.loadClassMetadataFromRows({{"#", "Kind", "Step", "Note"},
+        {"0", "77", "4294967295", "FinalTier"}, {"1", "77", "0", "FirstTier"}}));
+    CHECK(skills.promotionClassNamesFromMetadata("FinalTier").empty());
+    CHECK(skills.promotionClassNamesFromMetadata("AbsentClass").empty());
+}
+
+TEST_CASE("world guide canonical class comparisons use the gameplay race evaluator and promotion registry")
+{
+    const auto text = [](const std::string &fileName)
+    {
+        std::ifstream file(std::string(OPENYAMM_SOURCE_DIR) + "/assets_dev/engine/data_tables/" + fileName);
+        REQUIRE(file.is_open());
+        return std::string{std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>()};
+    };
+    ClassMultiplierTable classes;
+    ClassSkillTable skills;
+    REQUIRE(classes.loadFromRows(guideTableRows("class_multipliers.txt")));
+    REQUIRE(classes.applyClassExtraRows(guideTableRows("class_extra.txt")));
+    REQUIRE(skills.loadCapsFromRows(guideTableRows("class_skills.txt")));
+    REQUIRE(skills.loadClassMetadataFromRows(guideTableRows("class_extra.txt")));
+    REQUIRE(skills.loadClassSpellPointMetadataFromRows(guideTableRows("class_multipliers.txt")));
+    MergedRaceSkillTable racial;
+    MergedCharacterSelectionTable selection;
+    std::string error;
+    REQUIRE(racial.loadFromYaml(text("race_skills.yml"), error));
+    REQUIRE(selection.loadFromYaml(text("character_selection.yml"), error));
+    REQUIRE(skills.applyRaceSkillOverrides(racial));
+    CHECK(skills.promotionClassNamesFromMetadata("Knight") == std::vector<std::string>{"Cavalier"});
+    CHECK(skills.promotionClassNamesFromMetadata("Cavalier")
+        == std::vector<std::string>{"BlackKnight", "Champion"});
+    WorldGuideSource source;
+    source.pClasses = &classes; source.pSkills = &skills; source.pCharacterSelection = &selection;
+    WorldGuideKnowledge knowledge;
+    knowledge.classes.insert("Knight"); knowledge.races.insert(0);
+    const auto entries = buildWorldGuide(source, WorldGuideSection::Classes, knowledge, false);
+    REQUIRE(entries.size() == 1);
+    const SkillMastery base = skills.getClassCap("Knight", "Learning");
+    const SkillMastery human = skills.getEffectiveCap("Knight", 0, "Learning");
+    REQUIRE(base != human);
+    CHECK(entries.front().details.find("Learning: " + masteryDisplayName(base) + " -> " + masteryDisplayName(human))
+        != std::string::npos);
+    const auto trainer = std::find_if(entries.front().links.begin(), entries.front().links.end(),
+        [](const WorldGuideLink &link) { return link.label.starts_with("Human: Learning"); });
+    REQUIRE(trainer != entries.front().links.end());
+    CHECK(trainer->mastery == uint32_t(human) - 1);
+    CHECK(entries.front().details.find("Vampire mastery differences") == std::string::npos);
+    CHECK(knowledge.classes.size() == 1);
+}
+
 TEST_CASE("world guide alchemy counts reused reagents and reveals only known formulas")
 {
     ItemTable items;

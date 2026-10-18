@@ -1528,6 +1528,11 @@ std::optional<std::string> MergedCharacterSelectionTable::raceNameForId(uint32_t
     return it->second;
 }
 
+const std::unordered_map<uint32_t, std::string> &MergedCharacterSelectionTable::raceNames() const
+{
+    return m_characterSelectionRaceNamesById;
+}
+
 size_t MergedCharacterSelectionTable::raceCount() const
 {
     return m_characterSelectionAllowedClassesByRaceId.size();

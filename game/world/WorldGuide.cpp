@@ -282,6 +282,21 @@ std::vector<WorldGuideEntry> buildWorldGuide(const WorldGuideSource &source, Wor
     }
     else if (section == WorldGuideSection::Classes && source.pClasses != nullptr && source.pSkills != nullptr)
     {
+        std::vector<std::pair<uint32_t, std::string>> races;
+        if (source.pCharacterSelection != nullptr)
+        {
+            for (const auto &[raceId, name] : source.pCharacterSelection->raceNames())
+                if (!name.empty() && (guide || knowledge.races.contains(raceId))) races.emplace_back(raceId, name);
+            std::sort(races.begin(), races.end(), [](const auto &left, const auto &right)
+            { return left.second == right.second ? left.first < right.first : left.second < right.second; });
+        }
+        const auto signedValue = [](int64_t value)
+        { return (value > 0 ? "+" : "") + std::to_string(value); };
+        std::map<std::string, std::vector<std::string>> previousPromotions;
+        for (const auto &[id, definition] : source.pClasses->entries())
+            for (const std::string &target : source.pSkills->promotionClassNamesFromMetadata(id))
+                previousPromotions[target].push_back(id);
+        for (auto &[target, parents] : previousPromotions) std::sort(parents.begin(), parents.end());
         for (const auto &[id, definition] : source.pClasses->entries())
         {
             if (!guide && !knowledge.classes.contains(id))
@@ -305,6 +320,43 @@ std::vector<WorldGuideEntry> buildWorldGuide(const WorldGuideSource &source, Wor
                 entry.links.push_back({WorldGuideLink::Kind::Trainer, displaySkillName(skill)
                     + ": " + masteryDisplayName(cap) + " (find trainers)", displaySkillName(skill), uint32_t(cap) - 1});
             }
+            for (const auto &[raceId, raceName] : races)
+            {
+                std::string differences;
+                for (const std::string &skill : allCanonicalSkillNames())
+                {
+                    const SkillMastery base = source.pSkills->getClassCap(id, skill);
+                    const SkillMastery effective = source.pSkills->getEffectiveCap(id, raceId, skill);
+                    if (base == effective) continue;
+                    differences += displaySkillName(skill) + ": " + masteryDisplayName(base)
+                        + " -> " + masteryDisplayName(effective) + "\n";
+                    if (effective >= SkillMastery::Expert)
+                        entry.links.push_back({WorldGuideLink::Kind::Trainer, raceName + ": " + displaySkillName(skill)
+                            + " - " + masteryDisplayName(effective) + " (find trainers)", displaySkillName(skill),
+                            uint32_t(effective) - 1});
+                }
+                if (!differences.empty())
+                    entry.details += "\n" + raceName + " mastery differences:\n" + differences;
+            }
+            for (const std::string &parent : previousPromotions[id])
+                if (guide || knowledge.classes.contains(parent))
+                    entry.links.push_back({WorldGuideLink::Kind::Class,
+                        "Earlier tier: " + source.pClasses->get(parent)->displayName, parent});
+            std::string promotions;
+            for (const std::string &target : source.pSkills->promotionClassNamesFromMetadata(id))
+            {
+                const ClassMultiplierEntry *pPromotion = source.pClasses->get(target);
+                if (pPromotion == nullptr || (!guide && !knowledge.classes.contains(target))) continue;
+                promotions += pPromotion->displayName + ": base HP "
+                    + signedValue(int64_t(pPromotion->baseHealth) - definition.baseHealth) + ", HP/level "
+                    + signedValue(int64_t(pPromotion->healthPerLevel) - definition.healthPerLevel) + ", base SP "
+                    + signedValue(int64_t(pPromotion->baseMana) - definition.baseMana) + ", SP/level "
+                    + signedValue(int64_t(pPromotion->manaPerLevel) - definition.manaPerLevel) + "\n";
+                entry.links.push_back({WorldGuideLink::Kind::Class, "Promotion: " + pPromotion->displayName, target});
+            }
+            if (!promotions.empty())
+                entry.details += "\nNext promotion tier (growth changes):\n" + promotions
+                    + "Quest completion and branching requirements still apply.\n";
             result.push_back(std::move(entry));
         }
     }
