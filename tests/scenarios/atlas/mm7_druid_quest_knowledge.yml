@@ -1,0 +1,20 @@
+id: atlas.mm7_druid_quest_knowledge
+title: Authored Druid pilgrimage request records persistent Atlas quest knowledge
+world: mm7
+mode: faithful
+steps:
+- new_game_flow:
+    start_map: 7out04.odm
+- speak_npc:
+    source_id: 389
+- select_topic:
+    kind: npc_topic
+    action_id: 848
+- assert:
+    qbit_set: [561]
+    named_global_var_changed: {name: openyamm.discovery.quest/561, value: 1}
+- save_game: pilgrimage-accepted
+- load_game: pilgrimage-accepted
+- assert:
+    qbit_set: [561]
+    named_global_var_changed: {name: openyamm.discovery.quest/561, value: 1}

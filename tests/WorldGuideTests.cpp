@@ -346,6 +346,63 @@ TEST_CASE("world guide quest relationships resolve against the current shared co
     }
 }
 
+TEST_CASE("world guide campaign clues do not turn undisclosed quest destinations into discoveries")
+{
+    JournalQuestTable quests;
+    REQUIRE(quests.loadFromRows(guideTableRows("english/quests.txt")));
+    REQUIRE(quests.loadLocationRows(guideTableRows("quest_locations.txt")));
+    MapStats maps;
+    REQUIRE(maps.loadFromRows(guideTableRows("map_stats.txt")));
+    ItemTable items;
+    OpenYAMM::Engine::AssetFileSystem assets;
+    REQUIRE(items.load(assets, guideTableRows("items.txt"), {}));
+    WorldGuideSource source;
+    source.pQuests = &quests;
+    source.pMaps = &maps;
+    source.pItems = &items;
+    source.worldId = "mm7";
+    WorldGuideKnowledge knowledge;
+    knowledge.activeQuests.insert(541);
+    const auto discovery = buildWorldGuide(source, WorldGuideSection::Quests, knowledge, false);
+    REQUIRE(discovery.size() == 1);
+    const auto hasTarget = [](const WorldGuideEntry &entry, const std::string &target)
+    {
+        return std::any_of(entry.links.begin(), entry.links.end(), [&](const WorldGuideLink &link)
+        { return link.target == target; });
+    };
+    // The request identifies the school and Erathia. The cipher still hides the precise tomb.
+    CHECK(hasTarget(discovery.front(), "world.mm7.map.7d14"));
+    CHECK(hasTarget(discovery.front(), "world.mm7.map.7out03"));
+    CHECK_FALSE(hasTarget(discovery.front(), "world.mm7.map.mdt11"));
+    CHECK_FALSE(hasTarget(discovery.front(), "1503"));
+    knowledge.items.insert(1503);
+    const auto withCipher = buildWorldGuide(source, WorldGuideSection::Quests, knowledge, false);
+    REQUIRE(withCipher.size() == 1);
+    CHECK(hasTarget(withCipher.front(), "1503"));
+    const auto guide = buildWorldGuide(source, WorldGuideSection::Quests, knowledge, true);
+    const auto ninja = std::find_if(guide.begin(), guide.end(),
+        [](const WorldGuideEntry &entry) { return entry.id == "541"; });
+    REQUIRE(ninja != guide.end());
+    CHECK(hasTarget(*ninja, "world.mm7.map.mdt11"));
+    const auto tomb = std::find_if(ninja->links.begin(), ninja->links.end(),
+        [](const WorldGuideLink &link) { return link.target == "world.mm7.map.mdt11"; });
+    REQUIRE(tomb != ninja->links.end());
+    CHECK_FALSE(tomb->informed);
+
+    source.worldId = "mm8";
+    knowledge.activeQuests = {68};
+    const auto troll = buildWorldGuide(source, WorldGuideSection::Quests, knowledge, false);
+    REQUIRE(troll.size() == 1);
+    CHECK_FALSE(hasTarget(troll.front(), "world.mm8.map.d43"));
+    const auto all = buildWorldGuide(source, WorldGuideSection::Quests, knowledge, true);
+    const auto homeland = std::find_if(all.begin(), all.end(),
+        [](const WorldGuideEntry &entry) { return entry.id == "68"; });
+    REQUIRE(homeland != all.end());
+    CHECK(hasTarget(*homeland, "world.mm8.map.d43"));
+    CHECK(knowledge.activeQuests == std::unordered_set<uint32_t>{68});
+    CHECK(knowledge.quests.empty());
+}
+
 TEST_CASE("world guide quest contacts link only to the selected current or observed NPC index")
 {
     MapStats maps;

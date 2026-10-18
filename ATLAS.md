@@ -480,3 +480,29 @@ The additional paired trainer-note regression uses the QA-only fixture under `te
 map note 1105; the unchanged-runtime control records both. Both checks include save/load. The fixture preparer
 creates an isolated package view with hard-linked unchanged large archives and a private mutable overlay ZIP;
 original package contents remain unchanged. Native MM6/MM7/MM8 quest-dialogue save/load regressions also passed.
+
+### Expanded campaign relationships, 2026-10-18
+
+The shared quest relationship registry now covers 61 quests (26 MM7, 35 MM8), with 231 typed relationships.
+The added content includes MM7 promotion destinations and MM8 local requests, delivery recipients, named items
+and disclosed regional clues. [The content audit](ATLAS_QUEST_AUDIT.md) identifies the source handlers and
+remaining gaps. This expands the initial 19-quest checkpoint; it is not full campaign coverage.
+
+Relationships use merged IDs and the active mounted scripts instead of importing a separate community-guide
+database. For example, the Rust potion request/reward resolves to Pole, while Hobert handles an individual
+delivery; the journal's obsolete contact name remains visible as the original text. The MM7 Lich quest points
+at Walls of Mist as specified by the actual dialogue, not an invented map named Proving Grounds. Named items
+resolve to their current merged definitions, including MM7's own empty Lich Jar and Dragon Egg.
+
+The Troll Homeland's precise map and the Ninja cipher's hidden tomb remain Guide-only. Accepted requests expose
+their disclosed regions and contacts, but do not infer NPC addresses, reveal terrain or open unknown item-reference
+descriptions. Conditional updates after solving the cipher, detailed delivery sites and other staged relationships
+remain part of the full coverage work.
+
+Focused ASan/UBSan coverage passed 47 cases / 3,563 assertions, including validation of all relationship targets
+and real-dataset disclosure checks. Isolated native Windows scenarios accepted Languid's and Pascella's requests
+in MM8 and Anthony's pilgrimage in MM7 through authored dialogue and preserved knowledge across save/load.
+Native AMD/OpenGL captures checked the new quest details, Guide-to-Discovery transitions and navigation to
+fully fogged Tatalia / the unexplored Smuggler's Cove plan in both worlds.
+Records live under the local Windows development directory `atlas-quest-content-20261018/`; user saves were not
+test targets. Android/controller checks and full campaign coverage remain pending.

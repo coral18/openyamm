@@ -1,0 +1,31 @@
+id: atlas.mm8_local_quest_knowledge
+title: Local Dagger Wound quests record knowledge through authored NPC dialogue
+world: mm8
+mode: faithful
+steps:
+- new_game_flow:
+    start_map: out01.odm
+- speak_npc:
+    source_id: 66
+- select_topic:
+    kind: npc_topic
+    action_id: 177
+- assert:
+    qbit_set: [109]
+    named_global_var_changed: {name: openyamm.discovery.quest/109, value: 1}
+- press_action: {action: cancel_dialog}
+- speak_npc:
+    source_id: 30
+- select_topic:
+    kind: npc_topic
+    action_id: 19
+- assert:
+    qbit_set: [109, 135]
+    named_global_var_changed: {name: openyamm.discovery.quest/135, value: 1}
+- save_game: local-quests-accepted
+- load_game: local-quests-accepted
+- assert:
+    qbit_set: [109, 135]
+    named_global_var_changed: {name: openyamm.discovery.quest/109, value: 1}
+- assert:
+    named_global_var_changed: {name: openyamm.discovery.quest/135, value: 1}
