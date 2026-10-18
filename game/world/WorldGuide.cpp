@@ -25,6 +25,61 @@
 
 namespace OpenYAMM::Game
 {
+std::optional<WorldClassComparison> buildWorldClassComparison(const WorldGuideSource &source,
+    const WorldGuideKnowledge &knowledge, bool guide, const std::string &anchorClass,
+    std::optional<uint32_t> raceId)
+{
+    const std::string anchor = canonicalClassName(anchorClass);
+    if (source.pClasses == nullptr || source.pSkills == nullptr || source.pClasses->get(anchor) == nullptr
+        || (!guide && !knowledge.classes.contains(anchor)))
+        return std::nullopt;
+    WorldClassComparison result;
+    result.raceId = raceId;
+    if (source.pCharacterSelection != nullptr)
+        for (const auto &[id, name] : source.pCharacterSelection->raceNames())
+            if (!name.empty() && (guide || knowledge.races.contains(id))) result.races.emplace_back(id, name);
+    std::sort(result.races.begin(), result.races.end(), [](const auto &left, const auto &right)
+    { return left.second == right.second ? left.first < right.first : left.second < right.second; });
+    if (raceId && std::none_of(result.races.begin(), result.races.end(),
+        [&](const auto &race) { return race.first == *raceId; }))
+        return std::nullopt;
+
+    std::unordered_map<std::string, std::vector<std::string>> family;
+    for (const auto &[id, definition] : source.pClasses->entries())
+        for (const std::string &target : source.pSkills->promotionClassNamesFromMetadata(id))
+            if (source.pClasses->get(target) != nullptr)
+            {
+                family[id].push_back(target);
+                family[target].push_back(id);
+            }
+    std::unordered_set<std::string> visited{anchor};
+    std::vector<std::string> pending{anchor};
+    for (size_t i = 0; i < pending.size(); ++i)
+        for (const std::string &neighbor : family[pending[i]])
+            if (visited.insert(neighbor).second) pending.push_back(neighbor);
+    // Traverse before filtering: a known later class may have an undiscovered intermediate tier.
+    for (const std::string &id : pending)
+        if (guide || knowledge.classes.contains(id)) result.classes.push_back({id, source.pClasses->get(id)});
+    std::sort(result.classes.begin() + 1, result.classes.end(), [](const auto &left, const auto &right)
+    {
+        if (left.pDefinition->promotionStep != right.pDefinition->promotionStep)
+            return left.pDefinition->promotionStep < right.pDefinition->promotionStep;
+        if (left.pDefinition->displayName != right.pDefinition->displayName)
+            return left.pDefinition->displayName < right.pDefinition->displayName;
+        return left.id < right.id;
+    });
+    for (const std::string &skill : allCanonicalSkillNames())
+    {
+        WorldClassComparisonRow row{skill};
+        for (const WorldClassComparisonColumn &column : result.classes)
+            row.caps.push_back(raceId ? source.pSkills->getEffectiveCap(column.id, *raceId, skill)
+                : source.pSkills->getClassCap(column.id, skill));
+        if (std::any_of(row.caps.begin(), row.caps.end(), [](SkillMastery cap) { return cap != SkillMastery::None; }))
+            result.skills.push_back(std::move(row));
+    }
+    return result;
+}
+
 std::vector<WorldAlchemyRecipe> planWorldAlchemy(uint32_t target, const std::vector<WorldAlchemyRecipe> &recipes,
     const std::unordered_set<uint32_t> &ingredients)
 {

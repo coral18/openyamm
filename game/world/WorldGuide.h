@@ -1,8 +1,11 @@
 #pragma once
 
+#include "game/party/SkillData.h"
+
 #include <cstdint>
 #include <array>
 #include <string>
+#include <utility>
 #include <unordered_set>
 #include <vector>
 
@@ -24,6 +27,7 @@ class JournalQuestTable;
 class NpcDialogTable;
 class WorldDatabase;
 class MergedCharacterSelectionTable;
+struct ClassMultiplierEntry;
 struct WorldKnowledge;
 
 enum class WorldGuideSection { Items, Spells, Classes, Alchemy, Companions, Progress, Monsters, Quests };
@@ -91,6 +95,31 @@ struct WorldAlchemyRecipe
 {
     uint32_t result = 0, first = 0, second = 0;
 };
+
+struct WorldClassComparisonColumn
+{
+    std::string id;
+    const ClassMultiplierEntry *pDefinition = nullptr;
+};
+
+struct WorldClassComparisonRow
+{
+    std::string skill;
+    std::vector<SkillMastery> caps;
+};
+
+// Definitions refer to the active class registry, which must outlive this read-only view.
+struct WorldClassComparison
+{
+    std::vector<WorldClassComparisonColumn> classes;
+    std::vector<WorldClassComparisonRow> skills;
+    std::vector<std::pair<uint32_t, std::string>> races;
+    std::optional<uint32_t> raceId;
+};
+
+std::optional<WorldClassComparison> buildWorldClassComparison(const WorldGuideSource &source,
+    const WorldGuideKnowledge &knowledge, bool guide, const std::string &anchorClass,
+    std::optional<uint32_t> raceId = std::nullopt);
 
 // Cheapest known reagent path. Cycles/unreachable recipes cannot create an infinite expansion.
 std::vector<WorldAlchemyRecipe> planWorldAlchemy(uint32_t target, const std::vector<WorldAlchemyRecipe> &recipes,

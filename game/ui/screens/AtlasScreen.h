@@ -42,6 +42,9 @@ private:
     void drawDetails();
     void drawReference();
     void rebuildReference();
+    WorldGuideSource referenceSource() const;
+    void drawClassComparison();
+    void compareClass(std::optional<uint32_t> raceId = std::nullopt);
     void indexQuestLocations();
     void rebuildWorld();
     void drawNoteEditor();
@@ -60,6 +63,9 @@ private:
     bool m_referenceOpen = false, m_referenceDirty = true;
     std::string m_referenceSelected;
     float m_referenceScroll = 0, m_referenceDetailScroll = 0, m_referenceContentHeight = 0;
+    std::optional<WorldClassComparison> m_classComparison;
+    size_t m_comparisonPage = 0;
+    float m_comparisonScroll = 0;
     std::unordered_set<std::string> m_indexedMaps, m_siteSelection;
     std::string m_locationError;
     NoteWriter m_writeNote;

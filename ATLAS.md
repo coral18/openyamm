@@ -717,7 +717,8 @@ creation restrictions still apply and are not inferred from the reference.
 
 Native class links use the shared reference navigation and scroll the selected target into view. The global
 merged registry is the same while browsing MM7 or MM8; this does not replace its mechanics with vanilla campaign
-rules. A full comparison grid, starting choices and links to actual promotion quest conditions remain open.
+rules. At this checkpoint a full comparison grid, starting choices and links to actual promotion quest conditions
+remained open; the following checkpoint adds the grid.
 
 Focused ASan/UBSan validation passed 60 cases / 4,061 assertions. Native Windows focused tests passed 64 cases /
 4,142 assertions, including the existing race-cap, class-kind exception, warrior/mana-mode exception and character
@@ -731,3 +732,38 @@ Native AMD/OpenGL tours in both worlds verified the Human Cleric modifier, exact
 Cleric -> Priest -> Priest of the Light, selected-row scrolling, and Guide -> Discovery returning to the sole
 current Cleric entry. Both tours resumed the same gameplay session; they do not perform promotion quests or
 change the character's class.
+
+
+### Native class comparison grid, 2026-10-18
+
+`Guidebook -> Classes -> select class -> Compare` opens a native table derived from the same active class and
+skill registries. The selected class remains the first column, alongside up to three related classes per page;
+additional branches remain available on later pages. Column headings open the normal class detail page. The
+metadata family is traversed in both directions, without named legacy fallbacks or unrelated class families.
+Discovery filters columns after traversal, allowing two known tiers to be compared without disclosing an unknown
+intermediate class. Changing Guide/Discovery, world or reference section discards the comparison.
+
+The race arrows cycle through Base class and the permitted race names from the actual registry, including sparse
+mod IDs. Human ID zero is distinct from the Base option. Discovery offers only current-party races and classes;
+Guide can compare the full family and every registered race. A request for an unknown race or hidden anchor is
+rejected, rather than silently showing base caps or leaking options. Reading or changing the table does not award
+discoveries, grant a skill, modify the party or change save data.
+
+Rows show base HP/SP, HP/SP per level and mastery caps from `getClassCap` or `getEffectiveCap`. Numeric growth
+differences use the pinned class as baseline with widened subtraction; caps use the same shared gameplay evaluator.
+Skills unavailable to all compared columns are omitted. The search field filters skill names, and the body uses
+the shared native wheel/touch/scrollbar behavior in logical units. Definitions reflect loaded mods and the merged
+game, not a separate vanilla database. Choosing a race is an inspection option: creation, transformation and
+promotion quest/branch eligibility are not inferred or bypassed.
+
+Focused ASan/UBSan checks passed 61 cases / 4,121 assertions. Native Windows focused tests passed 65 cases /
+4,202 assertions, including the existing racial-cap and creation-choice regressions. Added coverage checks a
+six-class custom family, all branches, a known later tier behind a hidden intermediate, sparse race 97,
+base-versus-Human-zero semantics, invalid inputs, modded HP growth and read-only Discovery behavior.
+
+Native AMD/OpenGL tours for MM7 and MM8 use isolated one-Human-Cleric fixtures under
+`atlas-class-grid-20261018/` in the Windows development directory. The fixtures are explicitly preseeded UI test
+campaigns, not proof of completing promotion quests. Captures cover base and Human caps, Learning filtering,
+both Cleric-family pages, race changes, the bottom of the skill table, heading navigation to Priest of the Light,
+return to Discovery with only the current Cleric, and resumed gameplay. Android/controller checks and the rest of
+the complete Atlas coverage matrix remain pending.

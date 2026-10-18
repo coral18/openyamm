@@ -1084,20 +1084,143 @@ void AtlasScreen::indexQuestLocations()
     }
 }
 
-void AtlasScreen::rebuildReference()
+WorldGuideSource AtlasScreen::referenceSource() const
 {
-    const WorldGuideSource source{&m_data.itemTable(), &m_data.spellTable(), &m_data.classMultiplierTable(),
+    return {&m_data.itemTable(), &m_data.spellTable(), &m_data.classMultiplierTable(),
         &m_data.classSkillTable(), &m_data.mergedPotionSettingTable(), &m_data.mergedReagentSettingTable(),
         &m_data.potionMixingTable(), &m_data.potionNoteTable(), &m_data.rosterTable(),
         &m_data.houseTable(), &m_data.mapStats(), m_presentation.worldId, &m_data.monsterTable(),
         &m_data.journalQuestTable(), &m_data.npcDialogTable(), &m_world, &m_knowledge,
         &m_data.mergedCharacterSelectionTable()};
-    m_referenceEntries = buildWorldGuide(source, m_referenceSection, m_referenceKnowledge, m_guide);
+}
+
+void AtlasScreen::rebuildReference()
+{
+    m_classComparison.reset();
+    m_referenceEntries = buildWorldGuide(referenceSource(), m_referenceSection, m_referenceKnowledge, m_guide);
     const auto selected = std::find_if(m_referenceEntries.begin(), m_referenceEntries.end(),
         [this](const WorldGuideEntry &entry) { return entry.id == m_referenceSelected; });
     if (selected != m_referenceEntries.end())
         m_referenceScroll = std::distance(m_referenceEntries.begin(), selected) * 33 * designScale();
     m_referenceDirty = false;
+}
+
+void AtlasScreen::compareClass(std::optional<uint32_t> raceId)
+{
+    m_classComparison = buildWorldClassComparison(referenceSource(), m_referenceKnowledge, m_guide,
+        m_referenceSelected, raceId);
+    m_comparisonScroll = 0;
+}
+
+void AtlasScreen::drawClassComparison()
+{
+    const size_t raceCount = m_classComparison->races.size() + 1;
+    size_t raceIndex = 0;
+    std::string raceName = "Base class";
+    for (size_t i = 0; i < m_classComparison->races.size(); ++i)
+        if (m_classComparison->raceId == m_classComparison->races[i].first)
+        {
+            raceIndex = i + 1;
+            raceName = m_classComparison->races[i].second;
+        }
+    const bool previousRace = button("atlas-compare-race-prev", canvasRect(285, 89, 25, 25), "<",
+        "button", raceCount > 1);
+    textInRect(canvasRect(314, 89, 151, 25), raceName, "menu_lucida", 11, 0xffc6dfeau, true);
+    const bool nextRace = button("atlas-compare-race-next", canvasRect(470, 89, 25, 25), ">",
+        "button", raceCount > 1);
+    if (previousRace || nextRace)
+    {
+        raceIndex = (raceIndex + (nextRace ? 1 : raceCount - 1)) % raceCount;
+        const std::optional<uint32_t> race = raceIndex == 0 ? std::nullopt
+            : std::optional<uint32_t>(m_classComparison->races[raceIndex - 1].first);
+        compareClass(race);
+        return;
+    }
+    const size_t pageCount = std::max(size_t(1), (m_classComparison->classes.size() + 1) / 3);
+    if (button("atlas-compare-page-prev", canvasRect(510, 89, 30, 25), "<", "button", m_comparisonPage > 0))
+        --m_comparisonPage;
+    textInRect(canvasRect(544, 89, 120, 25), "Page " + std::to_string(m_comparisonPage + 1)
+        + " / " + std::to_string(pageCount), "menu_lucida", 11, 0xffc6dfeau, true);
+    if (button("atlas-compare-page-next", canvasRect(670, 89, 30, 25), ">", "button",
+        m_comparisonPage + 1 < pageCount))
+        ++m_comparisonPage;
+    if (button("atlas-compare-details", canvasRect(711, 89, 110, 25), "Details"))
+    {
+        m_classComparison.reset();
+        m_search.clear();
+        return;
+    }
+    const WorldClassComparison &comparison = *m_classComparison;
+    std::vector<size_t> columns{0};
+    for (size_t i = 1 + m_comparisonPage * 3; i < comparison.classes.size() && columns.size() < 4; ++i)
+        columns.push_back(i);
+    const float columnWidth = 596.0f / columns.size();
+    textInRect(canvasRect(32, 121, 180, 32), "Skill / growth", "fondamento", 13);
+    for (size_t i = 0; i < columns.size(); ++i)
+    {
+        const WorldClassComparisonColumn &column = comparison.classes[columns[i]];
+        if (button("atlas-compare-class-" + column.id, canvasRect(215 + i * columnWidth, 121, columnWidth - 3, 32),
+            column.pDefinition->displayName, "button", true, i == 0))
+        {
+            m_referenceSelected = column.id;
+            m_referenceDirty = true;
+            m_classComparison.reset();
+            m_search.clear();
+            m_referenceDetailScroll = 0;
+            return;
+        }
+    }
+    const Rect body = canvasRect(25, 157, 798, 234);
+    std::vector<const WorldClassComparisonRow *> skills;
+    for (const WorldClassComparisonRow &row : comparison.skills)
+        if (m_search.empty() || toLowerCopy(displaySkillName(row.skill)).find(toLowerCopy(m_search))
+            != std::string::npos) skills.push_back(&row);
+    drawSolidRect(body, 0xff18160fu);
+    scrollViewport(body, (skills.size() + 4) * 24, m_comparisonScroll);
+    setDesignClip(body);
+    const ClassMultiplierEntry &anchor = *comparison.classes.front().pDefinition;
+    const std::pair<const char *, int ClassMultiplierEntry::*> growth[] = {
+        {"Base HP", &ClassMultiplierEntry::baseHealth}, {"HP / level", &ClassMultiplierEntry::healthPerLevel},
+        {"Base SP", &ClassMultiplierEntry::baseMana}, {"SP / level", &ClassMultiplierEntry::manaPerLevel}};
+    for (size_t row = 0; row < skills.size() + 4; ++row)
+    {
+        const float y = 157 + row * 24 - m_comparisonScroll;
+        const Rect rect = canvasRect(25, y, 786, 24);
+        if (rect.y + rect.height < body.y || rect.y > body.y + body.height) continue;
+        if (row % 2 == 0) drawSolidRect(rect, 0xff242019u);
+        textInRect(canvasRect(32, y, 178, 24), row < 4 ? growth[row].first
+            : displaySkillName(skills[row - 4]->skill), "menu_arrus", 11);
+        for (size_t i = 0; i < columns.size(); ++i)
+        {
+            std::string value;
+            int64_t difference = 0;
+            if (row < 4)
+            {
+                const int amount = comparison.classes[columns[i]].pDefinition->*growth[row].second;
+                difference = int64_t(amount) - anchor.*growth[row].second;
+                value = std::to_string(amount);
+                if (i > 0 && difference != 0)
+                    value += " (" + std::string(difference > 0 ? "+" : "") + std::to_string(difference) + ")";
+            }
+            else
+            {
+                const WorldClassComparisonRow &skill = *skills[row - 4];
+                const SkillMastery cap = skill.caps[columns[i]];
+                value = cap == SkillMastery::None ? "-" : masteryDisplayName(cap);
+                difference = int64_t(cap) - int64_t(skill.caps.front());
+            }
+            const uint32_t color = difference > 0 ? 0xff9bcea1u : difference < 0 ? 0xff83bce4u : 0xffc6dfeau;
+            textInRect(canvasRect(215 + i * columnWidth, y, columnWidth - 3, 24), value,
+                "menu_lucida", 11, color, true);
+        }
+    }
+    setDesignClip(std::nullopt);
+    outline(body, 0xff597284u);
+    textInRect(canvasRect(34, 403, 778, 54),
+        "First column stays fixed. Values follow active mods; differences use that class as the baseline. "
+        "Skills unavailable to all compared classes are omitted. "
+        "Race/class creation and promotion quest restrictions still apply.",
+        "menu_arrus", 11, 0xffc6dfeau, false, true);
 }
 
 void AtlasScreen::drawReference()
@@ -1129,9 +1252,26 @@ void AtlasScreen::drawReference()
         m_searchEditing = true;
         setTextEditing(true);
     }
-    textInRect(canvasRect(32, 91, 229, 20), m_search.empty() ? "Search this section..." : m_search,
+    textInRect(canvasRect(32, 91, 229, 20), m_search.empty()
+        ? (m_classComparison ? "Filter skills..." : "Search this section...") : m_search,
                "menu_lucida", 11);
-    textInRect(canvasRect(285, 89, 535, 25), m_presentation.name + " - active game data", "fondamento", 14);
+    if (m_classComparison)
+    {
+        drawClassComparison();
+        return;
+    }
+    const bool classes = m_referenceSection == WorldGuideSection::Classes;
+    textInRect(canvasRect(285, 89, classes ? 410 : 535, 25), m_presentation.name + " - active game data",
+        "fondamento", 14);
+    if (classes && button("atlas-class-compare", canvasRect(711, 89, 110, 25), "Compare", "button",
+        std::any_of(m_referenceEntries.begin(), m_referenceEntries.end(),
+            [this](const WorldGuideEntry &entry) { return entry.id == m_referenceSelected; })))
+    {
+        m_search.clear();
+        m_comparisonPage = 0;
+        compareClass();
+        return;
+    }
     const Rect list = canvasRect(25, 121, 245, 270), details = canvasRect(285, 121, 535, 270);
     drawSolidRect(list, 0xff18160fu); outline(list, 0xff597284u);
     drawSolidRect(details, 0xff18160fu); outline(details, 0xff597284u);

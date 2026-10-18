@@ -345,6 +345,91 @@ TEST_CASE("world class promotion references do not invent legacy paths or wrap o
     CHECK(skills.promotionClassNamesFromMetadata("AbsentClass").empty());
 }
 
+TEST_CASE("world class comparison grid preserves full families and filters undiscovered classes and races")
+{
+    ClassMultiplierTable classes;
+    REQUIRE(classes.loadFromRows({{"Class", "HP", "HP/level", "SP", "SP/level", "Mana"},
+        {"CinderNovice", "20", "3", "5", "1", "Intellect"},
+        {"CinderAdept", "25", "5", "8", "2", "Intellect"},
+        {"CinderSage", "30", "6", "10", "3", "Intellect"},
+        {"CinderScholar", "30", "5", "12", "4", "Intellect"},
+        {"CinderSeer", "32", "4", "15", "5", "Intellect"},
+        {"CinderWarden", "40", "8", "5", "1", "Intellect"},
+        {"Unrelated", "80", "9", "0", "0", "None"}}));
+    const std::vector<std::vector<std::string>> metadata = {{"#", "Kind", "Step", "Note"},
+        {"0", "77", "0", "CinderNovice"}, {"1", "77", "1", "CinderAdept"},
+        {"2", "77", "2", "CinderSage"}, {"3", "77", "2", "CinderScholar"},
+        {"4", "77", "2", "CinderSeer"}, {"5", "77", "2", "CinderWarden"},
+        {"6", "88", "0", "Unrelated"}};
+    REQUIRE(classes.applyClassExtraRows(metadata));
+    ClassSkillTable skills;
+    REQUIRE(skills.loadCapsFromRows({{"Skill", "CinderNovice", "CinderAdept", "CinderSage",
+        "CinderScholar", "CinderSeer", "CinderWarden", "Unrelated"},
+        {"Learning", "B", "E", "M", "G", "M", "B", "G"},
+        {"Sword", "-", "-", "-", "-", "-", "M", "G"}}));
+    REQUIRE(skills.loadClassMetadataFromRows(metadata));
+    MergedCharacterSelectionTable selection;
+    MergedRaceSkillTable racial;
+    std::string error;
+    REQUIRE(selection.loadFromYaml("race_class_availability:\n"
+        "- {race: Human, race_id: 0, classes: [CinderNovice]}\n"
+        "- {race: Windborn, race_id: 97, classes: [CinderNovice]}\n"
+        "new_game_continents:\n- {name: Testland, available_class_ids: [0], available_race_ids: [0,97]}\n", error));
+    REQUIRE(racial.loadFromYaml("rules:\n- {race: Windborn, race_id: 97, skill: Learning, add: 1}\n", error));
+    REQUIRE(skills.applyRaceSkillOverrides(racial));
+    WorldGuideSource source;
+    source.pClasses = &classes; source.pSkills = &skills; source.pCharacterSelection = &selection;
+    WorldGuideKnowledge knowledge;
+    knowledge.classes = {"CinderNovice", "CinderSage"}; knowledge.races = {0};
+    CHECK_FALSE(buildWorldClassComparison(source, knowledge, false, "CinderAdept"));
+    CHECK_FALSE(buildWorldClassComparison(source, knowledge, true, "AbsentClass"));
+    CHECK_FALSE(buildWorldClassComparison(source, knowledge, false, "CinderNovice", 97));
+    CHECK_FALSE(buildWorldClassComparison(source, knowledge, true, "CinderNovice", 98));
+    const auto known = buildWorldClassComparison(source, knowledge, false, "CinderNovice");
+    REQUIRE(known);
+    CHECK_FALSE(known->raceId);
+    REQUIRE(known->classes.size() == 2);
+    CHECK(known->classes[0].id == "CinderNovice");
+    CHECK(known->classes[1].id == "CinderSage"); // Hidden intermediate tier must not sever known relationships.
+    REQUIRE(known->races.size() == 1);
+    CHECK(known->races[0].first == 0);
+    REQUIRE(known->skills.size() == 1);
+    CHECK(known->skills[0].skill == "Learning");
+    CHECK(known->skills[0].caps == std::vector<SkillMastery>{SkillMastery::Normal, SkillMastery::Master});
+    const auto human = buildWorldClassComparison(source, knowledge, false, "CinderNovice", 0);
+    REQUIRE(human);
+    REQUIRE(human->raceId);
+    CHECK(*human->raceId == 0); // Human zero is distinct from the base-class option.
+    CHECK(human->skills[0].caps == known->skills[0].caps);
+    const auto guide = buildWorldClassComparison(source, knowledge, true, "CinderSage", 97);
+    REQUIRE(guide);
+    REQUIRE(guide->classes.size() == 6); // All branches survive UI paging; unrelated classes are absent.
+    CHECK(guide->classes.front().id == "CinderSage");
+    CHECK(guide->classes[1].id == "CinderNovice");
+    CHECK(guide->classes[2].id == "CinderAdept");
+    CHECK(guide->classes.back().id == "CinderWarden");
+    REQUIRE(guide->skills.size() == 2);
+    for (const WorldClassComparisonRow &row : guide->skills)
+        for (size_t i = 0; i < guide->classes.size(); ++i)
+            CHECK(row.caps[i] == skills.getEffectiveCap(guide->classes[i].id, 97, row.skill));
+    CHECK(knowledge.classes == std::unordered_set<std::string>{"CinderNovice", "CinderSage"});
+    CHECK(knowledge.races == std::unordered_set<uint32_t>{0});
+    int before = 0, after = 0;
+    REQUIRE(classes.patchProgression("CinderSage", ClassProgressionField::HealthPerLevel,
+        ClassPatchOperation::AddNumber, 1, before, after, error));
+    CHECK(guide->classes.front().pDefinition == classes.get("CinderSage"));
+    CHECK(guide->classes.front().pDefinition->healthPerLevel == 7);
+    ClassSkillTable withoutMetadata;
+    source.pSkills = &withoutMetadata;
+    const auto isolated = buildWorldClassComparison(source, knowledge, true, "CinderNovice");
+    REQUIRE(isolated);
+    REQUIRE(isolated->classes.size() == 1);
+    CHECK(isolated->classes.front().id == "CinderNovice");
+    CHECK(isolated->skills.empty());
+    source.pClasses = nullptr;
+    CHECK_FALSE(buildWorldClassComparison(source, knowledge, true, "CinderNovice"));
+}
+
 TEST_CASE("world guide canonical class comparisons use the gameplay race evaluator and promotion registry")
 {
     const auto text = [](const std::string &fileName)
@@ -386,6 +471,19 @@ TEST_CASE("world guide canonical class comparisons use the gameplay race evaluat
     CHECK(trainer->mastery == uint32_t(human) - 1);
     CHECK(entries.front().details.find("Vampire mastery differences") == std::string::npos);
     CHECK(knowledge.classes.size() == 1);
+    const auto baseGrid = buildWorldClassComparison(source, knowledge, false, "Knight");
+    const auto humanGrid = buildWorldClassComparison(source, knowledge, false, "Knight", 0);
+    REQUIRE(baseGrid);
+    REQUIRE(humanGrid);
+    const auto learningCap = [](const WorldClassComparison &grid)
+    {
+        const auto row = std::find_if(grid.skills.begin(), grid.skills.end(),
+            [](const WorldClassComparisonRow &entry) { return entry.skill == "Learning"; });
+        REQUIRE(row != grid.skills.end());
+        return row->caps.front();
+    };
+    CHECK(learningCap(*baseGrid) == base);
+    CHECK(learningCap(*humanGrid) == human);
 }
 
 TEST_CASE("world guide alchemy counts reused reagents and reveals only known formulas")

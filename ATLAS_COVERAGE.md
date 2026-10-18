@@ -28,7 +28,7 @@ tables, and do not bundle its HTML, JS, translated prose, generated illustration
 | Items, artifacts and equipment reference | Shared ItemTable view | Shared ItemTable view | Item-source relationships, icons and richer comparisons |
 | Alchemy recipes and ingredients | Native recursive recipe view | Native recursive recipe view | Broader canonical-content audit and ingredient-source links |
 | Spellbook reference and guild links | Spell/book navigation and eligible guild links from shared stock rules | Same shared rules and discovery filtering | Observed shelves, access/learning eligibility and conditional venue audit |
-| Classes and skill caps | Race mastery differences, promotion growth comparisons and exact-rank trainer searches | Same shared registry | Promotion quest/branch conditions, starting choices, comparison grid and class-history discoveries |
+| Classes and skill caps | Paged family comparison grid, race mastery, HP/SP growth and exact-rank trainer searches | Same shared registry | Promotion quest/branch conditions, starting choices and class-history discoveries |
 | Recruitable companions | Shared merged roster reference | Roster biography/stats and recruited-only Discovery | Recruitment locations/conditions and current recruitment state |
 | Arcomage/Arena tracking | Existing campaign counters and linked taverns | Existing campaign counters and linked taverns | Visual checklist polish and wider save-state audit |
 | Custom markers and notes | Native place/edit/delete with shared Map Book state | Same shared notes and canonical snapshot ownership | Marker styles, richer editing and Android/controller checks |
