@@ -22,6 +22,8 @@ struct JournalQuestLocation
     std::string target;
     // Journal-disclosed facts are distinct from secret sources available only in Guide Mode.
     bool disclosed = false;
+    std::vector<uint32_t> requiredQBitIds;
+    std::vector<uint32_t> forbiddenQBitIds;
 };
 
 struct JournalQuestEntry
@@ -37,6 +39,12 @@ struct JournalQuestEntry
     std::vector<JournalQuestLocation> locations;
 };
 
+struct JournalQuestKnowledgeChange
+{
+    std::vector<uint32_t> quests;
+    std::vector<std::string> locations;
+};
+
 class JournalQuestTable
 {
 public:
@@ -47,9 +55,11 @@ public:
     const std::vector<JournalQuestEntry> &entries() const;
     using QBitReader = std::function<bool(uint32_t)>;
     bool isVisible(const JournalQuestEntry &entry, const QBitReader &hasQBit) const;
-    std::vector<uint32_t> questsKnownAroundChange(uint32_t qbitId, bool wasSet, bool isSet,
+    bool locationAvailable(const JournalQuestLocation &location, const QBitReader &hasQBit) const;
+    JournalQuestKnowledgeChange knowledgeAroundChange(uint32_t qbitId, bool wasSet, bool isSet,
         const QBitReader &hasQBit) const;
     static std::string discoveryKey(uint32_t qbitId);
+    static std::string locationDiscoveryKey(uint32_t qbitId, const JournalQuestLocation &location);
     bool hasQuestText(uint32_t qbitId) const;
     bool isVisible(const JournalQuestEntry &entry, const Party &party) const;
     bool qbitChangeRevealsQuest(uint32_t qbitId, bool wasSet, bool isSet, const Party &party) const;

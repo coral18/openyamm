@@ -506,3 +506,36 @@ Native AMD/OpenGL captures checked the new quest details, Guide-to-Discovery tra
 fully fogged Tatalia / the unexplored Smuggler's Cove plan in both worlds.
 Records live under the local Windows development directory `atlas-quest-content-20261018/`; user saves were not
 test targets. Android/controller checks and full campaign coverage remain pending.
+
+### Conditional clues and retained quest knowledge, 2026-10-18
+
+Quest relationships now accept optional required/forbidden QBit lists through the shared JournalQuestTable.
+Six-column rows remain valid; extended eight-column rows add both condition fields. Incomplete rows and contradictory
+conditions reject the metadata transactionally. Condition QBit parsing uses bounded unsigned conversion consistently on
+Windows and Linux. [MODDING.md](MODDING.md#shared-quest-relationships-and-learned-clues) documents the format.
+
+Actual EventRuntime QBit changes evaluate both the old and new journal/relationship predicates. Learned facts
+are stored in the existing named-global save namespace using semantic quest/role/kind/target keys. Clearing a
+quest or changing a stage does not erase a previously learned destination. This tracking also runs with the
+optional Atlas mod disabled; Atlas queries remain read-only. Legacy active quests can infer presently available
+clues, but an old history flag does not manufacture unrecorded later clues.
+
+Discovery filters conditional rows using that knowledge. Guide labels unlearned conditional rows and does not
+mark them informed. Current content uses QBit 569 to reveal the Ninja quest's Hidden Tomb after the Erathian
+obelisk puzzle, and QBit 69 for the Troll Homeland after its canonical discovery flag. Neither relationship
+reveals explored terrain or an NPC's address. These two stages extend the previous campaign-data checkpoint;
+complete campaign relationships and remaining conditions still need content work.
+
+Focused ASan/UBSan tests passed 49 cases / 3,612 assertions, including conjunctions, exclusions, both sides of a
+change, historical retention, unsigned parsing, transactional failures and both real conditional datasets.
+Windows Release compiled successfully. The explicitly hybrid Ninja scenario supplies controlled promotion
+prerequisites, then uses actual Stephan dialogue and all five physical Erathian puzzle-button interactions.
+The exact tomb fact is absent before solving and present afterward, including save/load. Controlled chest and
+removed-puzzle flags isolate the actual promotion reward and preservation after the quest disappears; this does
+not claim to test its prerequisite quests, tomb combat or chests.
+
+Native AMD/OpenGL captures verified Discovery before learning, after learning and after quest completion with
+the original stage flag cleared; Guide toggles preserve each view's knowledge. Native MM6/MM7/MM8 quest-dialogue
+save/load regressions also passed. Isolated records are under the local Windows development directory
+`atlas-clues-20261018/`. No generated scripts, save-format version or user campaign files changed. Android and
+controller verification remains pending.

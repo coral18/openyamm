@@ -22,7 +22,7 @@ An item name is readable in the request; its full reference link still requires 
 | Quest QBit | Authored global events | Checked relationships |
 | --- | --- | --- |
 | 61 | 46 | Overdune, ashes, Dust's tomb, return; no guessed base residence |
-| 68 | 35–37 | Volog, Ravage Roaming clue; exact Ancient Troll Home remains Guide-only |
+| 68 | 35–37 | Volog, Ravage Roaming clue; exact Ancient Troll Home requires discovery QBit 69 |
 | 85 | 20 and initial journal | Find Dadeross on Dagger Wound; no invented giver |
 | 91 | 110, 152–153 | Council Fellmoon and Xanthor; Xanthor's current residence comes from NPC state |
 | 101 | 174–176 | Aislen and outer-island deliveries; six individual huts are not yet linked |
@@ -58,7 +58,7 @@ geographical/contact relationships, not another promotion implementation or vani
 
 | Quest QBit | Authored global events | Checked relationships |
 | --- | --- | --- |
-| 541 | 813–814 | Stephan, School of Sorcery, cipher and Erathia; exact hidden tomb is Guide-only |
+| 541 | 813–814; Erathia 402–406 | Stephan, school, cipher and Erathia; the exact hidden tomb requires QBit 569 |
 | 545 | 821–822 | Leda and the Arena |
 | 546 | 823–824 | Frederick and the Haunted Mansion in the Barrow Downs |
 | 547 | 825–826 | Frederick and Castle Navan's treasury |
@@ -76,14 +76,21 @@ geographical/contact relationships, not another promotion implementation or vani
 
 The Lich quest journal calls its source the "Proving Grounds", while the actual dialogue identifies Walls of
 Mist. The Atlas resolves that loaded map and item 1417; it does not substitute MM8's Lich Jar or a nonexistent map.
-Precise stone circles, bounty halls, later cipher disclosure, conditional stages and contacts without a known
+Precise stone circles, bounty halls, remaining conditional stages and contacts without a known
 physical residence still need richer links. The parent [coverage matrix](ATLAS_COVERAGE.md) remains authoritative
 for the full objective.
 
 ## Verification
 
 The shared-content test resolves every relationship against loaded maps, NPCs, houses and items. Additional
-tests exercise the real cipher and Troll Homeland datasets: Discovery hides exact undisclosed destinations,
-Guide exposes them without marking them informed, and an unknown cipher's full item reference stays hidden.
+tests exercise the real cipher and Troll Homeland datasets: Discovery hides precise destinations before the
+corresponding discovery flags, then exposes the learned clues. Guide exposes future clues without marking them
+informed, and an unknown cipher's full item reference stays hidden.
 Native isolated Windows scenarios accept Languid's and Pascella's requests and Anthony's pilgrimage through
 authored dialogue, then verify quest knowledge after save/load. Scenarios do not claim the quests were completed.
+
+The conditional-clue checkpoint adds an explicitly hybrid Ninja scenario: Initiate/Dark-path prerequisites are
+fixtures; actual Stephan dialogue gives the quest and actual Erathian button interactions solve the puzzle.
+Only then is the exact tomb relationship recorded. Save/load preserves the fact. A controlled chest-completion
+flag and removed puzzle flag isolate the final authored reward and historical retention; this does not test
+the promotion prerequisites, tomb combat or its chests. Other quest stages still need content work.

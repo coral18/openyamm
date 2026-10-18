@@ -59,6 +59,8 @@ struct WorldGuideKnowledge
     bool hasParty = false;
     std::unordered_set<int16_t> monsters;
     std::unordered_set<uint32_t> quests, activeQuests;
+    std::unordered_set<uint32_t> questBits;
+    std::unordered_set<std::string> questLocations;
 };
 
 struct WorldGuideLink

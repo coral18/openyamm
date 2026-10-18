@@ -27,7 +27,8 @@ bool parseQBitList(
     const std::string &text,
     std::vector<uint32_t> &qbitIds,
     size_t rowIndex,
-    const char *pColumnName)
+    const char *pColumnName,
+    const char *pTableName = "quests.txt")
 {
     size_t tokenBegin = 0;
 
@@ -57,21 +58,20 @@ bool parseQBitList(
         }
 
         const std::string token = text.substr(tokenBegin, trimmedEnd - tokenBegin);
-        char *pEnd = nullptr;
-        const unsigned long parsedValue = std::strtoul(token.c_str(), &pEnd, 10);
+        uint32_t parsedValue = 0;
+        const auto parsed = std::from_chars(token.data(), token.data() + token.size(), parsedValue);
 
         if (token.empty()
-            || pEnd == token.c_str()
-            || *pEnd != '\0'
-            || parsedValue == 0
-            || parsedValue > std::numeric_limits<uint32_t>::max())
+            || parsed.ec != std::errc()
+            || parsed.ptr != token.data() + token.size()
+            || parsedValue == 0)
         {
-            std::cerr << "Invalid " << pColumnName << " QBit at quests.txt row " << (rowIndex + 1)
+            std::cerr << "Invalid " << pColumnName << " QBit at " << pTableName << " row " << (rowIndex + 1)
                       << ": " << token << '\n';
             return false;
         }
 
-        const uint32_t qbitId = static_cast<uint32_t>(parsedValue);
+        const uint32_t qbitId = parsedValue;
         if (std::find(qbitIds.begin(), qbitIds.end(), qbitId) == qbitIds.end())
         {
             qbitIds.push_back(qbitId);
@@ -192,7 +192,8 @@ bool JournalQuestTable::loadLocationRows(const std::vector<std::vector<std::stri
         };
         uint32_t id = 0;
         const auto parsed = std::from_chars(row[0].data(), row[0].data() + row[0].size(), id);
-        if (row.size() != 6 || parsed.ec != std::errc() || parsed.ptr != row[0].data() + row[0].size()
+        if ((row.size() != 6 && row.size() != 8) || parsed.ec != std::errc()
+            || parsed.ptr != row[0].data() + row[0].size()
             || row[0] != std::to_string(id) || row[1] != normalizeWorldId(row[1]))
         {
             return fail();
@@ -217,6 +218,19 @@ bool JournalQuestTable::loadLocationRows(const std::vector<std::vector<std::stri
         if (row[5] != "journal" && row[5] != "guide") return fail();
         location.disclosed = row[5] == "journal";
         location.target = row[4];
+        if (row.size() == 8)
+        {
+            const bool requiredValid = row[6] == "-"
+                || parseQBitList(row[6], location.requiredQBitIds, rowIndex, "required", "quest_locations.txt");
+            const bool forbiddenValid = row[7] == "-"
+                || parseQBitList(row[7], location.forbiddenQBitIds, rowIndex, "forbidden", "quest_locations.txt");
+            if (!requiredValid || !forbiddenValid)
+                return fail();
+            if (std::any_of(location.requiredQBitIds.begin(), location.requiredQBitIds.end(), [&](uint32_t bit)
+                { return std::find(location.forbiddenQBitIds.begin(), location.forbiddenQBitIds.end(), bit)
+                    != location.forbiddenQBitIds.end(); }))
+                return fail();
+        }
         if (location.kind != JournalQuestLocation::Kind::Map)
         {
             uint32_t targetId = 0;
@@ -326,14 +340,32 @@ std::string JournalQuestTable::discoveryKey(uint32_t qbitId)
     return "openyamm.discovery.quest/" + std::to_string(qbitId);
 }
 
-std::vector<uint32_t> JournalQuestTable::questsKnownAroundChange(uint32_t qbitId, bool wasSet, bool isSet,
+bool JournalQuestTable::locationAvailable(const JournalQuestLocation &location, const QBitReader &hasQBit) const
+{
+    return std::all_of(location.requiredQBitIds.begin(), location.requiredQBitIds.end(), hasQBit)
+        && std::none_of(location.forbiddenQBitIds.begin(), location.forbiddenQBitIds.end(), hasQBit);
+}
+
+std::string JournalQuestTable::locationDiscoveryKey(uint32_t qbitId, const JournalQuestLocation &location)
+{
+    const char *pRole = location.role == JournalQuestLocation::Role::Giver ? "giver"
+        : location.role == JournalQuestLocation::Role::Return ? "return" : "objective";
+    const char *pKind = location.kind == JournalQuestLocation::Kind::Map ? "map"
+        : location.kind == JournalQuestLocation::Kind::Npc ? "npc"
+        : location.kind == JournalQuestLocation::Kind::House ? "house" : "item";
+    return discoveryKey(qbitId) + "/location/" + pRole + "/" + pKind + "/" + location.target;
+}
+
+JournalQuestKnowledgeChange JournalQuestTable::knowledgeAroundChange(uint32_t qbitId, bool wasSet, bool isSet,
     const QBitReader &hasQBit) const
 {
-    std::vector<uint32_t> result;
+    JournalQuestKnowledgeChange result;
     if (wasSet == isSet)
     {
         return result;
     }
+    const QBitReader before = [qbitId, wasSet, &hasQBit](uint32_t id)
+    { return id == qbitId ? wasSet : hasQBit(id); };
     for (const JournalQuestEntry &entry : m_entries)
     {
         const bool affected = entry.usesExplicitConditions
@@ -342,10 +374,24 @@ std::vector<uint32_t> JournalQuestTable::questsKnownAroundChange(uint32_t qbitId
                 || std::find(entry.forbiddenQBitIds.begin(), entry.forbiddenQBitIds.end(), qbitId)
                     != entry.forbiddenQBitIds.end()
             : entry.qbitId == qbitId;
-        if (affected && (isVisible(entry, hasQBit)
-            || isVisible(entry, [&](uint32_t id) { return id == qbitId ? wasSet : hasQBit(id); })))
+        const bool wasVisible = isVisible(entry, before);
+        const bool nowVisible = isVisible(entry, hasQBit);
+        if (affected && (wasVisible || nowVisible))
         {
-            result.push_back(entry.qbitId);
+            result.quests.push_back(entry.qbitId);
+        }
+        for (const JournalQuestLocation &location : entry.locations)
+        {
+            if (!location.disclosed)
+                continue;
+            const bool clueAffected = affected
+                || std::find(location.requiredQBitIds.begin(), location.requiredQBitIds.end(), qbitId)
+                    != location.requiredQBitIds.end()
+                || std::find(location.forbiddenQBitIds.begin(), location.forbiddenQBitIds.end(), qbitId)
+                    != location.forbiddenQBitIds.end();
+            if (clueAffected && ((wasVisible && locationAvailable(location, before))
+                || (nowVisible && locationAvailable(location, hasQBit))))
+                result.locations.push_back(locationDiscoveryKey(entry.qbitId, location));
         }
     }
     return result;

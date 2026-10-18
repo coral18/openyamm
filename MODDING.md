@@ -105,6 +105,34 @@ QBit ranges are inclusive, start at 10000 or higher, and must fit signed 32-bit 
 mods or with any mounted world's declared range is rejected. Declaring a range reserves it; this version does not
 create quest definitions or a Lua QBit API. Future modules must continue using the existing global quest registry.
 
+## Shared quest relationships and learned clues
+
+The shared `engine/data_tables/quest_locations.txt` associates existing journal entries with canonical maps and
+merged NPC, house or item IDs. Core owns the reader and knowledge API; content defines the relationships.
+This is not a general typed quest-patching interface yet. See [the content audit](ATLAS_QUEST_AUDIT.md).
+
+The six original columns remain valid: `QBit`, `World`, `Role`, `Kind`, `Target`, `Visibility`.
+An extended row has eight columns, adding `RequiredQBits` and `ForbiddenQBits`. Lists accept commas or semicolons;
+all required bits must be set and all forbidden bits clear. Empty cells or `-` mean no condition. A seven-column
+partial row, contradictory requirements, invalid IDs or duplicate target relationships reject the whole load.
+
+```text
+QBit	World	Role	Kind	Target	Visibility	RequiredQBits	ForbiddenQBits
+541	mm7	objective	map	world.mm7.map.mdt11	journal	569	-
+```
+
+`journal` clues become known while that journal entry is active and their conditions hold. `guide` rows stay
+Guide-only regardless of their conditions. Guide shows unlearned conditional rows as conditional clues; viewing
+them never records knowledge. Discovery retains a learned fact after its conditions or quest entry disappear.
+NPC location privacy and terrain exploration remain separate: knowing a name does not award an address or map.
+
+`JournalQuestTable::knowledgeAroundChange` observes both sides of each actual QBit change through EventRuntime.
+The existing saved named-global state stores learned relationship keys in the form
+`openyamm.discovery.quest/<qbit>/location/<role>/<kind>/<target>`. These keys use semantic IDs, not row positions,
+and need no save-format change. Tracking remains active with the optional Atlas UI disabled. Reading the Atlas
+does not write facts. Old active quests can expose currently available clues; an old history flag cannot invent
+later clues, and missing historical facts are not guessed. All consumers use the shared relationship predicates.
+
 ## Typed class patches
 
 v1 supports `set` and `add_number` on integer `progression.base_hp` and `progression.hp_per_level`. Class targets

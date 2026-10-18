@@ -695,10 +695,15 @@ void recordQuestKnowledge(EventRuntimeState &state, const Party *pParty, uint32_
     {
         return;
     }
-    for (uint32_t id : pParty->journalQuestTable()->questsKnownAroundChange(qbitId,
-        previousValue != 0, newValue != 0, [pParty](uint32_t bit) { return pParty->hasQuestBit(bit); }))
+    const JournalQuestKnowledgeChange knowledge = pParty->journalQuestTable()->knowledgeAroundChange(qbitId,
+        previousValue != 0, newValue != 0, [pParty](uint32_t bit) { return pParty->hasQuestBit(bit); });
+    for (uint32_t id : knowledge.quests)
     {
         state.namedGlobalVars[JournalQuestTable::discoveryKey(id)] = 1;
+    }
+    for (const std::string &key : knowledge.locations)
+    {
+        state.namedGlobalVars[key] = 1;
     }
 }
 

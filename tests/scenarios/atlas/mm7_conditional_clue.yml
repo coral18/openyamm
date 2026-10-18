@@ -1,0 +1,68 @@
+id: atlas.mm7_conditional_clue
+title: Real Erathian puzzle records a clue that survives quest completion and flag removal
+world: mm7
+mode: hybrid
+steps:
+- new_game_flow: {start_map: 7out03.odm}
+- note: Initiate and Dark-path prerequisites are controlled; their promotion quests are outside this test.
+- setup_shortcut: {kind: set_qbit, id: 1572}
+- setup_shortcut: {kind: set_qbit, id: 612}
+- save_game: promotion-prerequisites
+- load_game: promotion-prerequisites
+- load_map: {map: 7d26.blv}
+- speak_npc: {source_id: 378}
+- select_topic: {kind: npc_topic, action_id: 813}
+- assert:
+    qbit_set: [541]
+    named_global_var_changed:
+      name: openyamm.discovery.quest/541/location/objective/map/world.mm7.map.mdt11
+      value: 0
+- save_game: cipher-requested
+- press_action: {action: cancel_dialog}
+- load_map: {map: 7out03.odm}
+- press_interact:
+    pose: {x: 14100, y: -21620, z: 0, yaw: 0, pitch: 0.061}
+    expect: {kind: event_target, triggered_event: 402, can_activate: true}
+- press_interact:
+    pose: {x: 14100, y: -21659.3, z: 0, yaw: 0, pitch: -0.106}
+    expect: {kind: event_target, triggered_event: 403, can_activate: true}
+- press_interact:
+    pose: {x: 14100, y: -21620, z: 0, yaw: 0, pitch: -0.265}
+    expect: {kind: event_target, triggered_event: 404, can_activate: true}
+- press_interact:
+    pose: {x: 14100, y: -21580.7, z: 0, yaw: 0, pitch: -0.106}
+    expect: {kind: event_target, triggered_event: 405, can_activate: true}
+- press_interact:
+    pose: {x: 14100, y: -21620, z: 0, yaw: 0, pitch: -0.106}
+    expect: {kind: event_target, triggered_event: 406, can_activate: true}
+- assert:
+    qbit_set: [541, 569]
+    named_global_var_changed:
+      name: openyamm.discovery.quest/541/location/objective/map/world.mm7.map.mdt11
+      value: 1
+- save_game: puzzle-clue-learned
+- load_game: puzzle-clue-learned
+- assert:
+    named_global_var_changed:
+      name: openyamm.discovery.quest/541/location/objective/map/world.mm7.map.mdt11
+      value: 1
+- note: Controlled chest-completion and removed puzzle flags isolate retention; tomb combat/chests are not tested.
+- setup_shortcut: {kind: set_qbit, id: 754}
+- setup_shortcut: {kind: set_qbit, id: 569, value: false}
+- save_game: clue-retention-fixture
+- load_game: clue-retention-fixture
+- load_map: {map: 7d26.blv}
+- speak_npc: {source_id: 378}
+- select_topic: {kind: npc_topic, action_id: 814}
+- assert:
+    qbit_clear: [541, 569]
+    named_global_var_changed:
+      name: openyamm.discovery.quest/541/location/objective/map/world.mm7.map.mdt11
+      value: 1
+- save_game: completed-quest-clue
+- load_game: completed-quest-clue
+- assert:
+    qbit_clear: [541, 569]
+    named_global_var_changed:
+      name: openyamm.discovery.quest/541/location/objective/map/world.mm7.map.mdt11
+      value: 1

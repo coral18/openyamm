@@ -62,6 +62,16 @@ AtlasScreen::AtlasScreen(const Engine::AssetFileSystem &assets, const GameDataRe
             const auto known = m_knowledge.variables.find(JournalQuestTable::discoveryKey(quest.qbitId));
             if (known != m_knowledge.variables.end() && known->second > 0)
                 m_referenceKnowledge.quests.insert(quest.qbitId);
+            for (const JournalQuestLocation &location : quest.locations)
+            {
+                const std::string key = JournalQuestTable::locationDiscoveryKey(quest.qbitId, location);
+                const auto clue = m_knowledge.variables.find(key);
+                if (clue != m_knowledge.variables.end() && clue->second > 0)
+                    m_referenceKnowledge.questLocations.insert(key);
+                for (const std::vector<uint32_t> *pBits : {&location.requiredQBitIds, &location.forbiddenQBitIds})
+                    for (uint32_t bit : *pBits)
+                        if (m_pParty->hasQuestBit(bit)) m_referenceKnowledge.questBits.insert(bit);
+            }
         }
         m_referenceKnowledge.hasParty = true;
         m_referenceKnowledge.arcomageWinCount = m_pParty->arcomageWinCount();

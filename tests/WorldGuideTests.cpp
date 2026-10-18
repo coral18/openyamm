@@ -223,19 +223,19 @@ TEST_CASE("world guide quests preserve journal conditions and record both sides 
         {"10001", "Unrelated", "", "", "", "99"}}));
     std::unordered_set<uint32_t> bits{10};
     const auto hasBit = [&bits](uint32_t id) { return bits.contains(id); };
-    CHECK(quests.questsKnownAroundChange(11, false, true, hasBit).empty());
+    CHECK(quests.knowledgeAroundChange(11, false, true, hasBit).quests.empty());
     bits.insert(11);
-    CHECK(quests.questsKnownAroundChange(11, false, true, hasBit) == std::vector<uint32_t>{10000});
+    CHECK(quests.knowledgeAroundChange(11, false, true, hasBit).quests == std::vector<uint32_t>{10000});
     bits.insert(12);
-    CHECK(quests.questsKnownAroundChange(12, false, true, hasBit) == std::vector<uint32_t>{10000});
+    CHECK(quests.knowledgeAroundChange(12, false, true, hasBit).quests == std::vector<uint32_t>{10000});
     CHECK_FALSE(quests.isVisible(quests.entries()[1], hasBit));
     bits.erase(12);
-    CHECK(quests.questsKnownAroundChange(12, true, false, hasBit) == std::vector<uint32_t>{10000});
-    CHECK(quests.questsKnownAroundChange(12, false, false, hasBit).empty());
+    CHECK(quests.knowledgeAroundChange(12, true, false, hasBit).quests == std::vector<uint32_t>{10000});
+    CHECK(quests.knowledgeAroundChange(12, false, false, hasBit).quests.empty());
     bits.insert(3);
-    CHECK(quests.questsKnownAroundChange(3, false, true, hasBit) == std::vector<uint32_t>{3});
+    CHECK(quests.knowledgeAroundChange(3, false, true, hasBit).quests == std::vector<uint32_t>{3});
     bits.erase(3);
-    CHECK(quests.questsKnownAroundChange(3, true, false, hasBit) == std::vector<uint32_t>{3});
+    CHECK(quests.knowledgeAroundChange(3, true, false, hasBit).quests == std::vector<uint32_t>{3});
     CHECK(quests.discoveryKey(3) == "openyamm.discovery.quest/3");
 }
 
@@ -267,6 +267,88 @@ TEST_CASE("world guide quest metadata rejects broken or conflicting relationship
     CHECK_FALSE(quests.loadLocationRows({valid, otherWorld}));
     CHECK(quests.loadLocationRows({}));
     CHECK(quests.entries()[0].locations.empty());
+}
+
+TEST_CASE("world guide conditional clues retain facts learned before quest or stage bits disappear")
+{
+    JournalQuestTable quests;
+    REQUIRE(quests.loadFromRows({{"3", "Find the witness", "", ""}}));
+    REQUIRE(quests.loadLocationRows({
+        {"3", "mm8", "objective", "map", "world.mm8.map.out02", "journal", "10;11", "12"},
+        {"3", "mm8", "objective", "map", "world.mm8.map.out03", "guide", "10", ""}}));
+    const JournalQuestLocation &clue = quests.entries().front().locations.front();
+    const std::string key = quests.locationDiscoveryKey(3, clue);
+    CHECK(key == "openyamm.discovery.quest/3/location/objective/map/world.mm8.map.out02");
+    std::unordered_set<uint32_t> bits{3, 10};
+    const auto hasBit = [&bits](uint32_t bit) { return bits.contains(bit); };
+    CHECK_FALSE(quests.locationAvailable(clue, hasBit));
+    CHECK(quests.knowledgeAroundChange(3, false, true, hasBit).locations.empty());
+    bits.insert(11);
+    CHECK(quests.locationAvailable(clue, hasBit));
+    const JournalQuestKnowledgeChange learned = quests.knowledgeAroundChange(11, false, true, hasBit);
+    CHECK(learned.quests.empty());
+    CHECK(learned.locations == std::vector<std::string>{key});
+    // The old side matters when a condition becomes false or the journal entry is removed.
+    bits.insert(12);
+    CHECK_FALSE(quests.locationAvailable(clue, hasBit));
+    CHECK(quests.knowledgeAroundChange(12, false, true, hasBit).locations == learned.locations);
+    bits.erase(12);
+    bits.erase(3);
+    CHECK(quests.knowledgeAroundChange(3, true, false, hasBit).locations == learned.locations);
+    bits.erase(11);
+    CHECK(quests.knowledgeAroundChange(11, true, false, hasBit).locations.empty());
+    CHECK(quests.knowledgeAroundChange(11, false, false, hasBit).locations.empty());
+
+    MapStats maps;
+    REQUIRE(maps.loadFromRows(guideTableRows("map_stats.txt")));
+    WorldGuideSource source;
+    source.pQuests = &quests;
+    source.pMaps = &maps;
+    source.worldId = "mm8";
+    WorldGuideKnowledge knowledge;
+    knowledge.quests.insert(3);
+    // An old quest history flag cannot invent a later clue after its condition disappeared.
+    knowledge.questBits = {10, 11};
+    const auto legacy = buildWorldGuide(source, WorldGuideSection::Quests, knowledge, false);
+    REQUIRE(legacy.size() == 1);
+    CHECK(legacy.front().links.empty());
+    knowledge.questBits.clear();
+    knowledge.questLocations.insert(learned.locations.begin(), learned.locations.end());
+    const auto history = buildWorldGuide(source, WorldGuideSection::Quests, knowledge, false);
+    REQUIRE(history.size() == 1);
+    REQUIRE(history.front().links.size() == 1);
+    CHECK(history.front().links.front().target == "world.mm8.map.out02");
+    CHECK(history.front().links.front().informed);
+    CHECK(history.front().details.find("recorded earlier") != std::string::npos);
+    CHECK(history.front().details.find("Alvar") == std::string::npos);
+    const auto guide = buildWorldGuide(source, WorldGuideSection::Quests, knowledge, true);
+    REQUIRE(guide.size() == 1);
+    REQUIRE(guide.front().links.size() == 2);
+    CHECK_FALSE(guide.front().links.back().informed);
+    CHECK(guide.front().details.find("conditional clue") != std::string::npos);
+}
+
+TEST_CASE("world guide conditional metadata rejects partial contradictory and malformed conditions")
+{
+    JournalQuestTable quests;
+    REQUIRE(quests.loadFromRows({{"3", "A quest", "", ""}}));
+    const std::vector<std::string> valid{
+        "3", "mm8", "objective", "map", "world.mm8.map.out02", "journal", "10;11", "12"};
+    REQUIRE(quests.loadLocationRows({valid}));
+    for (const std::string &bad : {"-1", "+1", "0", "10x", "4294967296", "-4294967295"})
+    {
+        auto row = valid;
+        row[6] = bad;
+        CHECK_FALSE(quests.loadLocationRows({row}));
+        CHECK(quests.entries().front().locations.front().requiredQBitIds == std::vector<uint32_t>{10, 11});
+    }
+    auto contradictory = valid;
+    contradictory[7] = "11";
+    CHECK_FALSE(quests.loadLocationRows({contradictory}));
+    auto partial = valid;
+    partial.pop_back();
+    CHECK_FALSE(quests.loadLocationRows({partial}));
+    CHECK(quests.entries().front().locations.front().forbiddenQBitIds == std::vector<uint32_t>{12});
 }
 
 TEST_CASE("world guide quests filter world and unknown hints before exposing text or links")
@@ -388,6 +470,10 @@ TEST_CASE("world guide campaign clues do not turn undisclosed quest destinations
         [](const WorldGuideLink &link) { return link.target == "world.mm7.map.mdt11"; });
     REQUIRE(tomb != ninja->links.end());
     CHECK_FALSE(tomb->informed);
+    knowledge.questBits.insert(569);
+    const auto deciphered = buildWorldGuide(source, WorldGuideSection::Quests, knowledge, false);
+    REQUIRE(deciphered.size() == 1);
+    CHECK(hasTarget(deciphered.front(), "world.mm7.map.mdt11"));
 
     source.worldId = "mm8";
     knowledge.activeQuests = {68};
@@ -399,6 +485,10 @@ TEST_CASE("world guide campaign clues do not turn undisclosed quest destinations
         [](const WorldGuideEntry &entry) { return entry.id == "68"; });
     REQUIRE(homeland != all.end());
     CHECK(hasTarget(*homeland, "world.mm8.map.d43"));
+    knowledge.questBits.insert(69);
+    const auto foundHome = buildWorldGuide(source, WorldGuideSection::Quests, knowledge, false);
+    REQUIRE(foundHome.size() == 1);
+    CHECK(hasTarget(foundHome.front(), "world.mm8.map.d43"));
     CHECK(knowledge.activeQuests == std::unordered_set<uint32_t>{68});
     CHECK(knowledge.quests.empty());
 }

@@ -88,7 +88,13 @@ std::vector<WorldGuideEntry> buildWorldGuide(const WorldGuideSource &source, Wor
                 ? "Recorded earlier (no longer in the active journal)" : "Guide reference") + "\n\n" + quest.text;
             for (const JournalQuestLocation &location : quest.locations)
             {
-                if (!guide && !location.disclosed) continue;
+                const bool conditional = !location.requiredQBitIds.empty() || !location.forbiddenQBitIds.empty();
+                const bool available = source.pQuests->locationAvailable(location,
+                    [&](uint32_t bit) { return knowledge.questBits.contains(bit); });
+                const bool remembered = knowledge.questLocations.contains(
+                    JournalQuestTable::locationDiscoveryKey(quest.qbitId, location));
+                const bool learned = location.disclosed && (remembered || !conditional || (active && available));
+                if (!guide && !learned) continue;
                 const std::string role = location.role == JournalQuestLocation::Role::Giver ? "Giver"
                     : location.role == JournalQuestLocation::Role::Return ? "Return to" : "Objective";
                 std::string name, target;
@@ -145,12 +151,14 @@ std::vector<WorldGuideEntry> buildWorldGuide(const WorldGuideSource &source, Wor
                 if (!name.empty())
                 {
                     entry.details += "\n\n" + role + ": " + name;
+                    if (conditional && !learned) entry.details += " (conditional clue)";
+                    else if (conditional && learned && !available) entry.details += " (recorded earlier)";
                     // Merely hearing an item's name does not disclose its full mechanics or hidden description.
                     if (!target.empty() && (kind != WorldGuideLink::Kind::Item || guide
                         || knowledge.items.contains(uint32_t(std::stoul(location.target)))))
                     {
                         entry.links.push_back({kind, role + ": " + name, target, 0,
-                            location.disclosed && location.kind != JournalQuestLocation::Kind::Npc});
+                            learned && location.kind != JournalQuestLocation::Kind::Npc});
                     }
                 }
             }
