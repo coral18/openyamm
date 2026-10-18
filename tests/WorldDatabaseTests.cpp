@@ -728,6 +728,137 @@ TEST_CASE("world database hides travel destinations until both ends are known")
     CHECK(database.query(knowledge, false, "", WorldRecordKind::Travel).size() == 1);
 }
 
+TEST_CASE("world database transport knowledge keeps observed quotes separate from live and authored timetables")
+{
+    MapStats maps;
+    HouseTable houses;
+    MergedHouseRuleTable rules;
+    MergedTransportLocationTable transport;
+    REQUIRE(maps.loadFromRows(canonicalRows("map_stats.txt")));
+    REQUIRE(houses.loadFromRows(canonicalRows("house_data.txt")));
+    REQUIRE(rules.loadFromRows(canonicalRows("house_rules.txt")));
+    REQUIRE(transport.loadFromRows(canonicalRows("transport_locations.txt")));
+    REQUIRE(houses.applyHouseRules(rules, transport, maps));
+    REQUIRE(houses.get(462) != nullptr);
+    EventRuntimeState state;
+    EventRuntimeState::TransportRouteOverride replacement;
+    replacement.houseId = 462;
+    replacement.routeIndex = 4;
+    replacement.mapFileName = "7out01.odm";
+    replacement.destinationName = "Emerald Island";
+    replacement.travelDays = 4;
+    replacement.daysAvailable = {false, true, false, false, false, false, false};
+    state.transportRouteOverrides[EventRuntime::transportRouteOverrideKey(462, 4)] = replacement;
+    const WorldTransportState current = worldCurrentTransport(houses, 64, state);
+    REQUIRE(current.houses.contains(462));
+    const auto route = std::find_if(current.houses.at(462).begin(), current.houses.at(462).end(),
+        [](const WorldTransportEntry &entry) { return entry.route.routeIndex == 4; });
+    REQUIRE(route != current.houses.at(462).end());
+    CHECK(route->current);
+    CHECK(route->route.mapFileName == "7out01.odm");
+    const TransportOffer offer{route->route, {2, 8}};
+    recordWorldTransportObservation(state, 462, offer, maps.getEntries());
+    const WorldTransportState observed = worldObservedTransport(houses, maps, state.namedGlobalVars);
+    REQUIRE(observed.issues.empty());
+    REQUIRE(observed.houses.at(462).size() == 1);
+    CHECK(observed.houses.at(462).front().quote->gold == 8);
+    CHECK(observed.houses.at(462).front().quote->travelDays == 2);
+    CHECK(observed.houses.at(462).front().route.travelDays == 4);
+    NpcDialogTable npcs;
+    MergedTeacherTopicTable teachers;
+    WorldKnowledge knowledge;
+    knowledge.variables = state.namedGlobalVars;
+    knowledge.variables[WorldDatabase::houseDiscoveryKey(462)] = 1;
+    knowledge.visitedMaps = {"7out03.odm", "7out01.odm", "7out06.odm"};
+    WorldDatabase memory(maps, houses, npcs, teachers, "mm7", {}, {}, observed);
+    const auto known = memory.query(knowledge, false, "", WorldRecordKind::Travel);
+    REQUIRE(known.size() == 1);
+    CHECK(known.front()->destination->fileName == "7out01.odm");
+    CHECK(known.front()->transport->quote->gold == 8);
+    CHECK(known.front()->transport->observed);
+    // A secret change to destination, schedule and duration must not alter last-offered knowledge.
+    replacement.mapFileName = "7out06.odm";
+    replacement.travelDays = 6;
+    replacement.daysAvailable = {false, false, true, false, false, false, false};
+    state.transportRouteOverrides[EventRuntime::transportRouteOverrideKey(462, 4)] = replacement;
+    WorldDatabase live(maps, houses, npcs, teachers, "mm7", {}, {}, worldCurrentTransport(houses, 64, state));
+    const WorldRecord *pLive = live.find("mm7:house/462/route/4");
+    REQUIRE(pLive != nullptr);
+    CHECK(pLive->destination->fileName == "7out06.odm");
+    CHECK(pLive->transport->route.travelDays == 6);
+    CHECK_FALSE(live.visible(*pLive, knowledge, false));
+    CHECK(memory.find(known.front()->id)->destination->fileName == "7out01.odm");
+    WorldDatabase authored(maps, houses, npcs, teachers, "mm7");
+    CHECK(authored.query(knowledge, false, "", WorldRecordKind::Travel).empty());
+    CHECK_FALSE(authored.query(knowledge, true, "", WorldRecordKind::Travel).empty());
+    // Same slot, newly offered destination: explicit zeros retire the previous learned endpoint.
+    TransportOffer newOffer{pLive->transport->route, {5, 12}};
+    recordWorldTransportObservation(state, 462, newOffer, maps.getEntries());
+    CHECK(state.namedGlobalVars.at(worldTransportKey(462, 4) + "map/world.mm7.map.7out01") == 0);
+    const auto updated = worldObservedTransport(houses, maps, state.namedGlobalVars);
+    REQUIRE(updated.issues.empty());
+    REQUIRE(updated.houses.at(462).size() == 1);
+    CHECK(updated.houses.at(462).front().route.mapFileName == "7out06.odm");
+    CHECK(updated.houses.at(462).front().quote->gold == 12);
+    state.namedGlobalVars[worldTransportKey(462, 4) + "map/world.mm7.map.7out01"] = 1;
+    const auto ambiguous = worldObservedTransport(houses, maps, state.namedGlobalVars);
+    CHECK_FALSE(ambiguous.issues.empty());
+    CHECK(ambiguous.houses.empty());
+    state.namedGlobalVars.clear();
+    CHECK(worldObservedTransport(houses, maps, state.namedGlobalVars).houses.empty());
+}
+
+TEST_CASE("world transport rejects invalid observations without changing previous knowledge")
+{
+    Fixture f;
+    EventRuntimeState state;
+    TransportOffer offer;
+    offer.route.mapFileName = "7out02.odm";
+    offer.route.routeIndex = 7;
+    offer.route.travelDays = 3;
+    offer.route.daysAvailable[0] = true;
+    offer.route.requiredQBit = std::numeric_limits<uint32_t>::max();
+    offer.quote = {2, 15};
+    recordWorldTransportObservation(state, 11, offer, f.maps.getEntries());
+    const auto original = state.namedGlobalVars;
+    const auto observed = worldObservedTransport(f.houses, f.maps, original);
+    REQUIRE(observed.issues.empty());
+    REQUIRE(observed.houses.at(11).size() == 1);
+    CHECK(observed.houses.at(11).front().route.requiredQBit == std::numeric_limits<uint32_t>::max());
+
+    SUBCASE("unknown destination") { offer.route.mapFileName = "missing.odm"; }
+    SUBCASE("negative price") { offer.quote.gold = -1; }
+    SUBCASE("zero personal travel time") { offer.quote.travelDays = 0; }
+    SUBCASE("declared duration overflow") { offer.route.travelDays = std::numeric_limits<uint32_t>::max(); }
+    SUBCASE("no scheduled days") { offer.route.daysAvailable.fill(false); }
+    CHECK_THROWS_AS(recordWorldTransportObservation(state, 11, offer, f.maps.getEntries()), std::invalid_argument);
+    CHECK(state.namedGlobalVars == original);
+}
+
+TEST_CASE("world transport reports incomplete saved offers rather than inventing table knowledge")
+{
+    Fixture f;
+    EventRuntimeState state;
+    TransportOffer offer;
+    offer.route.mapFileName = "7out02.odm";
+    offer.route.daysAvailable[0] = true;
+    offer.quote = {1, 0};
+    recordWorldTransportObservation(state, 11, offer, f.maps.getEntries());
+    const std::string prefix = worldTransportKey(11, 0);
+    SUBCASE("missing quote") { state.namedGlobalVars.erase(prefix + "gold"); }
+    SUBCASE("invalid week mask") { state.namedGlobalVars[prefix + "week"] = 128; }
+    SUBCASE("unresolved map") { state.namedGlobalVars.erase(prefix + "map/world.mm7.map.7out02"); }
+    SUBCASE("noncanonical house ID")
+    {
+        state.namedGlobalVars.erase(prefix + "seen");
+        state.namedGlobalVars["openyamm.discovery.transport/011/0/seen"] = 1;
+    }
+    const auto observed = worldObservedTransport(f.houses, f.maps, state.namedGlobalVars);
+    CHECK(observed.observedOnly);
+    CHECK(observed.houses.empty());
+    CHECK(observed.issues.size() == 1);
+}
+
 TEST_CASE("world database uses canonical records and location hierarchy")
 {
     Fixture f;

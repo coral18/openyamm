@@ -1,0 +1,23 @@
+id: atlas.mm8_transport_observation
+world: mm8
+mode: faithful
+title: Actual Windling dialogue records the offered fare and learns unvisited Ravenshore
+steps:
+- new_game_flow: {start_map: out01.odm}
+- press_interact:
+    pose: {x: 17080, y: 21554, z: 192, yaw: 0, pitch: -0.387}
+    expect: {kind: event_target, triggered_event: 183, can_activate: true}
+- assert:
+    named_global_var_changed: {name: openyamm.discovery.transport/479/1/seen, value: 1}
+- assert:
+    named_global_var_changed: {name: openyamm.discovery.transport/479/1/map/world.mm8.map.out02, value: 1}
+- assert:
+    named_global_var_changed: {name: openyamm.discovery.transport/479/1/quoted_days, value: 4}
+- assert:
+    named_global_var_changed: {name: openyamm.discovery.world.mm8.map.out02, value: 1}
+- assert:
+    named_global_var_changed: {name: openyamm.discovery.transport/479/1/gold, value: 16}
+- save_game: offered-ravenshore
+- load_game: offered-ravenshore
+- assert:
+    named_global_var_changed: {name: openyamm.discovery.transport/479/1/seen, value: 1}

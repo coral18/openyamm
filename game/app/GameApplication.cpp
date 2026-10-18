@@ -8838,6 +8838,11 @@ bool GameApplication::openAtlasScreen(bool paused)
             npcState.npcNameOverrides = live.npcNameOverrides;
             npcState.unavailableNpcIds = live.unavailableNpcIds;
             m_pMapSceneRuntime->party().applyGlobalNpcStateTo(npcState);
+            const MapStatsEntry *pCurrent = m_gameDataRepository.mapStats().findByFileName(
+                m_gameSession.currentMapFileName());
+            if (pCurrent != nullptr)
+                knowledge.currentTransport = worldCurrentTransport(m_gameDataRepository.houseTable(),
+                    uint32_t(pCurrent->id), live);
         }
         knowledge.currentNpcs = worldCurrentNpcs(m_gameDataRepository.npcDialogTable(), npcState);
         knowledge.variables = m_gameSession.namedGlobalVars();

@@ -33,6 +33,12 @@ std::string atlasTravelDays(int64_t days)
 {
     return std::to_string(days) + (days == 1 ? " day" : " days");
 }
+WorldTransportState atlasTransportState(const GameDataRepository &data, const WorldKnowledge &knowledge,
+    bool guide, bool hasParty)
+{
+    return guide || !hasParty ? knowledge.currentTransport
+        : worldObservedTransport(data.houseTable(), data.mapStats(), knowledge.variables);
+}
 } // namespace
 
 AtlasScreen::AtlasScreen(const Engine::AssetFileSystem &assets, const GameDataRepository &data,
@@ -41,11 +47,17 @@ AtlasScreen::AtlasScreen(const Engine::AssetFileSystem &assets, const GameDataRe
     : MenuDesignScreen(assets, paused, audio), m_knowledge(std::move(knowledge)),
       m_presentation(loadWorldAtlasPresentation(assets, initialAtlasWorld(assets, pCurrentMap))),
       m_world(data.mapStats(), data.houseTable(), data.npcDialogTable(), data.mergedTeacherTopicTable(),
-              m_presentation.worldId, m_presentation.maps, atlasNpcState(data, m_knowledge, false, pParty != nullptr)),
+              m_presentation.worldId, m_presentation.maps, atlasNpcState(data, m_knowledge, false, pParty != nullptr),
+              atlasTransportState(data, m_knowledge, false, pParty != nullptr)),
       m_data(data), m_pParty(pParty),
       m_writeNote(std::move(writeNote)), m_close(std::move(close)), m_paused(paused)
 {
     loadDesign("menu/main_menu");
+    if (!m_world.transportIssues().empty())
+    {
+        m_locationError = "Some saved transport offers are unavailable.";
+        for (const std::string &issue : m_world.transportIssues()) std::cerr << issue << '\n';
+    }
     m_world.indexMapNotes(m_knowledge);
     for (const std::string &file : assets.enumerate("engine/world/atlas"))
         if (std::filesystem::path(file).extension() == ".yml")
@@ -285,7 +297,8 @@ void AtlasScreen::rebuildWorld()
 {
     m_world = WorldDatabase(m_data.mapStats(), m_data.houseTable(), m_data.npcDialogTable(),
         m_data.mergedTeacherTopicTable(), m_presentation.worldId, m_presentation.maps,
-        atlasNpcState(m_data, m_knowledge, m_guide, m_pParty != nullptr));
+        atlasNpcState(m_data, m_knowledge, m_guide, m_pParty != nullptr),
+        atlasTransportState(m_data, m_knowledge, m_guide, m_pParty != nullptr));
     m_world.indexMapNotes(m_knowledge);
     indexQuestLocations();
     m_indexedMaps.clear();
@@ -302,7 +315,8 @@ void AtlasScreen::selectWorld(const std::string &worldId)
         WorldAtlasPresentation presentation = loadWorldAtlasPresentation(assetFileSystem(), worldId);
         WorldDatabase world(m_data.mapStats(), m_data.houseTable(), m_data.npcDialogTable(),
                             m_data.mergedTeacherTopicTable(), worldId, presentation.maps,
-                            atlasNpcState(m_data, m_knowledge, m_guide, m_pParty != nullptr));
+                            atlasNpcState(m_data, m_knowledge, m_guide, m_pParty != nullptr),
+                            atlasTransportState(m_data, m_knowledge, m_guide, m_pParty != nullptr));
         m_world = std::move(world);
         m_world.indexMapNotes(m_knowledge);
         m_selectedFeature.clear();
@@ -889,8 +903,10 @@ void AtlasScreen::drawList()
         textInRect({row.x + 7 * designScale(), row.y + 2 * designScale(), row.width - 14 * designScale(), 18 * designScale()},
             record.name(), "menu_arrus", 12);
         const std::string subtitle = record.kind == WorldRecordKind::Travel
-            ? "From " + record.map->name + " - " + atlasTravelDays(record.walkingRoute
-                ? record.walkingRoute->travelDays : int64_t(record.route->travelDays))
+            ? "From " + record.map->name + " - " + (record.walkingRoute != nullptr ? ""
+                : record.transport->quote ? "quoted " : "base ") + atlasTravelDays(record.walkingRoute
+                    ? record.walkingRoute->travelDays : record.transport->quote
+                        ? record.transport->quote->travelDays : int64_t(record.transport->route.travelDays))
             : std::string(WorldDatabase::kindName(record.kind)) + (record.house != nullptr ? " - " + record.map->name : "");
         textInRect({row.x + 7 * designScale(), row.y + 19 * designScale(), row.width - 14 * designScale(), 12 * designScale()},
             subtitle, "menu_lucida", 9, 0xffa9bbb7u);
@@ -898,7 +914,9 @@ void AtlasScreen::drawList()
     revealFocus(viewport, m_scroll);
     setDesignClip(std::nullopt);
     if (records.empty())
-        textInRect(viewport, m_guide ? "No matching records." : "No matching discoveries.\nVisit places and meet their residents to reveal them.",
+        textInRect(viewport, m_guide ? "No matching records." : m_filter == WorldRecordKind::Travel
+            ? "No known routes.\nVisit destinations and ask transport agents for their offers."
+            : "No matching discoveries.\nVisit places and meet their residents to reveal them.",
                    "menu_arrus", 14, 0xffc6dfeau, true);
 }
 
@@ -1291,13 +1309,19 @@ void AtlasScreen::drawDetails()
                 text += "\nSelect a party in-game to check its training requirements.";
             }
         }
-        if (record->route != nullptr)
+        if (record->transport)
         {
-            text += " | " + atlasTravelDays(record->route->travelDays) + " | ";
+            const WorldTransportEntry &transport = *record->transport;
+            text += transport.observed ? " | Last offered" : transport.current ? " | Current timetable"
+                : " | Authored timetable";
+            text += transport.quote ? " | Quoted " : " | Base ";
+            text += atlasTravelDays(transport.quote ? transport.quote->travelDays : transport.route.travelDays);
+            if (transport.quote) text += " | " + std::to_string(transport.quote->gold) + " gold quoted";
+            text += " | ";
             const char *days[] = {"Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"};
             for (size_t day = 0; day < 7; ++day)
-                if (record->route->daysAvailable[day]) text += std::string(days[day]) + " ";
-            if (record->route->requiredQBit != 0) text += "| Quest unlock required";
+                if (transport.route.daysAvailable[day]) text += std::string(days[day]) + " ";
+            if (transport.route.requiredQBit != 0) text += "| Quest unlock required";
         }
         if (record->walkingRoute != nullptr)
         {

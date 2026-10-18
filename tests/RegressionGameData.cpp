@@ -8,6 +8,7 @@
 #include "game/tables/MergedBaseTables.h"
 
 #include <filesystem>
+#include <cstdlib>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -88,7 +89,9 @@ bool loadRegressionGameData(RegressionGameData &data, std::string &failure)
 {
     Engine::AssetFileSystem assetFileSystem;
     const std::filesystem::path sourceRoot = OPENYAMM_SOURCE_DIR;
-    const std::filesystem::path assetsRoot = sourceRoot / "assets_dev";
+    const char *pAssetsRoot = std::getenv("OPENYAMM_REGRESSION_ASSETS_ROOT");
+    const std::filesystem::path assetsRoot = pAssetsRoot != nullptr && *pAssetsRoot != '\0'
+        ? std::filesystem::path(pAssetsRoot) : sourceRoot / "assets_dev";
 
     if (!assetFileSystem.initialize(sourceRoot, assetsRoot, Engine::AssetScaleTier::X1))
     {

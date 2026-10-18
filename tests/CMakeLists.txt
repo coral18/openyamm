@@ -232,6 +232,8 @@ add_executable(openyamm_unit_tests
     ../game/mm9/Mm9TeacherSchedule.cpp
     ../game/tables/MapStats.cpp
     ../game/world/WorldDatabase.cpp
+    ../game/world/WorldNpcKnowledge.cpp
+    ../game/world/WorldTransportKnowledge.cpp
     ../game/world/WorldAtlasPresentation.cpp
     ../game/world/WorldGuide.cpp
     ../game/world/WorldFloorPlan.cpp
@@ -326,6 +328,10 @@ target_link_libraries(openyamm_unit_tests
 )
 
 add_dependencies(openyamm_unit_tests openyamm_ffmpeg_build)
+
+if (WIN32)
+    target_link_libraries(openyamm_unit_tests PRIVATE bcrypt)
+endif()
 
 if (UNIX AND NOT APPLE)
     target_link_options(openyamm_unit_tests

@@ -593,7 +593,10 @@ public:
 
     static uint32_t outdoorModelFacetTextureOverrideKey(uint32_t modelIndex, uint32_t faceIndex);
     static uint32_t monsterRelationOverrideKey(uint32_t leftMonsterId, uint32_t rightMonsterId);
-    static uint64_t transportRouteOverrideKey(uint32_t houseId, uint32_t routeIndex);
+    static uint64_t transportRouteOverrideKey(uint32_t houseId, uint32_t routeIndex)
+    {
+        return (uint64_t(houseId) << 32) | routeIndex;
+    }
 
     static float calculateMechanismDistance(const MapDeltaDoor &door, const RuntimeMechanismState &runtimeMechanism);
     void initializeMapRuntimeState(

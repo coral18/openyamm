@@ -57,7 +57,8 @@ community guide's complete content has been integrated yet.
 - Zoom, drag, search input, native button focus and scroll controls. Entry in main menu and pause menu.
 
 `game/world/WorldDatabase` indexes **references** to `MapStats`, `HouseTable`, `NpcDialogTable` and
-`MergedTeacherTopicTable`. It owns neither copies of those records nor an alternative balancing/content database.
+`MergedTeacherTopicTable`. It owns neither copies of those base records nor an alternative balancing/content database.
+Observed NPC/transport values are explicit saved knowledge; they do not replace the authoritative gameplay tables.
 Map IDs reuse the canonical IDs already supplied by the engine. Temporary legacy house/NPC IDs use the existing
 merged numeric IDs; richer package IDs can replace these as the upstream registries evolve.
 
@@ -88,14 +89,14 @@ Unknown services are filtered before search; routes require both endpoint maps t
 
 ## Remaining guide coverage
 
-This slice is not the complete external guide port. Quest chains, monster groups, site effects/loot/open state,
+This slice is not the complete external guide port. Complete campaign chains, placed/scripted monsters, site effects/loot/open state,
 conditional teleport destinations, Barrows connection graphs, item/ingredient sources, guild availability and
 companion recruitment locations remain to be added through shared game/world data. The native guidebook below
-now covers reference pages and campaign trackers. Player notes remain editable in the existing Map Book.
+now covers reference pages and campaign trackers. Player notes are editable in the Atlas and existing Map Book.
 Dungeon plans currently project all elevations together; floor
-selection and annotations are not yet shown in the Atlas. The index currently describes authored residents and teaching topics;
-runtime NPC relocation/topic overrides and information learned from books or rumours require additional shared
-discovery/data integration. Conditional or dynamically moved entrances require corresponding runtime metadata.
+selection and floor-specific annotations are not yet shown in the Atlas. The index uses current or last-observed
+resident locations/topics, but conditional/shared venues, generated/roaming NPCs and more information learned from
+books or rumours require additional shared integration. Dynamically moved entrances require runtime metadata.
 Sites currently cover explicit map-local event bindings; inherited decoration/global-event bindings need their
 runtime resolver exposed to the index. The Android implementation
 uses shared native code but this slice has not yet been
@@ -109,11 +110,22 @@ and an isolated `runtime` directory. Launch manually with `%USERPROFILE%\openyam
 ```bash
 tools/extended_windows_dev.sh build
 tools/extended_windows_dev.sh run --world mm7
+tools/extended_windows_dev.sh test '--source-file=*WorldDatabaseTests.cpp,*WorldGuideTests.cpp'
 ```
 
 Set `OPENYAMM_WINDOWS_DEV_ROOT` to another prepared WSL path if needed. The script does not download or provision
 the toolchain/payload. It syncs source changes, reuses CMake/Ninja dependencies and ccache, and runs with isolated
 settings/saves. Current toolchain: MSYS2 UCRT64 GCC 16.2, CMake 4.4.4, Ninja and ccache 4.14. No Vulkan build.
+The `test` action enables and builds the standard CMake `openyamm_unit_tests` target in the same native cache,
+then forwards the supplied doctest arguments. It does not launch gameplay or update the runtime overlay.
+The Windows test target links the existing NPC/transport knowledge implementations and FFmpeg's required bcrypt
+library. Only focused test selections have been run; compiling the target does not establish full-suite success.
+An unchanged focused Atlas run took about one second with the prepared native cache.
+
+For packaged-data checks, explicitly set `OPENYAMM_REGRESSION_ASSETS_ROOT` to the isolated `runtime/assets`
+directory and `OPENYAMM_ATLAS_AUDIT_ROOT` to a data-only cache prepared by `tools/prepare_atlas_audit.py`.
+The wrapper converts WSL paths for native tests. Without the regression override, tests retain their normal
+`assets_dev` source. Neither variable silently substitutes a different payload when data is missing.
 Upstream Direct3D shader generation needed two portability fixes: scalar vector initialization through
 `vec3_splat`, and explicit skinning attribute arguments because HLSL vertex inputs are local to `main`.
 The native menu image loader now recognizes PNG signatures in legacy `.bmp`/`.pcx` filenames, as the shared
@@ -574,3 +586,48 @@ The visit/save fixtures used for Atlas UI capture do not claim to perform those 
 Native AMD/OpenGL captures checked both worlds' known/Guide graphs, selected directions, destination navigation,
 retained regional fog and return to gameplay. Isolated runs are retained in the local Windows development
 directory `atlas-travel-20261018/`. Android/controller validation and complete Atlas coverage remain pending.
+
+### Observed transport offers and current local routing, 2026-10-18
+
+Discovery now indexes the actual offers presented by a transport agent: destination, scheduled weekdays,
+quoted fare and personal travel duration. The typed `TransportOffer` comes from the existing house-service
+calculation, including reputation, Merchant skill and follower travel reductions. The Atlas does not parse
+translated button labels or maintain a second pricing formula. This shared observation runs even when the
+optional Atlas module is disabled.
+
+Each house/route slot keeps its last offered values. An unobserved story change cannot silently replace them;
+revisiting the agent updates only the slots actually presented. An offer learns the destination's existence,
+not its terrain, buildings, residents or visited status. Unvisited destinations stay black and cannot receive
+Atlas notes. Older saves must revisit agents to learn their offers; a recorded house visit alone does not
+invent prices or schedules.
+
+Guide uses live route overrides for houses on the party's current map. Other maps remain explicitly labelled
+`Authored timetable`; no remote Lua is executed and old map snapshots are not treated as current predictions.
+`Current timetable` and authored rows show base duration, while `Last offered` rows show the actual quoted
+duration and gold. Reading Guide or switching catalogs does not record these offers.
+
+State reuses the existing session/runtime named globals, without a save-format bump:
+`openyamm.discovery.transport/<house>/<slot>/` owns `seen`, `map/<canonical-id>`, `days`, `week`, `required`,
+`quoted_days` and `gold`. Replacing a slot explicitly zeros its previous destination keys so the existing
+state merge retires them. Independently learned geography remains known. Missing, ambiguous or invalid
+saved offer payloads are reported and excluded instead of falling back to an authored schedule.
+
+The native Windows Release build and focused transport tests passed. The MM7 hybrid scenario
+`tests/scenarios/atlas/mm7_transport_observation.yml` opens Royal Steeds through its real door, saves the Emerald
+Island quote, applies a controlled scavenger-completion fixture, reloads through the authored on-load reroute,
+and proves knowledge changes to Bracada only after the next visit. It does not test the scavenger quest chain.
+The faithful MM8 `mm8_transport_observation.yml` opens Windling's real ship dialogue, learns Ravenshore and
+preserves the four-day, 16-gold fixture quote through save/load. The MM7 fixture quote is six days/eight gold;
+these are party-adjusted test outcomes, not universal prices.
+
+Native AMD/OpenGL captures verify remembered versus current schedules, Guide/Discovery switching, quoted
+prices, fully fogged unvisited destinations and return to gameplay. Records are isolated under the local
+Windows development directory `atlas-transport-20261018/`. Existing MM6/MM7/MM8 quest-dialogue save/load scenarios
+also passed after the shared observation hook. Focused booking tests compare the structured quote with gold
+actually spent and game time advanced, including follower reductions. Android/controller verification, drawn
+boat/coach routes, remote conditional timetable references, arrival points and full guide coverage remain pending.
+
+Final focused Atlas validation passed 54 cases / 3,795 assertions on native Windows and Linux ASan/UBSan.
+It includes atomic rejection of invalid offers, invalid saved schedules, canonical IDs, unsigned QBit round trips,
+and the existing map/content audits. The separate house-transport selection passed eight cases / 110 assertions.
+These are focused selections, not a full-suite or complete-campaign result.

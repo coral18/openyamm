@@ -4,8 +4,8 @@ set -euo pipefail
 repo_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 mode="${1:-build}"
 if [[ $# -gt 0 ]]; then shift; fi
-if [[ "$mode" != build && "$mode" != run ]]; then
-    echo 'Usage: extended_windows_dev.sh [build|run] [game arguments...]' >&2
+if [[ "$mode" != build && "$mode" != run && "$mode" != test ]]; then
+    echo 'Usage: extended_windows_dev.sh [build|run|test] [game or doctest arguments...]' >&2
     exit 2
 fi
 dev_root="${OPENYAMM_WINDOWS_DEV_ROOT:-}"
@@ -33,15 +33,35 @@ fi
 {
     printf '%s\n' 'export MSYSTEM=UCRT64' 'export CHERE_INVOKING=1' 'source /etc/profile' 'set -euo pipefail'
     printf 'export CCACHE_DIR=%q\n' "$native_root/cache/ccache"
-    if [[ "$mode" == build ]]; then
+    if [[ "$mode" == build || "$mode" == test ]]; then
         rsync -a --exclude=.git --exclude=build --exclude='build-*' --exclude=assets_cooked \
             --exclude=reference --exclude=re_mm8 --exclude=output --exclude=test_img --exclude=saves \
             "$repo_root/" "$dev_root/source/"
-        if [[ ! -f "$dev_root/build/CMakeCache.txt" ]]; then
-            printf 'cmake -S %q -B %q -G Ninja -DCMAKE_BUILD_TYPE=Release -DOPENYAMM_BUILD_TESTS=OFF -DOPENYAMM_BUILD_EDITOR=OFF -DOPENYAMM_BUILD_TOOLS=OFF -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache\n' \
-                "$native_root/source" "$native_root/build"
+        tests_enabled=OFF
+        if [[ "$mode" == test ]]; then tests_enabled=ON; fi
+        if [[ ! -f "$dev_root/build/CMakeCache.txt" ]] || { [[ "$mode" == test ]] \
+            && ! rg -q '^OPENYAMM_BUILD_TESTS:BOOL=ON\r?$' "$dev_root/build/CMakeCache.txt"; }; then
+            printf 'cmake -S %q -B %q -G Ninja -DCMAKE_BUILD_TYPE=Release -DOPENYAMM_BUILD_TESTS=%s -DOPENYAMM_BUILD_EDITOR=OFF -DOPENYAMM_BUILD_TOOLS=OFF -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache\n' \
+                "$native_root/source" "$native_root/build" "$tests_enabled"
         fi
-        printf 'cmake --build %q --target openyamm -j%s\n' "$native_root/build" "$build_jobs"
+        if [[ "$mode" == test ]]; then
+            printf 'cmake --build %q --target openyamm_unit_tests -j%s\n' "$native_root/build" "$build_jobs"
+            printf 'export PATH="$(cygpath -u %q):$PATH"\n' "$native_root/build/game"
+            for test_assets_key in OPENYAMM_ATLAS_AUDIT_ROOT OPENYAMM_REGRESSION_ASSETS_ROOT; do
+                if [[ -n "${!test_assets_key:-}" ]]; then
+                    test_assets_root="${!test_assets_key}"
+                    if [[ "$test_assets_root" == /* ]]; then
+                        test_assets_root="$(wslpath -m "$test_assets_root")"
+                    fi
+                    printf 'export %s=%q\n' "$test_assets_key" "$test_assets_root"
+                fi
+            done
+            printf 'cd %q\n' "$native_root/source"
+            printf '%q ' "$native_root/build/tests/openyamm_unit_tests.exe" "$@"
+            printf '\n'
+        else
+            printf 'cmake --build %q --target openyamm -j%s\n' "$native_root/build" "$build_jobs"
+        fi
     else
         if [[ ! -f "$dev_root/runtime/settings.ini" ]]; then
             echo "Missing isolated runtime settings: $dev_root/runtime/settings.ini" >&2

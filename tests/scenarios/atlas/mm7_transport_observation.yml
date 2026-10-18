@@ -1,0 +1,46 @@
+id: atlas.mm7_transport_observation
+world: mm7
+mode: hybrid
+title: Actual quotes follow authored Erathia story routing while knowledge keeps the last offer
+steps:
+- new_game_flow: {start_map: 7out03.odm}
+- save_game: initialized-clock
+- load_game: initialized-clock
+- advance_game_time: {days: 2}
+- press_interact:
+    pose: {x: -18056, y: 4440, z: 784, yaw: 1.5707963, pitch: 0}
+    expect: {kind: event_target, triggered_event: 9, can_activate: true}
+- assert:
+    named_global_var_changed: {name: openyamm.discovery.transport/462/4/seen, value: 1}
+- assert:
+    named_global_var_changed: {name: openyamm.discovery.transport/462/4/map/world.mm7.map.7out01, value: 1}
+- assert:
+    named_global_var_changed: {name: openyamm.discovery.transport/462/4/quoted_days, value: 6}
+- assert:
+    named_global_var_changed: {name: openyamm.discovery.transport/462/4/gold, value: 8}
+- save_game: offered-emerald
+- load_game: offered-emerald
+- assert:
+    named_global_var_changed: {name: openyamm.discovery.transport/462/4/map/world.mm7.map.7out01, value: 1}
+- note: Scavenger completion is controlled; its quest chain is not tested here.
+- setup_shortcut: {kind: set_qbit, id: 519}
+- save_game: changed-story-fixture
+- load_game: changed-story-fixture
+- assert:
+    named_global_var_changed: {name: openyamm.discovery.transport/462/4/map/world.mm7.map.7out01, value: 1}
+- assert:
+    named_global_var_changed: {name: openyamm.discovery.transport/462/4/map/world.mm7.map.7out06, value: 0}
+- save_game: changed-unseen
+- press_interact:
+    pose: {x: -18056, y: 4440, z: 784, yaw: 1.5707963, pitch: 0}
+    expect: {kind: event_target, triggered_event: 9, can_activate: true}
+- assert:
+    named_global_var_changed: {name: openyamm.discovery.transport/462/4/map/world.mm7.map.7out06, value: 1}
+- assert:
+    named_global_var_changed: {name: openyamm.discovery.transport/462/4/map/world.mm7.map.7out01, value: 0}
+- assert:
+    named_global_var_changed: {name: openyamm.discovery.world.mm7.map.7out01, value: 1}
+- save_game: offered-bracada
+- load_game: offered-bracada
+- assert:
+    named_global_var_changed: {name: openyamm.discovery.transport/462/4/map/world.mm7.map.7out06, value: 1}

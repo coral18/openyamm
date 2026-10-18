@@ -375,7 +375,7 @@ const OpenYAMM::Tests::RegressionGameData &requireRegressionGameData()
 {
     REQUIRE_MESSAGE(
         OpenYAMM::Tests::regressionGameDataLoaded(),
-        OpenYAMM::Tests::regressionGameDataFailure().c_str());
+        OpenYAMM::Tests::regressionGameDataFailure());
     return OpenYAMM::Tests::regressionGameData();
 }
 
@@ -5836,6 +5836,7 @@ TEST_CASE("transport action spends gold advances time and queues map move")
         findHouseActionById(actions, OpenYAMM::Game::HouseActionId::TransportRoute);
 
     REQUIRE(action.has_value());
+    REQUIRE(action->transportOffer.has_value());
     const OpenYAMM::Game::HouseActionResult result = OpenYAMM::Game::performHouseAction(
         *action,
         *pHouseEntry,
@@ -5847,6 +5848,9 @@ TEST_CASE("transport action spends gold advances time and queues map move")
     REQUIRE(result.soundType.has_value());
     CHECK_EQ(*result.soundType, OpenYAMM::Game::HouseSoundType::TransportTravel);
     CHECK_EQ(harness.party().gold(), initialGold - expectedPrice);
+    CHECK_EQ(initialGold - harness.party().gold(), action->transportOffer->quote.gold);
+    CHECK_EQ(harness.worldRuntime().gameMinutes() - initialGameMinutes,
+        doctest::Approx(action->transportOffer->quote.travelDays * 24.0f * 60.0f));
     CHECK_EQ(harness.worldRuntime().gameMinutes(), doctest::Approx(initialGameMinutes + 4.0f * 24.0f * 60.0f));
 
     pActiveMember = harness.party().activeMember();
@@ -6397,6 +6401,9 @@ TEST_CASE("transport route travel time uses hired NPC travel reductions")
 
     REQUIRE_EQ(actions.size(), 1);
     CHECK(actions.front().label.find("2 days to Test Harbor") != std::string::npos);
+    REQUIRE(actions.front().transportOffer.has_value());
+    CHECK_EQ(actions.front().transportOffer->quote.travelDays, 2);
+    CHECK_EQ(actions.front().transportOffer->route.travelDays, 5);
 
     const OpenYAMM::Game::HouseActionResult result = OpenYAMM::Game::performHouseAction(
         actions.front(),

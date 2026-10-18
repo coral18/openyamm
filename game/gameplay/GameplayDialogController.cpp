@@ -4022,6 +4022,14 @@ GameplayDialogController::PresentPendingDialogResult GameplayDialogController::p
 
     result.dialogOpened = true;
     result.resolvedContext = *context.eventRuntimeState.pendingDialogueContext;
+    if (result.resolvedContext.kind == DialogueContextKind::HouseService && context.pParty != nullptr
+        && context.pMapEntries != nullptr)
+    {
+        for (const EventDialogAction &action : context.activeEventDialog.actions)
+            if (action.transportOffer)
+                recordWorldTransportObservation(context.eventRuntimeState, result.resolvedContext.sourceId,
+                    *action.transportOffer, *context.pMapEntries);
+    }
     if (originalContext.kind == DialogueContextKind::HouseService)
         context.eventRuntimeState.namedGlobalVars[WorldDatabase::houseDiscoveryKey(originalContext.sourceId)] = 1;
     if (originalContext.hostHouseId != 0)

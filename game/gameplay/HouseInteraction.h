@@ -4,6 +4,7 @@
 #include "game/gameplay/GameplayRuntimeInterfaces.h"
 #include "game/party/SpeechIds.h"
 #include "game/tables/HouseTable.h"
+#include "game/gameplay/TransportOffer.h"
 
 #include <cstdint>
 #include <optional>
@@ -92,6 +93,7 @@ struct HouseActionOption
     std::string argument;
     bool enabled = true;
     std::string disabledReason;
+    std::optional<TransportOffer> transportOffer;
 };
 
 struct InnRestRequest

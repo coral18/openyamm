@@ -8906,10 +8906,6 @@ uint32_t EventRuntime::monsterRelationOverrideKey(uint32_t leftMonsterId, uint32
     return (leftMonsterId << 16) | (rightMonsterId & 0xFFFFu);
 }
 
-uint64_t EventRuntime::transportRouteOverrideKey(uint32_t houseId, uint32_t routeIndex)
-{
-    return (static_cast<uint64_t>(houseId) << 32) | routeIndex;
-}
 
 void EventRuntime::initializeMapRuntimeState(
     const std::optional<MapDeltaData> &mapDeltaData,

@@ -92,7 +92,12 @@ bool WorldKnowledge::knows(const WorldRecord &record) const
             && (record.teacher == nullptr
                 || discovered(*this, worldNpcTeacherKey(record.npc->id, record.teacher->topicId)));
     }
-    if (record.kind == WorldRecordKind::House || (record.kind == WorldRecordKind::Travel && record.house != nullptr))
+    if (record.kind == WorldRecordKind::Travel && record.house != nullptr)
+        return record.transport && record.destination != nullptr
+            && discovered(*this, WorldDatabase::houseDiscoveryKey(record.house->id))
+            && worldTransportObservationMatches(record.house->id, *record.transport,
+                WorldDatabase::mapId(*record.destination), variables);
+    if (record.kind == WorldRecordKind::House)
         return discovered(*this, WorldDatabase::houseDiscoveryKey(record.house->id));
     return discovered(*this, WorldDatabase::mapDiscoveryKey(*record.map))
         || visitedMaps.contains(toLowerCopy(record.map->fileName));
@@ -100,8 +105,10 @@ bool WorldKnowledge::knows(const WorldRecord &record) const
 
 WorldDatabase::WorldDatabase(const MapStats &maps, const HouseTable &houses, const NpcDialogTable &npcs,
     const MergedTeacherTopicTable &teachers, const std::string &worldId,
-    const std::vector<WorldMapPresentation> &presentation, const WorldNpcState &npcsState)
+    const std::vector<WorldMapPresentation> &presentation, const WorldNpcState &npcsState,
+    const WorldTransportState &transportState)
 {
+    m_transportIssues = transportState.issues;
     std::unordered_map<std::string, const WorldMapPresentation *> layouts;
     std::unordered_map<int, const MapStatsEntry *> areas;
     for (const auto &layout : presentation)
@@ -178,8 +185,15 @@ WorldDatabase::WorldDatabase(const MapStats &maps, const HouseTable &houses, con
         record.map = map;
         record.house = &house;
         m_records.push_back(record);
-        for (const auto &route : house.transportRoutes)
+        std::vector<WorldTransportEntry> routes;
+        if (const auto overrides = transportState.houses.find(id); overrides != transportState.houses.end())
+            routes = overrides->second;
+        else if (!transportState.observedOnly)
+            for (const HouseEntry::TransportRoute &route : house.transportRoutes)
+                routes.push_back({route, {}, false, false});
+        for (const WorldTransportEntry &transport : routes)
         {
+            const HouseEntry::TransportRoute &route = transport.route;
             const auto *destination = maps.findByFileName(route.mapFileName);
             // Cross-world travel is not presented as a local route.
             if (destination == nullptr || destination->worldId != worldId)
@@ -188,7 +202,7 @@ WorldDatabase::WorldDatabase(const MapStats &maps, const HouseTable &houses, con
             travel.id += "/route/" + std::to_string(route.routeIndex);
             travel.parentId = record.id;
             travel.kind = WorldRecordKind::Travel;
-            travel.route = &route;
+            travel.transport = transport;
             travel.destination = destination;
             m_records.push_back(std::move(travel));
         }
@@ -241,6 +255,7 @@ WorldDatabase::WorldDatabase(const MapStats &maps, const HouseTable &houses, con
 }
 
 const std::vector<WorldRecord> &WorldDatabase::records() const { return m_records; }
+const std::vector<std::string> &WorldDatabase::transportIssues() const { return m_transportIssues; }
 const WorldRecord *WorldDatabase::find(const std::string &id) const
 {
     const auto it = m_byId.find(id);

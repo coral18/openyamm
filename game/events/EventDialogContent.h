@@ -8,6 +8,7 @@
 #include "game/tables/MapStats.h"
 #include "game/tables/NpcDialogTable.h"
 #include "game/tables/TransitionTable.h"
+#include "game/gameplay/TransportOffer.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -96,6 +97,7 @@ struct EventDialogAction
     bool enabled = true;
     bool textOnly = false;
     std::string disabledReason;
+    std::optional<TransportOffer> transportOffer;
 };
 
 struct EventDialogContent

@@ -33,6 +33,7 @@ add_library(openyamm_game STATIC
     world/WorldMapFeatures.cpp
     world/WorldMapKnowledge.cpp
     world/WorldNpcKnowledge.cpp
+    world/WorldTransportKnowledge.cpp
     world/WorldMapNotes.cpp
     world/WorldMonsterKnowledge.cpp
     gameplay/MapEncounterDefinition.cpp

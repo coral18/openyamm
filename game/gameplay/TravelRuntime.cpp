@@ -2,6 +2,7 @@
 
 #include "game/gameplay/GameplayRuntimeInterfaces.h"
 #include "game/party/Party.h"
+#include "game/events/EventRuntime.h"
 #include "game/tables/MapStats.h"
 
 #include <algorithm>
@@ -14,6 +15,42 @@ bool walkingTravelQuestRequirementsMet(const MapEdgeTransition &transition,
     return transition.requiredQuestBitsAny.empty()
         || std::any_of(transition.requiredQuestBitsAny.begin(), transition.requiredQuestBitsAny.end(), hasQuestBit);
 }
+
+HouseEntry::TransportRoute effectiveTransportRoute(
+    const HouseEntry &houseEntry,
+    const HouseEntry::TransportRoute &baseRoute,
+    const EventRuntimeState *pEventRuntimeState)
+{
+    if (pEventRuntimeState == nullptr)
+    {
+        return baseRoute;
+    }
+
+    const uint64_t key = EventRuntime::transportRouteOverrideKey(houseEntry.id, baseRoute.routeIndex);
+    const auto iterator = pEventRuntimeState->transportRouteOverrides.find(key);
+
+    if (iterator == pEventRuntimeState->transportRouteOverrides.end())
+    {
+        return baseRoute;
+    }
+
+    const EventRuntimeState::TransportRouteOverride &overrideRoute = iterator->second;
+    HouseEntry::TransportRoute route = baseRoute;
+    route.destinationName = overrideRoute.destinationName.empty()
+        ? baseRoute.destinationName
+        : overrideRoute.destinationName;
+    route.mapFileName = overrideRoute.mapFileName.empty() ? baseRoute.mapFileName : overrideRoute.mapFileName;
+    route.daysAvailable = overrideRoute.daysAvailable;
+    route.travelDays = overrideRoute.travelDays == 0 ? baseRoute.travelDays : overrideRoute.travelDays;
+    route.x = overrideRoute.x;
+    route.y = overrideRoute.y;
+    route.z = overrideRoute.z;
+    route.directionDegrees = overrideRoute.directionDegrees;
+    route.requiredQBit = overrideRoute.requiredQBit;
+    route.useMapStartPosition = overrideRoute.useMapStartPosition;
+    return route;
+}
+
 
 void applyTravelDaysSideEffects(
     Party &party,
