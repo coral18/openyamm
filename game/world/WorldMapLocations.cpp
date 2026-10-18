@@ -214,14 +214,14 @@ bool WorldDatabase::locationVisible(const WorldMapLocation &location, const Worl
 }
 
 std::vector<const WorldRecord *> WorldDatabase::recordsAtLocation(const WorldMapLocation &location,
-    const WorldKnowledge &knowledge, bool guide) const
+    const WorldKnowledge &knowledge, bool guide, bool includeTravel) const
 {
     std::vector<const WorldRecord *> result;
     const WorldRecord *pTarget = find(location.recordId);
     if (pTarget == nullptr)
         return result;
     for (const WorldRecord &record : m_records)
-        if (record.kind != WorldRecordKind::Travel
+        if ((record.kind != WorldRecordKind::Travel || includeTravel)
             && (&record == pTarget || (pTarget->house != nullptr && record.house == pTarget->house))
             && visible(record, knowledge, guide))
             result.push_back(&record);

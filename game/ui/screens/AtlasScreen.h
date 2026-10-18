@@ -30,7 +30,7 @@ private:
     void selectWorld(const std::string &worldId);
     std::string regionTexture(const WorldRecord &record) const;
     void drawMap();
-    void drawWalkingLinks(const Rect &image);
+    void drawTravelLinks(const Rect &image);
     void indexKnownRegions();
     bool drawLocationMarkers(const WorldRecord &map, const Rect &image, const Rect &viewport,
         const WorldFloorPlanRaster *pFloorPlan);

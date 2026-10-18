@@ -305,9 +305,10 @@ bool WorldDatabase::walkingRouteUnlocked(const WorldRecord &record, const WorldK
         [&knowledge](uint32_t bit) { return knowledge.questBits.contains(bit); });
 }
 
-std::vector<WorldWalkingLink> WorldDatabase::walkingLinks(const WorldKnowledge &knowledge, bool guide) const
+std::vector<WorldTravelLink> WorldDatabase::travelLinks(const WorldKnowledge &knowledge, bool guide,
+    const std::string &search) const
 {
-    std::vector<WorldWalkingLink> result;
+    std::vector<WorldTravelLink> result;
     const auto anchor = [this](const WorldRecord *pMap) -> const WorldRecord *
     {
         // The constructor validates the parent graph; no synthetic map anchors are invented.
@@ -315,17 +316,22 @@ std::vector<WorldWalkingLink> WorldDatabase::walkingLinks(const WorldKnowledge &
             pMap = find(pMap->parentId);
         return pMap != nullptr && pMap->position ? pMap : nullptr;
     };
-    for (const WorldRecord &record : m_records)
+    for (const WorldRecord *pRecord : query(knowledge, guide, search, WorldRecordKind::Travel))
     {
-        if (record.walkingRoute == nullptr || !visible(record, knowledge, guide))
-            continue;
+        const WorldRecord &record = *pRecord;
         const WorldRecord *pSource = anchor(find(mapId(*record.map)));
         const WorldRecord *pDestination = anchor(find(mapId(*record.destination)));
         if (pSource == nullptr || pDestination == nullptr || pSource == pDestination
             || !visible(*pSource, knowledge, guide) || !visible(*pDestination, knowledge, guide))
             continue;
+        const WorldTravelKind kind = record.walkingRoute != nullptr ? WorldTravelKind::Walking
+            : toLowerCopy(record.house->type) == "boats" ? WorldTravelKind::Boat : WorldTravelKind::Coach;
+        // A last-offered connection is retained knowledge, not a live availability prediction.
+        const bool locked = !walkingRouteUnlocked(record, knowledge)
+            || (record.transport && !record.transport->observed && record.transport->route.requiredQBit != 0
+                && !knowledge.questBits.contains(record.transport->route.requiredQBit));
         result.push_back({record.id, pSource->id, pDestination->id, *pSource->position,
-            *pDestination->position, !walkingRouteUnlocked(record, knowledge)});
+            *pDestination->position, locked, kind});
     }
     return result;
 }

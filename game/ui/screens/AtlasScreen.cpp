@@ -452,13 +452,15 @@ void AtlasScreen::drawScreen(float)
                        "C Chests W Water S Shrines O Obelisks P Passages M Monsters N Notes",
                        "menu_lucida", 7, 0xffc6dfeau);
         else if (map->kind == WorldRecordKind::Region)
-            textInRect(canvasRect(375, 94, 195, 16), "B Buildings   T Trainers   D Dungeons",
+            textInRect(canvasRect(375, 94, 195, 16), m_filter == WorldRecordKind::Travel
+                ? "C Coaches   B Boats" : "B Buildings   T Trainers   D Dungeons",
                        "menu_lucida", 8, 0xffc6dfeau);
     }
     if (m_map.empty() && m_filter == WorldRecordKind::Travel)
-        textInRect(canvasRect(168, 89, 403, 25), "Walking links - arrows show direction", "menu_lucida", 11);
+        textInRect(canvasRect(168, 89, 403, 25),
+            "Walk: solid   Coach: dashed   Boat: dotted   |   Arrows show direction", "menu_lucida", 9);
     indexKnownRegions();
-    const std::string listHeading = !m_siteSelection.empty() ? "Selected markers (clear)"
+    const std::string listHeading = !m_siteSelection.empty() ? "Clear selection"
         : m_filter == WorldRecordKind::Travel ? (m_guide ? "All recorded routes" : "Known routes")
         : m_map.empty() ? (m_guide ? "All recorded locations" : "Your party's discoveries")
         : (m_guide ? "Locations and residents here" : "Discovered here");
@@ -548,7 +550,8 @@ bool AtlasScreen::drawLocationMarkers(const WorldRecord &map, const Rect &image,
     {
         if (location.mapId != map.id || !m_world.locationVisible(location, m_knowledge, m_guide))
             continue;
-        auto records = m_world.recordsAtLocation(location, m_knowledge, m_guide);
+        auto records = m_world.recordsAtLocation(location, m_knowledge, m_guide,
+            m_filter == WorldRecordKind::Travel);
         std::erase_if(records, [this](const WorldRecord *pRecord)
         { return (m_filter && pRecord->kind != *m_filter)
             || (m_trainerMastery != 0 && pRecord->teacher != nullptr && pRecord->teacher->mastery != m_trainerMastery)
@@ -589,7 +592,9 @@ bool AtlasScreen::drawLocationMarkers(const WorldRecord &map, const Rect &image,
         const WorldRecord *pPrimary = trainer != pin.records.end() ? *trainer
             : house != pin.records.end() ? *house : pin.records.front();
         const bool dungeon = pPrimary->kind == WorldRecordKind::Dungeon;
-        const char *label = dungeon ? "D" : trainer != pin.records.end() ? "T" : "B";
+        const bool transport = pPrimary->kind == WorldRecordKind::Travel;
+        const char *label = transport ? (toLowerCopy(pPrimary->house->type) == "boats" ? "B" : "C")
+            : dungeon ? "D" : trainer != pin.records.end() ? "T" : "B";
         const std::string caption = pin.sites > 1 ? std::to_string(pin.sites) + " locations - select to inspect"
             : pPrimary->name();
         const Rect marker{pin.x - 6 * designScale(), pin.y - 6 * designScale(),
@@ -627,40 +632,71 @@ bool AtlasScreen::drawLocationMarkers(const WorldRecord &map, const Rect &image,
     return hovered;
 }
 
-void AtlasScreen::drawWalkingLinks(const Rect &image)
+void AtlasScreen::drawTravelLinks(const Rect &image)
 {
-    const std::vector<WorldWalkingLink> links = m_world.walkingLinks(m_knowledge, m_guide);
-    for (size_t i = 0; i < links.size(); ++i)
+    const std::vector<WorldTravelLink> links = m_world.travelLinks(m_knowledge, m_guide, m_search);
+    const bool selectedRoute = std::any_of(links.begin(), links.end(),
+        [this](const WorldTravelLink &link) { return link.recordId == m_selected; });
+    // Draw the inspected route last, keeping the full network subdued behind it.
+    for (bool selectedPass : {false, true})
     {
-        const WorldWalkingLink &link = links[i];
-        size_t rank = 0, count = 0;
-        for (size_t j = 0; j < links.size(); ++j)
-            if ((links[j].sourceId == link.sourceId && links[j].destinationId == link.destinationId)
-                || (links[j].sourceId == link.destinationId && links[j].destinationId == link.sourceId))
+        for (size_t i = 0; i < links.size(); ++i)
+        {
+            const WorldTravelLink &link = links[i];
+            if ((m_selected == link.recordId) != selectedPass) continue;
+            size_t rank = 0, count = 0;
+            for (size_t j = 0; j < links.size(); ++j)
+                if ((links[j].sourceId == link.sourceId && links[j].destinationId == link.destinationId)
+                    || (links[j].sourceId == link.destinationId && links[j].destinationId == link.sourceId))
+                {
+                    if (j < i) ++rank;
+                    ++count;
+                }
+            float x1 = image.x + link.source.first * image.width;
+            float y1 = image.y + link.source.second * image.height;
+            float x2 = image.x + link.destination.first * image.width;
+            float y2 = image.y + link.destination.second * image.height;
+            const float length = std::hypot(x2 - x1, y2 - y1);
+            if (length < designScale()) continue;
+            const float dx = (x2 - x1) / length, dy = (y2 - y1) / length;
+            const float side = link.sourceId < link.destinationId ? 1.0f : -1.0f;
+            const float lane = (float(rank) - (float(count) - 1) / 2) * 5 * designScale() * side;
+            x1 -= dy * lane; x2 -= dy * lane;
+            y1 += dx * lane; y2 += dx * lane;
+            const bool selected = m_selected == link.recordId;
+            const uint32_t baseColor = selected ? 0xff8dc5e1u : link.locked ? 0xff53698bu
+                : link.kind == WorldTravelKind::Boat ? 0xffcfb487u
+                : link.kind == WorldTravelKind::Coach ? 0xff8ebed6u : 0xff91a990u;
+            const uint32_t alpha = selected ? 0xff000000u : selectedRoute ? 0x55000000u : 0x99000000u;
+            const uint32_t color = (baseColor & 0x00ffffffu) | alpha;
+            const float thickness = (selected ? 2.5f : 1.0f) * designScale();
+            const auto segment = [&](float startX, float startY, float endX, float endY, float stroke)
             {
-                if (j < i) ++rank;
-                ++count;
+                // Keep routes readable over snow, terrain and the schematic's region thumbnails.
+                if (selected)
+                    drawLine(startX, startY, endX, endY, stroke + 1.4f * designScale(), 0xe0161712u);
+                drawLine(startX, startY, endX, endY, stroke, color);
+            };
+            if (link.kind == WorldTravelKind::Walking)
+                segment(x1, y1, x2, y2, thickness);
+            else
+            {
+                const float dash = (link.kind == WorldTravelKind::Boat ? 2.0f : 7.0f) * designScale();
+                const float gap = 4 * designScale();
+                for (float offset = 0; offset < length; offset += dash + gap)
+                {
+                    const float end = std::min(offset + dash, length);
+                    segment(x1 + dx * offset, y1 + dy * offset,
+                        x1 + dx * end, y1 + dy * end, thickness);
+                }
             }
-        float x1 = image.x + link.source.first * image.width;
-        float y1 = image.y + link.source.second * image.height;
-        float x2 = image.x + link.destination.first * image.width;
-        float y2 = image.y + link.destination.second * image.height;
-        const float length = std::hypot(x2 - x1, y2 - y1);
-        if (length < designScale()) continue;
-        const float dx = (x2 - x1) / length, dy = (y2 - y1) / length;
-        const float side = link.sourceId < link.destinationId ? 1.0f : -1.0f;
-        const float lane = (float(rank) - (float(count) - 1) / 2) * 5 * designScale() * side;
-        x1 -= dy * lane; x2 -= dy * lane;
-        y1 += dx * lane; y2 += dx * lane;
-        const bool selected = m_selected == link.recordId;
-        const uint32_t color = selected ? 0xff8dc5e1u : link.locked ? 0xff53698bu : 0xff91a990u;
-        drawLine(x1, y1, x2, y2, (selected ? 2.5f : 1.2f) * designScale(), color);
-        const float tipX = x1 + (x2 - x1) * 0.62f, tipY = y1 + (y2 - y1) * 0.62f;
-        const float arrow = (selected ? 7.0f : 5.0f) * designScale();
-        drawLine(tipX, tipY, tipX - dx * arrow - dy * arrow / 2,
-            tipY - dy * arrow + dx * arrow / 2, designScale(), color);
-        drawLine(tipX, tipY, tipX - dx * arrow + dy * arrow / 2,
-            tipY - dy * arrow - dx * arrow / 2, designScale(), color);
+            const float tipX = x1 + (x2 - x1) * 0.62f, tipY = y1 + (y2 - y1) * 0.62f;
+            const float arrow = (selected ? 7.0f : 5.0f) * designScale();
+            segment(tipX, tipY, tipX - dx * arrow - dy * arrow / 2,
+                tipY - dy * arrow + dx * arrow / 2, designScale());
+            segment(tipX, tipY, tipX - dx * arrow + dy * arrow / 2,
+                tipY - dy * arrow - dx * arrow / 2, designScale());
+        }
     }
 }
 
@@ -759,7 +795,7 @@ void AtlasScreen::drawMap()
     if (map == nullptr)
     {
         if (m_filter == WorldRecordKind::Travel)
-            drawWalkingLinks(image);
+            drawTravelLinks(image);
         for (const auto &region : m_world.records())
         {
             if (!region.position || !m_world.visible(region, m_knowledge, m_guide))

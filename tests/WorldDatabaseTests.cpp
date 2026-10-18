@@ -629,10 +629,10 @@ TEST_CASE("world database walking graph preserves directed exits and canonical q
     WorldDatabase world(maps, houses, npcs, teachers, "mm7", presentation.maps);
     WorldKnowledge knowledge;
     knowledge.visitedMaps = {"7out02.odm", "7out04.odm"};
-    const auto links = world.walkingLinks(knowledge, false);
+    const auto links = world.travelLinks(knowledge, false);
     REQUIRE(links.size() == 3);
     std::unordered_set<std::string> distinct;
-    for (const WorldWalkingLink &link : links)
+    for (const WorldTravelLink &link : links)
     {
         CHECK(distinct.insert(link.recordId).second);
         const WorldRecord *pRoute = world.find(link.recordId);
@@ -644,13 +644,13 @@ TEST_CASE("world database walking graph preserves directed exits and canonical q
         CHECK(pRoute->destination->worldId == "mm7");
     }
     knowledge.visitedMaps.erase("7out04.odm");
-    CHECK(world.walkingLinks(knowledge, false).empty());
+    CHECK(world.travelLinks(knowledge, false).empty());
     knowledge.visitedMaps = {"out14.odm", "7out15.odm"};
-    const auto lockedLinks = world.walkingLinks(knowledge, false);
-    const auto entersShoals = [](const WorldWalkingLink &link)
+    const auto lockedLinks = world.travelLinks(knowledge, false);
+    const auto entersShoals = [](const WorldTravelLink &link)
     { return link.sourceId == "world.mm7.map.out14" && link.destinationId == "world.mm7.map.7out15"; };
     CHECK(std::none_of(lockedLinks.begin(), lockedLinks.end(), entersShoals));
-    const auto guide = world.walkingLinks(knowledge, true);
+    const auto guide = world.travelLinks(knowledge, true);
     const auto shoals = std::find_if(guide.begin(), guide.end(), entersShoals);
     REQUIRE(shoals != guide.end());
     CHECK(shoals->locked);
@@ -661,19 +661,19 @@ TEST_CASE("world database walking graph preserves directed exits and canonical q
     for (uint32_t bit : {642, 643, 783})
     {
         knowledge.questBits = {bit};
-        const auto unlocked = world.walkingLinks(knowledge, false);
+        const auto unlocked = world.travelLinks(knowledge, false);
         const auto entrance = std::find_if(unlocked.begin(), unlocked.end(), entersShoals);
         REQUIRE(entrance != unlocked.end());
         CHECK(entrance->recordId == shoals->recordId);
         CHECK_FALSE(entrance->locked);
     }
     knowledge.questBits = {999};
-    const auto unrelated = world.walkingLinks(knowledge, false);
+    const auto unrelated = world.travelLinks(knowledge, false);
     CHECK(std::none_of(unrelated.begin(), unrelated.end(), entersShoals));
     CHECK(knowledge.questBits == std::unordered_set<uint32_t>{999});
     CHECK(knowledge.visitedMaps.size() == 2);
     WorldDatabase noPresentation(maps, houses, npcs, teachers, "mm7");
-    CHECK(noPresentation.walkingLinks(knowledge, true).empty());
+    CHECK(noPresentation.travelLinks(knowledge, true).empty());
     CHECK_FALSE(noPresentation.query(knowledge, true, "", WorldRecordKind::Travel).empty());
 }
 
@@ -692,9 +692,9 @@ TEST_CASE("world database MM8 walking graph uses active navigation without discl
     WorldDatabase world(maps, houses, npcs, teachers, "mm8", presentation.maps);
     WorldKnowledge knowledge;
     knowledge.visitedMaps = {"out02.odm", "out03.odm", "7out03.odm"};
-    const auto links = world.walkingLinks(knowledge, false);
+    const auto links = world.travelLinks(knowledge, false);
     REQUIRE(links.size() == 2);
-    for (const WorldWalkingLink &link : links)
+    for (const WorldTravelLink &link : links)
     {
         const WorldRecord *pRoute = world.find(link.recordId);
         REQUIRE(pRoute != nullptr);
@@ -703,8 +703,8 @@ TEST_CASE("world database MM8 walking graph uses active navigation without discl
         CHECK(pRoute->walkingRoute->travelDays == 1);
     }
     knowledge.visitedMaps.erase("out03.odm");
-    CHECK(world.walkingLinks(knowledge, false).empty());
-    CHECK_FALSE(world.walkingLinks(knowledge, true).empty());
+    CHECK(world.travelLinks(knowledge, false).empty());
+    CHECK_FALSE(world.travelLinks(knowledge, true).empty());
 }
 
 TEST_CASE("world database hides travel destinations until both ends are known")
@@ -726,6 +726,105 @@ TEST_CASE("world database hides travel destinations until both ends are known")
     CHECK(guide.front()->walkingRoute->travelDays == 2);
     knowledge.visitedMaps.insert("7d21.blv");
     CHECK(database.query(knowledge, false, "", WorldRecordKind::Travel).size() == 1);
+}
+
+TEST_CASE("world travel graph draws only learned transport endpoints and keeps distinct service slots")
+{
+    MapStats maps;
+    HouseTable houses;
+    MergedHouseRuleTable rules;
+    MergedTransportLocationTable locations;
+    REQUIRE(maps.loadFromRows(canonicalRows("map_stats.txt")));
+    REQUIRE(houses.loadFromRows(canonicalRows("house_data.txt")));
+    REQUIRE(rules.loadFromRows(canonicalRows("house_rules.txt")));
+    REQUIRE(locations.loadFromRows(canonicalRows("transport_locations.txt")));
+    REQUIRE(houses.applyHouseRules(rules, locations, maps));
+    std::string world = "mm7", destination = "7out01.odm", foreign = "out01.odm";
+    uint32_t houseId = 462;
+    WorldTravelKind kind = WorldTravelKind::Coach;
+    SUBCASE("MM7 coach") {}
+    SUBCASE("MM8 boat")
+    {
+        world = "mm8"; destination = "out02.odm"; foreign = "7out02.odm";
+        houseId = 479; kind = WorldTravelKind::Boat;
+    }
+    INFO(world);
+    std::ifstream file(std::string(OPENYAMM_SOURCE_DIR) + "/assets_dev/engine/world/atlas/" + world + ".yml");
+    REQUIRE(file.is_open());
+    const std::string yaml{std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>()};
+    const auto presentation = parseWorldAtlasPresentation(yaml, world);
+    const HouseEntry *pHouse = houses.get(houseId);
+    REQUIRE(pHouse != nullptr);
+    const MapStatsEntry *pSource = maps.findById(pHouse->mapId);
+    REQUIRE(pSource != nullptr);
+    EventRuntimeState state;
+    TransportOffer offer;
+    offer.route.routeIndex = 99;
+    offer.route.mapFileName = destination;
+    offer.route.requiredQBit = 10023;
+    offer.quote = {2, 8};
+    recordWorldTransportObservation(state, houseId, offer, maps.getEntries());
+    WorldKnowledge knowledge;
+    knowledge.variables = state.namedGlobalVars;
+    knowledge.variables[WorldDatabase::houseDiscoveryKey(houseId)] = 1;
+    knowledge.visitedMaps.insert(pSource->fileName);
+    const auto observed = worldObservedTransport(houses, maps, state.namedGlobalVars);
+    NpcDialogTable npcs;
+    MergedTeacherTopicTable teachers;
+    WorldDatabase database(maps, houses, npcs, teachers, world, presentation.maps, {}, observed);
+    const auto links = database.travelLinks(knowledge, false);
+    REQUIRE(links.size() == 1);
+    const WorldTravelLink &link = links.front();
+    CHECK(link.kind == kind);
+    CHECK_FALSE(link.locked); // Retained last-offered knowledge does not forecast availability.
+    CHECK(link.sourceId == WorldDatabase::mapId(*pSource));
+    CHECK(link.destinationId == WorldDatabase::mapId(*maps.findByFileName(destination)));
+    CHECK(link.source == *database.find(link.sourceId)->position);
+    CHECK(link.destination == *database.find(link.destinationId)->position);
+    CHECK(database.travelLinks(knowledge, false, "unrelated search").empty());
+    CHECK(database.travelLinks(knowledge, false, pHouse->name).size() == 1);
+    WorldKnowledge unknown = knowledge;
+    unknown.variables.erase(WorldDatabase::mapDiscoveryKey(*maps.findByFileName(destination)));
+    CHECK(database.travelLinks(unknown, false).empty());
+    unknown = knowledge;
+    unknown.variables.erase(WorldDatabase::houseDiscoveryKey(houseId));
+    CHECK(database.travelLinks(unknown, false).empty());
+    WorldDatabase withoutAnchors(maps, houses, npcs, teachers, world, {}, {}, observed);
+    CHECK(withoutAnchors.travelLinks(knowledge, false).empty());
+    CHECK(withoutAnchors.query(knowledge, false, "", WorldRecordKind::Travel).size() == 1);
+
+    offer.route.routeIndex = 100;
+    recordWorldTransportObservation(state, houseId, offer, maps.getEntries());
+    knowledge.variables = state.namedGlobalVars;
+    knowledge.variables[WorldDatabase::houseDiscoveryKey(houseId)] = 1;
+    WorldDatabase parallel(maps, houses, npcs, teachers, world, presentation.maps, {},
+        worldObservedTransport(houses, maps, state.namedGlobalVars));
+    const auto distinct = parallel.travelLinks(knowledge, false);
+    REQUIRE(distinct.size() == 2);
+    CHECK(distinct[0].recordId != distinct[1].recordId);
+    CHECK(distinct[0].destinationId == distinct[1].destinationId);
+    const WorldMapLocation departure{"test-door", link.sourceId, database.find(link.recordId)->parentId};
+    CHECK(parallel.recordsAtLocation(departure, knowledge, false).size() == 1);
+    CHECK(parallel.recordsAtLocation(departure, knowledge, false, true).size() == 3);
+
+    WorldTransportState current;
+    current.houses[houseId].push_back({offer.route, {}, false, true});
+    WorldDatabase live(maps, houses, npcs, teachers, world, presentation.maps, {}, current);
+    const std::string routeId = departure.recordId + "/route/100";
+    const auto locked = live.travelLinks(knowledge, true);
+    const auto match = std::find_if(locked.begin(), locked.end(), [&](const WorldTravelLink &candidate)
+    { return candidate.recordId == routeId; });
+    REQUIRE(match != locked.end());
+    CHECK(match->locked);
+    CHECK(live.travelLinks(knowledge, false).empty()); // Current state is never an observed timetable.
+    knowledge.questBits.insert(10023);
+    const auto unlocked = live.travelLinks(knowledge, true);
+    CHECK_FALSE(std::find_if(unlocked.begin(), unlocked.end(), [&](const WorldTravelLink &candidate)
+        { return candidate.recordId == routeId; })->locked);
+
+    current.houses[houseId].front().route.mapFileName = foreign;
+    WorldDatabase otherWorld(maps, houses, npcs, teachers, world, presentation.maps, {}, current);
+    CHECK(otherWorld.find(routeId) == nullptr);
 }
 
 TEST_CASE("world database transport knowledge keeps observed quotes separate from live and authored timetables")

@@ -63,11 +63,19 @@ struct WorldRecord
     std::string searchText() const;
 };
 
-struct WorldWalkingLink
+enum class WorldTravelKind
+{
+    Walking,
+    Coach,
+    Boat
+};
+
+struct WorldTravelLink
 {
     std::string recordId, sourceId, destinationId;
     std::pair<float, float> source, destination;
     bool locked = false;
+    WorldTravelKind kind = WorldTravelKind::Walking;
 };
 
 struct WorldKnowledge
@@ -107,7 +115,8 @@ public:
         const std::string &withinMap = {}, bool includeTravel = true) const;
     bool visible(const WorldRecord &record, const WorldKnowledge &knowledge, bool guide) const;
     bool walkingRouteUnlocked(const WorldRecord &record, const WorldKnowledge &knowledge) const;
-    std::vector<WorldWalkingLink> walkingLinks(const WorldKnowledge &knowledge, bool guide) const;
+    std::vector<WorldTravelLink> travelLinks(const WorldKnowledge &knowledge, bool guide,
+        const std::string &search = {}) const;
     void indexMapLocations(const OutdoorMapData &map, const ScriptedEventProgram &events);
     void indexMapLocations(const MapStatsEntry &map, const IndoorMapData &geometry,
                            const ScriptedEventProgram &events);
@@ -123,7 +132,7 @@ public:
         const std::string &search = {}, const std::string &withinMap = {}) const;
     bool locationVisible(const WorldMapLocation &location, const WorldKnowledge &knowledge, bool guide) const;
     std::vector<const WorldRecord *> recordsAtLocation(const WorldMapLocation &location,
-        const WorldKnowledge &knowledge, bool guide) const;
+        const WorldKnowledge &knowledge, bool guide, bool includeTravel = false) const;
 
     static std::string mapId(const MapStatsEntry &map);
     static std::string mapDiscoveryKey(const MapStatsEntry &map);

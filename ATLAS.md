@@ -631,3 +631,29 @@ Final focused Atlas validation passed 54 cases / 3,795 assertions on native Wind
 It includes atomic rejection of invalid offers, invalid saved schedules, canonical IDs, unsigned QBit round trips,
 and the existing map/content audits. The separate house-transport selection passed eight cases / 110 assertions.
 These are focused selections, not a full-suite or complete-campaign result.
+
+### Coach/boat graph and departure markers, 2026-10-18
+
+The continent Travel view now draws walking, coach and boat connections through one shared `travelLinks` query.
+Solid lines denote walking, dashed lines coaches and dotted lines boats; arrows retain departure direction.
+Parallel services and opposite directions retain distinct route IDs/lanes. The selected list row highlights its
+own connection. Lines follow the same search and Discovery/Guide rules as the list; unknown endpoints or missing
+presentation anchors do not receive invented lines. The region anchors indicate broad connections, not exact
+roads, sea lanes or points of arrival.
+The complete network stays subdued over the continent art; an inspected connection is drawn last with a dark
+edge so its direction remains readable on bright terrain.
+
+Discovery draws only saved, last-offered services from the transport checkpoint above. Guide uses the explicitly
+current/authored schedule index, including required-QBit styling. A remembered quote is not coloured as a live
+availability forecast. Cross-world services stay outside a local-world graph.
+
+Regional Travel views now expose departure pins through the same event-backed physical house locations as
+buildings: `C` for coaches and `B` for boats, retaining the compact badge and larger hit area. Selecting a
+transport pin narrows the service list. Other filters retain their previous house/resident marker behaviour;
+a visited building does not disclose unknown transport routes.
+
+The focused native Windows and ASan/UBSan suites pass 55 cases / 3,873 assertions. Added canonical MM7/MM8 checks
+cover coach/boat identity, known endpoints, missing anchors, search, distinct historical slots, departure-record
+selection, Guide quest locks and world separation. Native Windows Release compilation passed; graphical checks
+use isolated copies of the previously exercised MM7 Royal Steeds and MM8 Windling saves under
+`atlas-transport-graph-20261018/`. Android/controller checks and the remaining coverage matrix remain open.
