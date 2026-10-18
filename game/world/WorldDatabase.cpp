@@ -78,6 +78,8 @@ std::string WorldRecord::searchText() const
 
 bool WorldKnowledge::knows(const WorldRecord &record) const
 {
+    if (informedRecords.contains(record.id))
+        return true;
     if (record.kind == WorldRecordKind::Npc || record.kind == WorldRecordKind::Trainer)
         return discovered(*this, WorldDatabase::npcDiscoveryKey(record.npc->id));
     if (record.kind == WorldRecordKind::House || (record.kind == WorldRecordKind::Travel && record.house != nullptr))

@@ -357,3 +357,41 @@ All native captures/logs and generated fixture saves stay outside Git under `atl
 Fresh native UI processes also reopened the canonical note-bearing saves in both worlds, displayed the saved region
 and historical-map text, edited the historical note and saved it again. This validates Atlas reads/edits against the
 same canonical snapshot that actual map entry restores, including saves where the legacy filename alias differs.
+
+### Shared quest relationships checkpoint, 2026-10-18
+
+The shared `JournalQuestTable` now accepts language-neutral relationships from
+`engine/data_tables/quest_locations.txt`: QBit, owning world, giver/objective/return role, typed target and disclosure.
+The initial reviewed dataset covers 19 quests and 70 relationships in MM7/MM8; this is partial content coverage.
+Target names and descriptions come from current map, NPC, house and item tables. Canonical map IDs and merged
+registry IDs are validated at startup; duplicate relationships, invalid roles/visibility, conflicting quest worlds,
+unknown QBits and unresolved references fail instead of yielding dead links. Metadata loading is transactional.
+
+The native Guidebook has a Quests tab. Discovery lists active or recorded quests only; Guide lists the relationships
+available for the selected world. Journal-disclosed objectives can make a place known without visiting it or revealing
+its terrain/floor plan. Guide-only source hints stay hidden in Discovery. Viewing Guide never awards discoveries.
+NPC contacts use the current registry's names, but no location is inferred from a static NPC residence: event-driven
+relocations require a separate location relationship until the shared NPC location index supports current overrides.
+Quest item names do not unlock their full reference descriptions before ownership/encounter.
+
+Actual event QBit changes record `openyamm.discovery.quest/<qbit>` in existing saved global state. Conditional journal
+rows reuse the journal visibility predicate on both sides of a changed bit. A removed journal entry is labelled
+"Recorded earlier", not automatically "Completed". Opening Atlas does not write knowledge; old saves infer currently
+active quests but do not invent past quests. No save-format change or generated Lua edit is required.
+
+Upstream compatibility was separately assessed without updating the working engine; see
+[the 2026-10-18 audit](UPSTREAM_COMPATIBILITY.md). Atlas completion remains governed by [coverage](ATLAS_COVERAGE.md).
+
+Validation: Windows Release compiled successfully. Focused ASan/UBSan tests passed 38 cases / 1,447 assertions
+across the shared World Database and Guidebook. The image-decoder translation unit excludes the external bx
+allocator's vptr instrumentation because the linked third-party allocator has no instrumented RTTI; Atlas, quest
+and database logic retain both sanitizers. Native faithful scenarios accepted Dadeross' letter, saved/reloaded it,
+returned it to Elgar Fellmoon, then saved/reloaded its recorded history; MM7 accepted the Lantern of Light quest
+and saved/reloaded knowledge through actual NPC dialogue. An MM6 regression also accepted Potbello's letter
+through dialogue and preserved QBit 1106 / quest knowledge after save/load; its local fixture uses the normal
+new-game party because the older smoke scenario's named party fixture is unsupported by the current runner.
+Native AMD/OpenGL captures checked both worlds, the
+active/history labels, quest navigation to still-fully-fogged Ravenshore and Guide-to-Discovery privacy. Captures and
+isolated campaigns are under the local Windows development directory `atlas-quests-20261018/`; they are not bundled
+in Git. Scenarios are retained under `tests/scenarios/atlas/*_quest_knowledge.yml`. Android remains unverified for
+this checkpoint.

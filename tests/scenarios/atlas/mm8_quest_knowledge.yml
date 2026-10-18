@@ -1,0 +1,38 @@
+id: atlas.mm8_quest_knowledge
+title: Actual letter quest acceptance and return records persistent knowledge
+world: mm8
+mode: faithful
+steps:
+- new_game_flow:
+    start_map: out01.odm
+- assert:
+    qbit_clear: [3]
+- speak_npc:
+    source_id: 2
+- select_topic:
+    kind: npc_topic
+    action_id: 20
+- assert:
+    qbit_set: [3]
+    named_global_var_changed: {name: openyamm.discovery.quest/3, value: 1}
+- save_game: letter-accepted
+- load_game: letter-accepted
+- assert:
+    qbit_set: [3]
+    named_global_var_changed: {name: openyamm.discovery.quest/3, value: 1}
+- load_map:
+    map: out02.odm
+- speak_npc:
+    source_id: 3
+- select_topic:
+    kind: npc_topic
+    action_id: 28
+- assert:
+    qbit_clear: [3]
+    qbit_set: [4]
+    named_global_var_changed: {name: openyamm.discovery.quest/3, value: 1}
+- save_game: letter-returned
+- load_game: letter-returned
+- assert:
+    qbit_clear: [3]
+    named_global_var_changed: {name: openyamm.discovery.quest/3, value: 1}

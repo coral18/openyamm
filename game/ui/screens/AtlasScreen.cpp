@@ -45,6 +45,17 @@ AtlasScreen::AtlasScreen(const Engine::AssetFileSystem &assets, const GameDataRe
             m_referenceKnowledge.monsters.insert(observation.monsterId);
     if (m_pParty != nullptr)
     {
+        for (const JournalQuestEntry &quest : m_data.journalQuestTable().entries())
+        {
+            if (m_data.journalQuestTable().isVisible(quest, *m_pParty))
+            {
+                m_referenceKnowledge.activeQuests.insert(quest.qbitId);
+                m_referenceKnowledge.quests.insert(quest.qbitId);
+            }
+            const auto known = m_knowledge.variables.find(JournalQuestTable::discoveryKey(quest.qbitId));
+            if (known != m_knowledge.variables.end() && known->second > 0)
+                m_referenceKnowledge.quests.insert(quest.qbitId);
+        }
         m_referenceKnowledge.hasParty = true;
         m_referenceKnowledge.arcomageWinCount = m_pParty->arcomageWinCount();
         m_referenceKnowledge.arcomageLossCount = m_pParty->arcomageLossCount();
@@ -77,6 +88,7 @@ AtlasScreen::AtlasScreen(const Engine::AssetFileSystem &assets, const GameDataRe
             if (m_pParty->hasRosterMember(pMember->id))
                 m_referenceKnowledge.roster.insert(pMember->id);
     }
+    indexQuestLocations();
     if (pCurrentMap != nullptr && pCurrentMap->outdoorMapData && pCurrentMap->localEventProgram)
     {
         m_world.indexMapLocations(*pCurrentMap->outdoorMapData, *pCurrentMap->localEventProgram);
@@ -256,6 +268,7 @@ void AtlasScreen::selectWorld(const std::string &worldId)
         m_referenceSelected.clear();
         m_referenceScroll = m_referenceDetailScroll = 0;
         m_presentation = std::move(presentation);
+        indexQuestLocations();
         m_trainerMastery = 0;
         m_indexedMaps.clear();
         m_siteSelection.clear();
@@ -900,12 +913,35 @@ void AtlasScreen::drawFeatureList()
             "menu_arrus", 13, 0xffc6dfeau, true);
 }
 
+void AtlasScreen::indexQuestLocations()
+{
+    WorldGuideSource source;
+    source.pQuests = &m_data.journalQuestTable();
+    source.pMaps = &m_data.mapStats();
+    source.pHouses = &m_data.houseTable();
+    source.worldId = m_presentation.worldId;
+    for (const WorldGuideEntry &entry : buildWorldGuide(source, WorldGuideSection::Quests,
+        m_referenceKnowledge, false))
+    {
+        for (const WorldGuideLink &link : entry.links)
+        {
+            if (link.kind != WorldGuideLink::Kind::Location || !link.informed) continue;
+            if (const WorldRecord *pLocation = m_world.find(link.target))
+            {
+                m_knowledge.informedRecords.insert(pLocation->id);
+                m_knowledge.informedRecords.insert(WorldDatabase::mapId(*pLocation->map));
+            }
+        }
+    }
+}
+
 void AtlasScreen::rebuildReference()
 {
     const WorldGuideSource source{&m_data.itemTable(), &m_data.spellTable(), &m_data.classMultiplierTable(),
         &m_data.classSkillTable(), &m_data.mergedPotionSettingTable(), &m_data.mergedReagentSettingTable(),
         &m_data.potionMixingTable(), &m_data.potionNoteTable(), &m_data.rosterTable(),
-        &m_data.houseTable(), &m_data.mapStats(), m_presentation.worldId, &m_data.monsterTable()};
+        &m_data.houseTable(), &m_data.mapStats(), m_presentation.worldId, &m_data.monsterTable(),
+        &m_data.journalQuestTable(), &m_data.npcDialogTable()};
     m_referenceEntries = buildWorldGuide(source, m_referenceSection, m_referenceKnowledge, m_guide);
     m_referenceDirty = false;
 }
@@ -916,9 +952,9 @@ void AtlasScreen::drawReference()
         {"Items", WorldGuideSection::Items}, {"Spells", WorldGuideSection::Spells},
         {"Classes", WorldGuideSection::Classes}, {"Alchemy", WorldGuideSection::Alchemy},
         {"Companions", WorldGuideSection::Companions}, {"Progress", WorldGuideSection::Progress},
-        {"Bestiary", WorldGuideSection::Monsters}};
+        {"Bestiary", WorldGuideSection::Monsters}, {"Quests", WorldGuideSection::Quests}};
     for (size_t i = 0; i < std::size(sections); ++i)
-        if (button("atlas-ref-section-" + std::to_string(i), canvasRect(25 + i * 114, 53, 107, 28),
+        if (button("atlas-ref-section-" + std::to_string(i), canvasRect(25 + i * 100, 53, 94, 28),
                    sections[i].first, "button", true, m_referenceSection == sections[i].second))
         {
             m_referenceSection = sections[i].second;
@@ -1009,8 +1045,8 @@ void AtlasScreen::drawReference()
                 }
                 else if (link.kind == WorldGuideLink::Kind::Location)
                 {
-                    if (const WorldRecord *pLocation = m_world.find(link.target);
-                        pLocation != nullptr && m_world.visible(*pLocation, m_knowledge, m_guide))
+                    const WorldRecord *pLocation = m_world.find(link.target);
+                    if (pLocation != nullptr && m_world.visible(*pLocation, m_knowledge, m_guide))
                     {
                         m_referenceOpen = false;
                         m_featureView = false;
@@ -1043,7 +1079,7 @@ void AtlasScreen::drawReference()
     textInRect(canvasRect(34, 407, 778, 43), m_guide
         ? "Reference definitions follow the loaded game tables, including enabled mods."
         : "Discovery shows encountered items, learned spells, current classes, known recipes, "
-          "recruited companions and observed monsters.",
+          "recruited companions, observed monsters and recorded quests.",
         "menu_arrus", 11);
 }
 
@@ -1130,7 +1166,7 @@ void AtlasScreen::drawDetails()
     }
     const auto *record = m_world.find(m_selected);
     std::string text = m_guide ? "Guide Mode reveals the database without changing your discoveries."
-        : "Only visited places and encountered residents are shown. Guide Mode reveals the reference database.";
+        : "Known places and encountered residents are shown. Quest information does not reveal unexplored terrain.";
     if (record != nullptr)
     {
         text = record->name();

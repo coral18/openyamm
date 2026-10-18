@@ -1,0 +1,22 @@
+id: atlas.mm7_quest_knowledge
+title: Actual Lantern quest acceptance records persistent knowledge
+world: mm7
+mode: faithful
+steps:
+- new_game_flow:
+    start_map: 7out02.odm
+- assert:
+    qbit_clear: [667]
+- speak_npc:
+    source_id: 432
+- select_topic:
+    kind: npc_topic
+    action_id: 929
+- assert:
+    qbit_set: [667]
+    named_global_var_changed: {name: openyamm.discovery.quest/667, value: 1}
+- save_game: lantern-accepted
+- load_game: lantern-accepted
+- assert:
+    qbit_set: [667]
+    named_global_var_changed: {name: openyamm.discovery.quest/667, value: 1}

@@ -845,3 +845,26 @@ TEST_CASE("world database entrance discovery requires full exploration of the co
     knowledge.fullyRevealedCells.assign(88 * 88 / 8, 255);
     CHECK(worldRegionPointExplored(knowledge, 32768, -32768));
 }
+
+TEST_CASE("world database informed quest locations reveal no terrain or unrelated services")
+{
+    Fixture fixture;
+    const WorldDatabase world = fixture.database();
+    WorldKnowledge knowledge;
+    const WorldRecord *pDungeon = world.find("world.mm7.map.7d21");
+    const WorldRecord *pRegion = world.find("world.mm7.map.7out02");
+    REQUIRE(pDungeon != nullptr);
+    REQUIRE(pRegion != nullptr);
+    knowledge.informedRecords.insert(pDungeon->id);
+    CHECK(world.visible(*pDungeon, knowledge, false));
+    CHECK_FALSE(world.visible(*pRegion, knowledge, false));
+    CHECK(knowledge.visitedMaps.empty());
+    CHECK(knowledge.regionMaps.empty());
+    CHECK(knowledge.floorPlans.empty());
+    CHECK(knowledge.variables.empty());
+    knowledge.informedRecords.insert("mm7:house/11");
+    CHECK(world.query(knowledge, false, "Blade's End").empty());
+    knowledge.informedRecords.insert(pRegion->id);
+    CHECK(world.query(knowledge, false, "Blade's End").size() == 1);
+    CHECK(world.query(knowledge, false, "Townsaver").empty());
+}

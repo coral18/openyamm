@@ -21,7 +21,7 @@ tables, and do not bundle its HTML, JS, translated prose, generated illustration
 | Buildings, resident NPCs, trainers | Implemented | Implemented | Runtime relocation and conditional-event coverage |
 | Trainer requirements and prices | Shared gameplay evaluator | Shared gameplay evaluator | Race-specific class/skill comparison |
 | Walking and scheduled transport | Existing table index | Existing table index | Visual route links and neighboring-region navigation |
-| Quest giver/objective/return chains | Not integrated | Not integrated | Shared quest/location relationships and discovery gating |
+| Quest giver/objective/return chains | Shared registry, 11 reviewed quests | Shared registry, 8 reviewed quests | Complete campaign relationship coverage, conditional stages and current NPC locations |
 | Chests, wells, shrines, obelisks | Event-backed Sites layer | Event-backed Sites layer | Effects, loot/open state, inherited decoration events and wider content audit |
 | Monster groups and Bestiary | Authored encounter areas and last-observed actors | Same shared index and observed-only Bestiary | Placed/scripted actors, named overrides, automatic visibility discovery and variant/source links |
 | Teleports and special connections | Declared map links with native navigation | Declared map links with native navigation | Conditional destinations, Gate semantics and Barrows/Regna connection graphs |

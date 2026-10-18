@@ -688,6 +688,20 @@ std::optional<SoundId> soundIdForPortraitFxEvent(PortraitFxEventKind kind)
     return std::nullopt;
 }
 
+void recordQuestKnowledge(EventRuntimeState &state, const Party *pParty, uint32_t qbitId,
+    int32_t previousValue, int32_t newValue)
+{
+    if (pParty == nullptr || pParty->journalQuestTable() == nullptr)
+    {
+        return;
+    }
+    for (uint32_t id : pParty->journalQuestTable()->questsKnownAroundChange(qbitId,
+        previousValue != 0, newValue != 0, [pParty](uint32_t bit) { return pParty->hasQuestBit(bit); }))
+    {
+        state.namedGlobalVars[JournalQuestTable::discoveryKey(id)] = 1;
+    }
+}
+
 bool shouldQueueQuestBitFx(const Party *pParty, uint32_t qbitId, int32_t previousValue, int32_t newValue)
 {
     if (pParty == nullptr || (previousValue != 0) == (newValue != 0))
@@ -3466,6 +3480,7 @@ void EventRuntime::setVariableValue(
         if (variable.kind == VariableKind::QBits && pParty != nullptr)
         {
             pParty->setQuestBit(variable.rawId, normalizedValue != 0);
+            recordQuestKnowledge(runtimeState, pParty, variable.rawId, previousValue, normalizedValue);
         }
         else
         {
@@ -4015,6 +4030,7 @@ void EventRuntime::addVariableValue(
         if (variable.kind == VariableKind::QBits && pParty != nullptr)
         {
             pParty->setQuestBit(variable.rawId, normalizedValue != 0);
+            recordQuestKnowledge(runtimeState, pParty, variable.rawId, previousValue, normalizedValue);
         }
         else
         {
@@ -4457,7 +4473,9 @@ void EventRuntime::subtractVariableValue(
     {
         if (variable.kind == VariableKind::QBits && pParty != nullptr)
         {
+            const bool wasSet = pParty->hasQuestBit(variable.rawId);
             pParty->setQuestBit(variable.rawId, false);
+            recordQuestKnowledge(runtimeState, pParty, variable.rawId, wasSet ? 1 : 0, 0);
         }
         else
         {
@@ -4500,6 +4518,7 @@ void EventRuntime::setQuestBitValue(
 {
     const bool wasSet = party.hasQuestBit(qbitId);
     party.setQuestBit(qbitId, value);
+    recordQuestKnowledge(runtimeState, &party, qbitId, wasSet ? 1 : 0, value ? 1 : 0);
 
     if (shouldQueueQuestBitFx(&party, qbitId, wasSet ? 1 : 0, value ? 1 : 0))
     {

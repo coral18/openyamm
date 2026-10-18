@@ -10,6 +10,9 @@
 #include "game/tables/MapStats.h"
 #include "game/tables/MonsterTable.h"
 #include "engine/TextTable.h"
+#include "engine/AssetFileSystem.h"
+#include "game/tables/JournalQuestTable.h"
+#include "game/tables/NpcDialogTable.h"
 
 #include <doctest/doctest.h>
 #include <algorithm>
@@ -209,4 +212,135 @@ TEST_CASE("world guide progress follows canonical tavern rules and preserves cam
     CHECK(knowledge.arcomageWins.empty());
     CHECK(knowledge.arcomageWinCount == 5);
     CHECK(knowledge.arenaWins[3] == 4);
+}
+
+TEST_CASE("world guide quests preserve journal conditions and record both sides of a bit change")
+{
+    JournalQuestTable quests;
+    REQUIRE(quests.loadFromRows({{"3", "Deliver the letter", "", ""},
+        {"10000", "Find the witness", "", "", "10;11", "12"},
+        {"10001", "Unrelated", "", "", "", "99"}}));
+    std::unordered_set<uint32_t> bits{10};
+    const auto hasBit = [&bits](uint32_t id) { return bits.contains(id); };
+    CHECK(quests.questsKnownAroundChange(11, false, true, hasBit).empty());
+    bits.insert(11);
+    CHECK(quests.questsKnownAroundChange(11, false, true, hasBit) == std::vector<uint32_t>{10000});
+    bits.insert(12);
+    CHECK(quests.questsKnownAroundChange(12, false, true, hasBit) == std::vector<uint32_t>{10000});
+    CHECK_FALSE(quests.isVisible(quests.entries()[1], hasBit));
+    bits.erase(12);
+    CHECK(quests.questsKnownAroundChange(12, true, false, hasBit) == std::vector<uint32_t>{10000});
+    CHECK(quests.questsKnownAroundChange(12, false, false, hasBit).empty());
+    bits.insert(3);
+    CHECK(quests.questsKnownAroundChange(3, false, true, hasBit) == std::vector<uint32_t>{3});
+    bits.erase(3);
+    CHECK(quests.questsKnownAroundChange(3, true, false, hasBit) == std::vector<uint32_t>{3});
+    CHECK(quests.discoveryKey(3) == "openyamm.discovery.quest/3");
+}
+
+TEST_CASE("world guide quest metadata rejects broken or conflicting relationships transactionally")
+{
+    JournalQuestTable quests;
+    REQUIRE(quests.loadFromRows({{"3", "Letter", "", ""}}));
+    const std::vector<std::string> valid{"3", "mm8", "objective", "map", "world.mm8.map.out02", "journal"};
+    REQUIRE(quests.loadLocationRows({valid}));
+    CHECK_FALSE(quests.loadLocationRows({valid, valid}));
+    REQUIRE(quests.entries()[0].locations.size() == 1);
+    const std::vector<std::pair<size_t, std::string>> invalid = {
+        {0, "900"}, {0, "-3"}, {1, ""}, {2, "finish"}, {3, "rumour"}, {4, ""}, {5, "anything"}
+    };
+    for (const auto &[column, value] : invalid)
+    {
+        auto row = valid;
+        row[column] = value;
+        CHECK_FALSE(quests.loadLocationRows({row}));
+        CHECK(quests.entries()[0].locations[0].target == "world.mm8.map.out02");
+    }
+    for (const std::string &id : {"-1", "0", "1x", "4294967296", "01"})
+    {
+        auto row = valid;
+        row[3] = "npc"; row[4] = id;
+        CHECK_FALSE(quests.loadLocationRows({row}));
+    }
+    auto otherWorld = valid; otherWorld[1] = "mm7";
+    CHECK_FALSE(quests.loadLocationRows({valid, otherWorld}));
+    CHECK(quests.loadLocationRows({}));
+    CHECK(quests.entries()[0].locations.empty());
+}
+
+TEST_CASE("world guide quests filter world and unknown hints before exposing text or links")
+{
+    JournalQuestTable quests;
+    REQUIRE(quests.loadFromRows({{"3", "Deliver the letter", "", ""},
+        {"4", "Secret quest", "", ""}, {"587", "Clean the castle", "", ""}}));
+    REQUIRE(quests.loadLocationRows({
+        {"3", "mm8", "objective", "map", "world.mm8.map.out02", "journal"},
+        {"3", "mm8", "objective", "map", "world.mm8.map.d09", "guide"},
+        {"4", "mm8", "objective", "map", "world.mm8.map.out03", "journal"},
+        {"587", "mm7", "objective", "map", "world.mm7.map.7d29", "journal"}}));
+    MapStats maps;
+    REQUIRE(maps.loadFromRows(guideTableRows("map_stats.txt")));
+    WorldGuideSource source;
+    source.pQuests = &quests; source.pMaps = &maps; source.worldId = "mm8";
+    WorldGuideKnowledge knowledge;
+    CHECK(buildWorldGuide(source, WorldGuideSection::Quests, knowledge, false).empty());
+    knowledge.activeQuests.insert(3);
+    const auto active = buildWorldGuide(source, WorldGuideSection::Quests, knowledge, false);
+    REQUIRE(active.size() == 1);
+    CHECK(active[0].details.find("Active quest") != std::string::npos);
+    REQUIRE(active[0].links.size() == 1);
+    CHECK(active[0].links[0].target == "world.mm8.map.out02");
+    CHECK(active[0].links[0].informed);
+    CHECK(active[0].details.find("Merchant House") == std::string::npos);
+    knowledge.activeQuests.clear(); knowledge.quests.insert(3);
+    const auto history = buildWorldGuide(source, WorldGuideSection::Quests, knowledge, false);
+    REQUIRE(history.size() == 1);
+    CHECK(history[0].details.find("Recorded earlier") != std::string::npos);
+    CHECK(history[0].details.find("Completed") == std::string::npos);
+    const auto guide = buildWorldGuide(source, WorldGuideSection::Quests, knowledge, true);
+    REQUIRE(guide.size() == 2);
+    const auto letter = std::find_if(guide.begin(), guide.end(),
+        [](const WorldGuideEntry &entry) { return entry.id == "3"; });
+    REQUIRE(letter != guide.end());
+    CHECK(letter->links.size() == 2);
+    source.worldId = "mm7";
+    CHECK(buildWorldGuide(source, WorldGuideSection::Quests, knowledge, false).empty());
+    CHECK(buildWorldGuide(source, WorldGuideSection::Quests, knowledge, true).size() == 1);
+}
+
+TEST_CASE("world guide quest relationships resolve against the current shared content")
+{
+    JournalQuestTable quests;
+    REQUIRE(quests.loadFromRows(guideTableRows("english/quests.txt")));
+    REQUIRE(quests.loadLocationRows(guideTableRows("quest_locations.txt")));
+    MapStats maps; HouseTable houses; NpcDialogTable npcs; ItemTable items;
+    REQUIRE(maps.loadFromRows(guideTableRows("map_stats.txt")));
+    REQUIRE(houses.loadFromRows(guideTableRows("house_data.txt")));
+    REQUIRE(npcs.loadNpcRows(guideTableRows("npc.txt")));
+    OpenYAMM::Engine::AssetFileSystem assets;
+    REQUIRE(items.load(assets, guideTableRows("items.txt"), {}));
+    REQUIRE(quests.validateLocations(maps, npcs, houses, items));
+    WorldGuideSource source;
+    source.pQuests = &quests; source.pMaps = &maps; source.pHouses = &houses;
+    source.pNpcs = &npcs; source.pItems = &items;
+    WorldGuideKnowledge knowledge;
+    for (const std::string &world : {"mm7", "mm8"})
+    {
+        source.worldId = world;
+        const auto guide = buildWorldGuide(source, WorldGuideSection::Quests, knowledge, true);
+        REQUIRE(guide.size() >= 8);
+        for (const WorldGuideEntry &entry : guide)
+        {
+            CHECK((entry.details.find("Objective:") != std::string::npos
+                || entry.details.find("Return to:") != std::string::npos));
+            CHECK_FALSE(entry.details.empty());
+        }
+    }
+    // Invalid map, item, NPC and house references are fatal instead of producing dead Atlas links.
+    for (const std::string &kind : {"map", "npc", "house", "item"})
+    {
+        REQUIRE(quests.loadLocationRows({{"3", "mm8", "objective", kind,
+            kind == "map" ? "world.mm7.map.7d29" : "4294967295", "journal"}}));
+        CHECK_FALSE(quests.validateLocations(maps, npcs, houses, items));
+    }
 }

@@ -64,6 +64,7 @@ struct WorldKnowledge
     std::unordered_map<std::string, int32_t> variables;
     // Existing map snapshots provide visited locations for campaigns saved before discovery tracking.
     std::unordered_set<std::string> visitedMaps;
+    std::unordered_set<std::string> informedRecords;
     std::unordered_map<std::string, WorldFloorPlanKnowledge> floorPlans;
     std::unordered_map<std::string, WorldRegionMapKnowledge> regionMaps;
     std::optional<WorldPartyMapPosition> partyPosition;

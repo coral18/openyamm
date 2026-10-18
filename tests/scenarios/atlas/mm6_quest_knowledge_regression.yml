@@ -1,0 +1,38 @@
+id: atlas.mm6_quest_knowledge_regression
+title: MM6 shared quest knowledge regression through Potbello dialogue
+world: mm6
+mode: faithful
+tags:
+  - mm6
+  - smoke
+  - faithful
+steps:
+  - new_game_flow:
+      continent: enroth
+      start_map: oute3.odm
+  - set_pose:
+      map: oute3.odm
+      x: -8878
+      y: -8697
+      z: 220
+      yaw: 0
+      pitch: -0.32
+  - press_interact:
+      expect:
+        kind: event_target
+  - select_topic:
+      kind: house_resident
+      action_id: 786
+  - select_topic:
+      kind: npc_topic
+      action_id: 1314
+  - assert:
+      qbit_set:
+        - 1106
+  - assert:
+      named_global_var_changed: {name: openyamm.discovery.quest/1106, value: 1}
+  - save_game: mm6-quest
+  - load_game: mm6-quest
+  - assert:
+      qbit_set: [1106]
+      named_global_var_changed: {name: openyamm.discovery.quest/1106, value: 1}

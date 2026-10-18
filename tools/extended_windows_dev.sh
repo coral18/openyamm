@@ -69,6 +69,7 @@ package = dev / "runtime/assets/assets.zip"
 updates = {
     "engine/data_tables/class_multipliers.txt": repo / "assets_dev/engine/data_tables/class_multipliers.txt",
     "engine/data_tables/house_data.txt": repo / "assets_dev/engine/data_tables/house_data.txt",
+    "engine/data_tables/quest_locations.txt": repo / "assets_dev/engine/data_tables/quest_locations.txt",
     "engine/data_tables/map_stats.txt": repo / "assets_dev/engine/data_tables/map_stats.txt",
     "engine/world/atlas/mm7.yml": repo / "assets_dev/engine/world/atlas/mm7.yml",
     "engine/world/atlas/mm8.yml": repo / "assets_dev/engine/world/atlas/mm8.yml",

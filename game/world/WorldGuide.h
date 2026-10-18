@@ -20,8 +20,10 @@ class RosterTable;
 class HouseTable;
 class MapStats;
 class MonsterTable;
+class JournalQuestTable;
+class NpcDialogTable;
 
-enum class WorldGuideSection { Items, Spells, Classes, Alchemy, Companions, Progress, Monsters };
+enum class WorldGuideSection { Items, Spells, Classes, Alchemy, Companions, Progress, Monsters, Quests };
 
 // A read-only view of the loaded game registries, never a second set of content definitions.
 struct WorldGuideSource
@@ -39,6 +41,8 @@ struct WorldGuideSource
     const MapStats *pMaps = nullptr;
     std::string worldId;
     const MonsterTable *pMonsters = nullptr;
+    const JournalQuestTable *pQuests = nullptr;
+    const NpcDialogTable *pNpcs = nullptr;
 };
 
 struct WorldGuideKnowledge
@@ -50,6 +54,7 @@ struct WorldGuideKnowledge
     uint32_t arcomageWinCount = 0, arcomageLossCount = 0;
     bool hasParty = false;
     std::unordered_set<int16_t> monsters;
+    std::unordered_set<uint32_t> quests, activeQuests;
 };
 
 struct WorldGuideLink
@@ -60,6 +65,8 @@ struct WorldGuideLink
     std::string target;
     // Teacher-topic ranks: 1 Expert, 2 Master, 3 Grandmaster (not SkillMastery values).
     uint32_t mastery = 0;
+    // A disclosed quest target may be known without being visited or explored.
+    bool informed = false;
 };
 
 // Derived reading text and links for a single view; values always come from the loaded tables.

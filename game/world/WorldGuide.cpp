@@ -10,6 +10,9 @@
 #include "game/tables/HouseTable.h"
 #include "game/tables/MapStats.h"
 #include "game/tables/MonsterTable.h"
+#include "game/tables/JournalQuestTable.h"
+#include "game/tables/NpcDialogTable.h"
+#include "game/maps/MapIdentity.h"
 
 #include <algorithm>
 #include <functional>
@@ -70,7 +73,80 @@ std::vector<WorldGuideEntry> buildWorldGuide(const WorldGuideSource &source, Wor
         const ItemDefinition *pItem = source.pItems != nullptr ? source.pItems->get(id) : nullptr;
         return pItem != nullptr ? pItem->name : "Item " + std::to_string(id);
     };
-    if (section == WorldGuideSection::Monsters && source.pMonsters != nullptr)
+    if (section == WorldGuideSection::Quests && source.pQuests != nullptr)
+    {
+        for (const JournalQuestEntry &quest : source.pQuests->entries())
+        {
+            const bool active = knowledge.activeQuests.contains(quest.qbitId);
+            if (quest.worldId != source.worldId || (!guide && !active && !knowledge.quests.contains(quest.qbitId)))
+            {
+                continue;
+            }
+            WorldGuideEntry entry{std::to_string(quest.qbitId), quest.text};
+            entry.details = std::string(active ? "Active quest" : knowledge.quests.contains(quest.qbitId)
+                ? "Recorded earlier (no longer in the active journal)" : "Guide reference") + "\n\n" + quest.text;
+            for (const JournalQuestLocation &location : quest.locations)
+            {
+                if (!guide && !location.disclosed) continue;
+                const std::string role = location.role == JournalQuestLocation::Role::Giver ? "Giver"
+                    : location.role == JournalQuestLocation::Role::Return ? "Return to" : "Objective";
+                std::string name, target;
+                WorldGuideLink::Kind kind = WorldGuideLink::Kind::Location;
+                if (location.kind == JournalQuestLocation::Kind::Map && source.pMaps != nullptr)
+                {
+                    for (const MapStatsEntry &map : source.pMaps->getEntries())
+                    {
+                        const std::string id = map.canonicalId.empty()
+                            ? buildCanonicalMapId(map.worldId, map.fileName) : map.canonicalId;
+                        if (id == location.target && map.worldId == source.worldId)
+                        {
+                            name = map.name;
+                            target = id;
+                            break;
+                        }
+                    }
+                }
+                else if (location.kind == JournalQuestLocation::Kind::Npc && source.pNpcs != nullptr)
+                {
+                    const NpcEntry *pNpc = source.pNpcs->getNpc(uint32_t(std::stoul(location.target)));
+                    if (pNpc != nullptr) name = pNpc->name;
+                    // NPC residence can change through events. Do not infer a quest location from its base house.
+                }
+                else if (location.kind == JournalQuestLocation::Kind::House && source.pHouses != nullptr)
+                {
+                    const HouseEntry *pHouse = source.pHouses->get(uint32_t(std::stoul(location.target)));
+                    if (pHouse != nullptr)
+                    {
+                        name = pHouse->name.empty() ? pHouse->buildingName : pHouse->name;
+                        target = pHouse->canonicalId.empty()
+                            ? source.worldId + ":house/" + location.target : pHouse->canonicalId;
+                    }
+                }
+                else if (location.kind == JournalQuestLocation::Kind::Item && source.pItems != nullptr)
+                {
+                    const ItemDefinition *pItem = source.pItems->get(uint32_t(std::stoul(location.target)));
+                    if (pItem != nullptr)
+                    {
+                        name = pItem->name;
+                        target = location.target;
+                        kind = WorldGuideLink::Kind::Item;
+                    }
+                }
+                if (!name.empty())
+                {
+                    entry.details += "\n\n" + role + ": " + name;
+                    // Merely hearing an item's name does not disclose its full mechanics or hidden description.
+                    if (!target.empty() && (kind != WorldGuideLink::Kind::Item || guide
+                        || knowledge.items.contains(uint32_t(std::stoul(location.target)))))
+                    {
+                        entry.links.push_back({kind, role + ": " + name, target, 0, location.disclosed});
+                    }
+                }
+            }
+            result.push_back(std::move(entry));
+        }
+    }
+    else if (section == WorldGuideSection::Monsters && source.pMonsters != nullptr)
     {
         for (const auto &[id, monster] : source.pMonsters->statsEntries())
         {

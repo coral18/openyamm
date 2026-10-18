@@ -1694,6 +1694,11 @@ bool GameDataLoader::loadInternal(
         return false;
     }
 
+    if (!m_journalQuestTable.validateLocations(m_mapStats, m_npcDialogTable, m_houseTable, m_itemTable))
+    {
+        return false;
+    }
+
     if (!loadMm9RudeDialogueTable(assetFileSystem))
     {
         return false;
@@ -3112,6 +3117,23 @@ bool GameDataLoader::loadJournalTables(const Engine::AssetFileSystem &assetFileS
     {
         std::cerr << "Failed to parse journal quest table\n";
         return false;
+    }
+
+    const std::string locationsPath = engineDataTablePath("quest_locations.txt");
+    if (const std::optional<std::string> contents = assetFileSystem.readTextFile(locationsPath))
+    {
+        const std::optional<Engine::TextTable> table = Engine::TextTable::parseTabSeparated(*contents);
+        std::vector<std::vector<std::string>> rows;
+        if (!table)
+        {
+            std::cerr << "Failed to parse " << locationsPath << '\n';
+            return false;
+        }
+        for (size_t i = 0; i < table->getRowCount(); ++i)
+        {
+            rows.push_back(table->getRow(i));
+        }
+        if (!m_journalQuestTable.loadLocationRows(rows)) return false;
     }
 
     if (!m_journalHistoryTable.loadFromRows(historyRows))

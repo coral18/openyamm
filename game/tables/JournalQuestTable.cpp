@@ -1,6 +1,12 @@
 #include "game/tables/JournalQuestTable.h"
 
 #include "game/party/Party.h"
+#include "game/tables/MapStats.h"
+#include "game/tables/NpcDialogTable.h"
+#include "game/tables/HouseTable.h"
+#include "game/tables/ItemTable.h"
+#include "game/maps/MapIdentity.h"
+#include <charconv>
 
 #include <algorithm>
 #include <cstdlib>
@@ -162,6 +168,125 @@ bool JournalQuestTable::loadFromRows(const std::vector<std::vector<std::string>>
     return !m_entries.empty();
 }
 
+bool JournalQuestTable::loadLocationRows(const std::vector<std::vector<std::string>> &rows)
+{
+    // Transactional: malformed mod metadata cannot leave partially attached relationships.
+    std::vector<JournalQuestEntry> entries = m_entries;
+    for (JournalQuestEntry &entry : entries)
+    {
+        entry.worldId.clear();
+        entry.locations.clear();
+    }
+    std::set<std::string> seen;
+    for (size_t rowIndex = 0; rowIndex < rows.size(); ++rowIndex)
+    {
+        const auto &row = rows[rowIndex];
+        if (row.empty() || row[0].empty() || row[0][0] == '#' || row[0] == "QBit")
+        {
+            continue;
+        }
+        const auto fail = [&]()
+        {
+            std::cerr << "Invalid quest_locations.txt relationship at row " << rowIndex + 1 << '\n';
+            return false;
+        };
+        uint32_t id = 0;
+        const auto parsed = std::from_chars(row[0].data(), row[0].data() + row[0].size(), id);
+        if (row.size() != 6 || parsed.ec != std::errc() || parsed.ptr != row[0].data() + row[0].size()
+            || row[0] != std::to_string(id) || row[1] != normalizeWorldId(row[1]))
+        {
+            return fail();
+        }
+        const auto found = std::find_if(entries.begin(), entries.end(),
+            [id](const JournalQuestEntry &entry) { return entry.qbitId == id; });
+        if (found == entries.end() || row[1].empty() || row[4].empty()
+            || (!found->worldId.empty() && found->worldId != row[1]))
+        {
+            return fail();
+        }
+        JournalQuestLocation location;
+        if (row[2] == "giver") location.role = JournalQuestLocation::Role::Giver;
+        else if (row[2] == "objective") location.role = JournalQuestLocation::Role::Objective;
+        else if (row[2] == "return") location.role = JournalQuestLocation::Role::Return;
+        else return fail();
+        if (row[3] == "map") location.kind = JournalQuestLocation::Kind::Map;
+        else if (row[3] == "npc") location.kind = JournalQuestLocation::Kind::Npc;
+        else if (row[3] == "house") location.kind = JournalQuestLocation::Kind::House;
+        else if (row[3] == "item") location.kind = JournalQuestLocation::Kind::Item;
+        else return fail();
+        if (row[5] != "journal" && row[5] != "guide") return fail();
+        location.disclosed = row[5] == "journal";
+        location.target = row[4];
+        if (location.kind != JournalQuestLocation::Kind::Map)
+        {
+            uint32_t targetId = 0;
+            const auto target = std::from_chars(row[4].data(), row[4].data() + row[4].size(), targetId);
+            if (target.ec != std::errc() || target.ptr != row[4].data() + row[4].size()
+                || targetId == 0 || row[4] != std::to_string(targetId))
+            {
+                return fail();
+            }
+        }
+        const std::string key = row[0] + "/" + row[2] + "/" + row[3] + "/" + row[4];
+        if (!seen.insert(key).second) return fail();
+        found->worldId = row[1];
+        found->locations.push_back(std::move(location));
+    }
+    m_entries = std::move(entries);
+    return true;
+}
+
+bool JournalQuestTable::validateLocations(const MapStats &maps, const NpcDialogTable &npcs,
+    const HouseTable &houses, const ItemTable &items) const
+{
+    for (const JournalQuestEntry &entry : m_entries)
+    {
+        if (!entry.locations.empty() && std::none_of(maps.getEntries().begin(), maps.getEntries().end(),
+            [&](const MapStatsEntry &map) { return map.worldId == entry.worldId; }))
+        {
+            std::cerr << "Unknown quest world: " << entry.worldId << '\n';
+            return false;
+        }
+        for (const JournalQuestLocation &location : entry.locations)
+        {
+            bool valid = false;
+            const auto kind = location.kind;
+            if (kind == JournalQuestLocation::Kind::Map)
+            {
+                valid = std::any_of(maps.getEntries().begin(), maps.getEntries().end(), [&](const MapStatsEntry &map)
+                {
+                    const std::string id = map.canonicalId.empty()
+                        ? buildCanonicalMapId(map.worldId, map.fileName) : map.canonicalId;
+                    return map.worldId == entry.worldId && id == location.target;
+                });
+            }
+            else
+            {
+                const uint32_t id = uint32_t(std::stoul(location.target));
+                if (kind == JournalQuestLocation::Kind::Npc) valid = npcs.getNpc(id) != nullptr;
+                if (kind == JournalQuestLocation::Kind::Item)
+                {
+                    const ItemDefinition *pItem = items.get(id);
+                    valid = pItem != nullptr && !pItem->name.empty();
+                }
+                if (kind == JournalQuestLocation::Kind::House)
+                {
+                    const HouseEntry *pHouse = houses.get(id);
+                    const MapStatsEntry *pMap = pHouse != nullptr ? maps.findById(pHouse->mapId) : nullptr;
+                    valid = pMap != nullptr && pMap->worldId == entry.worldId && pHouse->type != "Dungeon Ent";
+                }
+            }
+            if (!valid)
+            {
+                std::cerr << "Unknown quest location reference for QBit " << entry.qbitId
+                          << ": " << location.target << '\n';
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
 const std::vector<JournalQuestEntry> &JournalQuestTable::entries() const
 {
     return m_entries;
@@ -183,28 +308,47 @@ bool JournalQuestTable::hasQuestText(uint32_t qbitId) const
 
 bool JournalQuestTable::isVisible(const JournalQuestEntry &entry, const Party &party) const
 {
+    return isVisible(entry, [&party](uint32_t id) { return party.hasQuestBit(id); });
+}
+
+bool JournalQuestTable::isVisible(const JournalQuestEntry &entry, const QBitReader &hasQBit) const
+{
     if (!entry.usesExplicitConditions)
     {
-        return party.hasQuestBit(entry.qbitId);
+        return hasQBit(entry.qbitId);
     }
+    return std::all_of(entry.requiredQBitIds.begin(), entry.requiredQBitIds.end(), hasQBit)
+        && std::none_of(entry.forbiddenQBitIds.begin(), entry.forbiddenQBitIds.end(), hasQBit);
+}
 
-    for (uint32_t qbitId : entry.requiredQBitIds)
+std::string JournalQuestTable::discoveryKey(uint32_t qbitId)
+{
+    return "openyamm.discovery.quest/" + std::to_string(qbitId);
+}
+
+std::vector<uint32_t> JournalQuestTable::questsKnownAroundChange(uint32_t qbitId, bool wasSet, bool isSet,
+    const QBitReader &hasQBit) const
+{
+    std::vector<uint32_t> result;
+    if (wasSet == isSet)
     {
-        if (!party.hasQuestBit(qbitId))
+        return result;
+    }
+    for (const JournalQuestEntry &entry : m_entries)
+    {
+        const bool affected = entry.usesExplicitConditions
+            ? std::find(entry.requiredQBitIds.begin(), entry.requiredQBitIds.end(), qbitId)
+                    != entry.requiredQBitIds.end()
+                || std::find(entry.forbiddenQBitIds.begin(), entry.forbiddenQBitIds.end(), qbitId)
+                    != entry.forbiddenQBitIds.end()
+            : entry.qbitId == qbitId;
+        if (affected && (isVisible(entry, hasQBit)
+            || isVisible(entry, [&](uint32_t id) { return id == qbitId ? wasSet : hasQBit(id); })))
         {
-            return false;
+            result.push_back(entry.qbitId);
         }
     }
-
-    for (uint32_t qbitId : entry.forbiddenQBitIds)
-    {
-        if (party.hasQuestBit(qbitId))
-        {
-            return false;
-        }
-    }
-
-    return true;
+    return result;
 }
 
 bool JournalQuestTable::qbitChangeRevealsQuest(

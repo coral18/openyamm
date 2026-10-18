@@ -40,6 +40,7 @@ private:
     void drawDetails();
     void drawReference();
     void rebuildReference();
+    void indexQuestLocations();
     void drawNoteEditor();
     void saveNote(bool remove);
     void closeNoteEditor();
