@@ -14,6 +14,8 @@
 #include "game/tables/JournalQuestTable.h"
 #include "game/tables/NpcDialogTable.h"
 #include "game/maps/MapIdentity.h"
+#include "game/gameplay/GuildSpellbookRules.h"
+#include "game/party/SpellSchool.h"
 
 #include <algorithm>
 #include <functional>
@@ -217,22 +219,64 @@ std::vector<WorldGuideEntry> buildWorldGuide(const WorldGuideSource &source, Wor
             if (!item.materialName.empty())
                 entry.details += "Material: " + item.materialName + "\n";
             entry.details += item.notes;
+            if (source.pSpells != nullptr)
+                if (const auto spell = spellbookSpellId(item))
+                    if (const SpellEntry *pSpell = source.pSpells->findById(int(*spell)))
+                        entry.links.push_back({WorldGuideLink::Kind::Spell, "Spell: " + pSpell->name,
+                            std::to_string(*spell)});
             result.push_back(std::move(entry));
         }
     }
     else if (section == WorldGuideSection::Spells && source.pSpells != nullptr)
     {
+        std::map<uint32_t, std::vector<const ItemDefinition *>> books;
+        if (source.pItems != nullptr)
+            for (const ItemDefinition &item : source.pItems->entries())
+            {
+                if (item.itemId == 0 || item.name.empty()) continue;
+                if (const auto spell = spellbookSpellId(item)) books[*spell].push_back(&item);
+            }
         for (const SpellEntry &spell : source.pSpells->entries())
         {
-            if (spell.name.empty() || (!guide && !knowledge.spells.contains(uint32_t(spell.id))))
+            const std::vector<const ItemDefinition *> &spellbooks = books[uint32_t(spell.id)];
+            const bool knownBook = std::any_of(spellbooks.begin(), spellbooks.end(),
+                [&](const ItemDefinition *pBook) { return knowledge.items.contains(pBook->itemId); });
+            if (spell.name.empty() || (!guide && !knowledge.spells.contains(uint32_t(spell.id)) && !knownBook))
                 continue;
-            WorldGuideEntry entry{std::to_string(spell.id), spell.schoolName + " - " + spell.name};
-            entry.details = spell.name + " | " + spell.schoolName + "\n" + spell.description + "\n\n"
+            const auto skill = resolveMagicSkillName(uint32_t(spell.id));
+            const std::string school = skill ? displaySkillName(*skill) : "Other spells";
+            WorldGuideEntry entry{std::to_string(spell.id), school + " - " + spell.name};
+            const std::string status = guide ? "Guide reference"
+                : knowledge.spells.contains(uint32_t(spell.id)) ? "Learned by the party" : "Spellbook encountered";
+            entry.details = status + "\n\n" + spell.name + " | " + school + "\n"
+                + spell.description + "\n\n"
                 + "Normal (" + std::to_string(spell.normalManaCost) + " SP): " + spell.normalText + "\n\n"
                 + "Expert (" + std::to_string(spell.expertManaCost) + " SP): " + spell.expertText + "\n\n"
                 + "Master (" + std::to_string(spell.masterManaCost) + " SP): " + spell.masterText + "\n\n"
                 + "Grandmaster (" + std::to_string(spell.grandmasterManaCost) + " SP): "
                 + spell.grandmasterText + "\n\n" + spell.statsText;
+            for (const ItemDefinition *pBook : spellbooks)
+                if (guide || knowledge.items.contains(pBook->itemId))
+                    entry.links.push_back({WorldGuideLink::Kind::Item, "Spellbook: " + pBook->name,
+                        std::to_string(pBook->itemId)});
+            size_t guilds = 0;
+            if (source.pWorld != nullptr)
+                for (const WorldRecord &record : source.pWorld->records())
+                {
+                    if (record.kind != WorldRecordKind::House || record.map->worldId != source.worldId
+                        || (!guide && (source.pWorldKnowledge == nullptr
+                            || !source.pWorld->visible(record, *source.pWorldKnowledge, false)))
+                        || std::none_of(spellbooks.begin(), spellbooks.end(), [&](const ItemDefinition *pBook)
+                            { return guildSpellbookStockWeight(*record.house, *pBook) > 0; }))
+                        continue;
+                    entry.links.push_back({WorldGuideLink::Kind::Location,
+                        "Possible stock: " + record.name() + " - " + record.map->name, record.id});
+                    ++guilds;
+                }
+            entry.details += guilds == 0
+                ? "\n\nNo matching guild stock sources " + std::string(guide ? "in this world." : "discovered yet.")
+                : "\n\nGuild links describe the random stock pool, not current shelves. "
+                  "Stock rotates; guild access and spell-learning requirements still apply.";
             result.push_back(std::move(entry));
         }
     }

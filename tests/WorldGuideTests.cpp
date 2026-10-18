@@ -14,6 +14,7 @@
 #include "engine/AssetFileSystem.h"
 #include "game/tables/JournalQuestTable.h"
 #include "game/tables/NpcDialogTable.h"
+#include "game/gameplay/GuildSpellbookRules.h"
 
 #include <doctest/doctest.h>
 #include <algorithm>
@@ -100,11 +101,140 @@ TEST_CASE("world guide spell discovery filters before displaying any reference t
     knowledge.spells.insert(1);
     const auto visible = buildWorldGuide(source, WorldGuideSection::Spells, knowledge, false);
     REQUIRE(visible.size() == 1);
-    CHECK(visible[0].title == "Fire - Fire Bolt");
+    CHECK(visible[0].title == "Fire Magic - Fire Bolt");
     CHECK(visible[0].details.find("Visible spell text") != std::string::npos);
     CHECK(visible[0].details.find("Hidden spell text") == std::string::npos);
     CHECK(buildWorldGuide(source, WorldGuideSection::Spells, knowledge, true).size() == 2);
     CHECK(knowledge.spells.size() == 1);
+}
+
+TEST_CASE("guild spellbook pool respects school tier weights and explicit exclusions")
+{
+    HouseEntry guild;
+    guild.type = "Fire Guild";
+    guild.spellbookStockRule.quality = 1;
+    ItemDefinition book;
+    book.itemId = 400; book.name = "Torch Light";
+    book.equipStat = "Book"; book.mod1 = "S1"; book.value = 400;
+    REQUIRE(spellbookSpellId(book) == 1);
+    CHECK(guildSpellbookStockWeight(guild, book) == 1);
+    book.value = 401;
+    CHECK(guildSpellbookStockWeight(guild, book) == 0);
+    guild.spellbookStockRule.quality = 2;
+    CHECK(guildSpellbookStockWeight(guild, book) == 1);
+    book.value = 9000;
+    CHECK(guildSpellbookStockWeight(guild, book) == 0);
+    book.randomTreasureWeights[0] = 3;
+    CHECK(guildSpellbookStockWeight(guild, book) == 3); // Actual treasure weight precedes value-based fallback.
+    book.mod1 = "S12";
+    CHECK(guildSpellbookStockWeight(guild, book) == 0);
+    guild.type = "Elemental Guild";
+    CHECK(guildSpellbookStockWeight(guild, book) == 3);
+    book.mod1 = "S45";
+    CHECK(guildSpellbookStockWeight(guild, book) == 0);
+    guild.type = "Self Guild";
+    CHECK(guildSpellbookStockWeight(guild, book) == 3);
+    book.contentFlags = {"NoShop"};
+    CHECK(guildSpellbookStockWeight(guild, book) == 0);
+    book.contentFlags.clear();
+    guild.vendorStockProfile = VendorStockProfile::Spellbook;
+    CHECK(guildSpellbookStockWeight(guild, book) == 0); // Deterministic page stock bypasses this random pool.
+    guild.vendorStockProfile = VendorStockProfile::None;
+    guild.spellbookStockRule.quality = 0;
+    CHECK(guildSpellbookStockWeight(guild, book) == 0);
+    guild.spellbookStockRule.quality = 11;
+    for (const char *pEncoding : {"S", "S0", "S-1", "S1junk", "S4294967296"})
+    {
+        book.mod1 = pEncoding;
+        CHECK_FALSE(spellbookSpellId(book));
+        CHECK(guildSpellbookStockWeight(guild, book) == 0);
+    }
+    book.mod1 = "S45"; book.equipStat = "Scroll";
+    CHECK_FALSE(spellbookSpellId(book));
+    CHECK(guildSpellbookStockWeight(guild, book) == 0);
+}
+
+TEST_CASE("world guide links spellbooks and possible local guilds without disclosing unknown vendors")
+{
+    OpenYAMM::Engine::AssetFileSystem assets;
+    ItemTable items;
+    SpellTable spells;
+    HouseTable houses;
+    MapStats maps;
+    MergedHouseRuleTable rules;
+    MergedTransportLocationTable transport;
+    REQUIRE(items.load(assets, guideTableRows("items.txt"), guideTableRows("random_items.txt")));
+    REQUIRE(spells.loadFromRows(guideTableRows("spells.txt")));
+    REQUIRE(maps.loadFromRows(guideTableRows("map_stats.txt")));
+    REQUIRE(houses.loadFromRows(guideTableRows("house_data.txt")));
+    REQUIRE(rules.loadFromRows(guideTableRows("house_rules.txt")));
+    REQUIRE(transport.loadFromRows(guideTableRows("transport_locations.txt")));
+    REQUIRE(houses.applyHouseRules(rules, transport, maps));
+    NpcDialogTable npcs;
+    MergedTeacherTopicTable teachers;
+    for (const auto &[worldId, houseId] : std::vector<std::pair<std::string, uint32_t>>{{"mm7", 129}, {"mm8", 182}})
+    {
+        INFO(worldId);
+        WorldDatabase world(maps, houses, npcs, teachers, worldId);
+        WorldKnowledge discoveries;
+        WorldGuideKnowledge knowledge;
+        WorldGuideSource source;
+        source.pItems = &items; source.pSpells = &spells;
+        source.pWorld = &world; source.pWorldKnowledge = &discoveries; source.worldId = worldId;
+        CHECK(buildWorldGuide(source, WorldGuideSection::Spells, knowledge, false).empty());
+        knowledge.spells.insert(1);
+        const auto hidden = buildWorldGuide(source, WorldGuideSection::Spells, knowledge, false);
+        REQUIRE(hidden.size() == 1);
+        CHECK(hidden.front().links.empty());
+        const std::string target = worldId + ":house/" + std::to_string(houseId);
+        const auto containsGuild = [&](const WorldGuideEntry &entry)
+        {
+            return std::any_of(entry.links.begin(), entry.links.end(), [&](const WorldGuideLink &link)
+            { return link.kind == WorldGuideLink::Kind::Location && link.target == target; });
+        };
+        const auto guide = buildWorldGuide(source, WorldGuideSection::Spells, knowledge, true);
+        const auto torch = std::find_if(guide.begin(), guide.end(),
+            [](const WorldGuideEntry &entry) { return entry.id == "1"; });
+        REQUIRE(torch != guide.end());
+        CHECK(torch->title == "Fire Magic - Torch Light"); // The TXT Res column is not the magic school.
+        CHECK(containsGuild(*torch));
+        CHECK(torch->details.find("not current shelves") != std::string::npos);
+        for (const WorldGuideLink &link : torch->links)
+            if (link.kind == WorldGuideLink::Kind::Location)
+            {
+                REQUIRE(world.find(link.target) != nullptr);
+                CHECK(world.find(link.target)->map->worldId == worldId);
+                CHECK(world.find(link.target)->kind == WorldRecordKind::House);
+            }
+        CHECK(discoveries.variables.empty());
+        const HouseEntry *pGuild = houses.get(houseId);
+        REQUIRE(pGuild != nullptr);
+        const MapStatsEntry *pMap = maps.findById(pGuild->mapId);
+        REQUIRE(pMap != nullptr);
+        discoveries.visitedMaps.insert(pMap->fileName);
+        CHECK(buildWorldGuide(source, WorldGuideSection::Spells, knowledge, false).front().links.empty());
+        discoveries.variables[WorldDatabase::houseDiscoveryKey(houseId)] = 1;
+        const auto local = buildWorldGuide(source, WorldGuideSection::Spells, knowledge, false);
+        REQUIRE(local.size() == 1);
+        REQUIRE(local.front().links.size() == 1);
+        CHECK(containsGuild(local.front()));
+        CHECK_FALSE(local.front().links.front().informed);
+        CHECK(discoveries.regionMaps.empty()); // A source link is not a terrain discovery.
+        knowledge.spells.clear(); knowledge.items.insert(400);
+        const auto ownedBook = buildWorldGuide(source, WorldGuideSection::Spells, knowledge, false);
+        REQUIRE(ownedBook.size() == 1);
+        CHECK(ownedBook.front().id == "1");
+        CHECK(ownedBook.front().details.starts_with("Spellbook encountered"));
+        REQUIRE(ownedBook.front().links.size() == 2);
+        CHECK(ownedBook.front().links.front().kind == WorldGuideLink::Kind::Item);
+        CHECK(ownedBook.front().links.front().target == "400");
+        const auto itemPage = buildWorldGuide(source, WorldGuideSection::Items, knowledge, false);
+        REQUIRE(itemPage.size() == 1);
+        REQUIRE(itemPage.front().links.size() == 1);
+        CHECK(itemPage.front().links.front().kind == WorldGuideLink::Kind::Spell);
+        CHECK(itemPage.front().links.front().target == "1");
+        CHECK(knowledge.spells.empty()); // Inspecting the reference never learns the spell.
+    }
 }
 
 TEST_CASE("world guide reflects patched class progression and links exact mastery trainers")

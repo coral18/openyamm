@@ -1091,6 +1091,10 @@ void AtlasScreen::rebuildReference()
         &m_data.houseTable(), &m_data.mapStats(), m_presentation.worldId, &m_data.monsterTable(),
         &m_data.journalQuestTable(), &m_data.npcDialogTable(), &m_world, &m_knowledge};
     m_referenceEntries = buildWorldGuide(source, m_referenceSection, m_referenceKnowledge, m_guide);
+    const auto selected = std::find_if(m_referenceEntries.begin(), m_referenceEntries.end(),
+        [this](const WorldGuideEntry &entry) { return entry.id == m_referenceSelected; });
+    if (selected != m_referenceEntries.end())
+        m_referenceScroll = std::distance(m_referenceEntries.begin(), selected) * 33 * designScale();
     m_referenceDirty = false;
 }
 
@@ -1205,8 +1209,9 @@ void AtlasScreen::drawReference()
                 }
                 else
                 {
-                    m_referenceSection = link.kind == WorldGuideLink::Kind::Item
-                        ? WorldGuideSection::Items : WorldGuideSection::Alchemy;
+                    m_referenceSection = link.kind == WorldGuideLink::Kind::Spell ? WorldGuideSection::Spells
+                        : link.kind == WorldGuideLink::Kind::Item ? WorldGuideSection::Items
+                        : WorldGuideSection::Alchemy;
                     m_referenceSelected = link.target;
                     m_referenceDirty = true;
                     m_search.clear();
@@ -1226,7 +1231,7 @@ void AtlasScreen::drawReference()
             : "Select a record to inspect its details.", "menu_arrus", 13, 0xffc6dfeau, true);
     textInRect(canvasRect(34, 407, 778, 43), m_guide
         ? "Reference definitions follow the loaded game tables, including enabled mods."
-        : "Discovery shows encountered items, learned spells, current classes, known recipes, "
+        : "Discovery shows encountered items, known spell references, current classes, known recipes, "
           "recruited companions, observed monsters and recorded quests.",
         "menu_arrus", 11);
 }

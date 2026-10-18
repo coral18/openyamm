@@ -27,7 +27,7 @@ tables, and do not bundle its HTML, JS, translated prose, generated illustration
 | Teleports and special connections | Declared map links with native navigation | Declared map links with native navigation | Conditional destinations, Gate semantics and Barrows/Regna connection graphs |
 | Items, artifacts and equipment reference | Shared ItemTable view | Shared ItemTable view | Item-source relationships, icons and richer comparisons |
 | Alchemy recipes and ingredients | Native recursive recipe view | Native recursive recipe view | Broader canonical-content audit and ingredient-source links |
-| Spellbook reference and guild links | Shared SpellTable view | Shared SpellTable view | Guild availability and map links |
+| Spellbook reference and guild links | Spell/book navigation and eligible guild links from shared stock rules | Same shared rules and discovery filtering | Observed shelves, access/learning eligibility and conditional venue audit |
 | Classes and skill caps | Active class definitions and exact-rank trainer links | Same shared registry | Race overrides, promotion relationships and comparison chart |
 | Recruitable companions | Shared merged roster reference | Roster biography/stats and recruited-only Discovery | Recruitment locations/conditions and current recruitment state |
 | Arcomage/Arena tracking | Existing campaign counters and linked taverns | Existing campaign counters and linked taverns | Visual checklist polish and wider save-state audit |

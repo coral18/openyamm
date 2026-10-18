@@ -1,3 +1,4 @@
+#include "game/gameplay/GuildSpellbookRules.h"
 #include "doctest/doctest.h"
 
 #include "game/audio/SoundIds.h"
@@ -2968,6 +2969,13 @@ TEST_CASE("house service guild spellbook stock generates and buys")
     const OpenYAMM::Game::ItemDefinition *pSpellbook = gameData.itemTable.get(stockIt->objectDescriptionId);
     REQUIRE(pSpellbook != nullptr);
     CHECK_EQ(pSpellbook->equipStat, "Book");
+    for (const OpenYAMM::Game::InventoryItem &item : stock)
+    {
+        if (item.objectDescriptionId == 0) continue;
+        const OpenYAMM::Game::ItemDefinition *pCandidate = gameData.itemTable.get(item.objectDescriptionId);
+        REQUIRE(pCandidate != nullptr);
+        CHECK(OpenYAMM::Game::guildSpellbookStockWeight(*pHouseEntry, *pCandidate) > 0);
+    }
 
     const size_t slotIndex = static_cast<size_t>(std::distance(stock.begin(), stockIt));
     const size_t initialInventoryCount = harness.party().inventoryItemCount();

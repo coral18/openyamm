@@ -657,3 +657,40 @@ cover coach/boat identity, known endpoints, missing anchors, search, distinct hi
 selection, Guide quest locks and world separation. Native Windows Release compilation passed; graphical checks
 use isolated copies of the previously exercised MM7 Royal Steeds and MM8 Windling saves under
 `atlas-transport-graph-20261018/`. Android/controller checks and the remaining coverage matrix remain open.
+
+### Spellbooks and eligible guild sources, 2026-10-18
+
+Items and Spells now link in both directions through each book's actual spell encoding. Discovery includes a
+spell reference when the party learned the spell or has encountered its book; reference navigation never teaches
+the spell. Unknown books are not listed merely because the spell is known. Spell schools use the shared casting-skill
+resolver: the TXT `Res` field describes damage/resistance type, not a spell school. In particular, Torch Light
+belongs to Fire Magic rather than a school named `none`.
+
+Spell pages link to eligible guilds within the viewed world. Discovery requires a real recorded guild visit and
+known containing geography, rather than revealing every guild on an explored continent. Guide can inspect the
+world's stock-rule references without recording discoveries. Links select the same shared house/map records used
+by the main Atlas; no guild locations or item definitions are duplicated.
+
+The existing stock generator's school ranges and value/treasure-weight selection now live in the shared
+`GuildSpellbookRules` evaluator. Both gameplay stock generation and the Atlas use this evaluator, including
+quality limits and `NoShop` exclusions. Deterministic vendor pages bypass the random guild pool. Spell encodings
+must be complete unsigned IDs, so malformed suffixes or overflowing values cannot masquerade as another spell.
+
+These are explicitly possible stock sources, not predictions of current shelves, membership/access or the
+selected character's ability to learn a spell. Reading the Atlas does not generate, refresh or reserve stock,
+advance the RNG, spend gold or grant membership. Observed shelf contents, live access/learning evaluation and
+conditional/unused venue audit remain in the full coverage work.
+
+Focused ASan/UBSan validation passed 57 cases / 3,997 assertions. Native Windows focused validation passed
+59 cases / 4,038 assertions, including the existing real guild stock generation/purchase regression and agreement
+between generated books and the shared candidate evaluator. Canonical MM7/MM8 tests cover world isolation,
+unvisited-guild privacy, book/spell links, known-book discovery and unchanged exploration/learned-spell state.
+Faithful native scenarios `mm7_guild_discovery.yml` and `mm8_guild_discovery.yml` enter the actual Harmondale Fire
+Guild and Cures and Curses doors and preserve their discoveries through save/load. They do not test gaining
+membership or acquiring a book. Separate owned-book fixtures are explicitly hybrid UI setup, not evidence of
+performing those acquisition quests. Isolated records are retained under `atlas-guilds-20261018/` in the Windows
+development directory. Android/controller testing and complete campaign coverage remain pending.
+
+Native AMD/OpenGL checks cover book-to-spell navigation with the selected list row visible, visited/unvisited
+guild source lists, Guide-to-Discovery privacy, the reverse book link, guild-map navigation with retained fog
+and return to gameplay. Known-book fixtures remain isolated copies; original campaigns are not test targets.

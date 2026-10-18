@@ -1,0 +1,18 @@
+id: atlas.mm7_guild_discovery
+world: mm7
+mode: faithful
+title: A real Harmondale Fire Guild visit retains discovery across save and load
+steps:
+- new_game_flow: {start_map: 7out02.odm}
+- save_game: before-guild
+- assert:
+    named_global_var_changed: {name: openyamm.discovery.house/129, value: 0}
+- press_interact:
+    pose: {x: -8888, y: 15360, z: 384, yaw: 0, pitch: 0}
+    expect: {kind: event_target, triggered_event: 17, can_activate: true}
+- assert:
+    named_global_var_changed: {name: openyamm.discovery.house/129, value: 1}
+- save_game: guild-visited
+- load_game: guild-visited
+- assert:
+    named_global_var_changed: {name: openyamm.discovery.house/129, value: 1}

@@ -1,0 +1,18 @@
+id: atlas.mm8_guild_discovery
+world: mm8
+mode: faithful
+title: A real Cures and Curses visit retains discovery across save and load
+steps:
+- new_game_flow: {start_map: out01.odm}
+- save_game: before-guild
+- assert:
+    named_global_var_changed: {name: openyamm.discovery.house/182, value: 0}
+- press_interact:
+    pose: {x: 4376, y: 11280, z: 992, yaw: 3.1415927, pitch: 0}
+    expect: {kind: event_target, triggered_event: 179, can_activate: true}
+- assert:
+    named_global_var_changed: {name: openyamm.discovery.house/182, value: 1}
+- save_game: guild-visited
+- load_game: guild-visited
+- assert:
+    named_global_var_changed: {name: openyamm.discovery.house/182, value: 1}

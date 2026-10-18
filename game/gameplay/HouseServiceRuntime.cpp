@@ -1,4 +1,5 @@
 #include "game/gameplay/HouseServiceRuntime.h"
+#include "game/gameplay/GuildSpellbookRules.h"
 
 #include "game/gameplay/NpcFollowerRuntime.h"
 #include "game/gameplay/StealingRuntime.h"
@@ -344,95 +345,6 @@ bool itemMatchesHouseRuleTypes(const ItemDefinition &itemDefinition, const std::
         });
 }
 
-std::optional<uint32_t> tryParseSpellId(const ItemDefinition &itemDefinition)
-{
-    if (itemDefinition.equipStat != "Book" || itemDefinition.mod1.size() < 2 || itemDefinition.mod1[0] != 'S')
-    {
-        return std::nullopt;
-    }
-
-    try
-    {
-        return static_cast<uint32_t>(std::stoul(itemDefinition.mod1.substr(1)));
-    }
-    catch (...)
-    {
-        return std::nullopt;
-    }
-}
-
-bool isSpellbookAllowedForGuild(const HouseEntry &houseEntry, const ItemDefinition &itemDefinition)
-{
-    const std::optional<uint32_t> spellId = tryParseSpellId(itemDefinition);
-
-    if (!spellId)
-    {
-        return false;
-    }
-
-    if (isHouseType(houseEntry, "Elemental Guild"))
-    {
-        return *spellId >= 1 && *spellId <= 44;
-    }
-
-    if (isHouseType(houseEntry, "Fire Guild"))
-    {
-        return *spellId >= 1 && *spellId <= 11;
-    }
-
-    if (isHouseType(houseEntry, "Air Guild"))
-    {
-        return *spellId >= 12 && *spellId <= 22;
-    }
-
-    if (isHouseType(houseEntry, "Water Guild"))
-    {
-        return *spellId >= 23 && *spellId <= 33;
-    }
-
-    if (isHouseType(houseEntry, "Earth Guild"))
-    {
-        return *spellId >= 34 && *spellId <= 44;
-    }
-
-    if (isHouseType(houseEntry, "Self Guild"))
-    {
-        return *spellId >= 45 && *spellId <= 77;
-    }
-
-    if (isHouseType(houseEntry, "Spirit Guild"))
-    {
-        return *spellId >= 45 && *spellId <= 55;
-    }
-
-    if (isHouseType(houseEntry, "Mind Guild"))
-    {
-        return *spellId >= 56 && *spellId <= 66;
-    }
-
-    if (isHouseType(houseEntry, "Body Guild"))
-    {
-        return *spellId >= 67 && *spellId <= 77;
-    }
-
-    if (isHouseType(houseEntry, "Light Guild"))
-    {
-        return *spellId >= 78 && *spellId <= 88;
-    }
-
-    if (isHouseType(houseEntry, "Dark Guild"))
-    {
-        return *spellId >= 89 && *spellId <= 99;
-    }
-
-    if (isHouseType(houseEntry, "Spell Shop"))
-    {
-        return *spellId >= 1 && *spellId <= 99;
-    }
-
-    return false;
-}
-
 int stockRuleTreasureTier(const HouseEntry::StockRule &rule)
 {
     return std::clamp(rule.quality, 0, 6);
@@ -490,31 +402,6 @@ int itemTreasureWeightForSpecialStock(const ItemDefinition &entry, int tier)
     }
 
     return 0;
-}
-
-int spellbookQualityFromItemValue(const ItemDefinition &entry)
-{
-    if (entry.equipStat != "Book")
-    {
-        return 0;
-    }
-
-    if (entry.value > 3000)
-    {
-        return 4;
-    }
-
-    if (entry.value > 1000)
-    {
-        return 3;
-    }
-
-    if (entry.value > 400)
-    {
-        return 2;
-    }
-
-    return 1;
 }
 
 std::mt19937 createStockRng(const Party &party, const HouseEntry &houseEntry, const Party::HouseStockState &state)
@@ -822,21 +709,13 @@ std::vector<InventoryItem> generateGuildSpellbookStock(
         tier,
         rng,
         count,
+        [](const ItemDefinition &entry)
+        {
+            return entry.equipStat == "Book";
+        },
         [&houseEntry](const ItemDefinition &entry)
         {
-            return isSpellbookAllowedForGuild(houseEntry, entry);
-        },
-        [tier](const ItemDefinition &entry)
-        {
-            const int weight = itemTreasureWeightUpToTier(entry, std::min(tier, 6));
-
-            if (weight > 0)
-            {
-                return weight;
-            }
-
-            const int spellbookTier = spellbookQualityFromItemValue(entry);
-            return spellbookTier > 0 && spellbookTier <= tier ? 1 : 0;
+            return guildSpellbookStockWeight(houseEntry, entry);
         });
 }
 
