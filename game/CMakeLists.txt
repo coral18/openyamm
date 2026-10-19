@@ -36,6 +36,7 @@ add_library(openyamm_game STATIC
     world/WorldTransportKnowledge.cpp
     world/WorldMapNotes.cpp
     world/WorldMonsterKnowledge.cpp
+    world/WorldItemSources.cpp
     gameplay/MapEncounterDefinition.cpp
     ui/screens/AtlasScreen.cpp
     app/GameSession.cpp

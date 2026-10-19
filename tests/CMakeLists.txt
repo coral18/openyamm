@@ -245,6 +245,7 @@ add_executable(openyamm_unit_tests
     ../game/world/WorldMapKnowledge.cpp
     ../game/world/WorldMapNotes.cpp
     ../game/world/WorldMonsterKnowledge.cpp
+    ../game/world/WorldItemSources.cpp
     ../game/gameplay/MapEncounterDefinition.cpp
     ../game/tables/NpcDialogTable.cpp
     ../game/tables/ObjectTable.cpp

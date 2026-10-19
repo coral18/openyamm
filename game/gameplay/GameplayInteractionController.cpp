@@ -1,3 +1,4 @@
+#include "game/world/WorldItemSources.h"
 #include "game/gameplay/GameplayInteractionController.h"
 
 #include "game/gameplay/GameplayHeldItemController.h"
@@ -678,6 +679,8 @@ bool tryActivateWorldItem(
         pParty->requestSound(SoundId::Gold);
         runtime.playSpeechReaction(recipientMemberIndex, SpeechId::FoundItem, true);
         runtime.setStatusBarEvent(formatFoundItemStatusText(itemName));
+        if (EventRuntimeState *pState = worldRuntime.eventRuntimeState())
+            recordWorldItemPickup(*pState, removedItemState, worldRuntime.gameMinutes());
         recordWorldItemActivationResult(worldRuntime, "picked up " + itemName);
         return true;
     }
@@ -692,6 +695,8 @@ bool tryActivateWorldItem(
     pParty->requestSound(SoundId::Gold);
     runtime.playSpeechReaction(pParty->activeMemberIndex(), SpeechId::FoundItem, true);
     runtime.setStatusBarEvent(formatFoundItemStatusText(itemName));
+    if (EventRuntimeState *pState = worldRuntime.eventRuntimeState())
+        recordWorldItemPickup(*pState, removedItemState, worldRuntime.gameMinutes());
     recordWorldItemActivationResult(worldRuntime, "picked up " + itemName + " into hand");
     return true;
 }

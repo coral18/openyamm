@@ -188,3 +188,13 @@ resumed gameplay; all four engine-owned captures were inspected. Original user s
 
 Logs and disposable saves are retained outside Git under the Windows `mod-loader-v1-20261007` directory and ignored
 `build/mod-loader-tests`. Android packaging/verification was updated, but no new APK or phone test is claimed.
+
+
+## Shared item-source knowledge
+
+`WorldDatabase` derives authored item sources from mounted map state; the Atlas consumes the same index. Actual
+pickups and visible chest slots record shared named-map discovery state under `openyamm.discovery.item/` even
+when the optional Atlas UI is disabled. The existing save serializer and refill knowledge preservation retain
+those facts. See [the item-source checkpoint](ATLAS.md#item-sources-and-retained-observations-2026-10-19) for the
+source scope and runtime evidence. Looking up a source does not roll random loot, change artifact state or award
+knowledge. Scripted reward/drop and general semantic-source integration remain pending.

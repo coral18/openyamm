@@ -8,6 +8,7 @@
 #include "game/world/WorldMapNotes.h"
 #include "game/world/WorldNpcKnowledge.h"
 #include "game/world/WorldTransportKnowledge.h"
+#include "game/world/WorldItemSources.h"
 #include "game/tables/MapStats.h"
 #include "game/tables/MergedBaseTables.h"
 #include "game/tables/NpcDialogTable.h"
@@ -94,6 +95,7 @@ struct WorldKnowledge
     WorldNpcState currentNpcs;
     WorldTransportState currentTransport;
     std::unordered_set<uint32_t> questBits;
+    std::unordered_map<std::string, std::vector<WorldItemSource>> itemObservations;
     bool knows(const WorldRecord &record) const;
 };
 
@@ -127,6 +129,9 @@ public:
     void indexMapNotes(const WorldKnowledge &knowledge);
     const std::vector<WorldMapLocation> &locations() const;
     const std::vector<WorldMapFeature> &features() const;
+    void indexMapItemSources(const MapStatsEntry &map, std::vector<WorldItemSource> sources, const ItemTable &items);
+    void indexObservedItemSources(const WorldKnowledge &knowledge, const ItemTable &items);
+    std::vector<const WorldItemSource *> itemSources(const WorldKnowledge &knowledge, bool guide) const;
     bool featureVisible(const WorldMapFeature &feature, const WorldKnowledge &knowledge, bool guide) const;
     std::vector<const WorldMapFeature *> queryFeatures(const WorldKnowledge &knowledge, bool guide,
         const std::string &search = {}, const std::string &withinMap = {}) const;
@@ -141,6 +146,7 @@ public:
     static const char *kindName(WorldRecordKind kind);
 
 private:
+    void appendItemSource(const std::string &mapId, WorldItemSource source, const ItemTable &items);
     void indexMapSites(const WorldRecord &source, const std::vector<WorldInteractionSite> &sites,
         const ScriptedEventProgram &events);
     void replaceMapMonsterFeatures(const MapStatsEntry &map, std::vector<WorldMapFeature> features,
@@ -150,5 +156,6 @@ private:
     std::unordered_map<std::string, size_t> m_byId;
     std::vector<WorldMapLocation> m_locations;
     std::vector<WorldMapFeature> m_features;
+    std::vector<WorldItemSource> m_itemSources;
 };
 } // namespace OpenYAMM::Game

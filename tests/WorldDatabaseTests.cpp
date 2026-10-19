@@ -1031,6 +1031,44 @@ TEST_CASE("world database dungeon plan respects reveal bits and hidden faces")
     CHECK(buildWorldFloorPlan(map, {}, true).outlineCount == 4);
 }
 
+TEST_CASE("world dungeon plans frame remembered positions without revealing hidden geometry")
+{
+    IndoorMapData map;
+    map.vertices = {{0, 0, 0}, {100, 0, 0}, {1000000, 1000000, 0}, {1000100, 1000000, 0}};
+    map.faces.resize(2);
+    map.outlines = {{0, 1, 0, 1}, {2, 3, 0, 1}};
+    WorldFloorPlanKnowledge knowledge;
+    CHECK(buildWorldFloorPlan(map, knowledge, false).pixelsBgra.empty());
+    const std::vector<std::pair<float, float>> positions = {{4000, -2000}, {6000, -4000}};
+    const auto plan = buildWorldFloorPlan(map, knowledge, false, positions);
+    REQUIRE_FALSE(plan.pixelsBgra.empty());
+    CHECK(plan.outlineCount == 0);
+    CHECK(plan.centerX == doctest::Approx(5000));
+    CHECK(plan.centerY == doctest::Approx(-3000));
+    for (const auto &[x, y] : positions)
+    {
+        const auto uv = plan.worldToUv(x, y);
+        CHECK(uv.first > 0); CHECK(uv.first < 1);
+        CHECK(uv.second > 0); CHECK(uv.second < 1);
+        const auto world = plan.uvToWorld(uv.first, uv.second);
+        CHECK(world.first == doctest::Approx(x));
+        CHECK(world.second == doctest::Approx(y));
+    }
+    CHECK(knowledge.visibleOutlines.empty());
+    CHECK(knowledge.faceAttributes.empty());
+    const float invalid = std::numeric_limits<float>::quiet_NaN();
+    CHECK(buildWorldFloorPlan(map, knowledge, false, {{invalid, 1}, {1, invalid}}).pixelsBgra.empty());
+    const auto single = buildWorldFloorPlan(map, knowledge, false, {{123, 456}});
+    REQUIRE_FALSE(single.pixelsBgra.empty());
+    CHECK(single.pixelsPerWorldUnit > 0);
+    CHECK(single.worldToUv(123, 456).first == doctest::Approx(0.5));
+    knowledge.visibleOutlines = {0x80};
+    const auto partlyKnown = buildWorldFloorPlan(map, knowledge, false, positions);
+    CHECK(partlyKnown.outlineCount == 1);
+    CHECK(partlyKnown.centerX == doctest::Approx(3000));
+    CHECK(knowledge.visibleOutlines == std::vector<uint8_t>{0x80});
+}
+
 TEST_CASE("world database outdoor fog shares saved exploration without revealing empty maps")
 {
     GameplayMinimapState projection;

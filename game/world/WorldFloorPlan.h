@@ -30,5 +30,6 @@ struct WorldFloorPlanRaster
 };
 
 WorldFloorPlanRaster buildWorldFloorPlan(const IndoorMapData &map,
-    const WorldFloorPlanKnowledge &knowledge, bool guide);
+    const WorldFloorPlanKnowledge &knowledge, bool guide,
+    const std::vector<std::pair<float, float>> &knownPositions = {});
 } // namespace OpenYAMM::Game

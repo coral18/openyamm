@@ -8,7 +8,7 @@ namespace OpenYAMM::Game
 class ScriptedEventProgram;
 struct EventRuntimeState;
 
-enum class WorldMapFeatureKind { Chest, Water, Shrine, Obelisk, Connection, Monster, Note };
+enum class WorldMapFeatureKind { Chest, Water, Shrine, Obelisk, Connection, Monster, Note, Item };
 
 struct WorldMonsterFeature
 {
@@ -33,6 +33,8 @@ struct WorldMapFeature
     std::optional<WorldMonsterFeature> monster;
     uint32_t noteId = 0;
     bool userNote = false;
+    uint32_t itemId = 0;
+    bool observedItem = false;
 };
 
 std::vector<WorldMapFeature> buildWorldMapFeatures(const std::string &mapId,

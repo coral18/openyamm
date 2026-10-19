@@ -767,3 +767,59 @@ campaigns, not proof of completing promotion quests. Captures cover base and Hum
 both Cleric-family pages, race changes, the bottom of the skill table, heading navigation to Priest of the Light,
 return to Discovery with only the current Cleric, and resumed gameplay. Android/controller checks and the rest of
 the complete Atlas coverage matrix remain pending.
+
+
+### Item sources and retained observations, 2026-10-19
+
+Item pages now link to a shared `WorldDatabase` item-source index. The Guide's **Scan sources** action reads the
+viewed world's mounted maps incrementally, one map per frame, through the normal headless asset loader. The
+existing event/geometry index supplies physical chest links. Placed items and explicitly carried actor items get
+native `I` source markers; fixed chest entries link to a known physical chest when available, otherwise to its
+containing map. Source links return to the normal item page through **Item details**. Source coordinates distinguish
+multiple placements of identically named items. The reference retains a selected ID across mode changes only if
+that ID remains visible, avoiding an accidental switch to a different Merge item with the same display name.
+
+The reader inspects authored item payloads and fixed positive chest IDs. It excludes negative random-treasure
+placeholders, invalid item IDs, gold, hidden policy objects and loot-container sprites. It does not materialize
+chests, generate artifact rolls, advance campaign RNG or modify the party. This catalog describes authored source
+possibilities, not remaining stock, scripted eligibility, a respawn promise or the current position of an actor.
+Scripted rewards/drops, general semantic source policies and their conditional availability remain separate
+coverage work; this is not a claim of every possible source for every item.
+
+Discovery receives no authored-source entitlement from merely visiting or exploring a map. Successful pickups
+record the actual item's position immediately before removal through the shared interaction controller. Indoor/outdoor hooks
+supply that position before removal, including inventory and held-item destinations. Opening a real chest records
+only its visible materialized slots, excluding gold and hidden overflow. A chest record is historical evidence
+of seeing an item there, not a live inventory or a claim that the party took it. The last pickup per item/map and
+previously seen chest items remain available even after an item leaves the inventory.
+
+The existing named-map state stores facts under `openyamm.discovery.item/<kind>/<source>/<item>/...`. Canonical
+numeric keys, complete pickup coordinates, finite bounded positions and nonnegative timestamps are required.
+There is no save-format change; the existing shared knowledge preservation also carries these facts over a map
+refill. An old save receives no invented historical sources. Recording remains active when the optional Atlas UI
+module is disabled. Guide inspection does not write observations or reveal terrain. The reference list/detail
+viewports now consistently use the native scroll helper's logical units, avoiding an empty overscroll area beneath
+long source lists.
+
+An indoor map can frame known pickups, notes, observations and the current party before its first wall outline
+has been revealed. Only visible features contribute points; undiscovered geometry supplies neither lines nor
+bounds. A lone known point uses a small blank coordinate frame. Partly explored maps also include known points
+outside the revealed wall bounds. This keeps a recorded source selectable without exposing the dungeon layout.
+Invalid positions are ignored, and drawing the view leaves exploration state unchanged.
+
+Focused ASan/UBSan checks passed 64 cases / 4,200 assertions; the native Windows focused suite passed 68 cases /
+4,281 assertions. Added coverage checks fixed versus random chest entries, duplicate slots, hidden objects,
+sparse/corrupt saved keys, invalid coordinates/times, visible versus overflow items, refill retention, source
+re-indexing, Discovery filtering, native feature links, known-point dungeon framing and read-only queries. These are focused suites, not a full
+project test run.
+
+The faithful scenarios `tests/scenarios/atlas/mm7_item_sources.yml` and `mm8_item_sources.yml` use actual gameplay
+interactions: a Harmondale Phirna Root pickup, an Abandoned Temple diamond pickup and opening chest 19. The latter
+observes the Idol of the Snake. Both verify their source facts after save/load; they do not grant test items or
+populate observations directly. An isolated repeat with `openyamm.interactive-atlas` disabled also passed the MM7
+pickup/save/load flow. Scenario starting parties remain harness fixtures, not a claim of a vanilla playthrough.
+
+Native AMD/OpenGL captures and disposable campaign copies are retained under `atlas-items-20261019/` in the
+Windows development directory. They cover the source map with retained fog, return to the item, complete source
+scans for the viewed MM7/MM8 map registries, the last rows of long source lists, known-ID mode switching, observed
+chest-item references and resumed gameplay. Android/controller checks and complete Atlas coverage remain pending.

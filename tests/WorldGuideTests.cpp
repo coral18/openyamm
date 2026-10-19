@@ -15,11 +15,16 @@
 #include "game/tables/JournalQuestTable.h"
 #include "game/tables/NpcDialogTable.h"
 #include "game/gameplay/GuildSpellbookRules.h"
+#include "game/gameplay/GameplayRuntimeInterfaces.h"
+#include "game/world/WorldItemSources.h"
+#include "game/world/WorldMapKnowledge.h"
+#include "game/tables/ObjectTable.h"
 
 #include <doctest/doctest.h>
 #include <algorithm>
 #include <fstream>
 #include <iterator>
+#include <limits>
 
 using namespace OpenYAMM::Game;
 
@@ -896,4 +901,135 @@ TEST_CASE("world guide quest contacts link only to the selected current or obser
     CHECK_FALSE(met[0].links[0].informed);
     CHECK(met[0].details.find("Butler") != std::string::npos);
     CHECK(knownWorld.find(met[0].links[0].target)->house->id == 240);
+}
+
+TEST_CASE("world item source observations record visible chest slots and successful pickups with strict save keys")
+{
+    EventRuntimeState state;
+    GameplayChestViewState chest;
+    chest.chestId = 7;
+    GameplayChestItemState visible, hidden, gold;
+    visible.itemId = 42; hidden.itemId = 43; gold.itemId = 44; gold.isGold = true;
+    chest.items = {visible, gold}; chest.hiddenItems = {hidden};
+    recordWorldChestItems(state, chest, 123);
+    auto observed = worldObservedItemSources(state);
+    REQUIRE(observed.size() == 1);
+    CHECK(observed.front().itemId == 42);
+    CHECK(observed.front().kind == WorldItemSourceKind::Chest);
+    CHECK(observed.front().sourceIndex == 7);
+    CHECK(observed.front().gameMinutes == 123);
+    CHECK_FALSE(observed.front().position);
+    const auto unchanged = state.namedMapVars;
+    CHECK(worldObservedItemSources(state).size() == 1);
+    CHECK(state.namedMapVars == unchanged);
+    EventRuntimeState refilled;
+    restoreWorldMapKnowledgeAfterRefill(state, refilled);
+    REQUIRE(worldObservedItemSources(refilled).size() == 1);
+    CHECK(worldObservedItemSources(refilled).front().itemId == 42);
+    recordWorldChestItems(state, chest, std::numeric_limits<float>::infinity());
+    CHECK(state.namedMapVars == unchanged);
+    GameplayWorldItemInspectState pickup;
+    pickup.item.objectDescriptionId = 51;
+    recordWorldItemPickup(state, pickup, 124); // Position absent: never invent the party's position as a source.
+    CHECK(state.namedMapVars == unchanged);
+    pickup.position = {{100.4f, -200.7f, 300}};
+    recordWorldItemPickup(state, pickup, 124);
+    observed = worldObservedItemSources(state);
+    REQUIRE(observed.size() == 2);
+    const auto found = std::find_if(observed.begin(), observed.end(),
+        [](const WorldItemSource &source) { return source.itemId == 51; });
+    REQUIRE(found != observed.end());
+    CHECK(found->observed);
+    REQUIRE(found->position);
+    CHECK(*found->position == std::array<int32_t, 3>{100, -201, 300});
+    CHECK(found->gameMinutes == 124);
+    const auto afterPickup = state.namedMapVars;
+    pickup.isGold = true;
+    recordWorldItemPickup(state, pickup, 125);
+    pickup.isGold = false; pickup.position = {{std::numeric_limits<float>::quiet_NaN(), 0, 0}};
+    recordWorldItemPickup(state, pickup, 125);
+    pickup.position = {{0, 0, 0}};
+    recordWorldItemPickup(state, pickup, -1);
+    CHECK(state.namedMapVars == afterPickup);
+    for (const char *key : {"placed/0/52/time", "placed/01/51/time", "chest/7/043/time",
+        "chest/-1/43/time", "chest/7/4294967296/time", "chest/7/0/time", "carried/0/43/time"})
+        state.namedMapVars[std::string("openyamm.discovery.item/") + key] = 123;
+    CHECK(worldObservedItemSources(state).size() == 2);
+}
+
+TEST_CASE("world item source catalog excludes random chest placeholders "
+    "and keeps discovery separate from authored loot")
+{
+    OpenYAMM::Engine::AssetFileSystem assets;
+    ItemTable items;
+    ObjectTable objects;
+    REQUIRE(items.load(assets, guideTableRows("items.txt"), {}));
+    REQUIRE(objects.loadRows(guideTableRows("object_list.txt")));
+    const auto item = std::find_if(items.entries().begin(), items.entries().end(), [](const ItemDefinition &entry)
+    { return entry.itemId > 0 && !entry.name.empty() && entry.equipStat != "Gold"; });
+    REQUIRE(item != items.entries().end());
+    const uint32_t itemId = item->itemId;
+    const auto object = std::find_if(objects.entries().begin(), objects.entries().end(), [](const ObjectEntry &entry)
+    { return (entry.flags & 0x10) == 0; });
+    REQUIRE(object != objects.entries().end());
+    MapDeltaData delta;
+    MapDeltaSpriteObject placed;
+    placed.objectDescriptionId = uint16_t(std::distance(objects.entries().begin(), object));
+    placed.x = 101; placed.y = 202; placed.z = 303; placed.rawContainingItem.resize(36);
+    const auto putId = [](std::vector<uint8_t> &bytes, size_t offset, uint32_t id)
+    { for (size_t i = 0; i < 4; ++i) bytes[offset + i] = uint8_t(id >> (8 * i)); };
+    putId(placed.rawContainingItem, 0, itemId);
+    delta.spriteObjects.push_back(placed);
+    placed.semanticPolicyHidden = true; delta.spriteObjects.push_back(placed);
+    MapDeltaChest chest;
+    chest.rawItems.resize(36 * 3);
+    putId(chest.rawItems, 0, itemId); putId(chest.rawItems, 36, itemId);
+    putId(chest.rawItems, 72, uint32_t(-6));
+    delta.chests.push_back(chest);
+    MapDeltaActor actor; actor.carriedItemId = itemId; actor.x = -123;
+    delta.actors.push_back(actor);
+    const auto catalog = buildWorldItemSources(delta, items, objects);
+    REQUIRE(catalog.size() == 3);
+    CHECK(catalog[0].kind == WorldItemSourceKind::Placed);
+    CHECK(catalog[1].kind == WorldItemSourceKind::Chest);
+    CHECK(catalog[2].kind == WorldItemSourceKind::Carried);
+    CHECK(delta.chests[0].rawItems == chest.rawItems);
+    MapStats maps;
+    REQUIRE(maps.loadFromRows(guideTableRows("map_stats.txt")));
+    HouseTable houses; NpcDialogTable npcs; MergedTeacherTopicTable teachers;
+    WorldDatabase world(maps, houses, npcs, teachers, "mm7");
+    const MapStatsEntry *pMap = maps.findByFileName("7out02.odm");
+    REQUIRE(pMap != nullptr);
+    world.indexMapItemSources(*pMap, catalog, items);
+    world.indexMapItemSources(*pMap, catalog, items); // Re-index replaces, never accumulates duplicate sources.
+    WorldKnowledge known;
+    known.visitedMaps.insert("7out02.odm");
+    CHECK(world.itemSources(known, false).empty());
+    CHECK(world.itemSources(known, true).size() == 3);
+    CHECK(world.queryFeatures(known, false).empty());
+    CHECK(world.queryFeatures(known, true).size() == 2);
+    EventRuntimeState state;
+    GameplayWorldItemInspectState pickup; pickup.item.objectDescriptionId = itemId;
+    pickup.position = {{101, 202, 303}};
+    recordWorldItemPickup(state, pickup, 400);
+    known.itemObservations["7out02.odm"] = worldObservedItemSources(state);
+    world.indexObservedItemSources(known, items);
+    REQUIRE(world.itemSources(known, false).size() == 1);
+    CHECK(world.itemSources(known, false).front()->observed);
+    REQUIRE(world.queryFeatures(known, false).size() == 1);
+    CHECK(world.queryFeatures(known, false).front()->itemId == itemId);
+    WorldGuideSource source;
+    source.pItems = &items; source.pWorld = &world; source.pWorldKnowledge = &known;
+    WorldGuideKnowledge knowledge; knowledge.items.insert(itemId);
+    const auto entries = buildWorldGuide(source, WorldGuideSection::Items, knowledge, false);
+    REQUIRE(entries.size() == 1);
+    REQUIRE(entries.front().links.size() == 1);
+    CHECK(entries.front().links.front().kind == WorldGuideLink::Kind::Feature);
+    CHECK(entries.front().links.front().label.find("Last picked up: Harmondale") != std::string::npos);
+    const auto before = known.itemObservations;
+    CHECK(buildWorldGuide(source, WorldGuideSection::Items, knowledge, true).size() > 1);
+    CHECK(known.itemObservations.size() == before.size());
+    known.visitedMaps.clear();
+    CHECK(world.itemSources(known, false).empty());
+    CHECK(world.queryFeatures(known, false).empty());
 }

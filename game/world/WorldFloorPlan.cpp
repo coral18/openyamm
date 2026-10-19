@@ -9,7 +9,8 @@
 namespace OpenYAMM::Game
 {
 WorldFloorPlanRaster buildWorldFloorPlan(const IndoorMapData &map,
-    const WorldFloorPlanKnowledge &knowledge, bool guide)
+    const WorldFloorPlanKnowledge &knowledge, bool guide,
+    const std::vector<std::pair<float, float>> &knownPositions)
 {
     WorldFloorPlanRaster raster;
     std::vector<const IndoorOutline *> lines;
@@ -45,7 +46,15 @@ WorldFloorPlanRaster buildWorldFloorPlan(const IndoorMapData &map,
         }
     }
     raster.outlineCount = lines.size();
-    if (lines.empty())
+    // A remembered position can be known before any nearby wall outline. It frames an otherwise blank map,
+    // without using undiscovered geometry to infer its bounds or awarding any reveal bits.
+    for (const auto &[x, y] : knownPositions)
+        if (std::isfinite(x) && std::isfinite(y))
+        {
+            minX = std::min(minX, double(x)); maxX = std::max(maxX, double(x));
+            minY = std::min(minY, double(y)); maxY = std::max(maxY, double(y));
+        }
+    if (minX > maxX || minY > maxY)
         return raster;
     raster.pixelsBgra.resize(size_t(raster.width) * raster.height * 4);
     for (size_t p = 0; p < raster.pixelsBgra.size(); p += 4)
@@ -54,8 +63,9 @@ WorldFloorPlanRaster buildWorldFloorPlan(const IndoorMapData &map,
         raster.pixelsBgra[p + 2] = 24; raster.pixelsBgra[p + 3] = 255;
     }
     constexpr double padding = 24;
-    const double scale = std::min((raster.width - 2 * padding) / std::max(1.0, maxX - minX),
-                                  (raster.height - 2 * padding) / std::max(1.0, maxY - minY));
+    const double minimumSpan = lines.empty() ? 512.0 : 1.0;
+    const double scale = std::min((raster.width - 2 * padding) / std::max(minimumSpan, maxX - minX),
+                                  (raster.height - 2 * padding) / std::max(minimumSpan, maxY - minY));
     raster.centerX = (minX + maxX) / 2;
     raster.centerY = (minY + maxY) / 2;
     raster.pixelsPerWorldUnit = scale;

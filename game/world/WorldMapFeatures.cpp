@@ -17,6 +17,7 @@ const char *worldMapFeatureKindName(WorldMapFeatureKind kind)
     case WorldMapFeatureKind::Connection: return "Passage / teleport";
     case WorldMapFeatureKind::Monster: return "Monster";
     case WorldMapFeatureKind::Note: return "Note";
+    case WorldMapFeatureKind::Item: return "Item source";
     }
     return "Site";
 }

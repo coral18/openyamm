@@ -1,3 +1,4 @@
+#include "game/world/WorldItemSources.h"
 #include "game/gameplay/MapEncounterDefinition.h"
 #include "game/outdoor/OutdoorWorldRuntime.h"
 #include "game/gameplay/ActorVocalizationRules.h"
@@ -4645,6 +4646,7 @@ void OutdoorWorldRuntime::activateChestView(uint32_t chestId)
 
     if (EventRuntimeState *pEventRuntimeState = eventRuntimeState())
     {
+        recordWorldChestItems(*pEventRuntimeState, *m_activeChestView, gameMinutes());
         pEventRuntimeState->lastChestOpened = EventRuntimeState::ChestOpenedTrace{
             .sceneKind = "outdoor",
             .map = mapName(),
@@ -17404,6 +17406,7 @@ bool OutdoorWorldRuntime::worldItemInspectState(size_t worldItemIndex, GameplayW
     state.item = pWorldItem->item;
     state.goldAmount = pWorldItem->goldAmount;
     state.isGold = pWorldItem->isGold;
+    state.position = {{pWorldItem->x, pWorldItem->y, pWorldItem->z}};
     return true;
 }
 
@@ -17433,6 +17436,7 @@ bool OutdoorWorldRuntime::takeWorldItemInspectState(size_t worldItemIndex, Gamep
     state.item = pWorldItem->item;
     state.goldAmount = pWorldItem->goldAmount;
     state.isGold = pWorldItem->isGold;
+    state.position = {{pWorldItem->x, pWorldItem->y, pWorldItem->z}};
 
     WorldItemState removedItem = {};
     return takeWorldItem(worldItemIndex, removedItem);

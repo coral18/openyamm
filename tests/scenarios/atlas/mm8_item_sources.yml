@@ -1,0 +1,23 @@
+id: atlas.mm8_item_sources
+world: mm8
+mode: faithful
+title: Actual indoor pickup and visible chest contents retain item-source discoveries
+steps:
+- new_game_flow: {start_map: out01.odm}
+- load_map: {map: d05.blv}
+- press_interact:
+    pose: {x: 11908, y: -4288, z: -496, yaw: 0, pitch: -0.62}
+    expect: {kind: world_item, item_id: 186, can_activate: true}
+- assert:
+    named_map_var_changed: {name: openyamm.discovery.item/placed/0/186/x, value: 12192}
+- press_interact:
+    pose: {x: 10000, y: 3604, z: -512, yaw: 0, pitch: -0.29}
+    expect: {kind: event_target, triggered_event: 100, can_activate: true}
+- assert:
+    named_map_var_changed: {name: openyamm.discovery.item/chest/19/630/time, value: 540}
+- save_game: item-source
+- load_game: item-source
+- assert:
+    named_map_var_changed: {name: openyamm.discovery.item/placed/0/186/x, value: 12192}
+- assert:
+    named_map_var_changed: {name: openyamm.discovery.item/chest/19/630/time, value: 540}

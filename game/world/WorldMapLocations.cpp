@@ -60,7 +60,7 @@ void WorldDatabase::indexMapSites(const WorldRecord &source, const std::vector<W
     };
     std::erase_if(m_features, [pSource](const WorldMapFeature &feature)
     { return feature.mapId == pSource->id && feature.kind != WorldMapFeatureKind::Monster
-        && feature.kind != WorldMapFeatureKind::Note; });
+        && feature.kind != WorldMapFeatureKind::Note && feature.kind != WorldMapFeatureKind::Item; });
     auto features = buildWorldMapFeatures(pSource->id, sites, events);
     m_features.insert(m_features.end(), features.begin(), features.end());
     for (const WorldInteractionSite &site : sites)
@@ -147,6 +147,8 @@ bool WorldDatabase::featureVisible(const WorldMapFeature &feature, const WorldKn
         return knowledge.visitedMaps.contains(toLowerCopy(pMap->map->fileName));
     if (feature.kind == WorldMapFeatureKind::Monster)
         return feature.monster && feature.monster->observed;
+    if (feature.kind == WorldMapFeatureKind::Item)
+        return feature.observedItem && visible(*pMap, knowledge, false);
     const std::string file = toLowerCopy(pMap->map->fileName);
     if (const auto known = knowledge.interactedSites.find(file); known != knowledge.interactedSites.end())
     {

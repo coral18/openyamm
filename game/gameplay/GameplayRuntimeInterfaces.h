@@ -103,6 +103,7 @@ struct GameplayWorldItemInspectState
     InventoryItem item = {};
     uint32_t goldAmount = 0;
     bool isGold = false;
+    std::optional<std::array<float, 3>> position;
 };
 
 enum class ActorAiAnimationState : uint8_t

@@ -1,3 +1,4 @@
+#include "game/world/WorldItemSources.h"
 #include "game/gameplay/MapEncounterDefinition.h"
 #include "game/indoor/IndoorWorldRuntime.h"
 #include "game/gameplay/ActorVocalizationRules.h"
@@ -14380,6 +14381,7 @@ bool IndoorWorldRuntime::worldItemInspectState(size_t worldItemIndex, GameplayWo
     state.item = item;
     state.goldAmount = goldAmount;
     state.isGold = goldAmount > 0;
+    state.position = {{float(spriteObject.x), float(spriteObject.y), float(spriteObject.z)}};
     return true;
 }
 
@@ -16664,6 +16666,7 @@ void IndoorWorldRuntime::activateChestView(uint32_t chestId)
 
     if (EventRuntimeState *pEventRuntimeState = eventRuntimeState())
     {
+        recordWorldChestItems(*pEventRuntimeState, *m_activeChestView, gameMinutes());
         pEventRuntimeState->lastChestOpened = EventRuntimeState::ChestOpenedTrace{
             .sceneKind = "indoor",
             .map = mapName(),

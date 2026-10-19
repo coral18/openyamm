@@ -262,6 +262,10 @@ std::vector<WorldGuideEntry> buildWorldGuide(const WorldGuideSource &source, Wor
     }
     else if (section == WorldGuideSection::Items && source.pItems != nullptr)
     {
+        std::map<uint32_t, std::vector<const WorldItemSource *>> sources;
+        if (source.pWorld != nullptr && source.pWorldKnowledge != nullptr)
+            for (const WorldItemSource *pItemSource : source.pWorld->itemSources(*source.pWorldKnowledge, guide))
+                sources[pItemSource->itemId].push_back(pItemSource);
         for (const ItemDefinition &item : source.pItems->entries())
         {
             if (item.name.empty() || (!guide && !knowledge.items.contains(item.itemId)))
@@ -274,6 +278,32 @@ std::vector<WorldGuideEntry> buildWorldGuide(const WorldGuideSource &source, Wor
             if (!item.materialName.empty())
                 entry.details += "Material: " + item.materialName + "\n";
             entry.details += item.notes;
+            std::set<std::pair<std::string, std::string>> linkedSources;
+            for (const WorldItemSource *pItemSource : sources[item.itemId])
+            {
+                const WorldRecord *pMap = source.pWorld->find(pItemSource->mapId);
+                std::string target = pMap->id;
+                std::string label = worldItemSourceLabel(*pItemSource) + ": " + pMap->name();
+                WorldGuideLink::Kind kind = WorldGuideLink::Kind::Location;
+                for (const WorldMapFeature &feature : source.pWorld->features())
+                    if ((feature.id == pItemSource->id || (pItemSource->kind == WorldItemSourceKind::Chest
+                        && feature.mapId == pItemSource->mapId
+                        && std::find(feature.chestIds.begin(), feature.chestIds.end(), pItemSource->sourceIndex)
+                            != feature.chestIds.end()))
+                        && source.pWorld->featureVisible(feature, *source.pWorldKnowledge, guide))
+                    {
+                        target = feature.id; kind = WorldGuideLink::Kind::Feature;
+                        break;
+                    }
+                if (pItemSource->position)
+                    label += " (" + std::to_string((*pItemSource->position)[0]) + ", "
+                        + std::to_string((*pItemSource->position)[1]) + ")";
+                if (linkedSources.emplace(label, target).second)
+                    entry.links.push_back({kind, label, target});
+            }
+            if (!sources[item.itemId].empty())
+                entry.details += "\n\nSources below describe authored data or recorded observations. "
+                    "They do not guarantee remaining loot, random drops or quest availability.";
             if (source.pSpells != nullptr)
                 if (const auto spell = spellbookSpellId(item))
                     if (const SpellEntry *pSpell = source.pSpells->findById(int(*spell)))

@@ -1,0 +1,15 @@
+id: atlas.mm7_item_sources
+world: mm7
+mode: faithful
+title: An actual Harmondale pickup records its source through save and load
+steps:
+- new_game_flow: {start_map: 7out02.odm}
+- press_interact:
+    pose: {x: 5700, y: -7744, z: 20, yaw: 0, pitch: -0.62}
+    expect: {kind: world_item, item_id: 1007, can_activate: true}
+- assert:
+    named_map_var_changed: {name: openyamm.discovery.item/placed/0/1007/x, value: 5984}
+- save_game: item-source
+- load_game: item-source
+- assert:
+    named_map_var_changed: {name: openyamm.discovery.item/placed/0/1007/x, value: 5984}

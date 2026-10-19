@@ -59,10 +59,14 @@ AtlasScreen::AtlasScreen(const Engine::AssetFileSystem &assets, const GameDataRe
         for (const std::string &issue : m_world.transportIssues()) std::cerr << issue << '\n';
     }
     m_world.indexMapNotes(m_knowledge);
+    m_world.indexObservedItemSources(m_knowledge, m_data.itemTable());
     for (const std::string &file : assets.enumerate("engine/world/atlas"))
         if (std::filesystem::path(file).extension() == ".yml")
             m_availableWorlds.push_back(std::filesystem::path(file).stem().string());
     m_referenceKnowledge.recipes = m_knowledge.autonoteIds;
+    for (const auto &[file, observations] : m_knowledge.itemObservations)
+        for (const WorldItemSource &observation : observations)
+            m_referenceKnowledge.items.insert(observation.itemId);
     for (const auto &[file, observations] : m_knowledge.monsterObservations)
         for (const WorldMonsterObservation &observation : observations)
             m_referenceKnowledge.monsters.insert(observation.monsterId);
@@ -227,7 +231,9 @@ void AtlasScreen::saveNote(bool remove)
         notes.push_back({{m_noteDraft.id, m_noteDraft.x, m_noteDraft.y,
                          m_noteDraft.mapFileName, m_noteDraft.text, true}, true});
     m_world.indexMapNotes(m_knowledge);
+    m_world.indexObservedItemSources(m_knowledge, m_data.itemTable());
     m_selectedFeature = remove ? "" : m_map + "/note/" + std::to_string(m_noteDraft.id);
+    m_floorPlanKey.clear();
     m_featureView = true;
     m_filter.reset(); m_search.clear(); m_siteSelection.clear(); m_scroll = 0;
     closeNoteEditor();
@@ -301,7 +307,11 @@ void AtlasScreen::rebuildWorld()
         atlasNpcState(m_data, m_knowledge, m_guide, m_pParty != nullptr),
         atlasTransportState(m_data, m_knowledge, m_guide, m_pParty != nullptr));
     m_world.indexMapNotes(m_knowledge);
+    m_world.indexObservedItemSources(m_knowledge, m_data.itemTable());
     indexQuestLocations();
+    m_itemSourceMaps.clear(); m_itemSourceScanIndex = 0;
+    m_itemSourceScanActive = m_itemSourcesComplete = false;
+    m_itemSourceScanFailures = 0;
     m_indexedMaps.clear();
     m_floorPlanKey.clear();
 }
@@ -320,10 +330,14 @@ void AtlasScreen::selectWorld(const std::string &worldId)
                             atlasTransportState(m_data, m_knowledge, m_guide, m_pParty != nullptr));
         m_world = std::move(world);
         m_world.indexMapNotes(m_knowledge);
+        m_world.indexObservedItemSources(m_knowledge, m_data.itemTable());
         m_selectedFeature.clear();
         m_referenceDirty = true;
         m_referenceSelected.clear();
         m_referenceScroll = m_referenceDetailScroll = 0;
+        m_itemSourceMaps.clear(); m_itemSourceScanIndex = 0;
+        m_itemSourceScanActive = m_itemSourcesComplete = false;
+        m_itemSourceScanFailures = 0;
         m_presentation = std::move(presentation);
         indexQuestLocations();
         m_trainerMastery = 0;
@@ -379,7 +393,6 @@ void AtlasScreen::drawScreen(float)
             pSelected != nullptr && pSelected->npc != nullptr && m_world.visible(*pSelected, m_knowledge, m_guide))
             select(*pSelected);
         m_referenceDirty = true;
-        m_referenceSelected.clear();
         m_referenceScroll = m_referenceDetailScroll = 0;
         if (const auto *selected = m_world.find(m_selected);
             selected == nullptr || !m_world.visible(*selected, m_knowledge, m_guide))
@@ -450,7 +463,7 @@ void AtlasScreen::drawScreen(float)
         textInRect(canvasRect(168, 89, 403, 25), map->name(), "fondamento", 14);
         if (m_featureView)
             textInRect(canvasRect(375, 94, 195, 16),
-                       "C Chests W Water S Shrines O Obelisks P Passages M Monsters N Notes",
+                       "C Chests W Water S Shrines O Obelisks P Passages M Monsters N Notes I Items",
                        "menu_lucida", 7, 0xffc6dfeau);
         else if (map->kind == WorldRecordKind::Region)
             textInRect(canvasRect(375, 94, 195, 16), m_filter == WorldRecordKind::Travel
@@ -494,6 +507,31 @@ void AtlasScreen::drawScreen(float)
         drawDetails();
 }
 
+void AtlasScreen::indexMapData(MapAssetInfo &map)
+{
+    const std::optional<MapDeltaData> &delta = map.outdoorMapData
+        ? map.outdoorMapDeltaData : map.indoorMapDeltaData;
+    if (delta)
+        m_world.indexMapItemSources(map.map, buildWorldItemSources(*delta,
+            m_data.itemTable(), m_data.objectTable()), m_data.itemTable());
+    std::string error;
+    if (!GameDataLoader::loadEventPrograms(assetFileSystem(), map, error) || !map.localEventProgram)
+        throw std::runtime_error(error.empty() ? "Missing event metadata" : error);
+    const auto &observations = m_knowledge.monsterObservations[toLowerCopy(map.map.fileName)];
+    if (map.outdoorMapData)
+    {
+        m_world.indexMapLocations(*map.outdoorMapData, *map.localEventProgram);
+        m_world.indexMapMonsters(map.map, *map.outdoorMapData, m_data.monsterTable(), observations);
+    }
+    else if (map.indoorMapData)
+    {
+        m_world.indexMapLocations(map.map, *map.indoorMapData, *map.localEventProgram);
+        m_world.indexMapMonsters(map.map, *map.indoorMapData, m_data.monsterTable(), observations);
+    }
+    else
+        throw std::runtime_error("Missing map geometry");
+}
+
 void AtlasScreen::indexKnownRegions()
 {
     for (const WorldRecord &record : m_world.records())
@@ -507,24 +545,8 @@ void AtlasScreen::indexKnownRegions()
         {
             auto map = MapAssetLoader().load(assetFileSystem(), *record.map,
                 m_data.monsterTable(), m_data.objectTable(), MapLoadPurpose::HeadlessGameplay);
-            std::string error;
-            if (!map || !GameDataLoader::loadEventPrograms(assetFileSystem(), *map, error)
-                || !map->localEventProgram)
-                throw std::runtime_error(error.empty() ? "Missing geometry or event metadata" : error);
-            if (map->outdoorMapData)
-            {
-                m_world.indexMapLocations(*map->outdoorMapData, *map->localEventProgram);
-                m_world.indexMapMonsters(map->map, *map->outdoorMapData, m_data.monsterTable(),
-                    m_knowledge.monsterObservations[toLowerCopy(map->map.fileName)]);
-            }
-            else if (map->indoorMapData)
-            {
-                m_world.indexMapLocations(map->map, *map->indoorMapData, *map->localEventProgram);
-                m_world.indexMapMonsters(map->map, *map->indoorMapData, m_data.monsterTable(),
-                    m_knowledge.monsterObservations[toLowerCopy(map->map.fileName)]);
-            }
-            else
-                throw std::runtime_error("Missing map geometry");
+            if (!map) throw std::runtime_error("Missing map data");
+            indexMapData(*map);
         }
         catch (const std::exception &error)
         {
@@ -729,8 +751,15 @@ void AtlasScreen::drawMap()
             if (geometry)
             {
                 const auto knowledge = m_knowledge.floorPlans.find(toLowerCopy(map->map->fileName));
+                std::vector<std::pair<float, float>> positions;
+                for (const WorldMapFeature *pFeature : m_world.queryFeatures(m_knowledge, m_guide, "", map->id))
+                    positions.emplace_back(pFeature->site.x, pFeature->site.y);
+                if (m_knowledge.partyPosition
+                    && m_knowledge.partyPosition->mapFileName == toLowerCopy(map->map->fileName))
+                    positions.emplace_back(m_knowledge.partyPosition->x, m_knowledge.partyPosition->y);
                 m_floorPlan = buildWorldFloorPlan(*geometry,
-                    knowledge == m_knowledge.floorPlans.end() ? WorldFloorPlanKnowledge{} : knowledge->second, m_guide);
+                    knowledge == m_knowledge.floorPlans.end() ? WorldFloorPlanKnowledge{} : knowledge->second,
+                    m_guide, positions);
             }
             if (!m_floorPlan.pixelsBgra.empty())
                 m_floorPlanTexture = bgfx::createTexture2D(uint16_t(m_floorPlan.width), uint16_t(m_floorPlan.height),
@@ -772,6 +801,9 @@ void AtlasScreen::drawMap()
         drawTextureHandle(m_floorPlanTexture, image);
     else if (!schematic)
         drawTexture(texture, image);
+    if (floorPlan != nullptr && floorPlan->outlineCount == 0)
+        textInRect(canvasRect(34, 126, 200, 34),
+            "Recorded positions only.\nExplore to reveal dungeon outlines.", "menu_lucida", 10);
     if (map != nullptr && !dungeon && !m_guide)
     {
         if (m_fogMap != map->id)
@@ -1006,7 +1038,7 @@ bool AtlasScreen::drawFeatureMarkers(const WorldRecord &map, const Rect &image, 
             m_selectedFeature = feature.id;
             m_scroll = 0;
         }
-        const char *labels[] = {"C", "W", "S", "O", "P", "M", "N"};
+        const char *labels[] = {"C", "W", "S", "O", "P", "M", "N", "I"};
         textInRect(marker, pin.features.size() > 1 ? std::to_string(pin.features.size()) : labels[size_t(feature.kind)],
                    "menu_lucida", 7, 0xffc6dfeau, true);
         outline(marker, selected ? 0xff99d3eeu : 0xff8dc5e1u);
@@ -1101,8 +1133,40 @@ void AtlasScreen::rebuildReference()
     const auto selected = std::find_if(m_referenceEntries.begin(), m_referenceEntries.end(),
         [this](const WorldGuideEntry &entry) { return entry.id == m_referenceSelected; });
     if (selected != m_referenceEntries.end())
-        m_referenceScroll = std::distance(m_referenceEntries.begin(), selected) * 33 * designScale();
+        m_referenceScroll = std::distance(m_referenceEntries.begin(), selected) * 33;
+    else
+        m_referenceSelected.clear();
     m_referenceDirty = false;
+}
+
+void AtlasScreen::stepItemSourceScan()
+{
+    if (!m_itemSourceScanActive) return;
+    const MapStatsEntry &record = *m_itemSourceMaps[m_itemSourceScanIndex++];
+    try
+    {
+        auto map = MapAssetLoader().load(assetFileSystem(), record,
+            m_data.monsterTable(), m_data.objectTable(), MapLoadPurpose::HeadlessGameplay);
+        if (!map) throw std::runtime_error("Map data unavailable");
+        const std::optional<MapDeltaData> &delta = map->outdoorMapData
+            ? map->outdoorMapDeltaData : map->indoorMapDeltaData;
+        if (!delta) throw std::runtime_error("Authored companion data unavailable");
+        indexMapData(*map);
+        m_indexedMaps.insert(WorldDatabase::mapId(record));
+    }
+    catch (const std::exception &error)
+    {
+        ++m_itemSourceScanFailures;
+        m_locationError = "Some item sources could not be read; the source index is incomplete.";
+        std::cerr << "Atlas item source scan failed for " << record.fileName << ": " << error.what() << '\n';
+    }
+    if (m_itemSourceScanIndex == m_itemSourceMaps.size())
+    {
+        m_itemSourceScanActive = false;
+        m_itemSourcesComplete = true;
+        m_floorPlanKey.clear();
+        m_referenceDirty = true;
+    }
 }
 
 void AtlasScreen::compareClass(std::optional<uint32_t> raceId)
@@ -1225,6 +1289,7 @@ void AtlasScreen::drawClassComparison()
 
 void AtlasScreen::drawReference()
 {
+    stepItemSourceScan();
     const std::pair<const char *, WorldGuideSection> sections[] = {
         {"Items", WorldGuideSection::Items}, {"Spells", WorldGuideSection::Spells},
         {"Classes", WorldGuideSection::Classes}, {"Alchemy", WorldGuideSection::Alchemy},
@@ -1261,8 +1326,24 @@ void AtlasScreen::drawReference()
         return;
     }
     const bool classes = m_referenceSection == WorldGuideSection::Classes;
-    textInRect(canvasRect(285, 89, classes ? 410 : 535, 25), m_presentation.name + " - active game data",
+    const bool scanItems = m_guide && m_referenceSection == WorldGuideSection::Items;
+    textInRect(canvasRect(285, 89, classes || scanItems ? 410 : 535, 25),
+        m_presentation.name + " - active game data",
         "fondamento", 14);
+    if (scanItems && button("atlas-item-sources", canvasRect(711, 89, 110, 25),
+        m_itemSourceScanActive ? "Scan " + std::to_string(m_itemSourceScanIndex) + "/"
+            + std::to_string(m_itemSourceMaps.size()) : m_itemSourceScanFailures > 0 ? "Partial sources"
+            : m_itemSourcesComplete ? "Sources ready" : "Scan sources",
+        "button", !m_itemSourceScanActive && !m_itemSourcesComplete))
+    {
+        m_itemSourceMaps.clear();
+        m_itemSourceScanFailures = 0;
+        for (const WorldRecord &record : m_world.records())
+            if (record.kind == WorldRecordKind::Region || record.kind == WorldRecordKind::Dungeon)
+                m_itemSourceMaps.push_back(record.map);
+        m_itemSourceScanIndex = 0;
+        m_itemSourceScanActive = !m_itemSourceMaps.empty();
+    }
     if (classes && button("atlas-class-compare", canvasRect(711, 89, 110, 25), "Compare", "button",
         std::any_of(m_referenceEntries.begin(), m_referenceEntries.end(),
             [this](const WorldGuideEntry &entry) { return entry.id == m_referenceSelected; })))
@@ -1288,12 +1369,12 @@ void AtlasScreen::drawReference()
                 > (toLowerCopy(b->title).find(query) != std::string::npos);
         });
     const float rowHeight = 33 * designScale();
-    scrollViewport(list, entries.size() * rowHeight, m_referenceScroll);
+    scrollViewport(list, entries.size() * 33, m_referenceScroll);
     setDesignClip(list);
     for (size_t i = 0; i < entries.size(); ++i)
     {
-        const Rect row{list.x + 3 * designScale(), list.y + i * rowHeight - m_referenceScroll,
-                       list.width - 7 * designScale(), rowHeight - 2 * designScale()};
+        const Rect row{list.x + 3 * designScale(), list.y + i * rowHeight - m_referenceScroll * designScale(),
+                       list.width - 16 * designScale(), rowHeight - 2 * designScale()};
         if (row.y + row.height < list.y || row.y > list.y + list.height)
             continue;
         const WorldGuideEntry &entry = *entries[i];
@@ -1315,7 +1396,7 @@ void AtlasScreen::drawReference()
         const WorldGuideEntry &entry = **selected;
         scrollViewport(details, m_referenceContentHeight, m_referenceDetailScroll);
         setDesignClip(details);
-        const Rect text{details.x + 8 * designScale(), details.y + 8 * designScale() - m_referenceDetailScroll,
+        const Rect text{details.x + 8 * designScale(), details.y + (8 - m_referenceDetailScroll) * designScale(),
                         details.width - 24 * designScale(), 50000 * designScale()};
         float height = 0;
         textInRect(text, entry.details, "menu_arrus", 12, 0xffc6dfeau, false, true, &height);
@@ -1336,6 +1417,18 @@ void AtlasScreen::drawReference()
                     m_trainerMastery = link.mastery;
                     m_search = link.target;
                     m_scroll = 0;
+                }
+                else if (link.kind == WorldGuideLink::Kind::Feature)
+                {
+                    const auto feature = std::find_if(m_world.features().begin(), m_world.features().end(),
+                        [&](const WorldMapFeature &value) { return value.id == link.target; });
+                    if (feature != m_world.features().end() && m_world.featureVisible(*feature, m_knowledge, m_guide))
+                    {
+                        select(*m_world.find(feature->mapId));
+                        m_selectedFeature = feature->id;
+                        m_siteSelection = {feature->id};
+                        m_featureView = true; m_referenceOpen = false;
+                    }
                 }
                 else if (link.kind == WorldGuideLink::Kind::Location)
                 {
@@ -1365,14 +1458,20 @@ void AtlasScreen::drawReference()
             }
             y += 29 * designScale();
         }
-        m_referenceContentHeight = height + (entry.links.size() * 29 + 24) * designScale();
+        m_referenceContentHeight = height / designScale() + entry.links.size() * 29 + 24;
         setDesignClip(std::nullopt);
     }
     else
         textInRect(details, entries.empty() ? (m_guide ? "No records in this section."
             : "Nothing known yet. Guide Mode opens the full reference catalog.")
             : "Select a record to inspect its details.", "menu_arrus", 13, 0xffc6dfeau, true);
-    textInRect(canvasRect(34, 407, 778, 43), m_guide
+    textInRect(canvasRect(34, 407, 778, 43), m_itemSourceScanActive
+        ? "Reading authored item sources, one map per frame. Random loot is never generated."
+        : !m_locationError.empty() ? m_locationError : m_referenceSection == WorldGuideSection::Items
+        ? (m_guide ? "Sources cover authored placements, fixed chest entries and carried items. "
+            "They do not predict random loot or remaining contents."
+            : "Recorded sources come from actual pickups and visible chest contents. "
+              "A past observation does not guarantee an item is still there.") : m_guide
         ? "Reference definitions follow the loaded game tables, including enabled mods."
         : "Discovery shows encountered items, known spell references, current classes, known recipes, "
           "recruited companions, observed monsters and recorded quests.",
@@ -1390,14 +1489,19 @@ void AtlasScreen::drawDetails()
         { return pFeature->id == m_selectedFeature
             && (m_siteSelection.empty() || m_siteSelection.contains(pFeature->id)); });
         std::string text = "Select a site to inspect it. "
-            "C Chests, W Wells/Fountains, S Shrines, O Obelisks, P Passages, M Monsters, N Notes.";
+            "C Chests, W Wells/Fountains, S Shrines, O Obelisks, P Passages, M Monsters, N Notes, I Items.";
         const WorldRecord *pDestination = nullptr;
         int16_t creatureId = 0;
+        uint32_t itemId = 0;
         const WorldMapFeature *pNote = nullptr;
         if (selected != features.end())
         {
             const WorldMapFeature &feature = **selected;
             text = feature.title + " | " + worldMapFeatureKindName(feature.kind);
+            itemId = feature.itemId;
+            if (feature.kind == WorldMapFeatureKind::Item)
+                text += feature.observedItem ? "\nRecorded pickup; this is not a live availability check."
+                    : "\nAuthored source; scripts and the campaign state can change availability.";
             if (feature.kind == WorldMapFeatureKind::Connection)
             {
                 for (const WorldRecord &record : m_world.records())
@@ -1432,8 +1536,18 @@ void AtlasScreen::drawDetails()
         }
         if (!m_locationError.empty())
             text += "\n" + m_locationError;
-        textInRect(canvasRect(34, 407, pDestination != nullptr || creatureId > 0 || pNote != nullptr ? 625 : 778, 43),
+        textInRect(canvasRect(34, 407,
+            pDestination != nullptr || creatureId > 0 || itemId > 0 || pNote != nullptr ? 625 : 778, 43),
                    text, "menu_arrus", 11);
+        if (itemId > 0 && button("atlas-feature-item", canvasRect(669, 416, 145, 28), "Item details"))
+        {
+            m_referenceOpen = true;
+            m_referenceSection = WorldGuideSection::Items;
+            m_referenceSelected = std::to_string(itemId);
+            m_referenceDirty = true;
+            m_search.clear();
+            m_referenceScroll = m_referenceDetailScroll = m_referenceContentHeight = 0;
+        }
         if (pNote != nullptr && button("atlas-edit-note", canvasRect(669, 416, 145, 28), "Edit note"))
         {
             const WorldRecord *pMap = m_world.find(pNote->mapId);

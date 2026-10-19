@@ -8823,6 +8823,7 @@ bool GameApplication::openAtlasScreen(bool paused)
         const auto collectSites = [&knowledge](const std::string &file, const EventRuntimeState &state)
         {
             knowledge.monsterObservations[toLowerCopy(file)] = worldMonsterObservations(state);
+            knowledge.itemObservations[toLowerCopy(file)] = worldObservedItemSources(state);
             knowledge.notes[toLowerCopy(file)] = worldMapNotes(state, file);
             for (const auto &[key, value] : state.namedMapVars)
                 if (value > 0 && key.starts_with("openyamm.discovery.site/"))
