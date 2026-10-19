@@ -60,6 +60,7 @@ struct WorldRecord
 
     std::optional<std::string> npcName;
     bool lastObservedNpc = false;
+    std::vector<uint32_t> npcTopicIds;
     std::string name() const;
     std::string searchText() const;
 };
@@ -131,6 +132,9 @@ public:
     const std::vector<WorldMapFeature> &features() const;
     void indexMapItemSources(const MapStatsEntry &map, std::vector<WorldItemSource> sources, const ItemTable &items);
     void indexObservedItemSources(const WorldKnowledge &knowledge, const ItemTable &items);
+    void indexMapItemRewards(const MapStatsEntry &map, const ScriptedEventProgram &program,
+        const std::vector<WorldInteractionSite> &sites, const ItemTable &items);
+    void indexSharedItemRewards(const ScriptedEventProgram &program, const ItemTable &items);
     std::vector<const WorldItemSource *> itemSources(const WorldKnowledge &knowledge, bool guide) const;
     bool featureVisible(const WorldMapFeature &feature, const WorldKnowledge &knowledge, bool guide) const;
     std::vector<const WorldMapFeature *> queryFeatures(const WorldKnowledge &knowledge, bool guide,

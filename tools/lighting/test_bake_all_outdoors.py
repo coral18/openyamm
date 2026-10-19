@@ -81,9 +81,14 @@ class BatchBakeTests(unittest.TestCase):
 
     def test_dry_run_does_not_launch_blender_or_create_outputs(self):
         with tempfile.TemporaryDirectory() as directory:
-            output = Path(directory) / 'unused'
+            root = Path(directory)
+            source = root / 'assets_dev/worlds/mm7/maps/test.odm'
+            source.parent.mkdir(parents=True)
+            source.touch()
+            output = root / 'unused'
             with patch('sys.argv', ['batch', '--output', str(output), '--world', 'mm7', '--dry-run']), \
-                    patch.object(batch.subprocess, 'run') as run, contextlib.redirect_stdout(io.StringIO()) as log:
+                    patch.object(batch, 'ROOT', root), patch.object(batch.subprocess, 'run') as run, \
+                    contextlib.redirect_stdout(io.StringIO()) as log:
                 self.assertEqual(batch.main(), 0)
             run.assert_not_called()
             self.assertFalse(output.exists())

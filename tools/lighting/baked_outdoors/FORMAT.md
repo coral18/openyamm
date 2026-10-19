@@ -92,3 +92,8 @@ For an installed version-4 bake, use `bake_outdoor.py --sun-direct-only <install
 recipe profile, or `bake_all_outdoors.py --sun-direct-only --install`. Migration preserves the existing page,
 face/vertex and model/sprite probe bytes, validates every installed dependency, and adds producer provenance.
 Atlas placement or dimension mismatches reject migration instead of silently misaligning the new contribution.
+
+Generated item-reward overlays (`<map>_00_item_rewards.lua`) are catalog declarations, not lighting inputs.
+The decoration producer validates their generated header and literal `SetMapItemRewards` rows, then excludes
+them from shadow-card dependencies. Executable code in this reserved format rejects the bake. Ordinary map
+callbacks and gameplay overlays keep their full dependency hashes; catalog updates never rewrite baked hashes.

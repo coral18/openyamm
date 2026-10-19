@@ -82,7 +82,8 @@ bool parseArguments(
     std::optional<std::filesystem::path> &luaExportConfigPath,
     std::optional<std::string> &legacyEventsDir,
     std::optional<LegacyEventVersion> &legacyEventVersion,
-    bool &skipGlobal)
+    bool &skipGlobal,
+    bool &itemRewardsOnly)
 {
     bool hasAssetScaleArgument = false;
 
@@ -185,6 +186,12 @@ bool parseArguments(
 
             config.activeWorldId = argv[argumentIndex + 1];
             ++argumentIndex;
+            continue;
+        }
+
+        if (argument == "--item-rewards-only")
+        {
+            itemRewardsOnly = true;
             continue;
         }
 
@@ -2123,7 +2130,8 @@ bool exportLegacyProgram(
     const std::string &houseDataPath,
     const MapStatsEntry *pMapEntry,
     bool globalScope,
-    LegacyEventVersion version)
+    LegacyEventVersion version,
+    bool itemRewardsOnly)
 {
     std::string resolvedEvtPath;
     const std::optional<std::vector<uint8_t>> evtBytes = readFirstExistingBinary(
@@ -2237,6 +2245,18 @@ bool exportLegacyProgram(
         return false;
     }
 
+    const std::filesystem::path rewardPath = globalScope
+        ? scriptsRoot / "Global_00_item_rewards.lua"
+        : scriptsRoot / "maps" / (outputStem + "_00_item_rewards.lua");
+    const LegacyLuaExportScope scope = globalScope ? LegacyLuaExportScope::Global : LegacyLuaExportScope::Map;
+    if (!writeTextFile(rewardPath,
+            OpenYAMM::Game::generateLegacyEventItemRewardsLuaChunk(evtProgram, strTable, lookups, scope, version)))
+    {
+        std::cerr << "Failed to write item reward metadata for " << legacyBaseName << '\n';
+        return false;
+    }
+    if (itemRewardsOnly) return true;
+
     if (!writeTextFile(luaPath, OpenYAMM::Game::generateLegacyEventLuaChunk(
             evtProgram,
             strTable,
@@ -2262,6 +2282,7 @@ int main(int argc, char **argv)
     std::optional<std::string> legacyEventsDirOverride;
     std::optional<LegacyEventVersion> legacyEventVersionOverride;
     bool skipGlobal = false;
+    bool itemRewardsOnly = false;
 
     if (!parseArguments(
             argc,
@@ -2271,7 +2292,8 @@ int main(int argc, char **argv)
             luaExportConfigPath,
             legacyEventsDirOverride,
             legacyEventVersionOverride,
-            skipGlobal))
+            skipGlobal,
+            itemRewardsOnly))
     {
         return 2;
     }
@@ -2380,7 +2402,8 @@ int main(int argc, char **argv)
                 tablePaths.houseData,
                 nullptr,
                 true,
-                tablePaths.legacyEventVersion))
+                tablePaths.legacyEventVersion,
+                itemRewardsOnly))
     {
         return 1;
     }
@@ -2434,7 +2457,8 @@ int main(int argc, char **argv)
                 tablePaths.houseData,
                 &entry,
                 false,
-                tablePaths.legacyEventVersion))
+                tablePaths.legacyEventVersion,
+                itemRewardsOnly))
         {
             return 1;
         }

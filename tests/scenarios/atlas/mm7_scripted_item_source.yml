@@ -1,0 +1,15 @@
+id: atlas.mm7_scripted_item_source
+world: mm7
+mode: faithful
+title: Picking fruit records an actually delivered scripted reward through save and load
+steps:
+- new_game_flow: {start_map: 7out02.odm}
+- press_interact:
+    pose: {x: -21290, y: 20416, z: 2556, yaw: 0, pitch: -0.1}
+    expect: {kind: event_target, can_activate: true}
+- assert:
+    named_map_var_changed: {name: openyamm.discovery.item/map-reward/150/1432/time, value: 540}
+- save_game: received-fruit
+- load_game: received-fruit
+- assert:
+    named_map_var_changed: {name: openyamm.discovery.item/map-reward/150/1432/time, value: 540}

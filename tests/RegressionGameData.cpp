@@ -1,14 +1,12 @@
 #include "tests/RegressionGameData.h"
+#include "tests/RegressionMapLoader.h"
 
 #include "engine/AssetFileSystem.h"
-#include "engine/AssetScaleTier.h"
 #include "engine/TextTable.h"
 #include "game/arcomage/ArcomageLoader.h"
 #include "game/tables/MapStats.h"
 #include "game/tables/MergedBaseTables.h"
 
-#include <filesystem>
-#include <cstdlib>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -87,17 +85,13 @@ bool loadTextTableRows(
 
 bool loadRegressionGameData(RegressionGameData &data, std::string &failure)
 {
-    Engine::AssetFileSystem assetFileSystem;
-    const std::filesystem::path sourceRoot = OPENYAMM_SOURCE_DIR;
-    const char *pAssetsRoot = std::getenv("OPENYAMM_REGRESSION_ASSETS_ROOT");
-    const std::filesystem::path assetsRoot = pAssetsRoot != nullptr && *pAssetsRoot != '\0'
-        ? std::filesystem::path(pAssetsRoot) : sourceRoot / "assets_dev";
-
-    if (!assetFileSystem.initialize(sourceRoot, assetsRoot, Engine::AssetScaleTier::X1))
+    // PhysicsFS has one process-wide owner. The map and table fixtures must share its mounted package view.
+    if (!regressionMapLoaderLoaded())
     {
-        failure = "could not initialize asset file system for regression test tables";
+        failure = regressionMapLoaderFailure();
         return false;
     }
+    const Engine::AssetFileSystem &assetFileSystem = regressionMapLoader().assetFileSystem;
 
     const std::optional<std::string> supportScriptText =
         assetFileSystem.readTextFile("Data/scripts/common/event_support.lua");

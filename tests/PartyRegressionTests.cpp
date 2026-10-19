@@ -5,6 +5,8 @@
 #include "game/gameplay/JournalQuestRuntime.h"
 #include "game/items/ItemRuntime.h"
 #include "game/maps/SaveGame.h"
+#include "game/world/WorldItemSources.h"
+#include "game/world/WorldMapKnowledge.h"
 #include "game/party/Party.h"
 #include "game/party/SpellIds.h"
 #include "game/tables/CharacterDollTable.h"
@@ -160,6 +162,55 @@ TEST_CASE("event granted inventory items queue loot sound")
     party.applyEventRuntimeState(runtimeState, true);
 
     CHECK(hasPendingSound(party, OpenYAMM::Game::SoundId::Gold));
+}
+
+TEST_CASE("scripted item discoveries require successful delivery and pending origins survive save load")
+{
+    using namespace OpenYAMM::Game;
+    Party party = makeInventoryParty();
+    for (size_t i = 0; i < party.members().size(); ++i) fillInventory(*party.member(i), 43);
+    EventRuntimeState state;
+    state.mapFileName = "7out02.odm";
+    state.grantedItems.push_back(makeInventoryItem(42, 1, 1));
+    state.grantedItemIds.push_back(44);
+    stageWorldItemReward(state, true, 0, 100, false, 123);
+    stageWorldItemReward(state, false, 0, 101, true, 124);
+    CHECK(worldObservedItemSources(state).empty());
+    party.applyEventRuntimeState(state, true); // Full inventory: neither queued offer is a received reward.
+    CHECK(worldObservedItemSources(state).empty());
+    GameSaveData save;
+    save.mapFileName = state.mapFileName;
+    save.party = party.snapshot();
+    save.outdoorWorld.eventRuntimeState = state;
+    const auto path = std::filesystem::temp_directory_path() / "openyamm_pending_item_reward.oysav";
+    std::string error;
+    REQUIRE_MESSAGE(saveGameDataToPath(path, save, error), error);
+    auto loaded = loadGameDataFromPath(path, error);
+    std::filesystem::remove(path);
+    REQUIRE_MESSAGE(loaded.has_value(), error);
+    REQUIRE(loaded->outdoorWorld.eventRuntimeState.has_value());
+    state = *loaded->outdoorWorld.eventRuntimeState;
+    for (size_t i = 0; i < party.members().size(); ++i) party.member(i)->inventory.clear();
+    party.applyEventRuntimeState(state, false); // Synchronizing state is not delivery either.
+    CHECK(worldObservedItemSources(state).empty());
+    party.applyEventRuntimeState(state, true);
+    const auto rewards = worldObservedItemSources(state);
+    REQUIRE(rewards.size() == 2);
+    CHECK(rewards[0].itemId == 42);
+    CHECK(rewards[0].kind == WorldItemSourceKind::MapReward);
+    CHECK(rewards[0].sourceIndex == 100);
+    CHECK(rewards[0].gameMinutes == 123);
+    CHECK_FALSE(rewards[0].position);
+    CHECK(rewards[1].itemId == 44);
+    CHECK(rewards[1].kind == WorldItemSourceKind::SharedReward);
+    CHECK(rewards[1].gameMinutes == 124);
+    EventRuntimeState refilled;
+    restoreWorldMapKnowledgeAfterRefill(state, refilled);
+    CHECK(worldObservedItemSources(refilled).size() == 2);
+    // Old saves without queued provenance never acquire a guessed giver or reward event.
+    state.namedMapVars.clear();
+    party.applyEventRuntimeState(state, true);
+    CHECK(worldObservedItemSources(state).empty());
 }
 
 TEST_CASE("party keeps global hired followers when applying a map-local event runtime state")

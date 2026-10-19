@@ -522,14 +522,19 @@ void AtlasScreen::indexMapData(MapAssetInfo &map)
     {
         m_world.indexMapLocations(*map.outdoorMapData, *map.localEventProgram);
         m_world.indexMapMonsters(map.map, *map.outdoorMapData, m_data.monsterTable(), observations);
+        m_world.indexMapItemRewards(map.map, *map.localEventProgram,
+            worldInteractionSites(*map.outdoorMapData), m_data.itemTable());
     }
     else if (map.indoorMapData)
     {
         m_world.indexMapLocations(map.map, *map.indoorMapData, *map.localEventProgram);
         m_world.indexMapMonsters(map.map, *map.indoorMapData, m_data.monsterTable(), observations);
+        m_world.indexMapItemRewards(map.map, *map.localEventProgram,
+            worldInteractionSites(*map.indoorMapData), m_data.itemTable());
     }
     else
         throw std::runtime_error("Missing map geometry");
+    if (map.globalEventProgram) m_world.indexSharedItemRewards(*map.globalEventProgram, m_data.itemTable());
 }
 
 void AtlasScreen::indexKnownRegions()
@@ -1468,9 +1473,9 @@ void AtlasScreen::drawReference()
     textInRect(canvasRect(34, 407, 778, 43), m_itemSourceScanActive
         ? "Reading authored item sources, one map per frame. Random loot is never generated."
         : !m_locationError.empty() ? m_locationError : m_referenceSection == WorldGuideSection::Items
-        ? (m_guide ? "Sources cover authored placements, fixed chest entries and carried items. "
-            "They do not predict random loot or remaining contents."
-            : "Recorded sources come from actual pickups and visible chest contents. "
+        ? (m_guide ? "Sources include fixed loot and conditional scripted rewards. "
+            "They do not guarantee quest eligibility, random loot or remaining contents."
+            : "Recorded sources come from pickups, received rewards and visible chest contents. "
               "A past observation does not guarantee an item is still there.") : m_guide
         ? "Reference definitions follow the loaded game tables, including enabled mods."
         : "Discovery shows encountered items, known spell references, current classes, known recipes, "

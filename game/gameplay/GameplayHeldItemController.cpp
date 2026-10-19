@@ -1,4 +1,5 @@
 #include "game/gameplay/GameplayHeldItemController.h"
+#include "game/world/WorldItemSources.h"
 
 #include "game/audio/SoundIds.h"
 #include "game/events/EventRuntime.h"
@@ -190,13 +191,13 @@ void GameplayHeldItemController::applyGrantedEventItemsToHeldInventory(
                     + std::to_string(grantedItem.objectDescriptionId)
                     + gameplayDebugTraceItemSummary(grantedItem.objectDescriptionId, &itemTable)
                     + " member_index=" + std::to_string(recipientMemberIndex));
-                return;
+                return true;
             }
 #endif
 
             if (!GameplayHeldItemController::tryDisplaceHeldInventoryItem(runtime))
             {
-                return;
+                return false;
             }
 
             GameplayHeldItemController::setHeldInventoryItem(heldInventoryItem, grantedItem);
@@ -206,31 +207,35 @@ void GameplayHeldItemController::applyGrantedEventItemsToHeldInventory(
                 "item_received destination=held source=event item_id="
                 + std::to_string(grantedItem.objectDescriptionId)
                 + gameplayDebugTraceItemSummary(grantedItem.objectDescriptionId, &itemTable));
+            return true;
         };
 
-    for (const InventoryItem &item : eventRuntimeState.grantedItems)
+    for (size_t i = 0; i < eventRuntimeState.grantedItems.size(); ++i)
     {
+        const InventoryItem &item = eventRuntimeState.grantedItems[i];
         if (item.objectDescriptionId == 0)
         {
             continue;
         }
 
-        receiveGrantedItem(item);
+        if (receiveGrantedItem(item)) confirmWorldItemReward(eventRuntimeState, true, i);
     }
 
-    for (uint32_t itemId : eventRuntimeState.grantedItemIds)
+    for (size_t i = 0; i < eventRuntimeState.grantedItemIds.size(); ++i)
     {
+        const uint32_t itemId = eventRuntimeState.grantedItemIds[i];
         if (itemId == 0)
         {
             continue;
         }
 
         InventoryItem item = ItemGenerator::makeInventoryItem(itemId, itemTable, ItemGenerationMode::Generic);
-        receiveGrantedItem(std::move(item));
+        if (receiveGrantedItem(std::move(item))) confirmWorldItemReward(eventRuntimeState, false, i);
     }
 
     eventRuntimeState.grantedItems.clear();
     eventRuntimeState.grantedItemIds.clear();
+    clearWorldItemRewardQueue(eventRuntimeState);
 }
 
 bool GameplayHeldItemController::tryAutoPlaceHeldInventoryItemOnPartyMember(

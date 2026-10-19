@@ -532,6 +532,72 @@ std::vector<ScriptedEventProgram::TimerTrigger> readTimerTriggers(
 
 }
 
+namespace
+{
+bool readItemRewards(lua_State *pLuaState, int metadataIndex, ScriptedEventScope scope,
+    std::unordered_map<uint16_t, std::vector<uint32_t>> &result, std::string &error)
+{
+    const int stackTop = lua_gettop(pLuaState);
+    const auto fail = [&]()
+    {
+        error = "Invalid itemRewards metadata: expected registered handlers and arrays of positive uint32 item IDs";
+        lua_settop(pLuaState, stackTop);
+        return false;
+    };
+    lua_getfield(pLuaState, metadataIndex, "itemRewards");
+    if (lua_isnil(pLuaState, -1))
+    {
+        lua_pop(pLuaState, 1);
+        return true;
+    }
+    if (!lua_istable(pLuaState, -1)) return fail();
+    lua_pushnil(pLuaState);
+    while (lua_next(pLuaState, -2) != 0)
+    {
+        if (!lua_isinteger(pLuaState, -2) || lua_tointeger(pLuaState, -2) <= 0
+            || lua_tointeger(pLuaState, -2) > UINT16_MAX || !lua_istable(pLuaState, -1)) return fail();
+        const uint16_t eventId = uint16_t(lua_tointeger(pLuaState, -2));
+        lua_getfield(pLuaState, -1, "handler");
+        if (!lua_isfunction(pLuaState, -1)) return fail();
+        lua_getglobal(pLuaState, "evt");
+        lua_getfield(pLuaState, -1, luaScopeName(scope));
+        if (!lua_istable(pLuaState, -1)) return fail();
+        lua_rawgeti(pLuaState, -1, eventId);
+        const bool ownsHandler = lua_rawequal(pLuaState, -1, -4);
+        lua_pop(pLuaState, 4);
+        if (!ownsHandler)
+        {
+            // The callback was replaced or removed. Only explicitly redeclared metadata can describe it.
+            lua_pop(pLuaState, 1);
+            continue;
+        }
+        lua_getfield(pLuaState, -1, "items");
+        if (!lua_istable(pLuaState, -1)) return fail();
+        const size_t count = lua_rawlen(pLuaState, -1);
+        size_t entries = 0;
+        std::vector<uint32_t> items;
+        lua_pushnil(pLuaState);
+        while (lua_next(pLuaState, -2) != 0)
+        {
+            if (!lua_isinteger(pLuaState, -2) || lua_tointeger(pLuaState, -2) <= 0
+                || uint64_t(lua_tointeger(pLuaState, -2)) > count || !lua_isinteger(pLuaState, -1)
+                || lua_tointeger(pLuaState, -1) <= 0 || uint64_t(lua_tointeger(pLuaState, -1)) > UINT32_MAX)
+                return fail();
+            ++entries;
+            items.push_back(uint32_t(lua_tointeger(pLuaState, -1)));
+            lua_pop(pLuaState, 1);
+        }
+        if (entries != count) return fail();
+        std::sort(items.begin(), items.end());
+        items.erase(std::unique(items.begin(), items.end()), items.end());
+        if (!items.empty()) result.emplace(eventId, std::move(items));
+        lua_pop(pLuaState, 2);
+    }
+    lua_settop(pLuaState, stackTop);
+    return true;
+}
+}
+
 bool ScriptedEventProgram::populateMetadataFromLua(
     lua_State *pLuaState,
     ScriptedEventScope scope,
@@ -570,11 +636,17 @@ bool ScriptedEventProgram::populateMetadataFromLua(
     program.m_textureNames = readStringArrayFromField(pLuaState, -1, "textureNames");
     program.m_spriteNames = readStringArrayFromField(pLuaState, -1, "spriteNames");
     program.m_castSpellIds = readIntegerArrayFromField<uint32_t>(pLuaState, -1, "castSpellIds");
+    if (!readItemRewards(pLuaState, lua_absindex(pLuaState, -1), scope, program.m_itemRewards, error)) return false;
     program.m_levitateTrapFaceMask = readOptionalUnsignedField(pLuaState, -1, "levitateTrapFaceMask").value_or(0);
     program.m_levitateTrapEvents = readIntegerArrayFromField<uint16_t>(pLuaState, -1, "levitateTrapEvents", true);
     program.m_timerTriggers = readTimerTriggers(pLuaState, -1, scope);
     lua_pop(pLuaState, 3);
     return true;
+}
+
+const std::unordered_map<uint16_t, std::vector<uint32_t>> &ScriptedEventProgram::itemRewards() const
+{
+    return m_itemRewards;
 }
 
 std::optional<ScriptedEventProgram> ScriptedEventProgram::loadFromLuaText(

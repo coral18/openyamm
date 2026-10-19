@@ -1,0 +1,10 @@
+-- generated reward metadata from legacy EVT/STR; load after the base handlers
+SetMapItemRewards(50, {1506})
+SetMapItemRewards(150, {1432})
+SetMapItemRewards(151, {1432})
+SetMapItemRewards(152, {1432})
+SetMapItemRewards(153, {1432})
+SetMapItemRewards(154, {1432})
+SetMapItemRewards(155, {1432})
+SetMapItemRewards(156, {1432})
+SetMapItemRewards(157, {1432})

@@ -80,6 +80,16 @@ def intersect_states(states):
     return result, width, height
 
 
+def validate_reward_metadata(text, script):
+    lines = text.splitlines()
+    header = '-- generated reward metadata from legacy EVT/STR; load after the base handlers'
+    declaration = re.compile(r'SetMapItemRewards\([1-9][0-9]*, \{[1-9][0-9]*(?:, [1-9][0-9]*)*\}\)')
+    if not lines or lines[0] != header or any(
+            line.strip() and not line.lstrip().startswith('--') and not declaration.fullmatch(line.strip())
+            for line in lines[1:]):
+        raise ValueError('Invalid generated reward metadata overlay: ' + str(script))
+
+
 def export_cards(profile, output):
     assets = ROOT / 'assets_dev'
     world = assets / 'worlds' / profile['world']
@@ -115,7 +125,13 @@ def export_cards(profile, output):
             continue
         # Lua strings/comments retain legacy STR bytes and need not be UTF-8. Latin-1
         # maps bytes losslessly for this ASCII syntax scanner; it does not transcode assets.
-        text = use(script).read_bytes().decode('latin-1')
+        text = script.read_bytes().decode('latin-1')
+        if script.name == source.stem + '_00_item_rewards.lua':
+            # This reserved generated format only declares item rewards and cannot change any shadow caster.
+            # Keep gameplay callback/overlay dependencies, while reward catalog updates remain independent.
+            validate_reward_metadata(text, script)
+            continue
+        use(script)
         for index, states in sprite_states(text, script).items():
             if index not in override_keys:
                 raise ValueError('SetSprite target has no matching map entity event key: ' + str(index))

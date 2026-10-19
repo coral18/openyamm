@@ -83,6 +83,28 @@ class DecorationBakeTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'Unresolved decoration or sprite state: missing_tree'):
             self.export()
 
+    def test_generated_reward_metadata_does_not_change_shadow_cards_or_dependencies(self):
+        baseline = self.export()
+        metadata = self.world / 'events/maps/test_00_item_rewards.lua'
+        header = '-- generated reward metadata from legacy EVT/STR; load after the base handlers\n'
+        for declarations in ('', 'SetMapItemRewards(1, {42, 43})\n', 'SetMapItemRewards(2, {44})\n'):
+            with self.subTest(declarations=declarations):
+                metadata.write_text(header + declarations)
+                result = self.export()
+                for field in ('cards', 'counts', 'dependencies'):
+                    self.assertEqual(result[field], baseline[field])
+
+    def test_reserved_reward_metadata_cannot_hide_executable_visual_changes(self):
+        metadata = self.world / 'events/maps/test_00_item_rewards.lua'
+        header = '-- generated reward metadata from legacy EVT/STR; load after the base handlers\n'
+        for content in ('evt.SetSprite(7, 0, "0")\n',
+                        header + 'RegisterEvent(1, nil, function() evt.SetSprite(7, 0) end)\n',
+                        header + 'SetMapItemRewards(1, {42}); evt.SetSprite(7, 0)\n'):
+            with self.subTest(content=content):
+                metadata.write_text(content)
+                with self.assertRaisesRegex(ValueError, 'Invalid generated reward metadata overlay'):
+                    self.export()
+
 
 if __name__ == '__main__':
     unittest.main()

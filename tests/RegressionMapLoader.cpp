@@ -3,6 +3,7 @@
 #include "engine/AssetScaleTier.h"
 
 #include <filesystem>
+#include <cstdlib>
 #include <string>
 
 namespace OpenYAMM::Tests
@@ -19,7 +20,9 @@ struct RegressionMapLoaderState
 bool loadRegressionMapLoader(RegressionMapLoader &loader, std::string &failure)
 {
     const std::filesystem::path sourceRoot = OPENYAMM_SOURCE_DIR;
-    const std::filesystem::path assetsRoot = sourceRoot / "assets_dev";
+    const char *pAssetsRoot = std::getenv("OPENYAMM_REGRESSION_ASSETS_ROOT");
+    const std::filesystem::path assetsRoot = pAssetsRoot != nullptr && *pAssetsRoot != '\0'
+        ? std::filesystem::path(pAssetsRoot) : sourceRoot / "assets_dev";
 
     if (!loader.assetFileSystem.initialize(sourceRoot, assetsRoot, Engine::AssetScaleTier::X1))
     {

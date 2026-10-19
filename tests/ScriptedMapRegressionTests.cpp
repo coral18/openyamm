@@ -13,6 +13,7 @@
 #include "game/outdoor/OutdoorPartyRuntime.h"
 #include "game/outdoor/OutdoorWorldRuntime.h"
 #include "game/party/Party.h"
+#include "game/world/WorldItemSources.h"
 
 #include "tests/RegressionGameData.h"
 #include "tests/RegressionMapLoader.h"
@@ -937,7 +938,7 @@ const OpenYAMM::Tests::RegressionMapLoader &requireRegressionMapLoader()
 {
     REQUIRE_MESSAGE(
         OpenYAMM::Tests::regressionMapLoaderLoaded(),
-        OpenYAMM::Tests::regressionMapLoaderFailure().c_str());
+        OpenYAMM::Tests::regressionMapLoaderFailure());
     return OpenYAMM::Tests::regressionMapLoader();
 }
 
@@ -4140,7 +4141,7 @@ TEST_CASE("mm7 castle lambent and gloaming mmmerge faction gates")
 {
     REQUIRE_MESSAGE(
         OpenYAMM::Tests::regressionGameDataLoaded(),
-        OpenYAMM::Tests::regressionGameDataFailure().c_str());
+        OpenYAMM::Tests::regressionGameDataFailure());
 
     std::string error;
     const std::optional<OpenYAMM::Game::ScriptedEventProgram> lambentProgram =
@@ -4245,7 +4246,7 @@ TEST_CASE("mm7 deyja tatalia and evenmorn mmmerge overlays apply local behavior"
 {
     REQUIRE_MESSAGE(
         OpenYAMM::Tests::regressionGameDataLoaded(),
-        OpenYAMM::Tests::regressionGameDataFailure().c_str());
+        OpenYAMM::Tests::regressionGameDataFailure());
 
     const uint32_t hostileBit = static_cast<uint32_t>(OpenYAMM::Game::EvtActorAttribute::Hostile);
 
@@ -4339,7 +4340,7 @@ TEST_CASE("mm7 tularean forest mmmerge artifact and clanker overlays apply")
 {
     REQUIRE_MESSAGE(
         OpenYAMM::Tests::regressionGameDataLoaded(),
-        OpenYAMM::Tests::regressionGameDataFailure().c_str());
+        OpenYAMM::Tests::regressionGameDataFailure());
 
     std::string error;
     const std::optional<OpenYAMM::Game::ScriptedEventProgram> localEventProgram =
@@ -4454,7 +4455,7 @@ TEST_CASE("mm7 harmondale erathia shoals and strange temple mmmerge overlays app
 {
     REQUIRE_MESSAGE(
         OpenYAMM::Tests::regressionGameDataLoaded(),
-        OpenYAMM::Tests::regressionGameDataFailure().c_str());
+        OpenYAMM::Tests::regressionGameDataFailure());
 
     {
         std::string error;
@@ -5735,7 +5736,7 @@ TEST_CASE("mm7 phase1 mmmerge map overlays apply runtime state changes")
         CHECK_EQ(runtimeState.pendingDialogueContext->sourceId, 400u);
         REQUIRE_MESSAGE(
             OpenYAMM::Tests::regressionGameDataLoaded(),
-            OpenYAMM::Tests::regressionGameDataFailure().c_str());
+            OpenYAMM::Tests::regressionGameDataFailure());
         const OpenYAMM::Tests::RegressionGameData &gameData = OpenYAMM::Tests::regressionGameData();
         const OpenYAMM::Game::NpcEntry *pJaycen = gameData.npcDialogTable.getNpc(400);
         REQUIRE(pJaycen != nullptr);
@@ -6210,7 +6211,7 @@ TEST_CASE("mm6 loretta stable overlays preserve stable entry")
 {
     REQUIRE_MESSAGE(
         OpenYAMM::Tests::regressionGameDataLoaded(),
-        OpenYAMM::Tests::regressionGameDataFailure().c_str());
+        OpenYAMM::Tests::regressionGameDataFailure());
 
     struct Case
     {
@@ -9455,4 +9456,99 @@ TEST_CASE("outdoor_party_runtime_wait_advances_buff_durations_with_game_clock")
         partyRuntime.party().partyBuff(OpenYAMM::Game::PartyBuffId::FireResistance);
     REQUIRE(pUpdatedBuff != nullptr);
     CHECK(pUpdatedBuff->remainingSeconds == doctest::Approx(35940.0f));
+}
+
+TEST_CASE("scripted reward origins follow executed branches and wait for actual item delivery")
+{
+    using namespace OpenYAMM::Game;
+    const auto support = readSourceTextFile(std::filesystem::path(OPENYAMM_SOURCE_DIR)
+        / "assets_dev/engine/scripts/common/event_support.lua");
+    REQUIRE(support.has_value());
+    std::string error;
+    const auto program = ScriptedEventProgram::loadFromLuaText(*support + R"lua(
+RegisterEvent(10, "Conditional reward", function()
+    if IsQBitSet(QBit(100)) then evt.GiveItem(42) end
+end)
+RegisterEvent(11, "ID reward", function() AddValue(InventoryItem(43), 43) end)
+RegisterEvent(12, "Held reward", function() evt.SetHeldItem(44) end)
+RegisterEvent(13, "Direct reward", function() evt.GivePartyMemberItem(0, 45) end)
+RegisterEvent(14, "Nested global", function() evt.global[15]() end)
+RegisterGlobalEvent(15, "Shared reward", function() evt.GiveItem(46) end)
+)lua", "item-reward-runtime", ScriptedEventScope::Map, error);
+    REQUIRE_MESSAGE(program.has_value(), error);
+    Party party = makeScriptedRegressionParty();
+    for (size_t i = 0; i < party.members().size(); ++i) party.member(i)->inventory.clear();
+    EventRuntimeState state;
+    RecordingSceneEventContext scene;
+    scene.setCurrentGameMinutes(1234);
+    EventRuntime runtime;
+    REQUIRE(runtime.executeEventById(program, std::nullopt, 10, state, &party, &scene));
+    CHECK(state.grantedItems.empty());
+    CHECK(worldObservedItemSources(state).empty());
+    party.setQuestBit(100, true);
+    REQUIRE(runtime.executeEventById(program, std::nullopt, 10, state, &party, &scene));
+    REQUIRE(state.grantedItems.size() == 1);
+    CHECK(worldObservedItemSources(state).empty());
+    party.applyEventRuntimeState(state, true);
+    REQUIRE(worldObservedItemSources(state).size() == 1);
+    CHECK(worldObservedItemSources(state).front().sourceIndex == 10);
+    REQUIRE(runtime.executeEventById(program, std::nullopt, 11, state, &party, &scene));
+    REQUIRE(state.grantedItemIds.size() == 1);
+    CHECK(worldObservedItemSources(state).size() == 1);
+    party.applyEventRuntimeState(state, true);
+    CHECK(worldObservedItemSources(state).size() == 2);
+    REQUIRE(runtime.executeEventById(program, std::nullopt, 12, state, &party, &scene));
+    party.applyEventRuntimeState(state, true);
+    CHECK(worldObservedItemSources(state).size() == 3);
+    REQUIRE(runtime.executeEventById(program, std::nullopt, 13, state, &party, &scene));
+    // Direct inventory APIs record immediately after successful receipt, without a queued offer.
+    CHECK(worldObservedItemSources(state).size() == 4);
+    REQUIRE(runtime.executeEventById(program, std::nullopt, 14, state, &party, &scene));
+    REQUIRE(state.grantedItems.size() == 1);
+    party.applyEventRuntimeState(state, true);
+    const auto rewards = worldObservedItemSources(state);
+    REQUIRE(rewards.size() == 5);
+    const auto shared = std::find_if(rewards.begin(), rewards.end(), [](const WorldItemSource &source)
+    { return source.kind == WorldItemSourceKind::SharedReward; });
+    REQUIRE(shared != rewards.end());
+    CHECK(shared->sourceIndex == 15);
+    CHECK(shared->itemId == 46);
+    CHECK(shared->gameMinutes == 1234);
+    CHECK_FALSE(shared->position);
+}
+
+TEST_CASE("scripted reward origins return to the caller after nested callbacks and caught Lua errors")
+{
+    using namespace OpenYAMM::Game;
+    const auto support = readSourceTextFile(std::filesystem::path(OPENYAMM_SOURCE_DIR)
+        / "assets_dev/engine/scripts/common/event_support.lua");
+    REQUIRE(support.has_value());
+    std::string error;
+    const auto program = ScriptedEventProgram::loadFromLuaText(*support + R"lua(
+RegisterEvent(14, "Outer reward", function()
+    evt.global[15]()
+    assert(evt.GivePartyMemberItem(0, 47))
+    local ok = pcall(evt.global[16])
+    assert(not ok)
+    assert(evt.GivePartyMemberItem(0, 48))
+end)
+RegisterGlobalEvent(15, "Nested reward", function() assert(evt.GivePartyMemberItem(0, 46)) end)
+RegisterGlobalEvent(16, "Nested failure", function() error("intentional nested failure") end)
+)lua", "nested-item-reward-runtime", ScriptedEventScope::Map, error);
+    REQUIRE_MESSAGE(program.has_value(), error);
+    Party party = makeScriptedRegressionParty();
+    for (size_t i = 0; i < party.members().size(); ++i) party.member(i)->inventory.clear();
+    EventRuntimeState state;
+    RecordingSceneEventContext scene;
+    scene.setCurrentGameMinutes(1234);
+    EventRuntime runtime;
+    REQUIRE(runtime.executeEventById(program, std::nullopt, 14, state, &party, &scene));
+    const auto rewards = worldObservedItemSources(state);
+    REQUIRE(rewards.size() == 3);
+    for (const auto &source : rewards)
+    {
+        CHECK(source.sourceIndex == (source.itemId == 46 ? 15 : 14));
+        CHECK(source.kind == (source.itemId == 46
+            ? WorldItemSourceKind::SharedReward : WorldItemSourceKind::MapReward));
+    }
 }

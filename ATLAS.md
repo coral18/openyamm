@@ -823,3 +823,92 @@ Native AMD/OpenGL captures and disposable campaign copies are retained under `at
 Windows development directory. They cover the source map with retained fog, return to the item, complete source
 scans for the viewed MM7/MM8 map registries, the last rows of long source lists, known-ID mode switching, observed
 chest-item references and resumed gameplay. Android/controller checks and complete Atlas coverage remain pending.
+
+### Scripted reward sources and confirmed receipts, 2026-10-19
+
+Guide now indexes declared possible fixed rewards from the actual loaded local and shared Lua programs.
+Map callbacks link to their physical interaction sites where available, otherwise to their map. Shared callbacks
+link to NPCs whose current resolved topic slots actually reference them. Current relocation, availability and
+sparse topic overrides remain authoritative. Conditional possibilities do not assert quest eligibility or a
+remaining reward. Replacing or removing a callback invalidates its previous declaration by callback identity;
+appended/replacement callbacks must explicitly declare their own complete reward possibilities.
+
+The exporter emits 320 declarations: 125 in MM7 map programs, 20 in MM8, 95 in MM6, and 80 in the shared global
+program. These are declarations before runtime overlays, not 320 guaranteed active rewards. It follows reachable
+fixed Add/Set/GiveItem operations and separates synthetic timer/on-load continuations from direct interaction
+handlers. Random rolls are not generated or advertised as fixed rewards. Handwritten overlays without declarations,
+actor drops, general semantic source policies and conditional availability remain coverage work.
+
+Confirmed receipt tracking is independent of these declarations. Lua inventory additions, fixed/random GiveItem,
+SetHeldItem and direct GivePartyMemberItem carry the executing event's identity. Queued requests save temporary
+origin records under `openyamm.item-grant/`; they become `openyamm.discovery.item/map-reward/` or `shared-reward/`
+facts only after successful inventory or held-item delivery. A full inventory, an unexecuted branch or merely
+viewing the Guide grants no discovery. Direct successful inventory grants record immediately. The source is the
+map/event; historical knowledge never guesses which topic-sharing NPC delivered an item. Old queues without
+provenance receive no fabricated origin. Existing save serialization retains pending origins and received facts;
+refill retains only discoveries. Tracking also works with the Atlas UI module disabled.
+
+Regeneration uses `tools/regenerate_lua_events.sh`, with an optional existing native `OPENYAMM_BUILD_DIR`.
+Its reference-directory checks and explicit MM8 configuration prevent silently dropping required decompiled
+object-type resolutions. The exporter now produces separate `_00_item_rewards.lua` overlays, ordered after the
+base callbacks and before gameplay supplements. `--item-rewards-only` refreshes these declarations without
+rewriting any callback, string table annotation or lighting dependency. Full regeneration still exports both
+callbacks and their reward metadata. Empty generated overlays replace obsolete generated declarations.
+
+The packaged bakes hash their source callback files. Initial inline annotations correctly triggered that
+validation; the final separate-overlay design preserves the original callback bytes and all existing baked
+lighting checks. No bake hash was rewritten, no lighting check was disabled, and no generated callback was
+hand-edited. Unrelated STR labels and entrance-card differences found during full regeneration were left out
+of this reward-only installation. They require their own content regeneration and validation.
+
+Native validation exposed an existing package-precedence bug: mounting the active world ahead of `assets.zip`
+hid updated world scripts, even at canonical paths. The package mount now preserves the explicit overlay above
+all world ZIPs; active-world selection still follows namespace expansion. A regression test fails on the old
+mount order across MM6 -> MM7 -> MM6 and verifies both active and inactive namespaces. The Windows development
+overlay now includes current event programs and their common Lua support, without rewriting multi-GB world ZIPs.
+
+The lighting producer validates the reserved generated reward-only format and excludes it from future shadow
+bake inputs. Its tests prove that reward changes leave shadow cards/dependencies identical and reject executable
+visual changes hidden in the reserved filename. Ordinary gameplay scripts retain their complete dependency hashes.
+Callback origin guards restore the outer reward source after nested map/global calls, including caught Lua errors.
+The loader explicitly prioritizes base reward declarations before every gameplay overlay; `.fixup.lua` and numeric
+prefixes cannot attach stale base rewards to replacement callbacks. A real filesystem/loader test covers removal
+and explicit redeclaration for both map and global scopes.
+
+
+Checkpoint validation used the native Windows Release build: 193 focused cases / 6,876 assertions passed across
+reward export/metadata, World Database/Guide, party/save state, filesystem mounts, content manifests and Mod Loader.
+Linux ASan/UBSan coverage passed 66 cases / 4,263 assertions; the isolated filesystem suite passed 31 / 265.
+All 18 lighting-tool unit tests passed without executing a bake. Invalid scope registries are rejected without a
+Lua panic, and pending origins retain the full uint32 item-ID range.
+
+The broader scripted-map suite is not fully green: 88 of 95 cases passed, with seven failures / 134 failed
+assertions concerning Breach content, dimensional-travel geometry, sprite/palette fixtures, absent MM9 payload
+and a legacy-only d06 companion. Repeating those seven cases with original common Lua support and no generated
+reward overlays reproduced the same seven failures / 134 assertions. This is a data-baseline control using the
+current binary, not an old-C++ baseline, and does not establish that every existing failure predates this work.
+The regression table/map fixtures now share the process-wide PhysicsFS owner and honor the supplied runtime root.
+
+Reward-only regeneration reproduced all 205 metadata overlays exactly after LF normalization and left all 278
+existing callback/supplement files byte-for-byte unchanged. The native Release target rebuilt successfully, and
+both callback-origin runtime tests passed (2 cases / 36 assertions). Faithful MM7 fruit-picking and MM8 Dadeross
+letter scenarios passed their delivery and save/load assertions on that executable. The isolated Atlas-disabled
+MM7 repeat and MM6 quest-knowledge regression also passed during this checkpoint.
+
+Native AMD/OpenGL tours under `atlas-rewards-20261019/` in the Windows development directory cover both games:
+confirmed reward in Discovery, possible sources in Guide, native source-map navigation, return to the item and
+Discovery after Guide inspection. The runs require all five captures to be newly written. Source inspection
+neither records new reward history nor grants discovery. Android/controller testing and the remaining coverage
+matrix are still open; this checkpoint is not completion of either whole Atlas.
+
+A final native scan found one separate development-payload mismatch: the installed Ravenshore bake still hashed
+an older `out02_mmmerge.lua`, while the source supplement already added dimensional travel. The matching upstream
+`out02.lighting` and `out02.bake.json` from the current checkout are now included in the development overlay.
+The native geometry hash and all 256 baked dependencies match that source set. These are existing tracked upstream
+assets, not newly generated or modified binaries; no bake hashes or validation rules were changed. Sparse Windows
+development checkouts must hydrate these two files before running the build helper.
+
+After synchronizing the Ravenshore bake/recipe, the final MM7 and MM8 native tours both completed their fresh
+captures with no map-marker indexing failures, no item-source scan failures and no stale-lighting rejection.
+MM8 now reports `Sources ready`. Repeating the broader scripted-map suite with this matching payload still
+reports 88/95 passing and the same seven cases / 134 failed assertions listed above.

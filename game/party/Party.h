@@ -376,7 +376,7 @@ public:
     void reset();
     void seed(const PartySeed &seed);
     void applyMovementEffects(const OutdoorMovementEffects &effects);
-    void applyEventRuntimeState(const EventRuntimeState &runtimeState, bool grantItemsToInventory = true);
+    void applyEventRuntimeState(EventRuntimeState &runtimeState, bool grantItemsToInventory = true);
     void setDebugDamageImmune(bool enabled);
     void setDebugUnlimitedMana(bool enabled);
     bool applyDamageToMember(

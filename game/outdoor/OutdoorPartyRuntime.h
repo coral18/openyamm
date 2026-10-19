@@ -33,7 +33,7 @@ public:
     void setFaceAttributes(size_t bModelIndex, size_t faceIndex, uint32_t attributes);
     void updateFaceGeometries(const std::vector<OutdoorFaceGeometryData> &geometries);
     bool translateWithSupportedBModel(size_t bModelIndex, float deltaX, float deltaY, float deltaZ);
-    void applyEventRuntimeState(const EventRuntimeState &runtimeState, bool grantItemsToInventory = true);
+    void applyEventRuntimeState(EventRuntimeState &runtimeState, bool grantItemsToInventory = true);
 
     const OutdoorMoveState &movementState() const;
     const OutdoorMovementEvents &movementEvents() const;

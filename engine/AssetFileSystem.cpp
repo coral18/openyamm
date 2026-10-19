@@ -897,15 +897,15 @@ bool AssetFileSystem::mountPackagedAssetRoot(
         assetRoot / WorldsDevelopmentRootName / (normalizedWorldId + ".zip");
 
     if (std::filesystem::exists(activeWorldArchive)
-        && !mountSearchRootAt(activeWorldArchive, "/worlds/" + normalizedWorldId, false))
+        && !mountSearchRootAt(activeWorldArchive, "/worlds/" + normalizedWorldId, true))
     {
         return false;
     }
 
     const std::vector<std::filesystem::path> worldArchives = collectExistingWorldPackageArchives(assetRoot);
 
-    // PhysicsFS mounts a physical archive only once. Mount each world at its canonical namespace;
-    // unqualified legacy requests expand through these mounts in the same precedence order.
+    // PhysicsFS mounts a physical archive only once. Keep the canonical assets.zip overlay above every world;
+    // unqualified legacy requests choose the active world's namespace through path expansion below.
     for (const std::filesystem::path &worldArchive : worldArchives)
     {
         if (worldArchive == activeWorldArchive)

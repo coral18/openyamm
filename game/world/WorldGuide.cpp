@@ -285,6 +285,12 @@ std::vector<WorldGuideEntry> buildWorldGuide(const WorldGuideSource &source, Wor
                 std::string target = pMap->id;
                 std::string label = worldItemSourceLabel(*pItemSource) + ": " + pMap->name();
                 WorldGuideLink::Kind kind = WorldGuideLink::Kind::Location;
+                if (const WorldRecord *pProvider = source.pWorld->find(pItemSource->providerId);
+                    pProvider != nullptr && source.pWorld->visible(*pProvider, *source.pWorldKnowledge, guide))
+                {
+                    target = pProvider->id;
+                    label = worldItemSourceLabel(*pItemSource) + ": " + pProvider->name() + " - " + pMap->name();
+                }
                 for (const WorldMapFeature &feature : source.pWorld->features())
                     if ((feature.id == pItemSource->id || (pItemSource->kind == WorldItemSourceKind::Chest
                         && feature.mapId == pItemSource->mapId

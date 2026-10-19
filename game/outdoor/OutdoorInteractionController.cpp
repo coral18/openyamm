@@ -1,4 +1,5 @@
 #include "game/outdoor/OutdoorInteractionController.h"
+#include "game/world/WorldItemSources.h"
 #include "game/outdoor/OutdoorGameView.h"
 #include "game/outdoor/OutdoorBillboardRenderer.h"
 #include "game/events/EventRuntime.h"
@@ -1872,6 +1873,7 @@ void OutdoorInteractionController::closeActiveEventDialog(OutdoorGameView &view)
     {
         pEventRuntimeState->grantedItems.clear();
         pEventRuntimeState->grantedItemIds.clear();
+        clearWorldItemRewardQueue(*pEventRuntimeState);
     }
 
     const uint32_t hostHouseId = view.m_gameSession.gameplayScreenRuntime().closeActiveEventDialog();

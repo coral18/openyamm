@@ -1,4 +1,5 @@
 #include "game/events/ISceneEventContext.h"
+#include "game/world/WorldItemSources.h"
 #include "game/events/EventRuntime.h"
 #include "engine/scripting/LuaStateOwner.h"
 #include "game/audio/SoundIds.h"
@@ -4581,6 +4582,8 @@ struct LuaExecutionContext
     bool preserveRuntimeOutputsOnBegin = false;
     bool allowStandaloneMapEventDialogueContext = true;
     bool executingGlobalHandler = false;
+    std::optional<bool> currentRewardGlobalScope;
+    uint16_t currentRewardEventId = 0;
 };
 
 }
@@ -4606,6 +4609,7 @@ void prepareRuntimeStateForEventExecution(
     runtimeState.openedChestRequests.clear();
     runtimeState.grantedItems.clear();
     runtimeState.grantedItemIds.clear();
+    clearWorldItemRewardQueue(runtimeState);
     runtimeState.clearHeldItemRequest = false;
     runtimeState.removedItemIds.clear();
     runtimeState.grantedAwardIds.clear();
@@ -4671,6 +4675,17 @@ const ISceneEventContext *readonlySceneEventContext(const LuaExecutionContext *p
     return pExecutionContext->readonly
         ? pExecutionContext->pReadonlySceneEventContext
         : pExecutionContext->pSceneEventContext;
+}
+
+void stageLuaItemReward(lua_State *pLuaState, bool detailed, size_t index)
+{
+    const LuaExecutionContext *pContext = executionContextFromLua(pLuaState);
+    const ISceneEventContext *pScene = readonlySceneEventContext(pContext);
+    if (pContext != nullptr && !pContext->readonly && pContext->pRuntimeState != nullptr && pScene != nullptr)
+        stageWorldItemReward(*pContext->pRuntimeState, detailed, index,
+            pContext->currentRewardEventId != 0 ? pContext->currentRewardEventId : pContext->currentEventId,
+            pContext->currentRewardGlobalScope.value_or(pContext->executingGlobalHandler),
+            pScene->currentGameMinutes());
 }
 
 bool sceneEventContextIsIndoorMap(const LuaExecutionContext *pExecutionContext)
@@ -4787,6 +4802,32 @@ int luaBeginEvent(lua_State *pLuaState)
         }
     }
 
+    return 0;
+}
+
+int luaInvokeEventHandler(lua_State *pLuaState)
+{
+    LuaExecutionContext *pContext = executionContextFromLua(pLuaState);
+    const lua_Integer eventId = luaL_checkinteger(pLuaState, 1);
+    const std::string_view scope = luaL_checkstring(pLuaState, 2);
+    luaL_checktype(pLuaState, 3, LUA_TFUNCTION);
+    if (pContext == nullptr || eventId <= 0 || eventId > UINT16_MAX
+        || (scope != LuaScopeMap && scope != LuaScopeGlobal))
+        return luaL_error(pLuaState, "Invalid event handler context");
+    const int argumentCount = lua_gettop(pLuaState) - 3;
+    if (!lua_checkstack(pLuaState, argumentCount + 1))
+        return luaL_error(pLuaState, "Insufficient event handler stack");
+    const uint16_t previousEventId = pContext->currentRewardEventId;
+    const std::optional<bool> previousScope = pContext->currentRewardGlobalScope;
+    pContext->currentRewardEventId = uint16_t(eventId);
+    pContext->currentRewardGlobalScope = scope == LuaScopeGlobal;
+    lua_pushvalue(pLuaState, 3);
+    for (int i = 0; i < argumentCount; ++i) lua_pushvalue(pLuaState, i + 4);
+    const int status = lua_pcall(pLuaState, argumentCount, 0, 0);
+    // Restore even when a nested callback raises an error that its caller catches with pcall.
+    pContext->currentRewardEventId = previousEventId;
+    pContext->currentRewardGlobalScope = previousScope;
+    if (status != LUA_OK) return lua_error(pLuaState);
     return 0;
 }
 
@@ -5470,6 +5511,7 @@ int luaSetHeldItem(lua_State *pLuaState)
     }
 
     pRuntimeState->grantedItems.push_back(*item);
+    stageLuaItemReward(pLuaState, true, pRuntimeState->grantedItems.size() - 1);
     pRuntimeState->clearHeldItemRequest = false;
     return 0;
 }
@@ -5603,6 +5645,13 @@ int luaGivePartyMemberItem(lua_State *pLuaState)
     item->quantity = quantity;
     size_t recipientMemberIndex = 0;
     const bool granted = pParty->tryGrantInventoryItemStartingAt(memberIndex, *item, &recipientMemberIndex);
+    const LuaExecutionContext *pContext = executionContextFromLua(pLuaState);
+    const ISceneEventContext *pScene = readonlySceneEventContext(pContext);
+    if (granted && pContext != nullptr && pScene != nullptr)
+        recordWorldItemReward(*pRuntimeState, item->objectDescriptionId,
+            pContext->currentRewardEventId != 0 ? pContext->currentRewardEventId : pContext->currentEventId,
+            pContext->currentRewardGlobalScope.value_or(pContext->executingGlobalHandler),
+            pScene->currentGameMinutes());
     lua_pushboolean(pLuaState, granted);
     return 1;
 }
@@ -7539,6 +7588,7 @@ int luaAdd(lua_State *pLuaState)
 {
     EventRuntimeState *pRuntimeState = writableRuntimeState(pLuaState);
     const LuaExecutionContext *pExecutionContext = executionContextFromLua(pLuaState);
+    const size_t firstGrant = pRuntimeState->grantedItemIds.size();
     EventRuntime::addVariableValue(
         *pRuntimeState,
         EventRuntime::decodeVariable(static_cast<uint32_t>(luaL_checkinteger(pLuaState, 1))),
@@ -7546,6 +7596,8 @@ int luaAdd(lua_State *pLuaState)
         writableParty(pLuaState),
         selectedTargetMemberIndices(pLuaState),
         readonlySceneEventContext(pExecutionContext));
+    for (size_t i = firstGrant; i < pRuntimeState->grantedItemIds.size(); ++i)
+        stageLuaItemReward(pLuaState, false, i);
     return 0;
 }
 
@@ -7565,6 +7617,7 @@ int luaSet(lua_State *pLuaState)
 {
     EventRuntimeState *pRuntimeState = writableRuntimeState(pLuaState);
     const LuaExecutionContext *pExecutionContext = executionContextFromLua(pLuaState);
+    const size_t firstGrant = pRuntimeState->grantedItemIds.size();
     EventRuntime::setVariableValue(
         *pRuntimeState,
         EventRuntime::decodeVariable(static_cast<uint32_t>(luaL_checkinteger(pLuaState, 1))),
@@ -7572,6 +7625,8 @@ int luaSet(lua_State *pLuaState)
         writableParty(pLuaState),
         selectedTargetMemberIndices(pLuaState),
         readonlySceneEventContext(pExecutionContext));
+    for (size_t i = firstGrant; i < pRuntimeState->grantedItemIds.size(); ++i)
+        stageLuaItemReward(pLuaState, false, i);
     return 0;
 }
 
@@ -7747,6 +7802,7 @@ int luaGiveItem(lua_State *pLuaState)
         if (item)
         {
             pRuntimeState->grantedItems.push_back(*item);
+            stageLuaItemReward(pLuaState, true, pRuntimeState->grantedItems.size() - 1);
         }
 
         return 0;
@@ -7764,6 +7820,7 @@ int luaGiveItem(lua_State *pLuaState)
     if (item)
     {
         pRuntimeState->grantedItems.push_back(*item);
+        stageLuaItemReward(pLuaState, true, pRuntimeState->grantedItems.size() - 1);
     }
 
     return 0;
@@ -8275,6 +8332,7 @@ void registerEventBindings(LuaSessionCache &session)
     lua_newtable(pLuaState);
 
     registerLuaFunction(pLuaState, "_BeginEvent", luaBeginEvent);
+    registerLuaFunction(pLuaState, "_InvokeEventHandler", luaInvokeEventHandler);
     registerLuaFunction(pLuaState, "_BeginCanShowTopic", luaBeginCanShowTopic);
     registerLuaFunction(pLuaState, "Debug", luaDebugPrint);
     registerLuaFunction(pLuaState, "_RandomJump", luaRandomJump);
@@ -8799,6 +8857,7 @@ void clearTransientEventRuntimeState(EventRuntimeState &runtimeState)
     runtimeState.activeEventSpellId = 0;
     runtimeState.grantedItems.clear();
     runtimeState.grantedItemIds.clear();
+    clearWorldItemRewardQueue(runtimeState);
     runtimeState.clearHeldItemRequest = false;
     runtimeState.removedItemIds.clear();
     runtimeState.grantedAwardIds.clear();

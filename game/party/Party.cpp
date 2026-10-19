@@ -1,4 +1,5 @@
 #include "game/party/Party.h"
+#include "game/world/WorldItemSources.h"
 
 #include "game/events/EventRuntime.h"
 #include "game/debug/GameplayDebugTrace.h"
@@ -2765,15 +2766,17 @@ void Party::applyMovementEffects(const OutdoorMovementEffects &effects)
     }
 }
 
-void Party::applyEventRuntimeState(const EventRuntimeState &runtimeState, bool grantItemsToInventory)
+void Party::applyEventRuntimeState(EventRuntimeState &runtimeState, bool grantItemsToInventory)
 {
-    for (const InventoryItem &item : runtimeState.grantedItems)
+    for (size_t i = 0; i < runtimeState.grantedItems.size(); ++i)
     {
+        const InventoryItem &item = runtimeState.grantedItems[i];
         if (grantItemsToInventory)
         {
             size_t recipientMemberIndex = 0;
             if (tryGrantInventoryItem(item, &recipientMemberIndex))
             {
+                confirmWorldItemReward(runtimeState, true, i);
                 queueSound(SoundId::Gold);
                 GAMEPLAY_DEBUG_TRACE(
                     "item_received destination=inventory source=event item_id="
@@ -2790,12 +2793,14 @@ void Party::applyEventRuntimeState(const EventRuntimeState &runtimeState, bool g
         m_lastStatus = "item granted";
     }
 
-    for (uint32_t itemId : runtimeState.grantedItemIds)
+    for (size_t i = 0; i < runtimeState.grantedItemIds.size(); ++i)
     {
+        const uint32_t itemId = runtimeState.grantedItemIds[i];
         if (grantItemsToInventory)
         {
             if (tryGrantItem(itemId))
             {
+                confirmWorldItemReward(runtimeState, false, i);
                 queueSound(SoundId::Gold);
                 GAMEPLAY_DEBUG_TRACE(
                     "item_received destination=inventory source=event item_id="

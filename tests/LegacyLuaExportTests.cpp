@@ -94,7 +94,9 @@ OpenYAMM::Game::ScriptedEventProgram exportPressureTrapProgram(
     LegacyLuaExportLookups lookups;
     lookups.sourceMapFile = mapName;
     const std::string lua = generateLegacyEventLuaChunk(
-        legacyProgram, StrTable{}, lookups, LegacyLuaExportScope::Map, version);
+        legacyProgram, StrTable{}, lookups, LegacyLuaExportScope::Map, version)
+        + generateLegacyEventItemRewardsLuaChunk(legacyProgram, StrTable{}, lookups,
+            LegacyLuaExportScope::Map, version);
     const std::vector<uint8_t> supportBytes = readBinaryFixture(
         std::filesystem::path(OPENYAMM_SOURCE_DIR) / "assets_dev/engine/scripts/common/event_support.lua");
     std::string error;
@@ -948,4 +950,116 @@ TEST_CASE("legacy lua exporter keeps mm6 indoor light ids zero based")
 
     INFO(lua);
     CHECK(lua.find("evt.SetLight(0, 1)") != std::string::npos);
+}
+
+TEST_CASE("legacy item reward metadata follows reachable fixed grants and separates trigger continuations")
+{
+    using namespace OpenYAMM::Game;
+    std::vector<uint8_t> bytes;
+    const auto append = [&](uint16_t eventId, uint8_t step, EvtOpcode opcode, std::vector<uint8_t> payload)
+    {
+        bytes.insert(bytes.end(), {uint8_t(4 + payload.size()), uint8_t(eventId), uint8_t(eventId >> 8),
+            step, uint8_t(opcode)});
+        bytes.insert(bytes.end(), payload.begin(), payload.end());
+    };
+    append(1, 0, EvtOpcode::Add, {0x11, 0, 42, 0, 0, 0});
+    append(1, 1, EvtOpcode::GiveItem, {1, 0, 43, 0, 0, 0});
+    appendExitRecord(bytes, 1, 2);
+    append(1, 3, EvtOpcode::Add, {0x11, 0, 99, 0, 0, 0}); // Unreachable after return.
+    append(2, 0, EvtOpcode::Compare, {0x10, 0, 1, 0, 0, 0, 3});
+    append(2, 1, EvtOpcode::GiveItem, {1, 0, 44, 0, 0, 0});
+    appendExitRecord(bytes, 2, 2);
+    append(2, 3, EvtOpcode::Add, {0x11, 0, 45, 0, 0, 0});
+    appendExitRecord(bytes, 2, 4);
+    append(3, 0, EvtOpcode::Add, {0x11, 0, 49, 0, 0, 0});
+    appendExitRecord(bytes, 3, 1);
+    append(3, 5, EvtOpcode::OnMapReload, {});
+    append(3, 6, EvtOpcode::Add, {0x11, 0, 50, 0, 0, 0});
+    appendExitRecord(bytes, 3, 7);
+    append(4, 0, EvtOpcode::GiveItem, {3, 0, 0, 0, 0, 0}); // Random treasure has no fixed source ID.
+    appendExitRecord(bytes, 4, 1);
+    for (LegacyEventVersion version : {LegacyEventVersion::Mm6, LegacyEventVersion::Mm7, LegacyEventVersion::Mm8})
+    {
+        const ScriptedEventProgram program = exportPressureTrapProgram(bytes, version);
+        REQUIRE(program.itemRewards().contains(1));
+        CHECK(program.itemRewards().at(1) == std::vector<uint32_t>{42, 43});
+        CHECK(program.itemRewards().at(2) == std::vector<uint32_t>{44, 45});
+        CHECK(program.itemRewards().at(3) == std::vector<uint32_t>{49});
+        CHECK_FALSE(program.itemRewards().contains(4));
+        REQUIRE(program.onLoadEventIds().size() == 1);
+        CHECK(program.itemRewards().at(program.onLoadEventIds().front()) == std::vector<uint32_t>{50});
+    }
+}
+
+TEST_CASE("item reward declarations bind to active handlers and validate item arrays")
+{
+    using namespace OpenYAMM::Game;
+    const auto supportBytes = readBinaryFixture(std::filesystem::path(OPENYAMM_SOURCE_DIR)
+        / "assets_dev/engine/scripts/common/event_support.lua");
+    const std::string support(supportBytes.begin(), supportBytes.end());
+    const auto load = [&](const std::string &code, ScriptedEventScope scope = ScriptedEventScope::Map)
+    {
+        std::string error;
+        return ScriptedEventProgram::loadFromLuaText(support + "\n" + code, "item-reward-test", scope, error);
+    };
+    const std::string base = "RegisterEvent(10, '', function() end)\nSetMapItemRewards(10, {42, 41, 42})\n";
+    auto program = load(base);
+    REQUIRE(program);
+    CHECK(program->itemRewards().at(10) == std::vector<uint32_t>{41, 42});
+    program = load(base + "evt.map[10] = function() end\n");
+    REQUIRE(program);
+    CHECK(program->itemRewards().empty());
+    program = load(base + "RegisterEvent(10, '', function() end)\nSetMapItemRewards(10, {43})\n");
+    REQUIRE(program);
+    CHECK(program->itemRewards().at(10) == std::vector<uint32_t>{43});
+    program = load(base + "evt.map[10] = nil\n");
+    REQUIRE(program);
+    CHECK(program->itemRewards().empty());
+    CHECK_FALSE(load("SetMapItemRewards(10, {42})"));
+    for (const char *array : {"{0}", "{-1}", "{1.5}", "{'42'}", "{4294967296}",
+        "{[2] = 42}", "{[1] = 42, key = 43}", "false"})
+        CHECK_FALSE(load(std::string("RegisterEvent(10, '', function() end)\nSetMapItemRewards(10, ") + array + ")"));
+    const std::string global = "RegisterGlobalEvent(10, '', function() end)\nSetGlobalItemRewards(10, {99})\n";
+    program = load(base + global);
+    REQUIRE(program);
+    CHECK(program->itemRewards().at(10) == std::vector<uint32_t>{41, 42});
+    program = load(base + global, ScriptedEventScope::Global);
+    REQUIRE(program);
+    CHECK(program->itemRewards().at(10) == std::vector<uint32_t>{99});
+    for (const char *value : {"false", "nil"})
+    {
+        CHECK_FALSE(load(base + "evt.map = " + value));
+        CHECK_FALSE(load(global + "evt.global = " + value, ScriptedEventScope::Global));
+    }
+}
+
+TEST_CASE("reward metadata exports separately without changing callback code or redefining handlers")
+{
+    using namespace OpenYAMM::Game;
+    const std::vector<uint8_t> bytes = {10, 1, 0, 0, uint8_t(EvtOpcode::GiveItem), 1, 0, 42, 0, 0, 0,
+        4, 1, 0, 1, uint8_t(EvtOpcode::Exit)};
+    EvtProgram legacy;
+    REQUIRE(legacy.loadFromBytes(bytes));
+    const auto support = readBinaryFixture(std::filesystem::path(OPENYAMM_SOURCE_DIR)
+        / "assets_dev/engine/scripts/common/event_support.lua");
+    for (const auto scope : {LegacyLuaExportScope::Map, LegacyLuaExportScope::Global})
+    {
+        const std::string handlers = generateLegacyEventLuaChunk(legacy, {}, {}, scope);
+        const std::string metadata = generateLegacyEventItemRewardsLuaChunk(legacy, {}, {}, scope);
+        CHECK(handlers.find("ItemRewards(") == std::string::npos);
+        CHECK(metadata.find("RegisterEvent(") == std::string::npos);
+        CHECK(metadata.find("RegisterGlobalEvent(") == std::string::npos);
+        CHECK(metadata.find(scope == LegacyLuaExportScope::Map
+            ? "SetMapItemRewards(1, {42})" : "SetGlobalItemRewards(1, {42})") != std::string::npos);
+        const ScriptedEventScope programScope = scope == LegacyLuaExportScope::Map
+            ? ScriptedEventScope::Map : ScriptedEventScope::Global;
+        std::string error;
+        const std::string prefix(support.begin(), support.end());
+        const auto program = ScriptedEventProgram::loadFromLuaText(prefix + handlers + metadata,
+            "separate-item-rewards", programScope, error);
+        REQUIRE_MESSAGE(program.has_value(), error);
+        CHECK(program->itemRewards().at(1) == std::vector<uint32_t>{42});
+        CHECK_FALSE(ScriptedEventProgram::loadFromLuaText(prefix + metadata,
+            "missing-item-reward-handler", programScope, error));
+    }
 }

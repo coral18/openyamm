@@ -2,6 +2,8 @@
 #include "engine/AssetScaleTier.h"
 #include "game/content/ContentManifest.h"
 #include "game/content/ContentTableComposer.h"
+#include "game/data/GameDataLoader.h"
+#include "game/maps/MapAssetLoader.h"
 
 #include <doctest/doctest.h>
 
@@ -28,6 +30,64 @@ void writeTextFile(const std::filesystem::path &path, const std::string &content
     std::ofstream file(path, std::ios::binary);
     file << contents;
 }
+}
+
+TEST_CASE("item reward overlays precede all map and global callback replacements")
+{
+    using namespace OpenYAMM::Game;
+    const std::filesystem::path temporaryRoot = makeTemporaryRoot();
+    const std::filesystem::path assets = temporaryRoot / "assets_dev";
+    const std::filesystem::path support = assets / "engine/scripts/common/event_support.lua";
+    std::filesystem::create_directories(support.parent_path());
+    std::filesystem::copy_file(std::filesystem::path(OPENYAMM_SOURCE_DIR)
+        / "assets_dev/engine/scripts/common/event_support.lua", support);
+    const std::filesystem::path mapScripts = assets / "worlds/mm7/events/maps";
+    const std::filesystem::path globals = assets / "engine/events";
+    writeTextFile(mapScripts / "metadata_fixture.lua", "RegisterEvent(10, '', function() end)");
+    writeTextFile(mapScripts / "metadata_fixture_00_item_rewards.lua", "SetMapItemRewards(10, {42})");
+    writeTextFile(globals / "Global.lua", "RegisterGlobalEvent(20, '', function() end)");
+    writeTextFile(globals / "Global_00_item_rewards.lua", "SetGlobalItemRewards(20, {43})");
+    {
+        OpenYAMM::Engine::AssetFileSystem fs;
+        REQUIRE(fs.initialize(temporaryRoot, assets, OpenYAMM::Engine::AssetScaleTier::X1, "mm7"));
+        for (const std::string suffix : {".fixup.lua", "_000_custom.lua", "_zz_custom.lua"})
+        {
+            for (bool redeclared : {false, true})
+            {
+                CAPTURE(suffix);
+                CAPTURE(redeclared);
+                writeTextFile(mapScripts / ("metadata_fixture" + suffix),
+                    "ReplaceMapEvent(10, '', function() end)\n"
+                    + std::string(redeclared ? "SetMapItemRewards(10, {44})" : ""));
+                writeTextFile(globals / ("Global" + suffix),
+                    "ReplaceGlobalEvent(20, '', function() end)\n"
+                    + std::string(redeclared ? "SetGlobalItemRewards(20, {45})" : ""));
+                fs.refreshLookupCache();
+                MapAssetInfo map;
+                map.map.fileName = "metadata_fixture.blv";
+                map.map.worldId = "mm7";
+                std::string error;
+                REQUIRE_MESSAGE(GameDataLoader::loadEventPrograms(fs, map, error), error);
+                REQUIRE(map.localEventProgram.has_value());
+                REQUIRE(map.globalEventProgram.has_value());
+                if (redeclared)
+                {
+                    REQUIRE(map.localEventProgram->itemRewards().contains(10));
+                    REQUIRE(map.globalEventProgram->itemRewards().contains(20));
+                    CHECK(map.localEventProgram->itemRewards().at(10) == std::vector<uint32_t>{44});
+                    CHECK(map.globalEventProgram->itemRewards().at(20) == std::vector<uint32_t>{45});
+                }
+                else
+                {
+                    CHECK(map.localEventProgram->itemRewards().empty());
+                    CHECK(map.globalEventProgram->itemRewards().empty());
+                }
+            }
+            std::filesystem::remove(mapScripts / ("metadata_fixture" + suffix));
+            std::filesystem::remove(globals / ("Global" + suffix));
+        }
+    }
+    std::filesystem::remove_all(temporaryRoot);
 }
 
 TEST_CASE("content manifests default when package files are absent")

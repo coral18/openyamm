@@ -220,9 +220,10 @@ WorldDatabase::WorldDatabase(const MapStats &maps, const HouseTable &houses, con
             resident.lastObservedNpc = npcsState.observedOnly;
             if (const auto name = npcsState.names.find(npcId); name != npcsState.names.end())
                 resident.npcName = name->second;
-            m_records.push_back(resident);
             const auto topics = npcsState.topics.find(npcId);
             const std::vector<uint32_t> &topicIds = topics != npcsState.topics.end() ? topics->second : npc->topicIds;
+            resident.npcTopicIds = topicIds;
+            m_records.push_back(resident);
             for (uint32_t topicId : topicIds)
             {
                 if (const auto *teacher = teachers.get(topicId))

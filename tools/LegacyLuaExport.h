@@ -53,6 +53,13 @@ struct LegacyLuaExportLookups
     std::unordered_map<uint32_t, uint32_t> summonObjectTypesByEventStep;
 };
 
+std::string generateLegacyEventItemRewardsLuaChunk(
+    const EvtProgram &evtProgram,
+    const StrTable &strTable,
+    const LegacyLuaExportLookups &lookups,
+    LegacyLuaExportScope scope,
+    LegacyEventVersion version = LegacyEventVersion::Mm8);
+
 std::string generateLegacyEventLuaChunk(
     const EvtProgram &evtProgram,
     const StrTable &strTable,

@@ -12678,12 +12678,44 @@ void emitMetadata(
     stream << "})\n";
 }
 
+void emitItemRewardMetadata(std::ostringstream &stream, std::string_view scopeTableName,
+    const LegacyLuaEvent &event, uint16_t handlerId, std::optional<uint8_t> entryStep = std::nullopt)
+{
+    const std::vector<uint8_t> steps = collectNormalEventSteps(event);
+    if (steps.empty()) return;
+    std::vector<uint32_t> items;
+    for (uint8_t step : collectReachableSteps(event, steps, entryStep.value_or(steps.front())))
+        for (const LegacyLuaInstruction *pInstruction : collectMeaningfulInstructionsForStep(event, step))
+        {
+            const auto &args = pInstruction->arguments;
+            uint32_t itemId = 0;
+            if (pInstruction->operation == LegacyLuaOperation::GiveItem && args.size() >= 3)
+                itemId = args[2]; // Zero means a random roll, not a fixed item source.
+            else if ((pInstruction->operation == LegacyLuaOperation::Add
+                || pInstruction->operation == LegacyLuaOperation::Set) && args.size() >= 2)
+            {
+                const FormattedSelector selector = formatSelector(args[0], {});
+                if (selector.semantic == SelectorSemantic::InventoryItem)
+                    itemId = pInstruction->operation == LegacyLuaOperation::Add
+                        ? (int32_t(args[1]) > 0 ? args[1] : 0) : (args[1] != 0 ? selector.index : 0);
+            }
+            if (itemId > 0 && itemId <= INT32_MAX) items.push_back(itemId);
+        }
+    sortAndUnique(items);
+    if (items.empty()) return;
+    stream << (scopeTableName == LuaScopeGlobal ? "SetGlobalItemRewards(" : "SetMapItemRewards(")
+           << handlerId << ", {";
+    for (size_t i = 0; i < items.size(); ++i) stream << (i == 0 ? "" : ", ") << items[i];
+    stream << "})\n";
+}
+
 void emitSyntheticTriggerEventFunctions(
     std::ostringstream &stream,
     std::string_view scopeTableName,
     const std::vector<LegacyLuaEvent> &decodedEvents,
     const LegacyLuaExportLookups &lookups,
-    const std::vector<SyntheticTriggerEvent> &syntheticTriggerEvents)
+    const std::vector<SyntheticTriggerEvent> &syntheticTriggerEvents,
+    std::ostringstream *pRewardMetadata = nullptr)
 {
     if (syntheticTriggerEvents.empty())
     {
@@ -12696,6 +12728,7 @@ void emitSyntheticTriggerEventFunctions(
 
     for (const SyntheticTriggerEvent &syntheticEvent : syntheticTriggerEvents)
     {
+        bool emittedBody = false;
         stream << registerFunction << "(" << syntheticEvent.syntheticEventId << ", \"\", function()\n";
 
         const auto sourceEventIterator = std::find_if(
@@ -12731,12 +12764,37 @@ void emitSyntheticTriggerEventFunctions(
             {
                 trimTrailingTopLevelReturn(bodyStream);
                 stream << bodyStream.str();
+                emittedBody = true;
             }
         }
 
         stream << "end)\n\n";
+        if (emittedBody && pRewardMetadata != nullptr)
+            emitItemRewardMetadata(*pRewardMetadata, scopeTableName, *sourceEventIterator,
+                syntheticEvent.syntheticEventId, syntheticEvent.continuationStep);
     }
 }
+}
+
+std::string generateLegacyEventItemRewardsLuaChunk(
+    const EvtProgram &evtProgram,
+    const StrTable &strTable,
+    const LegacyLuaExportLookups &lookups,
+    LegacyLuaExportScope scope,
+    LegacyEventVersion version)
+{
+    const std::string_view scopeTableName = scope == LegacyLuaExportScope::Global ? LuaScopeGlobal : LuaScopeMap;
+    const std::vector<LegacyLuaEvent> events = decodeEvents(evtProgram, strTable, lookups, version);
+    const std::vector<SyntheticTriggerEvent> triggers = collectSyntheticTriggerEvents(evtProgram);
+    std::ostringstream metadata;
+    metadata << "-- generated reward metadata from legacy EVT/STR; load after the base handlers\n";
+    for (size_t i = 0; i < events.size(); ++i)
+        emitItemRewardMetadata(metadata, scopeTableName,
+            directEventWithoutSyntheticTriggerContinuations(events[i], evtProgram.getEvents()[i]), events[i].eventId);
+    // Reuse the same continuation emitter to exclude any synthetic callback whose body cannot be emitted.
+    std::ostringstream handlers;
+    emitSyntheticTriggerEventFunctions(handlers, scopeTableName, events, lookups, triggers, &metadata);
+    return metadata.str();
 }
 
 std::string generateLegacyEventLuaChunk(

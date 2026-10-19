@@ -18,6 +18,7 @@
 #include "game/gameplay/GameplayRuntimeInterfaces.h"
 #include "game/world/WorldItemSources.h"
 #include "game/world/WorldMapKnowledge.h"
+#include "game/events/ScriptedEventProgram.h"
 #include "game/tables/ObjectTable.h"
 
 #include <doctest/doctest.h>
@@ -1032,4 +1033,132 @@ TEST_CASE("world item source catalog excludes random chest placeholders "
     known.visitedMaps.clear();
     CHECK(world.itemSources(known, false).empty());
     CHECK(world.queryFeatures(known, false).empty());
+}
+
+TEST_CASE("world scripted rewards follow active handlers and NPC topics without becoming discoveries")
+{
+    OpenYAMM::Engine::AssetFileSystem assets;
+    ItemTable items;
+    MapStats maps;
+    HouseTable houses;
+    NpcDialogTable npcs;
+    MergedTeacherTopicTable teachers;
+    REQUIRE(items.load(assets, guideTableRows("items.txt"), {}));
+    REQUIRE(maps.loadFromRows(guideTableRows("map_stats.txt")));
+    REQUIRE(houses.loadFromRows(guideTableRows("house_data.txt")));
+    REQUIRE(npcs.loadNpcRows(guideTableRows("npc.txt")));
+    const auto item = std::find_if(items.entries().begin(), items.entries().end(), [](const ItemDefinition &entry)
+    { return entry.itemId > 0 && !entry.name.empty() && entry.equipStat != "Gold"; });
+    REQUIRE(item != items.entries().end());
+    std::ifstream supportFile(std::string(OPENYAMM_SOURCE_DIR)
+        + "/assets_dev/engine/scripts/common/event_support.lua");
+    REQUIRE(supportFile.is_open());
+    const std::string support{std::istreambuf_iterator<char>(supportFile), std::istreambuf_iterator<char>()};
+    const std::string code = support + "\nRegisterEvent(10, '', function() end)\nSetMapItemRewards(10, {"
+        + std::to_string(item->itemId) + "})\nRegisterGlobalEvent(11, '', function() end)\n"
+        + "SetGlobalItemRewards(11, {" + std::to_string(item->itemId) + "})\n";
+    std::string error;
+    const auto local = ScriptedEventProgram::loadFromLuaText(code, "reward-map", ScriptedEventScope::Map, error);
+    const auto global = ScriptedEventProgram::loadFromLuaText(code, "reward-npc", ScriptedEventScope::Global, error);
+    REQUIRE(local.has_value());
+    REQUIRE(global.has_value());
+    for (const std::string worldId : {"mm7", "mm8"})
+    {
+        CAPTURE(worldId);
+        const WorldDatabase original(maps, houses, npcs, teachers, worldId);
+        const auto npc = std::find_if(original.records().begin(), original.records().end(), [](const WorldRecord &r)
+        { return r.kind == WorldRecordKind::Npc && r.npc && r.map; });
+        REQUIRE(npc != original.records().end());
+        WorldNpcState current;
+        current.topics[npc->npc->id] = {11, 11};
+        WorldDatabase world(maps, houses, npcs, teachers, worldId, {}, current);
+        WorldKnowledge known;
+        known.visitedMaps.insert(npc->map->fileName);
+        const std::vector<WorldInteractionSite> sites = {
+            {"reward-site", 10, 101.4f, -202.7f, 303},
+            {"invalid-site", 10, std::numeric_limits<float>::infinity(), 0, 0}};
+        world.indexMapItemRewards(*npc->map, *local, sites, items);
+        world.indexSharedItemRewards(*global, items);
+        const auto all = world.itemSources(known, true);
+        const auto rewardCount = [&](WorldItemSourceKind kind)
+        { return std::count_if(all.begin(), all.end(), [kind](const auto *p) { return p->kind == kind; }); };
+        CHECK(rewardCount(WorldItemSourceKind::MapReward) == 1);
+        CHECK(rewardCount(WorldItemSourceKind::SharedReward) >= 1);
+        const auto personal = std::find_if(all.begin(), all.end(), [&](const auto *p)
+        { return p->providerId == npc->id; });
+        REQUIRE(personal != all.end());
+        CHECK((*personal)->sourceIndex == 11);
+        CHECK(std::count_if(all.begin(), all.end(), [&](const auto *p) { return p->providerId == npc->id; }) == 1);
+        REQUIRE(world.queryFeatures(known, true).size() == 1);
+        CHECK(world.queryFeatures(known, true).front()->site.x == 101);
+        CHECK(world.queryFeatures(known, true).front()->site.y == -203);
+        CHECK(world.itemSources(known, false).empty());
+        CHECK(world.queryFeatures(known, false).empty());
+        WorldGuideSource source;
+        source.pItems = &items; source.pWorld = &world; source.pWorldKnowledge = &known;
+        WorldGuideKnowledge reference;
+        reference.items.insert(item->itemId);
+        const auto guide = buildWorldGuide(source, WorldGuideSection::Items, reference, true);
+        const auto entry = std::find_if(guide.begin(), guide.end(), [&](const WorldGuideEntry &e)
+        { return e.id == std::to_string(item->itemId); });
+        REQUIRE(entry != guide.end());
+        CHECK(std::any_of(entry->links.begin(), entry->links.end(), [&](const WorldGuideLink &link)
+        { return link.target == npc->id && link.label.find("Possible NPC reward:") == 0; }));
+        const auto discovery = buildWorldGuide(source, WorldGuideSection::Items, reference, false);
+        REQUIRE(discovery.size() == 1);
+        CHECK(discovery.front().links.empty());
+        // Reindexing physical sources does not erase the independent scripted source layer.
+        world.indexMapItemSources(*npc->map, {}, items);
+        world.indexMapItemRewards(*npc->map, *local, sites, items);
+        world.indexSharedItemRewards(*global, items);
+        CHECK(world.itemSources(known, true).size() == all.size());
+        // Replaced handlers invalidate old metadata even when the event number remains the same.
+        const auto replaced = ScriptedEventProgram::loadFromLuaText(code
+            + "\nevt.map[10] = function() end", "replacement", ScriptedEventScope::Map, error);
+        REQUIRE(replaced.has_value());
+        world.indexMapItemRewards(*npc->map, *replaced, sites, items);
+        CHECK(world.queryFeatures(known, true).empty());
+        current.topics[npc->npc->id] = {};
+        WorldDatabase changed(maps, houses, npcs, teachers, worldId, {}, current);
+        changed.indexSharedItemRewards(*global, items);
+        const auto changedSources = changed.itemSources(known, true);
+        CHECK(std::none_of(changedSources.begin(), changedSources.end(), [&](const auto *p)
+        { return p->providerId == npc->id; }));
+    }
+}
+
+TEST_CASE("world reward receipts reject stale pending origins and malformed discovery records")
+{
+    EventRuntimeState state;
+    state.grantedItemIds = {42};
+    stageWorldItemReward(state, false, 0, 10, true, 123);
+    CHECK(worldObservedItemSources(state).empty());
+    EventRuntimeState refilled;
+    restoreWorldMapKnowledgeAfterRefill(state, refilled);
+    CHECK(refilled.namedMapVars.empty()); // Pending offers do not survive a world refill as discoveries.
+    state.grantedItemIds[0] = 43;
+    confirmWorldItemReward(state, false, 0);
+    CHECK(worldObservedItemSources(state).empty());
+    stageWorldItemReward(state, false, 0, 10, true, 123);
+    clearWorldItemRewardQueue(state);
+    confirmWorldItemReward(state, false, 0);
+    CHECK(worldObservedItemSources(state).empty());
+    recordWorldItemReward(state, 43, 10, true, 124);
+    REQUIRE(worldObservedItemSources(state).size() == 1);
+    const auto valid = state.namedMapVars;
+    recordWorldItemReward(state, 0, 10, true, 124);
+    recordWorldItemReward(state, 43, 0, true, 124);
+    recordWorldItemReward(state, 43, 10, true, -1);
+    recordWorldItemReward(state, 43, 10, true, std::numeric_limits<float>::infinity());
+    CHECK(state.namedMapVars == valid);
+    for (const char *key : {"map-reward/0/42/time", "shared-reward/65536/42/time",
+        "map-reward/01/42/time", "map-reward/1/042/time", "shared-reward/1/0/time"})
+        state.namedMapVars[std::string("openyamm.discovery.item/") + key] = 123;
+    CHECK(worldObservedItemSources(state).size() == 1);
+    EventRuntimeState wideId;
+    wideId.grantedItemIds = {UINT32_MAX};
+    stageWorldItemReward(wideId, false, 0, 12, true, 125);
+    confirmWorldItemReward(wideId, false, 0);
+    REQUIRE(worldObservedItemSources(wideId).size() == 1);
+    CHECK(worldObservedItemSources(wideId).front().itemId == UINT32_MAX);
 }

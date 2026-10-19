@@ -379,6 +379,35 @@ TEST_CASE("AssetFileSystem mounts generated runtime zip package sets")
     std::filesystem::remove_all(temporaryRoot);
 }
 
+TEST_CASE("AssetFileSystem canonical overlays override active and inactive world packages")
+{
+    using namespace OpenYAMM::Engine;
+    const std::filesystem::path temporaryRoot = makeTemporaryRoot();
+    const std::filesystem::path assetRoot = temporaryRoot / "assets";
+    writeZipFile(assetRoot / "assets.zip", {
+        {"engine/events/Global.lua", "updated-global"},
+        {"worlds/mm6/events/maps/shared.lua", "updated-mm6"},
+        {"worlds/mm7/events/maps/shared.lua", "updated-mm7"}
+    });
+    writeZipFile(assetRoot / "engine.zip", {{"events/Global.lua", "old-global"}});
+    writeZipFile(assetRoot / "worlds/mm6.zip", {{"events/maps/shared.lua", "old-mm6"}});
+    writeZipFile(assetRoot / "worlds/mm7.zip", {{"events/maps/shared.lua", "old-mm7"}});
+    {
+        AssetFileSystem fs;
+        REQUIRE(fs.initialize(temporaryRoot, assetRoot, AssetScaleTier::X1, "mm6"));
+        CHECK(fs.readTextFile("events/Global.lua") == std::optional<std::string>("updated-global"));
+        CHECK(fs.readTextFile("events/maps/shared.lua") == std::optional<std::string>("updated-mm6"));
+        CHECK(fs.readTextFile("worlds/mm7/events/maps/shared.lua") == std::optional<std::string>("updated-mm7"));
+        REQUIRE(fs.switchActiveWorld("mm7"));
+        CHECK(fs.readTextFile("events/maps/shared.lua") == std::optional<std::string>("updated-mm7"));
+        CHECK(fs.readTextFile("worlds/mm6/events/maps/shared.lua") == std::optional<std::string>("updated-mm6"));
+        CHECK(fs.readTextFile("events/Global.lua") == std::optional<std::string>("updated-global"));
+        REQUIRE(fs.switchActiveWorld("mm6"));
+        CHECK(fs.readTextFile("events/maps/shared.lua") == std::optional<std::string>("updated-mm6"));
+    }
+    std::filesystem::remove_all(temporaryRoot);
+}
+
 TEST_CASE("AssetFileSystem reads aliased package files case-insensitively")
 {
     const std::filesystem::path temporaryRoot = makeTemporaryRoot();
@@ -403,7 +432,7 @@ TEST_CASE("AssetFileSystem reads aliased package files case-insensitively")
         const std::optional<std::filesystem::path> physicalPath =
             assetFileSystem.resolvePhysicalPath("Videos/Houses/ntrhall.ogv");
         REQUIRE(physicalPath.has_value());
-        CHECK(physicalPath->generic_string().ends_with("assets_dev/worlds/mm8/videos/Houses/Ntrhall.ogv"));
+        CHECK(std::filesystem::equivalent(*physicalPath, assetRoot / "worlds/mm8/videos/Houses/Ntrhall.ogv"));
     }
 
     std::filesystem::remove_all(temporaryRoot);
@@ -1196,8 +1225,10 @@ TEST_CASE("AssetFileSystem rejects ambiguous case fallback while preserving exac
     using namespace OpenYAMM::Engine;
     const std::filesystem::path temporaryRoot = makeTemporaryRoot();
     const std::filesystem::path assetRoot = temporaryRoot / "assets_dev";
-    writeTextFile(assetRoot / "engine/ui/Icon.txt", "first");
-    writeTextFile(assetRoot / "engine/ui/iCon.txt", "second");
+    // A ZIP retains both spellings on case-insensitive hosts too; loose NTFS files would overwrite each other.
+    writeZipFile(assetRoot / "assets.zip", {
+        {"engine/ui/Icon.txt", "first"}, {"engine/ui/iCon.txt", "second"}
+    });
     {
         AssetFileSystem assets;
         REQUIRE(assets.initialize(temporaryRoot, assetRoot, AssetScaleTier::X1));

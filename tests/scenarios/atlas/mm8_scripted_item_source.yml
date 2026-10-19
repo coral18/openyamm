@@ -1,0 +1,15 @@
+id: atlas.mm8_scripted_item_source
+world: mm8
+mode: faithful
+title: Receiving Dadeross letter records a shared-event item source through save and load
+steps:
+- new_game_flow: {start_map: out01.odm}
+- speak_npc: {source_id: 2}
+- select_topic: {kind: npc_topic, action_id: 20}
+- assert:
+    qbit_set: [3]
+    named_map_var_changed: {name: openyamm.discovery.item/shared-reward/20/741/time, value: 540}
+- save_game: received-letter
+- load_game: received-letter
+- assert:
+    named_map_var_changed: {name: openyamm.discovery.item/shared-reward/20/741/time, value: 540}

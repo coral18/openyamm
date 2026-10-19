@@ -197,4 +197,34 @@ pickups and visible chest slots record shared named-map discovery state under `o
 when the optional Atlas UI is disabled. The existing save serializer and refill knowledge preservation retain
 those facts. See [the item-source checkpoint](ATLAS.md#item-sources-and-retained-observations-2026-10-19) for the
 source scope and runtime evidence. Looking up a source does not roll random loot, change artifact state or award
-knowledge. Scripted reward/drop and general semantic-source integration remain pending.
+knowledge. Received scripted rewards are also recorded, after successful inventory or held-item delivery.
+Queued offers are not discoveries. Pending queue provenance uses `openyamm.item-grant/` in existing named-map
+state; it survives save/load with the grant queue, is cleared with that queue, and is not retained across refill.
+Old saves with no pending provenance receive no invented reward history.
+
+Lua scripts can declare possible fixed rewards after registering their callback:
+
+```lua
+RegisterEvent(123, "Conditional reward", function()
+    if IsQBitSet(QBit(10001)) then
+        AddValue(InventoryItem(42), 42)
+    end
+end)
+SetMapItemRewards(123, {42})
+```
+
+`SetGlobalItemRewards` declares shared callbacks used by NPC topics. Declarations describe possibilities, not
+eligibility, remaining stock or an entitlement to receive the item. The engine validates positive uint32 item IDs
+in contiguous arrays and binds each declaration to the exact registered handler. Replacing, removing or appending
+a callback invalidates its previous declaration; explicitly declare the replacement's full possibilities.
+Guide links map rewards to their physical event sites where available and shared rewards to current NPC-topic
+providers. Discovery shows only confirmed received rewards and does not guess the NPC who delivered an item.
+
+The legacy exporter emits declarations for reachable fixed `Add`, `Set` and `GiveItem` operations, including
+synthetic trigger continuations. It does not execute the event or roll random rewards. Regenerate with
+`tools/regenerate_lua_events.sh`; `OPENYAMM_BUILD_DIR` selects an existing native build directory when needed.
+The generated `_00_item_rewards.lua` overlays load after base handlers and before gameplay supplements. Use
+`--item-rewards-only` to refresh declarations while keeping the callback files and their baked lighting hashes intact.
+GrayFace's decompiled `txt` references for all three worlds must be present at the documented reference paths:
+the exporter also uses them to resolve object types, so the script rejects missing reference directories.
+Handwritten callbacks must own their declarations; actor drops and general semantic-source integration remain pending.

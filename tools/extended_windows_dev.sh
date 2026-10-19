@@ -94,7 +94,14 @@ updates = {
     "engine/world/atlas/mm7.yml": repo / "assets_dev/engine/world/atlas/mm7.yml",
     "engine/world/atlas/mm8.yml": repo / "assets_dev/engine/world/atlas/mm8.yml",
     "worlds/mm7/events/maps/7out02_zz_extended.lua": repo / "assets_dev/worlds/mm7/events/maps/7out02_zz_extended.lua",
+    # The current Ravenshore supplement requires the matching upstream bake and its recipe.
+    "worlds/mm8/maps/out02.lighting": repo / "assets_dev/worlds/mm8/maps/out02.lighting",
+    "worlds/mm8/maps/out02.bake.json": repo / "assets_dev/worlds/mm8/maps/out02.bake.json",
 }
+updates["engine/scripts/common/event_support.lua"] = repo / "assets_dev/engine/scripts/common/event_support.lua"
+for relative in ["engine/events", "worlds/mm6/events", "worlds/mm7/events", "worlds/mm8/events"]:
+    for source in (repo / "assets_dev" / relative).rglob("*.lua"):
+        updates[source.relative_to(repo / "assets_dev").as_posix()] = source
 fd, temporary = tempfile.mkstemp(prefix=".extended-overlay-", suffix=".zip", dir=package.parent)
 os.close(fd)
 try:

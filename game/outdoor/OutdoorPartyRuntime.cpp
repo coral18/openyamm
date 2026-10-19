@@ -113,7 +113,7 @@ bool OutdoorPartyRuntime::translateWithSupportedBModel(
     return m_movementDriver.translateWithSupportedBModel(bModelIndex, deltaX, deltaY, deltaZ);
 }
 
-void OutdoorPartyRuntime::applyEventRuntimeState(const EventRuntimeState &runtimeState, bool grantItemsToInventory)
+void OutdoorPartyRuntime::applyEventRuntimeState(EventRuntimeState &runtimeState, bool grantItemsToInventory)
 {
     m_party.applyEventRuntimeState(runtimeState, grantItemsToInventory);
 }

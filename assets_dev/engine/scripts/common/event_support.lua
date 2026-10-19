@@ -797,7 +797,7 @@ function support.registerScopeEvent(scopeName, tableName, eventId, title, handle
     if handler ~= nil then
         evt[tableName][eventId] = function(...)
             evt._BeginEvent(eventId)
-            handler(...)
+            evt._InvokeEventHandler(eventId, scopeName, handler, ...)
         end
     end
 end
@@ -868,7 +868,7 @@ function support.appendScopeEvent(scopeName, tableName, eventId, handler)
         end
 
         if handler ~= nil then
-            handler(...)
+            evt._InvokeEventHandler(eventId, scopeName, handler, ...)
         end
     end
 end
@@ -1008,6 +1008,23 @@ end
 function support.setMapContextAction(eventId, metadata)
     local meta = ensureMetaScope("map")
     meta.contextActions[eventId] = metadata
+end
+
+local function setItemRewards(scopeName, eventId, items)
+    local handler = evt[scopeName][eventId]
+    assert(type(handler) == "function", "Item reward metadata requires a registered event handler")
+    local meta = ensureMetaScope(scopeName)
+    meta.itemRewards = meta.itemRewards or {}
+    -- Binding to the actual callback prevents an overlay from inheriting stale base rewards.
+    meta.itemRewards[eventId] = {handler = handler, items = items}
+end
+
+function support.setMapItemRewards(eventId, items)
+    setItemRewards("map", eventId, items)
+end
+
+function support.setGlobalItemRewards(eventId, items)
+    setItemRewards("global", eventId, items)
 end
 
 function support.appendMapOnLoadEvent(eventId)
@@ -1582,6 +1599,8 @@ PickRandomOption = support.pickRandomOption
 AskQuestionWithAnswerSteps = support.askQuestionWithAnswerSteps
 SetMapMetadata = support.setMapMetadata
 SetMapContextAction = support.setMapContextAction
+SetMapItemRewards = support.setMapItemRewards
+SetGlobalItemRewards = support.setGlobalItemRewards
 AppendMapOnLoadEvent = support.appendMapOnLoadEvent
 AppendMapOnLeaveEvent = support.appendMapOnLeaveEvent
 RegisterMapOnLoadEvent = support.registerMapOnLoadEvent
