@@ -1475,8 +1475,8 @@ void AtlasScreen::drawReference()
         : !m_locationError.empty() ? m_locationError : m_referenceSection == WorldGuideSection::Items
         ? (m_guide ? "Sources include fixed loot and conditional scripted rewards. "
             "They do not guarantee quest eligibility, random loot or remaining contents."
-            : "Recorded sources come from pickups, received rewards and visible chest contents. "
-              "A past observation does not guarantee an item is still there.") : m_guide
+            : "Recorded sources include pickups, creature loot, received rewards and seen chest items. "
+              "Past observations do not guarantee that loot remains.") : m_guide
         ? "Reference definitions follow the loaded game tables, including enabled mods."
         : "Discovery shows encountered items, known spell references, current classes, known recipes, "
           "recruited companions, observed monsters and recorded quests.",

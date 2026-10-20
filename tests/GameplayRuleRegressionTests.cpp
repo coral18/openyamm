@@ -25,6 +25,7 @@
 #include "game/items/PriceCalculator.h"
 #include "game/maps/IndoorSceneYml.h"
 #include "game/maps/OutdoorSceneYml.h"
+#include "game/maps/SaveGame.h"
 #include "game/outdoor/OutdoorMapData.h"
 #include "game/maps/TerrainTileData.h"
 #include "game/outdoor/OutdoorGeometryUtils.h"
@@ -40,6 +41,8 @@
 #include "game/tables/SpriteTables.h"
 #include "game/tables/SurfaceMaterialTable.h"
 #include "game/ui/GameplayOverlayTypes.h"
+#include "game/world/WorldItemSources.h"
+#include "game/world/WorldMapKnowledge.h"
 
 #include "tests/RegressionGameData.h"
 #include "tests/PartySpellTestHarness.h"
@@ -49,6 +52,7 @@
 #include <cmath>
 #include <cstddef>
 #include <filesystem>
+#include <limits>
 #include <fstream>
 #include <iostream>
 #include <optional>
@@ -2605,6 +2609,58 @@ TEST_CASE("corpse auto loot silently closes empty corpse view")
     CHECK(result.empty);
     CHECK(result.statusText.empty());
     CHECK(worldRuntime.activeCorpseView() == nullptr);
+}
+
+TEST_CASE("taken creature items record only the selected item at its actual actor position")
+{
+    using namespace OpenYAMM::Game;
+    OpenYAMM::Tests::PartySpellTestWorldRuntime runtime;
+    GameplayRuntimeActorState actor;
+    actor.preciseX = 100.4f; actor.preciseY = -200.7f; actor.preciseZ = 300;
+    runtime.addActor(actor);
+    runtime.advanceGameMinutes(123);
+    GameplayCorpseViewState view;
+    view.items = {makeTestCorpseItem(42, 1, 1), makeTestCorpseItem(43, 1, 1)};
+    REQUIRE(worldObservedItemSources(*runtime.eventRuntimeState()).empty());
+    recordWorldActorItem(runtime, view, view.items.front());
+    const auto sources = worldObservedItemSources(*runtime.eventRuntimeState());
+    REQUIRE(sources.size() == 1);
+    CHECK(sources.front().itemId == 42);
+    CHECK(sources.front().kind == WorldItemSourceKind::Carried);
+    CHECK(sources.front().sourceIndex == 0);
+    CHECK(sources.front().gameMinutes == 123);
+    CHECK(sources.front().position == std::array<int32_t, 3>{100, -201, 300});
+    CHECK(worldItemSourceLabel(sources.front()) == "Taken from creature");
+    EventRuntimeState refilled;
+    restoreWorldMapKnowledgeAfterRefill(*runtime.eventRuntimeState(), refilled);
+    CHECK(worldObservedItemSources(refilled).size() == 1);
+    const auto valid = runtime.eventRuntimeState()->namedMapVars;
+    view.items.front().isGold = true;
+    recordWorldActorItem(runtime, view, view.items.front());
+    view.items.front().isGold = false;
+    view.fromSummonedMonster = true; // This legacy namespace cannot be resolved as a map actor index.
+    recordWorldActorItem(runtime, view, view.items.front());
+    view.fromSummonedMonster = false;
+    view.sourceIndex = 1;
+    recordWorldActorItem(runtime, view, view.items.front());
+    actor.preciseX = std::numeric_limits<float>::quiet_NaN();
+    runtime.addActor(actor);
+    recordWorldActorItem(runtime, view, view.items.front());
+    CHECK(runtime.eventRuntimeState()->namedMapVars == valid);
+    GameSaveData save;
+    save.mapFileName = "7out02.odm";
+    save.outdoorWorld.eventRuntimeState = *runtime.eventRuntimeState();
+    const std::filesystem::path path = std::filesystem::temp_directory_path() / "openyamm_taken_creature_item.oysav";
+    std::string error;
+    REQUIRE_MESSAGE(saveGameDataToPath(path, save, error), error);
+    const auto loaded = loadGameDataFromPath(path, error);
+    std::filesystem::remove(path);
+    REQUIRE_MESSAGE(loaded.has_value(), error);
+    REQUIRE(loaded->outdoorWorld.eventRuntimeState.has_value());
+    const auto savedSources = worldObservedItemSources(*loaded->outdoorWorld.eventRuntimeState);
+    REQUIRE(savedSources.size() == 1);
+    CHECK(savedSources.front().position == sources.front().position);
+    CHECK(savedSources.front().itemId == 42);
 }
 
 TEST_CASE("charged wand attack profile prefers wand over equipped bow")

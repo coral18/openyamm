@@ -17,6 +17,7 @@ ReplaceMapEvent(376, "Portrait", function()
     SetQBit(QBit(778)) -- Took Angel Painting
     applyPortraitTakenState()
 end, "Portrait")
+SetMapItemRewards(376, {1423})
 
 RegisterMapOnLoadEvent(65037, "Restore Haunted Mansion portrait state", function()
     if IsQBitSet(QBit(778)) then -- Took Angel Painting

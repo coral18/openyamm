@@ -126,6 +126,7 @@ std::string worldItemSourceLabel(const WorldItemSource &source)
     if (source.observed)
     {
         if (source.kind == WorldItemSourceKind::Chest) return "Observed in chest";
+        if (source.kind == WorldItemSourceKind::Carried) return "Taken from creature";
         if (source.kind == WorldItemSourceKind::MapReward || source.kind == WorldItemSourceKind::SharedReward)
             return "Received reward";
         return "Last picked up";
@@ -171,6 +172,25 @@ void recordWorldItemPickup(EventRuntimeState &state, const GameplayWorldItemInsp
     record(state, source);
 }
 
+void recordWorldActorItem(IGameplayWorldRuntime &runtime, const GameplayCorpseViewState &view,
+    const GameplayChestItemState &item)
+{
+    EventRuntimeState *pState = runtime.eventRuntimeState();
+    const uint32_t itemId = item.item.objectDescriptionId != 0 ? item.item.objectDescriptionId : item.itemId;
+    const float minute = runtime.gameMinutes();
+    GameplayRuntimeActorState actor;
+    if (pState == nullptr || item.isGold || itemId == 0 || !validMinute(minute) || view.fromSummonedMonster
+        || !runtime.actorRuntimeState(view.sourceIndex, actor)) return;
+    WorldItemSource source;
+    source.itemId = itemId;
+    source.sourceIndex = view.sourceIndex;
+    source.kind = WorldItemSourceKind::Carried;
+    source.position = sourcePosition(actor.preciseX, actor.preciseY, actor.preciseZ);
+    if (!source.position) return;
+    source.gameMinutes = int32_t(minute);
+    record(*pState, source);
+}
+
 std::vector<WorldItemSource> worldObservedItemSources(const EventRuntimeState &state)
 {
     std::vector<WorldItemSource> result;
@@ -186,12 +206,13 @@ std::vector<WorldItemSource> worldObservedItemSources(const EventRuntimeState &s
         const std::string kind = id.substr(0, first);
         if (kind == "chest") source.kind = WorldItemSourceKind::Chest;
         else if (kind == "placed" && source.sourceIndex == 0) source.kind = WorldItemSourceKind::Placed;
+        else if (kind == "carried") source.kind = WorldItemSourceKind::Carried;
         else if ((kind == "map-reward" || kind == "shared-reward")
             && source.sourceIndex > 0 && source.sourceIndex <= UINT16_MAX)
             source.kind = kind == "map-reward" ? WorldItemSourceKind::MapReward : WorldItemSourceKind::SharedReward;
         else continue;
         source.id = "observed/" + id; source.observed = true; source.gameMinutes = minute;
-        if (source.kind == WorldItemSourceKind::Placed)
+        if (source.kind == WorldItemSourceKind::Placed || source.kind == WorldItemSourceKind::Carried)
         {
             const std::string prefix = ObservationPrefix + id + "/";
             if (!state.namedMapVars.contains(prefix + "x") || !state.namedMapVars.contains(prefix + "y")

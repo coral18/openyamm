@@ -1030,6 +1030,22 @@ TEST_CASE("world item source catalog excludes random chest placeholders "
     const auto before = known.itemObservations;
     CHECK(buildWorldGuide(source, WorldGuideSection::Items, knowledge, true).size() > 1);
     CHECK(known.itemObservations.size() == before.size());
+    // Taking an item from a creature adds a historical feature, not its entire possible loot table.
+    const std::string carried = "openyamm.discovery.item/carried/5/" + std::to_string(itemId) + "/";
+    state.namedMapVars[carried + "x"] = -321;
+    state.namedMapVars[carried + "y"] = 123;
+    state.namedMapVars[carried + "z"] = 55;
+    state.namedMapVars[carried + "time"] = 410;
+    known.itemObservations["7out02.odm"] = worldObservedItemSources(state);
+    world.indexObservedItemSources(known, items);
+    const auto withCreature = buildWorldGuide(source, WorldGuideSection::Items, knowledge, false);
+    REQUIRE(withCreature.size() == 1);
+    REQUIRE(withCreature.front().links.size() == 2);
+    const auto creature = std::find_if(withCreature.front().links.begin(), withCreature.front().links.end(),
+        [](const WorldGuideLink &link) { return link.label.starts_with("Taken from creature: Harmondale"); });
+    REQUIRE(creature != withCreature.front().links.end());
+    CHECK(creature->kind == WorldGuideLink::Kind::Feature);
+    CHECK(creature->label.find("(-321, 123)") != std::string::npos);
     known.visitedMaps.clear();
     CHECK(world.itemSources(known, false).empty());
     CHECK(world.queryFeatures(known, false).empty());

@@ -397,6 +397,7 @@ GameplayCorpseAutoLootResult autoLootActiveCorpseView(
 
     while (const GameplayCorpseViewState *pCorpseView = worldRuntime.activeCorpseView())
     {
+        const uint32_t sourceIndex = pCorpseView->sourceIndex;
         if (pCorpseView->items.empty())
         {
             break;
@@ -421,7 +422,7 @@ GameplayCorpseAutoLootResult autoLootActiveCorpseView(
             result.lootedAny = result.lootedAny || goldAmount > 0;
             GAMEPLAY_DEBUG_TRACE(
                 "gold_received destination=party source=corpse"
-                " corpse_index=" + std::to_string(pCorpseView->sourceIndex)
+                " corpse_index=" + std::to_string(sourceIndex)
                 + " amount=" + std::to_string(goldAmount));
             continue;
         }
@@ -442,7 +443,7 @@ GameplayCorpseAutoLootResult autoLootActiveCorpseView(
                 "item_received destination=inventory source=corpse item_id="
                 + std::to_string(inventoryItem.objectDescriptionId)
                 + gameplayDebugTraceItemSummary(inventoryItem.objectDescriptionId, pItemTable)
-                + " corpse_index=" + std::to_string(pCorpseView->sourceIndex)
+                + " corpse_index=" + std::to_string(sourceIndex)
                 + " loot_item_index=0"
                 + " member_index=" + std::to_string(party.activeMemberIndex()));
 
@@ -471,7 +472,7 @@ GameplayCorpseAutoLootResult autoLootActiveCorpseView(
                 "item_received destination=held source=corpse item_id="
                 + std::to_string(pHeldInventoryItem->item.objectDescriptionId)
                 + gameplayDebugTraceItemSummary(pHeldInventoryItem->item.objectDescriptionId, pItemTable)
-                + " corpse_index=" + std::to_string(pCorpseView->sourceIndex)
+                + " corpse_index=" + std::to_string(sourceIndex)
                 + " loot_item_index=0");
 
             if (result.firstItemName.empty())

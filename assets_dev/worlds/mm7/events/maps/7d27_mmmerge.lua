@@ -15,6 +15,7 @@ ReplaceMapEvent(376, nil, function()
     ApplyRolandReleasedState()
     evt.SpeakNPC(626)
 end)
+SetMapItemRewards(376, {1463})
 
 RegisterMapOnLoadEvent(65027, "Restore Roland release state", function()
     if IsQBitSet(QBit(752)) then

@@ -1,0 +1,15 @@
+id: atlas.mm7_creature_item_source
+world: mm7
+mode: faithful
+title: Taking an authored creature item retains its physical source through save and load
+# CombatLoot applies deterministic test damage to a real authored actor; no test item is granted.
+steps:
+- new_game_flow: {start_map: 7out02.odm}
+- load_map: {map: 7d06.blv}
+- combat_loot: {actor_index: 3, expected_item_id: 845}
+- assert:
+    named_map_var_changed: {name: openyamm.discovery.item/carried/3/845/x, value: -5586}
+- save_game: taken-creature-item
+- load_game: taken-creature-item
+- assert:
+    named_map_var_changed: {name: openyamm.discovery.item/carried/3/845/x, value: -5586}

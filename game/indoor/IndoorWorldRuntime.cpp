@@ -11188,6 +11188,7 @@ bool IndoorWorldRuntime::tryStealFromActor(size_t actorIndex, uint32_t successRo
         return true;
     }
 
+    recordWorldActorItem(*this, corpse, stolenItem);
     corpse.items.erase(corpse.items.begin());
 
     if (m_pGameplayView != nullptr)
@@ -15127,6 +15128,7 @@ bool IndoorWorldRuntime::takeActiveCorpseItem(size_t itemIndex, ChestItemState &
     }
 
     item = m_activeCorpseView->items[itemIndex];
+    recordWorldActorItem(*this, *m_activeCorpseView, item);
     m_activeCorpseView->items.erase(m_activeCorpseView->items.begin() + itemIndex);
 
     if (m_activeCorpseView->items.empty())

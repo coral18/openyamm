@@ -912,3 +912,46 @@ After synchronizing the Ravenshore bake/recipe, the final MM7 and MM8 native tou
 captures with no map-marker indexing failures, no item-source scan failures and no stale-lighting rejection.
 MM8 now reports `Sources ready`. Repeating the broader scripted-map suite with this matching payload still
 reports 88/95 passing and the same seven cases / 134 failed assertions listed above.
+
+
+### Creature item history and handwritten reward declarations, 2026-10-20
+
+Actual item removal from a creature now records shared `openyamm.discovery.item/carried/<actor>/<item>/`
+coordinates and time. The shared recorder reads the current runtime actor position, not the authored spawn or
+party position. Both indoor and outdoor corpse-item removal and successful inventory delivery after stealing
+use that recorder. Failed theft, a blocked pickup, viewing a creature, gold and untaken contents add no item fact.
+Invalid/unresolvable actor indices, nonfinite positions and legacy separate-summon views cannot invent a map
+actor origin. The existing named-map serializer and refill knowledge retention preserve these historical facts;
+old campaigns receive no reconstructed loot history. The optional Atlas UI remains independent of recording.
+
+Discovery item details link these facts to a native item-source feature and retain the source when returning
+from the map. The label is `Taken from creature`, covering both corpse loot and successful theft. This history
+is neither a guaranteed random drop nor a current inventory/availability check. Loot is generated only by the
+normal gameplay interaction. Corpse auto-loot also captures its source index before taking the final item, so
+its debug trace no longer reads a corpse view that the take operation may have destroyed.
+
+Handwritten MM7 script owners now declare five replacement/appended callback rewards explicitly: Colony Zod's
+key (376/1463), the Haunted Mansion portrait (376/1423), Malwick's wand (769/947), and the Master Archer and
+Sniper promotion bows (816 and 820 / 1345). Generated EVT callbacks and their lighting hashes are unchanged.
+Other handwritten sources, guaranteed scripted drops, semantic item policies and conditional-source completeness
+remain in the coverage matrix; these five declarations are not a claim of complete reward coverage.
+
+Native Windows validation passed 193 focused Atlas/loader cases / 6,881 assertions and seven targeted creature,
+handwritten-reward and callback-origin cases / 729 assertions. Linux Atlas ASan/UBSan checks passed 66 / 4,268.
+The expanded selection including GameplayRuleRegressionTests is not fully green: 384 of 395 cases passed,
+with eleven fixture/setup failures from missing loose scene/geometry inputs or a second PhysicsFS initialization.
+The full report is retained as `build/atlas-reference/quests/actor-sources-native-tests-full.log`; no whole-project
+pass is claimed. The previously documented broader scripted-map limitations remain open.
+
+The faithful `mm7_creature_item_source.yml` and `mm8_creature_item_source.yml` scenarios take an authored Longbow
+in the Temple of the Moon and Sword of Whistlebone in Garrote Gorge, then verify the recorded position after
+save/load. Their CombatLoot action applies deterministic test damage to an existing authored actor and uses the
+normal corpse interaction; it does not grant the expected item or write discovery facts. The recorded runtime X
+positions are -5586 and -17050, respectively, differing from the static spawn coordinates. These are
+isolated interaction fixtures, not a claim of a balanced vanilla playthrough. Repeating MM7 with the Atlas UI
+module disabled also passes (only `karol.test` enabled).
+
+Native AMD/OpenGL captures under `atlas-actors-20261020/` in the Windows development directory show the Discovery
+item, its source map with retained fog/party arrow, and return to the same item in both games. All three images
+per game are checked for fresh writes and were visually inspected. Android/controller checks and complete Atlas
+coverage remain pending.

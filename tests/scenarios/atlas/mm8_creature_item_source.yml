@@ -1,0 +1,15 @@
+id: atlas.mm8_creature_item_source
+world: mm8
+mode: faithful
+title: Taking an outdoor creature item retains its physical source through save and load
+# CombatLoot applies deterministic test damage to a real authored actor; no test item is granted.
+steps:
+- new_game_flow: {start_map: out01.odm}
+- load_map: {map: out05.odm}
+- combat_loot: {actor_index: 3, expected_item_id: 540}
+- assert:
+    named_map_var_changed: {name: openyamm.discovery.item/carried/3/540/x, value: -17050}
+- save_game: taken-creature-item
+- load_game: taken-creature-item
+- assert:
+    named_map_var_changed: {name: openyamm.discovery.item/carried/3/540/x, value: -17050}

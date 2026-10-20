@@ -12,8 +12,11 @@ namespace OpenYAMM::Game
 class ItemTable;
 class ObjectTable;
 class ScriptedEventProgram;
+class IGameplayWorldRuntime;
 struct EventRuntimeState;
 struct GameplayChestViewState;
+struct GameplayCorpseViewState;
+struct GameplayChestItemState;
 struct GameplayWorldItemInspectState;
 struct MapDeltaData;
 
@@ -36,6 +39,9 @@ std::vector<WorldItemSource> buildWorldItemSources(const MapDeltaData &delta,
 std::string worldItemSourceLabel(const WorldItemSource &source);
 void recordWorldChestItems(EventRuntimeState &state, const GameplayChestViewState &view, float gameMinutes);
 void recordWorldItemPickup(EventRuntimeState &state, const GameplayWorldItemInspectState &item, float gameMinutes);
+// Call only after taking an item successfully. Does not inspect or materialize other creature loot.
+void recordWorldActorItem(IGameplayWorldRuntime &runtime, const GameplayCorpseViewState &source,
+    const GameplayChestItemState &item);
 std::vector<WorldItemSource> worldObservedItemSources(const EventRuntimeState &state);
 // Pending origin is saved alongside the existing grant queue; it is not a discovery until delivery succeeds.
 void stageWorldItemReward(EventRuntimeState &state, bool detailed, size_t index,

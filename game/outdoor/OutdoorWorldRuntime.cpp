@@ -14436,6 +14436,7 @@ bool OutdoorWorldRuntime::tryStealFromActor(size_t actorIndex, uint32_t successR
         return true;
     }
 
+    recordWorldActorItem(*this, corpse, stolenItem);
     corpse.items.erase(corpse.items.begin());
 
     if (m_pInteractionView != nullptr)
@@ -17156,6 +17157,7 @@ bool OutdoorWorldRuntime::takeActiveCorpseItem(size_t itemIndex, ChestItemState 
     }
 
     item = m_activeCorpseView->items[itemIndex];
+    recordWorldActorItem(*this, *m_activeCorpseView, item);
     m_activeCorpseView->items.erase(m_activeCorpseView->items.begin() + static_cast<ptrdiff_t>(itemIndex));
 
     if (m_activeCorpseView->items.empty())

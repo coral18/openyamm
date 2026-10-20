@@ -9347,6 +9347,29 @@ TEST_CASE("d06 submarine event plays cutscene and moves to small sub pen")
     CHECK_EQ(runtimeState.pendingMapMove->z, -687);
 }
 
+TEST_CASE("handwritten MM7 rewards describe the final loaded callbacks")
+{
+    using namespace OpenYAMM::Game;
+    const auto &loader = requireRegressionMapLoader();
+    for (const auto &[file, item] : {std::pair{"7d27.blv", 1463u}, std::pair{"7d37.blv", 1423u}})
+    {
+        MapAssetInfo map;
+        map.map.fileName = file;
+        map.map.worldId = "mm7";
+        std::string error;
+        REQUIRE_MESSAGE(GameDataLoader::loadEventPrograms(loader.assetFileSystem, map, error), error);
+        REQUIRE(map.localEventProgram.has_value());
+        REQUIRE(map.localEventProgram->itemRewards().contains(376));
+        CHECK(map.localEventProgram->itemRewards().at(376) == std::vector<uint32_t>{item});
+        REQUIRE(map.globalEventProgram.has_value());
+        for (const auto &[event, reward] : {std::pair{769, 947u}, std::pair{816, 1345u}, std::pair{820, 1345u}})
+        {
+            REQUIRE(map.globalEventProgram->itemRewards().contains(event));
+            CHECK(map.globalEventProgram->itemRewards().at(event) == std::vector<uint32_t>{reward});
+        }
+    }
+}
+
 TEST_CASE("corpse loot includes authored guaranteed carried item")
 {
     const OpenYAMM::Tests::RegressionMapLoader &mapLoader = requireRegressionMapLoader();

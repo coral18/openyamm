@@ -404,6 +404,7 @@ ReplaceGlobalEvent(816, "MMMerge Master Archer promotion", function()
         ClearQBit(QBit(542))
     end
 end)
+SetGlobalItemRewards(816, {1345})
 
 ReplaceGlobalEvent(818, "MMMerge Warrior Mage promotion", function()
     local result = MM7.CompletePromotion({
@@ -461,6 +462,7 @@ ReplaceGlobalEvent(820, "MMMerge Sniper promotion", function()
         SetQBit(QBit(544))
     end
 end)
+SetGlobalItemRewards(820, {1345})
 
 ReplaceGlobalEvent(821, "MMMerge Champion promotion gate", function()
     if MM7.AnyQBit({1566, 1567}) then
@@ -1034,6 +1036,7 @@ AppendGlobalEvent(769, function()
         maxCharges = 30,
     })
 end)
+SetGlobalItemRewards(769, {947})
 
 ReplaceGlobalEvent(783, "MMMerge Cast Off to Harmondale", function()
     ClearQBit(QBit(528))

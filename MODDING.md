@@ -228,3 +228,9 @@ The generated `_00_item_rewards.lua` overlays load after base handlers and befor
 GrayFace's decompiled `txt` references for all three worlds must be present at the documented reference paths:
 the exporter also uses them to resolve object types, so the script rejects missing reference directories.
 Handwritten callbacks must own their declarations; actor drops and general semantic-source integration remain pending.
+
+
+Successful corpse-item removal and pickpocket inventory delivery also record `openyamm.discovery.item/carried/`
+facts through the shared runtime. Recorded positions belong to the actual actor at that interaction, not its
+spawn. The existing save/refill handling preserves this historical knowledge independently of the Atlas UI.
+Merely inspecting a creature does not reveal its loot, and an old save does not acquire a guessed loot history.
