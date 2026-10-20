@@ -8,9 +8,22 @@
 
 namespace OpenYAMM::Game
 {
+std::optional<int32_t> worldFloorPlanLayer(float z)
+{
+    if (!std::isfinite(z)) return std::nullopt;
+    const double layer = std::floor((double(z) + 256) / 512);
+    if (layer < INT32_MIN || layer > INT32_MAX) return std::nullopt;
+    return int32_t(layer);
+}
+
+bool worldFloorPlanLayerMatches(std::optional<int32_t> layer, float z)
+{
+    return !layer || worldFloorPlanLayer(z) == layer;
+}
+
 WorldFloorPlanRaster buildWorldFloorPlan(const IndoorMapData &map,
     const WorldFloorPlanKnowledge &knowledge, bool guide,
-    const std::vector<std::pair<float, float>> &knownPositions)
+    const std::vector<std::pair<float, float>> &knownPositions, std::optional<int32_t> layer)
 {
     WorldFloorPlanRaster raster;
     std::vector<const IndoorOutline *> lines;
@@ -38,7 +51,9 @@ WorldFloorPlanRaster buildWorldFloorPlan(const IndoorMapData &map,
             || hasFaceAttribute(a, FaceAttribute::SeenByParty) || hasFaceAttribute(b, FaceAttribute::SeenByParty);
         if (!guide && !revealed)
             continue;
-        lines.push_back(&line);
+        const int32_t lineLayer = *worldFloorPlanLayer(line.z);
+        raster.layers.push_back(lineLayer);
+        if (!layer || lineLayer == *layer) lines.push_back(&line);
         for (auto id : {line.vertex1Id, line.vertex2Id})
         {
             minX = std::min(minX, double(map.vertices[id].x)); maxX = std::max(maxX, double(map.vertices[id].x));
@@ -46,6 +61,8 @@ WorldFloorPlanRaster buildWorldFloorPlan(const IndoorMapData &map,
         }
     }
     raster.outlineCount = lines.size();
+    std::sort(raster.layers.begin(), raster.layers.end());
+    raster.layers.erase(std::unique(raster.layers.begin(), raster.layers.end()), raster.layers.end());
     // A remembered position can be known before any nearby wall outline. It frames an otherwise blank map,
     // without using undiscovered geometry to infer its bounds or awarding any reveal bits.
     for (const auto &[x, y] : knownPositions)
@@ -62,8 +79,8 @@ WorldFloorPlanRaster buildWorldFloorPlan(const IndoorMapData &map,
         raster.pixelsBgra[p] = 15; raster.pixelsBgra[p + 1] = 22;
         raster.pixelsBgra[p + 2] = 24; raster.pixelsBgra[p + 3] = 255;
     }
-    constexpr double padding = 24;
-    const double minimumSpan = lines.empty() ? 512.0 : 1.0;
+    constexpr double padding = 40;
+    const double minimumSpan = raster.layers.empty() ? 512.0 : 1.0;
     const double scale = std::min((raster.width - 2 * padding) / std::max(minimumSpan, maxX - minX),
                                   (raster.height - 2 * padding) / std::max(minimumSpan, maxY - minY));
     raster.centerX = (minX + maxX) / 2;

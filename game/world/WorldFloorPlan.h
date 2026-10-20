@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <vector>
 #include <utility>
+#include <optional>
 
 #include <unordered_set>
 
@@ -27,9 +28,14 @@ struct WorldFloorPlanRaster
     std::pair<float, float> worldToUv(float x, float y) const;
     std::pair<float, float> uvToWorld(float u, float v) const;
     std::vector<uint8_t> pixelsBgra;
+    std::vector<int32_t> layers;
 };
 
+// Height bands are 512 world units wide and centred at integer multiples of 512.
+std::optional<int32_t> worldFloorPlanLayer(float z);
+bool worldFloorPlanLayerMatches(std::optional<int32_t> layer, float z);
 WorldFloorPlanRaster buildWorldFloorPlan(const IndoorMapData &map,
     const WorldFloorPlanKnowledge &knowledge, bool guide,
-    const std::vector<std::pair<float, float>> &knownPositions = {});
+    const std::vector<std::pair<float, float>> &knownPositions = {},
+    std::optional<int32_t> layer = std::nullopt);
 } // namespace OpenYAMM::Game

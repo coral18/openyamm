@@ -268,7 +268,7 @@ std::vector<WorldGuideEntry> buildWorldGuide(const WorldGuideSource &source, Wor
                 sources[pItemSource->itemId].push_back(pItemSource);
         for (const ItemDefinition &item : source.pItems->entries())
         {
-            if (item.name.empty() || (!guide && !knowledge.items.contains(item.itemId)))
+            if (item.itemId == 0 || item.name.empty() || (!guide && !knowledge.items.contains(item.itemId)))
                 continue;
             WorldGuideEntry entry{std::to_string(item.itemId), item.name};
             entry.details = item.name + "\n" + item.equipStat + " | " + item.skillGroup

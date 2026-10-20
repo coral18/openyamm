@@ -47,16 +47,16 @@ void WorldDatabase::indexMapSites(const WorldRecord &source, const std::vector<W
         }
         return nullptr;
     };
-    const auto add = [&](const std::string &site, uint16_t eventId, double x, double y)
+    const auto add = [&](const std::string &site, uint16_t eventId, double x, double y, double z)
     {
         const WorldRecord *pTarget = target(eventId);
-        if (pTarget == nullptr || !std::isfinite(x) || !std::isfinite(y))
+        if (pTarget == nullptr || !std::isfinite(x) || !std::isfinite(y) || !std::isfinite(z))
             return;
         if (pSource->kind == WorldRecordKind::Region
             && (x < -32768 || x > 32768 || y < -32768 || y > 32768))
             return;
         m_locations.push_back({pSource->id + "/site/" + site + "/event/" + std::to_string(eventId),
-                               pSource->id, pTarget->id, eventId, float(x), float(y)});
+                               pSource->id, pTarget->id, eventId, float(x), float(y), float(z)});
     };
     std::erase_if(m_features, [pSource](const WorldMapFeature &feature)
     { return feature.mapId == pSource->id && feature.kind != WorldMapFeatureKind::Monster
@@ -64,7 +64,7 @@ void WorldDatabase::indexMapSites(const WorldRecord &source, const std::vector<W
     auto features = buildWorldMapFeatures(pSource->id, sites, events);
     m_features.insert(m_features.end(), features.begin(), features.end());
     for (const WorldInteractionSite &site : sites)
-        add(site.id, site.eventId, site.x, site.y);
+        add(site.id, site.eventId, site.x, site.y, site.z);
 }
 
 const std::vector<WorldMapLocation> &WorldDatabase::locations() const { return m_locations; }

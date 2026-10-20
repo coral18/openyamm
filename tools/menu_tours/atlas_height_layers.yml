@@ -1,0 +1,25 @@
+# Load an isolated dungeon save, for example from atlas/mm7_creature_item_source.yml or mm8_item_sources.yml.
+# Coordinates use MenuInputTour's shared 1600x900 design canvas.
+output_dir: output/atlas-height-layers
+exit: true
+steps:
+  - expect: gameplay
+  - pause: true
+  - click: [800, 821]
+  - click: [1480, 126]
+  - capture: known-all
+  - click: [637, 695]
+  - capture: known-party
+  - click: [406, 695]
+  - capture: known-higher
+  - click: [499, 695]
+  - click: [1152, 57]
+  - capture: guide-all
+  - click: [406, 695]
+  - capture: guide-lowest
+  - click: [406, 695]
+  - capture: guide-next
+  - click: [637, 695]
+  - capture: guide-party
+  - click: [1152, 57]
+  - capture: discovery-reset

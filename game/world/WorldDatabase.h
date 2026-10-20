@@ -32,6 +32,7 @@ struct WorldMapLocation
     std::string recordId;
     uint16_t eventId = 0;
     float x = 0, y = 0;
+    float z = 0;
 };
 
 // Presentation metadata only. Names, services, requirements and schedules belong to the game tables.

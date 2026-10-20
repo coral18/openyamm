@@ -955,3 +955,46 @@ Native AMD/OpenGL captures under `atlas-actors-20261020/` in the Windows develop
 item, its source map with retained fog/party arrow, and return to the same item in both games. All three images
 per game are checked for fresh writes and were visually inspected. Android/controller checks and complete Atlas
 coverage remain pending.
+
+
+### Dungeon elevation controls, 2026-10-20
+
+Dungeon maps now offer Lower, Higher, All and Party height controls. Layers are 512-world-unit height bands
+centred at multiples of 512, using the same native `IndoorOutline.z` elevation reference as the dungeon minimap.
+They are height filters, not authored or inferred semantic floor names. All heights retains the previous overview.
+The selected band filters outlines, physical service pins, located service records, feature pins and the feature
+list. A reference link to a known positioned feature selects its band; selecting a venue restores All so that
+navigation does not land on a hidden pin. Existing two-dimensional map notes remain visible on all bands.
+Per-level annotations and more complex overlapping-floor separation remain coverage work.
+
+Discovery derives available bands solely from revealed/non-hidden outlines, visible known features and the live
+party's known height. Unrevealed geometry supplies neither bands nor bounds. Guide uses the full available plan;
+returning to Discovery resets the band and rebuilds its available heights from party knowledge. Raster bounds
+stay anchored to all already-known outlines/positions while changing a band, so adjacent layers share the same
+projection. Reading or changing the filter does not write exploration state, quest state or item observations.
+
+The live Atlas party projection now carries optional foot Z. The party arrow appears only on its selected band
+(or All), and Party height selects that band without revealing any nearby geometry. Source/party points can still
+frame an otherwise blank plan. The controls occupy their own bottom rail, clear of the map and its markers;
+additional raster padding keeps the party arrow inside the map. Layers are local screen state. Neither the save
+schema nor gameplay movement changed, and the optional Atlas module remains independent of shared discovery.
+
+Native visual checks exposed zero-ID authored item sources: an empty carried-item field was accepted because
+merged table row zero has a placeholder name. The source builder and common source index now reject ID zero,
+and the item reference also excludes that sentinel. Regression coverage supplies an empty actor beside a real
+carried-item source; this fixes the authoritative derived index rather than hiding a misleading `0` label.
+
+Windows Release validation passed 169 focused cases / 6,543 assertions across World Database/Guide, party/save,
+filesystem mounts, content manifests and Mod Loader. Linux Atlas ASan/UBSan passed 68 cases / 4,296 assertions.
+Height-specific tests cover negative heights/band boundaries, invalid inputs, stacked outlines, stable projection,
+strict hidden-layer filtering, unchanged discovery bits and physical service Z. These are focused suites; previous
+full-regression fixture limitations remain open.
+
+The reusable native input tour is `tools/menu_tours/atlas_height_layers.yml`, with shared design-canvas coordinates
+and output under `output/atlas-height-layers` in the isolated runtime. Load an isolated dungeon save and set
+`debug.menu_input_tour_path` to that file as described in `tools/RUN_GAME.md`. Native AMD/OpenGL runs under
+`atlas-heights-20261020/` in the Windows development directory use the Temple of the Moon (MM7) and Abandoned
+Temple (MM8), covering known overview, party height, higher height, full Guide, two Guide bands, Guide party
+height and return to Discovery. Each run requires all eight captures to be newly written. The inspected images
+confirm that geometry changes by height, the party arrow follows its band, and leaving Guide restores the hidden
+plan. Android/controller checks and the complete Atlas coverage matrix remain pending.

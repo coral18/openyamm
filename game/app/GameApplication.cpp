@@ -8901,7 +8901,7 @@ bool GameApplication::openAtlasScreen(bool paused)
         }
         if (const auto *runtime = m_gameSession.activeWorldRuntime())
             knowledge.partyPosition = WorldPartyMapPosition{toLowerCopy(m_gameSession.currentMapFileName()),
-                runtime->partyX(), runtime->partyY(), runtime->gameplayCameraYawRadians()};
+                runtime->partyX(), runtime->partyY(), runtime->gameplayCameraYawRadians(), runtime->partyFootZ()};
         knowledge.visitedMaps.insert(toLowerCopy(m_gameSession.currentMapFileName()));
     }
     try

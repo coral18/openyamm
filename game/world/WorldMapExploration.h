@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <string>
 #include <vector>
+#include <optional>
 
 namespace OpenYAMM::Game
 {
@@ -18,6 +19,7 @@ struct WorldPartyMapPosition
 {
     std::string mapFileName;
     float x = 0, y = 0, yawRadians = 0;
+    std::optional<float> z;
 };
 
 // Same native 88x88 exploration grid as the outdoor Map Book. Empty masks stay hidden.

@@ -989,6 +989,7 @@ TEST_CASE("world item source catalog excludes random chest placeholders "
     delta.chests.push_back(chest);
     MapDeltaActor actor; actor.carriedItemId = itemId; actor.x = -123;
     delta.actors.push_back(actor);
+    delta.actors.emplace_back(); // Zero means no carried item, even if table row zero has a placeholder name.
     const auto catalog = buildWorldItemSources(delta, items, objects);
     REQUIRE(catalog.size() == 3);
     CHECK(catalog[0].kind == WorldItemSourceKind::Placed);
@@ -1027,6 +1028,8 @@ TEST_CASE("world item source catalog excludes random chest placeholders "
     REQUIRE(entries.front().links.size() == 1);
     CHECK(entries.front().links.front().kind == WorldGuideLink::Kind::Feature);
     CHECK(entries.front().links.front().label.find("Last picked up: Harmondale") != std::string::npos);
+    const auto allItems = buildWorldGuide(source, WorldGuideSection::Items, knowledge, true);
+    CHECK(std::none_of(allItems.begin(), allItems.end(), [](const WorldGuideEntry &entry) { return entry.id == "0"; }));
     const auto before = known.itemObservations;
     CHECK(buildWorldGuide(source, WorldGuideSection::Items, knowledge, true).size() > 1);
     CHECK(known.itemObservations.size() == before.size());

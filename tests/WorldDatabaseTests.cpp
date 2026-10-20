@@ -1031,6 +1031,52 @@ TEST_CASE("world database dungeon plan respects reveal bits and hidden faces")
     CHECK(buildWorldFloorPlan(map, {}, true).outlineCount == 4);
 }
 
+TEST_CASE("dungeon height bands handle negative heights and reject nonfinite layer selections")
+{
+    CHECK(worldFloorPlanLayer(0) == 0);
+    CHECK(worldFloorPlanLayer(255.9f) == 0);
+    CHECK(worldFloorPlanLayer(256) == 1);
+    CHECK(worldFloorPlanLayer(-256) == 0);
+    CHECK(worldFloorPlanLayer(-256.1f) == -1);
+    CHECK(worldFloorPlanLayer(-768) == -1);
+    CHECK(worldFloorPlanLayerMatches(-1, -300));
+    CHECK_FALSE(worldFloorPlanLayerMatches(0, -300));
+    CHECK_FALSE(worldFloorPlanLayer(std::numeric_limits<float>::infinity()));
+    CHECK_FALSE(worldFloorPlanLayer(std::numeric_limits<float>::max()));
+    CHECK_FALSE(worldFloorPlanLayerMatches(0, std::numeric_limits<float>::quiet_NaN()));
+}
+
+TEST_CASE("dungeon height selection keeps a stable known projection and hides undiscovered layers")
+{
+    IndoorMapData map;
+    map.vertices = {{0, 0, 0}, {100, 0, 0}, {0, 100, 1024}, {100, 100, 1024},
+        {100000, 100000, 4096}, {100100, 100000, 4096}};
+    map.faces.resize(2);
+    map.outlines = {{0, 1, 0, 1, 0}, {2, 3, 0, 1, 1024}, {4, 5, 0, 1, 4096}};
+    WorldFloorPlanKnowledge knowledge;
+    knowledge.visibleOutlines = {0xc0};
+    const auto all = buildWorldFloorPlan(map, knowledge, false);
+    const auto lower = buildWorldFloorPlan(map, knowledge, false, {}, 0);
+    const auto upper = buildWorldFloorPlan(map, knowledge, false, {}, 2);
+    const auto hidden = buildWorldFloorPlan(map, knowledge, false, {}, 8);
+    CHECK(all.layers == std::vector<int32_t>{0, 2});
+    CHECK(lower.layers == all.layers);
+    CHECK(upper.layers == all.layers);
+    CHECK(all.outlineCount == 2);
+    CHECK(lower.outlineCount == 1);
+    CHECK(upper.outlineCount == 1);
+    CHECK(hidden.outlineCount == 0);
+    CHECK(lower.pixelsBgra != upper.pixelsBgra);
+    CHECK(lower.worldToUv(50, 50) == upper.worldToUv(50, 50));
+    CHECK(lower.worldToUv(50, 50) == hidden.worldToUv(50, 50));
+    CHECK(lower.centerX == 50);
+    CHECK(lower.centerY == 50);
+    CHECK(knowledge.visibleOutlines == std::vector<uint8_t>{0xc0});
+    CHECK(buildWorldFloorPlan(map, knowledge, true).layers == std::vector<int32_t>{0, 2, 8});
+    knowledge.invisibleFaces.insert(1);
+    CHECK(buildWorldFloorPlan(map, knowledge, false).layers.empty());
+}
+
 TEST_CASE("world dungeon plans frame remembered positions without revealing hidden geometry")
 {
     IndoorMapData map;
@@ -1447,6 +1493,7 @@ TEST_CASE("world database indoor services locate resident NPCs and trainers on t
     IndoorMapData geometry;
     geometry.entities.resize(1);
     geometry.entities[0].x = 50000; geometry.entities[0].y = 60000;
+    geometry.entities[0].z = -512;
     geometry.entities[0].eventIdSecondary = 10;
     std::string error;
     const auto program = ScriptedEventProgram::loadFromLuaText(R"lua(
@@ -1464,6 +1511,7 @@ TEST_CASE("world database indoor services locate resident NPCs and trainers on t
     CHECK(location.recordId == "mm7:house/11");
     CHECK(location.x == 50000); // Indoor projection is not limited by the outdoor terrain coordinate range.
     CHECK(location.y == 60000);
+    CHECK(location.z == -512);
     CHECK(world.recordsAtLocation(location, {}, true).size() == 3);
     CHECK_FALSE(world.locationVisible(location, {}, false));
     WorldKnowledge known;

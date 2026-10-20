@@ -288,6 +288,11 @@ void AtlasScreen::select(const WorldRecord &record)
         m_filter.reset();
         m_siteSelection.clear();
     }
+    else
+    {
+        m_floorLayer.reset();
+        m_floorPlanKey.clear();
+    }
 }
 
 std::string AtlasScreen::regionTexture(const WorldRecord &record) const
@@ -578,6 +583,7 @@ bool AtlasScreen::drawLocationMarkers(const WorldRecord &map, const Rect &image,
     {
         if (location.mapId != map.id || !m_world.locationVisible(location, m_knowledge, m_guide))
             continue;
+        if (pFloorPlan != nullptr && !worldFloorPlanLayerMatches(m_floorLayer, location.z)) continue;
         auto records = m_world.recordsAtLocation(location, m_knowledge, m_guide,
             m_filter == WorldRecordKind::Travel);
         std::erase_if(records, [this](const WorldRecord *pRecord)
@@ -730,11 +736,13 @@ void AtlasScreen::drawTravelLinks(const Rect &image)
 
 void AtlasScreen::drawMap()
 {
-    const Rect viewport = canvasRect(25, 121, 544, 270);
-    drawSolidRect(viewport, 0xff18160fu);
-    outline(viewport, 0xff597284u);
     const WorldRecord *map = m_world.find(m_map);
     const bool dungeon = map != nullptr && map->kind == WorldRecordKind::Dungeon;
+    const Rect frame = canvasRect(25, 121, 544, 270);
+    const Rect viewport = canvasRect(25, 121, 544, dungeon ? 234 : 270);
+    drawSolidRect(frame, 0xff18160fu);
+    outline(frame, 0xff597284u);
+    if (dungeon) drawSolidRect(canvasRect(25, 354, 544, 1), 0xff597284u);
     const bool schematic = map == nullptr && m_presentation.overviewTexture.empty();
     const std::string texture = map == nullptr ? m_presentation.overviewTexture : regionTexture(*map);
     const WorldFloorPlanRaster *floorPlan = nullptr;
@@ -742,11 +750,22 @@ void AtlasScreen::drawMap()
     std::string floorPlanKey;
     if (dungeon)
     {
-        floorPlanKey = map->id + (m_guide ? ":guide" : ":discovery");
+        const std::string context = map->id + (m_guide ? ":guide" : ":discovery");
+        if (m_floorLayerContext != context)
+        {
+            m_floorLayerContext = context;
+            m_floorLayer.reset();
+            for (const WorldMapFeature &feature : m_world.features())
+                if (feature.id == m_selectedFeature && feature.kind != WorldMapFeatureKind::Note
+                    && m_world.featureVisible(feature, m_knowledge, m_guide))
+                    m_floorLayer = worldFloorPlanLayer(feature.site.z);
+        }
+        floorPlanKey = context + (m_floorLayer ? ":" + std::to_string(*m_floorLayer) : ":all");
         if (m_floorPlanKey != floorPlanKey)
         {
             m_floorPlanKey = floorPlanKey;
             m_floorPlan = {};
+            m_floorLayers.clear();
             if (bgfx::isValid(m_floorPlanTexture))
                 bgfx::destroy(m_floorPlanTexture);
             m_floorPlanTexture = BGFX_INVALID_HANDLE;
@@ -764,7 +783,17 @@ void AtlasScreen::drawMap()
                     positions.emplace_back(m_knowledge.partyPosition->x, m_knowledge.partyPosition->y);
                 m_floorPlan = buildWorldFloorPlan(*geometry,
                     knowledge == m_knowledge.floorPlans.end() ? WorldFloorPlanKnowledge{} : knowledge->second,
-                    m_guide, positions);
+                    m_guide, positions, m_floorLayer);
+                m_floorLayers = m_floorPlan.layers;
+                for (const WorldMapFeature *pFeature : m_world.queryFeatures(m_knowledge, m_guide, "", map->id))
+                    if (pFeature->kind != WorldMapFeatureKind::Note)
+                        if (const auto layer = worldFloorPlanLayer(pFeature->site.z)) m_floorLayers.push_back(*layer);
+                if (m_knowledge.partyPosition && m_knowledge.partyPosition->z
+                    && m_knowledge.partyPosition->mapFileName == toLowerCopy(map->map->fileName))
+                    if (const auto layer = worldFloorPlanLayer(*m_knowledge.partyPosition->z))
+                        m_floorLayers.push_back(*layer);
+                std::sort(m_floorLayers.begin(), m_floorLayers.end());
+                m_floorLayers.erase(std::unique(m_floorLayers.begin(), m_floorLayers.end()), m_floorLayers.end());
             }
             if (!m_floorPlan.pixelsBgra.empty())
                 m_floorPlanTexture = bgfx::createTexture2D(uint16_t(m_floorPlan.width), uint16_t(m_floorPlan.height),
@@ -782,10 +811,12 @@ void AtlasScreen::drawMap()
         }
         size = TextureSize{float(floorPlan->width), float(floorPlan->height)};
     }
-    else if (schematic)
-        size = TextureSize{1000, 600};
     else
-        size = textureSize(texture);
+    {
+        m_floorLayer.reset();
+        m_floorLayerContext.clear();
+        size = schematic ? std::optional<TextureSize>(TextureSize{1000, 600}) : textureSize(texture);
+    }
     if (!size)
     {
         textInRect(canvasRect(66, 185, 466, 115),
@@ -808,7 +839,8 @@ void AtlasScreen::drawMap()
         drawTexture(texture, image);
     if (floorPlan != nullptr && floorPlan->outlineCount == 0)
         textInRect(canvasRect(34, 126, 200, 34),
-            "Recorded positions only.\nExplore to reveal dungeon outlines.", "menu_lucida", 10);
+            m_floorLayer ? "No mapped outlines at this height."
+                : "Recorded positions only.\nExplore to reveal dungeon outlines.", "menu_lucida", 10);
     if (map != nullptr && !dungeon && !m_guide)
     {
         if (m_fogMap != map->id)
@@ -889,9 +921,10 @@ void AtlasScreen::drawMap()
     }
     if (map != nullptr)
         drawPartyArrow(*map, image, floorPlan);
+    const bool overLayerControls = dungeon && pointerInside(canvasRect(34, 357, 356, 27));
     if (m_placingNote && map != nullptr && leftMouseJustPressed()
         && pointerInside(viewport) && pointerInside(image)
-        && !pointerInside(canvasRect(490, 357, 67, 27)))
+        && !pointerInside(canvasRect(490, 357, 67, 27)) && !overLayerControls)
     {
         const float u = (mouseX() - image.x) / image.width, v = (mouseY() - image.y) / image.height;
         const auto point = floorPlan != nullptr ? floorPlan->uvToWorld(u, v) : [&]()
@@ -904,7 +937,8 @@ void AtlasScreen::drawMap()
         m_noteError.clear(); m_placingNote = false; m_noteEditorOpen = true; m_dragging = false;
         setTextEditing(true);
     }
-    else if (!m_noteEditorOpen && leftMouseJustPressed() && pointerInside(viewport) && !markerHovered)
+    else if (!m_noteEditorOpen && leftMouseJustPressed() && pointerInside(viewport)
+        && !markerHovered && !overLayerControls)
     {
         m_dragging = true;
         m_dragX = mouseX(); m_dragY = mouseY();
@@ -920,6 +954,43 @@ void AtlasScreen::drawMap()
     const float zoomX = schematic ? 34 : 490;
     if (button("atlas-zoom-out", canvasRect(zoomX, 357, 30, 27), "-")) m_zoom = std::max(1.0f, m_zoom - 0.25f);
     if (button("atlas-zoom-in", canvasRect(zoomX + 37, 357, 30, 27), "+")) m_zoom = std::min(3.0f, m_zoom + 0.25f);
+    if (dungeon) drawFloorLayers(*map);
+}
+
+void AtlasScreen::selectFloorLayer(std::optional<int32_t> layer)
+{
+    if (m_floorLayer == layer) return;
+    m_floorLayer = layer;
+    m_floorPlanKey.clear();
+    m_siteSelection.clear(); m_selectedFeature.clear(); m_selected.clear(); m_scroll = 0;
+    m_dragging = false;
+}
+
+void AtlasScreen::drawFloorLayers(const WorldRecord &map)
+{
+    const auto lower = m_floorLayer ? std::lower_bound(m_floorLayers.begin(), m_floorLayers.end(), *m_floorLayer)
+        : m_floorLayers.end();
+    const auto higher = m_floorLayer ? std::upper_bound(m_floorLayers.begin(), m_floorLayers.end(), *m_floorLayer)
+        : m_floorLayers.begin();
+    if (button("atlas-layer-lower", canvasRect(34, 357, 43, 27), "Lower", "button",
+        lower != m_floorLayers.begin())) selectFloorLayer(*std::prev(lower));
+    textInRect(canvasRect(81, 357, 110, 27),
+        m_floorLayer ? "Layer " + std::to_string(*m_floorLayer) : "All heights", "menu_lucida", 11, 0xffc6dfeau, true);
+    if (button("atlas-layer-higher", canvasRect(195, 357, 43, 27), "Higher", "button",
+        higher != m_floorLayers.end())) selectFloorLayer(*higher);
+    std::optional<int32_t> partyLayer;
+    if (m_knowledge.partyPosition && m_knowledge.partyPosition->z
+        && m_knowledge.partyPosition->mapFileName == toLowerCopy(map.map->fileName))
+        partyLayer = worldFloorPlanLayer(*m_knowledge.partyPosition->z);
+    if (button("atlas-layer-all", canvasRect(242, 357, 48, 27), "All", "button", m_floorLayer.has_value()))
+        selectFloorLayer(std::nullopt);
+    if (button("atlas-layer-party", canvasRect(294, 357, 92, 27), "Party height", "button", partyLayer.has_value()))
+        selectFloorLayer(partyLayer);
+}
+
+bool AtlasScreen::featureOnFloorLayer(const WorldMapFeature &feature) const
+{
+    return feature.kind == WorldMapFeatureKind::Note || worldFloorPlanLayerMatches(m_floorLayer, feature.site.z);
 }
 
 void AtlasScreen::drawPartyArrow(const WorldRecord &map, const Rect &image, const WorldFloorPlanRaster *floorPlan)
@@ -927,6 +998,8 @@ void AtlasScreen::drawPartyArrow(const WorldRecord &map, const Rect &image, cons
     if (!m_knowledge.partyPosition || toLowerCopy(map.map->fileName) != m_knowledge.partyPosition->mapFileName)
         return;
     const auto &party = *m_knowledge.partyPosition;
+    if (floorPlan != nullptr && m_floorLayer
+        && (!party.z || !worldFloorPlanLayerMatches(m_floorLayer, *party.z))) return;
     std::pair<float, float> uv;
     if (floorPlan != nullptr)
         uv = floorPlan->worldToUv(party.x, party.y);
@@ -954,6 +1027,20 @@ void AtlasScreen::drawList()
     if (m_trainerMastery != 0)
         std::erase_if(records, [this](const WorldRecord *pRecord)
         { return pRecord->teacher != nullptr && pRecord->teacher->mastery != m_trainerMastery; });
+    if (m_floorLayer)
+    {
+        std::unordered_set<std::string> located, onLayer;
+        for (const WorldMapLocation &location : m_world.locations())
+            if (location.mapId == m_map && m_world.locationVisible(location, m_knowledge, m_guide))
+                for (const WorldRecord *pRecord : m_world.recordsAtLocation(location, m_knowledge, m_guide,
+                    m_filter == WorldRecordKind::Travel))
+                {
+                    located.insert(pRecord->id);
+                    if (worldFloorPlanLayerMatches(m_floorLayer, location.z)) onLayer.insert(pRecord->id);
+                }
+        std::erase_if(records, [&](const WorldRecord *pRecord)
+        { return located.contains(pRecord->id) && !onLayer.contains(pRecord->id); });
+    }
     if (!m_siteSelection.empty())
         std::erase_if(records, [this](const WorldRecord *pRecord) { return !m_siteSelection.contains(pRecord->id); });
     if (m_map.empty() && m_search.empty() && !m_filter)
@@ -1005,6 +1092,7 @@ bool AtlasScreen::drawFeatureMarkers(const WorldRecord &map, const Rect &image, 
     std::vector<Pin> pins;
     for (const WorldMapFeature *pFeature : m_world.queryFeatures(m_knowledge, m_guide, m_search, map.id))
     {
+        if (pFloorPlan != nullptr && !featureOnFloorLayer(*pFeature)) continue;
         const auto point = pFloorPlan != nullptr ? pFloorPlan->worldToUv(pFeature->site.x, pFeature->site.y)
             : [&]()
             {
@@ -1065,6 +1153,7 @@ void AtlasScreen::drawFeatureList()
 {
     const Rect viewport = canvasRect(588, 121, 235, 270);
     auto features = m_world.queryFeatures(m_knowledge, m_guide, m_search, m_map);
+    std::erase_if(features, [this](const WorldMapFeature *pFeature) { return !featureOnFloorLayer(*pFeature); });
     if (!m_siteSelection.empty())
         std::erase_if(features, [this](const WorldMapFeature *pFeature)
         { return !m_siteSelection.contains(pFeature->id); });
@@ -1431,6 +1520,7 @@ void AtlasScreen::drawReference()
                     {
                         select(*m_world.find(feature->mapId));
                         m_selectedFeature = feature->id;
+                        m_floorLayerContext.clear();
                         m_siteSelection = {feature->id};
                         m_featureView = true; m_referenceOpen = false;
                     }

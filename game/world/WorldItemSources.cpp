@@ -78,6 +78,7 @@ std::vector<WorldItemSource> buildWorldItemSources(const MapDeltaData &delta,
     const auto add = [&](uint32_t id, uint32_t index, WorldItemSourceKind kind,
         std::optional<std::array<int32_t, 3>> position)
     {
+        if (id == 0) return;
         const ItemDefinition *pItem = items.get(id);
         if (pItem == nullptr || pItem->name.empty() || toLowerCopy(pItem->equipStat) == "gold") return;
         WorldItemSource source;
@@ -282,6 +283,7 @@ void clearWorldItemRewardQueue(EventRuntimeState &state)
 
 void WorldDatabase::appendItemSource(const std::string &mapId, WorldItemSource source, const ItemTable &items)
 {
+    if (source.itemId == 0) return;
     const ItemDefinition *pItem = items.get(source.itemId);
     if (pItem == nullptr || pItem->name.empty()) return;
     source.mapId = mapId;

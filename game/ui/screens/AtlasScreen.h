@@ -39,6 +39,9 @@ private:
                             const WorldFloorPlanRaster *pFloorPlan);
     void drawFeatureList();
     void drawPartyArrow(const WorldRecord &map, const Rect &image, const WorldFloorPlanRaster *floorPlan);
+    void drawFloorLayers(const WorldRecord &map);
+    void selectFloorLayer(std::optional<int32_t> layer);
+    bool featureOnFloorLayer(const WorldMapFeature &feature) const;
     void drawList();
     void drawDetails();
     void drawReference();
@@ -92,6 +95,9 @@ private:
     float m_zoom = 1;
     float m_panX = 0, m_panY = 0;
     std::string m_floorPlanKey;
+    std::string m_floorLayerContext;
+    std::optional<int32_t> m_floorLayer;
+    std::vector<int32_t> m_floorLayers;
     WorldFloorPlanRaster m_floorPlan;
     bgfx::TextureHandle m_floorPlanTexture = BGFX_INVALID_HANDLE;
     std::string m_fogMap;
