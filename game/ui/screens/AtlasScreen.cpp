@@ -229,9 +229,11 @@ void AtlasScreen::saveNote(bool remove)
     std::erase_if(notes, [this](const WorldMapNote &note) { return note.value.id == m_noteDraft.id; });
     if (!remove)
         notes.push_back({{m_noteDraft.id, m_noteDraft.x, m_noteDraft.y,
-                         m_noteDraft.mapFileName, m_noteDraft.text, true}, true});
+                         m_noteDraft.mapFileName, m_noteDraft.text, true}, true, m_noteDraft.elevation});
     m_world.indexMapNotes(m_knowledge);
     m_world.indexObservedItemSources(m_knowledge, m_data.itemTable());
+    if (!remove && m_noteDraft.elevation)
+        selectFloorLayer(worldFloorPlanLayer(float(*m_noteDraft.elevation)));
     m_selectedFeature = remove ? "" : m_map + "/note/" + std::to_string(m_noteDraft.id);
     m_floorPlanKey.clear();
     m_featureView = true;
@@ -243,8 +245,10 @@ void AtlasScreen::drawNoteEditor()
 {
     textInRect(canvasRect(80, 87, 690, 35), "Map note", "fondamento", 23, 0xffbcddeeu);
     const WorldRecord *pMap = m_world.find(m_map);
-    textInRect(canvasRect(80, 125, 690, 25), (pMap != nullptr ? pMap->name() : "Map") + " | "
+    const bool dungeon = pMap != nullptr && pMap->kind == WorldRecordKind::Dungeon;
+    textInRect(canvasRect(80, 125, dungeon ? 315 : 690, 25), (pMap != nullptr ? pMap->name() : "Map") + " | "
         + std::to_string(m_noteDraft.x) + ", " + std::to_string(m_noteDraft.y), "menu_lucida", 11);
+    if (dungeon) drawNoteElevation();
     const Rect field = canvasRect(80, 160, 690, 125);
     drawSolidRect(field, 0xff18160fu); outline(field, 0xff8dc5e1u);
     if (button("atlas-note-text", field, "", "text_field"))
@@ -262,6 +266,32 @@ void AtlasScreen::drawNoteEditor()
         closeNoteEditor();
     if (m_noteDraft.id != 0 && button("atlas-note-delete", canvasRect(615, 330, 155, 30), "Delete note"))
         saveNote(true);
+}
+
+void AtlasScreen::drawNoteElevation()
+{
+    const auto current = m_noteDraft.elevation ? worldFloorPlanLayer(float(*m_noteDraft.elevation)) : std::nullopt;
+    textInRect(canvasRect(400, 125, 100, 25), current ? "Layer " + std::to_string(*current) : "All heights",
+        "menu_lucida", 11, 0xffc6dfeau, true);
+    const auto lower = current ? std::lower_bound(m_floorLayers.begin(), m_floorLayers.end(), *current)
+        : m_floorLayers.end();
+    const auto higher = current ? std::upper_bound(m_floorLayers.begin(), m_floorLayers.end(), *current)
+        : m_floorLayers.begin();
+    if (button("atlas-note-lower", canvasRect(504, 125, 30, 25), "<", "button", lower != m_floorLayers.begin()))
+        m_noteDraft.elevation = worldFloorPlanLayerElevation(*std::prev(lower));
+    if (button("atlas-note-higher", canvasRect(538, 125, 30, 25), ">", "button", higher != m_floorLayers.end()))
+        m_noteDraft.elevation = worldFloorPlanLayerElevation(*higher);
+    if (button("atlas-note-all", canvasRect(572, 125, 65, 25), "All", "button", current.has_value()))
+        m_noteDraft.elevation.reset();
+    std::optional<int32_t> partyHeight;
+    if (m_knowledge.partyPosition && m_knowledge.partyPosition->z
+        && m_knowledge.partyPosition->mapFileName == toLowerCopy(m_noteDraft.mapFileName))
+    {
+        const double height = std::round(double(*m_knowledge.partyPosition->z));
+        if (std::isfinite(height) && height >= INT32_MIN && height <= INT32_MAX) partyHeight = int32_t(height);
+    }
+    if (button("atlas-note-party", canvasRect(642, 125, 128, 25), "Party height", "button", partyHeight.has_value()))
+        m_noteDraft.elevation = partyHeight;
 }
 
 void AtlasScreen::select(const WorldRecord &record)
@@ -756,7 +786,8 @@ void AtlasScreen::drawMap()
             m_floorLayerContext = context;
             m_floorLayer.reset();
             for (const WorldMapFeature &feature : m_world.features())
-                if (feature.id == m_selectedFeature && feature.kind != WorldMapFeatureKind::Note
+                if (feature.id == m_selectedFeature
+                    && (feature.kind != WorldMapFeatureKind::Note || feature.noteElevation)
                     && m_world.featureVisible(feature, m_knowledge, m_guide))
                     m_floorLayer = worldFloorPlanLayer(feature.site.z);
         }
@@ -786,7 +817,7 @@ void AtlasScreen::drawMap()
                     m_guide, positions, m_floorLayer);
                 m_floorLayers = m_floorPlan.layers;
                 for (const WorldMapFeature *pFeature : m_world.queryFeatures(m_knowledge, m_guide, "", map->id))
-                    if (pFeature->kind != WorldMapFeatureKind::Note)
+                    if (pFeature->kind != WorldMapFeatureKind::Note || pFeature->noteElevation)
                         if (const auto layer = worldFloorPlanLayer(pFeature->site.z)) m_floorLayers.push_back(*layer);
                 if (m_knowledge.partyPosition && m_knowledge.partyPosition->z
                     && m_knowledge.partyPosition->mapFileName == toLowerCopy(map->map->fileName))
@@ -934,6 +965,8 @@ void AtlasScreen::drawMap()
         }();
         m_noteDraft = {map->map->fileName, 0, int32_t(std::lround(point.first)),
                        int32_t(std::lround(point.second)), {}, false};
+        if (floorPlan != nullptr && m_floorLayer)
+            m_noteDraft.elevation = worldFloorPlanLayerElevation(*m_floorLayer);
         m_noteError.clear(); m_placingNote = false; m_noteEditorOpen = true; m_dragging = false;
         setTextEditing(true);
     }
@@ -986,11 +1019,6 @@ void AtlasScreen::drawFloorLayers(const WorldRecord &map)
         selectFloorLayer(std::nullopt);
     if (button("atlas-layer-party", canvasRect(294, 357, 92, 27), "Party height", "button", partyLayer.has_value()))
         selectFloorLayer(partyLayer);
-}
-
-bool AtlasScreen::featureOnFloorLayer(const WorldMapFeature &feature) const
-{
-    return feature.kind == WorldMapFeatureKind::Note || worldFloorPlanLayerMatches(m_floorLayer, feature.site.z);
 }
 
 void AtlasScreen::drawPartyArrow(const WorldRecord &map, const Rect &image, const WorldFloorPlanRaster *floorPlan)
@@ -1092,7 +1120,7 @@ bool AtlasScreen::drawFeatureMarkers(const WorldRecord &map, const Rect &image, 
     std::vector<Pin> pins;
     for (const WorldMapFeature *pFeature : m_world.queryFeatures(m_knowledge, m_guide, m_search, map.id))
     {
-        if (pFloorPlan != nullptr && !featureOnFloorLayer(*pFeature)) continue;
+        if (pFloorPlan != nullptr && !worldMapFeatureOnFloorLayer(*pFeature, m_floorLayer)) continue;
         const auto point = pFloorPlan != nullptr ? pFloorPlan->worldToUv(pFeature->site.x, pFeature->site.y)
             : [&]()
             {
@@ -1153,7 +1181,8 @@ void AtlasScreen::drawFeatureList()
 {
     const Rect viewport = canvasRect(588, 121, 235, 270);
     auto features = m_world.queryFeatures(m_knowledge, m_guide, m_search, m_map);
-    std::erase_if(features, [this](const WorldMapFeature *pFeature) { return !featureOnFloorLayer(*pFeature); });
+    std::erase_if(features, [this](const WorldMapFeature *pFeature)
+    { return !worldMapFeatureOnFloorLayer(*pFeature, m_floorLayer); });
     if (!m_siteSelection.empty())
         std::erase_if(features, [this](const WorldMapFeature *pFeature)
         { return !m_siteSelection.contains(pFeature->id); });
@@ -1175,9 +1204,13 @@ void AtlasScreen::drawFeatureList()
         textInRect({row.x + 7 * designScale(), row.y, row.width - 14 * designScale(), 18 * designScale()},
                    feature.title, "menu_arrus", 12);
         const WorldRecord *pMap = m_world.find(feature.mapId);
+        std::string subtitle = worldMapFeatureKindName(feature.kind);
+        if (feature.kind == WorldMapFeatureKind::Note && pMap->kind == WorldRecordKind::Dungeon)
+            subtitle += feature.noteElevation
+                ? " | Layer " + std::to_string(*worldFloorPlanLayer(float(*feature.noteElevation))) : " | All heights";
         textInRect({row.x + 7 * designScale(), row.y + 19 * designScale(),
                     row.width - 14 * designScale(), 12 * designScale()},
-                   std::string(worldMapFeatureKindName(feature.kind)) + " - " + pMap->name(),
+                   subtitle + " - " + pMap->name(),
                    "menu_lucida", 9, 0xffa9bbb7u);
     }
     revealFocus(viewport, m_scroll);
@@ -1647,7 +1680,7 @@ void AtlasScreen::drawDetails()
         {
             const WorldRecord *pMap = m_world.find(pNote->mapId);
             m_noteDraft = {pMap->map->fileName, pNote->noteId, int32_t(pNote->site.x), int32_t(pNote->site.y),
-                           pNote->title, false};
+                           pNote->title, false, pNote->noteElevation};
             m_noteError.clear(); m_noteEditorOpen = true;
             m_searchEditing = false;
             setTextEditing(true);

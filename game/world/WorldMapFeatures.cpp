@@ -1,4 +1,5 @@
 #include "game/world/WorldMapFeatures.h"
+#include "game/world/WorldFloorPlan.h"
 #include "game/events/ScriptedEventProgram.h"
 #include "game/events/EventRuntime.h"
 
@@ -6,6 +7,13 @@
 
 namespace OpenYAMM::Game
 {
+bool worldMapFeatureOnFloorLayer(const WorldMapFeature &feature, std::optional<int32_t> layer)
+{
+    if (feature.kind == WorldMapFeatureKind::Note)
+        return !feature.noteElevation || worldFloorPlanLayerMatches(layer, float(*feature.noteElevation));
+    return worldFloorPlanLayerMatches(layer, feature.site.z);
+}
+
 const char *worldMapFeatureKindName(WorldMapFeatureKind kind)
 {
     switch (kind)

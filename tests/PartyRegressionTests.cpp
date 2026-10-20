@@ -7,6 +7,7 @@
 #include "game/maps/SaveGame.h"
 #include "game/world/WorldItemSources.h"
 #include "game/world/WorldMapKnowledge.h"
+#include "game/world/WorldMapNotes.h"
 #include "game/party/Party.h"
 #include "game/party/SpellIds.h"
 #include "game/tables/CharacterDollTable.h"
@@ -211,6 +212,42 @@ TEST_CASE("scripted item discoveries require successful delivery and pending ori
     state.namedMapVars.clear();
     party.applyEventRuntimeState(state, true);
     CHECK(worldObservedItemSources(state).empty());
+}
+
+TEST_CASE("note elevation and unassigned legacy notes survive save and load independently")
+{
+    using namespace OpenYAMM::Game;
+    EventRuntimeState state;
+    state.mapFileName = "7d06.blv";
+    WorldMapNoteEdit layered{state.mapFileName, 0, 100, 200, "Lower passage", false};
+    layered.elevation = -512;
+    WorldMapNoteEdit flat{state.mapFileName, 0, 300, 400, "Legacy flat note", false};
+    std::string error;
+    REQUIRE_MESSAGE(editWorldMapNote(state, state.mapFileName, layered, error), error);
+    REQUIRE_MESSAGE(editWorldMapNote(state, state.mapFileName, flat, error), error);
+    state.runtimeMapNotes[42] = {42, 10, 20, state.mapFileName, "Scripted landmark", true};
+    state.namedMapVars["openyamm.map-notes.user/42/z"] = 1024; // No ownership: never assign script notes a user layer.
+    GameSaveData save;
+    save.currentSceneKind = SceneKind::Indoor;
+    save.mapFileName = state.mapFileName;
+    save.indoorScene.eventRuntimeState = state;
+    const auto path = std::filesystem::temp_directory_path() / "openyamm_note_elevation.oysav";
+    REQUIRE_MESSAGE(saveGameDataToPath(path, save, error), error);
+    const auto loaded = loadGameDataFromPath(path, error);
+    std::filesystem::remove(path);
+    REQUIRE_MESSAGE(loaded.has_value(), error);
+    REQUIRE(loaded->indoorScene.eventRuntimeState.has_value());
+    EventRuntimeState restored = *loaded->indoorScene.eventRuntimeState;
+    const auto notes = worldMapNotes(restored, state.mapFileName);
+    REQUIRE(notes.size() == 3);
+    CHECK(notes.back().elevation == -512);
+    CHECK(notes.back().value.text == "Lower passage");
+    CHECK_FALSE(notes[0].elevation);
+    CHECK_FALSE(notes[1].elevation);
+    layered.remove = true;
+    REQUIRE_MESSAGE(editWorldMapNote(restored, state.mapFileName, layered, error), error);
+    CHECK_FALSE(restored.namedMapVars.contains("openyamm.map-notes.user/" + std::to_string(layered.id) + "/z"));
+    CHECK(worldMapNotes(restored, state.mapFileName).size() == 2);
 }
 
 TEST_CASE("party keeps global hired followers when applying a map-local event runtime state")

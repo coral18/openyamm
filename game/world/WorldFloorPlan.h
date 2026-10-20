@@ -33,6 +33,7 @@ struct WorldFloorPlanRaster
 
 // Height bands are 512 world units wide and centred at integer multiples of 512.
 std::optional<int32_t> worldFloorPlanLayer(float z);
+std::optional<int32_t> worldFloorPlanLayerElevation(int32_t layer);
 bool worldFloorPlanLayerMatches(std::optional<int32_t> layer, float z);
 WorldFloorPlanRaster buildWorldFloorPlan(const IndoorMapData &map,
     const WorldFloorPlanKnowledge &knowledge, bool guide,

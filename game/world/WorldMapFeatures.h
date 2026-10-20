@@ -35,11 +35,13 @@ struct WorldMapFeature
     bool userNote = false;
     uint32_t itemId = 0;
     bool observedItem = false;
+    std::optional<int32_t> noteElevation;
 };
 
 std::vector<WorldMapFeature> buildWorldMapFeatures(const std::string &mapId,
     const std::vector<WorldInteractionSite> &sites, const ScriptedEventProgram &events);
 const char *worldMapFeatureKindName(WorldMapFeatureKind kind);
+bool worldMapFeatureOnFloorLayer(const WorldMapFeature &feature, std::optional<int32_t> layer);
 std::string worldSiteDiscoveryKey(uint16_t eventId, const std::string &siteId);
 void recordWorldSiteDiscovery(EventRuntimeState &state, uint16_t eventId, const std::string &siteId);
 }

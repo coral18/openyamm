@@ -1,0 +1,185 @@
+# Run with an isolated dungeon save and a writable isolated saves directory.
+# Exercises note creation, layers, rename, All/Party height, F9/F10 persistence, and deletion.
+# Uses MenuInputTour shared design coordinates and ordinary gameplay quicksave/load controls.
+output_dir: output/atlas-note-heights
+exit: true
+steps:
+- expect: gameplay
+- pause: true
+- click:
+  - 800
+  - 821
+- click:
+  - 1480
+  - 126
+- click:
+  - 1152
+  - 57
+- click:
+  - 406
+  - 695
+- click:
+  - 1420
+  - 190
+- click:
+  - 800
+  - 500
+- text: Atlas height note
+- capture: editor-layer
+- click:
+  - 295
+  - 647
+- click:
+  - 275
+  - 125
+- text: Atlas height note
+- key: Return
+- capture: created
+- click:
+  - 1152
+  - 57
+- click:
+  - 637
+  - 695
+- capture: other-height-hidden
+- click:
+  - 499
+  - 695
+- click:
+  - 1250
+  - 260
+- click:
+  - 1390
+  - 807
+- text: ' edited'
+- capture: editor-keeps-layer
+- click:
+  - 295
+  - 647
+- capture: edited
+- click:
+  - 1440
+  - 57
+- key: Escape
+- expect: gameplay
+- key: F9
+- wait: 1
+- key: F10
+- wait: 1
+- expect: gameplay
+- pause: true
+- click:
+  - 800
+  - 821
+- click:
+  - 1480
+  - 126
+- click:
+  - 275
+  - 125
+- text: Atlas height note
+- key: Return
+- click:
+  - 637
+  - 695
+- capture: reloaded-other-height-hidden
+- click:
+  - 499
+  - 695
+- capture: reloaded-visible
+- click:
+  - 1250
+  - 260
+- click:
+  - 1390
+  - 807
+- capture: reloaded-editor
+- click:
+  - 1134
+  - 258
+- capture: editor-all-heights
+- click:
+  - 295
+  - 647
+- click:
+  - 637
+  - 695
+- capture: all-heights-on-party
+- click:
+  - 1250
+  - 260
+- click:
+  - 1390
+  - 807
+- click:
+  - 1324
+  - 258
+- capture: editor-party-height
+- click:
+  - 295
+  - 647
+- click:
+  - 1440
+  - 57
+- key: Escape
+- expect: gameplay
+- key: F9
+- wait: 1
+- key: F10
+- wait: 1
+- expect: gameplay
+- pause: true
+- click:
+  - 800
+  - 821
+- click:
+  - 1480
+  - 126
+- click:
+  - 275
+  - 125
+- text: Atlas height note
+- key: Return
+- click:
+  - 637
+  - 695
+- capture: reassigned-after-reload
+- click:
+  - 1250
+  - 260
+- click:
+  - 1390
+  - 807
+- capture: reassigned-editor
+- click:
+  - 1298
+  - 647
+- click:
+  - 275
+  - 125
+- text: Atlas height note
+- key: Return
+- capture: deleted
+- click:
+  - 1440
+  - 57
+- key: Escape
+- expect: gameplay
+- key: F9
+- wait: 1
+- key: F10
+- wait: 1
+- expect: gameplay
+- pause: true
+- click:
+  - 800
+  - 821
+- click:
+  - 1480
+  - 126
+- click:
+  - 275
+  - 125
+- text: Atlas height note
+- key: Return
+- capture: deleted-after-reload

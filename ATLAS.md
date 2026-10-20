@@ -965,7 +965,7 @@ They are height filters, not authored or inferred semantic floor names. All heig
 The selected band filters outlines, physical service pins, located service records, feature pins and the feature
 list. A reference link to a known positioned feature selects its band; selecting a venue restores All so that
 navigation does not land on a hidden pin. Existing two-dimensional map notes remain visible on all bands.
-Per-level annotations and more complex overlapping-floor separation remain coverage work.
+The later checkpoint below adds explicit note heights; more complex overlapping-floor separation remains coverage work.
 
 Discovery derives available bands solely from revealed/non-hidden outlines, visible known features and the live
 party's known height. Unrevealed geometry supplies neither bands nor bounds. Guide uses the full available plan;
@@ -998,3 +998,34 @@ Temple (MM8), covering known overview, party height, higher height, full Guide, 
 height and return to Discovery. Each run requires all eight captures to be newly written. The inspected images
 confirm that geometry changes by height, the party arrow follows its band, and leaving Guide restores the hidden
 plan. Android/controller checks and the complete Atlas coverage matrix remain pending.
+
+
+### Height-aware dungeon notes, 2026-10-20
+
+User map notes can now carry an optional absolute world Z through the shared `WorldMapNotes` API. Core stores
+it in the existing named-map state as `openyamm.map-notes.user/<id>/z`, alongside the ownership marker and normal
+`RuntimeMapNote`. The serializer and refill knowledge retention need no new binary save version. Only owned
+user notes read this metadata. Missing elevation means All heights, preserving old and script-owned notes without
+inventing a floor. Zero is a valid assigned height; deletion clears the ownership and elevation keys, and creation
+reserves IDs with orphaned elevation metadata rather than accidentally inheriting it.
+
+Creating a dungeon note on a selected band assigns a representative height for that band. Creating one in All
+leaves it unassigned. Editing preserves its exact saved elevation when changing text. The editor offers lower/higher
+known bands, All, and the party's actual foot height when the party is in that dungeon. These choices use only
+known bands in Discovery; they neither reveal geometry nor change gameplay position. Saving a height-assigned
+note selects its band. Pins, list rows and note-link navigation use its saved height; notes without one remain
+visible on every band. Dungeon note subtitles identify their band or All heights, including overlapping XY notes.
+
+Windows Release compilation and 172 focused cases / 6,602 assertions passed. Linux Atlas ASan/UBSan passed
+70 cases / 4,342 assertions. Coverage includes actual save serialization, old flat notes, script ownership,
+explicit zero/reset, reserved metadata IDs, refill retention, shared feature filtering and extreme band conversion.
+These are focused checks; the previously documented broader regression fixture limitations remain open.
+
+The reusable native tour is `tools/menu_tours/atlas_note_heights.yml`, using isolated dungeon saves and ordinary
+F9 quicksave / F10 quickload. Native Windows evidence is retained under `atlas-note-heights-20261020/` in the
+development directory. Both 95-step AMD/OpenGL tours completed with 15 freshly written captures and a fresh
+isolated quicksave per world. Inspected captures show the initial lower-band note hidden at party height,
+text/height retained after reload, an All-heights note visible at party height, reassignment to actual party
+height retained after another reload, and deletion still absent after a final reload. The MM7 fixture uses the
+Temple of the Moon (initial band -1, party band 1); MM8 uses Abandoned Temple (initial band -2, party band -1).
+The original user saves/settings were not modified. Android/controller checks and full Atlas coverage remain pending.

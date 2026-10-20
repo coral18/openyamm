@@ -21,6 +21,12 @@ bool worldFloorPlanLayerMatches(std::optional<int32_t> layer, float z)
     return !layer || worldFloorPlanLayer(z) == layer;
 }
 
+std::optional<int32_t> worldFloorPlanLayerElevation(int32_t layer)
+{
+    const int32_t height = int32_t(std::clamp(int64_t(layer) * 512, int64_t(INT32_MIN), int64_t(INT32_MAX)));
+    return worldFloorPlanLayer(float(height)) == layer ? std::optional<int32_t>(height) : std::nullopt;
+}
+
 WorldFloorPlanRaster buildWorldFloorPlan(const IndoorMapData &map,
     const WorldFloorPlanKnowledge &knowledge, bool guide,
     const std::vector<std::pair<float, float>> &knownPositions, std::optional<int32_t> layer)

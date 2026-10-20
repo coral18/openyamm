@@ -131,6 +131,8 @@ void WorldDatabase::indexMapNotes(const WorldKnowledge &knowledge)
             feature.title = note.value.text;
             feature.noteId = note.value.id;
             feature.userNote = note.userOwned;
+            feature.noteElevation = note.elevation;
+            if (note.elevation) feature.site.z = float(*note.elevation);
             m_features.push_back(std::move(feature));
         }
     }

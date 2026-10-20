@@ -1,6 +1,7 @@
 #pragma once
 
 #include "game/events/EventRuntime.h"
+#include <optional>
 
 namespace OpenYAMM::Game
 {
@@ -8,6 +9,7 @@ struct WorldMapNote
 {
     EventRuntimeState::RuntimeMapNote value;
     bool userOwned = false;
+    std::optional<int32_t> elevation;
 };
 
 struct WorldMapNoteEdit
@@ -17,6 +19,7 @@ struct WorldMapNoteEdit
     int32_t x = 0, y = 0;
     std::string text;
     bool remove = false;
+    std::optional<int32_t> elevation;
 };
 
 std::vector<WorldMapNote> worldMapNotes(const EventRuntimeState &state, const std::string &mapFileName);

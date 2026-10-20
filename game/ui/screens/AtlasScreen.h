@@ -41,7 +41,6 @@ private:
     void drawPartyArrow(const WorldRecord &map, const Rect &image, const WorldFloorPlanRaster *floorPlan);
     void drawFloorLayers(const WorldRecord &map);
     void selectFloorLayer(std::optional<int32_t> layer);
-    bool featureOnFloorLayer(const WorldMapFeature &feature) const;
     void drawList();
     void drawDetails();
     void drawReference();
@@ -53,6 +52,7 @@ private:
     void indexQuestLocations();
     void rebuildWorld();
     void drawNoteEditor();
+    void drawNoteElevation();
     void saveNote(bool remove);
     void closeNoteEditor();
 

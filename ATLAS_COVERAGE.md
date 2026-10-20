@@ -17,7 +17,7 @@ tables, and do not bundle its HTML, JS, translated prose, generated illustration
 | Region browsing, search, zoom/pan | Implemented | Implemented | More extensive map/content audit |
 | Continent overview | Existing game illustration | Original regional schematic | Optional licensed/original illustrated Jadame artwork |
 | Discovery fog and current party arrow | Implemented | Implemented | Wider dungeon/device checks |
-| Dungeon plans from engine geometry | Known height bands, party-height selection and filtered pins | Same shared projection and controls | Per-level annotations, complex floor separation and special connection views |
+| Dungeon plans from engine geometry | Known height bands, party-height selection, filtered pins and height-aware notes | Same shared projection and controls | Complex floor separation and special connection views |
 | Buildings, resident NPCs, trainers | Current/observed residents, indoor service markers | Same shared index | Conditional venues, shared-service placements and generated/roaming NPCs |
 | Trainer requirements and prices | Gameplay evaluator, observed offers and race-specific mastery comparisons | Same shared evaluator | Conditional eligibility audit and starting-skill/race-selection checks |
 | Walking and scheduled transport | Directed walking/coach/boat graph, departure pins, last-offered schedules/fare/duration, live local overrides and destination navigation | Same shared knowledge/navigation | Remote scripted timetable references, availability forecasting and arrival-point links |
@@ -31,7 +31,7 @@ tables, and do not bundle its HTML, JS, translated prose, generated illustration
 | Classes and skill caps | Paged family comparison grid, race mastery, HP/SP growth and exact-rank trainer searches | Same shared registry | Promotion quest/branch conditions, starting choices and class-history discoveries |
 | Recruitable companions | Shared merged roster reference | Roster biography/stats and recruited-only Discovery | Recruitment locations/conditions and current recruitment state |
 | Arcomage/Arena tracking | Existing campaign counters and linked taverns | Existing campaign counters and linked taverns | Visual checklist polish and wider save-state audit |
-| Custom markers and notes | Native place/edit/delete with shared Map Book state | Same shared notes and canonical snapshot ownership | Marker styles, richer editing and Android/controller checks |
+| Custom markers and notes | Native place/edit/delete, optional dungeon height, All/Party assignment and shared Map Book state | Same shared notes and canonical snapshot ownership | Marker styles, richer editing and Android/controller checks |
 | Optional Atlas mod | Profile-controlled native UI module | Same shared module | Launcher toggles and wider device checks |
 | Localization parity | Current engine language | Current engine language | Integrate engine localization; no copied guide translation bundle |
 

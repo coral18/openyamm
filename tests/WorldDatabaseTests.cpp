@@ -97,6 +97,7 @@ TEST_CASE("world map user notes reuse map-local notes without replacing script-o
     state.mapFileName = "7out02.odm";
     state.runtimeMapNotes[3101] = {3101, 4, 5, state.mapFileName, "Sword - Master", true};
     WorldMapNoteEdit edit{"7OUT02.ODM", 0, 123, -456, "  Własna notatka  ", false};
+    edit.elevation = -512;
     std::string error;
     REQUIRE(editWorldMapNote(state, state.mapFileName, edit, error));
     CHECK(error.empty());
@@ -105,17 +106,40 @@ TEST_CASE("world map user notes reuse map-local notes without replacing script-o
     REQUIRE(worldMapNotes(state, state.mapFileName).size() == 2);
     CHECK_FALSE(worldMapNotes(state, state.mapFileName)[0].userOwned);
     CHECK(worldMapNotes(state, state.mapFileName)[1].userOwned);
+    CHECK(worldMapNotes(state, state.mapFileName)[1].elevation == -512);
+    CHECK_FALSE(worldMapNotes(state, state.mapFileName)[0].elevation);
     CHECK(state.runtimeMapNotes.at(edit.id).x == 123);
     CHECK(state.runtimeMapNotes.at(edit.id).y == -456);
     edit.text = "Po zmianie";
     REQUIRE(editWorldMapNote(state, state.mapFileName, edit, error));
     CHECK(state.runtimeMapNotes.at(edit.id).text == "Po zmianie");
+    CHECK(worldMapNotes(state, state.mapFileName)[1].elevation == -512);
     CHECK(state.runtimeMapNotes.size() == 2);
     edit.remove = true;
     REQUIRE(editWorldMapNote(state, state.mapFileName, edit, error));
     CHECK(state.runtimeMapNotes.size() == 1);
     CHECK(state.runtimeMapNotes.at(3101).text == "Sword - Master");
     CHECK(state.namedMapVars.empty());
+}
+
+TEST_CASE("note elevation is explicit and reserved metadata cannot be inherited by a new note")
+{
+    EventRuntimeState state;
+    const std::string orphan = "openyamm.map-notes.user/4294967295/z";
+    state.namedMapVars[orphan] = 512;
+    WorldMapNoteEdit edit{"d05.blv", 0, 10, 20, "Old-style flat note", false};
+    std::string error;
+    REQUIRE(editWorldMapNote(state, "d05.blv", edit, error));
+    CHECK(edit.id == UINT32_MAX - 1);
+    REQUIRE(worldMapNotes(state, "d05.blv").size() == 1);
+    CHECK_FALSE(worldMapNotes(state, "d05.blv").front().elevation);
+    edit.elevation = 0;
+    REQUIRE(editWorldMapNote(state, "d05.blv", edit, error));
+    CHECK(worldMapNotes(state, "d05.blv").front().elevation == 0);
+    edit.elevation.reset();
+    REQUIRE(editWorldMapNote(state, "d05.blv", edit, error));
+    CHECK_FALSE(worldMapNotes(state, "d05.blv").front().elevation);
+    CHECK(state.namedMapVars.at(orphan) == 512);
 }
 
 TEST_CASE("world map note edits reject foreign maps and ownership before changing saved data")
@@ -192,6 +216,7 @@ TEST_CASE("map refills preserve party knowledge without restoring cleared gamepl
 {
     EventRuntimeState previous, refilled;
     WorldMapNoteEdit edit{"d05.blv", 0, 100, 200, "My dungeon note", false};
+    edit.elevation = -512;
     std::string error;
     REQUIRE(editWorldMapNote(previous, "d05.blv", edit, error));
     previous.runtimeMapNotes[3101] = {3101, 1, 2, "d05.blv", "Sword - Master", true};
@@ -205,6 +230,7 @@ TEST_CASE("map refills preserve party knowledge without restoring cleared gamepl
     restoreWorldMapKnowledgeAfterRefill(previous, refilled);
     REQUIRE(worldMapNotes(refilled, "d05.blv").size() == 2);
     CHECK(worldMapNotes(refilled, "d05.blv")[1].userOwned);
+    CHECK(worldMapNotes(refilled, "d05.blv")[1].elevation == -512);
     CHECK(refilled.namedMapVars.at("openyamm.discovery.site/surface/1/event/5") == 1);
     REQUIRE(worldMonsterObservations(refilled).size() == 1);
     CHECK(worldMonsterObservations(refilled)[0].dead);
@@ -220,6 +246,7 @@ TEST_CASE("world map notes are indexed without revealing terrain or deleting oth
     EventRuntimeState state;
     state.mapFileName = "7out02.odm";
     WorldMapNoteEdit edit{state.mapFileName, 0, 1200, -500, "My secret camp", false};
+    edit.elevation = -512;
     std::string error;
     REQUIRE(editWorldMapNote(state, state.mapFileName, edit, error));
     WorldKnowledge knowledge;
@@ -232,6 +259,11 @@ TEST_CASE("world map notes are indexed without revealing terrain or deleting oth
     REQUIRE(features.size() == 1);
     CHECK(features[0]->userNote);
     CHECK(features[0]->noteId == edit.id);
+    CHECK(features[0]->noteElevation == -512);
+    CHECK(features[0]->site.z == -512);
+    CHECK(worldMapFeatureOnFloorLayer(*features[0], -1));
+    CHECK_FALSE(worldMapFeatureOnFloorLayer(*features[0], 0));
+    CHECK(worldMapFeatureOnFloorLayer(*features[0], std::nullopt));
     CHECK(knowledge.regionMaps.empty());
     CHECK(knowledge.variables.empty());
     std::string programError;
@@ -1033,6 +1065,18 @@ TEST_CASE("world database dungeon plan respects reveal bits and hidden faces")
 
 TEST_CASE("dungeon height bands handle negative heights and reject nonfinite layer selections")
 {
+    CHECK(worldFloorPlanLayerElevation(-1) == -512);
+    CHECK(worldFloorPlanLayerElevation(0) == 0);
+    CHECK_FALSE(worldFloorPlanLayerElevation(INT32_MIN));
+    CHECK_FALSE(worldFloorPlanLayerElevation(INT32_MAX));
+    for (int32_t height : {INT32_MIN, -768, -256, 0, 256, INT32_MAX})
+    {
+        const auto layer = worldFloorPlanLayer(float(height));
+        REQUIRE(layer.has_value());
+        const auto savedHeight = worldFloorPlanLayerElevation(*layer);
+        REQUIRE(savedHeight.has_value());
+        CHECK(worldFloorPlanLayer(float(*savedHeight)) == layer);
+    }
     CHECK(worldFloorPlanLayer(0) == 0);
     CHECK(worldFloorPlanLayer(255.9f) == 0);
     CHECK(worldFloorPlanLayer(256) == 1);
@@ -1044,6 +1088,21 @@ TEST_CASE("dungeon height bands handle negative heights and reject nonfinite lay
     CHECK_FALSE(worldFloorPlanLayer(std::numeric_limits<float>::infinity()));
     CHECK_FALSE(worldFloorPlanLayer(std::numeric_limits<float>::max()));
     CHECK_FALSE(worldFloorPlanLayerMatches(0, std::numeric_limits<float>::quiet_NaN()));
+}
+
+TEST_CASE("map feature height filtering keeps legacy notes flat and uses explicit note height")
+{
+    WorldMapFeature note;
+    note.kind = WorldMapFeatureKind::Note;
+    CHECK(worldMapFeatureOnFloorLayer(note, -1));
+    CHECK(worldMapFeatureOnFloorLayer(note, 2));
+    note.site.z = 1000; // The exact saved note height, not a stale display position, owns its layer.
+    note.noteElevation = -512;
+    CHECK(worldMapFeatureOnFloorLayer(note, -1));
+    CHECK_FALSE(worldMapFeatureOnFloorLayer(note, 2));
+    note.kind = WorldMapFeatureKind::Chest;
+    CHECK(worldMapFeatureOnFloorLayer(note, 2));
+    CHECK_FALSE(worldMapFeatureOnFloorLayer(note, -1));
 }
 
 TEST_CASE("dungeon height selection keeps a stable known projection and hides undiscovered layers")

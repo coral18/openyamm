@@ -170,6 +170,21 @@ The Atlas uses the optional native UI module `openyamm.interactive-atlas`; its m
 QBits or gameplay patches. World discovery, monster observations and personal map annotations remain shared Core
 save state and survive disabling the Atlas. See [ATLAS.md](ATLAS.md) for implementation and native validation.
 
+### Shared map note heights
+
+`WorldMapNote` and `WorldMapNoteEdit` expose optional `int32_t elevation`, an absolute world Z rather than a
+screen layer index. A missing value means All heights. Old two-dimensional notes retain that meaning; no floor
+is inferred from their XY position, map geometry or the current party. An edit supplies the complete note state,
+including its optional elevation: preserve it when renaming, or clear it explicitly to assign All heights.
+
+Core stores this value in existing map-local named variables as `openyamm.map-notes.user/<id>/z`, alongside the
+existing ownership marker. Only user-owned notes consume that metadata. Zero is a valid assigned height.
+Creation avoids IDs occupied by either the note, ownership marker or height metadata; deletion clears both owned
+keys. The normal serializer, canonical map snapshot and refill knowledge retention preserve the annotation.
+There is no new save version or Atlas-owned serialization. `worldMapFeatureOnFloorLayer` supplies the shared
+height predicate; unassigned notes match every layer. The Atlas editor consumes these APIs independently of
+terrain exploration and offers known bands, All heights and the current party's height in the same dungeon.
+
 ## Validation
 
 Six focused C++ tests / 111 assertions cover strict parsing, versions, selection/order, dependencies, cycles,
