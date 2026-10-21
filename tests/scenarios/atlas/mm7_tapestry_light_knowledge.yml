@@ -1,0 +1,45 @@
+id: atlas.mm7_tapestry_light_knowledge
+title: Strict authored light tapestry request and reward with controlled prerequisites and reward item
+world: mm7
+mode: faithful
+steps:
+- new_game_flow: {start_map: 7d20.blv}
+- note: Faction choice and Malwick summons are fixtures; their story and travel are outside this test.
+- setup_shortcut: {kind: set_qbit, id: 611}
+- setup_shortcut: {kind: set_qbit, id: 526}
+- setup_shortcut: {kind: set_qbit, id: 693}
+- save_game: light-prerequisites
+- load_game: light-prerequisites
+- speak_npc: {source_id: 438}
+- select_topic: {kind: npc_topic, action_id: 941}
+- assert:
+    qbit_set: [611, 694]
+    named_global_var_changed: {name: openyamm.discovery.quest/694/location/objective/map/world.mm7.map.7d30, value: 1}
+- assert:
+    named_global_var_changed: {name: openyamm.discovery.quest/694/location/objective/map/world.mm7.map.d03, value: 0}
+- assert:
+    named_global_var_changed: {name: openyamm.discovery.world.mm7.map.7d30, value: 0}
+- save_game: light-tapestry-accepted
+- load_game: light-tapestry-accepted
+- assert:
+    qbit_set: [694]
+    named_global_var_changed: {name: openyamm.discovery.quest/694/location/objective/map/world.mm7.map.7d30, value: 1}
+- note: The tapestry is an inventory fixture; the theft, castle access and combat are not tested.
+- setup_shortcut: {kind: grant_item, item_id: 1422}
+- save_game: light-reward-fixture
+- load_game: light-reward-fixture
+- speak_npc: {source_id: 438}
+- select_topic: {kind: npc_topic, action_id: 943}
+- assert:
+    qbit_clear: [694]
+    qbit_set: [702]
+    named_global_var_changed: {name: openyamm.discovery.quest/694/location/objective/map/world.mm7.map.7d30, value: 1}
+- save_game: light-tapestry-returned
+- load_game: light-tapestry-returned
+- assert:
+    qbit_clear: [694]
+    named_global_var_changed: {name: openyamm.discovery.quest/694/location/objective/map/world.mm7.map.7d30, value: 1}
+- assert:
+    named_global_var_changed: {name: openyamm.discovery.quest/694/location/objective/map/world.mm7.map.d03, value: 0}
+- assert:
+    named_global_var_changed: {name: openyamm.discovery.world.mm7.map.7d30, value: 0}

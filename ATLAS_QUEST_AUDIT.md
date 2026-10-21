@@ -1,7 +1,7 @@
 # Atlas quest relationships: content audit
 
-The shared `engine/data_tables/quest_locations.txt` currently describes 94 quests:
-26 MM7 and 68 MM8 entries, with 364 relationships. This is partial campaign coverage.
+The shared `engine/data_tables/quest_locations.txt` currently describes 144 quests:
+76 MM7 and 68 MM8 entries, with 578 relationships. This is partial campaign coverage.
 All names and descriptions resolve through the loaded game registries; the relationship file contains IDs,
 roles and disclosure metadata, not a second copy of quest prose. Mods and other consumers use the same table.
 
@@ -96,7 +96,7 @@ Three remaining nonempty MM8 journal rows are deliberately not presented as veri
 
 Thus 68 relationships-bearing quests are not a claim of complete MM8 content, flawless campaign scripts or
 full stage coverage. Named side-quest sources, potion reagent quantities/alternatives, optional dialogue clues,
-remaining historical state and relocation stages still require audit. MM7 remains at 26 linked quests.
+remaining historical state and relocation stages still require audit. MM7's subsequent expansion is recorded below.
 
 ## Added MM7 relationships
 
@@ -155,3 +155,50 @@ Arion's actual topic 32 then sets the distinct return stage, actual Fellmoon top
 it, and strict assertions verify both saves and retained knowledge. It is not a fixture-free campaign playthrough.
 Private Windows captures show Champion's laboratory only in Guide, Lich's explicitly disclosed library/laboratory
 in Discovery, and the distinct active return-to-Fellmoon entry. Android/controller acceptance remains pending.
+
+## MM7 campaign expansion, 2026-10-21
+
+This adds 50 quests and 214 relationships. MM7 now has 76 linked entries: all nonempty, non-placeholder campaign
+journal rows in the current 512–1023 range except QBit 757. The latter is a transient `Congratulations` notification,
+set and immediately cleared by several map events; it is not a quest. This inventory claim does not establish
+complete dialogue-stage, site or campaign behavior coverage.
+
+| Quest QBits | Current sources | Added relationships |
+| --- | --- | --- |
+| 513–518 | `7out01` initial map event, global 756 | Six hunt items and Thomas; no invented NPC giver for the initial assignment |
+| 528 | globals 784–785; override 783 | Markham and Emerald Island; precise dragon cave and shield proof are Guide hints |
+| 530–531, 533 | globals 794–800 and promotion overrides | Lasker, vase/Manor, Watchtower 6, Seknit and Celeste; exact dagger proof is a Guide hint |
+| 534, 536, 538–539 | globals 801–810, promotion overrides; `7d13` 376 | Quixote/Wromthrax, Alice/Setag, Hume and the Barrow Downs |
+| 589–590, 606–607 | globals 874–886 and follower supplements | Real/false Riverstride plans, real/imposter Loren, Catherine and the loaded ElfKing record |
+| 591 | `MM7.UpdateTulareanArtifactBattle`, globals 868/872/880/887/890 | Messenger, Trumpet and Tularean Forest; optional recipient choices are Guide hints |
+| 613, 640 | globals 895–896, 917–918 | Walls of Mist/Gavin and Breeding Zone/Archibald |
+| 615–616, 634–635 | globals 897–900, 907–910 | Distinct altar pieces, both temples, Colony Zod and the correct Light/Dark recipient |
+| 618, 620–621, 636–637, 639 | globals 901–906, 911–916 | Wine Cellar, Soul Jar Case, current Control Cube, Clanker's defenses and the corresponding contacts |
+| 642–643 | globals 919–922 and final-task overrides | Lincoln, Shoals, Overthruster and Resurectra/Kastore |
+| 663–665 | `7out02` judge events; current common arbiter logic | Announced faction access routes and a return to Castle Harmondale; candidate identities remain Guide hints |
+| 668, 670–671 | globals 931–932, 935–937 | Haldar/Maze and the separate Norbert letter/Quill return stages |
+| 691–692 | globals 938–940 | Johann's letter, Hall under the Hill, Faerie King and the separate Pipes return stage |
+| 693–694 | `7out02`/`7out13`, globals 941–943 | Niles, Mercenary Guild, Tapestry and the disclosed faction-specific castle |
+| 698–699, 706–707 | globals 944–949, 1063–1064 | Troglodytes, both Griffin regions, Darron/White Cliff and Gary/Stole/Hall of the Pit |
+| 712, 716–717 | globals 1212–1217 | Statuette regions, the three distinct paintings and Gina's tournament request |
+
+Merged item IDs follow current handlers: vase 1426, Carmine proof 1342, both Soul Jar Case requests 1404, Control
+Cube 1477, altar pieces 1478/1479 and Overthruster 1407. Exact unannounced proof, meditation and statuette-form
+hints stay in Guide; the initial generic potion/instrument requests do not assert that the party already knows
+their precise Cure Wounds/Lute definitions. The meditation hint follows current `7d13`'s Hume interaction,
+not an assumed vanilla barrow number. Names and descriptions still come from the loaded registries.
+
+The Tapestry request uses QBits 611/612 to disclose Castle Lambent or Castle Gloaming. Guide deliberately offers
+both alternatives; it does not record either as learned. After quest completion, Discovery keeps the actually
+learned castle instead of inferring the other branch from unrelated later state. Optional Ambassador/candidate
+dialogue clues, remaining reward stages, precise sites, conditional residence and deadline presentation need
+further work; one indexed journal entry does not prove that every stage is represented.
+
+Verification: 194 focused Windows cases / 7477 assertions and 89 Linux ASan/UBSan cases / 4944 assertions pass.
+The shared-content validator resolves all 578 relationships against mounted definitions. The new pure test checks
+both Tapestry branches and historical retention, plus undisclosed contestant/meditation/assassin/Arcomage clues.
+`mm7_campaign_requests_knowledge.yml` verifies actual initial hunt assignment and authored Markham, Rogue and
+Initiate requests with persistence. The two `mm7_tapestry_{light,dark}_knowledge.yml` scenarios run with strict
+`faithful` assertions but explicit faction/Malwick prerequisite and Tapestry inventory fixtures. The actual
+request and reward handlers record and retain only their branch's clue across save/load; the castle's physical
+discovery flag remains zero. Faction selection, the theft, castle access, travel and combat are not tested there.

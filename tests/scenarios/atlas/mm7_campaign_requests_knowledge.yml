@@ -1,0 +1,40 @@
+id: atlas.mm7_campaign_requests_knowledge
+title: Authored initial hunt and missing contestants, Rogue and Initiate requests retain quest knowledge
+world: mm7
+mode: faithful
+steps:
+- new_game_flow: {start_map: 7out01.odm}
+- assert:
+    qbit_set: [513, 514, 515, 516, 517, 518]
+- speak_npc: {source_id: 340}
+- select_topic: {kind: npc_topic, action_id: 784}
+- assert:
+    qbit_set: [528]
+    named_global_var_changed: {name: openyamm.discovery.quest/528, value: 1}
+- press_action: {action: cancel_dialog}
+- load_map: {map: d01.blv}
+- speak_npc: {source_id: 354}
+- select_topic: {kind: npc_topic, action_id: 794}
+- assert:
+    qbit_set: [530]
+    named_global_var_changed: {name: openyamm.discovery.quest/530, value: 1}
+- press_action: {action: cancel_dialog}
+- load_map: {map: out14.odm}
+- speak_npc: {source_id: 377}
+- select_topic: {kind: npc_topic, action_id: 808}
+- assert:
+    qbit_set: [539]
+    named_global_var_changed: {name: openyamm.discovery.quest/539, value: 1}
+- assert:
+    named_global_var_changed:
+      name: openyamm.discovery.quest/539/location/objective/map/world.mm7.map.7d13
+      value: 0
+- save_game: campaign-requests
+- load_game: campaign-requests
+- assert:
+    qbit_set: [528, 530, 539]
+    named_global_var_changed: {name: openyamm.discovery.quest/528, value: 1}
+- assert:
+    named_global_var_changed: {name: openyamm.discovery.quest/530, value: 1}
+- assert:
+    named_global_var_changed: {name: openyamm.discovery.quest/539, value: 1}

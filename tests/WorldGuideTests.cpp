@@ -1027,6 +1027,69 @@ TEST_CASE("MM8 campaign relationships distinguish accepted clues from later disc
     CHECK(knowledge.questBits.empty());
 }
 
+TEST_CASE("MM7 campaign relationships preserve the disclosed castle branch after a quest leaves the journal")
+{
+    JournalQuestTable quests;
+    REQUIRE(quests.loadFromRows(guideTableRows("english/quests.txt")));
+    REQUIRE(quests.loadLocationRows(guideTableRows("quest_locations.txt")));
+    MapStats maps;
+    REQUIRE(maps.loadFromRows(guideTableRows("map_stats.txt")));
+    ItemTable items;
+    OpenYAMM::Engine::AssetFileSystem assets;
+    REQUIRE(items.load(assets, guideTableRows("items.txt"), {}));
+    WorldGuideSource source;
+    source.pQuests = &quests; source.pMaps = &maps; source.pItems = &items; source.worldId = "mm7";
+    WorldGuideKnowledge knowledge;
+    const auto hasTarget = [](const WorldGuideEntry &entry, const std::string &target)
+    {
+        return std::any_of(entry.links.begin(), entry.links.end(),
+            [&](const WorldGuideLink &link) { return link.target == target; });
+    };
+    knowledge.activeQuests = {694};
+    knowledge.questBits = {611, 694};
+    const auto accepted = quests.knowledgeAroundChange(694, false, true,
+        [&](uint32_t bit) { return knowledge.questBits.contains(bit); });
+    knowledge.quests.insert(accepted.quests.begin(), accepted.quests.end());
+    knowledge.questLocations.insert(accepted.locations.begin(), accepted.locations.end());
+    const auto light = buildWorldGuide(source, WorldGuideSection::Quests, knowledge, false);
+    REQUIRE(light.size() == 1);
+    CHECK(hasTarget(light[0], "world.mm7.map.7d30"));
+    CHECK_FALSE(hasTarget(light[0], "world.mm7.map.d03"));
+    knowledge.activeQuests.clear();
+    knowledge.questBits = {612};
+    const auto remembered = buildWorldGuide(source, WorldGuideSection::Quests, knowledge, false);
+    REQUIRE(remembered.size() == 1);
+    CHECK(hasTarget(remembered[0], "world.mm7.map.7d30"));
+    CHECK_FALSE(hasTarget(remembered[0], "world.mm7.map.d03"));
+    // A fresh Dark-path request discloses Castle Gloaming instead; Guide offers both alternatives.
+    knowledge = {};
+    knowledge.activeQuests = {694}; knowledge.questBits = {612, 694};
+    const auto dark = buildWorldGuide(source, WorldGuideSection::Quests, knowledge, false);
+    REQUIRE(dark.size() == 1);
+    CHECK(hasTarget(dark[0], "world.mm7.map.d03"));
+    CHECK_FALSE(hasTarget(dark[0], "world.mm7.map.7d30"));
+    const auto guide = buildWorldGuide(source, WorldGuideSection::Quests, knowledge, true);
+    const auto tapestry = std::find_if(guide.begin(), guide.end(),
+        [](const WorldGuideEntry &entry) { return entry.id == "694"; });
+    REQUIRE(tapestry != guide.end());
+    CHECK(hasTarget(*tapestry, "world.mm7.map.d03"));
+    CHECK(hasTarget(*tapestry, "world.mm7.map.7d30"));
+    CHECK(knowledge.questLocations.empty());
+    CHECK(knowledge.quests.empty());
+
+    knowledge.activeQuests = {528, 539, 533, 706};
+    const auto clues = buildWorldGuide(source, WorldGuideSection::Quests, knowledge, false);
+    REQUIRE(clues.size() == 4);
+    for (const WorldGuideEntry &entry : clues)
+    {
+        CHECK_FALSE(hasTarget(entry, "world.mm7.map.7d28"));
+        CHECK_FALSE(hasTarget(entry, "world.mm7.map.7d13"));
+        CHECK(entry.details.find("Contestant's Shield") == std::string::npos);
+        CHECK(entry.details.find("Lady Carmine's Dagger") == std::string::npos);
+        CHECK(entry.details.find("Arcomage Deck") == std::string::npos);
+    }
+}
+
 TEST_CASE("world guide quest contacts link only to the selected current or observed NPC index")
 {
     MapStats maps;

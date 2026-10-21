@@ -1,0 +1,31 @@
+# 1600x900; load either light-tapestry-accepted or dark-tapestry-accepted in a private runtime.
+# Discovery must name only the requested castle. Guide deliberately includes both branch alternatives.
+output_dir: captures
+exit: true
+steps:
+- expect: gameplay
+- key: F9
+- pause: true
+- click: [800, 821]
+- click: [450, 57]
+- click: [1450, 126]
+- click: [275, 190]
+- text: Tapestry
+- key: Return
+- click: [200, 265]
+- capture: tapestry-discovery
+- pointer_move: [1035, 527]
+- wheel: -1000
+- capture: tapestry-disclosed-castle
+- click: [1035, 640]
+- wait: 2
+- capture: unvisited-castle-from-clue
+- click: [450, 57]
+- click: [1152, 57]
+- capture: tapestry-guide
+- click: [1152, 57]
+- click: [1450, 57]
+- expect: pause
+- click: [800, 301]
+- expect: gameplay
+- key: F9

@@ -1373,3 +1373,29 @@ development root's `atlas-mm8-campaign-20261021/` directory.
 Galvinus' mismatched Accuracy/Blazen flags. They require separate event/state review, not invented Atlas facts.
 MM7 campaign coverage, remaining conditional clues/site/reference content and Android/controller checks remain
 part of the incomplete full objective; these counts do not measure overall Atlas completion.
+
+### MM7 campaign quest relationships, 2026-10-21
+
+The shared registry now contains 144 quests and 578 relationships: 76 MM7 and 68 MM8 entries. This expansion adds
+50 MM7 quests / 214 relationships covering the initial hunt, remaining promotions, both political paths, the
+main finale and side requests. All nonempty, non-placeholder MM7 campaign journal entries now have relationships
+except the transient QBit 757 `Congratulations` notification. This does not establish complete stage, site or
+campaign behavior coverage; [the content audit](ATLAS_QUEST_AUDIT.md) lists the handlers and remaining limitations.
+
+The Tapestry request discloses Castle Lambent on Light and Castle Gloaming on Dark. Its known clue persists after
+quest completion; Guide offers both branches without recording new knowledge. Unknown contestant proof, exact
+meditation destination, assassin proof and Arcomage evidence remain Guide hints. All merged item/NPC/map IDs are
+resolved from the current registries; no generated event, gameplay rule, save format or engine API changed.
+
+Validation: 194 focused Windows cases / 7477 assertions and 89 Linux ASan/UBSan cases / 4944 assertions pass.
+Strict native scenarios verify the initial hunt assignment and actual Markham/Rogue/Initiate requests, then both
+Tapestry request/reward branches and persistence. The latter use explicit faction/Malwick and inventory fixtures;
+they do not test the faction story, theft, castle access, travel or combat. Native AMD OpenGL captures show only
+the correct castle in Discovery and both alternatives in Guide. Following the clue to the unvisited castle
+shows `No explored floor plan yet`, and the saved physical discovery flag remains zero after browsing and reload.
+
+Reusable inputs are `mm7_campaign_requests_knowledge.yml`, `mm7_tapestry_{light,dark}_knowledge.yml` under
+`tests/scenarios/atlas/` and `tools/menu_tours/atlas_mm7_campaign_quests.yml`. Private settings, saves, logs and
+captures are under the Windows development root's `atlas-mm7-campaign-20261021/` directory. Android/controller
+checks, remaining conditional/reward stages, MM8's broken Accuracy journal and wider site/reference coverage
+remain part of the active complete-Atlas objective.
