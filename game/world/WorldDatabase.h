@@ -126,9 +126,12 @@ public:
     void indexMapLocations(const MapStatsEntry &map, const IndoorMapData &geometry,
                            const ScriptedEventProgram &events);
     void indexMapMonsters(const MapStatsEntry &map, const OutdoorMapData &geometry, const MonsterTable &monsters,
-                          const std::vector<WorldMonsterObservation> &observations = {});
+                          const std::vector<WorldMonsterObservation> &observations = {},
+                          const MapDeltaData *pAuthoredActors = nullptr);
     void indexMapMonsters(const MapStatsEntry &map, const IndoorMapData &geometry, const MonsterTable &monsters,
-                          const std::vector<WorldMonsterObservation> &observations = {});
+                          const std::vector<WorldMonsterObservation> &observations = {},
+                          const MapDeltaData *pAuthoredActors = nullptr);
+    void indexObservedMonsters(const WorldKnowledge &knowledge, const MonsterTable &monsters);
     void indexMapNotes(const WorldKnowledge &knowledge);
     void indexMapArrivals(const WorldKnowledge &knowledge);
     std::vector<const WorldMapFeature *> connectionArrivals(const WorldMapFeature &source,
@@ -159,7 +162,8 @@ private:
     void indexMapSites(const WorldRecord &source, const std::vector<WorldInteractionSite> &sites,
         const ScriptedEventProgram &events);
     void replaceMapMonsterFeatures(const MapStatsEntry &map, std::vector<WorldMapFeature> features,
-        const MonsterTable &monsters, const std::vector<WorldMonsterObservation> &observations);
+        const MonsterTable &monsters, const std::vector<WorldMonsterObservation> &observations,
+        const MapDeltaData *pAuthoredActors);
     std::vector<WorldRecord> m_records;
     std::vector<std::string> m_transportIssues;
     std::unordered_map<std::string, size_t> m_byId;

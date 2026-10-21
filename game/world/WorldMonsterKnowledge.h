@@ -7,6 +7,7 @@ namespace OpenYAMM::Game
 class IGameplayWorldRuntime;
 class MonsterTable;
 struct MapStatsEntry;
+struct MapDeltaData;
 
 struct WorldMonsterObservation
 {
@@ -15,6 +16,7 @@ struct WorldMonsterObservation
     int32_t x = 0, y = 0, z = 0;
     bool dead = false;
     int32_t gameMinutes = 0;
+    int32_t uniqueNameIndex = 0;
 };
 
 void recordWorldMonsterObservation(EventRuntimeState &state, const WorldMonsterObservation &observation);
@@ -25,6 +27,9 @@ std::vector<WorldMapFeature> buildWorldEncounterFeatures(const MapStatsEntry &ma
     const OutdoorMapData &geometry, const MonsterTable &monsters);
 std::vector<WorldMapFeature> buildWorldEncounterFeatures(const MapStatsEntry &map,
     const IndoorMapData &geometry, const MonsterTable &monsters);
+// Read only fresh package companion data, never a live or saved population.
+std::vector<WorldMapFeature> buildWorldPlacedMonsterFeatures(const MapStatsEntry &map,
+    const MapDeltaData &authoredActors, const MonsterTable &monsters);
 std::vector<WorldMapFeature> buildWorldObservedMonsterFeatures(const std::string &mapId,
     const std::vector<WorldMonsterObservation> &observations, const MonsterTable &monsters);
 }

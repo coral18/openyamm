@@ -2,6 +2,21 @@
 
 namespace OpenYAMM::Game
 {
+int16_t resolveMapDeltaActorMonsterId(const MapDeltaActor &actor)
+{
+    if (actor.monsterInfoId > 0)
+    {
+        return actor.monsterInfoId;
+    }
+
+    if (actor.monsterId > 0)
+    {
+        return actor.monsterId;
+    }
+
+    return 0;
+}
+
 std::string resolveMapDeltaActorName(const MonsterTable &monsterTable, const MapDeltaActor &actor)
 {
     if (actor.uniqueNameIndex > 0)

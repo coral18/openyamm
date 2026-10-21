@@ -1,0 +1,47 @@
+# Native Windows 1600x900 tour. Uses isolated settings and saves.
+# MM7: load the save from tests/scenarios/atlas/mm7_arrival.yml.
+output_dir: captures-final
+exit: true
+steps:
+- expect: gameplay
+- pause: true
+- click:
+  - 800
+  - 821
+- click:
+  - 1152
+  - 57
+- click:
+  - 1480
+  - 126
+- click:
+  - 275
+  - 125
+- text: authored placement
+- key: Return
+- click:
+  - 1250
+  - 260
+- capture: mm7-authored-placement
+- click:
+  - 1390
+  - 807
+- capture: mm7-placed-bestiary
+- click:
+  - 1450
+  - 190
+- wait: 20
+- capture: mm7-sources-ready
+- pointer_move:
+  - 1035
+  - 527
+- wheel: -1000
+- capture: mm7-bestiary-source-links
+- click:
+  - 1035
+  - 695
+- capture: mm7-bestiary-to-dungeon-map
+- click:
+  - 1152
+  - 57
+- capture: mm7-discovery-after-guide

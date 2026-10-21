@@ -2772,21 +2772,6 @@ std::optional<std::string> resolveMonsterNameForSpawn(const MapStatsEntry &map, 
     return pEncounter->monsterName + " " + (descriptor.fixedTier == '\0' ? 'A' : descriptor.fixedTier);
 }
 
-int16_t resolveMapDeltaActorMonsterId(const MapDeltaActor &actor)
-{
-    if (actor.monsterInfoId > 0)
-    {
-        return actor.monsterInfoId;
-    }
-
-    if (actor.monsterId > 0)
-    {
-        return actor.monsterId;
-    }
-
-    return 0;
-}
-
 std::array<uint16_t, 8> buildMonsterActionSpriteFrameIndices(
     const SpriteFrameTable &spriteFrameTable,
     const MonsterEntry *pMonsterEntry

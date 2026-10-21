@@ -1,0 +1,41 @@
+id: atlas.mm8_named_monster_observation
+title: An actually contacted named creature retains its observed identity through save and load
+world: mm8
+mode: faithful
+steps:
+- new_game_flow:
+    start_map: out01.odm
+- load_map:
+    map: out05.odm
+- press_interact:
+    pose:
+      x: -17208
+      y: -11944
+      z: 1376
+      yaw: 0
+      pitch: -0.4
+    expect:
+      kind: actor
+      actor_index: 3
+      can_activate: true
+- assert:
+    named_map_var_changed:
+      name: openyamm.discovery.monster/3/name
+      value: 2
+- assert:
+    named_map_var_changed:
+      name: openyamm.discovery.monster/0/name
+      value: 0
+- save_game: named-monster
+- load_map:
+    map: out01.odm
+- assert:
+    named_map_var_changed:
+      name: openyamm.discovery.monster/3/name
+      value: 0
+- load_game: named-monster
+- assert:
+    named_map_var_changed:
+      name: openyamm.discovery.monster/3/name
+      value: 2
+tags: [mm8, atlas, discovery, save]

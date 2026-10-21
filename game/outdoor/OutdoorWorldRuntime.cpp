@@ -13904,6 +13904,7 @@ bool OutdoorWorldRuntime::actorRuntimeState(size_t actorIndex, GameplayRuntimeAc
     state.visualScale = pActor->shrinkRemainingSeconds > 0
         ? std::clamp(pActor->shrinkDamageMultiplier, 0.25f, 1.0f) : 1.0f;
     state.monsterId = pActor->monsterId;
+    state.uniqueNameIndex = pActor->uniqueNameId <= INT32_MAX ? int32_t(pActor->uniqueNameId) : 0;
     state.mm9RudeId = pActor->mm9RudeId;
     state.mm9SourceObjectIndex = !pActor->spawnedAtRuntime
         && m_pOutdoorMapDeltaData != nullptr

@@ -60,6 +60,7 @@ AtlasScreen::AtlasScreen(const Engine::AssetFileSystem &assets, const GameDataRe
     }
     m_world.indexMapNotes(m_knowledge);
     m_world.indexMapArrivals(m_knowledge);
+    m_world.indexObservedMonsters(m_knowledge, m_data.monsterTable());
     m_world.indexObservedItemSources(m_knowledge, m_data.itemTable());
     for (const std::string &file : assets.enumerate("engine/world/atlas"))
         if (std::filesystem::path(file).extension() == ".yml")
@@ -233,6 +234,7 @@ void AtlasScreen::saveNote(bool remove)
                          m_noteDraft.mapFileName, m_noteDraft.text, true}, true, m_noteDraft.elevation});
     m_world.indexMapNotes(m_knowledge);
     m_world.indexMapArrivals(m_knowledge);
+    m_world.indexObservedMonsters(m_knowledge, m_data.monsterTable());
     m_world.indexObservedItemSources(m_knowledge, m_data.itemTable());
     if (!remove && m_noteDraft.elevation)
         selectFloorLayer(worldFloorPlanLayer(float(*m_noteDraft.elevation)));
@@ -345,11 +347,12 @@ void AtlasScreen::rebuildWorld()
         atlasTransportState(m_data, m_knowledge, m_guide, m_pParty != nullptr));
     m_world.indexMapNotes(m_knowledge);
     m_world.indexMapArrivals(m_knowledge);
+    m_world.indexObservedMonsters(m_knowledge, m_data.monsterTable());
     m_world.indexObservedItemSources(m_knowledge, m_data.itemTable());
     indexQuestLocations();
-    m_itemSourceMaps.clear(); m_itemSourceScanIndex = 0;
-    m_itemSourceScanActive = m_itemSourcesComplete = false;
-    m_itemSourceScanFailures = 0;
+    m_sourceMaps.clear(); m_sourceScanIndex = 0;
+    m_sourceScanActive = m_sourcesComplete = false;
+    m_sourceScanFailures = 0;
     m_indexedMaps.clear();
     m_floorPlanKey.clear();
 }
@@ -369,14 +372,15 @@ void AtlasScreen::selectWorld(const std::string &worldId)
         m_world = std::move(world);
         m_world.indexMapNotes(m_knowledge);
         m_world.indexMapArrivals(m_knowledge);
+        m_world.indexObservedMonsters(m_knowledge, m_data.monsterTable());
         m_world.indexObservedItemSources(m_knowledge, m_data.itemTable());
         m_selectedFeature.clear();
         m_referenceDirty = true;
         m_referenceSelected.clear();
         m_referenceScroll = m_referenceDetailScroll = 0;
-        m_itemSourceMaps.clear(); m_itemSourceScanIndex = 0;
-        m_itemSourceScanActive = m_itemSourcesComplete = false;
-        m_itemSourceScanFailures = 0;
+        m_sourceMaps.clear(); m_sourceScanIndex = 0;
+        m_sourceScanActive = m_sourcesComplete = false;
+        m_sourceScanFailures = 0;
         m_presentation = std::move(presentation);
         indexQuestLocations();
         m_trainerMastery = 0;
@@ -560,14 +564,16 @@ void AtlasScreen::indexMapData(MapAssetInfo &map)
     if (map.outdoorMapData)
     {
         m_world.indexMapLocations(*map.outdoorMapData, *map.localEventProgram);
-        m_world.indexMapMonsters(map.map, *map.outdoorMapData, m_data.monsterTable(), observations);
+        m_world.indexMapMonsters(map.map, *map.outdoorMapData, m_data.monsterTable(),
+            observations, delta ? &*delta : nullptr);
         m_world.indexMapItemRewards(map.map, *map.localEventProgram,
             worldInteractionSites(*map.outdoorMapData), m_data.itemTable());
     }
     else if (map.indoorMapData)
     {
         m_world.indexMapLocations(map.map, *map.indoorMapData, *map.localEventProgram);
-        m_world.indexMapMonsters(map.map, *map.indoorMapData, m_data.monsterTable(), observations);
+        m_world.indexMapMonsters(map.map, *map.indoorMapData, m_data.monsterTable(),
+            observations, delta ? &*delta : nullptr);
         m_world.indexMapItemRewards(map.map, *map.localEventProgram,
             worldInteractionSites(*map.indoorMapData), m_data.itemTable());
     }
@@ -1271,10 +1277,10 @@ void AtlasScreen::rebuildReference()
     m_referenceDirty = false;
 }
 
-void AtlasScreen::stepItemSourceScan()
+void AtlasScreen::stepMapSourceScan()
 {
-    if (!m_itemSourceScanActive) return;
-    const MapStatsEntry &record = *m_itemSourceMaps[m_itemSourceScanIndex++];
+    if (!m_sourceScanActive) return;
+    const MapStatsEntry &record = *m_sourceMaps[m_sourceScanIndex++];
     try
     {
         auto map = MapAssetLoader().load(assetFileSystem(), record,
@@ -1288,14 +1294,14 @@ void AtlasScreen::stepItemSourceScan()
     }
     catch (const std::exception &error)
     {
-        ++m_itemSourceScanFailures;
-        m_locationError = "Some item sources could not be read; the source index is incomplete.";
-        std::cerr << "Atlas item source scan failed for " << record.fileName << ": " << error.what() << '\n';
+        ++m_sourceScanFailures;
+        m_locationError = "Some map sources could not be read; the source index is incomplete.";
+        std::cerr << "Atlas map source scan failed for " << record.fileName << ": " << error.what() << '\n';
     }
-    if (m_itemSourceScanIndex == m_itemSourceMaps.size())
+    if (m_sourceScanIndex == m_sourceMaps.size())
     {
-        m_itemSourceScanActive = false;
-        m_itemSourcesComplete = true;
+        m_sourceScanActive = false;
+        m_sourcesComplete = true;
         m_floorPlanKey.clear();
         m_referenceDirty = true;
     }
@@ -1421,7 +1427,7 @@ void AtlasScreen::drawClassComparison()
 
 void AtlasScreen::drawReference()
 {
-    stepItemSourceScan();
+    stepMapSourceScan();
     const std::pair<const char *, WorldGuideSection> sections[] = {
         {"Items", WorldGuideSection::Items}, {"Spells", WorldGuideSection::Spells},
         {"Classes", WorldGuideSection::Classes}, {"Alchemy", WorldGuideSection::Alchemy},
@@ -1458,23 +1464,24 @@ void AtlasScreen::drawReference()
         return;
     }
     const bool classes = m_referenceSection == WorldGuideSection::Classes;
-    const bool scanItems = m_guide && m_referenceSection == WorldGuideSection::Items;
-    textInRect(canvasRect(285, 89, classes || scanItems ? 410 : 535, 25),
+    const bool scanSources = m_guide && (m_referenceSection == WorldGuideSection::Items
+        || m_referenceSection == WorldGuideSection::Monsters);
+    textInRect(canvasRect(285, 89, classes || scanSources ? 410 : 535, 25),
         m_presentation.name + " - active game data",
         "fondamento", 14);
-    if (scanItems && button("atlas-item-sources", canvasRect(711, 89, 110, 25),
-        m_itemSourceScanActive ? "Scan " + std::to_string(m_itemSourceScanIndex) + "/"
-            + std::to_string(m_itemSourceMaps.size()) : m_itemSourceScanFailures > 0 ? "Partial sources"
-            : m_itemSourcesComplete ? "Sources ready" : "Scan sources",
-        "button", !m_itemSourceScanActive && !m_itemSourcesComplete))
+    if (scanSources && button("atlas-map-sources", canvasRect(711, 89, 110, 25),
+        m_sourceScanActive ? "Scan " + std::to_string(m_sourceScanIndex) + "/"
+            + std::to_string(m_sourceMaps.size()) : m_sourceScanFailures > 0 ? "Partial sources"
+            : m_sourcesComplete ? "Sources ready" : "Scan sources",
+        "button", !m_sourceScanActive && !m_sourcesComplete))
     {
-        m_itemSourceMaps.clear();
-        m_itemSourceScanFailures = 0;
+        m_sourceMaps.clear();
+        m_sourceScanFailures = 0;
         for (const WorldRecord &record : m_world.records())
             if (record.kind == WorldRecordKind::Region || record.kind == WorldRecordKind::Dungeon)
-                m_itemSourceMaps.push_back(record.map);
-        m_itemSourceScanIndex = 0;
-        m_itemSourceScanActive = !m_itemSourceMaps.empty();
+                m_sourceMaps.push_back(record.map);
+        m_sourceScanIndex = 0;
+        m_sourceScanActive = !m_sourceMaps.empty();
     }
     if (classes && button("atlas-class-compare", canvasRect(711, 89, 110, 25), "Compare", "button",
         std::any_of(m_referenceEntries.begin(), m_referenceEntries.end(),
@@ -1489,14 +1496,15 @@ void AtlasScreen::drawReference()
     drawSolidRect(list, 0xff18160fu); outline(list, 0xff597284u);
     drawSolidRect(details, 0xff18160fu); outline(details, 0xff597284u);
     std::vector<const WorldGuideEntry *> entries;
+    const std::string query = toLowerCopy(m_search);
     for (const WorldGuideEntry &entry : m_referenceEntries)
-        if (m_search.empty() || toLowerCopy(entry.title + " " + entry.details).find(toLowerCopy(m_search))
-            != std::string::npos)
+        if (query.empty() || toLowerCopy(entry.title + " " + entry.details).find(query) != std::string::npos
+            || std::any_of(entry.links.begin(), entry.links.end(), [&](const WorldGuideLink &link)
+                { return toLowerCopy(link.label).find(query) != std::string::npos; }))
             entries.push_back(&entry);
     if (!m_search.empty())
-        std::stable_sort(entries.begin(), entries.end(), [this](const WorldGuideEntry *a, const WorldGuideEntry *b)
+        std::stable_sort(entries.begin(), entries.end(), [&query](const WorldGuideEntry *a, const WorldGuideEntry *b)
         {
-            const std::string query = toLowerCopy(m_search);
             return (toLowerCopy(a->title).find(query) != std::string::npos)
                 > (toLowerCopy(b->title).find(query) != std::string::npos);
         });
@@ -1598,8 +1606,8 @@ void AtlasScreen::drawReference()
         textInRect(details, entries.empty() ? (m_guide ? "No records in this section."
             : "Nothing known yet. Guide Mode opens the full reference catalog.")
             : "Select a record to inspect its details.", "menu_arrus", 13, 0xffc6dfeau, true);
-    textInRect(canvasRect(34, 407, 778, 43), m_itemSourceScanActive
-        ? "Reading authored item sources, one map per frame. Random loot is never generated."
+    textInRect(canvasRect(34, 407, 778, 43), m_sourceScanActive
+        ? "Reading authored map sources. Random loot and encounters are never generated."
         : !m_locationError.empty() ? m_locationError : m_referenceSection == WorldGuideSection::Items
         ? (m_guide ? "Sources include fixed loot and conditional scripted rewards. "
             "They do not guarantee quest eligibility, random loot or remaining contents."
@@ -1683,6 +1691,8 @@ void AtlasScreen::drawDetails()
                 if (monster.observed)
                     text += std::string("\nLast observed: ") + (monster.dead ? "defeated" : "alive")
                         + " | Day " + std::to_string(monster.gameMinutes / (24 * 60) + 1);
+                else if (monster.placed)
+                    text += "\nAuthored placement. Scripts and the current world state can change its presence.";
                 else
                     text += "\nAuthored group: " + std::to_string(monster.minCount) + " - "
                         + std::to_string(monster.maxCount) + " creatures. Not a live population count.";

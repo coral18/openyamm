@@ -10975,6 +10975,7 @@ bool IndoorWorldRuntime::actorRuntimeState(size_t actorIndex, GameplayRuntimeAct
     state.visualScale = pEffectState != nullptr && pEffectState->shrinkRemainingSeconds > 0
         ? std::clamp(pEffectState->shrinkDamageMultiplier, 0.25f, 1.0f) : 1.0f;
     state.monsterId = resolvedMonsterId;
+    state.uniqueNameIndex = std::max(0, actor.uniqueNameIndex);
     state.mm9RudeId = actor.mm9RudeId;
     state.mm9SourceObjectIndex = actor.mm9SourceObjectIndex;
     state.preciseX = pAiState != nullptr ? pAiState->preciseX : static_cast<float>(actor.x);

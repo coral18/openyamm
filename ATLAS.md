@@ -89,7 +89,7 @@ Unknown services are filtered before search; routes require both endpoint maps t
 
 ## Remaining guide coverage
 
-This slice is not the complete external guide port. Complete campaign chains, placed/scripted monsters, site effects/loot/open state,
+This slice is not the complete external guide port. Complete campaign chains, scripted monster sources, site effects/loot/open state,
 conditional teleport destinations, Barrows connection graphs, item/ingredient sources, guild availability and
 companion recruitment locations remain to be added through shared game/world data. The native guidebook below
 now covers reference pages and campaign trackers. Player notes are editable in the Atlas and existing Map Book.
@@ -1082,3 +1082,47 @@ The two cross-map tours completed all 20 steps / four captures each. The same-ma
 four captures: its inspected images show the known source on band -7, the selected arrival on band 0 and
 View origin restoring All heights. All twelve captures were freshly written; the inspected source/arrival and
 Discovery images retain the current party's knowledge. These are AMD/OpenGL native checks, not Android evidence.
+
+### Placed creatures and Bestiary map sources, 2026-10-21
+
+Guide Sites now indexes individually placed actors from fresh package `.ddm`/`.dlv` companion data, alongside
+encounter areas. Their names and monster definitions use the shared actor resolver; the existing import-ID rule was
+moved from MapAssetLoader into that resolver without changing its precedence. Unknown positive stats identities
+are not silently remapped to another valid monster. Pins retain the stable package actor index and original XYZ,
+and explicitly describe an authored placement, not a living population or a promised current spawn.
+The current-map fast path never passes its potentially mutated delta as authored data.
+
+Discovery remains observation-only, even on fully explored terrain. Indoor and outdoor actor runtime states now
+expose the actual unique-name index. Actual player picks/targets record that optional identity with the position,
+base definition, alive/dead flag and time. Older observations without it remain unnamed; later unnamed observations
+clear old names. Save/load and map-refill retention use the existing named-map variables, with no binary save-version
+change. No package index or Guide operation creates discovery records.
+
+Bestiary entries link back to visible placed actors, encounter areas and last observations. Source labels identify
+the provenance, map and XY; links use the native feature selection and dungeon-height controls. Reference search
+also checks visible source labels, so searching an observed name such as Jeric finds its base creature entry without
+revealing unknown actors. Known observations
+from previous maps are indexed directly from the party's map history, so their links do not depend on reopening the
+map or loading its geometry. Guide's existing incremental item-source scan is now one shared map-source scan,
+available from Items or Bestiary; it never rolls loot or generates encounters.
+
+Validation on isolated settings and saves:
+
+- Windows Release main build passed. The six focused World Database/Guide, Party/save, AssetFileSystem,
+  ContentManifest and ModLoader suites passed 180 cases / 6732 assertions.
+- Linux ASan/UBSan shared Atlas suites passed 76 cases / 4449 assertions, including authored-versus-observed privacy,
+  actor-ID precedence, unique names, repeat indexing and cross-world history isolation.
+- The existing faithful MM8 monster-observation scenario passed. The new
+  `tests/scenarios/atlas/mm8_named_monster_observation.yml` contacted the actual Garrote Gorge actor 3, observed
+  Jeric Whistlebone's identity, saved, changed map and reloaded it. It passed with the Atlas enabled and disabled.
+- Native AMD OpenGL 3.3 tours produced 18 fresh final captures across MM7/MM8. Visual checks covered named
+  observations, authored placements, Bestiary-to-map navigation, an MM7 dungeon link and returning from Guide
+  to Discovery without disclosing Guide-only sources. A focused lookup tour also verified a named observation
+  can be found directly in Bestiary before visiting Sites. Both full map-source scans reached Sources ready without
+  marker/source-index failures. Reusable tours are `tools/menu_tours/atlas_monster_sources_mm7.yml` and
+  `tools/menu_tours/atlas_monster_sources_mm8.yml`, plus `tools/menu_tours/atlas_monster_lookup.yml`;
+  private logs/captures remain outside Git under
+  `atlas-monsters-20261021` in the Windows development directory.
+
+This is another checkpoint, not completion of the Atlas objective. Declarative scripted spawn sources, automatic
+visibility discovery, variant navigation, broader campaign data auditing and Android/controller checks remain open.

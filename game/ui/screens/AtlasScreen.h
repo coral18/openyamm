@@ -48,7 +48,7 @@ private:
     WorldGuideSource referenceSource() const;
     void drawClassComparison();
     void compareClass(std::optional<uint32_t> raceId = std::nullopt);
-    void stepItemSourceScan();
+    void stepMapSourceScan();
     void indexQuestLocations();
     void rebuildWorld();
     void drawNoteEditor();
@@ -71,10 +71,10 @@ private:
     std::optional<WorldClassComparison> m_classComparison;
     size_t m_comparisonPage = 0;
     float m_comparisonScroll = 0;
-    std::vector<const MapStatsEntry *> m_itemSourceMaps;
-    size_t m_itemSourceScanIndex = 0;
-    size_t m_itemSourceScanFailures = 0;
-    bool m_itemSourceScanActive = false, m_itemSourcesComplete = false;
+    std::vector<const MapStatsEntry *> m_sourceMaps;
+    size_t m_sourceScanIndex = 0;
+    size_t m_sourceScanFailures = 0;
+    bool m_sourceScanActive = false, m_sourcesComplete = false;
     std::unordered_set<std::string> m_indexedMaps, m_siteSelection;
     std::string m_locationError;
     NoteWriter m_writeNote;

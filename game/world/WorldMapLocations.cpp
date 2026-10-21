@@ -130,28 +130,52 @@ std::vector<const WorldMapFeature *> WorldDatabase::connectionArrivals(const Wor
 }
 
 void WorldDatabase::replaceMapMonsterFeatures(const MapStatsEntry &map, std::vector<WorldMapFeature> features,
-    const MonsterTable &monsters, const std::vector<WorldMonsterObservation> &observations)
+    const MonsterTable &monsters, const std::vector<WorldMonsterObservation> &observations,
+    const MapDeltaData *pAuthoredActors)
 {
     const std::string id = mapId(map);
     if (find(id) == nullptr)
         return;
     std::erase_if(m_features, [&id](const WorldMapFeature &feature)
     { return feature.mapId == id && feature.kind == WorldMapFeatureKind::Monster; });
+    if (pAuthoredActors != nullptr)
+    {
+        auto placed = buildWorldPlacedMonsterFeatures(map, *pAuthoredActors, monsters);
+        features.insert(features.end(), placed.begin(), placed.end());
+    }
     auto observed = buildWorldObservedMonsterFeatures(id, observations, monsters);
     features.insert(features.end(), observed.begin(), observed.end());
     m_features.insert(m_features.end(), features.begin(), features.end());
 }
 
 void WorldDatabase::indexMapMonsters(const MapStatsEntry &map, const OutdoorMapData &geometry,
-    const MonsterTable &monsters, const std::vector<WorldMonsterObservation> &observations)
+    const MonsterTable &monsters, const std::vector<WorldMonsterObservation> &observations,
+    const MapDeltaData *pAuthoredActors)
 {
-    replaceMapMonsterFeatures(map, buildWorldEncounterFeatures(map, geometry, monsters), monsters, observations);
+    replaceMapMonsterFeatures(map, buildWorldEncounterFeatures(map, geometry, monsters),
+        monsters, observations, pAuthoredActors);
 }
 
 void WorldDatabase::indexMapMonsters(const MapStatsEntry &map, const IndoorMapData &geometry,
-    const MonsterTable &monsters, const std::vector<WorldMonsterObservation> &observations)
+    const MonsterTable &monsters, const std::vector<WorldMonsterObservation> &observations,
+    const MapDeltaData *pAuthoredActors)
 {
-    replaceMapMonsterFeatures(map, buildWorldEncounterFeatures(map, geometry, monsters), monsters, observations);
+    replaceMapMonsterFeatures(map, buildWorldEncounterFeatures(map, geometry, monsters),
+        monsters, observations, pAuthoredActors);
+}
+
+void WorldDatabase::indexObservedMonsters(const WorldKnowledge &knowledge, const MonsterTable &monsters)
+{
+    std::erase_if(m_features, [](const WorldMapFeature &feature)
+    { return feature.monster && feature.monster->observed; });
+    for (const WorldRecord &map : m_records)
+    {
+        if (map.kind != WorldRecordKind::Region && map.kind != WorldRecordKind::Dungeon) continue;
+        const auto found = knowledge.monsterObservations.find(toLowerCopy(map.map->fileName));
+        if (found == knowledge.monsterObservations.end()) continue;
+        auto observed = buildWorldObservedMonsterFeatures(map.id, found->second, monsters);
+        m_features.insert(m_features.end(), observed.begin(), observed.end());
+    }
 }
 
 void WorldDatabase::indexMapNotes(const WorldKnowledge &knowledge)

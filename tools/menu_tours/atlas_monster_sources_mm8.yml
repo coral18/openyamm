@@ -1,0 +1,68 @@
+# Native Windows 1600x900 tour. Uses isolated settings and saves.
+# MM8: load the save from tests/scenarios/atlas/mm8_named_monster_observation.yml.
+output_dir: captures-final
+exit: true
+steps:
+- expect: gameplay
+- pause: true
+- click:
+  - 800
+  - 821
+- click:
+  - 1480
+  - 126
+- click:
+  - 275
+  - 125
+- text: Jeric
+- key: Return
+- click:
+  - 1250
+  - 260
+- capture: named-discovery
+- click:
+  - 1390
+  - 807
+- capture: bestiary-definition
+- pointer_move:
+  - 1035
+  - 527
+- wheel: -12
+- capture: bestiary-observed-links
+- click:
+  - 1035
+  - 695
+- capture: bestiary-to-observed-map
+- click:
+  - 1152
+  - 57
+- click:
+  - 275
+  - 125
+- text: Jeric
+- key: Return
+- click:
+  - 1250
+  - 260
+- capture: named-authored-placement
+- click:
+  - 1390
+  - 807
+- click:
+  - 1450
+  - 190
+- wait: 20
+- capture: bestiary-sources-ready
+- pointer_move:
+  - 1035
+  - 527
+- wheel: -1000
+- capture: bestiary-authored-links
+- click:
+  - 1035
+  - 641
+- capture: bestiary-to-authored-map
+- click:
+  - 1152
+  - 57
+- capture: discovery-after-guide

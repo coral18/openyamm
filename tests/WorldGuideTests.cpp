@@ -20,6 +20,8 @@
 #include "game/world/WorldMapKnowledge.h"
 #include "game/events/ScriptedEventProgram.h"
 #include "game/tables/ObjectTable.h"
+#include "game/maps/MapDeltaData.h"
+#include "game/outdoor/OutdoorMapData.h"
 
 #include <doctest/doctest.h>
 #include <algorithm>
@@ -49,6 +51,62 @@ TEST_CASE("world guide bestiary filters unknown definitions before exposing thei
     CHECK(discovered[0].details.find("Special attack: 0") == std::string::npos);
     CHECK(buildWorldGuide(source, WorldGuideSection::Monsters, knowledge, true).size() == 2);
     CHECK(knowledge.monsters.size() == 1);
+}
+
+TEST_CASE("world guide bestiary links only visible map sources to their precise monster features")
+{
+    std::vector<std::string> monster(38, "0");
+    monster[0] = "11"; monster[1] = "Goblin"; monster[2] = "Goblin A";
+    MonsterTable monsters;
+    REQUIRE(monsters.loadStatsFromRows({monster}));
+    REQUIRE(monsters.loadUniqueNamesFromRows({{"1", "Gruk the Red"}}));
+    std::vector<std::string> row(35);
+    row[0] = "63"; row[1] = "Harmondale"; row[2] = "7out02.odm"; row[34] = "mm7";
+    MapStats maps;
+    REQUIRE(maps.loadFromRows({row}));
+    HouseTable houses;
+    NpcDialogTable npcs;
+    MergedTeacherTopicTable teachers;
+    WorldDatabase database(maps, houses, npcs, teachers, "mm7");
+    MapStatsEntry map = *maps.findById(63);
+    map.encounter1.monsterName = map.encounter1.pictureName = "Goblin";
+    map.encounter1.minCount = map.encounter1.maxCount = 2;
+    OutdoorMapData geometry;
+    geometry.spawns = {{100, 200, 0, 64, 3, 1}};
+    MapDeltaData delta;
+    delta.actors.resize(1);
+    delta.actors[0].monsterInfoId = 11;
+    delta.actors[0].uniqueNameIndex = 1;
+    delta.actors[0].x = 300;
+    database.indexMapMonsters(map, geometry, monsters, {}, &delta);
+    WorldGuideSource source;
+    WorldKnowledge worldKnowledge;
+    WorldGuideKnowledge knowledge;
+    source.pMonsters = &monsters;
+    source.pWorld = &database;
+    source.pWorldKnowledge = &worldKnowledge;
+    knowledge.monsters.insert(11); // Knowing a species does not disclose its other locations.
+    const auto undisclosed = buildWorldGuide(source, WorldGuideSection::Monsters, knowledge, false);
+    REQUIRE(undisclosed.size() == 1);
+    CHECK(undisclosed[0].links.empty());
+    const auto guide = buildWorldGuide(source, WorldGuideSection::Monsters, knowledge, true);
+    REQUIRE(guide.size() == 1);
+    REQUIRE(guide[0].links.size() == 2);
+    CHECK(guide[0].links[0].kind == WorldGuideLink::Kind::Feature);
+    CHECK(guide[0].links[0].target == WorldDatabase::mapId(map) + "/encounter/0");
+    CHECK(guide[0].links[1].target == WorldDatabase::mapId(map) + "/placed/0");
+    CHECK(guide[0].links[1].label.find("Gruk the Red") != std::string::npos);
+    CHECK(guide[0].links[1].label.find("Harmondale (300, 0)") != std::string::npos);
+    worldKnowledge.monsterObservations[map.fileName] = {{8, 11, 42, 43, 44, false, 100, 1}};
+    database.indexObservedMonsters(worldKnowledge, monsters); // Past maps need no geometry load.
+    database.indexObservedMonsters(worldKnowledge, monsters); // Refresh must not duplicate links.
+    const auto discovery = buildWorldGuide(source, WorldGuideSection::Monsters, knowledge, false);
+    REQUIRE(discovery[0].links.size() == 1);
+    CHECK(discovery[0].links[0].target == WorldDatabase::mapId(map) + "/observed/8");
+    CHECK(discovery[0].links[0].label.find("Gruk the Red - last observed") != std::string::npos);
+    CHECK(discovery[0].links[0].label.find("(42, 43)") != std::string::npos);
+    CHECK(worldKnowledge.visitedMaps.empty());
+    CHECK(buildWorldGuide(source, WorldGuideSection::Monsters, knowledge, true)[0].links.size() == 3);
 }
 
 namespace

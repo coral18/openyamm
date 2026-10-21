@@ -224,6 +224,11 @@ std::vector<WorldGuideEntry> buildWorldGuide(const WorldGuideSource &source, Wor
     }
     else if (section == WorldGuideSection::Monsters && source.pMonsters != nullptr)
     {
+        std::map<int16_t, std::vector<const WorldMapFeature *>> sources;
+        if (source.pWorld != nullptr && source.pWorldKnowledge != nullptr)
+            for (const WorldMapFeature *pFeature : source.pWorld->queryFeatures(*source.pWorldKnowledge, guide))
+                if (pFeature->monster)
+                    for (int16_t id : pFeature->monster->definitions) sources[id].push_back(pFeature);
         for (const auto &[id, monster] : source.pMonsters->statsEntries())
         {
             if (id <= 0 || id > INT16_MAX || monster.name.empty()
@@ -257,6 +262,18 @@ std::vector<WorldGuideEntry> buildWorldGuide(const WorldGuideSource &source, Wor
                 + std::to_string(monster.loot.goldDiceSides) + "\nItem chance: "
                 + std::to_string(monster.loot.itemChance) + "% | Item level: " + std::to_string(monster.loot.itemLevel)
                 + "\n\nShared base definition. Runtime scaling and effects may change these values.";
+            for (const WorldMapFeature *pFeature : sources[int16_t(id)])
+            {
+                const WorldRecord *pMap = source.pWorld->find(pFeature->mapId);
+                entry.links.push_back({WorldGuideLink::Kind::Feature,
+                    pFeature->title + " - " + pMap->name() + " ("
+                        + std::to_string(int64_t(pFeature->site.x)) + ", "
+                        + std::to_string(int64_t(pFeature->site.y)) + ")",
+                    pFeature->id});
+            }
+            if (!entry.links.empty())
+                entry.details += "\n\nMap links distinguish initial placements, possible encounter areas and last "
+                    "observations. They do not show the current population.";
             result.push_back(std::move(entry));
         }
     }

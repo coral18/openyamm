@@ -6,6 +6,7 @@
 #include "game/indoor/IndoorMapData.h"
 #include "game/maps/MapIdentity.h"
 #include "game/tables/MonsterTable.h"
+#include "game/data/ActorNameResolver.h"
 
 #include <algorithm>
 #include <charconv>
@@ -62,7 +63,7 @@ std::vector<WorldMapFeature> encounterFeatures(const MapStatsEntry &map, const s
 
 void recordWorldMonsterObservation(EventRuntimeState &state, const WorldMonsterObservation &observation)
 {
-    if (observation.monsterId <= 0 || observation.gameMinutes < 0)
+    if (observation.monsterId <= 0 || observation.gameMinutes < 0 || observation.uniqueNameIndex < 0)
         return;
     const std::string prefix = ObservationPrefix + std::to_string(observation.actorId) + "/";
     state.namedMapVars[prefix + "x"] = observation.x;
@@ -71,6 +72,7 @@ void recordWorldMonsterObservation(EventRuntimeState &state, const WorldMonsterO
     state.namedMapVars[prefix + "dead"] = observation.dead ? 1 : 0;
     state.namedMapVars[prefix + "time"] = observation.gameMinutes;
     state.namedMapVars[prefix + "type"] = observation.monsterId;
+    state.namedMapVars[prefix + "name"] = observation.uniqueNameIndex;
 }
 
 std::vector<WorldMonsterObservation> worldMonsterObservations(const EventRuntimeState &state)
@@ -98,7 +100,9 @@ std::vector<WorldMonsterObservation> worldMonsterObservations(const EventRuntime
         observation.z = state.namedMapVars.at(prefix + "z");
         observation.dead = state.namedMapVars.at(prefix + "dead") != 0;
         observation.gameMinutes = state.namedMapVars.at(prefix + "time");
-        if (observation.gameMinutes >= 0)
+        const auto name = state.namedMapVars.find(prefix + "name");
+        if (name != state.namedMapVars.end()) observation.uniqueNameIndex = name->second;
+        if (observation.gameMinutes >= 0 && observation.uniqueNameIndex >= 0)
             result.push_back(observation);
     }
     std::sort(result.begin(), result.end(), [](const WorldMonsterObservation &a, const WorldMonsterObservation &b)
@@ -120,7 +124,7 @@ void recordWorldActorObservation(IGameplayWorldRuntime &world, size_t actorIndex
     recordWorldMonsterObservation(*pState, {actor.actorId, actor.monsterId,
         int32_t(std::lround(actor.preciseX)), int32_t(std::lround(actor.preciseY)),
         int32_t(std::lround(actor.preciseZ)),
-        actor.isDead, int32_t(world.gameMinutes())});
+        actor.isDead, int32_t(world.gameMinutes()), actor.uniqueNameIndex});
 }
 
 std::vector<WorldMapFeature> buildWorldEncounterFeatures(const MapStatsEntry &map,
@@ -133,6 +137,32 @@ std::vector<WorldMapFeature> buildWorldEncounterFeatures(const MapStatsEntry &ma
     const IndoorMapData &geometry, const MonsterTable &monsters)
 {
     return encounterFeatures(map, geometry.spawns, monsters);
+}
+
+std::vector<WorldMapFeature> buildWorldPlacedMonsterFeatures(const MapStatsEntry &map,
+    const MapDeltaData &authoredActors, const MonsterTable &monsters)
+{
+    std::vector<WorldMapFeature> result;
+    const std::string mapId = map.canonicalId.empty()
+        ? buildCanonicalMapId(map.worldId, map.fileName) : map.canonicalId;
+    for (size_t i = 0; i < authoredActors.actors.size(); ++i)
+    {
+        const MapDeltaActor &actor = authoredActors.actors[i];
+        const int16_t monsterId = resolveMapDeltaActorMonsterId(actor);
+        const auto *pStats = monsters.findStatsById(monsterId);
+        if (monsterId <= 0 || pStats == nullptr) continue;
+        WorldMapFeature feature;
+        feature.mapId = mapId;
+        feature.site = {"placed/" + std::to_string(i), 0, float(actor.x), float(actor.y), float(actor.z)};
+        feature.id = mapId + "/" + feature.site.id;
+        feature.kind = WorldMapFeatureKind::Monster;
+        const std::string name = resolveMapDeltaActorName(monsters, actor);
+        feature.title = (name.empty() ? pStats->name : name) + " - authored placement";
+        feature.monster = WorldMonsterFeature{{monsterId}, 1, 1};
+        feature.monster->placed = true;
+        result.push_back(std::move(feature));
+    }
+    return result;
 }
 
 std::vector<WorldMapFeature> buildWorldObservedMonsterFeatures(const std::string &mapId,
@@ -150,7 +180,9 @@ std::vector<WorldMapFeature> buildWorldObservedMonsterFeatures(const std::string
             float(observation.x), float(observation.y), float(observation.z)};
         feature.id = mapId + "/" + feature.site.id;
         feature.kind = WorldMapFeatureKind::Monster;
-        feature.title = pStats->name + " - last observed";
+        const std::optional<std::string> name = observation.uniqueNameIndex > 0
+            ? monsters.getUniqueName(observation.uniqueNameIndex) : std::nullopt;
+        feature.title = (name && !name->empty() ? *name : pStats->name) + " - last observed";
         feature.monster = WorldMonsterFeature{{observation.monsterId}, 1, 1, 0, true,
             observation.dead, observation.gameMinutes};
         result.push_back(std::move(feature));

@@ -138,6 +138,7 @@ struct GameplayRuntimeActorState
     bool hostileToParty = false;
     bool hasDetectedParty = false;
     bool combatTargetingParty = false;
+    int32_t uniqueNameIndex = 0;
 };
 
 struct GameplayCombatFeedbackEvent

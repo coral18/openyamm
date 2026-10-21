@@ -17,6 +17,7 @@
 #include "game/events/EventRuntime.h"
 #include "game/gameplay/MapEncounterDefinition.h"
 #include "game/tables/MonsterTable.h"
+#include "game/maps/MapDeltaData.h"
 
 #include <fstream>
 #include <iterator>
@@ -439,6 +440,96 @@ TEST_CASE("world monster layers hide authored populations and retain only last o
     REQUIRE(updated.size() == 1);
     CHECK(updated[0].x == 150);
     CHECK(updated[0].dead);
+}
+
+TEST_CASE("world monster placements use shared actor identities without revealing an authored census")
+{
+    Fixture f;
+    auto database = f.database();
+    MonsterTable monsters = atlasMonsters();
+    REQUIRE(monsters.loadUniqueNamesFromRows({{"1", "Gruk the Red"}}));
+    const MapStatsEntry &map = *f.maps.findById(63);
+    MapDeltaData delta;
+    delta.actors.resize(5);
+    delta.actors[0].monsterInfoId = 12;
+    delta.actors[0].monsterId = 11; // Runtime stats identity takes precedence over the sprite identity.
+    delta.actors[0].uniqueNameIndex = 1;
+    delta.actors[0].name = "Obsolete imported name";
+    delta.actors[0].x = 100; delta.actors[0].y = -200; delta.actors[0].z = 512;
+    delta.actors[1].monsterId = 13; // Legacy fallback when no stats identity is supplied.
+    delta.actors[2].monsterInfoId = 99; delta.actors[2].monsterId = 11; // Unknown positive id is not remapped.
+    delta.actors[3].monsterId = -1;
+    const auto placed = buildWorldPlacedMonsterFeatures(map, delta, monsters);
+    REQUIRE(placed.size() == 2);
+    CHECK(placed[0].title == "Gruk the Red - authored placement");
+    CHECK(placed[0].monster->definitions == std::vector<int16_t>{12});
+    CHECK(placed[1].monster->definitions == std::vector<int16_t>{13});
+    CHECK(placed[0].id == WorldDatabase::mapId(map) + "/placed/0");
+    CHECK(placed[0].site.x == 100);
+    CHECK(placed[0].site.y == -200);
+    CHECK(placed[0].site.z == 512);
+    CHECK(placed[0].monster->placed);
+    CHECK_FALSE(placed[0].monster->observed);
+    CHECK(delta.actors[0].name == "Obsolete imported name");
+    WorldKnowledge knowledge;
+    knowledge.visitedMaps.insert(map.fileName);
+    knowledge.regionMaps[map.fileName].fullyRevealedCells.assign(88 * 88 / 8, 255);
+    const std::vector<WorldMonsterObservation> observations = {{42, 12, 1, 2, 3, false, 600, 1}};
+    database.indexMapMonsters(map, OutdoorMapData{}, monsters, observations, &delta);
+    CHECK(database.queryFeatures(knowledge, true).size() == 3);
+    const auto known = database.queryFeatures(knowledge, false);
+    REQUIRE(known.size() == 1);
+    CHECK(known[0]->title == "Gruk the Red - last observed");
+    CHECK(known[0]->site.x == 1);
+    CHECK_FALSE(known[0]->monster->placed);
+    delta.actors[0].x = 9000;
+    database.indexMapMonsters(map, OutdoorMapData{}, monsters, observations, &delta);
+    CHECK(database.queryFeatures(knowledge, false)[0]->site.x == 1);
+    CHECK(database.queryFeatures(knowledge, true).size() == 3); // Reindex replaces rather than duplicates pins.
+    const MapStatsEntry &dungeon = *f.maps.findById(95);
+    database.indexMapMonsters(dungeon, IndoorMapData{}, monsters, {}, &delta);
+    CHECK(database.queryFeatures(knowledge, true, "", WorldDatabase::mapId(dungeon)).size() == 2);
+    CHECK(database.queryFeatures(knowledge, false, "", WorldDatabase::mapId(dungeon)).empty());
+}
+
+TEST_CASE("world monster history indexes only owning world maps without loading their geometry")
+{
+    Fixture f;
+    auto database = f.database();
+    MonsterTable monsters = atlasMonsters();
+    WorldKnowledge knowledge;
+    knowledge.monsterObservations["7d21.blv"] = {{4, 11, 100, 200, -512, false, 100}};
+    knowledge.monsterObservations["out01.odm"] = {{5, 12, 200, 300, 0, false, 100}}; // Different world.
+    knowledge.monsterObservations["missing.blv"] = {{6, 13, 300, 400, 0, false, 100}};
+    database.indexObservedMonsters(knowledge, monsters);
+    const auto known = database.queryFeatures(knowledge, false);
+    REQUIRE(known.size() == 1);
+    CHECK(known[0]->mapId == WorldDatabase::mapId(*f.maps.findById(95)));
+    CHECK(known[0]->site.z == -512);
+    database.indexObservedMonsters(knowledge, monsters);
+    CHECK(database.queryFeatures(knowledge, false).size() == 1);
+    knowledge.monsterObservations.clear();
+    database.indexObservedMonsters(knowledge, monsters);
+    CHECK(database.queryFeatures(knowledge, false).empty());
+}
+
+TEST_CASE("world monster observations preserve and clear actually observed unique names")
+{
+    EventRuntimeState state;
+    const std::string key = "openyamm.discovery.monster/7/name";
+    recordWorldMonsterObservation(state, {7, 11, 10, 20, 30, false, 100, 1});
+    REQUIRE(worldMonsterObservations(state).size() == 1);
+    CHECK(worldMonsterObservations(state)[0].uniqueNameIndex == 1);
+    recordWorldMonsterObservation(state, {7, 11, 11, 21, 31, false, 200});
+    CHECK(worldMonsterObservations(state)[0].uniqueNameIndex == 0);
+    CHECK(state.namedMapVars.at(key) == 0);
+    state.namedMapVars.erase(key); // Observations in existing saves have no optional name.
+    REQUIRE(worldMonsterObservations(state).size() == 1);
+    CHECK(worldMonsterObservations(state)[0].uniqueNameIndex == 0);
+    state.namedMapVars[key] = -1;
+    CHECK(worldMonsterObservations(state).empty());
+    recordWorldMonsterObservation(state, {8, 11, 0, 0, 0, false, 100, -1});
+    CHECK_FALSE(state.namedMapVars.contains("openyamm.discovery.monster/8/type"));
 }
 
 TEST_CASE("world monster knowledge ignores incomplete invalid and noncanonical observation records")

@@ -270,3 +270,17 @@ Successful corpse-item removal and pickpocket inventory delivery also record `op
 facts through the shared runtime. Recorded positions belong to the actual actor at that interaction, not its
 spawn. The existing save/refill handling preserves this historical knowledge independently of the Atlas UI.
 Merely inspecting a creature does not reveal its loot, and an old save does not acquire a guessed loot history.
+
+### Shared monster observations and Atlas sources
+
+`GameplayRuntimeActorState::uniqueNameIndex` exposes the actor's actual merged `place_mon.txt` identity.
+Indoor and outdoor runtimes supply it without consulting the Atlas. Core records it when the player picks or
+targets that actor, alongside the existing monster observation fields, under
+`openyamm.discovery.monster/<actorId>/name` in the owning map's named variables. Zero clears a previous name;
+old observations without the optional key keep an unnamed identity. Names are never inferred from an unseen
+package actor. Existing save serialization and discovery retention through map refill preserve the value.
+
+Guide placements are a separate, read-only projection of fresh package `MapDeltaData::actors`. The shared actor
+identity/name resolver supplies their definition and label. Do not feed a live/saved population into this projection
+or represent it as current occupancy. Discovery only exposes recorded observations, including their Bestiary map
+links. Disabling `openyamm.interactive-atlas` does not disable Core observation collection or discard its history.

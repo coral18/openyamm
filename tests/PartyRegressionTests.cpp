@@ -8,6 +8,7 @@
 #include "game/world/WorldItemSources.h"
 #include "game/world/WorldMapKnowledge.h"
 #include "game/world/WorldMapNotes.h"
+#include "game/world/WorldMonsterKnowledge.h"
 #include "game/world/WorldMapKnowledge.h"
 #include "game/party/Party.h"
 #include "game/party/SpellIds.h"
@@ -240,6 +241,37 @@ TEST_CASE("actual event arrival provenance and coordinates survive normal save s
     CHECK(arrivals[0].y == -200);
     CHECK(arrivals[0].z == -512);
     CHECK(arrivals[0].gameMinutes == 1440);
+}
+
+TEST_CASE("named monster observations survive normal save serialization and map refill")
+{
+    using namespace OpenYAMM::Game;
+    EventRuntimeState state;
+    state.mapFileName = "7d06.blv";
+    recordWorldMonsterObservation(state, {3, 12, 100, -200, -512, true, 1440, 7});
+    GameSaveData save;
+    save.currentSceneKind = SceneKind::Indoor;
+    save.mapFileName = state.mapFileName;
+    save.indoorScene.eventRuntimeState = state;
+    const auto path = std::filesystem::temp_directory_path() / "openyamm_named_monster.oysav";
+    std::string error;
+    REQUIRE_MESSAGE(saveGameDataToPath(path, save, error), error);
+    const auto loaded = loadGameDataFromPath(path, error);
+    std::filesystem::remove(path);
+    REQUIRE_MESSAGE(loaded.has_value(), error);
+    REQUIRE(loaded->indoorScene.eventRuntimeState.has_value());
+    EventRuntimeState refilled;
+    restoreWorldMapKnowledgeAfterRefill(*loaded->indoorScene.eventRuntimeState, refilled);
+    const auto observations = worldMonsterObservations(refilled);
+    REQUIRE(observations.size() == 1);
+    CHECK(observations[0].actorId == 3);
+    CHECK(observations[0].monsterId == 12);
+    CHECK(observations[0].uniqueNameIndex == 7);
+    CHECK(observations[0].x == 100);
+    CHECK(observations[0].y == -200);
+    CHECK(observations[0].z == -512);
+    CHECK(observations[0].dead);
+    CHECK(observations[0].gameMinutes == 1440);
 }
 
 TEST_CASE("note elevation and unassigned legacy notes survive save and load independently")
