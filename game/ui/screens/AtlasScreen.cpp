@@ -1585,7 +1585,8 @@ void AtlasScreen::drawReference()
                 }
                 else
                 {
-                    m_referenceSection = link.kind == WorldGuideLink::Kind::Spell ? WorldGuideSection::Spells
+                    m_referenceSection = link.kind == WorldGuideLink::Kind::Monster ? WorldGuideSection::Monsters
+                        : link.kind == WorldGuideLink::Kind::Spell ? WorldGuideSection::Spells
                         : link.kind == WorldGuideLink::Kind::Class ? WorldGuideSection::Classes
                         : link.kind == WorldGuideLink::Kind::Item ? WorldGuideSection::Items
                         : WorldGuideSection::Alchemy;

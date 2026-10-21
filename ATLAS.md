@@ -1126,3 +1126,21 @@ Validation on isolated settings and saves:
 
 This is another checkpoint, not completion of the Atlas objective. Declarative scripted spawn sources, automatic
 visibility discovery, variant navigation, broader campaign data auditing and Android/controller checks remain open.
+
+### Bestiary variant navigation, 2026-10-21
+
+Bestiary entries now link to the other explicit A/B/C picture tiers selected by the runtime's MonsterTable lookup.
+IDs do not have to be adjacent. Noncanonical reused pictures and records without an explicit tier do not invent
+families. Discovery offers a link only when the party already knows that exact target definition; Guide can expose
+the other loaded tiers without changing knowledge. The native Monster link opens the target Bestiary entry and
+scrolls its list into view. Variant links remain distinct from physical map-source links.
+
+Windows Release built successfully; the six focused suites passed 181 cases / 6766 assertions. Linux ASan/UBSan
+passed 77 cases / 4483 assertions. New coverage uses nonadjacent IDs, mixed-case pictures, reused-picture aliases,
+untiered records and known/unknown variants. The native AMD OpenGL 3.3 tour produced five fresh final captures:
+Discovery hid unknown Dragon Hunter/Crusader variants, Guide navigated from Dragonslayer to Crusader, and returning
+to Discovery retained only the actual Dragonslayer observation. See `tools/menu_tours/atlas_monster_variants.yml`.
+Captures and logs are private under the Windows development directory's `atlas-monsters-20261021`.
+
+Scripted spawn declarations, automatic visibility discovery and a wider source/content audit still remain open.
+This does not establish Android/controller validation or finish the complete Atlas objective.

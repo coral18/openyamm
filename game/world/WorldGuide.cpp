@@ -14,6 +14,7 @@
 #include "game/tables/JournalQuestTable.h"
 #include "game/tables/NpcDialogTable.h"
 #include "game/maps/MapIdentity.h"
+#include "game/StringUtils.h"
 #include "game/gameplay/GuildSpellbookRules.h"
 #include "game/party/SpellSchool.h"
 
@@ -262,6 +263,21 @@ std::vector<WorldGuideEntry> buildWorldGuide(const WorldGuideSource &source, Wor
                 + std::to_string(monster.loot.goldDiceSides) + "\nItem chance: "
                 + std::to_string(monster.loot.itemChance) + "% | Item level: " + std::to_string(monster.loot.itemLevel)
                 + "\n\nShared base definition. Runtime scaling and effects may change these values.";
+            const std::string picture = toLowerCopy(monster.pictureName);
+            const auto *pCanonical = source.pMonsters->findStatsByPictureName(picture);
+            // Use the same explicit picture tiers as encounter resolution, never numeric ID adjacency.
+            if (pCanonical != nullptr && pCanonical->id == id && picture.size() > 2
+                && picture[picture.size() - 2] == ' ' && picture.back() >= 'a' && picture.back() <= 'c')
+                for (char tier : {'A', 'B', 'C'})
+                {
+                    const auto *pVariant = source.pMonsters->findStatsByPictureName(
+                        picture.substr(0, picture.size() - 1) + tier);
+                    if (pVariant != nullptr && pVariant->id > 0 && pVariant->id <= INT16_MAX
+                        && pVariant->id != id && !pVariant->name.empty()
+                        && (guide || knowledge.monsters.contains(int16_t(pVariant->id))))
+                        entry.links.push_back({WorldGuideLink::Kind::Monster,
+                            "Variant " + std::string(1, tier) + ": " + pVariant->name, std::to_string(pVariant->id)});
+                }
             for (const WorldMapFeature *pFeature : sources[int16_t(id)])
             {
                 const WorldRecord *pMap = source.pWorld->find(pFeature->mapId);
@@ -271,7 +287,7 @@ std::vector<WorldGuideEntry> buildWorldGuide(const WorldGuideSource &source, Wor
                         + std::to_string(int64_t(pFeature->site.y)) + ")",
                     pFeature->id});
             }
-            if (!entry.links.empty())
+            if (!sources[int16_t(id)].empty())
                 entry.details += "\n\nMap links distinguish initial placements, possible encounter areas and last "
                     "observations. They do not show the current population.";
             result.push_back(std::move(entry));

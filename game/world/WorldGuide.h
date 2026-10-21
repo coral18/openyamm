@@ -72,7 +72,7 @@ struct WorldGuideKnowledge
 
 struct WorldGuideLink
 {
-    enum class Kind { Trainer, Alchemy, Item, Location, Spell, Class, Feature };
+    enum class Kind { Trainer, Alchemy, Item, Location, Spell, Class, Feature, Monster };
     Kind kind = Kind::Item;
     std::string label;
     std::string target;

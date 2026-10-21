@@ -109,6 +109,53 @@ TEST_CASE("world guide bestiary links only visible map sources to their precise 
     CHECK(buildWorldGuide(source, WorldGuideSection::Monsters, knowledge, true)[0].links.size() == 3);
 }
 
+TEST_CASE("world guide monster variants follow runtime picture tiers and never disclose unknown definitions")
+{
+    const auto monsterRow = [](int id, const std::string &name, const std::string &picture)
+    {
+        std::vector<std::string> row(38, "0");
+        row[0] = std::to_string(id); row[1] = name; row[2] = picture;
+        return row;
+    };
+    MonsterTable monsters;
+    REQUIRE(monsters.loadStatsFromRows({monsterRow(6, "Disguised peasant", "Goblin A"),
+        monsterRow(11, "Goblin warrior", "GOBLIN A"), monsterRow(501, "Goblin shaman", "Goblin b"),
+        monsterRow(24000, "Goblin king", "Goblin C"), monsterRow(4, "Goblin statue", "Goblin")}));
+    WorldGuideSource source;
+    source.pMonsters = &monsters;
+    WorldGuideKnowledge knowledge;
+    knowledge.monsters.insert(11);
+    const auto first = buildWorldGuide(source, WorldGuideSection::Monsters, knowledge, false);
+    REQUIRE(first.size() == 1);
+    CHECK(first[0].links.empty());
+    knowledge.monsters.insert(501);
+    const auto learned = buildWorldGuide(source, WorldGuideSection::Monsters, knowledge, false);
+    REQUIRE(learned.size() == 2);
+    for (const WorldGuideEntry &entry : learned)
+    {
+        REQUIRE(entry.links.size() == 1);
+        CHECK(entry.links[0].kind == WorldGuideLink::Kind::Monster);
+        CHECK(entry.links[0].target == (entry.id == "11" ? "501" : "11"));
+        CHECK(entry.links[0].label.find("Goblin king") == std::string::npos);
+        CHECK(entry.links[0].target != "6");
+    }
+    const auto guide = buildWorldGuide(source, WorldGuideSection::Monsters, knowledge, true);
+    REQUIRE(guide.size() == 5);
+    for (const WorldGuideEntry &entry : guide)
+        if (entry.id == "6" || entry.id == "4")
+            CHECK(entry.links.empty()); // A reused picture or a missing explicit tier cannot invent a family.
+        else
+        {
+            REQUIRE(entry.links.size() == 2);
+            CHECK(entry.links[0].kind == WorldGuideLink::Kind::Monster);
+            CHECK(entry.links[1].kind == WorldGuideLink::Kind::Monster);
+            CHECK(entry.links[0].target != entry.id);
+            CHECK(entry.links[1].target != entry.id);
+        }
+    CHECK(knowledge.monsters == std::unordered_set<int16_t>{11, 501});
+    CHECK(buildWorldGuide(source, WorldGuideSection::Monsters, knowledge, false).size() == 2);
+}
+
 namespace
 {
 std::vector<std::vector<std::string>> guideTableRows(const std::string &name)

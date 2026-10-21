@@ -1,0 +1,52 @@
+# Load the isolated save from tests/scenarios/atlas/mm8_named_monster_observation.yml.
+output_dir: captures-variants
+exit: true
+steps:
+- expect: gameplay
+- pause: true
+- click:
+  - 800
+  - 821
+- click:
+  - 450
+  - 57
+- click:
+  - 1250
+  - 126
+- click:
+  - 275
+  - 190
+- text: Jeric
+- key: Return
+- click:
+  - 200
+  - 265
+- pointer_move:
+  - 1035
+  - 527
+- wheel: -12
+- capture: discovery-no-unknown-variants
+- click:
+  - 1152
+  - 57
+- pointer_move:
+  - 1035
+  - 527
+- wheel: -12
+- capture: guide-variant-links
+- click:
+  - 1035
+  - 641
+- capture: guide-variant-navigation
+- click:
+  - 1152
+  - 57
+- capture: discovery-variant-remains-unknown
+- click:
+  - 200
+  - 265
+- pointer_move:
+  - 1035
+  - 527
+- wheel: -12
+- capture: discovery-original-still-private
