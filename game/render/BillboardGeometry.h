@@ -38,6 +38,17 @@ inline bx::Vec3 bottomAnchoredBillboardCenter(
     };
 }
 
+inline bx::Vec3 billboardTexturePoint(const BillboardQuad &quad, bool mirrored,
+    const std::array<float, 2> &texturePoint)
+{
+    const float displayU = mirrored ? 1.0f - texturePoint[0] : texturePoint[0];
+    const float horizontal = displayU * 2.0f - 1.0f;
+    const float vertical = 1.0f - texturePoint[1] * 2.0f;
+    return {quad.center.x + quad.right.x * horizontal + quad.up.x * vertical,
+        quad.center.y + quad.right.y * horizontal + quad.up.y * vertical,
+        quad.center.z + quad.right.z * horizontal + quad.up.z * vertical};
+}
+
 inline std::optional<bx::Vec3> nearestOpaqueBillboardPoint(
     const BillboardQuad &quad,
     const BillboardOpacityMask &opacityMask,
@@ -54,13 +65,6 @@ inline std::optional<bx::Vec3> nearestOpaqueBillboardPoint(
         return std::nullopt;
     }
 
-    const float nearestDisplayU = mirrored ? 1.0f - (*nearestTexturePoint)[0] : (*nearestTexturePoint)[0];
-    const float horizontal = nearestDisplayU * 2.0f - 1.0f;
-    const float vertical = 1.0f - (*nearestTexturePoint)[1] * 2.0f;
-    return bx::Vec3{
-        quad.center.x + quad.right.x * horizontal + quad.up.x * vertical,
-        quad.center.y + quad.right.y * horizontal + quad.up.y * vertical,
-        quad.center.z + quad.right.z * horizontal + quad.up.z * vertical,
-    };
+    return billboardTexturePoint(quad, mirrored, *nearestTexturePoint);
 }
 }

@@ -668,6 +668,7 @@ public:
     std::optional<GameplayPartyAttackActorFacts> partyAttackActorFacts(
         size_t actorIndex,
         bool visibleForFallback) const override;
+    bool hasWorldLineOfSight(const GameplayWorldPoint &from, const GameplayWorldPoint &to) const override;
     bool partyAttackActorHasLineOfSight(size_t actorIndex) const;
     std::vector<GameplayPartyAttackActorFacts> collectPartyAttackFallbackActors(
         const GameplayPartyAttackFallbackQuery &query) const override;
@@ -1088,7 +1089,8 @@ public:
         std::vector<size_t> &indices) const;
     const OutdoorFaceGeometryData *outdoorFace(size_t faceIndex) const;
     bool hasClearOutdoorLineOfSight(
-        const bx::Vec3 &start, const bx::Vec3 &end, bool includeWalkableFaces = false) const;
+        const bx::Vec3 &start, const bx::Vec3 &end, bool includeWalkableFaces = false,
+        float terrainHeightSlack = 12.0f) const;
     size_t bloodSplatCount() const;
     const BloodSplatState *bloodSplatState(size_t splatIndex) const;
     uint64_t bloodSplatRevision() const;

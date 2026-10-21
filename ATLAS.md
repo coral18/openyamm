@@ -1303,3 +1303,46 @@ Validation:
 
 Android/controller acceptance, complete campaign relationships, remaining site/loot semantics and the other gaps
 in [ATLAS_COVERAGE.md](ATLAS_COVERAGE.md) remain part of the active complete MM7/MM8 Atlas objective.
+
+
+## Corpse sight and visual geometry checkpoint (2026-10-21)
+
+Passive sight now records visible corpses and can update a previously living observation to defeated. It uses the
+actual main camera and a point inside an opaque pixel of the current sprite, accounting for scale, offsets and
+mirroring. A transparent frame contributes no candidate; a standing collision-height estimate or an empty image
+center cannot stand in for the corpse silhouette. The opacity anchor is derived during existing mask loading,
+without adding a per-frame pixel scan or changing packaged mask formats.
+
+Core exposes `IGameplayWorldRuntime::hasWorldLineOfSight` separately from combat target facts. Indoor sight reuses
+portal traversal and face occlusion without the AI detection radius/portal limit. Outdoor sight includes walkable
+occluders and uses zero terrain height slack for low sprites; existing combat defaults and dead-target rejection
+remain unchanged. The shared candidate rotation, query budget and retry throttling continue to apply. Seeing a
+corpse does not open it, reveal its carried contents or grant items. Save keys and binary formats do not change.
+
+Validation:
+
+- Windows Release built. Eight focused Atlas/save/package/mod/bitmap suites passed 209 cases / 7306 assertions.
+- Linux ASan/UBSan Atlas and billboard geometry suites passed 87 cases / 4639 assertions.
+- Windows indoor runtime detection/LOS suite passed six cases / 736 assertions using the complete external runtime
+  packages. The added geometry test covers a low corpse point across clear connected rooms versus an occluding
+  wall beyond the AI detection range, actual death-animation completion, preserved combat rejection and NaN input.
+- The runtime test target needed its missing `RegressionMapLoader.cpp` dependency. Detection fixtures now share
+  the existing package-backed loader rather than assume the sparse checkout contains a complete payload.
+- Faithful fixtures kill actual authored actors with deterministic test damage and `loot_corpse: false`, which
+  leaves the real corpse untouched. The default remains true; existing MM7/MM8 creature-item receipt regressions
+  still pass. Additional faithful checks round-trip the native observations and confirm no carried-item receipt
+  was fabricated merely by sight.
+- Native AMD OpenGL 3.3 checks record the Temple of the Moon Guard (actor3/creature404), Jeric Whistlebone in
+  Garrote Gorge (actor3/creature45/name2), and an open-field Dagger Wound corpse (actor0/creature3) as defeated.
+  Images and the pre-Atlas quicksaves were inspected. Bestiary links reach their historical map markers, whose
+  footer displays `Last observed: defeated`. MM8 facing-away records no corpse; Atlas-disabled still records it.
+- Matching previous-build controls with the corpse outside the hover ray do not create these passive corpse
+  discoveries. Direct hovering remains a valid existing observation path and is not a negative control.
+- Reusable inputs: `tests/scenarios/atlas/mm7_corpse_sight_fixture.yml`, `mm8_corpse_sight_fixture.yml`,
+  `mm8_open_corpse_sight_fixture.yml` and `tools/menu_tours/atlas_corpse_mm{7,8}.yml`. Private settings, logs, controls
+  and fresh captures are under the local Windows development root's `atlas-corpse-sight-20261021/` directory.
+
+Sight uses one opaque silhouette sample and the current world geometry, not GPU pixel-occlusion readback. Partial
+cover, decorative-sprite overlap and replacement models still need broader visibility audits; direct inspection
+remains available. Android/controller checks and the remaining campaign/site/reference coverage remain part of
+the active complete MM7/MM8 Atlas objective.

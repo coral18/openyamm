@@ -1129,6 +1129,8 @@ bool ScenarioRuntimeDriver::executeCombatLoot(
         }
     }
 
+    if (!request.lootCorpse) return inspectState.isDead;
+
     if (request.expectedItemId != 0 && scenarioPartyHasItem(party(), request.expectedItemId))
     {
         result.expectedItemAcquired = true;

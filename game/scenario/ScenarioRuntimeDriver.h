@@ -63,6 +63,7 @@ struct ScenarioCombatLootRequest
     std::optional<size_t> actorIndex;
     std::string targetName;
     uint32_t expectedItemId = 0;
+    bool lootCorpse = true;
 };
 
 struct ScenarioCombatLootResult

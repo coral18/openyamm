@@ -23,6 +23,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iterator>
+#include <limits>
 #include <optional>
 
 namespace
@@ -1864,34 +1865,30 @@ TEST_CASE("temporary event bonuses survive save round trip and remain rest-clear
 }
 
 
-TEST_CASE("rendered creature discovery requires actual LOS and cannot reveal adjacent or invisible actors")
+TEST_CASE("rendered creature discovery uses camera geometry LOS for living sprites and corpses")
 {
     using namespace OpenYAMM::Game;
     class SightRuntime : public OpenYAMM::Tests::PartySpellTestWorldRuntime
     {
     public:
         bool clear = false;
+        bool killed = false;
         float movementX = 0;
-        std::optional<size_t> clearIndex;
+        std::optional<float> clearTargetX;
         mutable uint32_t checks = 0;
+        mutable GameplayWorldPoint source, target;
         bool actorRuntimeState(size_t index, GameplayRuntimeActorState &actor) const override
         {
             if (!PartySpellTestWorldRuntime::actorRuntimeState(index, actor)) return false;
             actor.preciseX += movementX;
+            if (index == 0 && killed) actor.isDead = true;
             return true;
         }
-        std::optional<GameplayPartyAttackActorFacts> partyAttackActorFacts(size_t index, bool visible) const override
+        bool hasWorldLineOfSight(const GameplayWorldPoint &from, const GameplayWorldPoint &to) const override
         {
             ++checks;
-            GameplayRuntimeActorState actor;
-            if (!actorRuntimeState(index, actor)) return std::nullopt;
-            GameplayPartyAttackActorFacts facts;
-            facts.monsterId = actor.monsterId;
-            facts.isInvisible = actor.isInvisible;
-            facts.isDead = actor.isDead;
-            facts.visibleForFallback = visible;
-            facts.lineOfSightToParty = clear && (!clearIndex || index == *clearIndex);
-            return facts;
+            source = from; target = to;
+            return clear && (!clearTargetX || to.x == *clearTargetX);
         }
     } runtime;
     EventRuntimeState state;
@@ -1906,58 +1903,81 @@ TEST_CASE("rendered creature discovery requires actual LOS and cannot reveal adj
     const size_t invisible = runtime.addActor(actor);
     actor.actorId = 45; actor.isInvisible = false; actor.isDead = true;
     const size_t dead = runtime.addActor(actor);
+    const std::array<float, 3> eye = {1, 2, 399};
+    WorldMonsterSightCandidate candidate{visible, {100, -200, 320}};
     WorldMonsterSightTracker tracker;
-    recordWorldVisibleActorObservation(tracker, runtime, visible, 100);
-    CHECK(state.namedMapVars.empty()); // In-frustum art behind a wall is insufficient.
+    recordWorldVisibleActorObservation(tracker, runtime, candidate, eye, 100);
+    CHECK(state.namedMapVars.empty());
     CHECK(runtime.checks == 1);
     runtime.clear = true;
-    recordWorldVisibleActorObservation(tracker, runtime, visible, 101);
+    recordWorldVisibleActorObservation(tracker, runtime, candidate, eye, 101);
     CHECK(state.namedMapVars.empty());
-    CHECK(runtime.checks == 1); // A blocked candidate does not repeat expensive LOS work every frame.
-    recordWorldVisibleActorObservation(tracker, runtime, visible, 1100);
-    const auto observed = worldMonsterObservations(state);
+    CHECK(runtime.checks == 1);
+    recordWorldVisibleActorObservation(tracker, runtime, candidate, eye, 1100);
+    auto observed = worldMonsterObservations(state);
     REQUIRE(observed.size() == 1);
     CHECK(observed[0].actorId == 42);
     CHECK(observed[0].monsterId == 12);
     CHECK(observed[0].x == 100);
     CHECK(observed[0].y == -200);
+    CHECK(runtime.source.z == 399);
+    CHECK(runtime.target.z == 320);
     CHECK(runtime.checks == 2);
-    recordWorldVisibleActorObservation(tracker, runtime, visible, 2100);
-    recordWorldVisibleActorObservation(tracker, runtime, invisible, 2100);
-    recordWorldVisibleActorObservation(tracker, runtime, dead, 2100);
-    recordWorldVisibleActorObservation(tracker, runtime, 999, 2100);
-    CHECK(worldMonsterObservations(state).size() == 1);
-    CHECK(runtime.checks == 2); // Unchanged, invisible, dead and invalid candidates need no LOS work.
+    recordWorldVisibleActorObservation(tracker, runtime, candidate, eye, 2100);
+    recordWorldVisibleActorObservation(tracker, runtime, {invisible, candidate.point}, eye, 2100);
+    recordWorldVisibleActorObservation(tracker, runtime, {999, candidate.point}, eye, 2100);
+    CHECK(runtime.checks == 2);
     runtime.movementX = 25;
+    candidate.point[0] = 125;
     runtime.clear = false;
-    recordWorldVisibleActorObservation(tracker, runtime, visible, 2200);
-    CHECK(worldMonsterObservations(state)[0].x == 100); // Movement behind a wall never moves the Atlas pin.
-    runtime.clear = true;
-    recordWorldVisibleActorObservation(tracker, runtime, visible, 2201);
+    recordWorldVisibleActorObservation(tracker, runtime, candidate, eye, 2200);
     CHECK(worldMonsterObservations(state)[0].x == 100);
-    recordWorldVisibleActorObservation(tracker, runtime, visible, 3200);
+    runtime.clear = true;
+    recordWorldVisibleActorObservation(tracker, runtime, candidate, eye, 2201);
+    CHECK(worldMonsterObservations(state)[0].x == 100);
+    recordWorldVisibleActorObservation(tracker, runtime, candidate, eye, 3200);
     CHECK(worldMonsterObservations(state)[0].x == 125);
     CHECK(runtime.checks == 4);
 
-    // A large occluded crowd must not starve a later visible actor when earlier retries become eligible again.
+    runtime.killed = true;
+    candidate.point[2] = 305; // Actual corpse sprite, not the standing actor's collision height.
+    runtime.clear = false;
+    recordWorldVisibleActorObservation(tracker, runtime, candidate, eye, 4200);
+    CHECK_FALSE(worldMonsterObservations(state)[0].dead); // Death behind cover cannot update knowledge.
+    runtime.clear = true;
+    recordWorldVisibleActorObservation(tracker, runtime, candidate, eye, 5200);
+    CHECK(worldMonsterObservations(state)[0].dead);
+    CHECK(runtime.target.z == 305);
+    CHECK(runtime.source.z == 399);
+    CHECK_FALSE(runtime.partyAttackActorFacts(visible, true)); // No valid combat target is needed.
+    recordWorldVisibleActorObservation(tracker, runtime, {dead, {125, -200, 305}}, eye, 5216);
+    observed = worldMonsterObservations(state);
+    REQUIRE(observed.size() == 2);
+    CHECK(observed[1].actorId == 45);
+    CHECK(observed[1].dead);
+    const auto beforeInvalid = state.namedMapVars;
+    candidate.point[0] = std::numeric_limits<float>::quiet_NaN();
+    recordWorldVisibleActorObservation(tracker, runtime, candidate, eye, 9000);
+    CHECK(state.namedMapVars == beforeInvalid);
+
     SightRuntime crowded;
     EventRuntimeState crowdState;
     crowdState.mapFileName = "crowded.blv";
     crowded.bindEventRuntimeState(&crowdState);
     crowded.clear = true;
-    std::vector<size_t> candidates;
+    std::vector<WorldMonsterSightCandidate> candidates;
     actor.isDead = false;
     for (uint32_t i = 0; i < 301; ++i)
     {
         actor.actorId = i;
-        candidates.push_back(crowded.addActor(actor));
+        candidates.push_back({crowded.addActor(actor), {float(i), 0, 320}});
     }
-    crowded.clearIndex = candidates.back();
+    crowded.clearTargetX = 300;
     WorldMonsterSightTracker fair;
     for (uint64_t frame = 0; frame < 200; ++frame)
     {
         const uint32_t before = crowded.checks;
-        fair.observeRenderedActors(crowded, candidates, frame * 16);
+        fair.observeRenderedActors(crowded, candidates, eye, frame * 16);
         CHECK(crowded.checks - before <= 2);
     }
     const auto crowdObserved = worldMonsterObservations(crowdState);

@@ -560,6 +560,7 @@ public:
         int16_t fromSectorId,
         const GameplayWorldPoint &to,
         int16_t toSectorId) const;
+    bool hasWorldLineOfSight(const GameplayWorldPoint &from, const GameplayWorldPoint &to) const override;
     bool partyAttackActorHasLineOfSight(size_t actorIndex) const;
     std::vector<IndoorActorCollision> actorMovementCollidersForActorMovement(
         const std::vector<size_t> &activeActorIndices) const;

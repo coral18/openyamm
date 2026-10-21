@@ -48,3 +48,31 @@ TEST_CASE("nearest opaque billboard points preserve displayed mirroring")
     CHECK(mirrored->y == doctest::Approx(20.0f));
     CHECK(mirrored->z == doctest::Approx(30.0f));
 }
+
+
+TEST_CASE("visual sight anchors use opaque pixel centers and preserve mirrors and mask replacement")
+{
+    using namespace OpenYAMM::Game;
+    BillboardOpacityMask mask;
+    CHECK_FALSE(mask.firstOpaqueNormalized());
+    std::vector<uint8_t> pixels(4 * 4 * 4, 0);
+    pixels[(3 * 4 + 3) * 4 + 3] = 255; // Low corpse pixel; the image center is transparent.
+    mask.assignFromBgra(pixels, 4, 4);
+    REQUIRE(mask.firstOpaqueNormalized());
+    CHECK(mask.isOpaqueNormalized((*mask.firstOpaqueNormalized())[0], (*mask.firstOpaqueNormalized())[1]));
+    const BillboardQuad quad{{10, 20, 30}, {4, 0, 0}, {0, 0, 8}};
+    const bx::Vec3 point = billboardTexturePoint(quad, false, *mask.firstOpaqueNormalized());
+    CHECK(point.x == doctest::Approx(13));
+    CHECK(point.z == doctest::Approx(24));
+    const bx::Vec3 mirror = billboardTexturePoint(quad, true, *mask.firstOpaqueNormalized());
+    CHECK(mirror.x == doctest::Approx(7));
+    CHECK(mirror.z == doctest::Approx(24));
+    REQUIRE(mask.assignBits(4, 4, {0x01, 0x00}));
+    REQUIRE(mask.firstOpaqueNormalized());
+    CHECK((*mask.firstOpaqueNormalized())[0] == doctest::Approx(0.125));
+    CHECK((*mask.firstOpaqueNormalized())[1] == doctest::Approx(0.125));
+    REQUIRE(mask.assignBits(4, 4, {0x00, 0x00}));
+    CHECK_FALSE(mask.firstOpaqueNormalized());
+    mask.assignFromBgra({}, 0, 0);
+    CHECK_FALSE(mask.firstOpaqueNormalized());
+}

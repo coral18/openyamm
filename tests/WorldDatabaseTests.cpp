@@ -1835,7 +1835,9 @@ TEST_CASE("passive creature sight checks are bounded and never refresh unseen hi
     CHECK(tracker.shouldCheckSight(state, candidate, 5001)); // New map cannot inherit a retry throttle.
     CHECK(tracker.shouldCheckSight(state, candidate, 1)); // A restarted clock clears transient work state.
     candidate.actorId = 4; candidate.dead = true;
-    CHECK_FALSE(tracker.shouldCheckSight(state, candidate, 10000));
+    CHECK(tracker.shouldCheckSight(state, candidate, 10000)); // A newly visible corpse requires its own LOS.
+    recordWorldMonsterObservation(state, candidate);
+    CHECK_FALSE(tracker.shouldCheckSight(state, candidate, 11000));
     candidate.dead = false; candidate.monsterId = 0;
     CHECK_FALSE(tracker.shouldCheckSight(state, candidate, 10000));
     candidate.monsterId = 12; candidate.uniqueNameIndex = -1;

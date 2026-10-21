@@ -347,6 +347,7 @@ add_test(NAME openyamm_unit_tests COMMAND openyamm_unit_tests)
 add_executable(openyamm_runtime_tests
     UnitTestMain.cpp
     RegressionGameData.cpp
+    RegressionMapLoader.cpp
     NewGameScreenTests.cpp
     GameplayUiRuntimeTests.cpp
     GameplaySpellServiceTests.cpp

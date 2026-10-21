@@ -742,6 +742,7 @@ public:
     }
     virtual bool canActivateTelekinesisTarget(const GameplayWorldHit &hit) const = 0;
     virtual bool activateTelekinesisTarget(const GameplayWorldHit &hit) = 0;
+    virtual bool hasWorldLineOfSight(const GameplayWorldPoint &from, const GameplayWorldPoint &to) const = 0;
     virtual std::optional<GameplayPartyAttackActorFacts> partyAttackActorFacts(
         size_t actorIndex,
         bool visibleForFallback) const = 0;

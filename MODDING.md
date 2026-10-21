@@ -336,8 +336,8 @@ in the ordinary named-map state. This is a save extension, not an opaque mod-sta
 
 ### Passive creature sight
 
-Core records living creature sprites accepted by the main gameplay view after art/frustum/sector culling and a
-separate party-to-actor geometry LOS check. Reflections, preview actors, replacement FX models and fullscreen
+Core records creature sprites accepted by the main gameplay view after art/frustum/sector culling and a
+separate camera-to-opaque-sprite geometry LOS check. Reflections, preview actors, replacement FX models and fullscreen
 non-gameplay UI do not submit sight candidates. This produces ordinary map-local monster observations, independent
 of whether the optional Atlas UI mod is enabled. It does not inspect loot or reveal configured spawn populations.
 
@@ -346,5 +346,9 @@ checks per 16ms and a one-second retry interval per actor. Unchanged known posit
 query or saved-state write. Movement or a new name requires fresh LOS before updating the historical observation;
 positions behind walls stay at their last recorded values. The tracker is not saved and owns no world data.
 
-The passive path currently covers living sprites. Existing direct targeting/inspection and loot observations remain
-available; passive corpse and replacement-model recognition need separate visibility support.
+Both living sprites and visible corpses participate. The caller supplies the actual camera eye and a point within
+an opaque pixel of the current sprite, including its scale, offsets and mirroring. A transparent sprite contributes
+no sight candidate. `IGameplayWorldRuntime::hasWorldLineOfSight` queries existing world geometry independently of
+combat targetability and AI detection range. Outdoor visual rays include walkable occluders and use zero terrain
+height slack; existing combat query defaults remain unchanged. Seeing a corpse does not inspect or acquire its loot.
+Replacement-model recognition still needs its own render-visibility support.

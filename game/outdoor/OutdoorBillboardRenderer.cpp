@@ -3163,13 +3163,19 @@ void OutdoorBillboardRenderer::renderActorPreviewBillboards(
         && !view.m_gameSession.sharedWorldInteractionBlockedThisFrame()
         && view.m_gameSession.gameplayScreenRuntime().currentHudScreenState() == GameplayHudScreenState::Gameplay)
     {
-        std::vector<size_t> sightCandidates;
+        std::vector<WorldMonsterSightCandidate> sightCandidates;
         sightCandidates.reserve(drawItems.size());
         for (const BillboardDrawItem &item : drawItems)
             if (item.actor && !item.modelActor && item.visible && item.actorIndex != static_cast<size_t>(-1)
                 && item.pTexture != nullptr && bgfx::isValid(item.pTexture->textureHandle))
-                sightCandidates.push_back(item.actorIndex);
-        view.m_monsterSightTracker.observeRenderedActors(*view.m_pOutdoorWorldRuntime, sightCandidates, SDL_GetTicks());
+            {
+                const auto opaque = item.pTexture->opacityMask.firstOpaqueNormalized();
+                if (!opaque) continue;
+                const bx::Vec3 point = billboardTexturePoint(item.quad, item.mirrored, *opaque);
+                sightCandidates.push_back({item.actorIndex, {point.x, point.y, point.z}});
+            }
+        view.m_monsterSightTracker.observeRenderedActors(*view.m_pOutdoorWorldRuntime, sightCandidates,
+            {cameraPosition.x, cameraPosition.y, cameraPosition.z}, SDL_GetTicks());
     }
 
     bool standardBillboardEffectUniformsActive = false;

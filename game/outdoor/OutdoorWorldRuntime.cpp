@@ -12467,12 +12467,11 @@ void OutdoorWorldRuntime::setOutdoorFaceGeometryAttributes(size_t bModelIndex, s
 }
 
 bool OutdoorWorldRuntime::hasClearOutdoorLineOfSight(
-    const bx::Vec3 &start, const bx::Vec3 &end, bool includeWalkableFaces) const
+    const bx::Vec3 &start, const bx::Vec3 &end, bool includeWalkableFaces, float terrainHeightSlack) const
 {
     if (m_pOutdoorMapData != nullptr)
     {
         constexpr float TerrainLosSampleSpacing = static_cast<float>(OutdoorMapData::TerrainTileSize) * 0.5f;
-        constexpr float TerrainLosHeightSlack = 12.0f;
         const float deltaX = end.x - start.x;
         const float deltaY = end.y - start.y;
         const float deltaZ = end.z - start.z;
@@ -12490,7 +12489,7 @@ bool OutdoorWorldRuntime::hasClearOutdoorLineOfSight(
                 const float sampleZ = start.z + deltaZ * factor;
                 const float terrainHeight = sampleOutdoorTerrainHeight(*m_pOutdoorMapData, sampleX, sampleY);
 
-                if (terrainHeight >= sampleZ - TerrainLosHeightSlack)
+                if (terrainHeight >= sampleZ - terrainHeightSlack)
                 {
                     return false;
                 }
@@ -14851,6 +14850,13 @@ std::optional<GameplayPartyAttackActorFacts> OutdoorWorldRuntime::partyAttackAct
         .visibleForFallback = visibleForFallback,
         .lineOfSightToParty = partyAttackActorHasLineOfSight(actorIndex),
     };
+}
+
+bool OutdoorWorldRuntime::hasWorldLineOfSight(const GameplayWorldPoint &from, const GameplayWorldPoint &to) const
+{
+    if (m_pOutdoorMapData == nullptr || !std::isfinite(from.x) || !std::isfinite(from.y) || !std::isfinite(from.z)
+        || !std::isfinite(to.x) || !std::isfinite(to.y) || !std::isfinite(to.z)) return false;
+    return hasClearOutdoorLineOfSight({from.x, from.y, from.z}, {to.x, to.y, to.z}, true, 0.0f);
 }
 
 bool OutdoorWorldRuntime::partyAttackActorHasLineOfSight(size_t actorIndex) const

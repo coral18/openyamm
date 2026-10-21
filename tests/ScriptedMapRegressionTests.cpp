@@ -666,6 +666,14 @@ public:
         return false;
     }
 
+    bool hasWorldLineOfSight(const OpenYAMM::Game::GameplayWorldPoint &from,
+        const OpenYAMM::Game::GameplayWorldPoint &to) const override
+    {
+        (void)from;
+        (void)to;
+        return false;
+    }
+
     std::optional<OpenYAMM::Game::GameplayPartyAttackActorFacts> partyAttackActorFacts(
         size_t actorIndex,
         bool visibleForFallback) const override

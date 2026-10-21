@@ -790,6 +790,13 @@ public:
         return false;
     }
 
+    bool hasWorldLineOfSight(const Game::GameplayWorldPoint &from, const Game::GameplayWorldPoint &to) const override
+    {
+        (void)from;
+        (void)to;
+        return false;
+    }
+
     std::optional<Game::GameplayPartyAttackActorFacts> partyAttackActorFacts(
         size_t actorIndex,
         bool visibleForFallback) const override

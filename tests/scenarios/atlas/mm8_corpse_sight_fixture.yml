@@ -1,0 +1,16 @@
+id: atlas.mm8_corpse_sight_fixture
+world: mm8
+mode: faithful
+title: An untouched real corpse for native Atlas sight checks
+steps:
+- new_game_flow: {start_map: out01.odm}
+- load_map: {map: out05.odm}
+- combat_loot: {actor_index: 3, loot_corpse: false}
+- assert:
+    actor_visible: {actor_index: 3, dead: true}
+- set_pose: {x: -16500, y: -11944, z: 1376, yaw: 3.44159265, pitch: 0}
+- assert:
+    named_map_var_changed: {name: openyamm.discovery.monster/3/type, value: 0}
+- assert:
+    named_map_var_changed: {name: openyamm.discovery.item/carried/3/540/time, value: 0}
+- save_game: untouched-corpse

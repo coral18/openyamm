@@ -1,0 +1,25 @@
+id: atlas.mm8_open_corpse_sight_fixture
+world: mm8
+mode: faithful
+steps:
+- new_game_flow:
+    start_map: out01.odm
+- combat_loot:
+    actor_index: 0
+    loot_corpse: false
+- assert:
+    actor_visible:
+      actor_index: 0
+      dead: true
+- set_pose:
+    x: 4040
+    y: 7960
+    z: 544
+    yaw: 3.14159265
+    pitch: 0
+- assert:
+    named_map_var_changed:
+      name: openyamm.discovery.monster/0/type
+      value: 0
+- save_game: untouched-corpse
+title: A clearly visible open-field corpse for native Atlas sight checks

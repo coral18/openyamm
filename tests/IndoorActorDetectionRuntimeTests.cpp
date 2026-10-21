@@ -5,9 +5,11 @@
 #include "game/data/GameDataLoader.h"
 #include "game/gameplay/GameplayActorService.h"
 #include "game/scene/IndoorSceneRuntime.h"
+#include "tests/RegressionMapLoader.h"
 
 #include <array>
 #include <filesystem>
+#include <limits>
 
 using namespace OpenYAMM::Game;
 
@@ -23,11 +25,11 @@ struct GoblinwatchDetectionFixture
 
     GoblinwatchDetectionFixture(int actorX = -640, int actorY = 3456)
     {
-        OpenYAMM::Engine::AssetFileSystem assets;
-        const std::filesystem::path sourceRoot = OPENYAMM_SOURCE_DIR;
-        REQUIRE(assets.initialize(sourceRoot, sourceRoot / "assets_dev", OpenYAMM::Engine::AssetScaleTier::X1, "mm6"));
-        REQUIRE(data.loadForHeadlessGameplay(assets));
-        REQUIRE(data.loadMapByFileNameForHeadlessGameplay(assets, "6d01.blv"));
+        REQUIRE_MESSAGE(OpenYAMM::Tests::regressionMapLoaderLoaded(),
+            OpenYAMM::Tests::regressionMapLoaderFailure());
+        const OpenYAMM::Tests::RegressionMapLoader &loadedData = OpenYAMM::Tests::regressionMapLoader();
+        data = loadedData.gameDataLoader;
+        REQUIRE(data.loadMapByFileNameForHeadlessGameplay(loadedData.assetFileSystem, "6d01.blv"));
         const MapAssetInfo &loaded = *data.getSelectedMap();
         map = *loaded.indoorMapData;
         map.spawns.clear();
@@ -85,10 +87,10 @@ struct SectorDetectionFixture
 
     SectorDetectionFixture(int partyX, bool blockingWall = true, int actorX = -1024)
     {
-        OpenYAMM::Engine::AssetFileSystem assets;
-        const std::filesystem::path sourceRoot = OPENYAMM_SOURCE_DIR;
-        REQUIRE(assets.initialize(sourceRoot, sourceRoot / "assets_dev", OpenYAMM::Engine::AssetScaleTier::X1, "mm6"));
-        REQUIRE(data.loadForHeadlessGameplay(assets));
+        REQUIRE_MESSAGE(OpenYAMM::Tests::regressionMapLoaderLoaded(),
+            OpenYAMM::Tests::regressionMapLoaderFailure());
+        const OpenYAMM::Tests::RegressionMapLoader &loadedData = OpenYAMM::Tests::regressionMapLoader();
+        data = loadedData.gameDataLoader;
 
         map.sectors.resize(4);
         const auto addFace = [&](std::initializer_list<IndoorVertex> vertices, uint8_t type,
@@ -299,4 +301,31 @@ TEST_CASE("indoor detection crosses a closed neighboring Goblinwatch doorway and
     fixture.advance(1);
     CHECK(scene.worldRuntime().mapActorAiState(0)->hasDetectedParty);
     CHECK_NE(scene.worldRuntime().mapDeltaData()->actors[0].attributes & uint32_t(EvtActorAttribute::Nearby), 0u);
+}
+
+TEST_CASE("visual geometry LOS is independent of corpse targetability and the AI detection radius")
+{
+    bool wall = false;
+    SUBCASE("clear connected rooms") { wall = false; }
+    SUBCASE("occluding wall") { wall = true; }
+    SectorDetectionFixture fixture(3072, wall, -4096);
+    IndoorWorldRuntime &world = fixture.pScene->worldRuntime();
+    const GameplayWorldPoint eye{3072, 0, 96};
+    const GameplayWorldPoint corpsePoint{-4096, 0, 8};
+    CHECK(world.hasWorldLineOfSight(eye, corpsePoint) == !wall);
+    CHECK_FALSE(world.hasIndoorCombatLineOfSight(eye, 3, corpsePoint, 1)); // Existing combat distance rule.
+    REQUIRE(world.applyPartyAttackMeleeDamage(0, 100000, CombatDamageType::Irresistible, eye));
+    for (int i = 0; i < 6 * 128; ++i)
+    {
+        fixture.pScene->advanceSimulation(1000.0f / 128);
+        world.updateActorAi(1.0f / 128);
+    }
+    GameplayRuntimeActorState actor;
+    REQUIRE(world.actorRuntimeState(0, actor));
+    REQUIRE(actor.isDead);
+    CHECK_FALSE(world.partyAttackActorHasLineOfSight(0));
+    CHECK(world.hasWorldLineOfSight(eye, corpsePoint) == !wall);
+    GameplayWorldPoint invalid = eye;
+    invalid.x = std::numeric_limits<float>::quiet_NaN();
+    CHECK_FALSE(world.hasWorldLineOfSight(invalid, corpsePoint));
 }

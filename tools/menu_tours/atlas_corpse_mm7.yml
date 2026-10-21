@@ -1,0 +1,37 @@
+# Native follow-up for mm7_corpse_sight_fixture.yml, 1600x900.
+output_dir: captures-atlas-corpse-mm7
+exit: true
+steps:
+- expect: gameplay
+- wait: 2
+- capture: visible-untouched-corpse
+- key: F9
+- wait: 1
+- pause: true
+- click:
+  - 800
+  - 821
+- click:
+  - 450
+  - 57
+- click:
+  - 1250
+  - 126
+- click:
+  - 275
+  - 190
+- text: Guard
+- key: Return
+- click:
+  - 200
+  - 265
+- capture: corpse-bestiary
+- pointer_move:
+  - 1035
+  - 527
+- wheel: -1000
+- capture: corpse-location-link
+- click:
+  - 1035
+  - 695
+- capture: observed-defeated-map-marker

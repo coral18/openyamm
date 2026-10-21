@@ -7968,11 +7968,23 @@ void IndoorRenderer::renderActorPreviewBillboards(
         && !pGameSession->sharedWorldInteractionBlockedThisFrame()
         && pGameSession->gameplayScreenRuntime().currentHudScreenState() == GameplayHudScreenState::Gameplay)
     {
-        std::vector<size_t> sightCandidates;
+        std::vector<WorldMonsterSightCandidate> sightCandidates;
         sightCandidates.reserve(drawItems.size());
         for (const BillboardDrawItem &item : drawItems)
-            if (!m_worldFxSystem.hasActorModel(item.actorIndex)) sightCandidates.push_back(item.actorIndex);
-        m_monsterSightTracker.observeRenderedActors(m_pSceneRuntime->worldRuntime(), sightCandidates, SDL_GetTicks());
+        {
+            if (m_worldFxSystem.hasActorModel(item.actorIndex)) continue;
+            const float scale = std::max(item.pFrame->scale * item.heightScale, 0.01f);
+            const bx::Vec3 point = spriteBillboardCenter(float(item.x), float(item.y), float(item.z),
+                cameraRight, cameraUp, *item.pTexture, scale, item.mirrored);
+            const auto opaque = item.pTexture->opacityMask.firstOpaqueNormalized();
+            if (!opaque) continue;
+            const BillboardQuad quad = billboardQuad(point, cameraRight, cameraUp,
+                item.pTexture->width * scale, item.pTexture->height * scale);
+            const bx::Vec3 sightPoint = billboardTexturePoint(quad, item.mirrored, *opaque);
+            sightCandidates.push_back({item.actorIndex, {sightPoint.x, sightPoint.y, sightPoint.z}});
+        }
+        m_monsterSightTracker.observeRenderedActors(m_pSceneRuntime->worldRuntime(), sightCandidates,
+            {cameraPosition.x, cameraPosition.y, cameraPosition.z}, SDL_GetTicks());
     }
 
     for (const BillboardDrawItem &drawItem : drawItems)

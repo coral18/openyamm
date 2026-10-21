@@ -2744,6 +2744,9 @@ bool runCombatLoot(
         request.expectedItemId = step.payload["item_id"].as<uint32_t>();
     }
 
+    if (step.payload["loot_corpse"])
+        request.lootCorpse = step.payload["loot_corpse"].as<bool>();
+
     std::string mapFileName = context.currentMapFileName;
 
     if (step.payload["map"] && step.payload["map"].IsScalar())

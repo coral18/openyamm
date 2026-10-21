@@ -22,12 +22,18 @@ struct WorldMonsterObservation
     int32_t uniqueNameIndex = 0;
 };
 
+struct WorldMonsterSightCandidate
+{
+    size_t actorIndex = 0;
+    std::array<float, 3> point = {};
+};
+
 // Transient work budget for actual main-view candidates; it never owns saved knowledge.
 class WorldMonsterSightTracker
 {
 public:
-    void observeRenderedActors(IGameplayWorldRuntime &world, std::span<const size_t> candidates,
-        uint64_t realMilliseconds);
+    void observeRenderedActors(IGameplayWorldRuntime &world, std::span<const WorldMonsterSightCandidate> candidates,
+        const std::array<float, 3> &eye, uint64_t realMilliseconds);
     bool shouldCheckSight(const EventRuntimeState &state, const WorldMonsterObservation &candidate,
         uint64_t realMilliseconds);
 
@@ -41,7 +47,7 @@ private:
 
 // Call only after main-view art/frustum/sector culling, never for previews, reflections or population scans.
 void recordWorldVisibleActorObservation(WorldMonsterSightTracker &tracker, IGameplayWorldRuntime &world,
-    size_t actorIndex, uint64_t realMilliseconds);
+    const WorldMonsterSightCandidate &candidate, const std::array<float, 3> &eye, uint64_t realMilliseconds);
 void recordWorldMonsterObservation(EventRuntimeState &state, const WorldMonsterObservation &observation);
 std::vector<WorldMonsterObservation> worldMonsterObservations(const EventRuntimeState &state);
 // Call only for an actor actually picked/targeted by the player, never for an omniscient actor scan.

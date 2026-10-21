@@ -4368,6 +4368,23 @@ bool IndoorWorldRuntime::hasIndoorCombatLineOfSight(
         resolvedToSector);
 }
 
+bool IndoorWorldRuntime::hasWorldLineOfSight(const GameplayWorldPoint &from, const GameplayWorldPoint &to) const
+{
+    if (m_pIndoorMapData == nullptr || !std::isfinite(from.x) || !std::isfinite(from.y) || !std::isfinite(from.z)
+        || !std::isfinite(to.x) || !std::isfinite(to.y) || !std::isfinite(to.z)) return false;
+    RuntimeGeometryCache &geometry = runtimeGeometryCache();
+    if (geometry.vertices.empty()) return false;
+    const int16_t fromSector = resolveIndoorPointSector(m_pIndoorMapData, geometry.vertices,
+        &geometry.geometryCache, {from.x, from.y, from.z}, -1);
+    const int16_t toSector = resolveIndoorPointSector(m_pIndoorMapData, geometry.vertices,
+        &geometry.geometryCache, {to.x, to.y, to.z}, -1);
+    const IndoorPortalSectorTrace trace = traceIndoorLineThroughPortalSectors(*m_pIndoorMapData,
+        geometry.vertices, geometry.geometryCache, {from.x, from.y, from.z}, fromSector,
+        {to.x, to.y, to.z}, toSector, int(m_pIndoorMapData->sectors.size()));
+    return trace.reachedTargetSector && !indoorSegmentBlockedByCombatFace(*m_pIndoorMapData,
+        mapDeltaData(), eventRuntimeState(), geometry.vertices, geometry.geometryCache, from, to, trace.sectorIds);
+}
+
 bool IndoorWorldRuntime::partyAttackActorHasLineOfSight(size_t actorIndex) const
 {
     const MapDeltaData *pMapDeltaData = mapDeltaData();

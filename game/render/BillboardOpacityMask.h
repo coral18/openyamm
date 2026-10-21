@@ -26,6 +26,7 @@ public:
         m_width = 0;
         m_height = 0;
         m_opaqueTop = 0;
+        m_opaqueX = 0;
         m_hasOpaquePixel = false;
         m_bits.clear();
 
@@ -58,6 +59,7 @@ public:
                     if (!m_hasOpaquePixel)
                     {
                         m_opaqueTop = y;
+                        m_opaqueX = x;
                         m_hasOpaquePixel = true;
                     }
                 }
@@ -98,7 +100,9 @@ public:
             if (m_bits[i] != 0)
             {
                 m_hasOpaquePixel = true;
-                m_opaqueTop = int((i * 8 + std::countr_zero(unsigned(m_bits[i]))) / size_t(width));
+                const size_t first = i * 8 + std::countr_zero(unsigned(m_bits[i]));
+                m_opaqueTop = int(first / size_t(width));
+                m_opaqueX = int(first % size_t(width));
                 break;
             }
         }
@@ -215,6 +219,12 @@ public:
         };
     }
 
+    std::optional<std::array<float, 2>> firstOpaqueNormalized() const
+    {
+        if (!m_hasOpaquePixel || m_width <= 0 || m_height <= 0) return std::nullopt;
+        return std::array<float, 2>{(float(m_opaqueX) + 0.5f) / m_width, (float(m_opaqueTop) + 0.5f) / m_height};
+    }
+
     float opaqueTopNormalized() const
     {
         if (!m_hasOpaquePixel || m_height <= 0)
@@ -228,6 +238,7 @@ private:
     int m_width = 0;
     int m_height = 0;
     int m_opaqueTop = 0;
+    int m_opaqueX = 0;
     bool m_hasOpaquePixel = false;
     std::vector<uint8_t> m_bits;
 };
