@@ -132,6 +132,9 @@ struct EventRuntimeState
         std::optional<int32_t> directionDegrees;
         bool useMapStartPosition = false;
         bool useFullscreenLoading = false;
+        // Runtime provenance. Restored legacy/queued requests do not infer an event origin.
+        std::string sourceMapFileName;
+        uint16_t sourceMapEventId = 0;
         std::string traceSourceKind;
         uint32_t traceSourceId = 0;
         uint32_t traceActionId = 0;

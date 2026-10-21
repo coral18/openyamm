@@ -1,0 +1,36 @@
+id: atlas.mm8_teleport_arrival
+world: mm8
+mode: faithful
+title: Same-map Prison portal records the destination position and survives save/load
+steps:
+- new_game_flow:
+    start_map: out01.odm
+- load_map:
+    map: d39.blv
+- press_interact:
+    pose:
+      x: 16
+      y: -170
+      z: -3520
+      yaw: 1.5707963
+      pitch: 0
+    expect:
+      kind: event_target
+      triggered_event: 451
+      can_activate: true
+- assert:
+    map: d39.blv
+- assert:
+    named_map_var_changed:
+      name: openyamm.discovery.arrival/world.mm8.map.d39/event/451/seen
+      value: 1
+- assert:
+    named_map_var_changed:
+      name: openyamm.discovery.arrival/world.mm8.map.d39/event/451/x
+      value: 47
+- save_game: same-map-arrival
+- load_game: same-map-arrival
+- assert:
+    named_map_var_changed:
+      name: openyamm.discovery.arrival/world.mm8.map.d39/event/451/x
+      value: 47

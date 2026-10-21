@@ -4582,8 +4582,8 @@ struct LuaExecutionContext
     bool preserveRuntimeOutputsOnBegin = false;
     bool allowStandaloneMapEventDialogueContext = true;
     bool executingGlobalHandler = false;
-    std::optional<bool> currentRewardGlobalScope;
-    uint16_t currentRewardEventId = 0;
+    std::optional<bool> currentHandlerGlobalScope;
+    uint16_t currentHandlerEventId = 0;
 };
 
 }
@@ -4683,8 +4683,8 @@ void stageLuaItemReward(lua_State *pLuaState, bool detailed, size_t index)
     const ISceneEventContext *pScene = readonlySceneEventContext(pContext);
     if (pContext != nullptr && !pContext->readonly && pContext->pRuntimeState != nullptr && pScene != nullptr)
         stageWorldItemReward(*pContext->pRuntimeState, detailed, index,
-            pContext->currentRewardEventId != 0 ? pContext->currentRewardEventId : pContext->currentEventId,
-            pContext->currentRewardGlobalScope.value_or(pContext->executingGlobalHandler),
+            pContext->currentHandlerEventId != 0 ? pContext->currentHandlerEventId : pContext->currentEventId,
+            pContext->currentHandlerGlobalScope.value_or(pContext->executingGlobalHandler),
             pScene->currentGameMinutes());
 }
 
@@ -4817,16 +4817,16 @@ int luaInvokeEventHandler(lua_State *pLuaState)
     const int argumentCount = lua_gettop(pLuaState) - 3;
     if (!lua_checkstack(pLuaState, argumentCount + 1))
         return luaL_error(pLuaState, "Insufficient event handler stack");
-    const uint16_t previousEventId = pContext->currentRewardEventId;
-    const std::optional<bool> previousScope = pContext->currentRewardGlobalScope;
-    pContext->currentRewardEventId = uint16_t(eventId);
-    pContext->currentRewardGlobalScope = scope == LuaScopeGlobal;
+    const uint16_t previousEventId = pContext->currentHandlerEventId;
+    const std::optional<bool> previousScope = pContext->currentHandlerGlobalScope;
+    pContext->currentHandlerEventId = uint16_t(eventId);
+    pContext->currentHandlerGlobalScope = scope == LuaScopeGlobal;
     lua_pushvalue(pLuaState, 3);
     for (int i = 0; i < argumentCount; ++i) lua_pushvalue(pLuaState, i + 4);
     const int status = lua_pcall(pLuaState, argumentCount, 0, 0);
     // Restore even when a nested callback raises an error that its caller catches with pcall.
-    pContext->currentRewardEventId = previousEventId;
-    pContext->currentRewardGlobalScope = previousScope;
+    pContext->currentHandlerEventId = previousEventId;
+    pContext->currentHandlerGlobalScope = previousScope;
     if (status != LUA_OK) return lua_error(pLuaState);
     return 0;
 }
@@ -5649,8 +5649,8 @@ int luaGivePartyMemberItem(lua_State *pLuaState)
     const ISceneEventContext *pScene = readonlySceneEventContext(pContext);
     if (granted && pContext != nullptr && pScene != nullptr)
         recordWorldItemReward(*pRuntimeState, item->objectDescriptionId,
-            pContext->currentRewardEventId != 0 ? pContext->currentRewardEventId : pContext->currentEventId,
-            pContext->currentRewardGlobalScope.value_or(pContext->executingGlobalHandler),
+            pContext->currentHandlerEventId != 0 ? pContext->currentHandlerEventId : pContext->currentEventId,
+            pContext->currentHandlerGlobalScope.value_or(pContext->executingGlobalHandler),
             pScene->currentGameMinutes());
     lua_pushboolean(pLuaState, granted);
     return 1;
@@ -6348,6 +6348,12 @@ int luaMoveToMap(lua_State *pLuaState)
 
     if (pExecutionContext != nullptr)
     {
+        if (!pExecutionContext->currentHandlerGlobalScope.value_or(pExecutionContext->executingGlobalHandler))
+        {
+            move.sourceMapFileName = pRuntimeState->mapFileName;
+            move.sourceMapEventId = pExecutionContext->currentHandlerEventId != 0
+                ? pExecutionContext->currentHandlerEventId : pExecutionContext->currentEventId;
+        }
         move.traceSourceKind = "lua_event";
         move.traceEventId = pExecutionContext->currentEventId;
         move.traceDestinationName = move.mapName.value_or(std::string("current_map"));

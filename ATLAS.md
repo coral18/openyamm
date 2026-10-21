@@ -1029,3 +1029,56 @@ text/height retained after reload, an All-heights note visible at party height, 
 height retained after another reload, and deletion still absent after a final reload. The MM7 fixture uses the
 Temple of the Moon (initial band -1, party band 1); MM8 uses Abandoned Temple (initial band -2, party band -1).
 The original user saves/settings were not modified. Android/controller checks and full Atlas coverage remain pending.
+
+
+### Observed event connections and arrival points, 2026-10-20
+
+Actual successful map-local event travel now records the arrival map, actual runtime XY/foot Z and game minute.
+The shared recorder runs after loading/teleporting and before normal travel autosave; same-map teleports use it
+as well. Loading failure, cancellation, a declared destination and debug map loading add no arrival. Runtime
+`PendingMapMove::sourceMapEventId` and `sourceMapFileName` identify the executing map handler independently of
+diagnostic trace fields. Capturing the source before queueing also preserves on-leave/deferred event ownership.
+Global and local handlers with identical numeric IDs remain separate. The existing scoped handler guard also
+handles nested calls and restores the caller after caught Lua errors; its fields now describe general handler
+identity rather than only item rewards.
+
+Destination map-local state stores `openyamm.discovery.arrival/<canonical-source-map>/event/<event-id>/`
+with `seen`, integer `x/y/z` and elapsed `time`. Coordinates round to world units; time keeps completed minutes.
+Each source-event/destination pair retains its latest arrival, so a conditional event can retain several known
+destinations without turning one observation into a current destination guarantee. The normal serializer and
+refill knowledge preservation retain these facts. Reads use the owning snapshot's map filename explicitly:
+the runtime state's temporary map filename is not serialized. Old saves and restored queued moves without a
+runtime handler origin receive no invented history. There is no binary save-version change or generated Lua edit.
+
+World Database derives small `A` arrival markers and links source passages to their observed destinations in
+latest-first order. Atlas offers View arrival, View origin and a next-destination control when several are known.
+Arrival navigation selects the recorded feature and its height, including same-map teleports. An arrival record
+does not establish a return passage. View origin restores the known overview, so a previous arrival-height filter
+does not hide the origin on same-map links. Discovery retains its normal terrain fog; these facts frame known positions
+without revealing nearby map geometry. Guide/Discovery viewing does not write observations. The recorder operates
+with the optional Atlas module disabled.
+
+Scheduled coach/boat arrival history, cross-world presentation, full conditional/Gate content audit and dedicated
+Barrows/Regna graph views remain separate completion work. Broader Atlas and Android/controller work remains
+listed in the coverage matrix.
+
+Final verification on 2026-10-21 passed 175 focused Windows cases / 6,658 assertions, plus three Lua handler/reward
+origin cases / 53 assertions. The latter distinguish same-number global/local callbacks, nested local calls and
+caught Lua errors without regressing reward origins. The final shared data logic also passed Linux ASan/UBSan
+coverage (72 cases / 4,387 assertions). These focused checks do not close the broader regression fixture limitations
+documented above.
+
+Faithful native scenarios `mm7_arrival.yml` and `mm8_arrival.yml` use normal exit interaction and confirmation in
+the Temple of the Moon and Abandoned Temple, retaining actual arrival X values 15,816 and 21,519 after save/load.
+The MM8 scenario also passes with the Atlas module disabled. `mm8_teleport_arrival.yml` activates the authored
+Prison of the Lord of Earth portal (event 451), remains in `d39.blv`, records arrival X 47 and retains it after
+save/load. These scenarios reposition an isolated party for interaction; they do not grant discovery state.
+
+Native AMD/OpenGL evidence is retained under `atlas-arrivals-20261020/` in the Windows development directory.
+`tools/menu_tours/atlas_arrivals.yml` covers the arrival record, origin map, source-to-arrival link and return from
+Guide to Discovery in both games. `tools/menu_tours/atlas_teleport_arrival.yml` covers the same-map height change
+and origin overview. Tours require fresh captures and isolated settings/saves. Android/controller checks remain open.
+The two cross-map tours completed all 20 steps / four captures each. The same-map tour completed 17 steps /
+four captures: its inspected images show the known source on band -7, the selected arrival on band 0 and
+View origin restoring All heights. All twelve captures were freshly written; the inspected source/arrival and
+Discovery images retain the current party's knowledge. These are AMD/OpenGL native checks, not Android evidence.

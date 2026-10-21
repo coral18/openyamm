@@ -98,6 +98,7 @@ struct WorldKnowledge
     WorldTransportState currentTransport;
     std::unordered_set<uint32_t> questBits;
     std::unordered_map<std::string, std::vector<WorldItemSource>> itemObservations;
+    std::unordered_map<std::string, std::vector<WorldMapArrival>> arrivals;
     bool knows(const WorldRecord &record) const;
 };
 
@@ -129,6 +130,9 @@ public:
     void indexMapMonsters(const MapStatsEntry &map, const IndoorMapData &geometry, const MonsterTable &monsters,
                           const std::vector<WorldMonsterObservation> &observations = {});
     void indexMapNotes(const WorldKnowledge &knowledge);
+    void indexMapArrivals(const WorldKnowledge &knowledge);
+    std::vector<const WorldMapFeature *> connectionArrivals(const WorldMapFeature &source,
+        const WorldKnowledge &knowledge) const;
     const std::vector<WorldMapLocation> &locations() const;
     const std::vector<WorldMapFeature> &features() const;
     void indexMapItemSources(const MapStatsEntry &map, std::vector<WorldItemSource> sources, const ItemTable &items);

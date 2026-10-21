@@ -205,6 +205,27 @@ Logs and disposable saves are retained outside Git under the Windows `mod-loader
 `build/mod-loader-tests`. Android packaging/verification was updated, but no new APK or phone test is claimed.
 
 
+## Shared event arrival knowledge
+
+Successful map-local event moves record actual destination coordinates and game time through `recordWorldMapArrival`,
+after the destination runtime has loaded and applied its party position. Same-map teleports use the same recorder.
+Rejected/cancelled/failed loads, debug map loads and merely declared destinations do not record an arrival. This
+tracking runs independently of the optional Atlas UI. `PendingMapMove::sourceMapEventId` and `sourceMapFileName`
+carry runtime map-handler identity before queueing; deferred moves retain their original map. Global handlers
+cannot borrow a coincident local event ID. Nested callback scope is restored after errors.
+
+Destination map-local named state uses `openyamm.discovery.arrival/<canonical-source-map>/event/<event-id>/`
+with `seen`, `x`, `y`, `z` and `time` fields. Each source-event/destination pair retains its latest actual arrival;
+different destinations remain separate. The standard serializer and refill discovery retention preserve these
+records without a new binary save version. `worldMapArrivals` takes the owning snapshot's filename explicitly,
+because the runtime state's temporary `mapFileName` is not serialized. Missing/invalid records add no knowledge.
+Old saves and restored pending moves without runtime event identity receive no invented travel history.
+
+`WorldDatabase::indexMapArrivals` derives arrival features; `connectionArrivals` links them to local source events
+in deterministic latest-first order. Arrival features identify historical observations, not live transport offers,
+current portal eligibility or proof of a return passage. Recording and querying them reveal no terrain. Scheduled
+coach/boat arrivals and cross-world presentation are separate remaining work.
+
 ## Shared item-source knowledge
 
 `WorldDatabase` derives authored item sources from mounted map state; the Atlas consumes the same index. Actual

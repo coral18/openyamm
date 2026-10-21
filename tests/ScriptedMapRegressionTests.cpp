@@ -9540,6 +9540,41 @@ RegisterGlobalEvent(15, "Shared reward", function() evt.GiveItem(46) end)
     CHECK_FALSE(shared->position);
 }
 
+TEST_CASE("map move provenance distinguishes local and global handlers and restores nested caller scope")
+{
+    using namespace OpenYAMM::Game;
+    const auto support = readSourceTextFile(std::filesystem::path(OPENYAMM_SOURCE_DIR)
+        / "assets_dev/engine/scripts/common/event_support.lua");
+    REQUIRE(support.has_value());
+    std::string error;
+    const auto program = ScriptedEventProgram::loadFromLuaText(*support + R"lua(
+RegisterEvent(14, nil, function() evt.global[15]() end)
+RegisterEvent(15, nil, function() evt.MoveToMap(100, 200, 300, 0, 0, 0, 0, 0, "out01.odm") end)
+RegisterGlobalEvent(15, nil, function() evt.MoveToMap(400, 500, 600, 0, 0, 0, 0, 0, "out01.odm") end)
+RegisterEvent(16, nil, function() evt.map[15]() end)
+RegisterGlobalEvent(17, nil, function() error("intentional nested failure") end)
+RegisterEvent(18, nil, function()
+    assert(not pcall(evt.global[17]))
+    evt.MoveToMap(700, 800, 900, 0, 0, 0, 0, 0, "out01.odm")
+end)
+)lua", "map-move-origin-runtime", ScriptedEventScope::Map, error);
+    REQUIRE_MESSAGE(program.has_value(), error);
+    EventRuntime runtime;
+    for (const auto &[eventId, expectedOrigin, expectedX] :
+        {std::array<uint16_t, 3>{14, 0, 400}, {16, 15, 100}, {18, 18, 700}})
+    {
+        EventRuntimeState state;
+        state.mapFileName = "7d06.blv";
+        RecordingSceneEventContext scene;
+        REQUIRE(runtime.executeEventById(program, std::nullopt, eventId, state, nullptr, &scene));
+        const auto *pMove = pendingMapMove(state);
+        REQUIRE(pMove != nullptr);
+        CHECK(pMove->sourceMapEventId == expectedOrigin);
+        CHECK(pMove->sourceMapFileName == (expectedOrigin == 0 ? "" : "7d06.blv"));
+        CHECK(pMove->x == expectedX);
+    }
+}
+
 TEST_CASE("scripted reward origins return to the caller after nested callbacks and caught Lua errors")
 {
     using namespace OpenYAMM::Game;

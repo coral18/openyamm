@@ -8,6 +8,7 @@
 #include "game/world/WorldItemSources.h"
 #include "game/world/WorldMapKnowledge.h"
 #include "game/world/WorldMapNotes.h"
+#include "game/world/WorldMapKnowledge.h"
 #include "game/party/Party.h"
 #include "game/party/SpellIds.h"
 #include "game/tables/CharacterDollTable.h"
@@ -212,6 +213,33 @@ TEST_CASE("scripted item discoveries require successful delivery and pending ori
     state.namedMapVars.clear();
     party.applyEventRuntimeState(state, true);
     CHECK(worldObservedItemSources(state).empty());
+}
+
+TEST_CASE("actual event arrival provenance and coordinates survive normal save serialization")
+{
+    using namespace OpenYAMM::Game;
+    EventRuntimeState state;
+    state.mapFileName = "7d06.blv";
+    REQUIRE(recordWorldMapArrival(state, "world.mm7.map.7out03", 105, 100, -200, -512, 1440));
+    GameSaveData save;
+    save.currentSceneKind = SceneKind::Indoor;
+    save.mapFileName = state.mapFileName;
+    save.indoorScene.eventRuntimeState = state;
+    const auto path = std::filesystem::temp_directory_path() / "openyamm_arrival.oysav";
+    std::string error;
+    REQUIRE_MESSAGE(saveGameDataToPath(path, save, error), error);
+    const auto loaded = loadGameDataFromPath(path, error);
+    std::filesystem::remove(path);
+    REQUIRE_MESSAGE(loaded.has_value(), error);
+    REQUIRE(loaded->indoorScene.eventRuntimeState.has_value());
+    const auto arrivals = worldMapArrivals(*loaded->indoorScene.eventRuntimeState, loaded->mapFileName);
+    REQUIRE(arrivals.size() == 1);
+    CHECK(arrivals[0].sourceMapId == "world.mm7.map.7out03");
+    CHECK(arrivals[0].eventId == 105);
+    CHECK(arrivals[0].x == 100);
+    CHECK(arrivals[0].y == -200);
+    CHECK(arrivals[0].z == -512);
+    CHECK(arrivals[0].gameMinutes == 1440);
 }
 
 TEST_CASE("note elevation and unassigned legacy notes survive save and load independently")

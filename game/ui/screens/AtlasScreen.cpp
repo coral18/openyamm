@@ -59,6 +59,7 @@ AtlasScreen::AtlasScreen(const Engine::AssetFileSystem &assets, const GameDataRe
         for (const std::string &issue : m_world.transportIssues()) std::cerr << issue << '\n';
     }
     m_world.indexMapNotes(m_knowledge);
+    m_world.indexMapArrivals(m_knowledge);
     m_world.indexObservedItemSources(m_knowledge, m_data.itemTable());
     for (const std::string &file : assets.enumerate("engine/world/atlas"))
         if (std::filesystem::path(file).extension() == ".yml")
@@ -231,6 +232,7 @@ void AtlasScreen::saveNote(bool remove)
         notes.push_back({{m_noteDraft.id, m_noteDraft.x, m_noteDraft.y,
                          m_noteDraft.mapFileName, m_noteDraft.text, true}, true, m_noteDraft.elevation});
     m_world.indexMapNotes(m_knowledge);
+    m_world.indexMapArrivals(m_knowledge);
     m_world.indexObservedItemSources(m_knowledge, m_data.itemTable());
     if (!remove && m_noteDraft.elevation)
         selectFloorLayer(worldFloorPlanLayer(float(*m_noteDraft.elevation)));
@@ -342,6 +344,7 @@ void AtlasScreen::rebuildWorld()
         atlasNpcState(m_data, m_knowledge, m_guide, m_pParty != nullptr),
         atlasTransportState(m_data, m_knowledge, m_guide, m_pParty != nullptr));
     m_world.indexMapNotes(m_knowledge);
+    m_world.indexMapArrivals(m_knowledge);
     m_world.indexObservedItemSources(m_knowledge, m_data.itemTable());
     indexQuestLocations();
     m_itemSourceMaps.clear(); m_itemSourceScanIndex = 0;
@@ -365,6 +368,7 @@ void AtlasScreen::selectWorld(const std::string &worldId)
                             atlasTransportState(m_data, m_knowledge, m_guide, m_pParty != nullptr));
         m_world = std::move(world);
         m_world.indexMapNotes(m_knowledge);
+        m_world.indexMapArrivals(m_knowledge);
         m_world.indexObservedItemSources(m_knowledge, m_data.itemTable());
         m_selectedFeature.clear();
         m_referenceDirty = true;
@@ -1160,7 +1164,8 @@ bool AtlasScreen::drawFeatureMarkers(const WorldRecord &map, const Rect &image, 
             m_scroll = 0;
         }
         const char *labels[] = {"C", "W", "S", "O", "P", "M", "N", "I"};
-        textInRect(marker, pin.features.size() > 1 ? std::to_string(pin.features.size()) : labels[size_t(feature.kind)],
+        textInRect(marker, pin.features.size() > 1 ? std::to_string(pin.features.size())
+            : feature.arrival ? "A" : labels[size_t(feature.kind)],
                    "menu_lucida", 7, 0xffc6dfeau, true);
         outline(marker, selected ? 0xff99d3eeu : 0xff8dc5e1u);
         if (pointerInside(hit) || focused(id))
@@ -1617,8 +1622,15 @@ void AtlasScreen::drawDetails()
         { return pFeature->id == m_selectedFeature
             && (m_siteSelection.empty() || m_siteSelection.contains(pFeature->id)); });
         std::string text = "Select a site to inspect it. "
-            "C Chests, W Wells/Fountains, S Shrines, O Obelisks, P Passages, M Monsters, N Notes, I Items.";
+            "C Chests, W Wells/Fountains, S Shrines, O Obelisks, P Passages, A Arrivals, M Monsters, N Notes, I Items.";
         const WorldRecord *pDestination = nullptr;
+        const WorldMapFeature *pArrivalDestination = nullptr;
+        size_t arrivalCount = 0;
+        if (m_connectionContext != m_selectedFeature)
+        {
+            m_connectionContext = m_selectedFeature;
+            m_connectionChoice = 0;
+        }
         int16_t creatureId = 0;
         uint32_t itemId = 0;
         const WorldMapFeature *pNote = nullptr;
@@ -1632,12 +1644,28 @@ void AtlasScreen::drawDetails()
                     : "\nAuthored source; scripts and the campaign state can change availability.";
             if (feature.kind == WorldMapFeatureKind::Connection)
             {
-                for (const WorldRecord &record : m_world.records())
+                const auto arrivals = m_world.connectionArrivals(feature, m_knowledge);
+                arrivalCount = arrivals.size();
+                if (!arrivals.empty())
+                {
+                    m_connectionChoice %= arrivals.size();
+                    pArrivalDestination = arrivals[m_connectionChoice];
+                    pDestination = m_world.find(pArrivalDestination->mapId);
+                    text += "\nTravelled to: " + pDestination->name() + " | Day "
+                        + std::to_string(pArrivalDestination->arrival->gameMinutes / (24 * 60) + 1)
+                        + (arrivalCount > 1 ? " | " + std::to_string(m_connectionChoice + 1)
+                            + "/" + std::to_string(arrivalCount) + " known destinations" : "");
+                }
+                else for (const WorldRecord &record : m_world.records())
                     if ((record.kind == WorldRecordKind::Region || record.kind == WorldRecordKind::Dungeon)
                         && toLowerCopy(record.map->fileName) == toLowerCopy(feature.targetMap)
                         && m_world.visible(record, m_knowledge, m_guide))
                         pDestination = &record;
-                text += feature.targetMap.empty() ? "\nDestination not mapped"
+                if (feature.arrival)
+                    text += "\nRecorded arrival | Day "
+                        + std::to_string(feature.arrival->gameMinutes / (24 * 60) + 1)
+                        + ". This does not establish a return passage.";
+                else if (arrivals.empty()) text += feature.targetMap.empty() ? "\nDestination not mapped"
                     : pDestination != nullptr ? "\nDeclared connection: " + pDestination->name()
                     : m_guide ? "\nDestination outside this catalog" : "\nDestination undiscovered";
             }
@@ -1665,8 +1693,11 @@ void AtlasScreen::drawDetails()
         if (!m_locationError.empty())
             text += "\n" + m_locationError;
         textInRect(canvasRect(34, 407,
-            pDestination != nullptr || creatureId > 0 || itemId > 0 || pNote != nullptr ? 625 : 778, 43),
+            arrivalCount > 1 ? 565
+                : pDestination != nullptr || creatureId > 0 || itemId > 0 || pNote != nullptr ? 625 : 778, 43),
                    text, "menu_arrus", 11);
+        if (arrivalCount > 1 && button("atlas-next-arrival", canvasRect(609, 416, 50, 28), ">"))
+            m_connectionChoice = (m_connectionChoice + 1) % arrivalCount;
         if (itemId > 0 && button("atlas-feature-item", canvasRect(669, 416, 145, 28), "Item details"))
         {
             m_referenceOpen = true;
@@ -1695,10 +1726,19 @@ void AtlasScreen::drawDetails()
             m_referenceScroll = m_referenceDetailScroll = m_referenceContentHeight = 0;
         }
         if (pDestination != nullptr && button("atlas-feature-destination", canvasRect(669, 416, 145, 28),
-                                             "Open connected map"))
+            pArrivalDestination != nullptr ? "View arrival"
+                : selected != features.end() && (*selected)->arrival ? "View origin" : "Open connected map"))
         {
+            const std::string arrivalId = pArrivalDestination != nullptr ? pArrivalDestination->id : "";
             select(*pDestination);
             m_siteSelection.clear();
+            m_floorLayerContext.clear();
+            if (!arrivalId.empty())
+            {
+                m_featureView = true;
+                m_selectedFeature = arrivalId;
+                m_search.clear();
+            }
         }
         return;
     }

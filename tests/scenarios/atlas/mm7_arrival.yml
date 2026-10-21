@@ -1,0 +1,42 @@
+id: atlas.mm7_arrival
+world: mm7
+mode: faithful
+title: Normal dungeon exit records its actual arrival and retains it through save/load
+steps:
+- new_game_flow:
+    start_map: 7out02.odm
+- load_map:
+    map: 7d06.blv
+- press_interact:
+    pose:
+      x: -1136
+      y: -4500
+      z: 576
+      yaw: -1.5707963
+    expect:
+      kind: event_target
+      triggered_event: 100
+      can_activate: true
+- select_topic:
+    kind: map_transition_confirm
+    action_id: 0
+- assert:
+    map: 7out01.odm
+- assert:
+    named_map_var_changed:
+      name: openyamm.discovery.arrival/world.mm7.map.7d06/event/100/seen
+      value: 1
+- assert:
+    named_map_var_changed:
+      name: openyamm.discovery.arrival/world.mm7.map.7d06/event/100/x
+      value: 15816
+- save_game: arrival
+- load_game: arrival
+- assert:
+    named_map_var_changed:
+      name: openyamm.discovery.arrival/world.mm7.map.7d06/event/100/seen
+      value: 1
+- assert:
+    named_map_var_changed:
+      name: openyamm.discovery.arrival/world.mm7.map.7d06/event/100/x
+      value: 15816

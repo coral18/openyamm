@@ -91,6 +91,88 @@ MonsterTable atlasMonsters()
 }
 } // namespace
 
+TEST_CASE("successful map arrivals retain actual positions and reject incomplete or invalid records")
+{
+    EventRuntimeState state;
+    state.mapFileName = "7D21.BLV";
+    const std::string source = "world.mm7.map.7out02";
+    const std::string key = "openyamm.discovery.arrival/" + source + "/event/13/";
+    REQUIRE(recordWorldMapArrival(state, source, 13, 101.6f, -22.2f, -512, 1440.9f));
+    auto arrivals = worldMapArrivals(state, state.mapFileName);
+    REQUIRE(arrivals.size() == 1);
+    CHECK(arrivals[0].sourceMapId == source);
+    CHECK(arrivals[0].mapFileName == "7d21.blv");
+    CHECK(arrivals[0].eventId == 13);
+    CHECK(arrivals[0].x == 102);
+    CHECK(arrivals[0].y == -22);
+    CHECK(arrivals[0].z == -512);
+    CHECK(arrivals[0].gameMinutes == 1440);
+    const auto saved = state.namedMapVars;
+    CHECK_FALSE(recordWorldMapArrival(state, source, 0, 1, 2, 3, 4));
+    CHECK_FALSE(recordWorldMapArrival(state, source, 65536, 1, 2, 3, 4));
+    CHECK_FALSE(recordWorldMapArrival(state, "", 13, 1, 2, 3, 4));
+    CHECK_FALSE(recordWorldMapArrival(state, source, 13, 1, 2, 3, -0.1f));
+    CHECK_FALSE(recordWorldMapArrival(state, source, 13, std::numeric_limits<float>::infinity(), 2, 3, 4));
+    CHECK(state.namedMapVars == saved);
+    EventRuntimeState refilled;
+    refilled.mapFileName = state.mapFileName;
+    restoreWorldMapKnowledgeAfterRefill(state, refilled);
+    REQUIRE(worldMapArrivals(refilled, refilled.mapFileName).size() == 1);
+    CHECK(worldMapArrivals(refilled, refilled.mapFileName)[0].z == -512);
+    state.namedMapVars.erase(key + "x");
+    CHECK(worldMapArrivals(state, state.mapFileName).empty());
+    state.namedMapVars[key + "x"] = 0;
+    state.namedMapVars[key + "time"] = -1;
+    CHECK(worldMapArrivals(state, state.mapFileName).empty());
+    state.namedMapVars[key + "time"] = 0;
+    state.namedMapVars["openyamm.discovery.arrival/broken/event/seen"] = 1;
+    REQUIRE(worldMapArrivals(state, state.mapFileName).size() == 1);
+    CHECK(worldMapArrivals(state, state.mapFileName)[0].x == 0);
+    REQUIRE(recordWorldMapArrival(state, source, 13, 1, 2, 3, 2880));
+    REQUIRE(worldMapArrivals(state, state.mapFileName).size() == 1);
+    CHECK(worldMapArrivals(state, state.mapFileName)[0].x == 1);
+}
+
+TEST_CASE("observed connections retain conditional destinations without revealing geometry or return passages")
+{
+    Fixture f;
+    auto database = f.database();
+    const std::string sourceId = WorldDatabase::mapId(*f.maps.findByFileName("7out02.odm"));
+    EventRuntimeState cave;
+    cave.mapFileName = "7d21.blv";
+    EventRuntimeState region;
+    region.mapFileName = "7out02.odm";
+    REQUIRE(recordWorldMapArrival(cave, sourceId, 13, 100, 200, -512, 1440));
+    REQUIRE(recordWorldMapArrival(region, sourceId, 13, 300, 400, 1024, 2880));
+    WorldKnowledge knowledge;
+    knowledge.arrivals[cave.mapFileName] = worldMapArrivals(cave, cave.mapFileName);
+    knowledge.arrivals[region.mapFileName] = worldMapArrivals(region, region.mapFileName);
+    database.indexMapArrivals(knowledge);
+    REQUIRE(database.features().size() == 2);
+    CHECK(database.queryFeatures(knowledge, false).empty());
+    CHECK(database.queryFeatures(knowledge, true).size() == 2);
+    knowledge.visitedMaps = {cave.mapFileName, region.mapFileName};
+    CHECK(database.queryFeatures(knowledge, false).size() == 2);
+    WorldMapFeature source;
+    source.kind = WorldMapFeatureKind::Connection;
+    source.mapId = sourceId;
+    source.site.eventId = 13;
+    const auto arrivals = database.connectionArrivals(source, knowledge);
+    REQUIRE(arrivals.size() == 2);
+    CHECK(arrivals[0]->arrival->gameMinutes == 2880);
+    CHECK(arrivals[1]->site.z == -512);
+    CHECK_FALSE(worldMapFeatureOnFloorLayer(*arrivals[1], 0));
+    CHECK(database.connectionArrivals(*arrivals[0], knowledge).empty());
+    source.site.eventId = 14;
+    CHECK(database.connectionArrivals(source, knowledge).empty());
+    CHECK(knowledge.regionMaps.empty());
+    CHECK(knowledge.floorPlans.empty());
+    CHECK(knowledge.variables.empty());
+    CHECK(knowledge.interactedSites.empty());
+    database.indexMapArrivals(knowledge);
+    CHECK(database.features().size() == 2);
+}
+
 TEST_CASE("world map user notes reuse map-local notes without replacing script-owned records")
 {
     EventRuntimeState state;

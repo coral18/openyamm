@@ -1,0 +1,41 @@
+# Use the checkpoint from tests/scenarios/atlas/mm8_teleport_arrival.yml.
+# The source portal is on layer -7; View arrival selects layer 0 without changing the map.
+# View origin restores the known overview instead of leaving the origin hidden by a height filter.
+output_dir: output/atlas-arrivals
+exit: true
+steps:
+- expect: gameplay
+- pause: true
+- click:
+  - 800
+  - 821
+- click:
+  - 1480
+  - 126
+- click:
+  - 275
+  - 125
+- text: Passage
+- key: Return
+- click:
+  - 406
+  - 695
+- click:
+  - 1250
+  - 260
+- capture: source-lower-band
+- click:
+  - 1390
+  - 807
+- capture: arrival-upper-band
+- click:
+  - 1390
+  - 807
+- capture: origin-overview
+- click:
+  - 1152
+  - 57
+- click:
+  - 1152
+  - 57
+- capture: teleport-discovery-restored

@@ -83,6 +83,8 @@ private:
     bool m_noteEditorOpen = false, m_placingNote = false;
     bool m_featureView = false;
     std::string m_selectedFeature;
+    std::string m_connectionContext;
+    size_t m_connectionChoice = 0;
     std::function<void()> m_close;
     bool m_paused = false;
     bool m_guide = false;

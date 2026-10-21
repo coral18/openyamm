@@ -60,7 +60,8 @@ void WorldDatabase::indexMapSites(const WorldRecord &source, const std::vector<W
     };
     std::erase_if(m_features, [pSource](const WorldMapFeature &feature)
     { return feature.mapId == pSource->id && feature.kind != WorldMapFeatureKind::Monster
-        && feature.kind != WorldMapFeatureKind::Note && feature.kind != WorldMapFeatureKind::Item; });
+        && feature.kind != WorldMapFeatureKind::Note && feature.kind != WorldMapFeatureKind::Item
+        && !feature.arrival; });
     auto features = buildWorldMapFeatures(pSource->id, sites, events);
     m_features.insert(m_features.end(), features.begin(), features.end());
     for (const WorldInteractionSite &site : sites)
@@ -80,6 +81,53 @@ void WorldDatabase::indexMapLocations(const MapStatsEntry &map, const IndoorMapD
 }
 
 const std::vector<WorldMapFeature> &WorldDatabase::features() const { return m_features; }
+
+void WorldDatabase::indexMapArrivals(const WorldKnowledge &knowledge)
+{
+    std::erase_if(m_features, [](const WorldMapFeature &feature) { return feature.arrival.has_value(); });
+    for (const auto &[file, arrivals] : knowledge.arrivals)
+        for (const WorldMapArrival &arrival : arrivals)
+        {
+            const WorldRecord *pDestination = nullptr;
+            for (const WorldRecord &record : m_records)
+                if ((record.kind == WorldRecordKind::Region || record.kind == WorldRecordKind::Dungeon)
+                    && toLowerCopy(record.map->fileName) == file && file == toLowerCopy(arrival.mapFileName))
+                    pDestination = &record;
+            const WorldRecord *pSource = find(arrival.sourceMapId);
+            if (pDestination == nullptr || pSource == nullptr || arrival.eventId == 0
+                || (pSource->kind != WorldRecordKind::Region && pSource->kind != WorldRecordKind::Dungeon))
+                continue;
+            WorldMapFeature feature;
+            feature.id = pDestination->id + "/arrival/" + arrival.sourceMapId
+                + "/event/" + std::to_string(arrival.eventId);
+            feature.mapId = pDestination->id;
+            feature.kind = WorldMapFeatureKind::Connection;
+            feature.site = {"arrival/" + arrival.sourceMapId + "/event/" + std::to_string(arrival.eventId),
+                0, float(arrival.x), float(arrival.y), float(arrival.z)};
+            feature.title = "Arrival from " + pSource->name();
+            feature.targetMap = pSource->map->fileName;
+            feature.arrival = arrival;
+            m_features.push_back(std::move(feature));
+        }
+}
+
+std::vector<const WorldMapFeature *> WorldDatabase::connectionArrivals(const WorldMapFeature &source,
+    const WorldKnowledge &knowledge) const
+{
+    std::vector<const WorldMapFeature *> result;
+    if (source.kind != WorldMapFeatureKind::Connection || source.arrival) return result;
+    for (const WorldMapFeature &feature : m_features)
+        if (feature.arrival && feature.arrival->sourceMapId == source.mapId
+            && feature.arrival->eventId == source.site.eventId && featureVisible(feature, knowledge, false))
+            result.push_back(&feature);
+    std::sort(result.begin(), result.end(), [](const WorldMapFeature *a, const WorldMapFeature *b)
+    {
+        if (a->arrival->gameMinutes != b->arrival->gameMinutes)
+            return a->arrival->gameMinutes > b->arrival->gameMinutes;
+        return a->id < b->id;
+    });
+    return result;
+}
 
 void WorldDatabase::replaceMapMonsterFeatures(const MapStatsEntry &map, std::vector<WorldMapFeature> features,
     const MonsterTable &monsters, const std::vector<WorldMonsterObservation> &observations)
@@ -145,6 +193,8 @@ bool WorldDatabase::featureVisible(const WorldMapFeature &feature, const WorldKn
         return false;
     if (guide)
         return true;
+    if (feature.arrival)
+        return knowledge.visitedMaps.contains(toLowerCopy(pMap->map->fileName));
     if (feature.kind == WorldMapFeatureKind::Note)
         return knowledge.visitedMaps.contains(toLowerCopy(pMap->map->fileName));
     if (feature.kind == WorldMapFeatureKind::Monster)

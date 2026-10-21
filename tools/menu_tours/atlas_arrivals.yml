@@ -1,0 +1,45 @@
+# Load the isolated arrival checkpoint created by tests/scenarios/atlas/mm7_arrival.yml or mm8_arrival.yml.
+# Verifies recorded arrival, origin navigation, source-to-arrival navigation and Guide/Discovery isolation.
+output_dir: output/atlas-arrivals
+exit: true
+steps:
+- expect: gameplay
+- pause: true
+- click:
+  - 800
+  - 821
+- click:
+  - 1480
+  - 126
+- click:
+  - 275
+  - 125
+- text: Arrival from
+- key: Return
+- click:
+  - 1250
+  - 260
+- capture: arrival-record
+- click:
+  - 1390
+  - 807
+- click:
+  - 275
+  - 125
+- text: Leave
+- key: Return
+- click:
+  - 1250
+  - 260
+- capture: travelled-source
+- click:
+  - 1390
+  - 807
+- capture: linked-arrival
+- click:
+  - 1152
+  - 57
+- click:
+  - 1152
+  - 57
+- capture: discovery-restored

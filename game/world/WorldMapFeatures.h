@@ -1,6 +1,7 @@
 #pragma once
 
 #include "game/world/WorldInteractionSites.h"
+#include "game/world/WorldMapKnowledge.h"
 #include <optional>
 
 namespace OpenYAMM::Game
@@ -36,6 +37,7 @@ struct WorldMapFeature
     uint32_t itemId = 0;
     bool observedItem = false;
     std::optional<int32_t> noteElevation;
+    std::optional<WorldMapArrival> arrival;
 };
 
 std::vector<WorldMapFeature> buildWorldMapFeatures(const std::string &mapId,

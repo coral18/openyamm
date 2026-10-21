@@ -8825,6 +8825,7 @@ bool GameApplication::openAtlasScreen(bool paused)
             knowledge.monsterObservations[toLowerCopy(file)] = worldMonsterObservations(state);
             knowledge.itemObservations[toLowerCopy(file)] = worldObservedItemSources(state);
             knowledge.notes[toLowerCopy(file)] = worldMapNotes(state, file);
+            knowledge.arrivals[toLowerCopy(file)] = worldMapArrivals(state, file);
             for (const auto &[key, value] : state.namedMapVars)
                 if (value > 0 && key.starts_with("openyamm.discovery.site/"))
                     knowledge.interactedSites[toLowerCopy(file)].insert(key);
@@ -10358,6 +10359,19 @@ bool GameApplication::processPendingMapMove()
         || (!pendingMapMove->useMapStartPosition
             && sameMapFileName(*pendingMapMove->mapName, m_gameSession.currentMapFileName()));
 
+    const MapStatsEntry *pSourceMap = m_gameDataRepository.mapStats().findByFileName(
+        pendingMapMove->sourceMapFileName);
+    const std::string sourceMapId = pSourceMap != nullptr ? WorldDatabase::mapId(*pSourceMap) : "";
+    const auto rememberArrival = [this, &pendingMapMove, &sourceMapId]()
+    {
+        IGameplayWorldRuntime *pRuntime = m_gameSession.activeWorldRuntime();
+        EventRuntimeState *pState = m_pMapSceneRuntime != nullptr
+            ? m_pMapSceneRuntime->eventRuntimeState() : nullptr;
+        if (pRuntime != nullptr && pState != nullptr)
+            recordWorldMapArrival(*pState, sourceMapId, pendingMapMove->sourceMapEventId,
+                pRuntime->partyX(), pRuntime->partyY(), pRuntime->partyFootZ(), pRuntime->gameMinutes());
+    };
+
     const auto applyMapMoveDirection = [this, &pendingMapMove]()
     {
         if (!pendingMapMove->directionDegrees.has_value() || m_pMapSceneRuntime == nullptr)
@@ -10402,6 +10416,7 @@ bool GameApplication::processPendingMapMove()
         applyMapMoveDirection();
 
         m_gameAudioSystem.playCommonSound(SoundId::Teleport, GameAudioSystem::PlaybackGroup::Ui);
+        rememberArrival();
         synchronizeSessionFromRuntime();
         GAMEPLAY_DEBUG_TRACE_BLOCK(
             logMapArrived(
@@ -10495,6 +10510,7 @@ bool GameApplication::processPendingMapMove()
     }
 
     applyMapMoveDirection();
+    rememberArrival();
     float arrivedGameMinutes = m_gameSession.gameMinutes();
     if (IGameplayWorldRuntime *pWorldRuntime = m_gameSession.activeWorldRuntime())
     {
