@@ -1,0 +1,25 @@
+id: atlas.mm8_promotion_requests_knowledge
+title: Authored Champion and Lich requests retain distinct precise and regional clues
+world: mm8
+mode: faithful
+steps:
+- new_game_flow: {start_map: out05.odm}
+- speak_npc: {source_id: 49}
+- select_topic: {kind: npc_topic, action_id: 52}
+- assert:
+    qbit_set: [70]
+    named_global_var_changed: {name: openyamm.discovery.quest/70, value: 1}
+- press_action: {action: cancel_dialog}
+- load_map: {map: out06.odm}
+- speak_npc: {source_id: 61}
+- select_topic: {kind: npc_topic, action_id: 86}
+- assert:
+    qbit_set: [70, 82]
+    named_global_var_changed: {name: openyamm.discovery.quest/82, value: 1}
+- save_game: promotion-requests
+- load_game: promotion-requests
+- assert:
+    qbit_set: [70, 82]
+    named_global_var_changed: {name: openyamm.discovery.quest/70, value: 1}
+- assert:
+    named_global_var_changed: {name: openyamm.discovery.quest/82, value: 1}

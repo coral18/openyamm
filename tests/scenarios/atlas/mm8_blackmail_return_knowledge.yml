@@ -1,0 +1,49 @@
+id: atlas.mm8_blackmail_return_knowledge
+title: Authored blackmail return stage with controlled cursor-to-inventory placement
+world: mm8
+mode: faithful
+steps:
+- new_game_flow:
+    start_map: out01.odm
+- speak_npc: {source_id: 2}
+- select_topic: {kind: npc_topic, action_id: 20}
+- press_action: {action: cancel_dialog}
+- load_map: {map: out02.odm}
+- speak_npc: {source_id: 3}
+- select_topic: {kind: npc_topic, action_id: 28}
+- advance_runtime: {seconds: 0.1}
+- select_topic: {kind: npc_topic, action_id: 29}
+- advance_runtime: {seconds: 0.1}
+- assert:
+    qbit_set: [9]
+    qbit_clear: [284]
+- press_action: {action: cancel_dialog}
+- load_map: {map: d07.blv}
+- note: Letter inventory placement is a fixture; this avoids relying on transient cursor state across map reloads.
+- note: The initial request, Arion handoff and Fellmoon reward are authored; travel, stowing and combat are not tested.
+- setup_shortcut: {kind: grant_item, item_id: 742}
+- save_game: blackmail-inventory-fixture
+- load_game: blackmail-inventory-fixture
+- speak_npc: {source_id: 4}
+- select_topic: {kind: npc_topic, action_id: 32}
+- assert:
+    qbit_clear: [9]
+    qbit_set: [10, 284]
+    named_global_var_changed: {name: openyamm.discovery.quest/284, value: 1}
+- save_game: blackmail-return-pending
+- load_game: blackmail-return-pending
+- assert:
+    qbit_set: [284]
+    named_global_var_changed: {name: openyamm.discovery.quest/284, value: 1}
+- load_map: {map: out02.odm}
+- speak_npc: {source_id: 3}
+- select_topic: {kind: npc_topic, action_id: 29}
+- assert:
+    qbit_clear: [284]
+    qbit_set: [24]
+    named_global_var_changed: {name: openyamm.discovery.quest/284, value: 1}
+- save_game: blackmail-returned
+- load_game: blackmail-returned
+- assert:
+    qbit_clear: [284]
+    named_global_var_changed: {name: openyamm.discovery.quest/284, value: 1}

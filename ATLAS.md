@@ -1346,3 +1346,30 @@ Sight uses one opaque silhouette sample and the current world geometry, not GPU 
 cover, decorative-sprite overlap and replacement models still need broader visibility audits; direct inspection
 remains available. Android/controller checks and the remaining campaign/site/reference coverage remain part of
 the active complete MM7/MM8 Atlas objective.
+
+### MM8 campaign quest relationships, 2026-10-21
+
+The shared registry now covers 94 quests (26 MM7, 68 MM8), with 364 typed relationships. This checkpoint adds
+33 MM8 quest chains and 133 relationships: faction alliances, four elemental Hearts, the Crystal Gateway and
+elemental lords, remaining promotion requests, potion contacts, One-Eye and the distinct blackmail return stage.
+Arion's house is corrected from a return location to a delivery objective. No engine API, campaign script,
+save format, generated event or large asset package was changed.
+
+Disclosure follows actual requests: Quixote names Zog's fortress while Deftclaw does not; Leane names Shadowspire
+without naming the laboratory, while Vetrinus explicitly identifies Khel's library and the jar supplier.
+Exact undisclosed Palace/prison locations remain Guide hints. Conditional return contacts include the separate
+Quixote/Deftclaw council records; residence navigation still uses the current or last-observed NPC index.
+
+Windows Release uses the updated small source-data overlay. Six focused suites passed 193 cases / 7330 assertions;
+Linux ASan/UBSan passed 88 / 4797. Native authored Champion/Lich requests survive save/load. The separate blackmail
+test uses strict assertions and an explicit inventory-placement fixture, then actual Arion/Fellmoon handoff/reward
+handlers and persistence checks. Cursor stowing, travel and combat are outside that fixture's scope.
+Native AMD OpenGL captures confirm the different Discovery/Guide source lists; reusable inputs are
+`tests/scenarios/atlas/mm8_promotion_requests_knowledge.yml`, `mm8_blackmail_return_knowledge.yml` and
+`tools/menu_tours/atlas_mm8_campaign_quests.yml`. Private logs/captures/settings live under the local Windows
+development root's `atlas-mm8-campaign-20261021/` directory.
+
+[The quest audit](ATLAS_QUEST_AUDIT.md) records three unverified/broken MM8 journal rows (5, 172 and 132), including
+Galvinus' mismatched Accuracy/Blazen flags. They require separate event/state review, not invented Atlas facts.
+MM7 campaign coverage, remaining conditional clues/site/reference content and Android/controller checks remain
+part of the incomplete full objective; these counts do not measure overall Atlas completion.

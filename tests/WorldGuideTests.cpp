@@ -968,6 +968,65 @@ TEST_CASE("world guide campaign clues do not turn undisclosed quest destinations
     CHECK(knowledge.quests.empty());
 }
 
+TEST_CASE("MM8 campaign relationships distinguish accepted clues from later discoveries")
+{
+    JournalQuestTable quests;
+    REQUIRE(quests.loadFromRows(guideTableRows("english/quests.txt")));
+    REQUIRE(quests.loadLocationRows(guideTableRows("quest_locations.txt")));
+    MapStats maps;
+    REQUIRE(maps.loadFromRows(guideTableRows("map_stats.txt")));
+    NpcDialogTable npcs;
+    REQUIRE(npcs.loadNpcRows(guideTableRows("npc.txt")));
+    WorldGuideSource source;
+    source.pQuests = &quests; source.pMaps = &maps; source.pNpcs = &npcs; source.worldId = "mm8";
+    WorldGuideKnowledge knowledge;
+    const auto hasMap = [&](uint32_t qbit, const std::string &target, bool guide)
+    {
+        knowledge.activeQuests = {qbit};
+        const auto entries = buildWorldGuide(source, WorldGuideSection::Quests, knowledge, guide);
+        const auto quest = std::find_if(entries.begin(), entries.end(),
+            [&](const WorldGuideEntry &entry) { return entry.id == std::to_string(qbit); });
+        REQUIRE(quest != entries.end());
+        return std::any_of(quest->links.begin(), quest->links.end(),
+            [&](const WorldGuideLink &link) { return link.target == target; });
+    };
+    // Bastian requests a witness, not a named Troll at a secretly known address.
+    CHECK(hasMap(25, "world.mm8.map.out04", false));
+    CHECK(buildWorldGuide(source, WorldGuideSection::Quests, knowledge, false)[0].details.find(
+        "Overdune Snapfinger") == std::string::npos);
+    CHECK(hasMap(17, "world.mm8.map.out05", false));
+    CHECK_FALSE(hasMap(17, "world.mm8.map.d17", false));
+    CHECK(hasMap(17, "world.mm8.map.d17", true));
+    CHECK(hasMap(18, "world.mm8.map.out08", false));
+    CHECK_FALSE(hasMap(18, "world.mm8.map.d24", false));
+    CHECK(hasMap(18, "world.mm8.map.d24", true));
+    // Quixote discloses Zog's fortress; Deftclaw only knows that Quixote stole his egg.
+    CHECK(hasMap(31, "world.mm8.map.d25", false));
+    CHECK_FALSE(hasMap(33, "world.mm8.map.d25", false));
+    CHECK(hasMap(33, "world.mm8.map.d25", true));
+    CHECK(hasMap(70, "world.mm8.map.out06", false));
+    CHECK_FALSE(hasMap(70, "world.mm8.map.d20", false));
+    CHECK(hasMap(70, "world.mm8.map.d20", true));
+    // Vetrinus explicitly names both Khel's library and the Mad Necromancer's jar supply.
+    CHECK(hasMap(82, "world.mm8.map.d40", false));
+    CHECK(hasMap(82, "world.mm8.map.d20", false));
+    CHECK(hasMap(46, "world.mm8.map.d10", false));
+    CHECK_FALSE(hasMap(46, "world.mm8.map.d35", false));
+    CHECK(hasMap(46, "world.mm8.map.d35", true));
+    for (uint32_t qbit : {48, 50, 52, 54})
+    {
+        for (const std::string &prison : {"d36", "d37", "d38", "d39"})
+            CHECK_FALSE(hasMap(qbit, "world.mm8.map." + prison, false));
+    }
+    CHECK(hasMap(48, "world.mm8.map.d37", true));
+    CHECK(hasMap(50, "world.mm8.map.d39", true));
+    CHECK(hasMap(52, "world.mm8.map.d38", true));
+    CHECK(hasMap(54, "world.mm8.map.d36", true));
+    CHECK(knowledge.quests.empty());
+    CHECK(knowledge.questLocations.empty());
+    CHECK(knowledge.questBits.empty());
+}
+
 TEST_CASE("world guide quest contacts link only to the selected current or observed NPC index")
 {
     MapStats maps;
