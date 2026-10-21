@@ -9,7 +9,11 @@ steps:
 - combat_loot: {actor_index: 3, expected_item_id: 540}
 - assert:
     named_map_var_changed: {name: openyamm.discovery.item/carried/3/540/x, value: -17050}
+- assert:
+    named_map_var_changed: {name: openyamm.discovery.item/carried/3/540/monster, value: 45}
 - save_game: taken-creature-item
 - load_game: taken-creature-item
 - assert:
     named_map_var_changed: {name: openyamm.discovery.item/carried/3/540/x, value: -17050}
+- assert:
+    named_map_var_changed: {name: openyamm.discovery.item/carried/3/540/monster, value: 45}

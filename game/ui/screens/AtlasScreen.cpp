@@ -68,7 +68,11 @@ AtlasScreen::AtlasScreen(const Engine::AssetFileSystem &assets, const GameDataRe
     m_referenceKnowledge.recipes = m_knowledge.autonoteIds;
     for (const auto &[file, observations] : m_knowledge.itemObservations)
         for (const WorldItemSource &observation : observations)
+        {
             m_referenceKnowledge.items.insert(observation.itemId);
+            if (observation.kind == WorldItemSourceKind::Carried && observation.monsterId > 0)
+                m_referenceKnowledge.monsters.insert(observation.monsterId);
+        }
     for (const auto &[file, observations] : m_knowledge.monsterObservations)
         for (const WorldMonsterObservation &observation : observations)
             m_referenceKnowledge.monsters.insert(observation.monsterId);

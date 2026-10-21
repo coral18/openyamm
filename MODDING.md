@@ -297,3 +297,19 @@ or malformed fields do not imply inspection. Old item-source records do not crea
 save/load and map-refill discovery retention preserve observations, whose meaning remains last inspected, not
 current occupancy or a guarantee that a container is still empty. Atlas matches the observed IDs only to chest
 IDs declared at that physical event site. Its Guide index never inspects current or generated treasure.
+
+### Creature loot relationships
+
+`WorldItemSource::monsterId` is an optional base creature identity (zero means not recorded). Actual corpse-item
+receipt obtains it directly from `GameplayRuntimeActorState`, using the corpse view's actor index. Core writes it
+at `openyamm.discovery.item/carried/<actorIndex>/<itemId>/monster`. It does not infer a relationship by joining a
+possibly different stable actor ID or by reading an unseen/current actor later. Old sources without this field stay
+unattributed; explicit zero clears old attribution. Invalid negative/out-of-range saved values reject the source.
+The generic save serializer and discovery refill-retention path preserve the field without a binary version change.
+
+Authored carried-item sources use the same shared actor identity resolver as map loading. Guide derives configured
+chance links from the active MonsterTable death-drop rules, with current ItemTable names. Neither direction creates
+a physical spawn point, rolls treasure or treats every carried item as a species-wide guaranteed drop. Discovery
+only links recovered, typed relationships with known endpoints, and learning both endpoints separately is insufficient.
+Alchemy ingredient links include direct alternatives as well as the selected minimum-reagent plan, reusing native
+Item/Alchemy references to reach these shared sources.

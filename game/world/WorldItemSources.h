@@ -31,6 +31,7 @@ struct WorldItemSource
     bool observed = false;
     int32_t gameMinutes = 0;
     std::string providerId;
+    int16_t monsterId = 0;
 };
 
 struct WorldChestObservation

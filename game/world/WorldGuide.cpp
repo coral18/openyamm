@@ -23,9 +23,50 @@
 #include <map>
 #include <set>
 #include <stdexcept>
+#include <tuple>
 
 namespace OpenYAMM::Game
 {
+namespace
+{
+struct CreatureLootReference
+{
+    int16_t monsterId = 0;
+    uint32_t itemId = 0;
+    std::string provenance;
+};
+
+std::vector<CreatureLootReference> creatureLootReferences(const WorldGuideSource &source,
+    const WorldGuideKnowledge &knowledge, bool guide)
+{
+    std::vector<CreatureLootReference> result;
+    if (source.pMonsters == nullptr || source.pItems == nullptr) return result;
+    std::set<std::tuple<int16_t, uint32_t, std::string>> included;
+    const auto add = [&](int16_t monsterId, uint32_t itemId, const std::string &provenance)
+    {
+        const auto *pMonster = source.pMonsters->findStatsById(monsterId);
+        const ItemDefinition *pItem = source.pItems->get(itemId);
+        if (monsterId <= 0 || pMonster == nullptr || pMonster->name.empty() || pItem == nullptr || pItem->name.empty()
+            || (!guide && (!knowledge.monsters.contains(monsterId) || !knowledge.items.contains(itemId)))) return;
+        if (included.emplace(monsterId, itemId, provenance).second)
+            result.push_back({monsterId, itemId, provenance});
+    };
+    if (guide)
+        for (const auto &[id, monster] : source.pMonsters->statsEntries())
+            if (id > 0 && id <= INT16_MAX)
+                for (const auto &drop : source.pMonsters->deathDropsForMonsterId(int16_t(id)))
+                    if (drop.chancePercent > 0 && drop.chancePercent <= 100)
+                        add(int16_t(id), drop.itemId, "Death drop (" + std::to_string(drop.chancePercent) + "%)");
+    if (source.pWorld != nullptr && source.pWorldKnowledge != nullptr)
+        for (const WorldItemSource *pItem : source.pWorld->itemSources(*source.pWorldKnowledge, guide))
+            if (pItem->kind == WorldItemSourceKind::Carried && (guide || pItem->observed))
+                add(pItem->monsterId, pItem->itemId, pItem->observed ? "Recovered loot" : "Authored carried item");
+    std::sort(result.begin(), result.end(), [](const CreatureLootReference &a, const CreatureLootReference &b)
+    { return std::tie(a.monsterId, a.itemId, a.provenance) < std::tie(b.monsterId, b.itemId, b.provenance); });
+    return result;
+}
+}
+
 std::optional<WorldClassComparison> buildWorldClassComparison(const WorldGuideSource &source,
     const WorldGuideKnowledge &knowledge, bool guide, const std::string &anchorClass,
     std::optional<uint32_t> raceId)
@@ -225,6 +266,9 @@ std::vector<WorldGuideEntry> buildWorldGuide(const WorldGuideSource &source, Wor
     }
     else if (section == WorldGuideSection::Monsters && source.pMonsters != nullptr)
     {
+        std::map<int16_t, std::vector<CreatureLootReference>> loot;
+        for (const CreatureLootReference &reference : creatureLootReferences(source, knowledge, guide))
+            loot[reference.monsterId].push_back(reference);
         std::map<int16_t, std::vector<const WorldMapFeature *>> sources;
         if (source.pWorld != nullptr && source.pWorldKnowledge != nullptr)
             for (const WorldMapFeature *pFeature : source.pWorld->queryFeatures(*source.pWorldKnowledge, guide))
@@ -263,6 +307,12 @@ std::vector<WorldGuideEntry> buildWorldGuide(const WorldGuideSource &source, Wor
                 + std::to_string(monster.loot.goldDiceSides) + "\nItem chance: "
                 + std::to_string(monster.loot.itemChance) + "% | Item level: " + std::to_string(monster.loot.itemLevel)
                 + "\n\nShared base definition. Runtime scaling and effects may change these values.";
+            for (const CreatureLootReference &reference : loot[int16_t(id)])
+                entry.links.push_back({WorldGuideLink::Kind::Item,
+                    reference.provenance + ": " + itemName(reference.itemId), std::to_string(reference.itemId)});
+            if (!loot[int16_t(id)].empty())
+                entry.details += "\n\nCreature loot links distinguish drop chances, initial carried items "
+                    "and recovered loot. They do not guarantee a drop from every creature.";
             const std::string picture = toLowerCopy(monster.pictureName);
             const auto *pCanonical = source.pMonsters->findStatsByPictureName(picture);
             // Use the same explicit picture tiers as encounter resolution, never numeric ID adjacency.
@@ -295,6 +345,9 @@ std::vector<WorldGuideEntry> buildWorldGuide(const WorldGuideSource &source, Wor
     }
     else if (section == WorldGuideSection::Items && source.pItems != nullptr)
     {
+        std::map<uint32_t, std::vector<CreatureLootReference>> loot;
+        for (const CreatureLootReference &reference : creatureLootReferences(source, knowledge, guide))
+            loot[reference.itemId].push_back(reference);
         std::map<uint32_t, std::vector<const WorldItemSource *>> sources;
         if (source.pWorld != nullptr && source.pWorldKnowledge != nullptr)
             for (const WorldItemSource *pItemSource : source.pWorld->itemSources(*source.pWorldKnowledge, guide))
@@ -340,7 +393,11 @@ std::vector<WorldGuideEntry> buildWorldGuide(const WorldGuideSource &source, Wor
                 if (linkedSources.emplace(label, target).second)
                     entry.links.push_back({kind, label, target});
             }
-            if (!sources[item.itemId].empty())
+            for (const CreatureLootReference &reference : loot[item.itemId])
+                entry.links.push_back({WorldGuideLink::Kind::Monster,
+                    reference.provenance + ": " + source.pMonsters->findStatsById(reference.monsterId)->name,
+                    std::to_string(reference.monsterId)});
+            if (!sources[item.itemId].empty() || !loot[item.itemId].empty())
                 entry.details += "\n\nSources below describe authored data or recorded observations. "
                     "They do not guarantee remaining loot, random drops or quest availability.";
             if (source.pSpells != nullptr)
@@ -591,6 +648,13 @@ std::vector<WorldGuideEntry> buildWorldGuide(const WorldGuideSource &source, Wor
                 entry.details += "Alchemy mastery: " + masteryDisplayName(SkillMastery(*potion.requiredMastery)) + "\n";
             entry.details += "\nOne minimum-reagent path (intermediate steps first):\n";
             std::set<uint32_t> linked;
+            const auto linkInput = [&](uint32_t input)
+            {
+                if (input != 0 && linked.insert(input).second && (guide || knowledge.items.contains(input)))
+                    entry.links.push_back({source.pPotions->getByItemId(input) != nullptr
+                        ? WorldGuideLink::Kind::Alchemy : WorldGuideLink::Kind::Item,
+                        "Inspect " + itemName(input), std::to_string(input)});
+            };
             for (const WorldAlchemyRecipe &step : plan)
             {
                 entry.details += itemName(step.first);
@@ -599,11 +663,7 @@ std::vector<WorldGuideEntry> buildWorldGuide(const WorldGuideSource &source, Wor
                 else
                     entry.details += " + empty bottle";
                 entry.details += " -> " + itemName(step.result) + "\n";
-                for (uint32_t input : {step.first, step.second})
-                    if (input != 0 && linked.insert(input).second && (guide || knowledge.items.contains(input)))
-                        entry.links.push_back({source.pPotions->getByItemId(input) != nullptr
-                            ? WorldGuideLink::Kind::Alchemy : WorldGuideLink::Kind::Item,
-                            "Inspect " + itemName(input), std::to_string(input)});
+                for (uint32_t input : {step.first, step.second}) linkInput(input);
             }
             if (plan.empty())
                 entry.details += "No complete known reagent path is available.\n";
@@ -626,8 +686,12 @@ std::vector<WorldGuideEntry> buildWorldGuide(const WorldGuideSource &source, Wor
             std::set<std::pair<uint32_t, uint32_t>> shown;
             for (const WorldAlchemyRecipe &recipe : recipes)
                 if (recipe.result == id && shown.insert(std::minmax(recipe.first, recipe.second)).second)
+                {
                     entry.details += itemName(recipe.first) + " + "
                         + (recipe.second == 0 ? "empty bottle" : itemName(recipe.second)) + "\n";
+                    linkInput(recipe.first);
+                    linkInput(recipe.second);
+                }
             entry.links.push_back({WorldGuideLink::Kind::Item, "Inspect item", std::to_string(id)});
             result.push_back(std::move(entry));
         }

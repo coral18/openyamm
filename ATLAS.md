@@ -1182,3 +1182,42 @@ Validation:
 
 Site effects, inherited decoration events, remaining source/content audits and Android/controller validation remain
 on the coverage checklist. The complete MM7/MM8 Atlas objective is still open.
+
+### Creature loot and alchemy source navigation, 2026-10-21
+
+Bestiary and Items now have bidirectional creature-loot references derived from the active MonsterTable death-drop
+rules and WorldDatabase carried-item sources. Guide labels configured percentage chances, authored carried items
+and actually recovered loot separately, using current registry names rather than stale descriptive columns. A rule
+has no invented physical map position and is not a guarantee of a drop from every creature. No RNG or treasure
+materialization is involved in building the references.
+
+Core records the actual base creature definition with successful corpse-item receipts. The optional source field
+is preserved in existing map-local named variables and normal saves/refill history. Old records without it remain
+unattributed; they are not joined to unseen actors or to monster-observation IDs, which can differ from actor indices.
+An actual typed loot receipt can establish knowledge of the creature. Discovery links only recovered relationships,
+not a configured rule inferred merely from knowing an item and monster independently. Guide browsing never creates
+these discoveries. Loose death-drop items collected from the ground still lack creature provenance and remain on
+the completion checklist.
+
+Alchemy direct formulas now expose their alternative ingredient links too, not only the one minimum-reagent plan.
+The native chain Cure Wounds -> Wolf's Eye -> Dire Wolf -> Wolf's Eye works using existing Item/Monster references;
+Guide displays the active 20% rules while Discovery retains its separate knowledge gates.
+
+Validation:
+
+- Windows Release built. Six focused Atlas/save/package/mod suites passed 188 cases / 6874 assertions.
+- Linux ASan/UBSan passed 82 cases / 4576 assertions. Coverage includes optional/invalid saved identities, shared
+  actor-ID precedence, declaration-versus-receipt privacy, real loaded item labels, preserved 20%/100% configured
+  chances, no rule-created physical features, duplicate relationship elimination and alternative ingredient links.
+- Faithful MM7 and MM8 creature-item scenarios passed after taking their actual authored loot. The MM8 scenario
+  verifies monster45 alongside item540 before and after save/load, with Atlas enabled and disabled. The normal
+  serializer/refill retention is also covered by the Windows Party suite.
+- Native AMD OpenGL 3.3 tours verified Longbow <-> Guard in MM7 and Sword of Whistlebone <-> Dragonslayer in MM8.
+  The extended MM8 tour navigated from the Cure Wounds alternative ingredient to Wolf's Eye, to the actual Dire Wolf
+  definition and its configured loot, then back. Returning to Discovery left the unlearned reagent hidden. Nineteen
+  final/staged cross-world captures cover these paths; reusable tours are
+  `tools/menu_tours/atlas_creature_loot_mm7.yml` and `tools/menu_tours/atlas_creature_loot_mm8.yml`.
+  Private logs, settings, saves and captures remain under `atlas-creature-loot-20261021` in the Windows dev directory.
+
+This remains a checkpoint toward the full objective. Ground-drop provenance, remaining scripted sources, the other
+coverage matrix gaps and Android/controller validation still require work.

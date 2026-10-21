@@ -1,5 +1,6 @@
 #include "game/world/WorldItemSources.h"
 #include "game/world/WorldDatabase.h"
+#include "game/data/ActorNameResolver.h"
 #include "game/events/EventRuntime.h"
 #include "game/events/ScriptedEventProgram.h"
 #include "game/gameplay/GameplayRuntimeInterfaces.h"
@@ -69,6 +70,7 @@ void record(EventRuntimeState &state, const WorldItemSource &source)
     if (source.position)
         for (size_t i = 0; i < 3; ++i) state.namedMapVars[key + std::string(1, "xyz"[i])] = (*source.position)[i];
     state.namedMapVars[key + "time"] = source.gameMinutes;
+    if (source.kind == WorldItemSourceKind::Carried) state.namedMapVars[key + "monster"] = source.monsterId;
 }
 }
 
@@ -77,13 +79,14 @@ std::vector<WorldItemSource> buildWorldItemSources(const MapDeltaData &delta,
 {
     std::vector<WorldItemSource> result;
     const auto add = [&](uint32_t id, uint32_t index, WorldItemSourceKind kind,
-        std::optional<std::array<int32_t, 3>> position)
+        std::optional<std::array<int32_t, 3>> position, int16_t monsterId = 0)
     {
         if (id == 0) return;
         const ItemDefinition *pItem = items.get(id);
         if (pItem == nullptr || pItem->name.empty() || toLowerCopy(pItem->equipStat) == "gold") return;
         WorldItemSource source;
         source.itemId = id; source.sourceIndex = index; source.kind = kind; source.position = position;
+        source.monsterId = std::max(int16_t(0), monsterId);
         source.id = "authored/" + sourceKey(source);
         result.push_back(std::move(source));
     };
@@ -118,7 +121,7 @@ std::vector<WorldItemSource> buildWorldItemSources(const MapDeltaData &delta,
     {
         const MapDeltaActor &actor = delta.actors[i];
         add(actor.carriedItemId, uint32_t(i), WorldItemSourceKind::Carried,
-            std::array<int32_t, 3>{actor.x, actor.y, actor.z});
+            std::array<int32_t, 3>{actor.x, actor.y, actor.z}, resolveMapDeltaActorMonsterId(actor));
     }
     return result;
 }
@@ -217,6 +220,7 @@ void recordWorldActorItem(IGameplayWorldRuntime &runtime, const GameplayCorpseVi
     source.itemId = itemId;
     source.sourceIndex = view.sourceIndex;
     source.kind = WorldItemSourceKind::Carried;
+    source.monsterId = std::max(int16_t(0), actor.monsterId);
     source.position = sourcePosition(actor.preciseX, actor.preciseY, actor.preciseZ);
     if (!source.position) return;
     source.gameMinutes = int32_t(minute);
@@ -251,6 +255,15 @@ std::vector<WorldItemSource> worldObservedItemSources(const EventRuntimeState &s
                 || !state.namedMapVars.contains(prefix + "z")) continue;
             source.position = {{state.namedMapVars.at(prefix + "x"), state.namedMapVars.at(prefix + "y"),
                 state.namedMapVars.at(prefix + "z")}};
+        }
+        if (source.kind == WorldItemSourceKind::Carried)
+        {
+            const auto monster = state.namedMapVars.find(ObservationPrefix + id + "/monster");
+            if (monster != state.namedMapVars.end())
+            {
+                if (monster->second < 0 || monster->second > INT16_MAX) continue;
+                source.monsterId = int16_t(monster->second);
+            }
         }
         result.push_back(std::move(source));
     }

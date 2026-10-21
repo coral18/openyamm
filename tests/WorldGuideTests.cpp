@@ -608,7 +608,7 @@ TEST_CASE("world guide alchemy counts reused reagents and reveals only known for
         {"1", "221", "1", "x", ""}, {"2", "222", "1", "x", ""},
         {"3", "223", "2", "x", ""}, {"4", "224", "3", "x", ""}}));
     REQUIRE(reagents.loadFromRows({{"Reagent", "Item", "Result"}, {"1", "100", "221"},
-        {"2", "101", "222"}}));
+        {"2", "101", "222"}, {"3", "102", "221"}}));
     const std::vector<std::vector<std::string>> matrix = {
         {"220", "", "", "", "", "", "", "221", "222", "223", "224"},
         {"221", "", "", "", "", "", "", "0", "223", "224", "0"},
@@ -635,6 +635,18 @@ TEST_CASE("world guide alchemy counts reused reagents and reveals only known for
     CHECK(guide.back().details.find("1 x Item 101") != std::string::npos);
     CHECK(knowledge.items.empty());
     CHECK(knowledge.recipes.size() == 1);
+    const auto base = std::find_if(guide.begin(), guide.end(),
+        [](const WorldGuideEntry &entry) { return entry.id == "221"; });
+    REQUIRE(base != guide.end());
+    CHECK(std::count_if(base->links.begin(), base->links.end(), [](const WorldGuideLink &link)
+        { return link.kind == WorldGuideLink::Kind::Item && link.target == "102"; }) == 1);
+    knowledge.items = {100, 221};
+    const auto partial = buildWorldGuide(source, WorldGuideSection::Alchemy, knowledge, false);
+    const auto knownBase = std::find_if(partial.begin(), partial.end(),
+        [](const WorldGuideEntry &entry) { return entry.id == "221"; });
+    REQUIRE(knownBase != partial.end());
+    CHECK(std::none_of(knownBase->links.begin(), knownBase->links.end(),
+        [](const WorldGuideLink &link) { return link.target == "102"; }));
 }
 
 TEST_CASE("world guide progress follows canonical tavern rules and preserves campaign state")
@@ -1079,6 +1091,107 @@ TEST_CASE("chest inspection records reject incomplete contradictory and noncanon
     CHECK(worldChestObservations(state).empty());
 }
 
+TEST_CASE("creature loot identities are optional for old sources and reject invalid saved definitions")
+{
+    EventRuntimeState state;
+    const std::string key = "openyamm.discovery.item/carried/3/540/";
+    state.namedMapVars[key + "time"] = 100;
+    state.namedMapVars[key + "x"] = 1;
+    state.namedMapVars[key + "y"] = 2;
+    state.namedMapVars[key + "z"] = 3;
+    REQUIRE(worldObservedItemSources(state).size() == 1);
+    CHECK(worldObservedItemSources(state)[0].monsterId == 0);
+    state.namedMapVars[key + "monster"] = 45;
+    CHECK(worldObservedItemSources(state)[0].monsterId == 45);
+    state.namedMapVars[key + "monster"] = -1;
+    CHECK(worldObservedItemSources(state).empty());
+    state.namedMapVars[key + "monster"] = 32768;
+    CHECK(worldObservedItemSources(state).empty());
+    state.namedMapVars[key + "monster"] = 0;
+    REQUIRE(worldObservedItemSources(state).size() == 1);
+    CHECK(worldObservedItemSources(state)[0].monsterId == 0);
+}
+
+TEST_CASE("creature loot reference links require a recovered relationship in Discovery and preserve rule chances")
+{
+    OpenYAMM::Engine::AssetFileSystem assets;
+    ItemTable items;
+    REQUIRE(items.load(assets, guideTableRows("items.txt"), {}));
+    REQUIRE(items.get(201) != nullptr);
+    REQUIRE(items.get(540) != nullptr);
+    const auto row = [](int id, const std::string &name)
+    {
+        std::vector<std::string> result(38, "0");
+        result[0] = std::to_string(id); result[1] = result[2] = name;
+        return result;
+    };
+    MonsterTable monsters;
+    REQUIRE(monsters.loadStatsFromRows({row(45, "Dragonslayer"), row(85, "Dire Wolf")}));
+    REQUIRE(monsters.loadDeathDropsFromRows({{"45", "Old monster name", "540", "Old item name", "100", "Rule"},
+        {"85", "Old wolf", "201", "Old reagent", "20", "Rule"},
+        {"45", "Invalid item", "999999", "Missing", "100", "Rule"},
+        {"99", "Missing creature", "540", "Sword", "100", "Rule"}}));
+    MapStats maps;
+    REQUIRE(maps.loadFromRows(guideTableRows("map_stats.txt")));
+    HouseTable houses;
+    NpcDialogTable npcs;
+    MergedTeacherTopicTable teachers;
+    WorldDatabase world(maps, houses, npcs, teachers, "mm7");
+    WorldKnowledge known;
+    known.visitedMaps.insert("7out02.odm");
+    WorldGuideSource source;
+    source.pItems = &items; source.pMonsters = &monsters;
+    source.pWorld = &world; source.pWorldKnowledge = &known;
+    WorldGuideKnowledge knowledge;
+    knowledge.items = {201, 540}; knowledge.monsters = {45, 85};
+    // Knowing both ends independently does not establish the relationship.
+    for (const WorldGuideEntry &entry : buildWorldGuide(source, WorldGuideSection::Monsters, knowledge, false))
+        CHECK(entry.links.empty());
+    for (const WorldGuideEntry &entry : buildWorldGuide(source, WorldGuideSection::Items, knowledge, false))
+        CHECK(entry.links.empty());
+    const auto find = [](const std::vector<WorldGuideEntry> &entries, const std::string &id) -> const WorldGuideEntry &
+    {
+        const auto match = std::find_if(entries.begin(), entries.end(),
+            [&](const WorldGuideEntry &entry) { return entry.id == id; });
+        REQUIRE(match != entries.end());
+        return *match;
+    };
+    const auto guideMonsters = buildWorldGuide(source, WorldGuideSection::Monsters, knowledge, true);
+    const auto &wolf = find(guideMonsters, "85");
+    REQUIRE(wolf.links.size() == 1);
+    CHECK(wolf.links[0].kind == WorldGuideLink::Kind::Item);
+    CHECK(wolf.links[0].target == "201");
+    CHECK(wolf.links[0].label == "Death drop (20%): " + items.get(201)->name);
+    const auto &slayer = find(guideMonsters, "45");
+    REQUIRE(slayer.links.size() == 1);
+    CHECK(slayer.links[0].label == "Death drop (100%): " + items.get(540)->name);
+    const auto guideItems = buildWorldGuide(source, WorldGuideSection::Items, knowledge, true);
+    const auto &reagent = find(guideItems, "201");
+    REQUIRE(reagent.links.size() == 1);
+    CHECK(reagent.links[0].kind == WorldGuideLink::Kind::Monster);
+    CHECK(reagent.links[0].label == "Death drop (20%): Dire Wolf");
+    CHECK(world.features().empty()); // A drop rule is not a physical map position.
+    WorldItemSource observation;
+    observation.id = "observed/carried/3/540"; observation.kind = WorldItemSourceKind::Carried;
+    observation.itemId = 540; observation.monsterId = 45;
+    observation.position = {{1, 2, 3}}; observation.sourceIndex = 3; observation.observed = true;
+    known.itemObservations["7out02.odm"] = {observation, observation}; // Repeated sightings yield one relation.
+    world.indexObservedItemSources(known, items);
+    const auto discovered = buildWorldGuide(source, WorldGuideSection::Monsters, knowledge, false);
+    REQUIRE(find(discovered, "45").links.size() == 1);
+    CHECK(find(discovered, "45").links[0].label == "Recovered loot: " + items.get(540)->name);
+    CHECK(find(discovered, "85").links.empty());
+    const auto discoveredItems = buildWorldGuide(source, WorldGuideSection::Items, knowledge, false);
+    const auto &sword = find(discoveredItems, "540");
+    CHECK(std::count_if(sword.links.begin(), sword.links.end(), [](const WorldGuideLink &link)
+        { return link.kind == WorldGuideLink::Kind::Monster && link.target == "45"; }) == 1);
+    CHECK(find(discoveredItems, "201").links.empty());
+    known.itemObservations["7out02.odm"][0].monsterId = 0;
+    known.itemObservations["7out02.odm"].resize(1);
+    world.indexObservedItemSources(known, items);
+    CHECK(find(buildWorldGuide(source, WorldGuideSection::Monsters, knowledge, false), "45").links.empty());
+}
+
 TEST_CASE("world item source observations record visible chest slots and successful pickups with strict save keys")
 {
     EventRuntimeState state;
@@ -1163,6 +1276,7 @@ TEST_CASE("world item source catalog excludes random chest placeholders "
     putId(chest.rawItems, 72, uint32_t(-6));
     delta.chests.push_back(chest);
     MapDeltaActor actor; actor.carriedItemId = itemId; actor.x = -123;
+    actor.monsterInfoId = 45; actor.monsterId = 85;
     delta.actors.push_back(actor);
     delta.actors.emplace_back(); // Zero means no carried item, even if table row zero has a placeholder name.
     const auto catalog = buildWorldItemSources(delta, items, objects);
@@ -1170,6 +1284,7 @@ TEST_CASE("world item source catalog excludes random chest placeholders "
     CHECK(catalog[0].kind == WorldItemSourceKind::Placed);
     CHECK(catalog[1].kind == WorldItemSourceKind::Chest);
     CHECK(catalog[2].kind == WorldItemSourceKind::Carried);
+    CHECK(catalog[2].monsterId == 45);
     CHECK(delta.chests[0].rawItems == chest.rawItems);
     MapStats maps;
     REQUIRE(maps.loadFromRows(guideTableRows("map_stats.txt")));

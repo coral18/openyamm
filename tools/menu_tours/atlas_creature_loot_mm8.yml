@@ -1,0 +1,98 @@
+# Isolated save: tests/scenarios/atlas/mm8_creature_item_source.yml
+output_dir: captures-final
+exit: true
+steps:
+- expect: gameplay
+- pause: true
+- click:
+  - 800
+  - 821
+- click:
+  - 450
+  - 57
+- click:
+  - 130
+  - 126
+- click:
+  - 275
+  - 190
+- text: Whistlebone
+- key: Return
+- click:
+  - 200
+  - 265
+- pointer_move:
+  - 1035
+  - 527
+- wheel: -12
+- capture: recovered-item-links
+- click:
+  - 1035
+  - 610
+- capture: recovered-creature-entry
+- pointer_move:
+  - 1035
+  - 527
+- wheel: -1000
+- capture: creature-recovered-item-link
+- click:
+  - 1035
+  - 695
+- capture: creature-back-to-item
+- click:
+  - 1152
+  - 57
+- click:
+  - 700
+  - 126
+- click:
+  - 275
+  - 190
+- text: Cure Wounds
+- key: Return
+- click:
+  - 200
+  - 265
+- capture: guide-alchemy-formulas
+- pointer_move:
+  - 1035
+  - 527
+- wheel: -1000
+- capture: guide-alternative-ingredients
+- wheel: 6
+- capture: guide-ingredients-up-1
+- wheel: 6
+- capture: guide-ingredients-up-2
+- wheel: 6
+- capture: guide-ingredients-up-3
+- click:
+  - 1035
+  - 505
+- capture: alchemy-to-reagent
+- pointer_move:
+  - 1035
+  - 527
+- wheel: -1000
+- capture: reagent-creature-drop-rules
+- click:
+  - 1035
+  - 585
+- capture: reagent-to-creature
+- pointer_move:
+  - 1035
+  - 527
+- wheel: -1000
+- capture: creature-drop-rules
+- click:
+  - 1035
+  - 530
+- capture: creature-to-reagent
+- click:
+  - 1152
+  - 57
+- click:
+  - 275
+  - 190
+- text: Wolf's Eye
+- key: Return
+- capture: discovery-after-guide-rules

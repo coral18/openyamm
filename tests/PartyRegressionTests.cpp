@@ -244,6 +244,35 @@ TEST_CASE("actual event arrival provenance and coordinates survive normal save s
     CHECK(arrivals[0].gameMinutes == 1440);
 }
 
+TEST_CASE("recorded creature loot identity survives save and refill independently of current actors")
+{
+    using namespace OpenYAMM::Game;
+    EventRuntimeState state;
+    const std::string key = "openyamm.discovery.item/carried/3/540/";
+    state.namedMapVars[key + "time"] = 100;
+    state.namedMapVars[key + "x"] = 1;
+    state.namedMapVars[key + "y"] = 2;
+    state.namedMapVars[key + "z"] = 3;
+    state.namedMapVars[key + "monster"] = 45;
+    GameSaveData save;
+    save.mapFileName = "out05.odm";
+    save.outdoorWorld.eventRuntimeState = state;
+    const auto path = std::filesystem::temp_directory_path() / "openyamm_typed_creature_loot.oysav";
+    std::string error;
+    REQUIRE_MESSAGE(saveGameDataToPath(path, save, error), error);
+    const auto loaded = loadGameDataFromPath(path, error);
+    std::filesystem::remove(path);
+    REQUIRE_MESSAGE(loaded.has_value(), error);
+    REQUIRE(loaded->outdoorWorld.eventRuntimeState.has_value());
+    EventRuntimeState refilled;
+    restoreWorldMapKnowledgeAfterRefill(*loaded->outdoorWorld.eventRuntimeState, refilled);
+    const auto observations = worldObservedItemSources(refilled);
+    REQUIRE(observations.size() == 1);
+    CHECK(observations[0].monsterId == 45);
+    CHECK(observations[0].itemId == 540);
+    CHECK(observations[0].gameMinutes == 100);
+}
+
 TEST_CASE("empty chest observations survive normal save serialization without implying current loot state")
 {
     using namespace OpenYAMM::Game;
