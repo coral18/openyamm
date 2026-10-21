@@ -99,6 +99,7 @@ struct WorldKnowledge
     std::unordered_set<uint32_t> questBits;
     std::unordered_map<std::string, std::vector<WorldItemSource>> itemObservations;
     std::unordered_map<std::string, std::vector<WorldMapArrival>> arrivals;
+    std::unordered_map<std::string, std::vector<WorldChestObservation>> chestObservations;
     bool knows(const WorldRecord &record) const;
 };
 
@@ -144,6 +145,8 @@ public:
         const std::vector<WorldInteractionSite> &sites, const ItemTable &items);
     void indexSharedItemRewards(const ScriptedEventProgram &program, const ItemTable &items);
     std::vector<const WorldItemSource *> itemSources(const WorldKnowledge &knowledge, bool guide) const;
+    std::vector<WorldChestObservation> observedChests(const WorldMapFeature &feature,
+        const WorldKnowledge &knowledge) const;
     bool featureVisible(const WorldMapFeature &feature, const WorldKnowledge &knowledge, bool guide) const;
     std::vector<const WorldMapFeature *> queryFeatures(const WorldKnowledge &knowledge, bool guide,
         const std::string &search = {}, const std::string &withinMap = {}) const;

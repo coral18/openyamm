@@ -492,6 +492,32 @@ TEST_CASE("world monster placements use shared actor identities without revealin
     CHECK(database.queryFeatures(knowledge, false, "", WorldDatabase::mapId(dungeon)).empty());
 }
 
+TEST_CASE("chest observations match only containers owned by a physical site on its map")
+{
+    Fixture f;
+    auto database = f.database();
+    WorldKnowledge knowledge;
+    knowledge.chestObservations["7out02.odm"] = {{0, 0, true, 100}, {7, 2, false, 200}, {8, 0, true, 300}};
+    knowledge.chestObservations["7d21.blv"] = {{0, 5, false, 400}};
+    WorldMapFeature feature;
+    feature.mapId = WorldDatabase::mapId(*f.maps.findById(63));
+    feature.kind = WorldMapFeatureKind::Chest;
+    feature.chestIds = {0, 7};
+    const auto observations = database.observedChests(feature, knowledge);
+    REQUIRE(observations.size() == 2);
+    CHECK(observations[0].chestId == 0);
+    CHECK(observations[0].empty);
+    CHECK(observations[1].chestId == 7);
+    CHECK(observations[1].visibleSlots == 2);
+    feature.mapId = WorldDatabase::mapId(*f.maps.findById(95));
+    REQUIRE(database.observedChests(feature, knowledge).size() == 1);
+    CHECK(database.observedChests(feature, knowledge)[0].visibleSlots == 5);
+    feature.kind = WorldMapFeatureKind::Water;
+    CHECK(database.observedChests(feature, knowledge).empty());
+    feature.mapId = "missing";
+    CHECK(database.observedChests(feature, knowledge).empty());
+}
+
 TEST_CASE("world monster history indexes only owning world maps without loading their geometry")
 {
     Fixture f;

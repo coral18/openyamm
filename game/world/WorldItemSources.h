@@ -33,11 +33,21 @@ struct WorldItemSource
     std::string providerId;
 };
 
+struct WorldChestObservation
+{
+    uint32_t chestId = 0;
+    uint32_t visibleSlots = 0;
+    bool empty = false;
+    int32_t gameMinutes = 0;
+};
+
 // Reads authored IDs only. Does not materialize random treasure, alter artifacts or advance any RNG.
 std::vector<WorldItemSource> buildWorldItemSources(const MapDeltaData &delta,
     const ItemTable &items, const ObjectTable &objects);
 std::string worldItemSourceLabel(const WorldItemSource &source);
-void recordWorldChestItems(EventRuntimeState &state, const GameplayChestViewState &view, float gameMinutes);
+// Record only a view actually inspected by the party, including an empty view.
+void recordWorldChestView(EventRuntimeState &state, const GameplayChestViewState &view, float gameMinutes);
+std::vector<WorldChestObservation> worldChestObservations(const EventRuntimeState &state);
 void recordWorldItemPickup(EventRuntimeState &state, const GameplayWorldItemInspectState &item, float gameMinutes);
 // Call only after taking an item successfully. Does not inspect or materialize other creature loot.
 void recordWorldActorItem(IGameplayWorldRuntime &runtime, const GameplayCorpseViewState &source,

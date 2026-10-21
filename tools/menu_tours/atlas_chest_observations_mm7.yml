@@ -1,0 +1,39 @@
+# Isolated save: tests/scenarios/atlas/mm7_chest_observation.yml
+output_dir: captures
+exit: true
+steps:
+- expect: gameplay
+- pause: true
+- click:
+  - 800
+  - 821
+- click:
+  - 1480
+  - 126
+- click:
+  - 275
+  - 125
+- text: Crate
+- key: Return
+- click:
+  - 1250
+  - 260
+- capture: last-inspected
+- click:
+  - 1152
+  - 57
+- click:
+  - 1250
+  - 260
+- capture: guide-first-container
+- click:
+  - 1250
+  - 330
+- capture: guide-second-container
+- click:
+  - 1152
+  - 57
+- click:
+  - 1250
+  - 260
+- capture: discovery-after-guide

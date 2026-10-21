@@ -8824,6 +8824,7 @@ bool GameApplication::openAtlasScreen(bool paused)
         {
             knowledge.monsterObservations[toLowerCopy(file)] = worldMonsterObservations(state);
             knowledge.itemObservations[toLowerCopy(file)] = worldObservedItemSources(state);
+            knowledge.chestObservations[toLowerCopy(file)] = worldChestObservations(state);
             knowledge.notes[toLowerCopy(file)] = worldMapNotes(state, file);
             knowledge.arrivals[toLowerCopy(file)] = worldMapArrivals(state, file);
             for (const auto &[key, value] : state.namedMapVars)

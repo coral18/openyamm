@@ -15,9 +15,22 @@ steps:
     expect: {kind: event_target, triggered_event: 100, can_activate: true}
 - assert:
     named_map_var_changed: {name: openyamm.discovery.item/chest/19/630/time, value: 540}
+- assert:
+    named_map_var_changed: {name: openyamm.discovery.chest/19/time, value: 540}
+- assert:
+    named_map_var_changed: {name: openyamm.discovery.chest/19/empty, value: 0}
+- assert:
+    item_received: {item_id: 630, source: chest, chest_id: 19, destination: held}
+- press_action: {action: escape}
+- assert:
+    named_map_var_changed: {name: openyamm.discovery.chest/19/empty, value: 1}
 - save_game: item-source
 - load_game: item-source
 - assert:
     named_map_var_changed: {name: openyamm.discovery.item/placed/0/186/x, value: 12192}
 - assert:
     named_map_var_changed: {name: openyamm.discovery.item/chest/19/630/time, value: 540}
+- assert:
+    named_map_var_changed: {name: openyamm.discovery.chest/19/time, value: 540}
+- assert:
+    named_map_var_changed: {name: openyamm.discovery.chest/19/empty, value: 1}

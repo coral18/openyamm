@@ -1,0 +1,35 @@
+id: atlas.mm7_chest_observation
+world: mm7
+mode: faithful
+title: An actually opened outdoor chest retains its last inspection through save and
+  load
+steps:
+- new_game_flow:
+    start_map: 7out02.odm
+- press_interact:
+    pose:
+      x: -440
+      y: 2360
+      z: 0
+      yaw: 0
+      pitch: -0.56
+    expect:
+      kind: event_target
+      triggered_event: 114
+      can_activate: true
+- assert:
+    named_map_var_changed:
+      name: openyamm.discovery.chest/3/time
+      value: 540
+- press_action: {action: escape}
+- save_game: chest-observation
+- load_game: chest-observation
+- assert:
+    named_map_var_changed:
+      name: openyamm.discovery.chest/3/time
+      value: 540
+tags:
+- mm7
+- atlas
+- discovery
+- save

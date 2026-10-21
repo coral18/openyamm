@@ -1,6 +1,7 @@
 #include "doctest/doctest.h"
 
 #include "game/gameplay/GameMechanics.h"
+#include "game/gameplay/GameplayRuntimeInterfaces.h"
 #include "game/events/EventRuntime.h"
 #include "game/gameplay/JournalQuestRuntime.h"
 #include "game/items/ItemRuntime.h"
@@ -241,6 +242,33 @@ TEST_CASE("actual event arrival provenance and coordinates survive normal save s
     CHECK(arrivals[0].y == -200);
     CHECK(arrivals[0].z == -512);
     CHECK(arrivals[0].gameMinutes == 1440);
+}
+
+TEST_CASE("empty chest observations survive normal save serialization without implying current loot state")
+{
+    using namespace OpenYAMM::Game;
+    EventRuntimeState state;
+    state.mapFileName = "7d06.blv";
+    GameplayChestViewState view;
+    view.chestId = 7;
+    recordWorldChestView(state, view, 1440);
+    GameSaveData save;
+    save.currentSceneKind = SceneKind::Indoor;
+    save.mapFileName = state.mapFileName;
+    save.indoorScene.eventRuntimeState = state;
+    const auto path = std::filesystem::temp_directory_path() / "openyamm_empty_chest.oysav";
+    std::string error;
+    REQUIRE_MESSAGE(saveGameDataToPath(path, save, error), error);
+    const auto loaded = loadGameDataFromPath(path, error);
+    std::filesystem::remove(path);
+    REQUIRE_MESSAGE(loaded.has_value(), error);
+    REQUIRE(loaded->indoorScene.eventRuntimeState.has_value());
+    const auto observations = worldChestObservations(*loaded->indoorScene.eventRuntimeState);
+    REQUIRE(observations.size() == 1);
+    CHECK(observations[0].chestId == 7);
+    CHECK(observations[0].visibleSlots == 0);
+    CHECK(observations[0].empty);
+    CHECK(observations[0].gameMinutes == 1440);
 }
 
 TEST_CASE("named monster observations survive normal save serialization and map refill")

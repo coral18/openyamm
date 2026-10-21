@@ -1009,6 +1009,76 @@ TEST_CASE("world guide quest contacts link only to the selected current or obser
     CHECK(knownWorld.find(met[0].links[0].target)->house->id == 240);
 }
 
+TEST_CASE("chest inspections distinguish empty visible contents and unconfirmed overflow without disclosing loot")
+{
+    EventRuntimeState state;
+    GameplayChestViewState view;
+    view.chestId = 0;
+    CHECK(worldChestObservations(state).empty());
+    recordWorldChestView(state, view, 100);
+    auto observations = worldChestObservations(state);
+    REQUIRE(observations.size() == 1);
+    CHECK(observations[0].chestId == 0);
+    CHECK(observations[0].visibleSlots == 0);
+    CHECK(observations[0].empty);
+    CHECK(worldObservedItemSources(state).empty());
+    GameplayChestItemState visible, hidden;
+    visible.itemId = 42; hidden.itemId = 43;
+    view.items = {visible}; view.hiddenItems = {hidden};
+    recordWorldChestView(state, view, 200);
+    observations = worldChestObservations(state);
+    REQUIRE(observations.size() == 1);
+    CHECK(observations[0].visibleSlots == 1);
+    CHECK_FALSE(observations[0].empty);
+    REQUIRE(worldObservedItemSources(state).size() == 1);
+    CHECK(worldObservedItemSources(state)[0].itemId == 42);
+    view.items.clear();
+    recordWorldChestView(state, view, 300);
+    observations = worldChestObservations(state);
+    CHECK(observations[0].visibleSlots == 0);
+    CHECK_FALSE(observations[0].empty); // Hidden overflow is never mislabeled as an empty chest.
+    CHECK(worldObservedItemSources(state).size() == 1);
+    view.hiddenItems.clear();
+    recordWorldChestView(state, view, 400);
+    observations = worldChestObservations(state);
+    CHECK(observations[0].empty);
+    CHECK(observations[0].gameMinutes == 400);
+    CHECK(worldObservedItemSources(state).size() == 1); // Historical item sources are not erased by looting.
+    const auto before = state.namedMapVars;
+    recordWorldChestView(state, view, std::numeric_limits<float>::infinity());
+    recordWorldChestView(state, view, -1);
+    CHECK(state.namedMapVars == before);
+    EventRuntimeState refilled;
+    restoreWorldMapKnowledgeAfterRefill(state, refilled);
+    REQUIRE(worldChestObservations(refilled).size() == 1);
+    CHECK(worldChestObservations(refilled)[0].empty);
+}
+
+TEST_CASE("chest inspection records reject incomplete contradictory and noncanonical saved keys")
+{
+    EventRuntimeState state;
+    state.namedMapVars["openyamm.discovery.item/chest/0/42/time"] = 100;
+    CHECK(worldChestObservations(state).empty()); // Old item history cannot invent inspection status.
+    const std::string key = "openyamm.discovery.chest/0/";
+    state.namedMapVars[key + "time"] = 100;
+    CHECK(worldChestObservations(state).empty());
+    state.namedMapVars[key + "visible"] = 0;
+    CHECK(worldChestObservations(state).empty());
+    state.namedMapVars[key + "empty"] = 1;
+    REQUIRE(worldChestObservations(state).size() == 1);
+    for (const char *suffix : {"time", "visible", "empty"})
+        state.namedMapVars[std::string("openyamm.discovery.chest/00/") + suffix] = state.namedMapVars.at(key + suffix);
+    CHECK(worldChestObservations(state).size() == 1);
+    state.namedMapVars[key + "visible"] = 1;
+    CHECK(worldChestObservations(state).empty());
+    state.namedMapVars[key + "empty"] = 2;
+    CHECK(worldChestObservations(state).empty());
+    state.namedMapVars[key + "empty"] = 0;
+    REQUIRE(worldChestObservations(state).size() == 1);
+    state.namedMapVars[key + "visible"] = -1;
+    CHECK(worldChestObservations(state).empty());
+}
+
 TEST_CASE("world item source observations record visible chest slots and successful pickups with strict save keys")
 {
     EventRuntimeState state;
@@ -1017,7 +1087,7 @@ TEST_CASE("world item source observations record visible chest slots and success
     GameplayChestItemState visible, hidden, gold;
     visible.itemId = 42; hidden.itemId = 43; gold.itemId = 44; gold.isGold = true;
     chest.items = {visible, gold}; chest.hiddenItems = {hidden};
-    recordWorldChestItems(state, chest, 123);
+    recordWorldChestView(state, chest, 123);
     auto observed = worldObservedItemSources(state);
     REQUIRE(observed.size() == 1);
     CHECK(observed.front().itemId == 42);
@@ -1032,7 +1102,7 @@ TEST_CASE("world item source observations record visible chest slots and success
     restoreWorldMapKnowledgeAfterRefill(state, refilled);
     REQUIRE(worldObservedItemSources(refilled).size() == 1);
     CHECK(worldObservedItemSources(refilled).front().itemId == 42);
-    recordWorldChestItems(state, chest, std::numeric_limits<float>::infinity());
+    recordWorldChestView(state, chest, std::numeric_limits<float>::infinity());
     CHECK(state.namedMapVars == unchanged);
     GameplayWorldItemInspectState pickup;
     pickup.item.objectDescriptionId = 51;

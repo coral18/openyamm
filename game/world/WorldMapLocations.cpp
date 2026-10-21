@@ -210,6 +210,20 @@ void WorldDatabase::indexMapNotes(const WorldKnowledge &knowledge)
     }
 }
 
+std::vector<WorldChestObservation> WorldDatabase::observedChests(const WorldMapFeature &feature,
+    const WorldKnowledge &knowledge) const
+{
+    std::vector<WorldChestObservation> result;
+    const WorldRecord *pMap = find(feature.mapId);
+    if (pMap == nullptr || feature.kind != WorldMapFeatureKind::Chest) return result;
+    const auto found = knowledge.chestObservations.find(toLowerCopy(pMap->map->fileName));
+    if (found == knowledge.chestObservations.end()) return result;
+    for (const WorldChestObservation &chest : found->second)
+        if (std::find(feature.chestIds.begin(), feature.chestIds.end(), chest.chestId) != feature.chestIds.end())
+            result.push_back(chest);
+    return result;
+}
+
 bool WorldDatabase::featureVisible(const WorldMapFeature &feature, const WorldKnowledge &knowledge, bool guide) const
 {
     const WorldRecord *pMap = find(feature.mapId);

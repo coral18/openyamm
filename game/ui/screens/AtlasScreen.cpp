@@ -1679,7 +1679,22 @@ void AtlasScreen::drawDetails()
                     : m_guide ? "\nDestination outside this catalog" : "\nDestination undiscovered";
             }
             else if (feature.kind == WorldMapFeatureKind::Chest)
-                text += "\nContainers at this interaction: " + std::to_string(feature.chestIds.size());
+            {
+                const auto observations = m_world.observedChests(feature, m_knowledge);
+                text += "\nContainers: " + std::to_string(feature.chestIds.size());
+                if (observations.empty()) text += " | No recorded inspection";
+                else if (feature.chestIds.size() == 1)
+                {
+                    const WorldChestObservation &chest = observations.front();
+                    text += std::string(" | Last inspected: ") + (chest.empty ? "empty"
+                        : chest.visibleSlots > 0 ? std::to_string(chest.visibleSlots) + " visible entries"
+                        : "contents unconfirmed") + " | Day " + std::to_string(chest.gameMinutes / (24 * 60) + 1);
+                }
+                else
+                    text += " | Inspected: " + std::to_string(observations.size()) + " | Last seen empty: "
+                        + std::to_string(std::count_if(observations.begin(), observations.end(),
+                            [](const WorldChestObservation &chest) { return chest.empty; }));
+            }
             else if (feature.kind == WorldMapFeatureKind::Note)
             {
                 text += feature.userNote ? "\nYour note" : "\nRecorded by the party";

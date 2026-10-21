@@ -284,3 +284,16 @@ Guide placements are a separate, read-only projection of fresh package `MapDelta
 identity/name resolver supplies their definition and label. Do not feed a live/saved population into this projection
 or represent it as current occupancy. Discovery only exposes recorded observations, including their Bestiary map
 links. Disabling `openyamm.interactive-atlas` does not disable Core observation collection or discard its history.
+
+### Shared chest inspection history
+
+`recordWorldChestView` records a view actually presented to the party: its chest ID, visible slot count, whether
+both visible and overflow lists were empty, and game time. It also retains the previously supported visible-item
+source history. Hidden item identities are never recorded by browsing a chest. Indoor and outdoor runtimes call
+it on successful opening, committed view changes and closing; a failed opening has no active view to record.
+
+State lives under `openyamm.discovery.chest/<id>/{time,visible,empty}` in the owning map's named variables. Missing
+or malformed fields do not imply inspection. Old item-source records do not create chest-state history. Existing
+save/load and map-refill discovery retention preserve observations, whose meaning remains last inspected, not
+current occupancy or a guarantee that a container is still empty. Atlas matches the observed IDs only to chest
+IDs declared at that physical event site. Its Guide index never inspects current or generated treasure.

@@ -1144,3 +1144,41 @@ Captures and logs are private under the Windows development directory's `atlas-m
 
 Scripted spawn declarations, automatic visibility discovery and a wider source/content audit still remain open.
 This does not establish Android/controller validation or finish the complete Atlas objective.
+
+### Last-inspected chest state, 2026-10-21
+
+Core now records an actual chest view on opening, committed view changes and closing. The shared
+`recordWorldChestView` keeps visible-item source history and separately records chest ID, visible slot count,
+empty status and game time. A view with hidden overflow is never reported as empty; hidden item identities remain
+unknown. Closing after taking the last item replaces the earlier inspection with the observed empty view. Failed
+openings do not create a new view or inspection. No current population, chest materialization or random treasure
+is read by the Atlas to fabricate this state.
+
+Atlas collects these observations from the same owning map snapshots as other discoveries. A physical chest site
+matches only its declared container IDs. Its footer reports the last inspection, or No recorded inspection; it does
+not claim unseen contents or imply that an old observation is still current. Guide can display an unvisited chest
+without creating an inspection record. Old saves without the new optional named-map fields remain unknown, even
+if an older item-source history exists. Existing save serialization and discovery retention through refill apply.
+
+Validation:
+
+- Windows Release built. The six focused Atlas/save/package/mod suites passed 185 cases / 6816 assertions.
+  ChestRegression passed another 17 cases / 198 assertions in a separate process. These fixtures must be separate:
+  the existing cached RegressionGameData retains PhysFS initialization and otherwise makes seven ContentManifest
+  initializations fail when ChestRegression and ContentManifest run in one process. No production workaround or
+  test suppression was added.
+- Linux ASan/UBSan passed 80 cases / 4525 assertions, including empty/overflow/restocked observations, strict keys,
+  retained item history, read-only derivation and map/container ownership. Normal binary serialization of an empty
+  observation is covered by the Windows Party suite.
+- Faithful scenarios opened actual outdoor chests in Harmondale and Dagger Wound, closed them and retained their
+  inspections through save/load. The extended MM8 item-source scenario opened Abandoned Temple chest 19,
+  took its actual item 630 into the ordinary held-item state, closed the chest, verified it was observed empty,
+  saved and reloaded. This passed with Atlas enabled and disabled; the historical item source remained recorded.
+- Three native AMD OpenGL 3.3 tours produced twelve fresh captures of MM7 and MM8 indoor/outdoor observations,
+  unknown Guide containers and return to Discovery. Four more MM8 captures verified the final unknown-state wording
+  without making claims about old saves. Tours are `tools/menu_tours/atlas_chest_observations_mm7.yml` and
+  `tools/menu_tours/atlas_chest_observations_mm8.yml`. Private logs, settings, saves and captures remain under the
+  Windows development directory's `atlas-chests-20261021`.
+
+Site effects, inherited decoration events, remaining source/content audits and Android/controller validation remain
+on the coverage checklist. The complete MM7/MM8 Atlas objective is still open.

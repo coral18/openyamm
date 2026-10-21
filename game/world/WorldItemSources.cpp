@@ -20,6 +20,7 @@ namespace OpenYAMM::Game
 namespace
 {
 const std::string ObservationPrefix = "openyamm.discovery.item/";
+const std::string ChestObservationPrefix = "openyamm.discovery.chest/";
 const std::string PendingRewardPrefix = "openyamm.item-grant/";
 
 uint32_t queuedItemId(const EventRuntimeState &state, bool detailed, size_t index)
@@ -143,9 +144,13 @@ std::string worldItemSourceLabel(const WorldItemSource &source)
     return "Item source";
 }
 
-void recordWorldChestItems(EventRuntimeState &state, const GameplayChestViewState &view, float gameMinutes)
+void recordWorldChestView(EventRuntimeState &state, const GameplayChestViewState &view, float gameMinutes)
 {
-    if (!validMinute(gameMinutes)) return;
+    if (!validMinute(gameMinutes) || view.items.size() > INT32_MAX) return;
+    const std::string key = ChestObservationPrefix + std::to_string(view.chestId) + "/";
+    state.namedMapVars[key + "time"] = int32_t(gameMinutes);
+    state.namedMapVars[key + "visible"] = int32_t(view.items.size());
+    state.namedMapVars[key + "empty"] = view.items.empty() && view.hiddenItems.empty() ? 1 : 0;
     // Only visible slots have actually been presented. Hidden overflow contents stay unknown.
     for (const GameplayChestItemState &item : view.items)
     {
@@ -156,6 +161,32 @@ void recordWorldChestItems(EventRuntimeState &state, const GameplayChestViewStat
         source.gameMinutes = int32_t(gameMinutes);
         record(state, source);
     }
+}
+
+std::vector<WorldChestObservation> worldChestObservations(const EventRuntimeState &state)
+{
+    std::vector<WorldChestObservation> result;
+    for (const auto &[key, minute] : state.namedMapVars)
+    {
+        if (!key.starts_with(ChestObservationPrefix) || !key.ends_with("/time") || minute < 0) continue;
+        const std::string id = key.substr(ChestObservationPrefix.size(),
+            key.size() - ChestObservationPrefix.size() - 5);
+        WorldChestObservation observation;
+        if (!wholeNumber(id, observation.chestId)) continue;
+        const std::string prefix = ChestObservationPrefix + id + "/";
+        const auto visible = state.namedMapVars.find(prefix + "visible");
+        const auto empty = state.namedMapVars.find(prefix + "empty");
+        if (visible == state.namedMapVars.end() || empty == state.namedMapVars.end() || visible->second < 0
+            || (empty->second != 0 && empty->second != 1) || (empty->second == 1 && visible->second != 0))
+            continue;
+        observation.visibleSlots = uint32_t(visible->second);
+        observation.empty = empty->second == 1;
+        observation.gameMinutes = minute;
+        result.push_back(observation);
+    }
+    std::sort(result.begin(), result.end(), [](const WorldChestObservation &a, const WorldChestObservation &b)
+    { return a.chestId < b.chestId; });
+    return result;
 }
 
 void recordWorldItemPickup(EventRuntimeState &state, const GameplayWorldItemInspectState &item, float gameMinutes)
