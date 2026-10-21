@@ -3159,6 +3159,19 @@ void OutdoorBillboardRenderer::renderActorPreviewBillboards(
         billboardBatchPool.reserve(32);
     }
 
+    if (pReflection == nullptr && view.m_pOutdoorWorldRuntime != nullptr
+        && !view.m_gameSession.sharedWorldInteractionBlockedThisFrame()
+        && view.m_gameSession.gameplayScreenRuntime().currentHudScreenState() == GameplayHudScreenState::Gameplay)
+    {
+        std::vector<size_t> sightCandidates;
+        sightCandidates.reserve(drawItems.size());
+        for (const BillboardDrawItem &item : drawItems)
+            if (item.actor && !item.modelActor && item.visible && item.actorIndex != static_cast<size_t>(-1)
+                && item.pTexture != nullptr && bgfx::isValid(item.pTexture->textureHandle))
+                sightCandidates.push_back(item.actorIndex);
+        view.m_monsterSightTracker.observeRenderedActors(*view.m_pOutdoorWorldRuntime, sightCandidates, SDL_GetTicks());
+    }
+
     bool standardBillboardEffectUniformsActive = false;
     const auto ensureStandardBillboardEffectUniforms =
         [&]()

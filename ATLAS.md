@@ -1261,3 +1261,45 @@ Validation:
 
 This completes loose ground-drop attribution. Campaign-content coverage, automatic visibility discovery, remaining
 UI/content work and Android/controller checks still belong to the active complete-atlas objective.
+
+
+## Passive creature-sight checkpoint (2026-10-21)
+
+Living creature sprites can now establish discoveries without clicking, attacking or hovering over each one. The
+indoor/outdoor main-view paths submit their current art/frustum/sector-qualified candidates to one shared sight
+tracker. An independent geometry LOS check must succeed before Core writes the ordinary map-local observation.
+There is no omniscient population scan, and this does not reveal carried items or configured drops.
+
+The transient tracker rotates through current candidates fairly, with at most two expensive checks per 16ms and
+one retry per actor per second. Unchanged known coordinates/names require no repeat LOS or saved-state write.
+Changed coordinates or identity must pass LOS again: unseen movement cannot move an Atlas marker. The scheduling
+state is not serialized. Existing semantic observation keys, normal saves and map-refill history remain authoritative.
+
+Only main gameplay sprites participate. Reflection passes, preview actors, fullscreen non-gameplay UI, invisible
+actors, corpses and replacement FX models do not create passive sightings. Direct targeting, inspection and actual
+loot observations remain available. Passive corpse/model visibility and broader map/device checks remain work for
+the complete-atlas objective; this checkpoint does not claim those paths are finished.
+
+Validation:
+
+- Windows Release built. Six focused Atlas/save/package/mod suites passed 192 cases / 7161 assertions.
+- Linux ASan/UBSan passed 84 cases / 4613 assertions.
+- Shared tests reject in-frustum candidates without LOS, invisible/dead/invalid actors, and actors not submitted by
+  the view. They preserve historical positions while a moving actor is occluded, update after renewed LOS, cover
+  rate limits and retry/map/clock resets, and prove a visible actor after 300 occluded candidates is not starved.
+- Four faithful MM7/MM8 scenarios passed: two clean sight fixtures and both existing actual creature-item receipt
+  regressions. Headless fixtures intentionally do not render or establish passive sightings by themselves.
+- Native AMD OpenGL 3.3 tours inspect the rendered scene, quicksave before opening Atlas and then inspect Discovery
+  Bestiary. The Temple of the Moon view records actor2/creature403 and actor3/creature404 out of 21 loaded actors;
+  a separate authored-entrance wall view records none of them. The prior executable records no creatures from the
+  matching positive indoor view without targeting.
+- Dagger Wound Island's matching positive view records 14 actual actors/five definitions versus just the hovered
+  actor in the prior executable. Facing away records none. The Atlas-disabled profile records the same 14 actors.
+  These are observed-instance counts, not a requirement to expose the full map population.
+- Private settings, fixtures, old-build controls, logs and fresh captures live under the local Windows development
+  root's `atlas-passive-20261021/`. Reusable sources are `tests/scenarios/atlas/mm{7,8}_passive_sight_fixture.yml`
+  and `tools/menu_tours/atlas_passive_sight.yml`. Start native runs from their exported unobserved saves; inspect
+  the quicksave as well as the images. All original user saves and the official installation remain untouched.
+
+Android/controller acceptance, complete campaign relationships, remaining site/loot semantics and the other gaps
+in [ATLAS_COVERAGE.md](ATLAS_COVERAGE.md) remain part of the active complete MM7/MM8 Atlas objective.

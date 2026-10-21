@@ -1,5 +1,7 @@
 #pragma once
 
+#include "game/world/WorldMonsterKnowledge.h"
+
 #include <deque>
 
 #include "game/render/SpriteAtlasCache.h"
@@ -157,6 +159,8 @@ public:
     void shutdown();
 
 private:
+    WorldMonsterSightTracker m_monsterSightTracker;
+
     struct TerrainVertex
     {
         float x;

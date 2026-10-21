@@ -1,0 +1,10 @@
+id: atlas.mm8_passive_sight_fixture
+world: mm8
+mode: faithful
+title: Clean outdoor save for the native passive-sight tour
+steps:
+- new_game_flow: {start_map: out01.odm}
+- set_pose: {x: 3240, y: 7960, z: 544, yaw: 0, pitch: -0.4}
+- assert:
+    named_map_var_changed: {name: openyamm.discovery.monster/0/type, value: 0}
+- save_game: unobserved

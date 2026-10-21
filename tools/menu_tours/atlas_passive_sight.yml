@@ -1,0 +1,14 @@
+# 1600x900. Start from a clean native sight fixture; inspect the quicksave before browsing.
+output_dir: captures-passive-sight
+exit: true
+steps:
+- expect: gameplay
+- wait: 2
+- capture: observed-scene
+- key: F9
+- wait: 1
+- pause: true
+- click: [800, 821]
+- click: [450, 57]
+- click: [1250, 126]
+- capture: discovered-bestiary

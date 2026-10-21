@@ -110,21 +110,98 @@ std::vector<WorldMonsterObservation> worldMonsterObservations(const EventRuntime
     return result;
 }
 
-void recordWorldActorObservation(IGameplayWorldRuntime &world, size_t actorIndex)
+namespace
+{
+std::optional<WorldMonsterObservation> actualActorObservation(IGameplayWorldRuntime &world, size_t actorIndex)
 {
     GameplayRuntimeActorState actor;
-    EventRuntimeState *pState = world.eventRuntimeState();
-    if (pState == nullptr || !world.actorRuntimeState(actorIndex, actor) || actor.isInvisible || actor.monsterId <= 0)
-        return;
+    if (!world.actorRuntimeState(actorIndex, actor) || actor.isInvisible || actor.monsterId <= 0)
+        return std::nullopt;
     const auto valid = [](float value)
     { return std::isfinite(value) && double(value) >= INT32_MIN && double(value) <= INT32_MAX; };
     if (!valid(actor.preciseX) || !valid(actor.preciseY) || !valid(actor.preciseZ) || !valid(world.gameMinutes())
-        || world.gameMinutes() < 0)
-        return;
-    recordWorldMonsterObservation(*pState, {actor.actorId, actor.monsterId,
+        || world.gameMinutes() < 0 || actor.uniqueNameIndex < 0)
+        return std::nullopt;
+    return WorldMonsterObservation{actor.actorId, actor.monsterId,
         int32_t(std::lround(actor.preciseX)), int32_t(std::lround(actor.preciseY)),
-        int32_t(std::lround(actor.preciseZ)),
-        actor.isDead, int32_t(world.gameMinutes()), actor.uniqueNameIndex});
+        int32_t(std::lround(actor.preciseZ)), actor.isDead, int32_t(world.gameMinutes()), actor.uniqueNameIndex};
+}
+}
+
+void recordWorldActorObservation(IGameplayWorldRuntime &world, size_t actorIndex)
+{
+    EventRuntimeState *pState = world.eventRuntimeState();
+    if (pState == nullptr) return;
+    if (const auto observation = actualActorObservation(world, actorIndex))
+        recordWorldMonsterObservation(*pState, *observation);
+}
+
+bool WorldMonsterSightTracker::shouldCheckSight(const EventRuntimeState &state,
+    const WorldMonsterObservation &candidate, uint64_t realMilliseconds)
+{
+    if (candidate.monsterId <= 0 || candidate.dead || candidate.gameMinutes < 0 || candidate.uniqueNameIndex < 0)
+        return false;
+    const std::string prefix = ObservationPrefix + std::to_string(candidate.actorId) + "/";
+    const auto knownType = state.namedMapVars.find(prefix + "type");
+    const auto knownName = state.namedMapVars.find(prefix + "name");
+    if (knownType != state.namedMapVars.end() && knownType->second == candidate.monsterId
+        && (knownName == state.namedMapVars.end() ? candidate.uniqueNameIndex == 0
+            : knownName->second == candidate.uniqueNameIndex)
+        && state.namedMapVars.contains(prefix + "x") && state.namedMapVars.contains(prefix + "y")
+        && state.namedMapVars.contains(prefix + "z") && state.namedMapVars.contains(prefix + "dead")
+        && state.namedMapVars.contains(prefix + "time") && state.namedMapVars.at(prefix + "time") >= 0
+        && state.namedMapVars.at(prefix + "x") == candidate.x && state.namedMapVars.at(prefix + "y") == candidate.y
+        && state.namedMapVars.at(prefix + "z") == candidate.z && state.namedMapVars.at(prefix + "dead") == 0)
+        return false;
+    if (m_map != state.mapFileName || realMilliseconds < m_windowStart)
+    {
+        m_map = state.mapFileName;
+        m_lastChecks.clear();
+        m_windowStart = realMilliseconds;
+        m_checks = 0;
+    }
+    if (realMilliseconds - m_windowStart >= 16)
+    {
+        m_windowStart = realMilliseconds;
+        m_checks = 0;
+    }
+    const auto last = m_lastChecks.find(candidate.actorId);
+    if (last != m_lastChecks.end() && realMilliseconds - last->second < 1000) return false;
+    if (m_checks >= 2) return false;
+    ++m_checks;
+    m_lastChecks[candidate.actorId] = realMilliseconds;
+    return true;
+}
+
+void WorldMonsterSightTracker::observeRenderedActors(IGameplayWorldRuntime &world,
+    std::span<const size_t> candidates, uint64_t realMilliseconds)
+{
+    if (candidates.empty()) return;
+    const size_t start = m_nextCandidate % candidates.size();
+    for (size_t i = 0; i < candidates.size(); ++i)
+    {
+        const size_t index = (start + i) % candidates.size();
+        recordWorldVisibleActorObservation(*this, world, candidates[index], realMilliseconds);
+        if (realMilliseconds >= m_windowStart && realMilliseconds - m_windowStart < 16 && m_checks >= 2)
+        {
+            m_nextCandidate = (index + 1) % candidates.size();
+            return;
+        }
+    }
+    m_nextCandidate = (start + 1) % candidates.size();
+}
+
+void recordWorldVisibleActorObservation(WorldMonsterSightTracker &tracker, IGameplayWorldRuntime &world,
+    size_t actorIndex, uint64_t realMilliseconds)
+{
+    EventRuntimeState *pState = world.eventRuntimeState();
+    if (pState == nullptr) return;
+    const auto observation = actualActorObservation(world, actorIndex);
+    if (!observation || !tracker.shouldCheckSight(*pState, *observation, realMilliseconds)) return;
+    const std::optional<GameplayPartyAttackActorFacts> sight = world.partyAttackActorFacts(actorIndex, true);
+    if (sight && sight->lineOfSightToParty && !sight->isInvisible && !sight->isDead
+        && sight->monsterId == observation->monsterId)
+        recordWorldMonsterObservation(*pState, *observation);
 }
 
 std::vector<WorldMapFeature> buildWorldEncounterFeatures(const MapStatsEntry &map,

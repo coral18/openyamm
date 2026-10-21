@@ -7964,6 +7964,17 @@ void IndoorRenderer::renderActorPreviewBillboards(
         }
     }
 
+    if (pReflection == nullptr && useRuntimeBillboards && pGameSession != nullptr
+        && !pGameSession->sharedWorldInteractionBlockedThisFrame()
+        && pGameSession->gameplayScreenRuntime().currentHudScreenState() == GameplayHudScreenState::Gameplay)
+    {
+        std::vector<size_t> sightCandidates;
+        sightCandidates.reserve(drawItems.size());
+        for (const BillboardDrawItem &item : drawItems)
+            if (!m_worldFxSystem.hasActorModel(item.actorIndex)) sightCandidates.push_back(item.actorIndex);
+        m_monsterSightTracker.observeRenderedActors(m_pSceneRuntime->worldRuntime(), sightCandidates, SDL_GetTicks());
+    }
+
     for (const BillboardDrawItem &drawItem : drawItems)
     {
         if (m_worldFxSystem.hasActorModel(drawItem.actorIndex))

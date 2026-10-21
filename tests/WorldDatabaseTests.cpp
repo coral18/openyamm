@@ -1802,3 +1802,44 @@ TEST_CASE("world database shared discovery queries reject secret current NPC loc
     CHECK(base.query(knowledge, false, "", WorldRecordKind::Trainer).empty());
     CHECK(base.query(knowledge, true, "", WorldRecordKind::Npc).size() == 1);
 }
+
+
+TEST_CASE("passive creature sight checks are bounded and never refresh unseen historical positions")
+{
+    WorldMonsterSightTracker tracker;
+    EventRuntimeState state;
+    state.mapFileName = "7d06.blv";
+    WorldMonsterObservation candidate{1, 12, 100, 200, 300, false, 540};
+    CHECK(tracker.shouldCheckSight(state, candidate, 100));
+    CHECK_FALSE(tracker.shouldCheckSight(state, candidate, 101));
+    candidate.actorId = 2;
+    CHECK(tracker.shouldCheckSight(state, candidate, 101));
+    candidate.actorId = 3;
+    CHECK_FALSE(tracker.shouldCheckSight(state, candidate, 102)); // At most two LOS queries per 16ms.
+    CHECK(tracker.shouldCheckSight(state, candidate, 116));
+    candidate.actorId = 1;
+    CHECK_FALSE(tracker.shouldCheckSight(state, candidate, 1099));
+    CHECK(tracker.shouldCheckSight(state, candidate, 1100));
+    CHECK(state.namedMapVars.empty()); // Candidate culling/rate limiting alone discovers nothing.
+    recordWorldMonsterObservation(state, candidate); // The caller has separately confirmed LOS.
+    const auto before = state.namedMapVars;
+    candidate.x = 9000;
+    candidate.gameMinutes = 600;
+    CHECK(tracker.shouldCheckSight(state, candidate, 5000)); // Movement needs fresh LOS, never a blind update.
+    CHECK(state.namedMapVars == before);
+    CHECK(worldMonsterObservations(state)[0].x == 100);
+    candidate.uniqueNameIndex = 1;
+    CHECK(tracker.shouldCheckSight(state, candidate, 6000)); // A newly assigned name can be seen later.
+    state.mapFileName = "out05.odm";
+    state.namedMapVars.clear();
+    CHECK(tracker.shouldCheckSight(state, candidate, 5001)); // New map cannot inherit a retry throttle.
+    CHECK(tracker.shouldCheckSight(state, candidate, 1)); // A restarted clock clears transient work state.
+    candidate.actorId = 4; candidate.dead = true;
+    CHECK_FALSE(tracker.shouldCheckSight(state, candidate, 10000));
+    candidate.dead = false; candidate.monsterId = 0;
+    CHECK_FALSE(tracker.shouldCheckSight(state, candidate, 10000));
+    candidate.monsterId = 12; candidate.uniqueNameIndex = -1;
+    CHECK_FALSE(tracker.shouldCheckSight(state, candidate, 10000));
+    candidate.uniqueNameIndex = 0; candidate.gameMinutes = -1;
+    CHECK_FALSE(tracker.shouldCheckSight(state, candidate, 10000));
+}

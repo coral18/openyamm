@@ -1,0 +1,12 @@
+id: atlas.mm7_passive_sight_fixture
+world: mm7
+mode: faithful
+title: Clean indoor save for the native passive-sight tour
+# The headless runner does not render. Native follow-up must discover visible guards without input targeting.
+steps:
+- new_game_flow: {start_map: 7out02.odm}
+- load_map: {map: 7d06.blv}
+- set_pose: {x: -5800, y: 6828, z: -128, yaw: 0, pitch: -0.4}
+- assert:
+    named_map_var_changed: {name: openyamm.discovery.monster/3/type, value: 0}
+- save_game: unobserved

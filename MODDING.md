@@ -333,3 +333,18 @@ snapshots. Readers reject unsupported namespaces/schemas, duplicate or invalid r
 Untagged saves have no trailer. Old saves load with unknown origins. A legacy engine resave drops the trailer and
 therefore loses attribution, rather than retaining stale slot tags; already recorded semantic discoveries remain
 in the ordinary named-map state. This is a save extension, not an opaque mod-state preservation API.
+
+### Passive creature sight
+
+Core records living creature sprites accepted by the main gameplay view after art/frustum/sector culling and a
+separate party-to-actor geometry LOS check. Reflections, preview actors, replacement FX models and fullscreen
+non-gameplay UI do not submit sight candidates. This produces ordinary map-local monster observations, independent
+of whether the optional Atlas UI mod is enabled. It does not inspect loot or reveal configured spawn populations.
+
+The shared transient `WorldMonsterSightTracker` processes current candidates in rotation, with at most two expensive
+checks per 16ms and a one-second retry interval per actor. Unchanged known positions/names need no repeated LOS
+query or saved-state write. Movement or a new name requires fresh LOS before updating the historical observation;
+positions behind walls stay at their last recorded values. The tracker is not saved and owns no world data.
+
+The passive path currently covers living sprites. Existing direct targeting/inspection and loot observations remain
+available; passive corpse and replacement-model recognition need separate visibility support.
