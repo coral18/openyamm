@@ -1186,10 +1186,62 @@ TEST_CASE("creature loot reference links require a recovered relationship in Dis
     CHECK(std::count_if(sword.links.begin(), sword.links.end(), [](const WorldGuideLink &link)
         { return link.kind == WorldGuideLink::Kind::Monster && link.target == "45"; }) == 1);
     CHECK(find(discoveredItems, "201").links.empty());
+    WorldItemSource ground = observation;
+    ground.id = "observed/death-drop/85/201"; ground.kind = WorldItemSourceKind::DeathDrop;
+    ground.itemId = 201; ground.monsterId = 85; ground.sourceIndex = 85;
+    known.itemObservations["7out02.odm"].push_back(ground);
+    world.indexObservedItemSources(known, items);
+    const auto groundMonsters = buildWorldGuide(source, WorldGuideSection::Monsters, knowledge, false);
+    REQUIRE(find(groundMonsters, "85").links.size() == 1);
+    CHECK(find(groundMonsters, "85").links[0].label == "Recovered loot: " + items.get(201)->name);
+    known.itemObservations["7out02.odm"].pop_back();
     known.itemObservations["7out02.odm"][0].monsterId = 0;
     known.itemObservations["7out02.odm"].resize(1);
     world.indexObservedItemSources(known, items);
     CHECK(find(buildWorldGuide(source, WorldGuideSection::Monsters, knowledge, false), "45").links.empty());
+}
+
+TEST_CASE("ground creature loot is discovered only on receipt and never inherited by ordinary drops")
+{
+    EventRuntimeState state;
+    GameplayWorldItemInspectState pickup;
+    pickup.item.objectDescriptionId = 201;
+    pickup.position = {{100, -200, 300}};
+    pickup.lootMonsterId = 85;
+    CHECK(worldObservedItemSources(state).empty());
+    recordWorldItemPickup(state, pickup, 100);
+    auto observed = worldObservedItemSources(state);
+    REQUIRE(observed.size() == 1);
+    CHECK(observed[0].kind == WorldItemSourceKind::DeathDrop);
+    CHECK(observed[0].monsterId == 85);
+    CHECK(observed[0].sourceIndex == 85);
+    CHECK(observed[0].itemId == 201);
+    CHECK(worldItemSourceLabel(observed[0]) == "Recovered ground drop");
+    pickup.lootMonsterId = 86;
+    recordWorldItemPickup(state, pickup, 101);
+    pickup.lootMonsterId = 0;
+    recordWorldItemPickup(state, pickup, 102);
+    observed = worldObservedItemSources(state);
+    REQUIRE(observed.size() == 3);
+    CHECK(std::count_if(observed.begin(), observed.end(), [](const WorldItemSource &source)
+        { return source.monsterId > 0; }) == 2);
+    const auto ordinary = std::find_if(observed.begin(), observed.end(), [](const WorldItemSource &source)
+        { return source.kind == WorldItemSourceKind::Placed; });
+    REQUIRE(ordinary != observed.end());
+    CHECK(ordinary->monsterId == 0);
+    CHECK(ordinary->gameMinutes == 102);
+    const auto before = state.namedMapVars;
+    pickup.lootMonsterId = -1;
+    recordWorldItemPickup(state, pickup, 103);
+    CHECK(state.namedMapVars == before);
+    EventRuntimeState refilled;
+    restoreWorldMapKnowledgeAfterRefill(state, refilled);
+    CHECK(worldObservedItemSources(refilled).size() == 3);
+    for (const char *index : {"0", "085", "32768", "-1", "4294967296"})
+        for (const char *suffix : {"time", "x", "y", "z"})
+            state.namedMapVars[std::string("openyamm.discovery.item/death-drop/") + index + "/201/" + suffix] = 1;
+    state.namedMapVars["openyamm.discovery.item/death-drop/87/201/time"] = 100; // Missing coordinates.
+    CHECK(worldObservedItemSources(state).size() == 3);
 }
 
 TEST_CASE("world item source observations record visible chest slots and successful pickups with strict save keys")

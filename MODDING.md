@@ -313,3 +313,23 @@ a physical spawn point, rolls treasure or treats every carried item as a species
 only links recovered, typed relationships with known endpoints, and learning both endpoints separately is insufficient.
 Alchemy ingredient links include direct alternatives as well as the selected minimum-reagent plan, reusing native
 Item/Alchemy references to reach these shared sources.
+
+
+### Ground death-drop provenance
+
+The monster-death handlers attach an optional `lootMonsterId` to each actual ground-item instance. Ordinary authored,
+event-created and player-dropped items default to zero; an inventory item does not carry this tag. The shared pickup
+controller records the source only after successful delivery into inventory or the held-item slot. Merely spawning,
+inspecting, saving or browsing the item does not create a discovery.
+
+Actual receipts use `openyamm.discovery.item/death-drop/<monsterId>/<itemId>/{x,y,z,time}`. Both IDs must be canonical,
+the creature ID must fit a positive `int16_t`, and all coordinates must be present. Separate species retain separate
+relationships for the same item. Discovery links the recovered relationship without revealing configured drop chances.
+
+The legacy binary save payload/version remains unchanged. Tagged ground instances use the optional trailing
+`OYEXTS1` packet envelope and namespace `openyamm.world-item-origins`, schema 1. The packet records scene scope,
+cached-map key, object slot, object-description signature and creature identity for active/cached indoor/outdoor
+snapshots. Readers reject unsupported namespaces/schemas, duplicate or invalid records and truncated payloads.
+Untagged saves have no trailer. Old saves load with unknown origins. A legacy engine resave drops the trailer and
+therefore loses attribution, rather than retaining stale slot tags; already recorded semantic discoveries remain
+in the ordinary named-map state. This is a save extension, not an opaque mod-state preservation API.

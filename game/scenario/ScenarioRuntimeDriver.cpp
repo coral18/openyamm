@@ -1249,7 +1249,7 @@ ScenarioInteractionResult ScenarioRuntimeDriver::activateWorldItem(
     }
 
     result.picked = true;
-    result.activated = pWorldRuntime->activateWorldHit(result.hit);
+    activateInteractionResult(result, failure);
 
     if (!result.activated)
     {

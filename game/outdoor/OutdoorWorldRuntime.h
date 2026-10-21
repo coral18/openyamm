@@ -429,6 +429,7 @@ public:
         bool semanticPlacedPickup = false;
         uint32_t semanticLootContainerId = 0;
         bool semanticLootContainer = false;
+        int16_t lootMonsterId = 0;
     };
 
     struct SpawnPointState
@@ -1241,6 +1242,7 @@ private:
     void queueMonsterKilledEvent(size_t actorIndex, int16_t monsterId);
     bool spawnMonsterDeathDropWorldItem(
         const InventoryItem &item,
+        int16_t monsterId,
         float x,
         float y,
         float z,

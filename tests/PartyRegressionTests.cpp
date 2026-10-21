@@ -20,6 +20,8 @@
 #include <algorithm>
 #include <array>
 #include <filesystem>
+#include <fstream>
+#include <iterator>
 #include <optional>
 
 namespace
@@ -271,6 +273,92 @@ TEST_CASE("recorded creature loot identity survives save and refill independentl
     CHECK(observations[0].monsterId == 45);
     CHECK(observations[0].itemId == 540);
     CHECK(observations[0].gameMinutes == 100);
+}
+
+TEST_CASE("ground loot origins extend saves without changing the legacy core payload")
+{
+    using namespace OpenYAMM::Game;
+    GameSaveData save;
+    save.mapFileName = "out05.odm";
+    OutdoorWorldRuntime::WorldItemState outside;
+    outside.objectDescriptionId = 123;
+    outside.lootMonsterId = 85;
+    save.outdoorWorld.worldItems = {outside, {}};
+    save.outdoorWorldStates["out02.odm"].worldItems = {outside};
+    MapDeltaSpriteObject inside;
+    inside.objectDescriptionId = 456;
+    inside.lootMonsterId = 45;
+    save.indoorScene.mapDeltaData.emplace();
+    save.indoorScene.mapDeltaData->spriteObjects = {inside, {}};
+    save.indoorSceneStates["d05.blv"].mapDeltaData.emplace();
+    save.indoorSceneStates["d05.blv"].mapDeltaData->spriteObjects = {inside};
+    const auto path = std::filesystem::temp_directory_path() / "openyamm_ground_loot_origins.oysav";
+    std::string error;
+    REQUIRE_MESSAGE(saveGameDataToPath(path, save, error), error);
+    const auto loaded = loadGameDataFromPath(path, error);
+    REQUIRE_MESSAGE(loaded.has_value(), error);
+    CHECK(loaded->outdoorWorld.worldItems[0].lootMonsterId == 85);
+    CHECK(loaded->outdoorWorld.worldItems[1].lootMonsterId == 0);
+    CHECK(loaded->outdoorWorldStates.at("out02.odm").worldItems[0].lootMonsterId == 85);
+    REQUIRE(loaded->indoorScene.mapDeltaData);
+    CHECK(loaded->indoorScene.mapDeltaData->spriteObjects[0].lootMonsterId == 45);
+    CHECK(loaded->indoorScene.mapDeltaData->spriteObjects[1].lootMonsterId == 0);
+    CHECK(loaded->indoorSceneStates.at("d05.blv").mapDeltaData->spriteObjects[0].lootMonsterId == 45);
+    const auto readBytes = [&]()
+    {
+        std::ifstream input(path, std::ios::binary);
+        return std::vector<char>(std::istreambuf_iterator<char>(input), {});
+    };
+    const auto tagged = readBytes();
+    save.outdoorWorld.worldItems[0].lootMonsterId = 0;
+    save.outdoorWorldStates.at("out02.odm").worldItems[0].lootMonsterId = 0;
+    save.indoorScene.mapDeltaData->spriteObjects[0].lootMonsterId = 0;
+    save.indoorSceneStates.at("d05.blv").mapDeltaData->spriteObjects[0].lootMonsterId = 0;
+    REQUIRE_MESSAGE(saveGameDataToPath(path, save, error), error);
+    const auto legacy = readBytes();
+    REQUIRE(tagged.size() > legacy.size());
+    CHECK(std::equal(legacy.begin(), legacy.end(), tagged.begin()));
+    const auto old = loadGameDataFromPath(path, error);
+    REQUIRE_MESSAGE(old.has_value(), error);
+    CHECK(old->outdoorWorld.worldItems[0].lootMonsterId == 0);
+    CHECK(old->indoorScene.mapDeltaData->spriteObjects[0].lootMonsterId == 0);
+    const auto reject = [&](const std::vector<char> &bytes, const std::string &message)
+    {
+        { std::ofstream output(path, std::ios::binary); output.write(bytes.data(), bytes.size()); }
+        error.clear();
+        CHECK_FALSE(loadGameDataFromPath(path, error).has_value());
+        CHECK(error.find(message) != std::string::npos);
+    };
+    auto corrupted = tagged;
+    corrupted.pop_back();
+    reject(corrupted, "corrupted");
+    corrupted = tagged;
+    corrupted[legacy.size()] = '?';
+    reject(corrupted, "corrupted");
+    // Header: magic, packet count, length-prefixed namespace, schema, length-prefixed payload.
+    const size_t schema = legacy.size() + 8 + 4 + 8 + std::string("openyamm.world-item-origins").size();
+    corrupted = tagged;
+    corrupted[schema] = 2;
+    reject(corrupted, "unsupported save extension");
+    const size_t firstRecord = schema + 4 + 8 + 4;
+    corrupted = tagged;
+    corrupted[firstRecord] = 4; // Unknown scene cannot attach an origin to an unrelated snapshot.
+    reject(corrupted, "world item origin data is corrupted");
+    corrupted = tagged;
+    corrupted[firstRecord + 1 + 8] = 127; // Invalid object slot.
+    reject(corrupted, "world item origin data is corrupted");
+    corrupted = tagged;
+    corrupted[firstRecord + 1 + 8 + 4] = 0; // Mismatched object signature.
+    reject(corrupted, "world item origin data is corrupted");
+    corrupted = tagged;
+    corrupted[firstRecord + 1 + 8 + 4 + 2] = 0; // Invalid creature identity.
+    reject(corrupted, "world item origin data is corrupted");
+    corrupted = tagged;
+    corrupted.push_back('?');
+    reject(corrupted, "unexpected data");
+    save.outdoorWorld.worldItems[0].lootMonsterId = -1;
+    CHECK_FALSE(saveGameDataToPath(path, save, error));
+    std::filesystem::remove(path);
 }
 
 TEST_CASE("empty chest observations survive normal save serialization without implying current loot state")

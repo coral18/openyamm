@@ -11,6 +11,8 @@
 #include <cstring>
 #include <fstream>
 #include <limits>
+#include <set>
+#include <tuple>
 #include <type_traits>
 #include <unordered_map>
 #include <unordered_set>
@@ -4001,12 +4003,159 @@ bool validateRequiredContentPackages(
     return true;
 }
 
+namespace
+{
+constexpr char SaveExtensionMagic[8] = {'O', 'Y', 'E', 'X', 'T', 'S', '1', '\0'};
+const std::string WorldItemOriginsExtension = "openyamm.world-item-origins";
+
+// The extension is attached to this exact serialized snapshot. Slot references never survive independently
+// of the core payload, and a legacy engine resave discards the trailer instead of retaining stale slot tags.
+struct SavedWorldItemOrigin
+{
+    uint8_t scene = 0; // Current outdoor, cached outdoor, current indoor, cached indoor.
+    std::string map;
+    uint32_t slot = 0;
+    uint16_t objectId = 0;
+    int16_t monsterId = 0;
+};
+
+bool writeSaveExtensions(BinaryWriter &writer, const GameSaveData &data, std::string &error)
+{
+    std::vector<SavedWorldItemOrigin> origins;
+    const auto collect = [&](uint8_t scene, const std::string &map, const auto &objects)
+    {
+        for (size_t i = 0; i < objects.size(); ++i)
+        {
+            if (objects[i].lootMonsterId < 0 || i > UINT32_MAX)
+            {
+                error = "invalid world item origin";
+                return false;
+            }
+            if (objects[i].lootMonsterId > 0)
+                origins.push_back({scene, map, uint32_t(i), objects[i].objectDescriptionId, objects[i].lootMonsterId});
+        }
+        return true;
+    };
+    if (!collect(0, "", data.outdoorWorld.worldItems)) return false;
+    for (const auto &[map, snapshot] : data.outdoorWorldStates)
+        if (!collect(1, map, snapshot.worldItems)) return false;
+    if (data.indoorScene.mapDeltaData && !collect(2, "", data.indoorScene.mapDeltaData->spriteObjects)) return false;
+    for (const auto &[map, snapshot] : data.indoorSceneStates)
+        if (snapshot.mapDeltaData && !collect(3, map, snapshot.mapDeltaData->spriteObjects)) return false;
+    if (origins.empty()) return true;
+    if (origins.size() > UINT32_MAX)
+    {
+        error = "too many world item origins";
+        return false;
+    }
+    std::sort(origins.begin(), origins.end(), [](const SavedWorldItemOrigin &a, const SavedWorldItemOrigin &b)
+    { return std::tie(a.scene, a.map, a.slot) < std::tie(b.scene, b.map, b.slot); });
+    BinaryWriter payload;
+    payload.write(uint32_t(origins.size()));
+    for (const SavedWorldItemOrigin &origin : origins)
+    {
+        payload.write(origin.scene);
+        payload.write(origin.map);
+        payload.write(origin.slot);
+        payload.write(origin.objectId);
+        payload.write(origin.monsterId);
+    }
+    writer.writeBytes(SaveExtensionMagic, sizeof(SaveExtensionMagic));
+    writer.write(uint32_t(1)); // Number of namespaced extension packets.
+    writer.write(WorldItemOriginsExtension);
+    writer.write(uint32_t(1)); // Namespace schema, independent of the upstream save version.
+    writer.write(payload.bytes());
+    return true;
+}
+
+bool readWorldItemOrigins(const std::vector<uint8_t> &bytes, GameSaveData &data)
+{
+    BinaryReader reader(bytes);
+    uint32_t count = 0;
+    if (!reader.read(count) || count > reader.remainingBytes() / 17) return false;
+    std::set<std::tuple<uint8_t, std::string, uint32_t>> seen;
+    for (uint32_t i = 0; i < count; ++i)
+    {
+        SavedWorldItemOrigin origin;
+        if (!reader.read(origin.scene) || !reader.read(origin.map) || !reader.read(origin.slot)
+            || !reader.read(origin.objectId) || !reader.read(origin.monsterId) || origin.monsterId <= 0
+            || !seen.emplace(origin.scene, origin.map, origin.slot).second) return false;
+        const auto apply = [&](auto &objects)
+        {
+            if (origin.slot >= objects.size() || objects[origin.slot].objectDescriptionId != origin.objectId)
+                return false;
+            objects[origin.slot].lootMonsterId = origin.monsterId;
+            return true;
+        };
+        bool applied = false;
+        if (origin.scene == 0 && origin.map.empty()) applied = apply(data.outdoorWorld.worldItems);
+        else if (origin.scene == 1 && !origin.map.empty())
+        {
+            const auto found = data.outdoorWorldStates.find(origin.map);
+            if (found != data.outdoorWorldStates.end()) applied = apply(found->second.worldItems);
+        }
+        else if (origin.scene == 2 && origin.map.empty() && data.indoorScene.mapDeltaData)
+            applied = apply(data.indoorScene.mapDeltaData->spriteObjects);
+        else if (origin.scene == 3 && !origin.map.empty())
+        {
+            const auto found = data.indoorSceneStates.find(origin.map);
+            if (found != data.indoorSceneStates.end() && found->second.mapDeltaData)
+                applied = apply(found->second.mapDeltaData->spriteObjects);
+        }
+        if (!applied) return false;
+    }
+    return !reader.failed() && reader.remainingBytes() == 0;
+}
+
+bool readSaveExtensions(BinaryReader &reader, GameSaveData &data, std::string &error)
+{
+    if (reader.remainingBytes() == 0) return true; // Legacy saves have no item provenance.
+    char magic[sizeof(SaveExtensionMagic)] = {};
+    uint32_t count = 0;
+    if (!reader.readBytes(magic, sizeof(magic)) || std::memcmp(magic, SaveExtensionMagic, sizeof(magic)) != 0
+        || !reader.read(count) || count > reader.remainingBytes() / 20)
+    {
+        error = "save extension data is corrupted";
+        return false;
+    }
+    std::unordered_set<std::string> seen;
+    for (uint32_t i = 0; i < count; ++i)
+    {
+        std::string name;
+        uint32_t schema = 0;
+        std::vector<uint8_t> payload;
+        if (!reader.read(name) || !reader.read(schema) || !reader.read(payload) || !seen.insert(name).second)
+        {
+            error = "save extension data is corrupted";
+            return false;
+        }
+        if (name != WorldItemOriginsExtension || schema != 1)
+        {
+            error = "unsupported save extension '" + name + "' schema " + std::to_string(schema);
+            return false;
+        }
+        if (!readWorldItemOrigins(payload, data))
+        {
+            error = "world item origin data is corrupted";
+            return false;
+        }
+    }
+    if (reader.remainingBytes() != 0)
+    {
+        error = "unexpected data after save extensions";
+        return false;
+    }
+    return true;
+}
+}
+
 bool saveGameDataToPath(const std::filesystem::path &path, const GameSaveData &data, std::string &error)
 {
     BinaryWriter writer;
     writer.writeBytes(SaveMagic, sizeof(SaveMagic));
     writer.write(SaveVersion);
     writer.write(data);
+    if (!writeSaveExtensions(writer, data, error)) return false;
 
     std::filesystem::create_directories(path.parent_path());
     std::ofstream output(path, std::ios::binary);
@@ -4084,6 +4233,7 @@ std::optional<GameSaveData> loadGameDataFromPath(const std::filesystem::path &pa
     try
     {
         decoded = reader.read(data);
+        if (decoded && !reader.failed() && !readSaveExtensions(reader, data, error)) return std::nullopt;
     }
     catch (const std::exception &exception)
     {

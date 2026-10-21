@@ -108,6 +108,7 @@ struct MapDeltaSpriteObject
     bool semanticPlacedPickup = false;
     bool semanticLootContainer = false;
     bool semanticPolicyHidden = false;
+    int16_t lootMonsterId = 0;
 };
 
 struct MapDeltaChest

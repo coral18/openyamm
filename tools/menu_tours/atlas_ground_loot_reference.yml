@@ -1,0 +1,42 @@
+# Isolated received item201 fixture from the ATLAS.md ground creature-loot checkpoint.
+# 1600x900; the known creature has two recovered-item links.
+output_dir: captures-atlas-ground-loot
+exit: true
+steps:
+- expect: gameplay
+- pause: true
+- click:
+  - 800
+  - 821
+- click:
+  - 450
+  - 57
+- click:
+  - 130
+  - 126
+- click:
+  - 275
+  - 190
+- text: Wolf's Eye
+- key: Return
+- click:
+  - 200
+  - 265
+- pointer_move:
+  - 1035
+  - 527
+- wheel: -1000
+- capture: recovered-ground-loot-source
+- click:
+  - 1035
+  - 610
+- capture: ground-source-to-creature
+- pointer_move:
+  - 1035
+  - 527
+- wheel: -1000
+- capture: creature-ground-receipt-link
+- click:
+  - 1035
+  - 643
+- capture: creature-back-to-ground-item

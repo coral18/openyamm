@@ -70,7 +70,8 @@ AtlasScreen::AtlasScreen(const Engine::AssetFileSystem &assets, const GameDataRe
         for (const WorldItemSource &observation : observations)
         {
             m_referenceKnowledge.items.insert(observation.itemId);
-            if (observation.kind == WorldItemSourceKind::Carried && observation.monsterId > 0)
+            if ((observation.kind == WorldItemSourceKind::Carried || observation.kind == WorldItemSourceKind::DeathDrop)
+                && observation.monsterId > 0)
                 m_referenceKnowledge.monsters.insert(observation.monsterId);
         }
     for (const auto &[file, observations] : m_knowledge.monsterObservations)

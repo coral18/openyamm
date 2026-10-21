@@ -1221,3 +1221,43 @@ Validation:
 
 This remains a checkpoint toward the full objective. Ground-drop provenance, remaining scripted sources, the other
 coverage matrix gaps and Android/controller validation still require work.
+
+
+## Ground creature-loot checkpoint (2026-10-21)
+
+Actual monster-death drops now retain their creature identity on the ground, including special carried items from
+creatures that leave no corpse. The shared pickup descriptor carries that identity through the successful inventory
+or held-item receipt. Discovery records the real pickup position and links Item <-> Bestiary only after acquisition;
+spawning, saving or inspecting a ground item does not reveal that relationship. Ordinary player drops carry no
+creature tag, and different species can establish independent sources of the same item.
+
+The optional `openyamm.world-item-origins` save trailer preserves instance provenance in current and cached indoor
+and outdoor snapshots. It leaves the upstream version-83 core payload unchanged, validates scene/map/slot/object
+identity, and rejects malformed or unsupported extension data. Old saves remain unattributed. A legacy engine can
+load the unchanged core; its resave discards the extension, so later loads cannot reuse stale slot identities.
+Already recorded semantic discoveries use the ordinary named-map save state. See [MODDING.md](MODDING.md).
+
+The scenario runner's recorded world-item activation now goes through the same shared interaction controller as
+keyboard pickup. This avoids a test-only direct world-runtime route that skipped receipt observations.
+
+Validation:
+
+- Windows Release built. Six focused Atlas/save/package/mod suites passed 190 cases / 6925 assertions.
+- Linux ASan/UBSan passed 83 cases / 4595 assertions.
+- Save tests cover active/cached indoor/outdoor origins, untagged controls, a byte-identical legacy core prefix,
+  truncated/malformed trailers, unsupported schemas and invalid scene/slot/object/creature values.
+- Nine isolated faithful scenarios passed: MM7/MM8 actual ground-drop creation, receipt after save/load, cached
+  inactive-map save/load and return, Atlas-disabled receipt, a legacy-engine resave, and a real pre-extension save
+  with an ordinary dropped item. Runtime receipts preserve actual coordinates and species in semantic discoveries.
+- Ground creation used a private deterministic death-drop table overlay (item201 at 100%) for authored MM7 actor3
+  (creature404, Temple of the Moon) and MM8 actor3 (creature45, Garrote Gorge). These are test rules, not gameplay
+  changes. Production data, probabilities, runtime packages and original user campaigns remain untouched.
+- The retained pre-extension Windows executable loaded a tagged save and wrote an ordinary save with no trailer.
+  The current engine then picked up its item as an ordinary source without inventing creature provenance.
+- Native AMD OpenGL 3.3 checks show recovered ground-source location and creature links in both worlds, using the
+  ordinary active game tables after receipt. The reusable reference tour is
+  `tools/menu_tours/atlas_ground_loot_reference.yml`; native captures and isolated fixtures are under the local
+  Windows development root's `atlas-ground-loot-20261021/` directory.
+
+This completes loose ground-drop attribution. Campaign-content coverage, automatic visibility discovery, remaining
+UI/content work and Android/controller checks still belong to the active complete-atlas objective.

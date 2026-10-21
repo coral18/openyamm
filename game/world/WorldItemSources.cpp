@@ -59,6 +59,7 @@ std::string sourceKey(const WorldItemSource &source)
 {
     return std::string(source.kind == WorldItemSourceKind::Chest ? "chest/"
         : source.kind == WorldItemSourceKind::Carried ? "carried/"
+        : source.kind == WorldItemSourceKind::DeathDrop ? "death-drop/"
         : source.kind == WorldItemSourceKind::MapReward ? "map-reward/"
         : source.kind == WorldItemSourceKind::SharedReward ? "shared-reward/" : "placed/")
         + std::to_string(source.sourceIndex) + "/" + std::to_string(source.itemId);
@@ -132,6 +133,7 @@ std::string worldItemSourceLabel(const WorldItemSource &source)
     {
         if (source.kind == WorldItemSourceKind::Chest) return "Observed in chest";
         if (source.kind == WorldItemSourceKind::Carried) return "Taken from creature";
+        if (source.kind == WorldItemSourceKind::DeathDrop) return "Recovered ground drop";
         if (source.kind == WorldItemSourceKind::MapReward || source.kind == WorldItemSourceKind::SharedReward)
             return "Received reward";
         return "Last picked up";
@@ -143,6 +145,7 @@ std::string worldItemSourceLabel(const WorldItemSource &source)
     case WorldItemSourceKind::Carried: return "Authored actor-carried item";
     case WorldItemSourceKind::MapReward: return "Possible event reward";
     case WorldItemSourceKind::SharedReward: return "Possible NPC reward";
+    case WorldItemSourceKind::DeathDrop: return "Creature death drop";
     }
     return "Item source";
 }
@@ -194,9 +197,16 @@ std::vector<WorldChestObservation> worldChestObservations(const EventRuntimeStat
 
 void recordWorldItemPickup(EventRuntimeState &state, const GameplayWorldItemInspectState &item, float gameMinutes)
 {
-    if (item.isGold || item.item.objectDescriptionId == 0 || !item.position || !validMinute(gameMinutes)) return;
+    if (item.isGold || item.item.objectDescriptionId == 0 || !item.position || !validMinute(gameMinutes)
+        || item.lootMonsterId < 0) return;
     WorldItemSource source;
     source.itemId = item.item.objectDescriptionId; source.gameMinutes = int32_t(gameMinutes);
+    if (item.lootMonsterId > 0)
+    {
+        source.kind = WorldItemSourceKind::DeathDrop;
+        source.sourceIndex = uint32_t(item.lootMonsterId);
+        source.monsterId = item.lootMonsterId;
+    }
     source.position.emplace();
     for (size_t i = 0; i < 3; ++i)
     {
@@ -243,12 +253,18 @@ std::vector<WorldItemSource> worldObservedItemSources(const EventRuntimeState &s
         if (kind == "chest") source.kind = WorldItemSourceKind::Chest;
         else if (kind == "placed" && source.sourceIndex == 0) source.kind = WorldItemSourceKind::Placed;
         else if (kind == "carried") source.kind = WorldItemSourceKind::Carried;
+        else if (kind == "death-drop" && source.sourceIndex > 0 && source.sourceIndex <= INT16_MAX)
+        {
+            source.kind = WorldItemSourceKind::DeathDrop;
+            source.monsterId = int16_t(source.sourceIndex);
+        }
         else if ((kind == "map-reward" || kind == "shared-reward")
             && source.sourceIndex > 0 && source.sourceIndex <= UINT16_MAX)
             source.kind = kind == "map-reward" ? WorldItemSourceKind::MapReward : WorldItemSourceKind::SharedReward;
         else continue;
         source.id = "observed/" + id; source.observed = true; source.gameMinutes = minute;
-        if (source.kind == WorldItemSourceKind::Placed || source.kind == WorldItemSourceKind::Carried)
+        if (source.kind == WorldItemSourceKind::Placed || source.kind == WorldItemSourceKind::Carried
+            || source.kind == WorldItemSourceKind::DeathDrop)
         {
             const std::string prefix = ObservationPrefix + id + "/";
             if (!state.namedMapVars.contains(prefix + "x") || !state.namedMapVars.contains(prefix + "y")

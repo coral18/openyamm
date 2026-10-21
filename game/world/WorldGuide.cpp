@@ -59,7 +59,8 @@ std::vector<CreatureLootReference> creatureLootReferences(const WorldGuideSource
                         add(int16_t(id), drop.itemId, "Death drop (" + std::to_string(drop.chancePercent) + "%)");
     if (source.pWorld != nullptr && source.pWorldKnowledge != nullptr)
         for (const WorldItemSource *pItem : source.pWorld->itemSources(*source.pWorldKnowledge, guide))
-            if (pItem->kind == WorldItemSourceKind::Carried && (guide || pItem->observed))
+            if ((pItem->kind == WorldItemSourceKind::Carried || pItem->kind == WorldItemSourceKind::DeathDrop)
+                && (guide || pItem->observed))
                 add(pItem->monsterId, pItem->itemId, pItem->observed ? "Recovered loot" : "Authored carried item");
     std::sort(result.begin(), result.end(), [](const CreatureLootReference &a, const CreatureLootReference &b)
     { return std::tie(a.monsterId, a.itemId, a.provenance) < std::tie(b.monsterId, b.itemId, b.provenance); });

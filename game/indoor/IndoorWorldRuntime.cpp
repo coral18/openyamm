@@ -12615,6 +12615,7 @@ void IndoorWorldRuntime::spawnMonsterDeathDropsForActor(size_t actorIndex, const
             ItemGenerator::makeInventoryItem(actor.carriedItemId, *m_pItemTable, ItemGenerationMode::Generic);
         spawnMonsterDeathDropItem(
             item,
+            monsterId,
             dropX,
             dropY,
             dropZ,
@@ -12664,12 +12665,13 @@ void IndoorWorldRuntime::spawnMonsterDeathDropsForActor(size_t actorIndex, const
 
         const InventoryItem item =
             ItemGenerator::makeInventoryItem(drop.itemId, *m_pItemTable, ItemGenerationMode::Generic);
-        spawnMonsterDeathDropItem(item, dropX, dropY, dropZ, actor.sectorId, seed ^ 0x9e3779b9u);
+        spawnMonsterDeathDropItem(item, monsterId, dropX, dropY, dropZ, actor.sectorId, seed ^ 0x9e3779b9u);
     }
 }
 
 bool IndoorWorldRuntime::spawnMonsterDeathDropItem(
     const InventoryItem &item,
+    int16_t monsterId,
     float x,
     float y,
     float z,
@@ -12712,6 +12714,7 @@ bool IndoorWorldRuntime::spawnMonsterDeathDropItem(
 
     MapDeltaSpriteObject spriteObject = {};
     spriteObject.spriteId = pObjectEntry->spriteId;
+    spriteObject.lootMonsterId = std::max(int16_t(0), monsterId);
     spriteObject.objectDescriptionId = *objectDescriptionId;
     spriteObject.x = int(std::lround(x));
     spriteObject.y = int(std::lround(y));
@@ -14381,6 +14384,7 @@ bool IndoorWorldRuntime::worldItemInspectState(size_t worldItemIndex, GameplayWo
 
     state = {};
     state.item = item;
+    state.lootMonsterId = spriteObject.lootMonsterId;
     state.goldAmount = goldAmount;
     state.isGold = goldAmount > 0;
     state.position = {{float(spriteObject.x), float(spriteObject.y), float(spriteObject.z)}};

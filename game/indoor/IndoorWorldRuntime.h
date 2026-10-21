@@ -767,6 +767,7 @@ private:
     void spawnMonsterDeathDropsForActor(size_t actorIndex, const MapDeltaActor &actor);
     bool spawnMonsterDeathDropItem(
         const InventoryItem &item,
+        int16_t monsterId,
         float x,
         float y,
         float z,

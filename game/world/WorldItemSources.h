@@ -20,7 +20,7 @@ struct GameplayChestItemState;
 struct GameplayWorldItemInspectState;
 struct MapDeltaData;
 
-enum class WorldItemSourceKind { Placed, Chest, Carried, MapReward, SharedReward };
+enum class WorldItemSourceKind { Placed, Chest, Carried, MapReward, SharedReward, DeathDrop };
 
 struct WorldItemSource
 {

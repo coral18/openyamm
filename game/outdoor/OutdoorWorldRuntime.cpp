@@ -5850,6 +5850,7 @@ void OutdoorWorldRuntime::spawnMonsterDeathDropsForActor(size_t actorIndex, cons
             ItemGenerator::makeInventoryItem(actor.specialItemId, *m_pItemTable, ItemGenerationMode::Generic);
         spawnMonsterDeathDropWorldItem(
             item,
+            actor.monsterId,
             dropX,
             dropY,
             dropZ,
@@ -5893,6 +5894,7 @@ void OutdoorWorldRuntime::spawnMonsterDeathDropsForActor(size_t actorIndex, cons
             ItemGenerator::makeInventoryItem(drop.itemId, *m_pItemTable, ItemGenerationMode::Generic);
         spawnMonsterDeathDropWorldItem(
             item,
+            actor.monsterId,
             dropX,
             dropY,
             dropZ,
@@ -5902,6 +5904,7 @@ void OutdoorWorldRuntime::spawnMonsterDeathDropsForActor(size_t actorIndex, cons
 
 bool OutdoorWorldRuntime::spawnMonsterDeathDropWorldItem(
     const InventoryItem &item,
+    int16_t monsterId,
     float x,
     float y,
     float z,
@@ -5946,6 +5949,7 @@ bool OutdoorWorldRuntime::spawnMonsterDeathDropWorldItem(
     WorldItemState worldItem = {};
     worldItem.worldItemId = m_nextWorldItemId++;
     worldItem.item = item;
+    worldItem.lootMonsterId = std::max(int16_t(0), monsterId);
     worldItem.objectDescriptionId = objectDescriptionId;
     worldItem.objectSpriteId = objectSpriteId;
     worldItem.objectSpriteFrameIndex = objectSpriteFrameIndex;
@@ -17412,6 +17416,7 @@ bool OutdoorWorldRuntime::worldItemInspectState(size_t worldItemIndex, GameplayW
 
     state = {};
     state.item = pWorldItem->item;
+    state.lootMonsterId = pWorldItem->lootMonsterId;
     state.goldAmount = pWorldItem->goldAmount;
     state.isGold = pWorldItem->isGold;
     state.position = {{pWorldItem->x, pWorldItem->y, pWorldItem->z}};
@@ -17442,6 +17447,7 @@ bool OutdoorWorldRuntime::takeWorldItemInspectState(size_t worldItemIndex, Gamep
 
     state = {};
     state.item = pWorldItem->item;
+    state.lootMonsterId = pWorldItem->lootMonsterId;
     state.goldAmount = pWorldItem->goldAmount;
     state.isGold = pWorldItem->isGold;
     state.position = {{pWorldItem->x, pWorldItem->y, pWorldItem->z}};
