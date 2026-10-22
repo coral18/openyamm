@@ -46,3 +46,33 @@ steps:
     runtime_event_variable:
       id: 21
       value: 200
+- assert:
+    named_map_var_changed:
+      name: openyamm.discovery.site-effects.v1/bmodel/38/surface/10/event/223/seen
+      value: 1
+- assert:
+    named_map_var_changed:
+      name: openyamm.discovery.site-effects.v1/bmodel/38/surface/10/event/223/stat/Gold/min-before
+      value: 0
+- assert:
+    named_map_var_changed:
+      name: openyamm.discovery.site-effects.v1/bmodel/38/surface/10/event/223/stat/Gold/min-after
+      value: 200
+- assert:
+    named_map_var_changed:
+      name: openyamm.discovery.site-effects.v1/bmodel/38/surface/10/event/223/changed
+      value: 0
+- save_game: observed-gold
+- load_game: observed-gold
+- assert:
+    named_map_var_changed:
+      name: openyamm.discovery.site-effects.v1/bmodel/38/surface/10/event/223/stat/Gold/max-after
+      value: 200
+- load_map:
+    map: out14.odm
+- load_map:
+    map: 7out02.odm
+- assert:
+    named_map_var_changed:
+      name: openyamm.discovery.site-effects.v1/bmodel/38/surface/10/event/223/stat/Gold/min-after
+      value: 200

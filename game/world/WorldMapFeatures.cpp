@@ -4,6 +4,7 @@
 #include "game/events/EventRuntime.h"
 #include "game/world/WorldDatabase.h"
 #include "game/tables/JournalAutonoteTable.h"
+#include "game/StringUtils.h"
 
 #include <algorithm>
 #include <optional>
@@ -34,6 +35,17 @@ const char *worldMapFeatureKindName(WorldMapFeatureKind kind)
     return "Site";
 }
 
+std::optional<WorldMapFeatureKind> worldMapFeatureKind(std::string_view action)
+{
+    if (action == "open_chest") return WorldMapFeatureKind::Chest;
+    if (action == "well" || action == "fountain") return WorldMapFeatureKind::Water;
+    if (action == "shrine") return WorldMapFeatureKind::Shrine;
+    if (action == "obelisk") return WorldMapFeatureKind::Obelisk;
+    if (action == "teleport" || action == "passage" || action == "travel"
+        || action == "enter_dungeon" || action == "leave_dungeon") return WorldMapFeatureKind::Connection;
+    return std::nullopt;
+}
+
 std::vector<WorldMapFeature> buildWorldMapFeatures(const std::string &mapId,
     const std::vector<WorldInteractionSite> &sites, const ScriptedEventProgram &events)
 {
@@ -43,16 +55,8 @@ std::vector<WorldMapFeature> buildWorldMapFeatures(const std::string &mapId,
         const auto metadata = events.getContextActionMetadata(site.eventId);
         if (!metadata || metadata->hidden)
             continue;
-        std::optional<WorldMapFeatureKind> kind;
-        if (metadata->kind == "open_chest" && !metadata->chestIds.empty()) kind = WorldMapFeatureKind::Chest;
-        else if (metadata->kind == "well" || metadata->kind == "fountain") kind = WorldMapFeatureKind::Water;
-        else if (metadata->kind == "shrine") kind = WorldMapFeatureKind::Shrine;
-        else if (metadata->kind == "obelisk") kind = WorldMapFeatureKind::Obelisk;
-        else if (metadata->kind == "teleport" || metadata->kind == "passage" || metadata->kind == "travel"
-            || metadata->kind == "enter_dungeon" || metadata->kind == "leave_dungeon")
-            kind = WorldMapFeatureKind::Connection;
-        if (!kind)
-            continue;
+        const std::optional<WorldMapFeatureKind> kind = worldMapFeatureKind(metadata->kind);
+        if (!kind || (*kind == WorldMapFeatureKind::Chest && metadata->chestIds.empty())) continue;
         WorldMapFeature feature;
         feature.id = mapId + "/site/" + site.id + "/event/" + std::to_string(site.eventId);
         feature.mapId = mapId;
@@ -72,6 +76,36 @@ std::vector<WorldMapFeature> buildWorldMapFeatures(const std::string &mapId,
         features.push_back(std::move(feature));
     }
     return features;
+}
+
+std::vector<const WorldSiteObservation *> WorldDatabase::siteObservations(const WorldMapFeature &feature,
+    const WorldKnowledge &knowledge) const
+{
+    std::vector<const WorldSiteObservation *> result;
+    const WorldRecord *pMap = find(feature.mapId);
+    if (pMap == nullptr || !featureVisible(feature, knowledge, false)) return result;
+    const auto found = knowledge.siteObservations.find(feature.mapId);
+    if (found == knowledge.siteObservations.end()) return result;
+    for (const WorldSiteObservation &observation : found->second)
+    {
+        if (observation.eventId != feature.site.eventId) continue;
+        const bool matches = observation.siteId == feature.site.id
+            || std::any_of(feature.site.faceIds.begin(), feature.site.faceIds.end(), [&](uint32_t face)
+            { return observation.siteId == feature.site.surfacePrefix + "surface/" + std::to_string(face); });
+        if (matches) result.push_back(&observation);
+    }
+    return result;
+}
+
+std::string WorldDatabase::siteObservationText(const WorldMapFeature &feature, const WorldKnowledge &knowledge) const
+{
+    std::string result;
+    for (const WorldSiteObservation *pObservation : siteObservations(feature, knowledge))
+    {
+        if (!result.empty()) result += "\n\n";
+        result += describeWorldSiteObservation(*pObservation);
+    }
+    return result;
 }
 
 std::string_view WorldDatabase::siteReference(const WorldMapFeature &feature,

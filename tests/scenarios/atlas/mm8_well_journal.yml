@@ -96,3 +96,25 @@ steps:
     runtime_event_variable:
       id: 13500641
       value: 1
+- assert:
+    named_map_var_changed:
+      name: openyamm.discovery.site-effects.v1/bmodel/22/surface/33/event/101/seen
+      value: 1
+- assert:
+    named_map_var_changed:
+      name: openyamm.discovery.site-effects.v1/bmodel/22/surface/33/event/101/stat/IntellectBonus/min-before
+      value: 0
+- assert:
+    named_map_var_changed:
+      name: openyamm.discovery.site-effects.v1/bmodel/22/surface/33/event/101/stat/IntellectBonus/min-after
+      value: 15
+- assert:
+    named_map_var_changed:
+      name: openyamm.discovery.site-effects.v1/bmodel/22/surface/33/event/101/changed
+      value: 0
+- save_game: observed-intellect
+- load_game: observed-intellect
+- assert:
+    named_map_var_changed:
+      name: openyamm.discovery.site-effects.v1/bmodel/22/surface/33/event/101/stat/IntellectBonus/max-after
+      value: 15

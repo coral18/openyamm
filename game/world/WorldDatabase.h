@@ -6,6 +6,7 @@
 #include "game/world/WorldMapFeatures.h"
 #include "game/world/WorldMonsterKnowledge.h"
 #include "game/world/WorldMapNotes.h"
+#include "game/world/WorldSiteObservations.h"
 #include "game/world/WorldNpcKnowledge.h"
 #include "game/world/WorldTransportKnowledge.h"
 #include "game/world/WorldItemSources.h"
@@ -104,6 +105,8 @@ struct WorldKnowledge
     std::unordered_map<std::string, std::vector<WorldItemSource>> itemObservations;
     std::unordered_map<std::string, std::vector<WorldMapArrival>> arrivals;
     std::unordered_map<std::string, std::vector<WorldChestObservation>> chestObservations;
+    // Canonical world/map IDs; raw filenames can collide between worlds.
+    std::unordered_map<std::string, std::vector<WorldSiteObservation>> siteObservations;
     bool knows(const WorldRecord &record) const;
 };
 
@@ -151,6 +154,9 @@ public:
     void indexNpcLocations(const ScriptedEventProgram &program);
     std::vector<const WorldItemSource *> itemSources(const WorldKnowledge &knowledge, bool guide) const;
     std::vector<WorldChestObservation> observedChests(const WorldMapFeature &feature,
+        const WorldKnowledge &knowledge) const;
+    std::string siteObservationText(const WorldMapFeature &feature, const WorldKnowledge &knowledge) const;
+    std::vector<const WorldSiteObservation *> siteObservations(const WorldMapFeature &feature,
         const WorldKnowledge &knowledge) const;
     std::string_view siteReference(const WorldMapFeature &feature, const WorldKnowledge &knowledge, bool guide) const;
     std::vector<const JournalAutonoteEntry *> siteJournalEntries(const WorldMapFeature &feature,

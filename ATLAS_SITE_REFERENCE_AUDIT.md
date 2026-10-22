@@ -31,7 +31,9 @@ MM8 out04:101/102, out06:102, out08:101/102 need a live/scene/inherited-decorati
 can have multiple physical sites. The shared exporter also emits 12 MM6 callbacks in eight maps; those receive
 data validation, rather than new MM6 UI acceptance.
 
-Discovery does not yet retain effects from sites without journal notes; observed outcome recording remains open.
+Discovery now retains actually observed synchronous numeric/condition outcomes through the shared Core site
+interaction hook, including at sites without journal notes. This separate history does not expose unexecuted
+branches or turn a generated reference into party knowledge. Deferred/spell-buff/item outcomes remain open.
 
 The current projection supports acyclic numeric character/resource comparisons, HP/SP fullness, simple local use
 gates, and nonnegative Add/Set/Subtract on supported writable stats/resources. It follows each branch and omits

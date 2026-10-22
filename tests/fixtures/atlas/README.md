@@ -105,8 +105,32 @@ For MM8, use `site-reused.oysav` from the existing MM8 well-journal scenario. Ke
 At 1600x900, run `tools/menu_tours/atlas_mm7_gold_site_reference.yml` and
 `atlas_mm8_intellect_site_reference.yml`. Each searches Guide by effect, opens **Read details**, returns to
 Discovery and saves. Inspect fresh captures: the unnoted MM7 well must have no learned description in Discovery;
-the MM8 case must retain only its learned journal note, not the generated Guide requirements.
+the MM8 case must retain its learned journal note and any actual recorded outcomes, without the generated
+Guide requirements.
 
 Then run `mm7_gold_site_reference_privacy.yml` / `mm8_intellect_site_reference_privacy.yml` here. They compare
 before/after saves: MM7 gold and actual MapVar(21) remain zero; MM8 Intellect bonus and journal note remain
 15/known. Generated reference text is never evidence of an earned reward or present availability.
+
+
+## Actual site observations and privacy
+
+Use separate private working directories with normal packages and Atlas enabled. The extended
+`tests/scenarios/atlas/mm7_unnoted_gold_well.yml` and `mm8_well_journal.yml` now assert actual observation state,
+repeat-use history, save/load and map transitions. They produce temporary `observed-gold.oysav` and
+`observed-intellect.oysav`. Copy these to separate private `saves/before.oysav` files for the learned UI cases.
+For two more isolated unseen-site cases, copy `before-gold-well.oysav` / `before-site.oysav` instead.
+
+Run `tools/menu_tours/atlas_mm{7,8}_site_observations_known.yml` and the corresponding `_unseen.yml` tours at
+1600x900. Inspect fresh native captures: learned Discovery finds +200 gold / +15 temporary Intellect and reads
+actual historical changes; Guide additionally shows its reference conditions; returning to Discovery hides
+those conditions. The unseen cases must find no actual outcome in Discovery before or after Guide browsing.
+An already-known journal description and an actual recorded outcome are separate sources of party knowledge.
+
+After the tours, create one private verifier directory per world. Copy the learned case's `before.oysav` and
+`quicksave.oysav` to `saves/before-known.oysav` / `saves/after-known.oysav`; copy the unseen equivalents to
+`saves/before-unseen.oysav` / `saves/after-unseen.oysav`. Run this directory's
+`mm7_site_observation_privacy.yml` / `mm8_site_observation_privacy.yml`. They verify unchanged resources,
+recorded endpoints, no additional-change flag, MM8 journal/stat state, and zero observations in unseen saves,
+then round-trip both histories. Unknown named-map values read as zero; the pure reader tests separately cover
+malformed partial records. Repeat the MM8 gameplay scenario with only `karol.test` enabled to check Atlas-off Core.

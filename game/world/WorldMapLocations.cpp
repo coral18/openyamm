@@ -278,7 +278,8 @@ std::vector<const WorldMapFeature *> WorldDatabase::queryFeatures(const WorldKno
             || !featureVisible(feature, knowledge, guide))
             continue;
         const std::string text = feature.title + " " + worldMapFeatureKindName(feature.kind) + " " + pMap->name()
-            + " " + std::string(siteReference(feature, knowledge, guide));
+            + " " + std::string(siteReference(feature, knowledge, guide))
+            + " " + siteObservationText(feature, knowledge);
         if (query.empty() || toLowerCopy(text).find(query) != std::string::npos)
             result.push_back(&feature);
     }

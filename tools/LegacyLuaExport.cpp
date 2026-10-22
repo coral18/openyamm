@@ -1,4 +1,5 @@
 #include "tools/LegacyLuaExport.h"
+#include "game/events/EventAttributeInfo.h"
 #include "game/events/EvtEnums.h"
 #include "game/party/SpellIds.h"
 #include "game/tables/PortraitEnums.h"
@@ -12777,22 +12778,11 @@ void emitAutonoteMetadata(std::ostringstream &stream, std::string_view scopeTabl
 // A read-only projection of a complete supported callback. Never execute a handler to inspect its effects.
 std::optional<std::string> siteNumericLabel(const FormattedSelector &selector)
 {
-    const std::string &key = selector.expression;
-    if (key == "Gold") return "Party gold";
-    if (key == "BankGold") return "Banked gold";
-    if (key == "Food") return "Food";
-    if (key == "CurrentHealth") return "Health";
-    if (key == "CurrentSpellPoints") return "Spell points";
-    constexpr std::pair<std::string_view, std::string_view> attributes[] = {
-        {"Might", "Might"}, {"Intellect", "Intellect"}, {"Personality", "Personality"},
-        {"Endurance", "Endurance"}, {"Accuracy", "Accuracy"}, {"Speed", "Speed"}, {"Luck", "Luck"}};
-    for (const auto &[name, label] : attributes)
-    {
-        if (key == "Base" + std::string(name)) return "Base " + std::string(label);
-        if (key == std::string(name) + "Bonus") return "Temporary " + std::string(label);
-        if (key == "Actual" + std::string(name)) return std::string(label);
-    }
-    return std::nullopt;
+    const EventAttributeInfo *pAttribute = eventAttributeInfo(selector.expression);
+    // Fullness predicates are handled separately; their calculated maxima are not ordinary numeric comparisons.
+    if (pAttribute == nullptr || !pAttribute->referenceNumeric || pAttribute->variable == EvtVariable::MaxHealth
+        || pAttribute->variable == EvtVariable::MaxSpellPoints) return std::nullopt;
+    return std::string(pAttribute->label);
 }
 
 bool siteUseCounter(const LegacyLuaEvent &event, const FormattedSelector &selector)

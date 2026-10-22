@@ -1565,3 +1565,42 @@ Accepted checks for this slice: 176 focused Windows cases / 68,589 assertions, t
 63 assertions, 91 ASan/UBSan cases / 5,014 assertions and 13 lighting cases passed. The final Release build,
 two fresh native UI tours, their post-UI save verifiers and the Atlas-disabled MM8 well scenario passed.
 This is a checkpoint within the full MM7/MM8 Atlas goal, not completion of its remaining coverage matrix.
+
+
+### Actual observed site outcomes, 2026-10-22
+
+Using a visible well, shrine or obelisk now records actual synchronous before/after changes through shared gameplay
+interaction code, including when the Atlas module is disabled. Discovery's **Read details** and search use these
+records. An unnoted well can therefore teach its effect without exposing unvisited sites, untouched callback
+branches, hidden requirements or current reward availability. Merely browsing Guide creates no observations.
+
+The first supported set includes gold/banked gold/food, HP/SP, base and temporary attributes, skill points,
+level/age/armour bonus, the six displayed resistance families and visible conditions applied or removed.
+Health uses the actual clamped result: healing from 95 to 100 records +5 even if the callback requested +25.
+Character changes are anonymous observed ranges, with no invented attribution or extrapolation between endpoints.
+Party resources remain separate. Replacing/reordering party members during an event discards character comparisons.
+Repeated use without a change preserves historical effects and reports that no additional changes were recorded.
+Deferred changes, spell-buff state, items, experience and other unsupported effects are not inferred from silence.
+
+Core state uses `openyamm.discovery.site-effects.v1/<physical-site>/event/<id>/` in existing named map variables.
+Stable attribute symbols, rather than numeric legacy EVT aliases, identify effect endpoints. This requires no save
+format bump; the ordinary snapshot/save/refill paths retain the history. The Atlas indexes new history by canonical
+world/map ID, never an ambiguous filename alias. Older saves acquire observations through new actual interactions;
+the feature does not reconstruct rewards from a journal description. Incomplete saved outcome records are reported
+explicitly and are not overwritten with guessed defaults.
+
+`EventAttributeInfo` shares labels between actual observations and the existing supported Guide projection.
+Observation-only attributes do not silently extend the exporter’s accepted reference predicates. Failed, hidden,
+non-site and map-changing activations do not create outcome records. Other site discovery behavior is unchanged.
+
+The extended `mm7_unnoted_gold_well.yml` and `mm8_well_journal.yml` scenarios exercise physical wells, their actual
++200 gold / +15 temporary Intellect, repeated use, save/load and cross-map retention. These are controlled base
+campaign fixtures, not universal rewards. Reusable native tours and paired privacy verifiers are documented in
+`tests/fixtures/atlas/README.md`. Full Atlas coverage and Android/controller acceptance remain open.
+
+Accepted checks for the observed-outcome slice: Windows Release build, 141 focused unit cases / 5,803 assertions
+(including the 137-map packaged-house audit), and one shared-controller runtime case / 19 assertions passed.
+The two extended actual-well scenarios, MM8 Atlas-off variant, four native AMD/OpenGL tours and paired post-UI
+save/privacy verifiers passed. Captures were inspected, including both unseen sites' actual reference readers
+and the empty Discovery reader after returning from Guide. Private results are under the local Windows
+`atlas-site-observations-20261022/` directory. This is focused acceptance, not a full suite or Android result.

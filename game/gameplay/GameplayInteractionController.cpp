@@ -15,6 +15,7 @@
 #include "game/party/SpellIds.h"
 #include "game/tables/ItemTable.h"
 #include "game/world/WorldMapFeatures.h"
+#include "game/world/WorldSiteObservations.h"
 #include "game/world/WorldMonsterKnowledge.h"
 
 #include <SDL3/SDL_timer.h>
@@ -738,6 +739,9 @@ bool tryActivateWorldHit(
 
     if (hit.kind == GameplayWorldHitKind::Actor && hit.actor)
         recordWorldActorObservation(*pWorldRuntime, hit.actor->actorIndex);
+    std::optional<WorldSiteValueSnapshot> before;
+    std::string observedMap, observedSite;
+    uint16_t observedEvent = 0;
     if (hit.eventTarget && hit.eventTarget->contextActionMetadata && !hit.eventTarget->contextActionMetadata->hidden)
     {
         const GameplayEventTargetHit &target = *hit.eventTarget;
@@ -751,9 +755,30 @@ bool tryActivateWorldHit(
                  || target.targetKind == GameplayWorldEventTargetKind::Decoration)
             siteId = "decoration/" + std::to_string(target.targetIndex);
         if (EventRuntimeState *pState = pWorldRuntime->eventRuntimeState())
+        {
             recordWorldSiteDiscovery(*pState, eventId, siteId);
+            const auto kind = worldMapFeatureKind(target.contextActionMetadata->kind);
+            if (eventId != 0 && !siteId.empty() && pWorldRuntime->party() != nullptr && kind
+                && (*kind == WorldMapFeatureKind::Water || *kind == WorldMapFeatureKind::Shrine
+                    || *kind == WorldMapFeatureKind::Obelisk))
+            {
+                before = captureWorldSiteValues(*pState, *pWorldRuntime->party());
+                observedMap = pState->mapFileName;
+                observedSite = siteId;
+                observedEvent = eventId;
+            }
+        }
     }
-    return pWorldRuntime->activateWorldHit(hit);
+    const bool activated = pWorldRuntime->activateWorldHit(hit);
+    if (activated && before)
+    {
+        EventRuntimeState *pState = pWorldRuntime->eventRuntimeState();
+        const Party *pParty = pWorldRuntime->party();
+        if (pState != nullptr && pParty != nullptr && pState->mapFileName == observedMap)
+            recordWorldSiteObservation(*pState, observedSite, observedEvent, *before,
+                captureWorldSiteValues(*pState, *pParty), pWorldRuntime->gameMinutes());
+    }
+    return activated;
 }
 
 void clearWorldHover(IGameplayWorldRuntime *pWorldRuntime)

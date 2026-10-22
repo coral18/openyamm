@@ -1,0 +1,161 @@
+id: atlas.mm8_site_observation_privacy
+title: Guide and Discovery browsing neither invent nor modify actual site outcomes
+world: mm8
+mode: faithful
+steps:
+- load_game:
+    name: before-known
+    path: saves/before-known.oysav
+- assert:
+    runtime_event_variable:
+      id: 26
+      value: 15
+      member_index: 0
+- assert:
+    runtime_event_variable:
+      id: 13500641
+      value: 1
+- assert:
+    named_map_var_changed:
+      name: openyamm.discovery.site-effects.v1/bmodel/22/surface/33/event/101/seen
+      value: 1
+- assert:
+    named_map_var_changed:
+      name: openyamm.discovery.site-effects.v1/bmodel/22/surface/33/event/101/changed
+      value: 0
+- assert:
+    named_map_var_changed:
+      name: openyamm.discovery.site-effects.v1/bmodel/22/surface/33/event/101/stat/IntellectBonus/seen
+      value: 1
+- assert:
+    named_map_var_changed:
+      name: openyamm.discovery.site-effects.v1/bmodel/22/surface/33/event/101/stat/IntellectBonus/min-before
+      value: 0
+- assert:
+    named_map_var_changed:
+      name: openyamm.discovery.site-effects.v1/bmodel/22/surface/33/event/101/stat/IntellectBonus/min-after
+      value: 15
+- assert:
+    named_map_var_changed:
+      name: openyamm.discovery.site-effects.v1/bmodel/22/surface/33/event/101/stat/IntellectBonus/max-after
+      value: 15
+- load_game:
+    name: after-known
+    path: saves/after-known.oysav
+- assert:
+    runtime_event_variable:
+      id: 26
+      value: 15
+      member_index: 0
+- assert:
+    runtime_event_variable:
+      id: 13500641
+      value: 1
+- assert:
+    named_map_var_changed:
+      name: openyamm.discovery.site-effects.v1/bmodel/22/surface/33/event/101/seen
+      value: 1
+- assert:
+    named_map_var_changed:
+      name: openyamm.discovery.site-effects.v1/bmodel/22/surface/33/event/101/changed
+      value: 0
+- assert:
+    named_map_var_changed:
+      name: openyamm.discovery.site-effects.v1/bmodel/22/surface/33/event/101/stat/IntellectBonus/seen
+      value: 1
+- assert:
+    named_map_var_changed:
+      name: openyamm.discovery.site-effects.v1/bmodel/22/surface/33/event/101/stat/IntellectBonus/min-before
+      value: 0
+- assert:
+    named_map_var_changed:
+      name: openyamm.discovery.site-effects.v1/bmodel/22/surface/33/event/101/stat/IntellectBonus/min-after
+      value: 15
+- assert:
+    named_map_var_changed:
+      name: openyamm.discovery.site-effects.v1/bmodel/22/surface/33/event/101/stat/IntellectBonus/max-after
+      value: 15
+- save_game: privacy-roundtrip-known
+- load_game: privacy-roundtrip-known
+- assert:
+    named_map_var_changed:
+      name: openyamm.discovery.site-effects.v1/bmodel/22/surface/33/event/101/seen
+      value: 1
+- load_game:
+    name: before-unseen
+    path: saves/before-unseen.oysav
+- assert:
+    runtime_event_variable:
+      id: 26
+      value: 0
+      member_index: 0
+- assert:
+    runtime_event_variable:
+      id: 13500641
+      value: 0
+- assert:
+    named_map_var_changed:
+      name: openyamm.discovery.site-effects.v1/bmodel/22/surface/33/event/101/seen
+      value: 0
+- assert:
+    named_map_var_changed:
+      name: openyamm.discovery.site-effects.v1/bmodel/22/surface/33/event/101/changed
+      value: 0
+- assert:
+    named_map_var_changed:
+      name: openyamm.discovery.site-effects.v1/bmodel/22/surface/33/event/101/stat/IntellectBonus/seen
+      value: 0
+- assert:
+    named_map_var_changed:
+      name: openyamm.discovery.site-effects.v1/bmodel/22/surface/33/event/101/stat/IntellectBonus/min-before
+      value: 0
+- assert:
+    named_map_var_changed:
+      name: openyamm.discovery.site-effects.v1/bmodel/22/surface/33/event/101/stat/IntellectBonus/min-after
+      value: 0
+- assert:
+    named_map_var_changed:
+      name: openyamm.discovery.site-effects.v1/bmodel/22/surface/33/event/101/stat/IntellectBonus/max-after
+      value: 0
+- load_game:
+    name: after-unseen
+    path: saves/after-unseen.oysav
+- assert:
+    runtime_event_variable:
+      id: 26
+      value: 0
+      member_index: 0
+- assert:
+    runtime_event_variable:
+      id: 13500641
+      value: 0
+- assert:
+    named_map_var_changed:
+      name: openyamm.discovery.site-effects.v1/bmodel/22/surface/33/event/101/seen
+      value: 0
+- assert:
+    named_map_var_changed:
+      name: openyamm.discovery.site-effects.v1/bmodel/22/surface/33/event/101/changed
+      value: 0
+- assert:
+    named_map_var_changed:
+      name: openyamm.discovery.site-effects.v1/bmodel/22/surface/33/event/101/stat/IntellectBonus/seen
+      value: 0
+- assert:
+    named_map_var_changed:
+      name: openyamm.discovery.site-effects.v1/bmodel/22/surface/33/event/101/stat/IntellectBonus/min-before
+      value: 0
+- assert:
+    named_map_var_changed:
+      name: openyamm.discovery.site-effects.v1/bmodel/22/surface/33/event/101/stat/IntellectBonus/min-after
+      value: 0
+- assert:
+    named_map_var_changed:
+      name: openyamm.discovery.site-effects.v1/bmodel/22/surface/33/event/101/stat/IntellectBonus/max-after
+      value: 0
+- save_game: privacy-roundtrip-unseen
+- load_game: privacy-roundtrip-unseen
+- assert:
+    named_map_var_changed:
+      name: openyamm.discovery.site-effects.v1/bmodel/22/surface/33/event/101/seen
+      value: 0

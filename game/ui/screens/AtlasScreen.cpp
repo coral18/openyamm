@@ -455,6 +455,7 @@ void AtlasScreen::drawScreen(float)
             select(*pSelected);
         m_referenceDirty = true;
         m_referenceScroll = m_referenceDetailScroll = 0;
+        m_siteJournalScroll = 0;
         if (const auto *selected = m_world.find(m_selected);
             selected == nullptr || !m_world.visible(*selected, m_knowledge, m_guide))
             m_selected.clear();
@@ -1659,13 +1660,19 @@ void AtlasScreen::drawSiteJournal()
     const WorldMapFeature &feature = *m_siteReading;
     const WorldRecord *pMap = m_world.find(feature.mapId);
     textInRect(canvasRect(25, 60, 798, 28), feature.title + " - " + pMap->map->name, "fondamento", 15);
-    textInRect(canvasRect(25, 89, 798, 25), m_guide ? "Site reference" : "Party's recorded notes",
+    textInRect(canvasRect(25, 89, 798, 25), m_guide ? "Site reference" : "Party's recorded findings",
         "menu_lucida", 11, 0xffc6dfeau);
     const Rect viewport = canvasRect(25, 121, 798, 270);
     outline(viewport, 0xff597284u);
     std::string content(m_world.siteReference(feature, m_knowledge, m_guide));
     try
     {
+        const std::string observed = m_world.siteObservationText(feature, m_knowledge);
+        if (!observed.empty())
+        {
+            if (!content.empty()) content += "\n\n";
+            content += observed;
+        }
         for (const JournalAutonoteEntry *pNote : m_world.siteJournalEntries(feature,
             m_data.journalAutonoteTable(), m_knowledge, m_guide))
         {
@@ -1677,7 +1684,7 @@ void AtlasScreen::drawSiteJournal()
     {
         content = error.what();
     }
-    if (content.empty()) content = "No notes recorded about this site yet.";
+    if (content.empty()) content = "No findings recorded about this site yet.";
     scrollViewport(viewport, m_siteJournalHeight, m_siteJournalScroll);
     setDesignClip(viewport);
     float height = 0;
@@ -1688,7 +1695,7 @@ void AtlasScreen::drawSiteJournal()
     setDesignClip(std::nullopt);
     textInRect(canvasRect(34, 407, 778, 43),
         m_guide ? "Effects depend on the selected character, available resources and previous visits."
-            : "Notes describe this location; effects can depend on the character and previous visits.",
+            : "Recorded findings describe past visits; results can depend on the character and previous use.",
         "menu_arrus", 11);
 }
 
@@ -1721,7 +1728,14 @@ void AtlasScreen::drawDetails()
             const WorldMapFeature &feature = **selected;
             text = feature.title + " | " + worldMapFeatureKindName(feature.kind);
             hasJournal = !m_world.siteReference(feature, m_knowledge, m_guide).empty();
-            if (hasJournal) text += "\nEffects and requirements available.";
+            const auto observations = m_world.siteObservations(feature, m_knowledge);
+            if (!observations.empty())
+            {
+                hasJournal = true;
+                text += "\nRecorded outcome available.";
+            }
+            if (!m_world.siteReference(feature, m_knowledge, m_guide).empty())
+                text += "\nEffects and requirements available.";
             try
             {
                 const auto notes = m_world.siteJournalEntries(feature,
@@ -1813,7 +1827,8 @@ void AtlasScreen::drawDetails()
             : arrivalCount > 1 ? 565 : otherAction || hasJournal ? 625 : 778;
         textInRect(canvasRect(34, 407, textWidth, 43), text, "menu_arrus", 11);
         if (hasJournal && button("atlas-site-journal", canvasRect(journalX, 416, 145, 28),
-            m_guide && !(**selected).guideReference.empty() ? "Read details" : "Read notes"))
+            (m_guide && !(**selected).guideReference.empty())
+                || !m_world.siteObservations(**selected, m_knowledge).empty() ? "Read details" : "Read notes"))
         {
             m_siteReading = **selected;
             m_siteJournalScroll = m_siteJournalHeight = 0;

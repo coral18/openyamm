@@ -1972,6 +1972,19 @@ TEST_CASE("site journal references use the shared registry and require both site
     CHECK(world.featureVisible(feature, knowledge, false));
     CHECK(world.queryFeatures(knowledge, false, "Effect and requirements").empty());
     CHECK(world.siteJournalEntries(feature, notes, knowledge, false).empty());
+    EventRuntimeState outcomeState;
+    WorldSiteValueSnapshot before{{"Hero"}, {{"Gold", std::nullopt, 0}}};
+    WorldSiteValueSnapshot after{{"Hero"}, {{"Gold", std::nullopt, 200}}};
+    REQUIRE(recordWorldSiteObservation(outcomeState, site.id, 10, before, after, 1));
+    knowledge.siteObservations[feature.mapId] = worldSiteObservations(outcomeState);
+    CHECK(world.siteObservationText(feature, knowledge).find("Party gold +200") != std::string::npos);
+    CHECK(world.queryFeatures(knowledge, false, "Party gold +200").size() == 1);
+    CHECK(world.siteReference(feature, knowledge, false).empty());
+    CHECK(world.queryFeatures(knowledge, false, "Effect and requirements").empty());
+    WorldMapFeature other = feature;
+    other.site.id = "decoration/1";
+    CHECK(world.siteObservations(other, knowledge).empty());
+    CHECK(knowledge.autonoteIds.empty());
     knowledge.autonoteIds.insert(42);
     auto known = world.siteJournalEntries(feature, notes, knowledge, false);
     REQUIRE(known.size() == 1);
@@ -1995,4 +2008,35 @@ TEST_CASE("site journal references use the shared registry and require both site
     CHECK(world.siteJournalEntries(broken, notes, knowledge, false).empty());
     knowledge.autonoteIds.insert(600);
     CHECK_THROWS_AS(world.siteJournalEntries(broken, notes, knowledge, false), std::invalid_argument);
+}
+
+TEST_CASE("site observations belong to canonical maps even when worlds share filenames and event ids")
+{
+    Fixture fixture;
+    REQUIRE(fixture.maps.loadFromRows({mapRow(1, "First world", "out10.odm", "mm7"),
+        mapRow(2, "Second world", "out10.odm", "mm8")}));
+    WorldDatabase first(fixture.maps, fixture.houses, fixture.npcs, fixture.teachers, "mm7");
+    WorldDatabase second(fixture.maps, fixture.houses, fixture.npcs, fixture.teachers, "mm8");
+    WorldMapFeature feature;
+    feature.mapId = "world.mm7.map.out10";
+    feature.kind = WorldMapFeatureKind::Water;
+    feature.site.id = "surface/10";
+    feature.site.eventId = 223;
+    WorldKnowledge knowledge;
+    knowledge.interactedSites["out10.odm"].insert(worldSiteDiscoveryKey(223, feature.site.id));
+    EventRuntimeState state;
+    REQUIRE(recordWorldSiteObservation(state, feature.site.id, 223,
+        {{"Hero"}, {{"Gold", std::nullopt, 0}}}, {{"Hero"}, {{"Gold", std::nullopt, 200}}}, 1));
+    knowledge.siteObservations[feature.mapId] = worldSiteObservations(state);
+    CHECK(first.siteObservations(feature, knowledge).size() == 1);
+    WorldMapFeature sameFilename = feature;
+    sameFilename.mapId = "world.mm8.map.out10";
+    CHECK(second.featureVisible(sameFilename, knowledge, false));
+    CHECK(second.siteObservations(sameFilename, knowledge).empty());
+    feature.site.id = "surface/11";
+    feature.site.surfacePrefix = "";
+    feature.site.faceIds = {10, 11};
+    CHECK(first.siteObservations(feature, knowledge).size() == 1);
+    feature.site.eventId = 224;
+    CHECK(first.siteObservations(feature, knowledge).empty());
 }

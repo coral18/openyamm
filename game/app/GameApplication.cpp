@@ -8822,11 +8822,15 @@ bool GameApplication::openAtlasScreen(bool paused)
     WorldKnowledge knowledge;
     if (paused)
     {
-        const auto collectSites = [&knowledge](const std::string &file, const EventRuntimeState &state)
+        const auto collectSites = [&knowledge](const std::string &file, const EventRuntimeState &state,
+            const std::string &canonicalMapId)
         {
             knowledge.monsterObservations[toLowerCopy(file)] = worldMonsterObservations(state);
             knowledge.itemObservations[toLowerCopy(file)] = worldObservedItemSources(state);
             knowledge.chestObservations[toLowerCopy(file)] = worldChestObservations(state);
+            // New observations belong to canonical snapshots, never ambiguous legacy filename aliases.
+            if (!canonicalMapId.empty())
+                knowledge.siteObservations[canonicalMapId] = worldSiteObservations(state);
             knowledge.notes[toLowerCopy(file)] = worldMapNotes(state, file);
             knowledge.arrivals[toLowerCopy(file)] = worldMapArrivals(state, file);
             for (const auto &[key, value] : state.namedMapVars)
@@ -8878,7 +8882,9 @@ bool GameApplication::openAtlasScreen(bool paused)
             {
                 knowledge.visitedMaps.insert(toLowerCopy(map.fileName));
                 if (pState->eventRuntimeState)
-                    collectSites(map.fileName, *pState->eventRuntimeState);
+                    collectSites(map.fileName, *pState->eventRuntimeState,
+                        m_gameSession.outdoorWorldStates().contains(WorldDatabase::mapId(map))
+                            ? WorldDatabase::mapId(map) : "");
                 knowledge.regionMaps[toLowerCopy(map.fileName)] =
                     {pState->fullyRevealedCells, pState->partiallyRevealedCells};
             }
@@ -8886,12 +8892,18 @@ bool GameApplication::openAtlasScreen(bool paused)
             {
                 knowledge.visitedMaps.insert(toLowerCopy(map.fileName));
                 if (pState->eventRuntimeState)
-                    collectSites(map.fileName, *pState->eventRuntimeState);
+                    collectSites(map.fileName, *pState->eventRuntimeState,
+                        m_gameSession.indoorSceneStates().contains(WorldDatabase::mapId(map))
+                            ? WorldDatabase::mapId(map) : "");
                 collectFloorPlan(map.fileName, *pState);
             }
         }
         if (m_pMapSceneRuntime != nullptr && m_pMapSceneRuntime->eventRuntimeState() != nullptr)
-            collectSites(m_gameSession.currentMapFileName(), *m_pMapSceneRuntime->eventRuntimeState());
+        {
+            const std::optional<MapAssetInfo> &selectedMap = m_gameDataLoader.getSelectedMap();
+            collectSites(m_gameSession.currentMapFileName(), *m_pMapSceneRuntime->eventRuntimeState(),
+                selectedMap ? WorldDatabase::mapId(selectedMap->map) : "");
+        }
         if (m_pMapSceneRuntime != nullptr && m_pMapSceneRuntime->kind() == SceneKind::Indoor)
             collectFloorPlan(m_gameSession.currentMapFileName(),
                 static_cast<IndoorSceneRuntime *>(m_pMapSceneRuntime.get())->snapshot());

@@ -45,6 +45,7 @@ add_executable(openyamm_unit_tests
     MapStatsRegressionTests.cpp
     JournalStateTests.cpp
     WorldDatabaseTests.cpp
+    WorldSiteObservationTests.cpp
     WorldGuideTests.cpp
     MapDeltaDataTests.cpp
     MM7MechanicsRuntimeTests.cpp
@@ -245,6 +246,7 @@ add_executable(openyamm_unit_tests
     ../game/world/WorldInteractionSites.cpp
     ../game/world/WorldMapFeatures.cpp
     ../game/world/WorldMapKnowledge.cpp
+    ../game/world/WorldSiteObservations.cpp
     ../game/world/WorldMapNotes.cpp
     ../game/world/WorldMonsterKnowledge.cpp
     ../game/world/WorldItemSources.cpp
@@ -347,6 +349,7 @@ endif()
 add_test(NAME openyamm_unit_tests COMMAND openyamm_unit_tests)
 
 add_executable(openyamm_runtime_tests
+    WorldSiteObservationRuntimeTests.cpp
     UnitTestMain.cpp
     RegressionGameData.cpp
     RegressionMapLoader.cpp

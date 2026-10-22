@@ -3,6 +3,7 @@
 #include "game/world/WorldInteractionSites.h"
 #include "game/world/WorldMapKnowledge.h"
 #include <optional>
+#include <string_view>
 
 namespace OpenYAMM::Game
 {
@@ -45,6 +46,7 @@ struct WorldMapFeature
 
 std::vector<WorldMapFeature> buildWorldMapFeatures(const std::string &mapId,
     const std::vector<WorldInteractionSite> &sites, const ScriptedEventProgram &events);
+std::optional<WorldMapFeatureKind> worldMapFeatureKind(std::string_view action);
 const char *worldMapFeatureKindName(WorldMapFeatureKind kind);
 bool worldMapFeatureOnFloorLayer(const WorldMapFeature &feature, std::optional<int32_t> layer);
 std::string worldSiteDiscoveryKey(uint16_t eventId, const std::string &siteId);
