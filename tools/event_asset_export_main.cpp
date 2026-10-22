@@ -74,6 +74,14 @@ std::optional<LegacyEventVersion> parseLegacyEventVersion(std::string_view value
     return std::nullopt;
 }
 
+enum class MetadataExport
+{
+    None,
+    ItemRewards,
+    NpcLocations,
+    AutonoteReferences
+};
+
 bool parseArguments(
     int argc,
     char **argv,
@@ -83,8 +91,7 @@ bool parseArguments(
     std::optional<std::string> &legacyEventsDir,
     std::optional<LegacyEventVersion> &legacyEventVersion,
     bool &skipGlobal,
-    bool &itemRewardsOnly,
-    bool &npcLocationsOnly)
+    MetadataExport &metadataOnly)
 {
     bool hasAssetScaleArgument = false;
 
@@ -190,15 +197,17 @@ bool parseArguments(
             continue;
         }
 
-        if (argument == "--item-rewards-only")
+        if (argument == "--item-rewards-only" || argument == "--npc-locations-only"
+            || argument == "--autonote-refs-only")
         {
-            itemRewardsOnly = true;
-            continue;
-        }
-
-        if (argument == "--npc-locations-only")
-        {
-            npcLocationsOnly = true;
+            if (metadataOnly != MetadataExport::None)
+            {
+                std::cerr << "Choose only one metadata-only export mode\n";
+                return false;
+            }
+            metadataOnly = argument == "--item-rewards-only" ? MetadataExport::ItemRewards
+                : argument == "--npc-locations-only" ? MetadataExport::NpcLocations
+                : MetadataExport::AutonoteReferences;
             continue;
         }
 
@@ -2138,8 +2147,7 @@ bool exportLegacyProgram(
     const MapStatsEntry *pMapEntry,
     bool globalScope,
     LegacyEventVersion version,
-    bool itemRewardsOnly,
-    bool npcLocationsOnly)
+    MetadataExport metadataOnly)
 {
     std::string resolvedEvtPath;
     const std::optional<std::vector<uint8_t>> evtBytes = readFirstExistingBinary(
@@ -2257,26 +2265,43 @@ bool exportLegacyProgram(
         ? scriptsRoot / "Global_00_item_rewards.lua"
         : scriptsRoot / "maps" / (outputStem + "_00_item_rewards.lua");
     const LegacyLuaExportScope scope = globalScope ? LegacyLuaExportScope::Global : LegacyLuaExportScope::Map;
-    if (!npcLocationsOnly && !writeTextFile(rewardPath,
+    if ((metadataOnly == MetadataExport::None || metadataOnly == MetadataExport::ItemRewards)
+        && !writeTextFile(rewardPath,
             OpenYAMM::Game::generateLegacyEventItemRewardsLuaChunk(evtProgram, strTable, lookups, scope, version)))
     {
         std::cerr << "Failed to write item reward metadata for " << legacyBaseName << '\n';
         return false;
     }
-    if (itemRewardsOnly) return true;
+    if (metadataOnly == MetadataExport::ItemRewards) return true;
     const std::filesystem::path locationPath = globalScope
         ? scriptsRoot / "Global_00_npc_locations.lua"
         : scriptsRoot / "maps" / (outputStem + "_00_npc_locations.lua");
-    const std::string locations = OpenYAMM::Game::generateLegacyEventNpcLocationsLuaChunk(
-        evtProgram, strTable, lookups, scope, version);
-    if (locations.empty())
-        std::filesystem::remove(locationPath);
-    else if (!writeTextFile(locationPath, locations))
+    if (metadataOnly == MetadataExport::None || metadataOnly == MetadataExport::NpcLocations)
     {
-        std::cerr << "Failed to write NPC location metadata for " << legacyBaseName << '\n';
+        const std::string locations = OpenYAMM::Game::generateLegacyEventNpcLocationsLuaChunk(
+            evtProgram, strTable, lookups, scope, version);
+        if (locations.empty())
+            std::filesystem::remove(locationPath);
+        else if (!writeTextFile(locationPath, locations))
+        {
+            std::cerr << "Failed to write NPC location metadata for " << legacyBaseName << '\n';
+            return false;
+        }
+    }
+    if (metadataOnly == MetadataExport::NpcLocations) return true;
+    const std::filesystem::path notePath = globalScope
+        ? scriptsRoot / "Global_00_autonote_refs.lua"
+        : scriptsRoot / "maps" / (outputStem + "_00_autonote_refs.lua");
+    const std::string notes = OpenYAMM::Game::generateLegacyEventAutonoteRefsLuaChunk(
+        evtProgram, strTable, lookups, scope, version);
+    if (notes.empty())
+        std::filesystem::remove(notePath);
+    else if (!writeTextFile(notePath, notes))
+    {
+        std::cerr << "Failed to write journal reference metadata for " << legacyBaseName << '\n';
         return false;
     }
-    if (npcLocationsOnly) return true;
+    if (metadataOnly == MetadataExport::AutonoteReferences) return true;
 
     if (!writeTextFile(luaPath, OpenYAMM::Game::generateLegacyEventLuaChunk(
             evtProgram,
@@ -2303,8 +2328,7 @@ int main(int argc, char **argv)
     std::optional<std::string> legacyEventsDirOverride;
     std::optional<LegacyEventVersion> legacyEventVersionOverride;
     bool skipGlobal = false;
-    bool itemRewardsOnly = false;
-    bool npcLocationsOnly = false;
+    MetadataExport metadataOnly = MetadataExport::None;
 
     if (!parseArguments(
             argc,
@@ -2315,15 +2339,8 @@ int main(int argc, char **argv)
             legacyEventsDirOverride,
             legacyEventVersionOverride,
             skipGlobal,
-            itemRewardsOnly,
-            npcLocationsOnly))
+            metadataOnly))
     {
-        return 2;
-    }
-
-    if (itemRewardsOnly && npcLocationsOnly)
-    {
-        std::cerr << "Choose only one metadata-only export mode\n";
         return 2;
     }
 
@@ -2432,8 +2449,7 @@ int main(int argc, char **argv)
                 nullptr,
                 true,
                 tablePaths.legacyEventVersion,
-                itemRewardsOnly,
-                npcLocationsOnly))
+                metadataOnly))
     {
         return 1;
     }
@@ -2488,8 +2504,7 @@ int main(int argc, char **argv)
                 &entry,
                 false,
                 tablePaths.legacyEventVersion,
-                itemRewardsOnly,
-                npcLocationsOnly))
+                metadataOnly))
         {
             return 1;
         }

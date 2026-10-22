@@ -1027,6 +1027,22 @@ function support.setGlobalItemRewards(eventId, items)
     setItemRewards("global", eventId, items)
 end
 
+local function setAutonoteReferences(scopeName, eventId, notes)
+    local handler = evt[scopeName][eventId]
+    assert(type(handler) == "function", "Autonote metadata requires a registered event handler")
+    local meta = ensureMetaScope(scopeName)
+    meta.autonoteReferences = meta.autonoteReferences or {}
+    meta.autonoteReferences[eventId] = {handler = handler, notes = notes}
+end
+
+function support.setMapAutonoteRefs(eventId, notes)
+    setAutonoteReferences("map", eventId, notes)
+end
+
+function support.setGlobalAutonoteRefs(eventId, notes)
+    setAutonoteReferences("global", eventId, notes)
+end
+
 local function setNpcLocations(scopeName, eventId, locations)
     local handler = evt[scopeName][eventId]
     assert(type(handler) == "function", "NPC location metadata requires a registered event handler")
@@ -1617,6 +1633,8 @@ SetMapMetadata = support.setMapMetadata
 SetMapContextAction = support.setMapContextAction
 SetMapItemRewards = support.setMapItemRewards
 SetGlobalItemRewards = support.setGlobalItemRewards
+SetMapAutonoteRefs = support.setMapAutonoteRefs
+SetGlobalAutonoteRefs = support.setGlobalAutonoteRefs
 SetMapNpcLocations = support.setMapNpcLocations
 SetGlobalNpcLocations = support.setGlobalNpcLocations
 AppendMapOnLoadEvent = support.appendMapOnLoadEvent

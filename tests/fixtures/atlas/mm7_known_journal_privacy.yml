@@ -1,0 +1,40 @@
+id: atlas.mm7_known_journal_privacy
+title: Atlas journal reading leaves actual party knowledge and well rewards unchanged
+world: mm7
+mode: faithful
+steps:
+- load_game:
+    name: before
+    path: saves/before.oysav
+- assert:
+    runtime_event_variable:
+      id: 17170657
+      value: 1
+- assert:
+    runtime_event_variable:
+      id: 25
+      member_index: 0
+      value: 10
+- load_game:
+    name: quicksave
+    path: saves/quicksave.oysav
+- assert:
+    runtime_event_variable:
+      id: 17170657
+      value: 1
+- assert:
+    runtime_event_variable:
+      id: 25
+      member_index: 0
+      value: 10
+- save_game: ui-verified
+- load_game: ui-verified
+- assert:
+    runtime_event_variable:
+      id: 17170657
+      value: 1
+- assert:
+    runtime_event_variable:
+      id: 25
+      member_index: 0
+      value: 10

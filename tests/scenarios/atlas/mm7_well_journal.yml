@@ -1,0 +1,98 @@
+id: atlas.mm7_well_journal
+title: Real well effect and shared journal knowledge persist without repeat bonuses
+world: mm7
+mode: faithful
+steps:
+- new_game_flow:
+    start_map: 7out02.odm
+- assert:
+    runtime_event_variable:
+      id: 17170657
+      value: 0
+- assert:
+    runtime_event_variable:
+      id: 25
+      member_index: 0
+      value: 0
+- set_pose:
+    x: -10490
+    y: -7088
+    z: 128
+    yaw: 0
+    pitch: -1.3
+- assert:
+    named_map_var_changed:
+      name: openyamm.discovery.site/bmodel/53/surface/10/event/218
+      value: 0
+- save_game: before-site
+- press_interact:
+    pose:
+      x: -10490
+      y: -7088
+      z: 128
+      yaw: 0
+      pitch: -1.3
+    expect:
+      kind: event_target
+      triggered_event: 218
+      can_activate: true
+- assert:
+    runtime_event_variable:
+      id: 25
+      member_index: 0
+      value: 10
+- assert:
+    runtime_event_variable:
+      id: 17170657
+      min: 1
+- save_game: site-used
+- load_game: site-used
+- assert:
+    runtime_event_variable:
+      id: 17170657
+      min: 1
+- press_interact:
+    pose:
+      x: -10490
+      y: -7088
+      z: 128
+      yaw: 0
+      pitch: -1.3
+    expect:
+      kind: event_target
+      triggered_event: 218
+      can_activate: true
+- assert:
+    runtime_event_variable:
+      id: 25
+      member_index: 0
+      value: 10
+- save_game: site-reused
+- load_game: site-reused
+- assert:
+    runtime_event_variable:
+      id: 17170657
+      min: 1
+- assert:
+    named_map_var_changed:
+      name: openyamm.discovery.site/bmodel/53/surface/10/event/218
+      value: 1
+- load_map:
+    map: out14.odm
+- assert:
+    runtime_event_variable:
+      id: 17170657
+      min: 1
+- load_map:
+    map: 7out02.odm
+- assert:
+    runtime_event_variable:
+      id: 17170657
+      min: 1
+- save_game: well-cross-map-history
+- save_game: cross-map-journal
+- load_game: cross-map-journal
+- assert:
+    runtime_event_variable:
+      id: 17170657
+      value: 1

@@ -10,6 +10,7 @@
 #include "game/events/EventDialogContent.h"
 #include "game/events/EvtEnums.h"
 #include "game/events/EventRuntime.h"
+#include "game/gameplay/JournalState.h"
 #include "game/data/GameDataLoader.h"
 #include "game/debug/GameplayDebugTrace.h"
 #include "game/fx/ParticleRecipes.h"
@@ -23372,7 +23373,7 @@ int HeadlessGameplayDiagnostics::runRegressionSuite(
                 return false;
             }
 
-            if (pEventRuntimeState->variables.contains(AutoNoteRawId))
+            if (journalNoteValue(*pEventRuntimeState, AutoNoteRawId >> 16) != 0)
             {
                 failure = "teacher autonote was already unlocked before house entry";
                 return false;
@@ -23405,9 +23406,7 @@ int HeadlessGameplayDiagnostics::runRegressionSuite(
                 return false;
             }
 
-            const auto noteIt = pEventRuntimeState->variables.find(AutoNoteRawId);
-
-            if (noteIt == pEventRuntimeState->variables.end() || noteIt->second == 0)
+            if (journalNoteValue(*pEventRuntimeState, AutoNoteRawId >> 16) == 0)
             {
                 failure = "teacher autonote was not unlocked on house entry";
                 return false;

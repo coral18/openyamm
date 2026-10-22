@@ -133,6 +133,34 @@ class DecorationBakeTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, 'Invalid NPC location metadata overlay'):
                     self.export()
 
+    def test_journal_catalogs_do_not_change_shadow_cards_or_dependencies(self):
+        baseline = self.export()
+        for suffix, header in [
+                ('_00_autonote_refs.lua', '-- generated journal references from legacy EVT/STR; '
+                 'load after the base handlers\n'),
+                ('_zz_autonote_refs.lua', '-- Journal reference metadata; load after gameplay overlays\n')]:
+            metadata = self.world / ('events/maps/test' + suffix)
+            for declaration in ('', 'SetMapAutonoteRefs(1, {42, 43})\n', 'SetMapAutonoteRefs(1, {})\n'):
+                metadata.write_text(header + declaration)
+                result = self.export()
+                for field in ('cards', 'counts', 'dependencies'):
+                    self.assertEqual(result[field], baseline[field])
+            metadata.unlink()
+
+    def test_journal_catalog_cannot_hide_executable_or_invalid_declarations(self):
+        metadata = self.world / 'events/maps/test_zz_autonote_refs.lua'
+        header = '-- Journal reference metadata; load after gameplay overlays\n'
+        for content in ('evt.SetSprite(7, 0)\n',
+                        header + 'SetMapAutonoteRefs(1, {42}); evt.SetSprite(7, 0)\n',
+                        header + 'RegisterEvent(1, nil, function() end)\n',
+                        header + 'SetMapAutonoteRefs(1, {0})\n',
+                        header + 'SetMapAutonoteRefs(65536, {42})\n',
+                        header + 'SetMapAutonoteRefs(1, {65536})\n'):
+            with self.subTest(content=content):
+                metadata.write_text(content)
+                with self.assertRaisesRegex(ValueError, 'Invalid journal reference metadata overlay'):
+                    self.export()
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -1,0 +1,98 @@
+id: atlas.mm8_well_journal
+title: Real well effect and shared journal knowledge persist without repeat bonuses
+world: mm8
+mode: faithful
+steps:
+- new_game_flow:
+    start_map: out01.odm
+- assert:
+    runtime_event_variable:
+      id: 13500641
+      value: 0
+- assert:
+    runtime_event_variable:
+      id: 26
+      member_index: 0
+      value: 0
+- set_pose:
+    x: 6500
+    y: 9896
+    z: 864
+    yaw: 0
+    pitch: 0
+- assert:
+    named_map_var_changed:
+      name: openyamm.discovery.site/bmodel/22/surface/33/event/101
+      value: 0
+- save_game: before-site
+- press_interact:
+    pose:
+      x: 6500
+      y: 9896
+      z: 864
+      yaw: 0
+      pitch: 0
+    expect:
+      kind: event_target
+      triggered_event: 101
+      can_activate: true
+- assert:
+    runtime_event_variable:
+      id: 26
+      member_index: 0
+      value: 15
+- assert:
+    runtime_event_variable:
+      id: 13500641
+      min: 1
+- save_game: site-used
+- load_game: site-used
+- assert:
+    runtime_event_variable:
+      id: 13500641
+      min: 1
+- press_interact:
+    pose:
+      x: 6500
+      y: 9896
+      z: 864
+      yaw: 0
+      pitch: 0
+    expect:
+      kind: event_target
+      triggered_event: 101
+      can_activate: true
+- assert:
+    runtime_event_variable:
+      id: 26
+      member_index: 0
+      value: 15
+- save_game: site-reused
+- load_game: site-reused
+- assert:
+    runtime_event_variable:
+      id: 13500641
+      min: 1
+- assert:
+    named_map_var_changed:
+      name: openyamm.discovery.site/bmodel/22/surface/33/event/101
+      value: 1
+- load_map:
+    map: d05.blv
+- assert:
+    runtime_event_variable:
+      id: 13500641
+      min: 1
+- load_map:
+    map: out01.odm
+- assert:
+    runtime_event_variable:
+      id: 13500641
+      min: 1
+- save_game: well-cross-map-history
+- save_game: cross-map-journal
+- load_game: cross-map-journal
+- assert:
+    runtime_event_variable:
+      id: 13500641
+      value: 1

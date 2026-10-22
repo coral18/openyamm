@@ -1465,3 +1465,58 @@ addresses and keep unvisited MM8 locations unknown through another save/load. Th
 [the fixture guide](tests/fixtures/atlas/README.md#possible-npc-locations-and-guide-privacy).
 Android/controller acceptance, conditional service/recruitment
 eligibility, generated/roaming NPCs and the other coverage-matrix gaps remain open.
+
+### Journal-backed site descriptions and party-wide notes, 2026-10-22
+
+Event-backed Sites now link to the shared `JournalAutonoteTable`. A well, shrine or obelisk can show its
+associated note in the footer and open a native, scrollable **Read notes** page. Discovery requires both
+knowledge of the site and the actual party note flag; observing a well does not reveal its effect. Guide can
+read the reference without executing the event or awarding knowledge. Switching back to Discovery re-evaluates
+those gates, including an already-open reading page. These are the mounted game's journal descriptions,
+not copied community-guide prose or a second Atlas database of effects.
+
+`SetMapAutonoteRefs(eventId, {noteIds})` and `SetGlobalAutonoteRefs` declare callback-bound references. Replacing
+or removing the handler invalidates its old references; an overlay may declare its new references afterward,
+or explicitly suppress them with `{}`. IDs are positive uint16 values and the loader rejects malformed arrays.
+The exporter emits reachable nonzero Add/Set AutoNote declarations, including synthetic continuations, only
+when the shared journal has meaningful text. Internal flags with blank/placeholder text remain gameplay state,
+not invented descriptions. Regenerate references with:
+
+```sh
+tools/regenerate_lua_events.sh --autonote-refs-only
+```
+
+The 48 catalogs comprise one base Global catalog and 17/16/14 MM6/MM7/MM8 map catalogs. They declare
+231/62/43/34 handler-to-note relationships respectively. Catalogs load after base handlers and before gameplay
+overlays, without rewriting those handlers. Lighting dependency validation recognizes only their restricted,
+validated metadata syntax; gameplay script hashes and existing baked lighting remain authoritative.
+
+The cross-map runtime check also exposed the old map-local storage of journal flags. The shared Core now
+stores positive indexed E1/DF AutoNote variables in `openyamm.journal.note/<id>` named global state. Event reads,
+writes, trainer/guild notes, ordinary journal display, awards and Atlas knowledge use this common ownership.
+Notes normalize to boolean flags; their numeric ID is not a character reward. Unindexed E1 remains the Intellect
+comparison. This works with the Atlas module disabled and uses the existing save encoding.
+
+Loading a legacy save performs `openyamm.migration.journal-notes-v1` once, collecting raw flags from the active
+map and cached indoor/outdoor snapshots even if unrelated named globals already exist. Canonical global values
+win, including explicit zero clears. Active-map legacy values override cached conflicts; otherwise cached
+positive evidence is retained. Within one snapshot E1 wins over its DF alias. Imported raw aliases are removed
+from restored runtime snapshots. The migration records an imported count and neither executes map events nor
+adds stat bonuses. A persisted zero and the version marker prevent stale snapshots from resurrecting a clear.
+
+Validation used an isolated native Windows Release build, ordinary OpenGL on the AMD GPU, and private saves:
+
+- 173 focused Windows unit cases passed; 25 additional real event/trainer/guild regressions passed.
+- 91 focused ASan/UBSan cases passed, including the refreshed packaged-map audit; lighting's 10 Python cases passed.
+- Strict MM7 Harmondale and MM8 Dagger Wound well interactions retain their real Might +10 / Intellect +15 bonus,
+  refuse repeated bonuses, preserve the note through map changes and save/load, and pass with Atlas disabled in MM8.
+- Actual saves retained from the previous map-local implementation migrate and retain notes after leaving the map.
+- Three native UI tours cover learned notes in both worlds and an observed-but-unused MM8 well. Fresh captures
+  were inspected: Guide shows the reference; Discovery hides its text after switching back. Post-UI save checks
+  confirm unchanged note knowledge and character bonuses, including the zero/zero unlearned case.
+
+Reusable scenarios are `tests/scenarios/atlas/mm{7,8}_well_journal.yml`; migration/privacy verifiers and setup
+instructions are under `tests/fixtures/atlas/`. Native tours are `tools/menu_tours/atlas_mm*_site_journal_*.yml`.
+Original campaigns and the official installation were not used for writes. This checkpoint covers journal-backed
+site descriptions; complete effect predicates, sites without notes, remaining loot semantics, inherited
+scripted decoration events and Android/controller acceptance remain open in `ATLAS_COVERAGE.md`.

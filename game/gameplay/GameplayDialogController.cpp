@@ -1,5 +1,7 @@
 #include "game/gameplay/GameplayDialogController.h"
 
+#include "game/gameplay/JournalState.h"
+
 #include "game/StringUtils.h"
 #include "game/audio/SoundIds.h"
 #include "game/debug/GameplayDebugTrace.h"
@@ -48,7 +50,6 @@ namespace
 {
 constexpr uint32_t DefaultAdventurersInnHouseId = 185;
 constexpr uint32_t ArcomageRulesTextId = 136;
-constexpr uint32_t AutoNoteVariableTag = 0x00E1u;
 constexpr uint32_t HeroismEffectSoundId = 14060;
 constexpr float OeYellowAlertDistance = 5120.0f;
 constexpr int OutdoorMapTravelFoodCost = 5;
@@ -912,13 +913,11 @@ bool tryRegisterTrainerNote(
             pParty);
     }
 
-    const uint32_t rawId = (*autonoteId << 16) | AutoNoteVariableTag;
-    const auto variableIt = eventRuntimeState.variables.find(rawId);
     bool changed = false;
 
-    if (variableIt == eventRuntimeState.variables.end() || variableIt->second == 0)
+    if (journalNoteValue(eventRuntimeState, uint16_t(*autonoteId)) == 0)
     {
-        eventRuntimeState.variables[rawId] = 1;
+        setJournalNoteValue(eventRuntimeState, uint16_t(*autonoteId), 1);
         changed = true;
     }
 
@@ -1784,11 +1783,6 @@ uint16_t guildMembershipPartyVariableId(uint32_t guildType)
     return static_cast<uint16_t>(GuildMembershipPartyVariableBase | static_cast<uint16_t>(guildType));
 }
 
-uint32_t autonoteVariableKey(uint32_t autonoteId)
-{
-    return (autonoteId << 16) | AutoNoteVariableTag;
-}
-
 bool hasGuildMembership(const EventRuntimeState &runtimeState, const Party *pParty, uint32_t guildType)
 {
     if (pParty != nullptr && pParty->eventVariableValue(guildMembershipPartyVariableId(guildType)) != 0)
@@ -1814,7 +1808,7 @@ void grantGuildMembership(
 
     if (offer.autonoteId != 0)
     {
-        runtimeState.variables[autonoteVariableKey(offer.autonoteId)] = 1;
+        setJournalNoteValue(runtimeState, uint16_t(offer.autonoteId), 1);
     }
 }
 

@@ -1,8 +1,10 @@
 #include "doctest/doctest.h"
+#include "engine/TextTable.h"
 
 #include "tools/LegacyLuaExport.h"
 #include "game/events/ScriptedEventProgram.h"
 
+#include <cctype>
 #include <array>
 #include <cstdint>
 #include <filesystem>
@@ -93,11 +95,24 @@ OpenYAMM::Game::ScriptedEventProgram exportPressureTrapProgram(
     REQUIRE(legacyProgram.loadFromBytes(bytes));
     LegacyLuaExportLookups lookups;
     lookups.sourceMapFile = mapName;
+    const auto noteBytes = readBinaryFixture(std::filesystem::path(OPENYAMM_SOURCE_DIR)
+        / "assets_dev/engine/data_tables/english/autonote.txt");
+    const auto noteTable = OpenYAMM::Engine::TextTable::parseTabSeparated(
+        std::string(noteBytes.begin(), noteBytes.end()));
+    REQUIRE(noteTable);
+    for (size_t i = 0; i < noteTable->getRowCount(); ++i)
+    {
+        const auto row = noteTable->getRow(i);
+        if (row.size() >= 2 && !row[0].empty() && std::isdigit(static_cast<unsigned char>(row[0][0])))
+            lookups.autonoteTexts[uint32_t(std::stoul(row[0]))] = row[1];
+    }
     const std::string lua = generateLegacyEventLuaChunk(
         legacyProgram, StrTable{}, lookups, LegacyLuaExportScope::Map, version)
         + generateLegacyEventItemRewardsLuaChunk(legacyProgram, StrTable{}, lookups,
             LegacyLuaExportScope::Map, version)
         + generateLegacyEventNpcLocationsLuaChunk(legacyProgram, StrTable{}, lookups,
+            LegacyLuaExportScope::Map, version)
+        + generateLegacyEventAutonoteRefsLuaChunk(legacyProgram, StrTable{}, lookups,
             LegacyLuaExportScope::Map, version);
     const std::vector<uint8_t> supportBytes = readBinaryFixture(
         std::filesystem::path(OPENYAMM_SOURCE_DIR) / "assets_dev/engine/scripts/common/event_support.lua");
@@ -1141,5 +1156,86 @@ TEST_CASE("legacy NPC location metadata respects reachability branches removals 
         REQUIRE(program.onLoadEventIds().size() == 1);
         CHECK(program.npcLocations().at(program.onLoadEventIds().front())
             == std::vector<ScriptedEventProgram::NpcLocation>{{42, 15}});
+    }
+}
+
+TEST_CASE("journal reference declarations bind active callbacks and reject invalid note IDs")
+{
+    using namespace OpenYAMM::Game;
+    const auto supportBytes = readBinaryFixture(std::filesystem::path(OPENYAMM_SOURCE_DIR)
+        / "assets_dev/engine/scripts/common/event_support.lua");
+    const std::string support(supportBytes.begin(), supportBytes.end());
+    const auto load = [&](const std::string &code, ScriptedEventScope scope = ScriptedEventScope::Map)
+    {
+        std::string error;
+        return ScriptedEventProgram::loadFromLuaText(support + "\n" + code, "journal-ref-test", scope, error);
+    };
+    const std::string base = "RegisterEvent(10, '', function() error('must not execute') end)\n"
+        "SetMapAutonoteRefs(10, {43, 42, 43, 65535})\n";
+    auto program = load(base);
+    REQUIRE(program);
+    CHECK(program->autonoteReferences().at(10) == std::vector<uint32_t>{42, 43, 65535});
+    for (const char *replacement : {"evt.map[10] = nil\n", "evt.map[10] = function() end\n"})
+    {
+        program = load(base + replacement);
+        REQUIRE(program);
+        CHECK(program->autonoteReferences().empty());
+    }
+    program = load(base + "AppendMapEvent(10, function() end)\nSetMapAutonoteRefs(10, {44})\n");
+    REQUIRE(program);
+    CHECK(program->autonoteReferences().at(10) == std::vector<uint32_t>{44});
+    program = load(base + "SetMapAutonoteRefs(10, {})\n");
+    REQUIRE(program);
+    CHECK(program->autonoteReferences().empty());
+    CHECK_FALSE(load("SetMapAutonoteRefs(10, {42})"));
+    for (const char *array : {"false", "{0}", "{-1}", "{'42'}", "{1.5}", "{65536}", "{4294967296}",
+        "{[2] = 42}", "{42, key = 43}"})
+        CHECK_FALSE(load(std::string("RegisterEvent(10, '', function() end)\nSetMapAutonoteRefs(10, ") + array + ")"));
+    const std::string global = "RegisterGlobalEvent(10, '', function() end)\nSetGlobalAutonoteRefs(10, {45})\n";
+    program = load(base + global, ScriptedEventScope::Global);
+    REQUIRE(program);
+    CHECK(program->autonoteReferences().at(10) == std::vector<uint32_t>{45});
+    program = load(base + global);
+    REQUIRE(program);
+    CHECK(program->autonoteReferences().at(10) == std::vector<uint32_t>{42, 43, 65535});
+}
+
+TEST_CASE("legacy journal reference metadata follows learned notes branches and synthetic continuations")
+{
+    using namespace OpenYAMM::Game;
+    std::vector<uint8_t> bytes;
+    const auto append = [&](uint16_t eventId, uint8_t step, EvtOpcode opcode, std::vector<uint8_t> payload)
+    {
+        bytes.insert(bytes.end(), {uint8_t(4 + payload.size()), uint8_t(eventId), uint8_t(eventId >> 8),
+            step, uint8_t(opcode)});
+        bytes.insert(bytes.end(), payload.begin(), payload.end());
+    };
+    append(1, 0, EvtOpcode::Add, {0xe1, 0, 42, 0, 0, 0});
+    appendExitRecord(bytes, 1, 1);
+    append(1, 2, EvtOpcode::Add, {0xe1, 0, 99, 0, 0, 0}); // Unreachable after return.
+    append(2, 0, EvtOpcode::Compare, {0x10, 0, 1, 0, 0, 0, 3});
+    append(2, 1, EvtOpcode::Set, {0xe1, 0, 43, 0, 0, 0});
+    appendExitRecord(bytes, 2, 2);
+    append(2, 3, EvtOpcode::Add, {0xe1, 0, 44, 0, 0, 0});
+    appendExitRecord(bytes, 2, 4);
+    append(3, 0, EvtOpcode::Add, {0xe1, 0, 45, 0, 0, 0});
+    appendExitRecord(bytes, 3, 1);
+    append(3, 5, EvtOpcode::OnMapReload, {});
+    append(3, 6, EvtOpcode::Add, {0xe1, 0, 46, 0, 0, 0});
+    appendExitRecord(bytes, 3, 7);
+    append(4, 0, EvtOpcode::Subtract, {0xe1, 0, 47, 0, 0, 0}); // Clearing is not learning.
+    appendExitRecord(bytes, 4, 1);
+    append(5, 0, EvtOpcode::Add, {0xe1, 0, 0x90, 1, 0, 0}); // Reserved blank journal row 400.
+    appendExitRecord(bytes, 5, 1);
+    for (LegacyEventVersion version : {LegacyEventVersion::Mm6, LegacyEventVersion::Mm7, LegacyEventVersion::Mm8})
+    {
+        const ScriptedEventProgram program = exportPressureTrapProgram(bytes, version);
+        CHECK(program.autonoteReferences().at(1) == std::vector<uint32_t>{42});
+        CHECK(program.autonoteReferences().at(2) == std::vector<uint32_t>{43, 44});
+        CHECK(program.autonoteReferences().at(3) == std::vector<uint32_t>{45});
+        CHECK_FALSE(program.autonoteReferences().contains(4));
+        CHECK_FALSE(program.autonoteReferences().contains(5));
+        REQUIRE(program.onLoadEventIds().size() == 1);
+        CHECK(program.autonoteReferences().at(program.onLoadEventIds().front()) == std::vector<uint32_t>{46});
     }
 }

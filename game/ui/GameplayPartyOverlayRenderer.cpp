@@ -1,4 +1,6 @@
 #include "game/ui/GameplayPartyOverlayRenderer.h"
+
+#include "game/gameplay/JournalState.h"
 #include "game/ui/GameplayClock.h"
 #include "game/ui/RestHourglassAnimation.h"
 #include "engine/SpriteAtlas.h"
@@ -4643,9 +4645,7 @@ void GameplayPartyOverlayRenderer::renderJournalOverlay(GameplayScreenRuntime &c
             {
                 for (const JournalAutonoteEntry &entry : pJournalAutonoteTable->entries())
                 {
-                    const auto variableIt = pEventRuntimeState->variables.find(entry.noteBit);
-
-                    if (variableIt == pEventRuntimeState->variables.end() || variableIt->second == 0)
+                    if (journalNoteValue(*pEventRuntimeState, uint16_t(entry.noteBit >> 16)) == 0)
                     {
                         continue;
                     }

@@ -339,7 +339,8 @@ std::vector<std::string> buildLuaScriptOverlayPathCandidates(
         {
             // Base declarations must precede every replacement, including .fixup and numeric prefixes.
             if (toLowerCopy(entryName) == toLowerCopy(baseName) + "_00_item_rewards.lua"
-                || toLowerCopy(entryName) == toLowerCopy(baseName) + "_00_npc_locations.lua")
+                || toLowerCopy(entryName) == toLowerCopy(baseName) + "_00_npc_locations.lua"
+                || toLowerCopy(entryName) == toLowerCopy(baseName) + "_00_autonote_refs.lua")
                 candidates.insert(candidates.begin(), "events/maps/" + entryName);
             else
                 candidates.push_back("events/maps/" + entryName);
@@ -358,7 +359,8 @@ std::vector<std::string> buildLuaGlobalScriptOverlayPathCandidates(const Engine:
         if (isLuaMapOverlayFileName(entryName, "Global"))
         {
             if (toLowerCopy(entryName) == "global_00_item_rewards.lua"
-                || toLowerCopy(entryName) == "global_00_npc_locations.lua")
+                || toLowerCopy(entryName) == "global_00_npc_locations.lua"
+                || toLowerCopy(entryName) == "global_00_autonote_refs.lua")
                 candidates.insert(candidates.begin(), "events/" + entryName);
             else
                 candidates.push_back("events/" + entryName);

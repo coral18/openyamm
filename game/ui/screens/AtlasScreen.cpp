@@ -375,6 +375,7 @@ void AtlasScreen::selectWorld(const std::string &worldId)
     m_placingNote = false;
     if (worldId == m_presentation.worldId)
         return;
+    m_siteReading.reset();
     try
     {
         WorldAtlasPresentation presentation = loadWorldAtlasPresentation(assetFileSystem(), worldId);
@@ -433,10 +434,12 @@ void AtlasScreen::drawScreen(float)
             selectWorld(m_availableWorlds[i]);
             return;
         }
-    if (button("atlas-reference", canvasRect(205, 17, 70, 27), m_referenceOpen ? "Map" : "Guidebook"))
+    if (button("atlas-reference", canvasRect(205, 17, 70, 27),
+        m_referenceOpen || m_siteReading ? "Map" : "Guidebook"))
     {
         m_placingNote = false;
-        m_referenceOpen = !m_referenceOpen;
+        m_referenceOpen = m_siteReading ? false : !m_referenceOpen;
+        m_siteReading.reset();
         m_referenceDirty = true;
         m_search.clear();
         m_referenceScroll = m_referenceDetailScroll = 0;
@@ -462,13 +465,21 @@ void AtlasScreen::drawScreen(float)
         m_panX = m_panY = 0;
         m_siteSelection.clear();
     }
+    if (m_siteReading && !m_world.featureVisible(*m_siteReading, m_knowledge, m_guide))
+        m_siteReading.reset();
     if (button("atlas-close", canvasRect(716, 17, 107, 27), "Back")
         || (!m_suppressEscape && !m_searchEditing && keyPressed(SDL_SCANCODE_ESCAPE)))
     {
-        m_close();
+        if (m_siteReading) m_siteReading.reset();
+        else m_close();
         return;
     }
     m_suppressEscape = false;
+    if (m_siteReading)
+    {
+        drawSiteJournal();
+        return;
+    }
     if (m_referenceOpen)
     {
         drawReference();
@@ -1643,6 +1654,42 @@ void AtlasScreen::drawReference()
         "menu_arrus", 11);
 }
 
+void AtlasScreen::drawSiteJournal()
+{
+    const WorldMapFeature &feature = *m_siteReading;
+    const WorldRecord *pMap = m_world.find(feature.mapId);
+    textInRect(canvasRect(25, 60, 798, 28), feature.title + " - " + pMap->map->name, "fondamento", 15);
+    textInRect(canvasRect(25, 89, 798, 25), m_guide ? "Journal reference" : "Party's recorded notes",
+        "menu_lucida", 11, 0xffc6dfeau);
+    const Rect viewport = canvasRect(25, 121, 798, 270);
+    outline(viewport, 0xff597284u);
+    std::string content;
+    try
+    {
+        for (const JournalAutonoteEntry *pNote : m_world.siteJournalEntries(feature,
+            m_data.journalAutonoteTable(), m_knowledge, m_guide))
+        {
+            if (!content.empty()) content += "\n\n";
+            content += pNote->text;
+        }
+    }
+    catch (const std::invalid_argument &error)
+    {
+        content = error.what();
+    }
+    if (content.empty()) content = "No notes recorded about this site yet.";
+    scrollViewport(viewport, m_siteJournalHeight, m_siteJournalScroll);
+    setDesignClip(viewport);
+    float height = 0;
+    textInRect({viewport.x + 10 * designScale(), viewport.y + (10 - m_siteJournalScroll) * designScale(),
+        viewport.width - 26 * designScale(), 50000 * designScale()}, content,
+        "menu_arrus", 13, 0xffc6dfeau, false, true, &height);
+    m_siteJournalHeight = height / designScale() + 20;
+    setDesignClip(std::nullopt);
+    textInRect(canvasRect(34, 407, 778, 43),
+        "Notes describe this location; effects can depend on the character and previous visits.", "menu_arrus", 11);
+}
+
 void AtlasScreen::drawDetails()
 {
     const Rect details = canvasRect(25, 403, 798, 52);
@@ -1666,10 +1713,25 @@ void AtlasScreen::drawDetails()
         int16_t creatureId = 0;
         uint32_t itemId = 0;
         const WorldMapFeature *pNote = nullptr;
+        bool hasJournal = false;
         if (selected != features.end())
         {
             const WorldMapFeature &feature = **selected;
             text = feature.title + " | " + worldMapFeatureKindName(feature.kind);
+            try
+            {
+                const auto notes = m_world.siteJournalEntries(feature,
+                    m_data.journalAutonoteTable(), m_knowledge, m_guide);
+                if (!notes.empty())
+                {
+                    hasJournal = true;
+                    text += "\n" + notes.front()->text;
+                }
+            }
+            catch (const std::invalid_argument &error)
+            {
+                text += "\n" + std::string(error.what());
+            }
             itemId = feature.itemId;
             if (feature.kind == WorldMapFeatureKind::Item)
                 text += feature.observedItem ? "\nRecorded pickup; this is not a live availability check."
@@ -1741,10 +1803,18 @@ void AtlasScreen::drawDetails()
         }
         if (!m_locationError.empty())
             text += "\n" + m_locationError;
-        textInRect(canvasRect(34, 407,
-            arrivalCount > 1 ? 565
-                : pDestination != nullptr || creatureId > 0 || itemId > 0 || pNote != nullptr ? 625 : 778, 43),
-                   text, "menu_arrus", 11);
+        const bool otherAction = pDestination != nullptr || creatureId > 0 || itemId > 0 || pNote != nullptr;
+        const float journalX = otherAction ? (arrivalCount > 1 ? 454 : 514) : 669;
+        const float textWidth = hasJournal && otherAction ? journalX - 44
+            : arrivalCount > 1 ? 565 : otherAction || hasJournal ? 625 : 778;
+        textInRect(canvasRect(34, 407, textWidth, 43), text, "menu_arrus", 11);
+        if (hasJournal && button("atlas-site-journal", canvasRect(journalX, 416, 145, 28), "Read notes"))
+        {
+            m_siteReading = **selected;
+            m_siteJournalScroll = m_siteJournalHeight = 0;
+            m_searchEditing = false;
+            setTextEditing(false);
+        }
         if (arrivalCount > 1 && button("atlas-next-arrival", canvasRect(609, 416, 50, 28), ">"))
             m_connectionChoice = (m_connectionChoice + 1) % arrivalCount;
         if (itemId > 0 && button("atlas-feature-item", canvasRect(669, 416, 145, 28), "Item details"))

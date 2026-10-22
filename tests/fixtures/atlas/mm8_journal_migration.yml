@@ -1,0 +1,27 @@
+id: atlas.mm8_legacy_well_journal
+title: Legacy map note migration survives leaving the discovery map and reload
+world: mm8
+mode: faithful
+steps:
+- load_game:
+    name: legacy-known
+    path: saves/legacy-known.oysav
+- assert:
+    runtime_event_variable:
+      id: 13500641
+      value: 1
+    named_global_var_changed:
+      name: openyamm.migration.journal-notes-v1
+      value: 1
+- load_map:
+    map: d05.blv
+- assert:
+    runtime_event_variable:
+      id: 13500641
+      value: 1
+- save_game: journal-migrated
+- load_game: journal-migrated
+- assert:
+    runtime_event_variable:
+      id: 13500641
+      value: 1

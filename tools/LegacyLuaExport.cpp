@@ -12679,7 +12679,8 @@ void emitMetadata(
 }
 
 void emitItemRewardMetadata(std::ostringstream &stream, std::string_view scopeTableName,
-    const LegacyLuaEvent &event, uint16_t handlerId, std::optional<uint8_t> entryStep = std::nullopt)
+    const LegacyLuaExportLookups &, const LegacyLuaEvent &event, uint16_t handlerId,
+    std::optional<uint8_t> entryStep = std::nullopt)
 {
     const std::vector<uint8_t> steps = collectNormalEventSteps(event);
     if (steps.empty()) return;
@@ -12710,7 +12711,8 @@ void emitItemRewardMetadata(std::ostringstream &stream, std::string_view scopeTa
 }
 
 void emitNpcLocationMetadata(std::ostringstream &stream, std::string_view scopeTableName,
-    const LegacyLuaEvent &event, uint16_t handlerId, std::optional<uint8_t> entryStep = std::nullopt)
+    const LegacyLuaExportLookups &, const LegacyLuaEvent &event, uint16_t handlerId,
+    std::optional<uint8_t> entryStep = std::nullopt)
 {
     const std::vector<uint8_t> steps = collectNormalEventSteps(event);
     if (steps.empty()) return;
@@ -12733,14 +12735,50 @@ void emitNpcLocationMetadata(std::ostringstream &stream, std::string_view scopeT
     stream << "})\n";
 }
 
+void emitAutonoteMetadata(std::ostringstream &stream, std::string_view scopeTableName,
+    const LegacyLuaExportLookups &lookups, const LegacyLuaEvent &event, uint16_t handlerId,
+    std::optional<uint8_t> entryStep = std::nullopt)
+{
+    const std::vector<uint8_t> steps = collectNormalEventSteps(event);
+    if (steps.empty()) return;
+    std::vector<uint32_t> notes;
+    for (uint8_t step : collectReachableSteps(event, steps, entryStep.value_or(steps.front())))
+        for (const LegacyLuaInstruction *pInstruction : collectMeaningfulInstructionsForStep(event, step))
+        {
+            const auto &args = pInstruction->arguments;
+            if ((pInstruction->operation == LegacyLuaOperation::Add
+                || pInstruction->operation == LegacyLuaOperation::Set)
+                && args.size() >= 2 && args[1] != 0)
+            {
+                const FormattedSelector selector = formatSelector(args[0], {});
+                if (selector.semantic == SelectorSemantic::Autonote && selector.index > 0)
+                {
+                    // Legacy note bits can be internal flags with deliberately blank journal rows.
+                    const auto text = lookups.autonoteTexts.find(selector.index);
+                    if (text != lookups.autonoteTexts.end() && !text->second.empty() && text->second != "0")
+                        notes.push_back(selector.index);
+                }
+            }
+        }
+    sortAndUnique(notes);
+    if (notes.empty()) return;
+    stream << (scopeTableName == LuaScopeGlobal ? "SetGlobalAutonoteRefs(" : "SetMapAutonoteRefs(")
+           << handlerId << ", {";
+    for (size_t i = 0; i < notes.size(); ++i) stream << (i == 0 ? "" : ", ") << notes[i];
+    stream << "})\n";
+}
+
+using EventMetadataEmitter = void (*)(std::ostringstream &, std::string_view, const LegacyLuaExportLookups &,
+    const LegacyLuaEvent &, uint16_t, std::optional<uint8_t>);
+
 void emitSyntheticTriggerEventFunctions(
     std::ostringstream &stream,
     std::string_view scopeTableName,
     const std::vector<LegacyLuaEvent> &decodedEvents,
     const LegacyLuaExportLookups &lookups,
     const std::vector<SyntheticTriggerEvent> &syntheticTriggerEvents,
-    std::ostringstream *pRewardMetadata = nullptr,
-    std::ostringstream *pNpcMetadata = nullptr)
+    std::ostringstream *pMetadata = nullptr,
+    EventMetadataEmitter emitMetadata = nullptr)
 {
     if (syntheticTriggerEvents.empty())
     {
@@ -12794,11 +12832,8 @@ void emitSyntheticTriggerEventFunctions(
         }
 
         stream << "end)\n\n";
-        if (emittedBody && pRewardMetadata != nullptr)
-            emitItemRewardMetadata(*pRewardMetadata, scopeTableName, *sourceEventIterator,
-                syntheticEvent.syntheticEventId, syntheticEvent.continuationStep);
-        if (emittedBody && pNpcMetadata != nullptr)
-            emitNpcLocationMetadata(*pNpcMetadata, scopeTableName, *sourceEventIterator,
+        if (emittedBody && pMetadata != nullptr && emitMetadata != nullptr)
+            emitMetadata(*pMetadata, scopeTableName, lookups, *sourceEventIterator,
                 syntheticEvent.syntheticEventId, syntheticEvent.continuationStep);
     }
 }
@@ -12817,11 +12852,12 @@ std::string generateLegacyEventItemRewardsLuaChunk(
     std::ostringstream metadata;
     metadata << "-- generated reward metadata from legacy EVT/STR; load after the base handlers\n";
     for (size_t i = 0; i < events.size(); ++i)
-        emitItemRewardMetadata(metadata, scopeTableName,
+        emitItemRewardMetadata(metadata, scopeTableName, lookups,
             directEventWithoutSyntheticTriggerContinuations(events[i], evtProgram.getEvents()[i]), events[i].eventId);
     // Reuse the same continuation emitter to exclude any synthetic callback whose body cannot be emitted.
     std::ostringstream handlers;
-    emitSyntheticTriggerEventFunctions(handlers, scopeTableName, events, lookups, triggers, &metadata);
+    emitSyntheticTriggerEventFunctions(handlers, scopeTableName, events, lookups, triggers,
+        &metadata, emitItemRewardMetadata);
     return metadata.str();
 }
 
@@ -12837,12 +12873,34 @@ std::string generateLegacyEventNpcLocationsLuaChunk(
     const std::vector<SyntheticTriggerEvent> triggers = collectSyntheticTriggerEvents(evtProgram);
     std::ostringstream metadata;
     for (size_t i = 0; i < events.size(); ++i)
-        emitNpcLocationMetadata(metadata, scopeTableName,
+        emitNpcLocationMetadata(metadata, scopeTableName, lookups,
             directEventWithoutSyntheticTriggerContinuations(events[i], evtProgram.getEvents()[i]), events[i].eventId);
     std::ostringstream handlers;
-    emitSyntheticTriggerEventFunctions(handlers, scopeTableName, events, lookups, triggers, nullptr, &metadata);
+    emitSyntheticTriggerEventFunctions(handlers, scopeTableName, events, lookups, triggers,
+        &metadata, emitNpcLocationMetadata);
     return metadata.str().empty() ? "" :
         "-- generated possible NPC locations from legacy EVT/STR; load after the base handlers\n" + metadata.str();
+}
+
+std::string generateLegacyEventAutonoteRefsLuaChunk(
+    const EvtProgram &evtProgram,
+    const StrTable &strTable,
+    const LegacyLuaExportLookups &lookups,
+    LegacyLuaExportScope scope,
+    LegacyEventVersion version)
+{
+    const std::string_view scopeTableName = scope == LegacyLuaExportScope::Global ? LuaScopeGlobal : LuaScopeMap;
+    const std::vector<LegacyLuaEvent> events = decodeEvents(evtProgram, strTable, lookups, version);
+    const std::vector<SyntheticTriggerEvent> triggers = collectSyntheticTriggerEvents(evtProgram);
+    std::ostringstream metadata;
+    for (size_t i = 0; i < events.size(); ++i)
+        emitAutonoteMetadata(metadata, scopeTableName, lookups,
+            directEventWithoutSyntheticTriggerContinuations(events[i], evtProgram.getEvents()[i]), events[i].eventId);
+    std::ostringstream handlers;
+    emitSyntheticTriggerEventFunctions(handlers, scopeTableName, events, lookups, triggers,
+        &metadata, emitAutonoteMetadata);
+    return metadata.str().empty() ? "" :
+        "-- generated journal references from legacy EVT/STR; load after the base handlers\n" + metadata.str();
 }
 
 std::string generateLegacyEventLuaChunk(

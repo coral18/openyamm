@@ -49,9 +49,11 @@ TEST_CASE("typed metadata overlays precede all map and global callback replaceme
     writeTextFile(mapScripts / "metadata_fixture.lua", "RegisterEvent(10, '', function() end)");
     writeTextFile(mapScripts / "metadata_fixture_00_item_rewards.lua", "SetMapItemRewards(10, {42})");
     writeTextFile(mapScripts / "metadata_fixture_00_npc_locations.lua", "SetMapNpcLocations(10, {{42, 11}})");
+    writeTextFile(mapScripts / "metadata_fixture_00_autonote_refs.lua", "SetMapAutonoteRefs(10, {42})");
     writeTextFile(globals / "Global.lua", "RegisterGlobalEvent(20, '', function() end)");
     writeTextFile(globals / "Global_00_item_rewards.lua", "SetGlobalItemRewards(20, {43})");
     writeTextFile(globals / "Global_00_npc_locations.lua", "SetGlobalNpcLocations(20, {{43, 12}})");
+    writeTextFile(globals / "Global_00_autonote_refs.lua", "SetGlobalAutonoteRefs(20, {43})");
     {
         OpenYAMM::Engine::AssetFileSystem fs;
         REQUIRE(fs.initialize(temporaryRoot, assets, OpenYAMM::Engine::AssetScaleTier::X1, "mm7"));
@@ -63,11 +65,13 @@ TEST_CASE("typed metadata overlays precede all map and global callback replaceme
                 CAPTURE(redeclared);
                 writeTextFile(mapScripts / ("metadata_fixture" + suffix),
                     "ReplaceMapEvent(10, '', function() end)\n"
-                    + std::string(redeclared ? "SetMapItemRewards(10, {44})\nSetMapNpcLocations(10, {{44, 13}})" : ""));
+                    + std::string(redeclared ? "SetMapItemRewards(10, {44})\nSetMapNpcLocations(10, {{44, 13}})\n"
+                        "SetMapAutonoteRefs(10, {44})" : ""));
                 writeTextFile(globals / ("Global" + suffix),
                     "ReplaceGlobalEvent(20, '', function() end)\n"
                     + std::string(redeclared
-                        ? "SetGlobalItemRewards(20, {45})\nSetGlobalNpcLocations(20, {{45, 14}})" : ""));
+                        ? "SetGlobalItemRewards(20, {45})\nSetGlobalNpcLocations(20, {{45, 14}})\n"
+                          "SetGlobalAutonoteRefs(20, {45})" : ""));
                 fs.refreshLookupCache();
                 MapAssetInfo map;
                 map.map.fileName = "metadata_fixture.blv";
@@ -82,6 +86,8 @@ TEST_CASE("typed metadata overlays precede all map and global callback replaceme
                     REQUIRE(map.globalEventProgram->itemRewards().contains(20));
                     CHECK(map.localEventProgram->itemRewards().at(10) == std::vector<uint32_t>{44});
                     CHECK(map.globalEventProgram->itemRewards().at(20) == std::vector<uint32_t>{45});
+                    CHECK(map.localEventProgram->autonoteReferences().at(10) == std::vector<uint32_t>{44});
+                    CHECK(map.globalEventProgram->autonoteReferences().at(20) == std::vector<uint32_t>{45});
                     CHECK(map.localEventProgram->npcLocations().at(10)
                         == std::vector<ScriptedEventProgram::NpcLocation>{{44, 13}});
                     CHECK(map.globalEventProgram->npcLocations().at(20)
@@ -91,6 +97,8 @@ TEST_CASE("typed metadata overlays precede all map and global callback replaceme
                 {
                     CHECK(map.localEventProgram->itemRewards().empty());
                     CHECK(map.globalEventProgram->itemRewards().empty());
+                    CHECK(map.localEventProgram->autonoteReferences().empty());
+                    CHECK(map.globalEventProgram->autonoteReferences().empty());
                     CHECK(map.localEventProgram->npcLocations().empty());
                     CHECK(map.globalEventProgram->npcLocations().empty());
                 }
@@ -427,7 +435,7 @@ TEST_CASE("item table contributions reject id and range collisions")
     CHECK(error.find("outside") != std::string::npos);
 }
 
-TEST_CASE("mounted MM6 MM7 MM8 NPC relocation declarations resolve against shared registries")
+TEST_CASE("mounted MM6 MM7 MM8 NPC and journal declarations resolve against shared registries")
 {
     using namespace OpenYAMM::Game;
     const std::filesystem::path root(OPENYAMM_SOURCE_DIR);
@@ -446,6 +454,8 @@ TEST_CASE("mounted MM6 MM7 MM8 NPC relocation declarations resolve against share
     HouseTable houses;
     NpcDialogTable npcs;
     MergedTeacherTopicTable teachers;
+    JournalAutonoteTable notes;
+    REQUIRE(notes.loadFromRows(rows("english/autonote.txt")));
     REQUIRE(maps.loadFromRows(rows("map_stats.txt")));
     REQUIRE(houses.loadFromRows(rows("house_data.txt")));
     REQUIRE(npcs.loadNpcRows(rows("npc.txt")));
@@ -455,7 +465,7 @@ TEST_CASE("mounted MM6 MM7 MM8 NPC relocation declarations resolve against share
         OpenYAMM::Engine::AssetFileSystem fs;
         REQUIRE(fs.initialize(root, root / "assets_dev", OpenYAMM::Engine::AssetScaleTier::X1, world));
         WorldDatabase database(maps, houses, npcs, teachers, world);
-        size_t scripts = 0, declarations = 0;
+        size_t scripts = 0, declarations = 0, journalReferences = 0;
         for (const MapStatsEntry &map : maps.getEntries())
         {
             if (map.worldId != world) continue;
@@ -466,6 +476,18 @@ TEST_CASE("mounted MM6 MM7 MM8 NPC relocation declarations resolve against share
             std::string error;
             REQUIRE_MESSAGE(GameDataLoader::loadEventPrograms(fs, asset, error), (map.fileName + ": " + error));
             ++scripts;
+            if (world == "mm7" && map.fileName == "7out02.odm")
+            {
+                REQUIRE(asset.localEventProgram);
+                CHECK(asset.localEventProgram->autonoteReferences().at(218) == std::vector<uint32_t>{262});
+                CHECK(asset.localEventProgram->autonoteReferences().at(220) == std::vector<uint32_t>{309});
+            }
+            if (world == "mm8" && map.fileName == "out01.odm")
+            {
+                REQUIRE(asset.localEventProgram);
+                CHECK(asset.localEventProgram->autonoteReferences().at(101) == std::vector<uint32_t>{206});
+                CHECK(asset.localEventProgram->autonoteReferences().at(150) == std::vector<uint32_t>{16});
+            }
             if (world == "mm8" && map.fileName == "d38.blv")
             {
                 REQUIRE(asset.localEventProgram);
@@ -487,10 +509,22 @@ TEST_CASE("mounted MM6 MM7 MM8 NPC relocation declarations resolve against share
                         ++declarations;
                     }
                 database.indexNpcLocations(**pProgram);
+                for (const auto &[eventId, ids] : (*pProgram)->autonoteReferences())
+                    for (uint32_t id : ids)
+                    {
+                        CAPTURE(map.fileName);
+                        CAPTURE(eventId);
+                        CAPTURE(id);
+                        REQUIRE(std::any_of(notes.entries().begin(), notes.entries().end(),
+                            [id](const JournalAutonoteEntry &note)
+                            { return (note.noteBit >> 16) == id && !note.text.empty() && note.text != "0"; }));
+                        ++journalReferences;
+                    }
             }
         }
         CHECK(scripts > 50);
         CHECK(declarations > 0);
+        CHECK(journalReferences > 0);
         CHECK(database.query({}, false, "possible location").empty());
         if (world == "mm7")
         {

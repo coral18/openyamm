@@ -43,6 +43,7 @@ add_executable(openyamm_unit_tests
     InventoryEquipRegressionTests.cpp
     LegacyLuaExportTests.cpp
     MapStatsRegressionTests.cpp
+    JournalStateTests.cpp
     WorldDatabaseTests.cpp
     WorldGuideTests.cpp
     MapDeltaDataTests.cpp
@@ -216,6 +217,7 @@ add_executable(openyamm_unit_tests
     ../game/tables/HouseTable.cpp
     ../game/tables/IconFrameTable.cpp
     ../game/tables/ItemTable.cpp
+    ../game/gameplay/JournalState.cpp
     ../game/tables/JournalAutonoteTable.cpp
     ../game/tables/JournalHistoryTable.cpp
     ../game/tables/JournalQuestTable.cpp

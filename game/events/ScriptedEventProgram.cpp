@@ -534,17 +534,19 @@ std::vector<ScriptedEventProgram::TimerTrigger> readTimerTriggers(
 
 namespace
 {
-bool readItemRewards(lua_State *pLuaState, int metadataIndex, ScriptedEventScope scope,
+bool readIdReferences(lua_State *pLuaState, int metadataIndex, ScriptedEventScope scope,
+    const char *pField, const char *pValues, uint32_t maximumId,
     std::unordered_map<uint16_t, std::vector<uint32_t>> &result, std::string &error)
 {
     const int stackTop = lua_gettop(pLuaState);
     const auto fail = [&]()
     {
-        error = "Invalid itemRewards metadata: expected registered handlers and arrays of positive uint32 item IDs";
+        error = "Invalid " + std::string(pField)
+            + " metadata: expected registered handlers and arrays of positive IDs up to " + std::to_string(maximumId);
         lua_settop(pLuaState, stackTop);
         return false;
     };
-    lua_getfield(pLuaState, metadataIndex, "itemRewards");
+    lua_getfield(pLuaState, metadataIndex, pField);
     if (lua_isnil(pLuaState, -1))
     {
         lua_pop(pLuaState, 1);
@@ -571,7 +573,7 @@ bool readItemRewards(lua_State *pLuaState, int metadataIndex, ScriptedEventScope
             lua_pop(pLuaState, 1);
             continue;
         }
-        lua_getfield(pLuaState, -1, "items");
+        lua_getfield(pLuaState, -1, pValues);
         if (!lua_istable(pLuaState, -1)) return fail();
         const size_t count = lua_rawlen(pLuaState, -1);
         size_t entries = 0;
@@ -581,7 +583,7 @@ bool readItemRewards(lua_State *pLuaState, int metadataIndex, ScriptedEventScope
         {
             if (!lua_isinteger(pLuaState, -2) || lua_tointeger(pLuaState, -2) <= 0
                 || uint64_t(lua_tointeger(pLuaState, -2)) > count || !lua_isinteger(pLuaState, -1)
-                || lua_tointeger(pLuaState, -1) <= 0 || uint64_t(lua_tointeger(pLuaState, -1)) > UINT32_MAX)
+                || lua_tointeger(pLuaState, -1) <= 0 || uint64_t(lua_tointeger(pLuaState, -1)) > maximumId)
                 return fail();
             ++entries;
             items.push_back(uint32_t(lua_tointeger(pLuaState, -1)));
@@ -718,7 +720,10 @@ bool ScriptedEventProgram::populateMetadataFromLua(
     program.m_textureNames = readStringArrayFromField(pLuaState, -1, "textureNames");
     program.m_spriteNames = readStringArrayFromField(pLuaState, -1, "spriteNames");
     program.m_castSpellIds = readIntegerArrayFromField<uint32_t>(pLuaState, -1, "castSpellIds");
-    if (!readItemRewards(pLuaState, lua_absindex(pLuaState, -1), scope, program.m_itemRewards, error)) return false;
+    if (!readIdReferences(pLuaState, lua_absindex(pLuaState, -1), scope,
+        "itemRewards", "items", UINT32_MAX, program.m_itemRewards, error)) return false;
+    if (!readIdReferences(pLuaState, lua_absindex(pLuaState, -1), scope,
+        "autonoteReferences", "notes", UINT16_MAX, program.m_autonoteReferences, error)) return false;
     if (!readNpcLocations(pLuaState, lua_absindex(pLuaState, -1), scope, program.m_npcLocations, error)) return false;
     program.m_levitateTrapFaceMask = readOptionalUnsignedField(pLuaState, -1, "levitateTrapFaceMask").value_or(0);
     program.m_levitateTrapEvents = readIntegerArrayFromField<uint16_t>(pLuaState, -1, "levitateTrapEvents", true);
@@ -730,6 +735,11 @@ bool ScriptedEventProgram::populateMetadataFromLua(
 const std::unordered_map<uint16_t, std::vector<uint32_t>> &ScriptedEventProgram::itemRewards() const
 {
     return m_itemRewards;
+}
+
+const std::unordered_map<uint16_t, std::vector<uint32_t>> &ScriptedEventProgram::autonoteReferences() const
+{
+    return m_autonoteReferences;
 }
 
 const std::unordered_map<uint16_t, std::vector<ScriptedEventProgram::NpcLocation>> &

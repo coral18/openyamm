@@ -1,5 +1,7 @@
 #include "game/app/GameSession.h"
 
+#include "game/gameplay/JournalState.h"
+
 #include "game/debug/GameplayDebugTrace.h"
 #include "game/gameplay/GameplayActionController.h"
 #include "game/gameplay/GameMechanics.h"
@@ -1354,6 +1356,7 @@ void GameSession::mergeNamedGlobalVarsFromRuntime(const EventRuntimeState &runti
 
 void GameSession::applyNamedGlobalVarsToRuntime(EventRuntimeState &runtimeState) const
 {
+    removeLegacyJournalNoteVariables(runtimeState);
     for (const auto &[name, value] : m_namedGlobalVars)
     {
         runtimeState.namedGlobalVars[name] = value;
@@ -1627,6 +1630,27 @@ void GameSession::restoreFromSaveData(const GameSaveData &saveData)
     m_gameMinutes = std::max(0.0f, saveData.savedGameMinutes);
     m_namedGlobalVars = saveData.namedGlobalVars;
     const bool collectLegacyNamedGlobalVars = m_namedGlobalVars.empty();
+    std::vector<const EventRuntimeState *> journalStates;
+    const EventRuntimeState *pCurrentJournalState = nullptr;
+    if (saveData.hasOutdoorRuntimeState && saveData.outdoorWorld.eventRuntimeState)
+    {
+        journalStates.push_back(&*saveData.outdoorWorld.eventRuntimeState);
+        if (saveData.currentSceneKind == SceneKind::Outdoor)
+            pCurrentJournalState = journalStates.back();
+    }
+    if (saveData.hasIndoorSceneState && saveData.indoorScene.eventRuntimeState)
+    {
+        journalStates.push_back(&*saveData.indoorScene.eventRuntimeState);
+        if (saveData.currentSceneKind == SceneKind::Indoor)
+            pCurrentJournalState = journalStates.back();
+    }
+    for (const auto &[map, snapshot] : saveData.outdoorWorldStates)
+        if (snapshot.eventRuntimeState)
+            journalStates.push_back(&*snapshot.eventRuntimeState);
+    for (const auto &[map, snapshot] : saveData.indoorSceneStates)
+        if (snapshot.eventRuntimeState)
+            journalStates.push_back(&*snapshot.eventRuntimeState);
+    migrateLegacyJournalNotes(m_namedGlobalVars, journalStates, pCurrentJournalState);
 
     if (m_gameMinutes <= 0.0f)
     {

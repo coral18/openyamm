@@ -31,6 +31,7 @@ struct WorldMapFeature
     WorldInteractionSite site;
     std::string title;
     std::vector<uint32_t> chestIds;
+    std::vector<uint32_t> autonoteIds;
     std::string targetMap;
     std::optional<WorldMonsterFeature> monster;
     uint32_t noteId = 0;

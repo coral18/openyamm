@@ -43,6 +43,7 @@ private:
     void selectFloorLayer(std::optional<int32_t> layer);
     void drawList();
     void drawDetails();
+    void drawSiteJournal();
     void drawReference();
     void rebuildReference();
     WorldGuideSource referenceSource() const;
@@ -69,6 +70,8 @@ private:
     std::vector<WorldGuideEntry> m_referenceEntries;
     WorldGuideSection m_referenceSection = WorldGuideSection::Items;
     bool m_referenceOpen = false, m_referenceDirty = true;
+    std::optional<WorldMapFeature> m_siteReading;
+    float m_siteJournalScroll = 0, m_siteJournalHeight = 0;
     std::string m_referenceSelected;
     float m_referenceScroll = 0, m_referenceDetailScroll = 0, m_referenceContentHeight = 0;
     std::optional<WorldClassComparison> m_classComparison;

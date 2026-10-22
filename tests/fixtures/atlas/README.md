@@ -66,3 +66,31 @@ promotion flags, original XP and no NPC/house/map discovery from Guide scanning/
 step initializes the headless loader's NPC registry before importing saves; it does not provide the asserted
 saved state. MM7's prerequisite/combat flags are explicit controlled fixtures in the original scenario, rather
 than a test of the scavenger hunt or castle combat. These fixtures target the base campaign, not arbitrary NPC mods.
+
+## Site journal references, cross-map persistence and privacy
+
+Run `tests/scenarios/atlas/mm7_well_journal.yml` and `mm8_well_journal.yml` against the normal packages from
+separate private working directories. They use real well targets in Harmondale / Dagger Wound Island, verify
+Might +10 / Intellect +15 without repeated rewards, and round-trip saves and map changes. Repeat MM8 with a
+private `mods/profile.yaml` enabling only `karol.test` to verify Core behavior with the Atlas module disabled.
+Scenario saves are written beneath the platform temporary scenario-save directory, grouped by scenario ID.
+
+For the learned-note UI tours, copy each scenario's `site-reused.oysav` to private `saves/before.oysav`; for the
+MM8 unlearned tour use `before-site.oysav`. Keep the two MM8 cases in different working directories. Launch at
+1600x900 with `tools/menu_tours/atlas_mm{7,8}_site_journal_known.yml` or
+`atlas_mm8_site_journal_unlearned.yml` as `debug.menu_input_tour_path`. The tours save a private quicksave before
+and after reading and capture both Guide and Discovery. Inspect the actual reading page: matching filenames
+alone do not establish correct input or privacy. The unlearned tour explicitly clears the search before typing
+again because the search persists when toggling Guide. It must show a description in Guide and no recorded
+note in Discovery. The two known tours must retain their respective real well descriptions.
+
+Run the corresponding `mm7_known_journal_privacy.yml`, `mm8_known_journal_privacy.yml` or
+`mm8_unlearned_journal_privacy.yml` verifier here. Each loads before/after saves and another round trip, asserting
+the exact note flag and character bonus. Browsing must not use the well, teach its effect or repeat its reward.
+
+For migration acceptance, retain an actual pre-fix save with a learned well note as private
+`saves/legacy-known.oysav`, then run `mm{7,8}_journal_migration.yml` with the fixed engine. The original acceptance
+used frozen previous-build saves, not current-engine fabricated legacy state. The verifiers require canonical
+note=1 and migration marker=1, then leave the discovery map and round-trip again. Pure `JournalStateTests`
+additionally cover cached-only notes, unrelated named globals, E1/DF alias conflicts, active-map clears,
+canonical zero tombstones and idempotence. Binary saves and large asset packages remain outside Git.

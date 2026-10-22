@@ -21,6 +21,8 @@ namespace OpenYAMM::Game
 {
 struct OutdoorMapData;
 class ScriptedEventProgram;
+class JournalAutonoteTable;
+struct JournalAutonoteEntry;
 enum class WorldRecordKind { Region, Dungeon, House, Npc, Trainer, Travel };
 
 // A physical interaction site in map geometry, referring to an existing house or dungeon record.
@@ -149,6 +151,8 @@ public:
     std::vector<const WorldItemSource *> itemSources(const WorldKnowledge &knowledge, bool guide) const;
     std::vector<WorldChestObservation> observedChests(const WorldMapFeature &feature,
         const WorldKnowledge &knowledge) const;
+    std::vector<const JournalAutonoteEntry *> siteJournalEntries(const WorldMapFeature &feature,
+        const JournalAutonoteTable &notes, const WorldKnowledge &knowledge, bool guide) const;
     bool featureVisible(const WorldMapFeature &feature, const WorldKnowledge &knowledge, bool guide) const;
     std::vector<const WorldMapFeature *> queryFeatures(const WorldKnowledge &knowledge, bool guide,
         const std::string &search = {}, const std::string &withinMap = {}) const;

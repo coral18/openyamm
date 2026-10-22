@@ -2,8 +2,12 @@
 #include "game/world/WorldFloorPlan.h"
 #include "game/events/ScriptedEventProgram.h"
 #include "game/events/EventRuntime.h"
+#include "game/world/WorldDatabase.h"
+#include "game/tables/JournalAutonoteTable.h"
 
+#include <algorithm>
 #include <optional>
+#include <stdexcept>
 
 namespace OpenYAMM::Game
 {
@@ -58,10 +62,30 @@ std::vector<WorldMapFeature> buildWorldMapFeatures(const std::string &mapId,
         if (feature.title.empty())
             feature.title = worldMapFeatureKindName(*kind);
         feature.chestIds = metadata->chestIds;
+        if (const auto notes = events.autonoteReferences().find(site.eventId);
+            notes != events.autonoteReferences().end())
+            feature.autonoteIds = notes->second;
         feature.targetMap = metadata->targetMap.value_or("");
         features.push_back(std::move(feature));
     }
     return features;
+}
+
+std::vector<const JournalAutonoteEntry *> WorldDatabase::siteJournalEntries(const WorldMapFeature &feature,
+    const JournalAutonoteTable &notes, const WorldKnowledge &knowledge, bool guide) const
+{
+    std::vector<const JournalAutonoteEntry *> result;
+    if (!featureVisible(feature, knowledge, guide)) return result;
+    for (uint32_t id : feature.autonoteIds)
+    {
+        if (!guide && !knowledge.autonoteIds.contains(id)) continue;
+        const auto note = std::lower_bound(notes.entries().begin(), notes.entries().end(), id,
+            [](const JournalAutonoteEntry &entry, uint32_t value) { return (entry.noteBit >> 16) < value; });
+        if (note == notes.entries().end() || (note->noteBit >> 16) != id || note->text.empty() || note->text == "0")
+            throw std::invalid_argument("Unknown site journal reference: " + std::to_string(id));
+        result.push_back(&*note);
+    }
+    return result;
 }
 
 std::string worldSiteDiscoveryKey(uint16_t eventId, const std::string &siteId)

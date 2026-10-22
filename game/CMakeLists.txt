@@ -43,6 +43,7 @@ add_library(openyamm_game STATIC
     audio/GameAudioSystem.cpp
     tables/ChestTable.cpp
     tables/AwardTable.cpp
+    gameplay/JournalState.cpp
     tables/JournalAutonoteTable.cpp
     tables/JournalHistoryTable.cpp
     tables/JournalQuestTable.cpp

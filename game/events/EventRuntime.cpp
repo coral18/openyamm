@@ -1,4 +1,6 @@
 #include "game/events/ISceneEventContext.h"
+
+#include "game/gameplay/JournalState.h"
 #include "game/world/WorldItemSources.h"
 #include "game/events/EventRuntime.h"
 #include "engine/scripting/LuaStateOwner.h"
@@ -2345,6 +2347,8 @@ int32_t EventRuntime::getVariableValue(
 
     if (variable.kind == VariableKind::AutoNote)
     {
+        if (const std::optional<uint16_t> id = journalNoteId(variable.rawId))
+            return journalNoteValue(runtimeState, *id);
         const std::unordered_map<uint32_t, int32_t>::const_iterator iterator = runtimeState.variables.find(variable.rawId);
         return iterator != runtimeState.variables.end() ? iterator->second : 0;
     }
@@ -2896,7 +2900,10 @@ void EventRuntime::setVariableValue(
     if (variable.kind == VariableKind::AutoNote)
     {
         const int32_t normalizedValue = value != 0 ? value : 0;
-        runtimeState.variables[variable.rawId] = normalizedValue;
+        if (const std::optional<uint16_t> id = journalNoteId(variable.rawId))
+            setJournalNoteValue(runtimeState, *id, normalizedValue);
+        else
+            runtimeState.variables[variable.rawId] = normalizedValue;
 
         if (normalizedValue != 0 && previousValue == 0)
         {
@@ -3676,7 +3683,10 @@ void EventRuntime::addVariableValue(
     if (variable.kind == VariableKind::AutoNote)
     {
         const int32_t updatedValue = previousValue != 0 ? previousValue : value;
-        runtimeState.variables[variable.rawId] = updatedValue;
+        if (const std::optional<uint16_t> id = journalNoteId(variable.rawId))
+            setJournalNoteValue(runtimeState, *id, updatedValue);
+        else
+            runtimeState.variables[variable.rawId] = updatedValue;
 
         if (updatedValue != 0 && previousValue == 0)
         {
@@ -4132,7 +4142,10 @@ void EventRuntime::subtractVariableValue(
     {
         if (value > 0)
         {
-            runtimeState.variables[variable.rawId] = 0;
+            if (const std::optional<uint16_t> id = journalNoteId(variable.rawId))
+                setJournalNoteValue(runtimeState, *id, 0);
+            else
+                runtimeState.variables[variable.rawId] = 0;
         }
 
         return;

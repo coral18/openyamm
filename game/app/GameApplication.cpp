@@ -1,4 +1,6 @@
 #include "game/world/WorldMapKnowledge.h"
+
+#include "game/gameplay/JournalState.h"
 #include "game/maps/MapSnapshotLookup.h"
 #include "game/app/GameApplication.h"
 #include "game/gameplay/SavePreviewImage.h"
@@ -8853,9 +8855,8 @@ bool GameApplication::openAtlasScreen(bool paused)
         {
             for (const auto &[key, value] : m_pMapSceneRuntime->eventRuntimeState()->namedGlobalVars)
                 knowledge.variables[key] = value;
-            const auto &variables = m_pMapSceneRuntime->eventRuntimeState()->variables;
             for (const JournalAutonoteEntry &note : m_gameDataRepository.journalAutonoteTable().entries())
-                if (const auto value = variables.find(note.noteBit); value != variables.end() && value->second != 0)
+                if (journalNoteValue(*m_pMapSceneRuntime->eventRuntimeState(), uint16_t(note.noteBit >> 16)) != 0)
                     knowledge.autonoteIds.insert(note.noteBit >> 16);
         }
         const auto collectFloorPlan = [&knowledge](const std::string &file, const IndoorSceneRuntime::Snapshot &state)

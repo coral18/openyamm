@@ -111,6 +111,22 @@ def validate_npc_metadata(text, script):
             raise ValueError('Invalid NPC location metadata overlay: ' + str(script))
 
 
+def validate_autonote_metadata(text, script):
+    lines = text.splitlines()
+    header = ('-- generated journal references from legacy EVT/STR; load after the base handlers'
+              if script.name.endswith('_00_autonote_refs.lua') else
+              '-- Journal reference metadata; load after gameplay overlays')
+    declaration = re.compile(r'SetMapAutonoteRefs\([1-9][0-9]*, \{(?:[1-9][0-9]*(?:, [1-9][0-9]*)*)?\}\)')
+    if not lines or lines[0] != header:
+        raise ValueError('Invalid journal reference metadata overlay: ' + str(script))
+    for line in lines[1:]:
+        line = line.strip()
+        if not line or line.startswith('--'):
+            continue
+        if not declaration.fullmatch(line) or any(int(value) > 65535 for value in re.findall(r'[0-9]+', line)):
+            raise ValueError('Invalid journal reference metadata overlay: ' + str(script))
+
+
 def export_cards(profile, output):
     assets = ROOT / 'assets_dev'
     world = assets / 'worlds' / profile['world']
@@ -155,6 +171,9 @@ def export_cards(profile, output):
         if script.name in (source.stem + '_00_npc_locations.lua', source.stem + '_zz_npc_locations.lua'):
             # Typed catalog declarations cannot affect geometry or shadow-caster state.
             validate_npc_metadata(text, script)
+            continue
+        if script.name in (source.stem + '_00_autonote_refs.lua', source.stem + '_zz_autonote_refs.lua'):
+            validate_autonote_metadata(text, script)
             continue
         use(script)
         for index, states in sprite_states(text, script).items():

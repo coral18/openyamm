@@ -1,6 +1,7 @@
 #include "doctest/doctest.h"
 
 #include "game/events/EventRuntime.h"
+#include "game/gameplay/JournalState.h"
 #include "game/events/EventDialogContent.h"
 #include "game/events/ISceneEventContext.h"
 #include "game/FaceEnums.h"
@@ -2364,15 +2365,13 @@ TEST_CASE("mm6 New Sorpigal obelisk applies autonote on press-any-key continuati
     CHECK_FALSE(party.hasQuestBit(1384));
 
     constexpr uint32_t ObeliskAutonoteVariable = (442u << 16) | 0x00e1u;
-    CHECK(runtimeState.variables.find(ObeliskAutonoteVariable) == runtimeState.variables.end());
+    CHECK_EQ(OpenYAMM::Game::journalNoteValue(runtimeState, ObeliskAutonoteVariable >> 16), 0);
 
     runtimeState.pendingInputPrompt.reset();
     REQUIRE(eventRuntime.executeEventById(localEventProgram, std::nullopt, 210, runtimeState, &party, nullptr, 2));
 
     CHECK(party.hasQuestBit(1384));
-    const auto autonoteIt = runtimeState.variables.find(ObeliskAutonoteVariable);
-    REQUIRE(autonoteIt != runtimeState.variables.end());
-    CHECK_EQ(autonoteIt->second, 442);
+    CHECK_EQ(OpenYAMM::Game::journalNoteValue(runtimeState, ObeliskAutonoteVariable >> 16), 1);
     REQUIRE_EQ(runtimeState.portraitFxRequests.size(), 1u);
     CHECK_EQ(runtimeState.portraitFxRequests.front().kind, OpenYAMM::Game::PortraitFxEventKind::AutoNote);
 }
