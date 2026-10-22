@@ -29,6 +29,58 @@ namespace OpenYAMM::Game
 {
 namespace
 {
+std::string classStartingSkills(const WorldGuideSource &source, const std::string &className,
+    const std::vector<std::pair<uint32_t, std::string>> &races)
+{
+    if (source.pCharacterSelection == nullptr) return {};
+    struct Group
+    {
+        std::vector<std::string> races, granted, optional;
+    };
+    std::vector<Group> groups;
+    for (const auto &[raceId, raceName] : races)
+    {
+        const std::vector<std::string> *pAllowed = source.pCharacterSelection->allowedClassesForRaceId(raceId);
+        if (pAllowed == nullptr || std::none_of(pAllowed->begin(), pAllowed->end(), [&](const std::string &name)
+            { return canonicalClassName(name) == className; })) continue;
+        Group profile;
+        profile.races.push_back(raceName);
+        for (const std::string &skill : allCanonicalSkillNames())
+        {
+            const StartingSkillAvailability availability =
+                source.pSkills->getEffectiveStartingSkillAvailability(className, raceId, skill);
+            if (availability == StartingSkillAvailability::HasByDefault)
+                profile.granted.push_back(displaySkillName(skill));
+            else if (availability == StartingSkillAvailability::CanLearn)
+                profile.optional.push_back(displaySkillName(skill));
+        }
+        const auto existing = std::find_if(groups.begin(), groups.end(), [&](const Group &group)
+        {
+            return group.granted == profile.granted && group.optional == profile.optional;
+        });
+        if (existing == groups.end())
+            groups.push_back(std::move(profile));
+        else
+            existing->races.push_back(raceName);
+    }
+    const auto names = [](const std::vector<std::string> &values)
+    {
+        std::string result;
+        for (const std::string &value : values)
+        {
+            if (!result.empty()) result += ", ";
+            result += value;
+        }
+        return result.empty() ? "None" : result;
+    };
+    std::string result;
+    if (!groups.empty()) result = "\n\nStarting skills by race:\n";
+    for (const Group &group : groups)
+        result += names(group.races) + "\nGranted: " + names(group.granted)
+            + "\nOptional choices: " + names(group.optional) + "\n";
+    return result;
+}
+
 struct CreatureLootReference
 {
     int16_t monsterId = 0;
@@ -505,6 +557,7 @@ std::vector<WorldGuideEntry> buildWorldGuide(const WorldGuideSource &source, Wor
                 + " | HP/level: " + std::to_string(definition.healthPerLevel)
                 + "\nBase SP: " + std::to_string(definition.baseMana)
                 + " | SP/level: " + std::to_string(definition.manaPerLevel)
+                + classStartingSkills(source, id, races)
                 + "\n\nCurrent class mastery limits:\n";
             for (const std::string &skill : allCanonicalSkillNames())
             {

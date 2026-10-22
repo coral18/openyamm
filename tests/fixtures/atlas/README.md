@@ -134,3 +134,22 @@ After the tours, create one private verifier directory per world. Copy the learn
 recorded endpoints, no additional-change flag, MM8 journal/stat state, and zero observations in unseen saves,
 then round-trip both histories. Unknown named-map values read as zero; the pure reader tests separately cover
 malformed partial records. Repeat the MM8 gameplay scenario with only `karol.test` enabled to check Atlas-off Core.
+
+
+## Class starting-skill profiles
+
+Run `mm7_class_starting_fixture.yml` and `mm8_class_starting_fixture.yml` from this directory against the normal
+packages, in separate private working directories. They explicitly seed one level-one Human Cleric, 500 gold,
+10 food and level-one Mace/Body Magic/Meditation/Learning. This is a controlled reference fixture, not proof of
+selecting those choices through the character-creation UI. Copy each temporary `before-class-reference.oysav`
+from `openyamm_scenario_saves/atlas_mm*_class_starting_fixture/` to private `saves/before.oysav`.
+
+Launch both worlds at 1600x900 with `tools/menu_tours/atlas_starting_skills.yml`. Inspect the new **Granted** and
+**Optional choices** text in Discovery; only the Human profile may appear there. Guide may show the other
+registered race/class combinations. The tour scrolls the longer profiles, checks the existing comparison grid,
+returns to Discovery and saves a private quicksave. Inspect fresh captures, not just their timestamps.
+
+Run `mm7_class_starting_privacy.yml` / `mm8_class_starting_privacy.yml` in the corresponding directories.
+It checks the same class/race/level, XP, resources and four known skills before/after browsing, verifies that
+Sword/Axe/Perception were not granted, and round-trips the result. It does not test every starting race's portrait
+availability or the full character-creation workflow. Keep all saves and captures private and outside Git.

@@ -1,0 +1,30 @@
+id: atlas.mm8_class_starting_fixture
+title: Controlled Human Cleric fixture for Atlas starting-skill reference checks
+world: mm8
+mode: faithful
+steps:
+- new_game_flow:
+    start_map: out01.odm
+    party:
+      gold: 500
+      food: 10
+      members:
+      - name: Atlas Tester
+        class: Cleric
+        race_id: 0
+        level: 1
+        skills:
+        - name: Mace
+          level: 1
+          mastery: 1
+        - name: BodyMagic
+          level: 1
+          mastery: 1
+        - name: Meditation
+          level: 1
+          mastery: 1
+        - name: Learning
+          level: 1
+          mastery: 1
+        equipment: {}
+- save_game: before-class-reference

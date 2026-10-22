@@ -1604,3 +1604,30 @@ The two extended actual-well scenarios, MM8 Atlas-off variant, four native AMD/O
 save/privacy verifiers passed. Captures were inspected, including both unseen sites' actual reference readers
 and the empty Discovery reader after returning from Guide. Private results are under the local Windows
 `atlas-site-observations-20261022/` directory. This is focused acceptance, not a full suite or Android result.
+
+
+### Starting-skill profiles by class and race, 2026-10-22
+
+Class details now show **Starting skills by race**, separating automatically granted skills from optional choices.
+The profiles query `ClassSkillTable::getEffectiveStartingSkillAvailability`, the same evaluator used by New Game,
+including racial grants, restrictions and the loaded starting-skill table. A higher mastery cap alone does not
+invent an extra starting choice. Identical profiles share one list of race names to keep the reading page compact.
+
+Race/class combinations follow the shared selection registry; Discovery uses only known party classes and races.
+Guide can read all registered profiles, and switching back does not teach a race or class. Replacing the starting
+skill table updates the reference without changing class caps. These profiles describe skill rules; portrait
+availability, preset optional selections and starting attribute allocation remain separate creation data.
+The existing scrollable class view and mastery comparison continue to work alongside the new text.
+
+The custom-class regression includes sparse race ID 97, a race-only Perception choice, an increased Learning cap
+which is not a starting choice, identical Human/Twin profiles, a race excluded from that class and changed data
+mod defaults. A canonical Knight check uses the mounted source tables to distinguish granted Sword/Leather Armor
+from the Human Learning mastery modifier. Reusable controlled Human Cleric fixtures and native tour/privacy checks
+are documented in `tests/fixtures/atlas/README.md`.
+
+Accepted checks for starting-skill profiles: the Windows Release build, 35 focused Guide cases / 1,278 assertions,
+four existing race-skill cases / 81 assertions, both native AMD/OpenGL tours and both 31-step post-UI save/privacy
+verifiers passed. Fresh captures confirm the Human-only Discovery profile, complete registered Guide profiles,
+scrolling, the existing comparison grid and return to gameplay. Tests use controlled private campaigns under
+`atlas-class-starting-20261022/` in the Windows development directory. This is focused PC acceptance; full
+character-creation, original-source asset gates, Android/controller acceptance and complete Atlas coverage remain open.

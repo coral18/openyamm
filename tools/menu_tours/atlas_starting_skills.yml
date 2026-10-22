@@ -1,0 +1,64 @@
+output_dir: captures
+exit: true
+steps:
+- expect: gameplay
+- key: F9
+- pause: true
+- click:
+  - 800
+  - 821
+- click:
+  - 450
+  - 57
+- click:
+  - 515
+  - 126
+- click:
+  - 200
+  - 265
+- capture: discovery-starting-skills
+- pointer_move:
+  - 1000
+  - 540
+- wheel: -2
+- capture: discovery-choices-scroll
+- click:
+  - 1152
+  - 57
+- click:
+  - 275
+  - 190
+- text: Cleric
+- key: Return
+- click:
+  - 200
+  - 265
+- capture: guide-starting-skills
+- pointer_move:
+  - 1000
+  - 540
+- wheel: -4
+- capture: guide-race-choices
+- click:
+  - 1440
+  - 190
+- capture: comparison-still-available
+- click:
+  - 1440
+  - 190
+- click:
+  - 1152
+  - 57
+- click:
+  - 200
+  - 265
+- capture: discovery-after-guide
+- click:
+  - 1450
+  - 57
+- expect: pause
+- click:
+  - 800
+  - 301
+- expect: gameplay
+- key: F9

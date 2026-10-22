@@ -554,6 +554,7 @@ TEST_CASE("world guide canonical class comparisons use the gameplay race evaluat
     REQUIRE(classes.loadFromRows(guideTableRows("class_multipliers.txt")));
     REQUIRE(classes.applyClassExtraRows(guideTableRows("class_extra.txt")));
     REQUIRE(skills.loadCapsFromRows(guideTableRows("class_skills.txt")));
+    REQUIRE(skills.loadStartingSkillsFromRows(guideTableRows("class_starting_skills.txt")));
     REQUIRE(skills.loadClassMetadataFromRows(guideTableRows("class_extra.txt")));
     REQUIRE(skills.loadClassSpellPointMetadataFromRows(guideTableRows("class_multipliers.txt")));
     MergedRaceSkillTable racial;
@@ -571,6 +572,14 @@ TEST_CASE("world guide canonical class comparisons use the gameplay race evaluat
     knowledge.classes.insert("Knight"); knowledge.races.insert(0);
     const auto entries = buildWorldGuide(source, WorldGuideSection::Classes, knowledge, false);
     REQUIRE(entries.size() == 1);
+    const size_t starting = entries.front().details.find("Starting skills by race:");
+    REQUIRE(starting != std::string::npos);
+    const std::string startingChoices = entries.front().details.substr(starting,
+        entries.front().details.find("Current class mastery limits:", starting) - starting);
+    CHECK(startingChoices.find("Human\nGranted: Sword, Leather Armor") != std::string::npos);
+    CHECK(startingChoices.find("Learning") == std::string::npos);
+    CHECK(startingChoices.find("Vampire") == std::string::npos);
+
     const SkillMastery base = skills.getClassCap("Knight", "Learning");
     const SkillMastery human = skills.getEffectiveCap("Knight", 0, "Learning");
     REQUIRE(base != human);
@@ -1644,4 +1653,77 @@ TEST_CASE("world reward receipts reject stale pending origins and malformed disc
     confirmWorldItemReward(wideId, false, 0);
     REQUIRE(worldObservedItemSources(wideId).size() == 1);
     CHECK(worldObservedItemSources(wideId).front().itemId == UINT32_MAX);
+}
+
+TEST_CASE("world guide starting choices follow race creation rules and never reveal unknown race profiles")
+{
+    ClassMultiplierTable classes;
+    REQUIRE(classes.loadFromRows({{"Class", "HP", "HP/level", "SP", "SP/level", "Mana"},
+        {"CinderNovice", "20", "3", "5", "1", "Intellect"},
+        {"CinderAdept", "25", "5", "8", "2", "Intellect"}}));
+    ClassSkillTable skills;
+    REQUIRE(skills.loadCapsFromRows({{"Skill", "CinderNovice", "CinderAdept"},
+        {"Sword", "M", "G"}, {"Axe", "M", "G"}, {"Learning", "B", "E"}, {"Perception", "-", "-"}}));
+    REQUIRE(skills.loadStartingSkillsFromRows({{"Class", "Sword", "Axe", "Learning", "Perception"},
+        {"CinderNovice", "F", "C", "-", "-"}, {"CinderAdept", "F", "C", "-", "-"}}));
+    MergedCharacterSelectionTable selection;
+    MergedRaceSkillTable racial;
+    std::string error;
+    REQUIRE(selection.loadFromYaml("race_class_availability:\n"
+        "- {race: Human, race_id: 0, classes: [CinderNovice]}\n"
+        "- {race: Twin, race_id: 12, classes: [CinderNovice]}\n"
+        "- {race: Windborn, race_id: 97, classes: [CinderNovice]}\n"
+        "- {race: Unlisted, race_id: 98, classes: [CinderAdept]}\n"
+        "new_game_continents:\n- {name: Testland, available_class_ids: [0], available_race_ids: [0,12,97,98]}\n",
+        error));
+    REQUIRE(racial.loadFromYaml("rules:\n"
+        "- {race: Windborn, race_id: 97, skill: Perception, min_mastery: basic}\n"
+        "- {race: Windborn, race_id: 97, skill: Learning, add: 1}\n", error));
+    REQUIRE(skills.applyRaceSkillOverrides(racial));
+    CHECK(skills.getEffectiveStartingSkillAvailability("CinderNovice", 97, "Perception")
+        == StartingSkillAvailability::CanLearn);
+    CHECK(skills.getEffectiveStartingSkillAvailability("CinderNovice", 97, "Learning")
+        == StartingSkillAvailability::None);
+    WorldGuideSource source;
+    source.pClasses = &classes;
+    source.pSkills = &skills;
+    source.pCharacterSelection = &selection;
+    WorldGuideKnowledge knowledge;
+    knowledge.classes.insert("CinderNovice");
+    knowledge.races.insert(0);
+    const auto startingText = [](const WorldGuideEntry &entry)
+    {
+        const size_t start = entry.details.find("Starting skills by race:");
+        return start == std::string::npos ? std::string{}
+            : entry.details.substr(start, entry.details.find("Current class mastery limits:", start) - start);
+    };
+    auto discovered = buildWorldGuide(source, WorldGuideSection::Classes, knowledge, false);
+    REQUIRE(discovered.size() == 1);
+    const std::string known = startingText(discovered[0]);
+    CHECK(known.find("Human\nGranted: Sword\nOptional choices: Axe") != std::string::npos);
+    CHECK(known.find("Windborn") == std::string::npos);
+    CHECK(known.find("Twin") == std::string::npos);
+    CHECK(known.find("Perception") == std::string::npos);
+    const auto guide = buildWorldGuide(source, WorldGuideSection::Classes, knowledge, true);
+    const auto novice = std::find_if(guide.begin(), guide.end(),
+        [](const WorldGuideEntry &entry) { return entry.id == "CinderNovice"; });
+    REQUIRE(novice != guide.end());
+    const std::string reference = startingText(*novice);
+    CHECK(reference.find("Human, Twin\nGranted: Sword\nOptional choices: Axe") != std::string::npos);
+    CHECK(reference.find("Windborn\nGranted: Sword\nOptional choices: Axe, Perception") != std::string::npos);
+    CHECK(reference.find("Unlisted") == std::string::npos);
+    CHECK(reference.find("Learning") == std::string::npos);
+    CHECK(knowledge.races == std::unordered_set<uint32_t>{0});
+    CHECK(knowledge.classes == std::unordered_set<std::string>{"CinderNovice"});
+    knowledge.races.insert(97);
+    discovered = buildWorldGuide(source, WorldGuideSection::Classes, knowledge, false);
+    CHECK(startingText(discovered[0]).find("Windborn") != std::string::npos);
+    // A data mod can replace the starting defaults without changing the mastery caps.
+    REQUIRE(skills.loadStartingSkillsFromRows({{"Class", "Sword", "Axe"}, {"CinderNovice", "C", "F"}}));
+    discovered = buildWorldGuide(source, WorldGuideSection::Classes, knowledge, false);
+    CHECK(startingText(discovered[0]).find("Granted: Axe\nOptional choices: Sword") != std::string::npos);
+    CHECK(skills.getClassCap("CinderNovice", "Sword") == SkillMastery::Master);
+    source.pCharacterSelection = nullptr;
+    discovered = buildWorldGuide(source, WorldGuideSection::Classes, knowledge, false);
+    CHECK(startingText(discovered[0]).empty());
 }

@@ -1,0 +1,148 @@
+id: atlas.mm8_class_starting_privacy
+title: Starting-skill references do not change class race skills experience or resources
+mode: faithful
+steps:
+- load_game:
+    name: before
+    path: saves/before.oysav
+- assert:
+    runtime_event_variable:
+      id: 2
+      member_index: 0
+      value: 4
+- assert:
+    runtime_event_variable:
+      id: 14
+      member_index: 0
+      value: 0
+- assert:
+    runtime_event_variable:
+      id: 9
+      member_index: 0
+      value: 1
+- assert:
+    runtime_event_variable:
+      id: 13
+      member_index: 0
+      value: 0
+- assert:
+    runtime_event_variable:
+      id: 21
+      member_index: 0
+      value: 500
+- assert:
+    runtime_event_variable:
+      id: 23
+      member_index: 0
+      value: 10
+- assert:
+    runtime_event_variable:
+      id: 74
+      member_index: 0
+      value: 1
+- assert:
+    runtime_event_variable:
+      id: 86
+      member_index: 0
+      value: 1
+- assert:
+    runtime_event_variable:
+      id: 93
+      member_index: 0
+      value: 1
+- assert:
+    runtime_event_variable:
+      id: 104
+      member_index: 0
+      value: 1
+- assert:
+    runtime_event_variable:
+      id: 69
+      member_index: 0
+      value: 0
+- assert:
+    runtime_event_variable:
+      id: 71
+      member_index: 0
+      value: 0
+- assert:
+    runtime_event_variable:
+      id: 94
+      member_index: 0
+      value: 0
+- load_game:
+    name: quicksave
+    path: saves/quicksave.oysav
+- assert:
+    runtime_event_variable:
+      id: 2
+      member_index: 0
+      value: 4
+- assert:
+    runtime_event_variable:
+      id: 14
+      member_index: 0
+      value: 0
+- assert:
+    runtime_event_variable:
+      id: 9
+      member_index: 0
+      value: 1
+- assert:
+    runtime_event_variable:
+      id: 13
+      member_index: 0
+      value: 0
+- assert:
+    runtime_event_variable:
+      id: 21
+      member_index: 0
+      value: 500
+- assert:
+    runtime_event_variable:
+      id: 23
+      member_index: 0
+      value: 10
+- assert:
+    runtime_event_variable:
+      id: 74
+      member_index: 0
+      value: 1
+- assert:
+    runtime_event_variable:
+      id: 86
+      member_index: 0
+      value: 1
+- assert:
+    runtime_event_variable:
+      id: 93
+      member_index: 0
+      value: 1
+- assert:
+    runtime_event_variable:
+      id: 104
+      member_index: 0
+      value: 1
+- assert:
+    runtime_event_variable:
+      id: 69
+      member_index: 0
+      value: 0
+- assert:
+    runtime_event_variable:
+      id: 71
+      member_index: 0
+      value: 0
+- assert:
+    runtime_event_variable:
+      id: 94
+      member_index: 0
+      value: 0
+- save_game: class-reference-privacy-roundtrip
+- load_game: class-reference-privacy-roundtrip
+- assert:
+    runtime_event_variable:
+      id: 2
+      member_index: 0
+      value: 4
+world: mm8
