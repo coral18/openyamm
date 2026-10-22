@@ -1,0 +1,115 @@
+id: atlas.mm8_accuracy_quest_knowledge
+title: Strict Pure Accuracy request, partial recipe refusal, reward and persistent
+  journal knowledge
+world: mm8
+mode: faithful
+steps:
+- new_game_flow:
+    start_map: out08.odm
+- assert:
+    qbit_clear:
+    - 132
+    - 133
+    - 134
+    runtime_event_variable:
+      id: 13
+      member_index: 0
+      value: 10000
+- speak_npc:
+    source_id: 77
+- select_topic:
+    kind: npc_topic
+    action_id: 244
+- assert:
+    qbit_set:
+    - 132
+    qbit_clear:
+    - 133
+    - 134
+    named_global_var_changed:
+      name: openyamm.discovery.quest/132
+      value: 1
+- save_game: accuracy-accepted
+- load_game: accuracy-accepted
+- note: Reagents are controlled inventory fixtures; gathering and alchemy mixing are
+    not tested.
+- setup_shortcut:
+    kind: grant_item
+    item_id: 200
+- setup_shortcut:
+    kind: grant_item
+    item_id: 200
+- setup_shortcut:
+    kind: grant_item
+    item_id: 205
+- setup_shortcut:
+    kind: grant_item
+    item_id: 210
+- setup_shortcut:
+    kind: grant_item
+    item_id: 210
+- setup_shortcut:
+    kind: grant_item
+    item_id: 210
+- save_game: partial-reagent-fixture
+- load_game: partial-reagent-fixture
+- speak_npc:
+    source_id: 77
+- select_topic:
+    kind: npc_topic
+    action_id: 246
+- assert:
+    qbit_set:
+    - 132
+    qbit_clear:
+    - 133
+    - 134
+    inventory_any_member:
+    - item_id: 200
+    - item_id: 205
+    - item_id: 210
+    runtime_event_variable:
+      id: 13
+      member_index: 0
+      value: 10000
+- setup_shortcut:
+    kind: grant_item
+    item_id: 210
+- save_game: full-reagent-fixture
+- load_game: full-reagent-fixture
+- speak_npc:
+    source_id: 77
+- select_topic:
+    kind: npc_topic
+    action_id: 246
+- assert:
+    qbit_clear:
+    - 132
+    - 134
+    qbit_set:
+    - 133
+    held_item:
+      active: true
+      item_id: 269
+    runtime_event_variable:
+      id: 13
+      member_index: 0
+      value: 15000
+    dialog:
+      actions:
+      - id: 245
+- save_game: accuracy-completed
+- load_game: accuracy-completed
+- assert:
+    qbit_clear:
+    - 132
+    - 134
+    qbit_set:
+    - 133
+    runtime_event_variable:
+      id: 13
+      member_index: 0
+      value: 15000
+    named_global_var_changed:
+      name: openyamm.discovery.quest/132
+      value: 1

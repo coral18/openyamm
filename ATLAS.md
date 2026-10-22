@@ -1399,3 +1399,28 @@ Reusable inputs are `mm7_campaign_requests_knowledge.yml`, `mm7_tapestry_{light,
 captures are under the Windows development root's `atlas-mm7-campaign-20261021/` directory. Android/controller
 checks, remaining conditional/reward stages, MM8's broken Accuracy journal and wider site/reference coverage
 remain part of the active complete-Atlas objective.
+
+
+### Pure Accuracy journal and save migration, 2026-10-22
+
+The shared quest registry now covers 145 entries / 581 relationships (76 MM7, 69 MM8). Galvinus' Pure Accuracy
+request uses active bit 132 and completion bit 133; it no longer writes Blazen bit 134. A world-local supplement
+replaces the authored handlers while preserving recipe groups, partial-recipe refusal, one potion and 5000 XP.
+Its fixed reward is declared for the shared item-source index. Generated Lua and the binary save schema are unchanged.
+
+A versioned import recognizes the verified legacy NPC/flag patterns, restores active or remembered historical
+quest state, records provenance and leaves unclassified state intact. It never grants rewards or erases ambiguous
+old Blazen flags. Core supplies generic NPC-topic and remembered-quest APIs; Atlas contains no quest-state workaround.
+[The content audit](ATLAS_QUEST_AUDIT.md) defines the import cases and compatibility boundary.
+
+Strict Windows checks cover original legacy active/completed saves with and without Blazen's actual Cure,
+repeated save switching, unchanged XP, fresh failure/success/reload and Atlas-disabled operation. Native AMD
+OpenGL captures show active and imported historical quest entries. The fixture preparer supports a private
+legacy-script shadow view for reproducing old saves without committing binary saves or large packages.
+
+Targeted validation: Atlas/save/package/mod 194 cases / 7479 assertions; Lua/NPC 73 / 2198; curated Linux
+ASan/UBSan 89 / 4946. The optional wider GameplayRuleRegression sweep has 11 missing-source-fixture failures
+in this sparse checkout, so these are scoped results. Private logs/settings/saves/captures are in
+`atlas-accuracy-20261022/` under the Windows development root. Public inputs are the fresh scenario,
+legacy/import fixtures in `tests/fixtures/atlas/` and `tools/menu_tours/atlas_mm8_accuracy_quest.yml`.
+Android/controller and the remaining conditional/site/reference checks are still part of the incomplete objective.

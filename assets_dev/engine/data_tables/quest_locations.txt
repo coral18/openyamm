@@ -199,6 +199,9 @@ QBit	World	Role	Kind	Target	Visibility	RequiredQBits	ForbiddenQBits
 129	mm8	objective	map	world.mm8.map.d12	journal
 129	mm8	objective	map	world.mm8.map.out03	journal
 129	mm8	return	npc	76	journal
+132	mm8	giver	npc	77	journal
+132	mm8	return	npc	77	journal
+132	mm8	return	map	world.mm8.map.out08	journal
 135	mm8	giver	npc	30	journal
 135	mm8	objective	item	652	journal
 135	mm8	objective	map	world.mm8.map.d05	journal

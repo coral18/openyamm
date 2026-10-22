@@ -1463,7 +1463,7 @@ EventDialogContent buildEventDialogContent(
                 overrideIt != npcRuntimeState.npcTopicOverrides.end() ? &overrideIt->second : nullptr;
             const std::vector<NpcDialogTable::ResolvedTopic> topics =
                 pNpcDialogTable->getTopicsForNpc(dialog.sourceId, pTopicOverrides);
-            const EventRuntime eventRuntime = {};
+            const EventRuntime eventRuntime(nullptr, pNpcDialogTable);
 
             if (hasPendingArenaOffer)
             {

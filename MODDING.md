@@ -107,6 +107,20 @@ create quest definitions or a Lua QBit API. Future modules must continue using t
 
 ## Shared quest relationships and learned clues
 
+Campaign Lua has two additional native `evt` bindings:
+
+- `evt.GetNPCTopic(npcId, slot)` reads a zero-based topic slot from the current NPC registry and runtime overrides.
+  An explicit override of zero stays hidden; it does not fall back to the base topic. Unknown NPCs and invalid
+  numeric IDs are errors. The query is also available inside read-only `CanShowTopic` handlers.
+- `evt.RememberQuest(qbitId)` records an existing journal reference as known without accepting/completing the quest,
+  changing QBits, awarding rewards or learning conditional destinations. It is idempotent and persists with the
+  existing knowledge namespace. Unknown/placeholder journal entries and read-only calls are errors.
+
+These bindings support world scripts and explicit state migrations; they do not add mod-loader Lua entrypoints.
+The MM8 Pure Accuracy supplement uses them to import known legacy states without synthesizing quest transitions
+or writing Atlas-specific UI state. Its version/case/original flags and NPC slots are recorded under
+`openyamm.migration.mm8.pure-accuracy-v1`. Ambiguous old bit 134 is preserved. See the quest content audit.
+
 The shared `engine/data_tables/quest_locations.txt` associates existing journal entries with canonical maps and
 merged NPC, house or item IDs. Core owns the reader and knowledge API; content defines the relationships.
 This is not a general typed quest-patching interface yet. See [the content audit](ATLAS_QUEST_AUDIT.md).

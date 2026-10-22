@@ -8199,6 +8199,54 @@ int luaSetMonGroupBit(lua_State *pLuaState)
     return 0;
 }
 
+int luaGetNpcTopic(lua_State *pLuaState)
+{
+    const lua_Integer rawNpcId = luaL_checkinteger(pLuaState, 1);
+    const lua_Integer rawSlot = luaL_checkinteger(pLuaState, 2);
+    luaL_argcheck(pLuaState, rawNpcId > 0 && rawNpcId <= std::numeric_limits<uint32_t>::max(), 1,
+        "NPC id must be a positive 32-bit integer");
+    luaL_argcheck(pLuaState, rawSlot >= 0 && rawSlot <= std::numeric_limits<uint32_t>::max(), 2,
+        "topic slot must be a nonnegative 32-bit integer");
+    const uint32_t npcId = uint32_t(rawNpcId);
+    const uint32_t slot = uint32_t(rawSlot);
+    const EventRuntime *pRuntime = readableEventRuntime(pLuaState);
+    const NpcDialogTable *pTable = pRuntime != nullptr ? pRuntime->npcDialogTable() : nullptr;
+    const NpcEntry *pNpc = pTable != nullptr ? pTable->getNpc(npcId) : nullptr;
+    if (pNpc == nullptr) return luaL_error(pLuaState, "Unknown NPC id: %I", rawNpcId);
+    uint32_t topic = slot < pNpc->topicIds.size() ? pNpc->topicIds[slot] : 0;
+    const EventRuntimeState *pState = readableRuntimeState(pLuaState);
+    if (pState != nullptr)
+    {
+        const auto npc = pState->npcTopicOverrides.find(npcId);
+        if (npc != pState->npcTopicOverrides.end())
+        {
+            const auto overridden = npc->second.find(slot);
+            if (overridden != npc->second.end()) topic = overridden->second;
+        }
+    }
+    lua_pushinteger(pLuaState, topic);
+    return 1;
+}
+
+int luaRememberQuest(lua_State *pLuaState)
+{
+    EventRuntimeState *pState = writableRuntimeState(pLuaState);
+    if (pState == nullptr) return luaL_error(pLuaState, "RememberQuest requires a writable event");
+    const lua_Integer rawId = luaL_checkinteger(pLuaState, 1);
+    luaL_argcheck(pLuaState, rawId > 0 && rawId <= std::numeric_limits<uint32_t>::max(), 1,
+        "quest id must be a positive 32-bit integer");
+    const uint32_t id = uint32_t(rawId);
+    const Party *pParty = readableParty(pLuaState);
+    const JournalQuestTable *pTable = pParty != nullptr ? pParty->journalQuestTable() : nullptr;
+    if (pTable == nullptr) return luaL_error(pLuaState, "RememberQuest requires a journal registry");
+    const auto quest = std::find_if(pTable->entries().begin(), pTable->entries().end(),
+        [id](const JournalQuestEntry &entry) { return entry.qbitId == id && entry.text != "0"; });
+    if (quest == pTable->entries().end()) return luaL_error(pLuaState, "Unknown quest id: %I", rawId);
+    // Learning a journal reference does not accept/complete a quest or infer conditional destinations.
+    pState->namedGlobalVars[JournalQuestTable::discoveryKey(id)] = 1;
+    return 0;
+}
+
 int luaSetNpcTopic(lua_State *pLuaState)
 {
     EventRuntimeState *pRuntimeState = writableRuntimeState(pLuaState);
@@ -8357,6 +8405,7 @@ void registerEventBindings(LuaSessionCache &session)
     registerLuaFunction(pLuaState, "SetQuestBit", luaSetQuestBit);
     registerLuaFunction(pLuaState, "QuestCompleteFeedback", luaQuestCompleteFeedback);
     registerLuaFunction(pLuaState, "ClearQuestBit", luaClearQuestBit);
+    registerLuaFunction(pLuaState, "RememberQuest", luaRememberQuest);
     registerLuaFunction(pLuaState, "GetPartyPosition", luaGetPartyPosition);
     registerLuaFunction(pLuaState, "GetEnemyDetectorState", luaGetEnemyDetectorState);
     registerLuaFunction(pLuaState, "SetMapActorPosition", luaSetMapActorPosition);
@@ -8449,6 +8498,7 @@ void registerEventBindings(LuaSessionCache &session)
     registerLuaFunction(pLuaState, "SimpleMessage", luaSimpleMessage);
     registerLuaFunction(pLuaState, "SummonItem", luaSummonItem);
     registerLuaFunction(pLuaState, "SummonObject", luaSummonObject);
+    registerLuaFunction(pLuaState, "GetNPCTopic", luaGetNpcTopic);
     registerLuaFunction(pLuaState, "SetNPCTopic", luaSetNpcTopic);
     registerLuaFunction(pLuaState, "MoveNPC", luaMoveNpc);
     registerLuaFunction(pLuaState, "GiveItem", luaGiveItem);

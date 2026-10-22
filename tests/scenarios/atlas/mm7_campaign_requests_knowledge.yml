@@ -38,3 +38,6 @@ steps:
     named_global_var_changed: {name: openyamm.discovery.quest/530, value: 1}
 - assert:
     named_global_var_changed: {name: openyamm.discovery.quest/539, value: 1}
+- assert:
+    qbit_clear: [132, 133, 134]
+    named_global_var_changed: {name: openyamm.discovery.quest/132, value: 0}

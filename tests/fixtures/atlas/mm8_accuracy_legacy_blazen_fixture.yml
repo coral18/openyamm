@@ -1,0 +1,84 @@
+# The normal fixed runtime must fail these intentionally legacy assertions.
+id: atlas.accuracy_legacy_blazen
+world: mm8
+mode: faithful
+steps:
+- new_game_flow:
+    start_map: d20.blv
+- note: Run only with legacy-pure-accuracy fixture assets; inventory grants isolate
+    quest state, not gathering.
+- speak_npc:
+    source_id: 107
+- select_topic:
+    kind: npc_topic
+    action_id: 54
+- setup_shortcut:
+    kind: grant_item
+    item_id: 623
+- save_game: blazen-cure-fixture
+- load_game: blazen-cure-fixture
+- speak_npc:
+    source_id: 107
+- select_topic:
+    kind: npc_topic
+    action_id: 54
+- assert:
+    qbit_set:
+    - 134
+    - 435
+    - 1542
+- save_game: blazen-authored-cure
+- load_game: blazen-authored-cure
+- load_map:
+    map: out08.odm
+- speak_npc:
+    source_id: 77
+- select_topic:
+    kind: npc_topic
+    action_id: 244
+- assert:
+    qbit_set:
+    - 133
+    qbit_clear:
+    - 132
+- save_game: legacy-active
+- setup_shortcut:
+    kind: grant_item
+    item_id: 200
+- setup_shortcut:
+    kind: grant_item
+    item_id: 200
+- setup_shortcut:
+    kind: grant_item
+    item_id: 205
+- setup_shortcut:
+    kind: grant_item
+    item_id: 210
+- setup_shortcut:
+    kind: grant_item
+    item_id: 210
+- setup_shortcut:
+    kind: grant_item
+    item_id: 210
+- setup_shortcut:
+    kind: grant_item
+    item_id: 210
+- save_game: legacy-reagents
+- load_game: legacy-reagents
+- speak_npc:
+    source_id: 77
+- select_topic:
+    kind: npc_topic
+    action_id: 246
+- assert:
+    qbit_set:
+    - 134
+    qbit_clear:
+    - 132
+    - 133
+- save_game: legacy-completed
+- assert:
+    qbit_set:
+    - 435
+    - 1542
+title: Legacy Pure Accuracy save fixture; requires legacy-pure-accuracy package view

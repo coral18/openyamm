@@ -38,6 +38,7 @@
 #include "game/tables/JournalQuestTable.h"
 #include "game/tables/ItemTable.h"
 #include "game/tables/MonsterTable.h"
+#include "game/tables/NpcDialogTable.h"
 #include "game/tables/SpriteTables.h"
 #include "game/tables/SurfaceMaterialTable.h"
 #include "game/ui/GameplayOverlayTypes.h"
@@ -6545,6 +6546,86 @@ TEST_CASE("lua AskQuestion uses question text when prior dialogue messages are s
     CHECK(dialog.isActive);
     REQUIRE_FALSE(dialog.lines.empty());
     CHECK_EQ(dialog.lines[0], "What is there when");
+}
+
+TEST_CASE("lua effective NPC topics preserve explicit hidden overrides and validate identities")
+{
+    using namespace OpenYAMM::Game;
+    NpcDialogTable npcs;
+    std::vector<std::string> npc(16, "0");
+    npc[0] = "77"; npc[1] = "Galvinus"; npc[10] = "244"; npc[12] = "246";
+    REQUIRE(npcs.loadNpcRows({npc}));
+    REQUIRE(npcs.loadTopicsFromRows({{"244", "Request", "", "", "", ""},
+        {"246", "Reward", "", "", "", ""}}));
+    EventRuntime runtime(nullptr, &npcs);
+    EventRuntimeState state;
+    const auto program = loadSyntheticScriptedProgram(
+        "evt.map[451] = function()\n"
+        "  evt.SetGlobalVar('default', evt.GetNPCTopic(77, 2))\n"
+        "  evt.SetNPCTopic(77, 2, 0)\n"
+        "  evt.SetGlobalVar('hidden', evt.GetNPCTopic(77, 2))\n"
+        "end\n"
+        "evt.CanShowTopic[246] = function() return evt.GetNPCTopic(77, 2) ~= 0 end\n",
+        "@NpcTopicQuery.lua", ScriptedEventScope::Global);
+    REQUIRE(program.has_value());
+    CHECK(runtime.canShowTopic(program, 246, state, nullptr));
+    EventRuntimeState::PendingDialogueContext context;
+    context.kind = DialogueContextKind::NpcTalk;
+    context.sourceId = 77;
+    state.pendingDialogueContext = context;
+    const EventDialogContent dialog = buildEventDialogContent(state, 0, true, &program, nullptr,
+        nullptr, &npcs, nullptr, nullptr, nullptr, nullptr, nullptr, 0.0f);
+    CHECK(std::any_of(dialog.actions.begin(), dialog.actions.end(),
+        [](const EventDialogAction &action) { return action.id == 246; }));
+    REQUIRE(runtime.executeEventById(program, std::nullopt, 451, state));
+    CHECK(state.namedGlobalVars.at("default") == 246);
+    CHECK(state.namedGlobalVars.at("hidden") == 0);
+    CHECK_FALSE(runtime.canShowTopic(program, 246, state, nullptr));
+    for (const std::string &arguments : {"78, 2", "77, -1", "4294967296, 0"})
+    {
+        const auto invalid = loadSyntheticScriptedProgram(
+            "evt.map[451] = function() evt.GetNPCTopic(" + arguments + ") end\n",
+            "@InvalidNpcTopicQuery.lua", ScriptedEventScope::Map);
+        REQUIRE(invalid.has_value());
+        CHECK_FALSE(runtime.executeEventById(invalid, std::nullopt, 451, state));
+    }
+}
+
+TEST_CASE("lua RememberQuest imports knowledge without accepting quests or learning conditional destinations")
+{
+    using namespace OpenYAMM::Game;
+    JournalQuestTable quests;
+    REQUIRE(quests.loadFromRows({{"42", "A remembered request"}, {"43", "0"}}));
+    REQUIRE(quests.loadLocationRows({{"42", "mm7", "objective", "map",
+        "world.mm7.map.7d30", "journal", "611", "-"}}));
+    Party party;
+    party.setJournalQuestTable(&quests);
+    party.setQuestBit(611, true);
+    EventRuntime runtime;
+    EventRuntimeState state;
+    const auto program = loadSyntheticScriptedProgram(
+        "evt.map[451] = function() evt.RememberQuest(42) end\n"
+        "evt.CanShowTopic[246] = function() evt.RememberQuest(42); return true end\n",
+        "@RememberJournal.lua", ScriptedEventScope::Map);
+    REQUIRE(program.has_value());
+    CHECK_FALSE(runtime.canShowTopic(program, 246, state, &party));
+    CHECK(state.namedGlobalVars.empty());
+    REQUIRE(runtime.executeEventById(program, std::nullopt, 451, state, &party));
+    CHECK_FALSE(party.hasQuestBit(42));
+    CHECK(party.hasQuestBit(611));
+    REQUIRE(state.namedGlobalVars.size() == 1);
+    CHECK(state.namedGlobalVars.at(JournalQuestTable::discoveryKey(42)) == 1);
+    REQUIRE(runtime.executeEventById(program, std::nullopt, 451, state, &party));
+    CHECK(state.namedGlobalVars.size() == 1);
+    for (const std::string &id : {"0", "-1", "43", "999", "4294967296"})
+    {
+        const auto invalid = loadSyntheticScriptedProgram(
+            "evt.map[451] = function() evt.RememberQuest(" + id + ") end\n",
+            "@InvalidRememberJournal.lua", ScriptedEventScope::Map);
+        REQUIRE(invalid.has_value());
+        CHECK_FALSE(runtime.executeEventById(invalid, std::nullopt, 451, state, &party));
+    }
+    CHECK(state.namedGlobalVars.size() == 1);
 }
 
 TEST_CASE("lua on-load runtime preserves preseeded named globals")

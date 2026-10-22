@@ -1,0 +1,39 @@
+# 1600x900; private accuracy-accepted or migrated save, normal fixed runtime assets.
+output_dir: captures
+exit: true
+steps:
+- expect: gameplay
+- key: F9
+- pause: true
+- click:
+  - 800
+  - 821
+- click:
+  - 450
+  - 57
+- click:
+  - 1450
+  - 126
+- click:
+  - 275
+  - 190
+- text: Galvinus
+- key: Return
+- click:
+  - 200
+  - 265
+- capture: accuracy-discovery
+- pointer_move:
+  - 1035
+  - 527
+- wheel: -1000
+- capture: accuracy-contacts
+- click:
+  - 1450
+  - 57
+- expect: pause
+- click:
+  - 800
+  - 301
+- expect: gameplay
+- key: F9

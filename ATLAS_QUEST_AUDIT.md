@@ -1,7 +1,7 @@
 # Atlas quest relationships: content audit
 
-The shared `engine/data_tables/quest_locations.txt` currently describes 144 quests:
-76 MM7 and 68 MM8 entries, with 578 relationships. This is partial campaign coverage.
+The shared `engine/data_tables/quest_locations.txt` currently describes 145 quests:
+76 MM7 and 69 MM8 entries, with 581 relationships. This is partial campaign coverage.
 All names and descriptions resolve through the loaded game registries; the relationship file contains IDs,
 roles and disclosure metadata, not a second copy of quest prose. Mods and other consumers use the same table.
 
@@ -85,7 +85,8 @@ The letter's existing `d09` relationship is retained: despite its loaded display
 Alvar", actual Ravenshore entrance events 503/505 lead there. Placeholder house 750 has no valid map and is
 not used as a navigation target.
 
-Three remaining nonempty MM8 journal rows are deliberately not presented as verified playable quest chains:
+At the 2026-10-21 checkpoint, three remaining nonempty MM8 journal rows were not presented as verified playable
+quest chains. Accuracy (132) is corrected by the subsequent 2026-10-22 checkpoint below; 5/172 remain stale:
 
 - QBit 5 (old pirate-leader objective) and 172 (old Arcomage objective) have no active setter in the current
   MM8/base event sources. The active tournament uses QBit 173 and already has relationships and Progress tracking.
@@ -202,3 +203,57 @@ Initiate requests with persistence. The two `mm7_tapestry_{light,dark}_knowledge
 `faithful` assertions but explicit faction/Malwick prerequisite and Tapestry inventory fixtures. The actual
 request and reward handlers record and retain only their branch's clue across save/load; the castle's physical
 discovery flag remains zero. Faction selection, the theft, castle access, travel and combat are not tested there.
+
+
+## MM8 Pure Accuracy correction and legacy import, 2026-10-22
+
+QBit 132 now has Galvinus giver/return and Ravage Roaming relationships. The world-owned
+`Global_mm8_accuracy.lua` supplement replaces handlers 244/246 without editing the generated global export:
+132 is active, 133 records completion, and the reward never writes unrelated Blazen bit 134. The original
+2/1/4 reagent groups, one Pure Accuracy potion and 5000 XP per party member are retained. All groups are checked
+before any are consumed. The replacement explicitly declares its fixed item reward 269 for shared source indexing.
+
+The one-time import uses effective Galvinus topic slots and the known legacy patterns:
+
+| Case | Legacy evidence | Import |
+| --- | --- | --- |
+| 0 | No 132/133, request 244 and reward 246 still present | Preserve unstarted state |
+| 1 | No 132, 133 set, request closed, reward 246 still present | Restore active 132 and clear legacy-active 133 |
+| 2 | No 132/133, both quest slots closed and legacy reward's 134 set | Set completion 133 and remember journal 132 |
+| 3 | Anything else | Preserve raw state; record that it was unclassified |
+
+Version, case, original 132/133/134 flags and original request/reward slots are retained under
+`openyamm.migration.mm8.pure-accuracy-v1`. The import never awards items/XP and never clears bit 134: an old
+completed potion quest may already have set it incorrectly, but its source is ambiguous. Existing Blazen
+435/1542 state is preserved. The pattern import targets the verified legacy base scripts, not arbitrary mod
+rewrites. Corrected quest state requires the matching corrected world supplement; save format compatibility
+is not a claim that older quest scripts understand the corrected flag meanings.
+Global supplements belong to the shared mounted-content base, so the migration may initialize during MM7 play
+when MM8 is mounted. The MM7 request regression checks that this creates neither MM8 quest flags nor knowledge.
+
+Core's neutral `GetNPCTopic` query uses the loaded registry plus explicit overrides, including hidden zero slots.
+The shared dialogue evaluator now supplies that registry to read-only eligibility queries. `RememberQuest`
+imports knowledge without synthesizing acceptance/completion, changing flags or inferring conditional clues.
+No binary save format changed. The Atlas remains an optional UI consumer.
+
+Verification includes actual pre-fix `0b47beb` saves, independently loaded by its retained executable/package
+view to establish original state and XP. Four valid legacy variants (active/completed, with/without authored
+Blazen Cure) migrate, round-trip and retain their original XP; active/completed/active switching in one process
+also passes. A deliberately inconsistent legacy state stays unchanged with case 3. The fresh strict scenario
+refuses a partial recipe, succeeds after the missing reagent is supplied, records exactly 5000 additional XP,
+leaves only the ingredient-information topic and retains history after reload. The same fresh scenario passes
+with the Atlas UI mod disabled. Reagent/Gem inventory and deliberately inconsistent-state fixtures are controlled;
+these checks do not claim ingredient gathering, alchemy mixing or a full promotion playthrough.
+
+Targeted Windows Atlas/save/package/mod coverage passes 194 cases / 7479 assertions; Lua/NPC coverage passes
+73 / 2198, including the new API and real shared dialogue-evaluator checks. The curated Linux ASan/UBSan suite
+passes 89 / 4946. A wider GameplayRuleRegression run encountered 11 missing-source-fixture failures (sparse
+MM6/MM9 scenes/binaries and source asset-root setup); it is not reported as an all-green full suite.
+Native AMD OpenGL captures verify active and imported historical entries. After Atlas browsing, all three
+quicksaves retain quest history, flags and XP through another save/load. The MM7 campaign request scenario also
+passes with the shared MM8 supplement mounted. Private records are under
+`atlas-accuracy-20261022/` in the Windows development root; public fresh/legacy/migration inputs and the
+fixture asset-view preparer are documented in `tests/fixtures/atlas/README.md`.
+
+Only stale MM8 rows 5/172 remain outside the playable journal inventory. Complete Atlas acceptance still needs
+remaining conditional/site/reference coverage and Android/controller checks; this correction is a checkpoint.

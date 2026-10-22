@@ -1,0 +1,124 @@
+id: atlas.mm8_accuracy_migration
+title: Strict legacy Accuracy migration and repeated save switching
+world: mm8
+mode: faithful
+steps:
+- note: Requires legacy-active.oysav and legacy-completed.oysav produced by the matching
+    legacy fixture.
+- load_game:
+    name: legacy-active
+    path: saves/legacy-active.oysav
+- assert:
+    qbit_set:
+    - 132
+    qbit_clear:
+    - 133
+    - 435
+    - 1542
+    - 134
+    runtime_event_variable:
+      id: 13
+      member_index: 0
+      value: 10000
+    named_global_var_changed:
+      name: openyamm.migration.mm8.pure-accuracy-v1.case
+      value: 1
+- assert:
+    named_global_var_changed:
+      name: openyamm.discovery.quest/132
+      value: 1
+- save_game: migrated-active
+- load_game: migrated-active
+- assert:
+    qbit_set:
+    - 132
+    qbit_clear:
+    - 133
+    - 435
+    - 1542
+    - 134
+    runtime_event_variable:
+      id: 13
+      member_index: 0
+      value: 10000
+    named_global_var_changed:
+      name: openyamm.migration.mm8.pure-accuracy-v1.case
+      value: 1
+- load_game:
+    name: legacy-completed
+    path: saves/legacy-completed.oysav
+- assert:
+    qbit_set:
+    - 133
+    - 134
+    qbit_clear:
+    - 132
+    - 435
+    - 1542
+    runtime_event_variable:
+      id: 13
+      member_index: 0
+      value: 15000
+    named_global_var_changed:
+      name: openyamm.migration.mm8.pure-accuracy-v1.case
+      value: 2
+- assert:
+    named_global_var_changed:
+      name: openyamm.discovery.quest/132
+      value: 1
+- save_game: migrated-completed
+- load_game: migrated-completed
+- assert:
+    qbit_set:
+    - 133
+    - 134
+    qbit_clear:
+    - 132
+    - 435
+    - 1542
+    runtime_event_variable:
+      id: 13
+      member_index: 0
+      value: 15000
+    named_global_var_changed:
+      name: openyamm.migration.mm8.pure-accuracy-v1.case
+      value: 2
+- load_game:
+    name: legacy-active
+    path: saves/legacy-active.oysav
+- assert:
+    qbit_set:
+    - 132
+    qbit_clear:
+    - 133
+    - 435
+    - 1542
+    - 134
+    runtime_event_variable:
+      id: 13
+      member_index: 0
+      value: 10000
+    named_global_var_changed:
+      name: openyamm.migration.mm8.pure-accuracy-v1.case
+      value: 1
+- assert:
+    named_global_var_changed:
+      name: openyamm.discovery.quest/132
+      value: 1
+- save_game: migrated-active
+- load_game: migrated-active
+- assert:
+    qbit_set:
+    - 132
+    qbit_clear:
+    - 133
+    - 435
+    - 1542
+    - 134
+    runtime_event_variable:
+      id: 13
+      member_index: 0
+      value: 10000
+    named_global_var_changed:
+      name: openyamm.migration.mm8.pure-accuracy-v1.case
+      value: 1

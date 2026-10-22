@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Prepare a fresh, isolated runtime package view for the hidden-trainer scenario.
+"""Prepare a fresh, isolated runtime package view for an Atlas scenario fixture.
 
 The output must be on the same filesystem as the input packages. Large archives
 are reused by hard link and only read by the game; assets.zip is a private copy.
@@ -13,7 +13,7 @@ import shutil
 import zipfile
 
 
-def prepare(assets, output):
+def prepare(assets, output, fixture_name="hidden-expert-bow"):
     archives = [assets / "engine.zip", *sorted((assets / "worlds").glob("*.zip"))]
     if not archives[0].is_file() or not (assets / "assets.zip").is_file():
         raise ValueError("Expected engine.zip, assets.zip and world packages in the input directory")
@@ -22,18 +22,33 @@ def prepare(assets, output):
     for archive in archives:
         os.link(archive, output / archive.relative_to(assets))
     shutil.copy2(assets / "assets.zip", output / "assets.zip")
-    fixture = Path(__file__).with_name("Global_zz_hide_bow.lua").read_bytes()
-    with zipfile.ZipFile(output / "assets.zip", "a", compression=zipfile.ZIP_DEFLATED) as package:
-        package.writestr("engine/events/Global_zz_hide_bow.lua", fixture)
-    receipt = {"fixture": "hidden-expert-bow", "source": str(assets),
+    if fixture_name == "legacy-pure-accuracy":
+        target = "worlds/mm8/events/Global_mm8_accuracy.lua"
+        fixture = b"-- Test fixture: retain generated legacy Pure Accuracy handlers without the modern supplement.\n"
+    else:
+        target = "engine/events/Global_zz_hide_bow.lua"
+        fixture = Path(__file__).with_name("Global_zz_hide_bow.lua").read_bytes()
+    # A shadow entry also overrides a cooked world archive. Remove old copies of this key first;
+    # duplicate ZIP entries have reader-dependent precedence.
+    temporary = output / "fixture-overlay.zip"
+    with zipfile.ZipFile(output / "assets.zip") as source, \
+            zipfile.ZipFile(temporary, "w", compression=zipfile.ZIP_DEFLATED) as package:
+        for entry in source.infolist():
+            if entry.filename != target:
+                package.writestr(entry, source.read(entry))
+        package.writestr(target, fixture)
+    os.replace(temporary, output / "assets.zip")
+    receipt = {"fixture": fixture_name, "source": str(assets), "shadow_path": target,
                "overlay_sha256": hashlib.sha256(fixture).hexdigest()}
     (output / "atlas-fixture.json").write_text(json.dumps(receipt, indent=2) + "\n")
-    print("Prepared hidden-trainer fixture; the source package contents were not changed")
+    print(f"Prepared {fixture_name} fixture; the source package contents were not changed")
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--assets", required=True, type=Path)
     parser.add_argument("--output", required=True, type=Path, help="A new directory on the input filesystem")
+    parser.add_argument("--fixture", choices=["hidden-expert-bow", "legacy-pure-accuracy"],
+                        default="hidden-expert-bow")
     args = parser.parse_args()
-    prepare(args.assets.resolve(), args.output.resolve())
+    prepare(args.assets.resolve(), args.output.resolve(), args.fixture)
