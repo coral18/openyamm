@@ -1,0 +1,62 @@
+# Requires private before.oysav and quicksave.oysav from the matching NPC Guide tour.
+id: atlas.mm7_possible_npc_persistence
+title: Guide catalogs and navigation preserve observed NPC state
+world: mm7
+mode: faithful
+steps:
+- load_game:
+    name: before
+    path: saves/before.oysav
+- assert:
+    qbit_set:
+    - 658
+    qbit_clear:
+    - 587
+    npc_house:
+      npc_id: 397
+      house_id: 1169
+- assert:
+    named_global_var_changed:
+      name: openyamm.discovery.npc/397/house
+      value: 240
+- assert:
+    named_global_var_changed:
+      name: openyamm.discovery.quest/587
+      value: 1
+- load_game:
+    name: quicksave
+    path: saves/quicksave.oysav
+- assert:
+    qbit_set:
+    - 658
+    qbit_clear:
+    - 587
+    npc_house:
+      npc_id: 397
+      house_id: 1169
+- assert:
+    named_global_var_changed:
+      name: openyamm.discovery.npc/397/house
+      value: 240
+- assert:
+    named_global_var_changed:
+      name: openyamm.discovery.quest/587
+      value: 1
+- save_game: after-ui-verified
+- load_game: after-ui-verified
+- assert:
+    qbit_set:
+    - 658
+    qbit_clear:
+    - 587
+    npc_house:
+      npc_id: 397
+      house_id: 1169
+- assert:
+    named_global_var_changed:
+      name: openyamm.discovery.npc/397/house
+      value: 240
+- assert:
+    named_global_var_changed:
+      name: openyamm.discovery.quest/587
+      value: 1

@@ -476,3 +476,10 @@ end)
 RegisterGlobalEvent(1788, "MMMerge Verdant connector stone", function()
     CrossContinents.HandleConnectorStone()
 end)
+
+-- Read destinations from the same configuration as the runtime placement helper.
+local verdantLocations = {}
+for _, houseId in pairs(CrossContinents.Config.MeetSpotHouseIds) do
+    verdantLocations[#verdantLocations + 1] = {CrossContinents.Config.VerdantNpcId, houseId}
+end
+SetGlobalNpcLocations(65200, verdantLocations)

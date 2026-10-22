@@ -12709,13 +12709,38 @@ void emitItemRewardMetadata(std::ostringstream &stream, std::string_view scopeTa
     stream << "})\n";
 }
 
+void emitNpcLocationMetadata(std::ostringstream &stream, std::string_view scopeTableName,
+    const LegacyLuaEvent &event, uint16_t handlerId, std::optional<uint8_t> entryStep = std::nullopt)
+{
+    const std::vector<uint8_t> steps = collectNormalEventSteps(event);
+    if (steps.empty()) return;
+    std::vector<std::pair<uint32_t, uint32_t>> locations;
+    for (uint8_t step : collectReachableSteps(event, steps, entryStep.value_or(steps.front())))
+        for (const LegacyLuaInstruction *pInstruction : collectMeaningfulInstructionsForStep(event, step))
+        {
+            const auto &args = pInstruction->arguments;
+            if (pInstruction->operation == LegacyLuaOperation::MoveNpc && args.size() >= 2
+                && args[0] > 0 && args[1] > 0)
+                locations.emplace_back(args[0], args[1]); // House zero removes a resident; it is not a place.
+        }
+    std::sort(locations.begin(), locations.end());
+    locations.erase(std::unique(locations.begin(), locations.end()), locations.end());
+    if (locations.empty()) return;
+    stream << (scopeTableName == LuaScopeGlobal ? "SetGlobalNpcLocations(" : "SetMapNpcLocations(")
+           << handlerId << ", {";
+    for (size_t i = 0; i < locations.size(); ++i)
+        stream << (i == 0 ? "" : ", ") << "{" << locations[i].first << ", " << locations[i].second << "}";
+    stream << "})\n";
+}
+
 void emitSyntheticTriggerEventFunctions(
     std::ostringstream &stream,
     std::string_view scopeTableName,
     const std::vector<LegacyLuaEvent> &decodedEvents,
     const LegacyLuaExportLookups &lookups,
     const std::vector<SyntheticTriggerEvent> &syntheticTriggerEvents,
-    std::ostringstream *pRewardMetadata = nullptr)
+    std::ostringstream *pRewardMetadata = nullptr,
+    std::ostringstream *pNpcMetadata = nullptr)
 {
     if (syntheticTriggerEvents.empty())
     {
@@ -12772,6 +12797,9 @@ void emitSyntheticTriggerEventFunctions(
         if (emittedBody && pRewardMetadata != nullptr)
             emitItemRewardMetadata(*pRewardMetadata, scopeTableName, *sourceEventIterator,
                 syntheticEvent.syntheticEventId, syntheticEvent.continuationStep);
+        if (emittedBody && pNpcMetadata != nullptr)
+            emitNpcLocationMetadata(*pNpcMetadata, scopeTableName, *sourceEventIterator,
+                syntheticEvent.syntheticEventId, syntheticEvent.continuationStep);
     }
 }
 }
@@ -12795,6 +12823,26 @@ std::string generateLegacyEventItemRewardsLuaChunk(
     std::ostringstream handlers;
     emitSyntheticTriggerEventFunctions(handlers, scopeTableName, events, lookups, triggers, &metadata);
     return metadata.str();
+}
+
+std::string generateLegacyEventNpcLocationsLuaChunk(
+    const EvtProgram &evtProgram,
+    const StrTable &strTable,
+    const LegacyLuaExportLookups &lookups,
+    LegacyLuaExportScope scope,
+    LegacyEventVersion version)
+{
+    const std::string_view scopeTableName = scope == LegacyLuaExportScope::Global ? LuaScopeGlobal : LuaScopeMap;
+    const std::vector<LegacyLuaEvent> events = decodeEvents(evtProgram, strTable, lookups, version);
+    const std::vector<SyntheticTriggerEvent> triggers = collectSyntheticTriggerEvents(evtProgram);
+    std::ostringstream metadata;
+    for (size_t i = 0; i < events.size(); ++i)
+        emitNpcLocationMetadata(metadata, scopeTableName,
+            directEventWithoutSyntheticTriggerContinuations(events[i], evtProgram.getEvents()[i]), events[i].eventId);
+    std::ostringstream handlers;
+    emitSyntheticTriggerEventFunctions(handlers, scopeTableName, events, lookups, triggers, nullptr, &metadata);
+    return metadata.str().empty() ? "" :
+        "-- generated possible NPC locations from legacy EVT/STR; load after the base handlers\n" + metadata.str();
 }
 
 std::string generateLegacyEventLuaChunk(

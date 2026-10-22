@@ -1027,6 +1027,22 @@ function support.setGlobalItemRewards(eventId, items)
     setItemRewards("global", eventId, items)
 end
 
+local function setNpcLocations(scopeName, eventId, locations)
+    local handler = evt[scopeName][eventId]
+    assert(type(handler) == "function", "NPC location metadata requires a registered event handler")
+    local meta = ensureMetaScope(scopeName)
+    meta.npcLocations = meta.npcLocations or {}
+    meta.npcLocations[eventId] = {handler = handler, locations = locations}
+end
+
+function support.setMapNpcLocations(eventId, locations)
+    setNpcLocations("map", eventId, locations)
+end
+
+function support.setGlobalNpcLocations(eventId, locations)
+    setNpcLocations("global", eventId, locations)
+end
+
 function support.appendMapOnLoadEvent(eventId)
     local meta = ensureMetaScope("map")
     table.insert(meta.onLoad, eventId)
@@ -1601,6 +1617,8 @@ SetMapMetadata = support.setMapMetadata
 SetMapContextAction = support.setMapContextAction
 SetMapItemRewards = support.setMapItemRewards
 SetGlobalItemRewards = support.setGlobalItemRewards
+SetMapNpcLocations = support.setMapNpcLocations
+SetGlobalNpcLocations = support.setGlobalNpcLocations
 AppendMapOnLoadEvent = support.appendMapOnLoadEvent
 AppendMapOnLeaveEvent = support.appendMapOnLeaveEvent
 RegisterMapOnLoadEvent = support.registerMapOnLoadEvent

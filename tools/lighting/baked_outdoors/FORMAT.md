@@ -97,3 +97,9 @@ Generated item-reward overlays (`<map>_00_item_rewards.lua`) are catalog declara
 The decoration producer validates their generated header and literal `SetMapItemRewards` rows, then excludes
 them from shadow-card dependencies. Executable code in this reserved format rejects the bake. Ordinary map
 callbacks and gameplay overlays keep their full dependency hashes; catalog updates never rewrite baked hashes.
+
+Possible-NPC-location catalogs follow the same rule. Generated `<map>_00_npc_locations.lua` and explicit
+`<map>_zz_npc_locations.lua` files contain only their required header, comments and literal
+`SetMapNpcLocations(eventId, {{npcId, houseId}, ...})` declarations. The exporter checks the grammar and integer
+ranges before excluding them from shadow-card dependencies. It rejects executable Lua in these reserved formats;
+ordinary gameplay files retain their full hashes. NPC catalogs do not move NPCs or change shadow casters.

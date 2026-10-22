@@ -47,3 +47,22 @@ retained package overlay. The reproducible shadow fixture reconstructs that lega
 engine; it does not claim to substitute for an original-format/version golden when the save schema changes.
 The fresh `mm8_accuracy_quest_knowledge.yml` scenario belongs to the normal fixed runtime. Its controlled partial
 recipe must be refused without consuming the usable ingredients; one final reagent then permits the real reward.
+
+## Possible NPC locations and Guide privacy
+
+Use the normal fixed packages and an isolated working directory with the Atlas enabled. Run the strict
+`mm7_npc_relocation.yml` scenario, then copy its temporary `npc-relocated.oysav` to private `saves/before.oysav`.
+For MM8, use `mm8_automatic_npc_observation.yml` and its `automatic-npc.oysav` instead. Leave the originals intact.
+
+Launch that private save at 1600x900 with the corresponding
+`tools/menu_tours/atlas_mm{7,8}_possible_npc_locations.yml` as `debug.menu_input_tour_path`. Both tours browse Guide,
+return to Discovery/gameplay and write private `saves/quicksave.oysav`. MM7 checks the Butler's current, possible
+and last-met locations. MM8 scans the mounted sources, opens Quixote's possible council location and returns to
+Discovery. Inspect the fresh native captures; existence alone does not prove the right view was rendered.
+
+Run the matching `mm{7,8}_possible_npc_persistence.yml` from this fixture directory. Each loads both private saves
+and round-trips the result, checking unchanged residence/knowledge. MM8 additionally checks selected alliance/
+promotion flags, original XP and no NPC/house/map discovery from Guide scanning/navigation. Its initial new-game
+step initializes the headless loader's NPC registry before importing saves; it does not provide the asserted
+saved state. MM7's prerequisite/combat flags are explicit controlled fixtures in the original scenario, rather
+than a test of the scavenger hunt or castle combat. These fixtures target the base campaign, not arbitrary NPC mods.

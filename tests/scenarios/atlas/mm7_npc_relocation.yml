@@ -1,6 +1,6 @@
 id: atlas.mm7_npc_relocation
 world: mm7
-mode: hybrid
+mode: faithful
 title: Controlled castle quest fixture tests actual Butler relocation and remembered residence
 steps:
 - new_game_flow: {start_map: 7out02.odm}

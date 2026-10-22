@@ -62,6 +62,9 @@ private:
     std::vector<std::string> m_availableWorlds;
     const GameDataRepository &m_data;
     const Party *m_pParty = nullptr;
+    // The paused gameplay map/program outlives this screen, like the supplied party and game registries.
+    const ScriptedEventProgram *m_pGlobalEvents = nullptr;
+    const ScriptedEventProgram *m_pLocalEvents = nullptr;
     WorldGuideKnowledge m_referenceKnowledge;
     std::vector<WorldGuideEntry> m_referenceEntries;
     WorldGuideSection m_referenceSection = WorldGuideSection::Items;

@@ -198,6 +198,7 @@ std::vector<WorldGuideEntry> buildWorldGuide(const WorldGuideSource &source, Wor
                 const std::string role = location.role == JournalQuestLocation::Role::Giver ? "Giver"
                     : location.role == JournalQuestLocation::Role::Return ? "Return to" : "Objective";
                 std::string name, target;
+                std::vector<WorldGuideLink> possibleContacts;
                 WorldGuideLink::Kind kind = WorldGuideLink::Kind::Location;
                 if (location.kind == JournalQuestLocation::Kind::Map && source.pMaps != nullptr)
                 {
@@ -226,6 +227,15 @@ std::vector<WorldGuideEntry> buildWorldGuide(const WorldGuideSource &source, Wor
                             name = pContact->name();
                             target = pContact->id;
                         }
+                        if (guide && pNpc != nullptr)
+                            for (const WorldRecord &candidate : source.pWorld->records())
+                                if (candidate.possibleNpcLocation && candidate.npc->id == pNpc->id)
+                                {
+                                    const std::string label = "Possible: " + pNpc->name + " - "
+                                        + candidate.map->name + " - " + candidate.house->name;
+                                    possibleContacts.push_back({WorldGuideLink::Kind::Location,
+                                        label, candidate.id});
+                                }
                     }
                 }
                 else if (location.kind == JournalQuestLocation::Kind::House && source.pHouses != nullptr)
@@ -260,6 +270,13 @@ std::vector<WorldGuideEntry> buildWorldGuide(const WorldGuideSource &source, Wor
                         entry.links.push_back({kind, role + ": " + name, target, 0,
                             learned && location.kind != JournalQuestLocation::Kind::Npc});
                     }
+                    for (const WorldGuideLink &possible : possibleContacts)
+                        if (std::none_of(entry.links.begin(), entry.links.end(), [&](const WorldGuideLink &existing)
+                            { return existing.target == possible.target; }))
+                        {
+                            entry.details += "\n\n" + possible.label + " (quest conditions may apply)";
+                            entry.links.push_back(possible);
+                        }
                 }
             }
             result.push_back(std::move(entry));

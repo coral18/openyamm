@@ -2,6 +2,8 @@
 #include "game/maps/MapSnapshotLookup.h"
 #include "doctest/doctest.h"
 #include "game/world/WorldDatabase.h"
+#include "game/world/WorldGuide.h"
+#include "game/tables/JournalQuestTable.h"
 #include "game/world/WorldAtlasPresentation.h"
 #include "engine/TextTable.h"
 #include <filesystem>
@@ -1844,4 +1846,85 @@ TEST_CASE("passive creature sight checks are bounded and never refresh unseen hi
     CHECK_FALSE(tracker.shouldCheckSight(state, candidate, 10000));
     candidate.uniqueNameIndex = 0; candidate.gameMinutes = -1;
     CHECK_FALSE(tracker.shouldCheckSight(state, candidate, 10000));
+}
+
+TEST_CASE("world database possible NPC residences stay guide-only and never invent training or knowledge")
+{
+    Fixture fixture;
+    std::vector<std::vector<std::string>> houses;
+    for (int id : {11, 12, 13})
+    {
+        std::vector<std::string> house(24);
+        house[0] = std::to_string(id); house[2] = "House";
+        house[3] = id == 11 ? "63" : id == 12 ? "95" : "1";
+        house[5] = "Residence " + std::to_string(id);
+        houses.push_back(house);
+    }
+    REQUIRE(fixture.houses.loadFromRows(houses));
+    EventRuntimeState state;
+    state.npcHouseOverrides[42] = 12;
+    state.npcNameOverrides[42] = "Current name";
+    recordWorldNpcObservation(state, 42, 11, {305});
+    const WorldNpcState current = worldCurrentNpcs(fixture.npcs, state);
+    WorldDatabase world(fixture.maps, fixture.houses, fixture.npcs, fixture.teachers, "mm7", {}, current);
+    std::string error;
+    const auto program = ScriptedEventProgram::loadFromLuaText(R"lua(
+        evt.map[10] = function() error('indexing must not execute the relocation') end
+        evt.meta.map.npcLocations = {
+            [10] = {handler = evt.map[10], locations = {{42, 11}, {42, 12}, {42, 13}}}
+        }
+    )lua", "@possible-residences", ScriptedEventScope::Map, error);
+    REQUIRE_MESSAGE(program, error);
+    world.indexNpcLocations(*program);
+    const size_t count = world.records().size();
+    world.indexNpcLocations(*program);
+    CHECK(world.records().size() == count);
+    const WorldRecord *pCurrent = world.find("mm7:npc/42");
+    REQUIRE(pCurrent != nullptr);
+    CHECK(pCurrent->house->id == 12);
+    CHECK(pCurrent->name() == "Current name");
+    const WorldRecord *pPossible = world.find("mm7:npc/42/possible-house/11");
+    REQUIRE(pPossible != nullptr);
+    CHECK(pPossible->possibleNpcLocation);
+    CHECK(pPossible->house->id == 11);
+    CHECK(pPossible->teacher == nullptr);
+    CHECK(pPossible->npcTopicIds.empty());
+    CHECK(pPossible->name() == "Townsaver (possible location)");
+    CHECK(world.find("mm7:npc/42/possible-house/12") == nullptr);
+    CHECK(world.find("mm7:npc/42/possible-house/13") == nullptr);
+    WorldKnowledge knowledge;
+    knowledge.variables = state.namedGlobalVars;
+    knowledge.informedRecords.insert(pPossible->id);
+    CHECK_FALSE(knowledge.knows(*pPossible));
+    CHECK_FALSE(world.visible(*pPossible, knowledge, false));
+    CHECK(world.visible(*pPossible, knowledge, true));
+    CHECK(world.query(knowledge, false, "possible location").empty());
+    const auto originalVariables = knowledge.variables;
+    JournalQuestTable quests;
+    REQUIRE(quests.loadFromRows({{"42", "Meet Townsaver"}}));
+    REQUIRE(quests.loadLocationRows({{"42", "mm7", "giver", "npc", "42", "journal"}}));
+    WorldGuideSource source;
+    source.worldId = "mm7"; source.pQuests = &quests; source.pNpcs = &fixture.npcs;
+    source.pWorld = &world; source.pWorldKnowledge = &knowledge;
+    WorldGuideKnowledge journal;
+    journal.activeQuests.insert(42);
+    const auto guide = buildWorldGuide(source, WorldGuideSection::Quests, journal, true);
+    REQUIRE(guide.size() == 1);
+    REQUIRE(guide[0].links.size() == 2);
+    CHECK(guide[0].links[0].target == "mm7:npc/42");
+    CHECK(guide[0].links[1].target == pPossible->id);
+    CHECK_FALSE(guide[0].links[1].informed);
+    CHECK(guide[0].details.find("quest conditions may apply") != std::string::npos);
+    CHECK(buildWorldGuide(source, WorldGuideSection::Quests, journal, false)[0].links.empty());
+    CHECK(knowledge.variables == originalVariables);
+    const WorldNpcState observed = worldObservedNpcs(fixture.npcs, fixture.teachers, state.namedGlobalVars);
+    WorldDatabase discovered(fixture.maps, fixture.houses, fixture.npcs, fixture.teachers, "mm7", {}, observed);
+    discovered.indexNpcLocations(*program);
+    REQUIRE(discovered.find("mm7:npc/42") != nullptr);
+    CHECK(discovered.find("mm7:npc/42")->house->id == 11);
+    CHECK(discovered.find(pPossible->id) == nullptr);
+    CHECK(fixture.npcs.getNpc(42)->houseId == 11);
+    WorldDatabase copy = world;
+    world = fixture.database();
+    CHECK(copy.find("mm7:npc/42/possible-house/11")->npc == fixture.npcs.getNpc(42));
 }

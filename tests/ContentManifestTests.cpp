@@ -4,6 +4,8 @@
 #include "game/content/ContentTableComposer.h"
 #include "game/data/GameDataLoader.h"
 #include "game/maps/MapAssetLoader.h"
+#include "game/world/WorldDatabase.h"
+#include "engine/TextTable.h"
 
 #include <doctest/doctest.h>
 
@@ -11,6 +13,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
+#include <iterator>
 #include <optional>
 #include <string>
 #include <vector>
@@ -32,7 +35,7 @@ void writeTextFile(const std::filesystem::path &path, const std::string &content
 }
 }
 
-TEST_CASE("item reward overlays precede all map and global callback replacements")
+TEST_CASE("typed metadata overlays precede all map and global callback replacements")
 {
     using namespace OpenYAMM::Game;
     const std::filesystem::path temporaryRoot = makeTemporaryRoot();
@@ -45,8 +48,10 @@ TEST_CASE("item reward overlays precede all map and global callback replacements
     const std::filesystem::path globals = assets / "engine/events";
     writeTextFile(mapScripts / "metadata_fixture.lua", "RegisterEvent(10, '', function() end)");
     writeTextFile(mapScripts / "metadata_fixture_00_item_rewards.lua", "SetMapItemRewards(10, {42})");
+    writeTextFile(mapScripts / "metadata_fixture_00_npc_locations.lua", "SetMapNpcLocations(10, {{42, 11}})");
     writeTextFile(globals / "Global.lua", "RegisterGlobalEvent(20, '', function() end)");
     writeTextFile(globals / "Global_00_item_rewards.lua", "SetGlobalItemRewards(20, {43})");
+    writeTextFile(globals / "Global_00_npc_locations.lua", "SetGlobalNpcLocations(20, {{43, 12}})");
     {
         OpenYAMM::Engine::AssetFileSystem fs;
         REQUIRE(fs.initialize(temporaryRoot, assets, OpenYAMM::Engine::AssetScaleTier::X1, "mm7"));
@@ -58,10 +63,11 @@ TEST_CASE("item reward overlays precede all map and global callback replacements
                 CAPTURE(redeclared);
                 writeTextFile(mapScripts / ("metadata_fixture" + suffix),
                     "ReplaceMapEvent(10, '', function() end)\n"
-                    + std::string(redeclared ? "SetMapItemRewards(10, {44})" : ""));
+                    + std::string(redeclared ? "SetMapItemRewards(10, {44})\nSetMapNpcLocations(10, {{44, 13}})" : ""));
                 writeTextFile(globals / ("Global" + suffix),
                     "ReplaceGlobalEvent(20, '', function() end)\n"
-                    + std::string(redeclared ? "SetGlobalItemRewards(20, {45})" : ""));
+                    + std::string(redeclared
+                        ? "SetGlobalItemRewards(20, {45})\nSetGlobalNpcLocations(20, {{45, 14}})" : ""));
                 fs.refreshLookupCache();
                 MapAssetInfo map;
                 map.map.fileName = "metadata_fixture.blv";
@@ -76,11 +82,17 @@ TEST_CASE("item reward overlays precede all map and global callback replacements
                     REQUIRE(map.globalEventProgram->itemRewards().contains(20));
                     CHECK(map.localEventProgram->itemRewards().at(10) == std::vector<uint32_t>{44});
                     CHECK(map.globalEventProgram->itemRewards().at(20) == std::vector<uint32_t>{45});
+                    CHECK(map.localEventProgram->npcLocations().at(10)
+                        == std::vector<ScriptedEventProgram::NpcLocation>{{44, 13}});
+                    CHECK(map.globalEventProgram->npcLocations().at(20)
+                        == std::vector<ScriptedEventProgram::NpcLocation>{{45, 14}});
                 }
                 else
                 {
                     CHECK(map.localEventProgram->itemRewards().empty());
                     CHECK(map.globalEventProgram->itemRewards().empty());
+                    CHECK(map.localEventProgram->npcLocations().empty());
+                    CHECK(map.globalEventProgram->npcLocations().empty());
                 }
             }
             std::filesystem::remove(mapScripts / ("metadata_fixture" + suffix));
@@ -413,4 +425,85 @@ TEST_CASE("item table contributions reject id and range collisions")
     first.idRange = OpenYAMM::Game::ContentIdRangeDefinition{"items", 10001, 10001};
     CHECK_FALSE(OpenYAMM::Game::composeItemTableRows({}, {first}, composedRows, error));
     CHECK(error.find("outside") != std::string::npos);
+}
+
+TEST_CASE("mounted MM6 MM7 MM8 NPC relocation declarations resolve against shared registries")
+{
+    using namespace OpenYAMM::Game;
+    const std::filesystem::path root(OPENYAMM_SOURCE_DIR);
+    const auto rows = [&](const std::string &name)
+    {
+        std::ifstream file(root / "assets_dev/engine/data_tables" / name, std::ios::binary);
+        REQUIRE(file.is_open());
+        const std::string text{std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>()};
+        const auto table = OpenYAMM::Engine::TextTable::parseTabSeparated(text);
+        REQUIRE(table);
+        std::vector<std::vector<std::string>> result;
+        for (size_t i = 0; i < table->getRowCount(); ++i) result.push_back(table->getRow(i));
+        return result;
+    };
+    MapStats maps;
+    HouseTable houses;
+    NpcDialogTable npcs;
+    MergedTeacherTopicTable teachers;
+    REQUIRE(maps.loadFromRows(rows("map_stats.txt")));
+    REQUIRE(houses.loadFromRows(rows("house_data.txt")));
+    REQUIRE(npcs.loadNpcRows(rows("npc.txt")));
+    for (const std::string world : {"mm6", "mm7", "mm8"})
+    {
+        CAPTURE(world);
+        OpenYAMM::Engine::AssetFileSystem fs;
+        REQUIRE(fs.initialize(root, root / "assets_dev", OpenYAMM::Engine::AssetScaleTier::X1, world));
+        WorldDatabase database(maps, houses, npcs, teachers, world);
+        size_t scripts = 0, declarations = 0;
+        for (const MapStatsEntry &map : maps.getEntries())
+        {
+            if (map.worldId != world) continue;
+            const std::string stem = std::filesystem::path(map.fileName).stem().string();
+            if (!fs.exists("worlds/" + world + "/events/maps/" + stem + ".lua")) continue;
+            MapAssetInfo asset;
+            asset.map = map;
+            std::string error;
+            REQUIRE_MESSAGE(GameDataLoader::loadEventPrograms(fs, asset, error), (map.fileName + ": " + error));
+            ++scripts;
+            if (world == "mm8" && map.fileName == "d38.blv")
+            {
+                REQUIRE(asset.localEventProgram);
+                CHECK(asset.localEventProgram->npcLocations().at(901)
+                    == std::vector<ScriptedEventProgram::NpcLocation>{{24, 662}});
+            }
+            for (const auto *pProgram : {&asset.localEventProgram, &asset.globalEventProgram})
+            {
+                REQUIRE(pProgram->has_value());
+                for (const auto &[eventId, locations] : (*pProgram)->npcLocations())
+                    for (const ScriptedEventProgram::NpcLocation &location : locations)
+                    {
+                        CAPTURE(map.fileName);
+                        CAPTURE(eventId);
+                        CAPTURE(location.npcId);
+                        CAPTURE(location.houseId);
+                        REQUIRE(npcs.getNpc(location.npcId) != nullptr);
+                        REQUIRE(houses.get(location.houseId) != nullptr);
+                        ++declarations;
+                    }
+                database.indexNpcLocations(**pProgram);
+            }
+        }
+        CHECK(scripts > 50);
+        CHECK(declarations > 0);
+        CHECK(database.query({}, false, "possible location").empty());
+        if (world == "mm7")
+        {
+            CHECK(database.find("mm7:npc/393/possible-house/1158") != nullptr);
+            CHECK(database.find("mm7:npc/416/possible-house/1164") != nullptr);
+        }
+        else if (world == "mm8")
+        {
+            CHECK(database.find("mm8:npc/52/possible-house/751") != nullptr);
+            const WorldRecord *pWaterLord = database.find("mm8:npc/24");
+            REQUIRE(pWaterLord != nullptr);
+            CHECK(pWaterLord->house->id == 662);
+            CHECK(database.find("mm8:npc/24/possible-house/662") == nullptr);
+        }
+    }
 }

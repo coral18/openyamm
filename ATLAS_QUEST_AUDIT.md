@@ -257,3 +257,11 @@ fixture asset-view preparer are documented in `tests/fixtures/atlas/README.md`.
 
 Only stale MM8 rows 5/172 remain outside the playable journal inventory. Complete Atlas acceptance still needs
 remaining conditional/site/reference coverage and Android/controller checks; this correction is a checkpoint.
+
+### Possible contact residences, 2026-10-22
+
+Quest/NPC IDs remain references to the loaded shared registries. The World Database now combines current or
+last-observed state with callback-owned declarations of possible NPC destinations. Guide quest contacts can
+navigate those alternatives; Discovery does not infer them from a quest contact's name. The quest inventory
+stays at 145 entries / 581 relationships, with no duplicated residence table in the Atlas or quest data.
+`ATLAS.md` records the source/export audit, native navigation checks and remaining eligibility limitations.

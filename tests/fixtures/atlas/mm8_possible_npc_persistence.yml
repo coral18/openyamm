@@ -1,0 +1,139 @@
+# Requires private before.oysav and quicksave.oysav from the matching NPC Guide tour.
+id: atlas.mm8_possible_npc_persistence
+title: Guide catalogs and navigation preserve observed NPC state
+world: mm8
+mode: faithful
+steps:
+- new_game_flow:
+    start_map: out01.odm
+- load_game:
+    name: before
+    path: saves/before.oysav
+- assert:
+    npc_house:
+      npc_id: 52
+      house_id: 0
+- assert:
+    qbit_clear:
+    - 21
+    - 31
+    - 70
+    runtime_event_variable:
+      id: 13
+      member_index: 0
+      value: 10000
+- assert:
+    named_global_var_changed:
+      name: openyamm.discovery.npc/28/house
+      value: 866
+- assert:
+    named_global_var_changed:
+      name: openyamm.discovery.npc/15
+      value: 0
+- assert:
+    named_global_var_changed:
+      name: openyamm.discovery.npc/52
+      value: 0
+- assert:
+    named_global_var_changed:
+      name: openyamm.discovery.npc/52/house
+      value: 0
+- assert:
+    named_global_var_changed:
+      name: openyamm.discovery.house/751
+      value: 0
+- assert:
+    named_global_var_changed:
+      name: openyamm.discovery.world.mm8.map.d16
+      value: 0
+- assert:
+    named_global_var_changed:
+      name: openyamm.discovery.world.mm8.map.d09
+      value: 0
+- load_game:
+    name: quicksave
+    path: saves/quicksave.oysav
+- assert:
+    npc_house:
+      npc_id: 52
+      house_id: 0
+- assert:
+    qbit_clear:
+    - 21
+    - 31
+    - 70
+    runtime_event_variable:
+      id: 13
+      member_index: 0
+      value: 10000
+- assert:
+    named_global_var_changed:
+      name: openyamm.discovery.npc/28/house
+      value: 866
+- assert:
+    named_global_var_changed:
+      name: openyamm.discovery.npc/15
+      value: 0
+- assert:
+    named_global_var_changed:
+      name: openyamm.discovery.npc/52
+      value: 0
+- assert:
+    named_global_var_changed:
+      name: openyamm.discovery.npc/52/house
+      value: 0
+- assert:
+    named_global_var_changed:
+      name: openyamm.discovery.house/751
+      value: 0
+- assert:
+    named_global_var_changed:
+      name: openyamm.discovery.world.mm8.map.d16
+      value: 0
+- assert:
+    named_global_var_changed:
+      name: openyamm.discovery.world.mm8.map.d09
+      value: 0
+- save_game: after-ui-verified
+- load_game: after-ui-verified
+- assert:
+    npc_house:
+      npc_id: 52
+      house_id: 0
+- assert:
+    qbit_clear:
+    - 21
+    - 31
+    - 70
+    runtime_event_variable:
+      id: 13
+      member_index: 0
+      value: 10000
+- assert:
+    named_global_var_changed:
+      name: openyamm.discovery.npc/28/house
+      value: 866
+- assert:
+    named_global_var_changed:
+      name: openyamm.discovery.npc/15
+      value: 0
+- assert:
+    named_global_var_changed:
+      name: openyamm.discovery.npc/52
+      value: 0
+- assert:
+    named_global_var_changed:
+      name: openyamm.discovery.npc/52/house
+      value: 0
+- assert:
+    named_global_var_changed:
+      name: openyamm.discovery.house/751
+      value: 0
+- assert:
+    named_global_var_changed:
+      name: openyamm.discovery.world.mm8.map.d16
+      value: 0
+- assert:
+    named_global_var_changed:
+      name: openyamm.discovery.world.mm8.map.d09
+      value: 0

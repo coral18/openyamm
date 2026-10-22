@@ -2,6 +2,7 @@
 #include "game/StringUtils.h"
 #include "game/maps/MapIdentity.h"
 #include "game/gameplay/TravelRuntime.h"
+#include "game/events/ScriptedEventProgram.h"
 
 #include <algorithm>
 #include <bit>
@@ -62,7 +63,7 @@ std::string WorldRecord::name() const
     if (kind == WorldRecordKind::Trainer)
         return npcName.value_or(npc->name) + " - " + teacher->note;
     if (kind == WorldRecordKind::Npc)
-        return npcName.value_or(npc->name);
+        return npcName.value_or(npc->name) + (possibleNpcLocation ? " (possible location)" : "");
     if (kind == WorldRecordKind::House)
         return house->name.empty() ? house->buildingName : house->name;
     return map->name;
@@ -80,6 +81,7 @@ std::string WorldRecord::searchText() const
 
 bool WorldKnowledge::knows(const WorldRecord &record) const
 {
+    if (record.possibleNpcLocation) return false;
     if (informedRecords.contains(record.id))
         return true;
     if (record.kind == WorldRecordKind::Npc || record.kind == WorldRecordKind::Trainer)
@@ -107,6 +109,7 @@ WorldDatabase::WorldDatabase(const MapStats &maps, const HouseTable &houses, con
     const MergedTeacherTopicTable &teachers, const std::string &worldId,
     const std::vector<WorldMapPresentation> &presentation, const WorldNpcState &npcsState,
     const WorldTransportState &transportState)
+    : m_pHouses(&houses), m_pNpcs(&npcs), m_observedNpcs(npcsState.observedOnly)
 {
     m_transportIssues = transportState.issues;
     std::unordered_map<std::string, const WorldMapPresentation *> layouts;
@@ -253,6 +256,49 @@ WorldDatabase::WorldDatabase(const MapStats &maps, const HouseTable &houses, con
             parent = find(parent->parentId);
         }
     }
+    if (!m_observedNpcs)
+        for (const auto &[houseId, house] : houses.entries())
+            for (uint32_t npcId : npcs.getNpcIdsForHouse(houseId))
+                appendPossibleNpcLocation(npcId, houseId);
+}
+
+void WorldDatabase::appendPossibleNpcLocation(uint32_t npcId, uint32_t houseId)
+{
+    if (m_observedNpcs) return;
+    const NpcEntry *pNpc = m_pNpcs->getNpc(npcId);
+    const HouseEntry *pHouse = m_pHouses->get(houseId);
+    if (pNpc == nullptr || pHouse == nullptr)
+        throw std::invalid_argument("Unknown NPC location reference: " + std::to_string(npcId)
+            + "/" + std::to_string(houseId));
+    const auto house = std::find_if(m_records.begin(), m_records.end(), [houseId](const WorldRecord &record)
+    { return record.kind == WorldRecordKind::House && record.house->id == houseId; });
+    if (house == m_records.end()) return; // A shared declaration may refer to another mounted world.
+    const std::string npcRecordId = house->map->worldId + ":npc/" + std::to_string(npcId);
+    const WorldRecord *pCurrent = find(npcRecordId);
+    if (pCurrent != nullptr && pCurrent->house->id == houseId) return;
+    const std::string id = npcRecordId + "/possible-house/" + std::to_string(houseId);
+    if (find(id) != nullptr) return;
+    WorldRecord possible = *house;
+    possible.id = id;
+    possible.parentId = house->id;
+    possible.kind = WorldRecordKind::Npc;
+    possible.npc = pNpc;
+    possible.possibleNpcLocation = true;
+    // A destination does not prove future name, topics, training offers or current availability.
+    m_byId.emplace(id, m_records.size());
+    m_records.push_back(std::move(possible));
+}
+
+void WorldDatabase::indexNpcLocations(const ScriptedEventProgram &program)
+{
+    if (m_observedNpcs) return;
+    std::vector<std::pair<uint32_t, uint32_t>> locations;
+    for (const auto &[eventId, entries] : program.npcLocations())
+        for (const ScriptedEventProgram::NpcLocation &location : entries)
+            locations.emplace_back(location.npcId, location.houseId);
+    std::sort(locations.begin(), locations.end());
+    locations.erase(std::unique(locations.begin(), locations.end()), locations.end());
+    for (const auto &[npcId, houseId] : locations) appendPossibleNpcLocation(npcId, houseId);
 }
 
 const std::vector<WorldRecord> &WorldDatabase::records() const { return m_records; }
@@ -265,6 +311,7 @@ const WorldRecord *WorldDatabase::find(const std::string &id) const
 
 bool WorldDatabase::visible(const WorldRecord &record, const WorldKnowledge &knowledge, bool guide) const
 {
+    if (record.possibleNpcLocation) return guide;
     if (guide)
         return true;
     if (!walkingRouteUnlocked(record, knowledge))

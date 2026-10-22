@@ -50,6 +50,10 @@ AtlasScreen::AtlasScreen(const Engine::AssetFileSystem &assets, const GameDataRe
               m_presentation.worldId, m_presentation.maps, atlasNpcState(data, m_knowledge, false, pParty != nullptr),
               atlasTransportState(data, m_knowledge, false, pParty != nullptr)),
       m_data(data), m_pParty(pParty),
+      m_pGlobalEvents(pCurrentMap != nullptr && pCurrentMap->globalEventProgram
+          ? &*pCurrentMap->globalEventProgram : nullptr),
+      m_pLocalEvents(pCurrentMap != nullptr && pCurrentMap->localEventProgram
+          ? &*pCurrentMap->localEventProgram : nullptr),
       m_writeNote(std::move(writeNote)), m_close(std::move(close)), m_paused(paused)
 {
     loadDesign("menu/main_menu");
@@ -140,6 +144,8 @@ AtlasScreen::AtlasScreen(const Engine::AssetFileSystem &assets, const GameDataRe
             if (m_pParty->hasRosterMember(pMember->id))
                 m_referenceKnowledge.roster.insert(pMember->id);
     }
+    if (m_pGlobalEvents != nullptr) m_world.indexNpcLocations(*m_pGlobalEvents);
+    if (m_pLocalEvents != nullptr) m_world.indexNpcLocations(*m_pLocalEvents);
     indexQuestLocations();
     if (pCurrentMap != nullptr && pCurrentMap->outdoorMapData && pCurrentMap->localEventProgram)
     {
@@ -354,6 +360,8 @@ void AtlasScreen::rebuildWorld()
     m_world.indexMapArrivals(m_knowledge);
     m_world.indexObservedMonsters(m_knowledge, m_data.monsterTable());
     m_world.indexObservedItemSources(m_knowledge, m_data.itemTable());
+    if (m_pGlobalEvents != nullptr) m_world.indexNpcLocations(*m_pGlobalEvents);
+    if (m_pLocalEvents != nullptr) m_world.indexNpcLocations(*m_pLocalEvents);
     indexQuestLocations();
     m_sourceMaps.clear(); m_sourceScanIndex = 0;
     m_sourceScanActive = m_sourcesComplete = false;
@@ -387,6 +395,8 @@ void AtlasScreen::selectWorld(const std::string &worldId)
         m_sourceScanActive = m_sourcesComplete = false;
         m_sourceScanFailures = 0;
         m_presentation = std::move(presentation);
+        if (m_pGlobalEvents != nullptr) m_world.indexNpcLocations(*m_pGlobalEvents);
+        if (m_pLocalEvents != nullptr) m_world.indexNpcLocations(*m_pLocalEvents);
         indexQuestLocations();
         m_trainerMastery = 0;
         m_indexedMaps.clear();
@@ -584,21 +594,29 @@ void AtlasScreen::indexMapData(MapAssetInfo &map)
     }
     else
         throw std::runtime_error("Missing map geometry");
-    if (map.globalEventProgram) m_world.indexSharedItemRewards(*map.globalEventProgram, m_data.itemTable());
+    if (map.localEventProgram) m_world.indexNpcLocations(*map.localEventProgram);
+    if (map.globalEventProgram)
+    {
+        m_world.indexSharedItemRewards(*map.globalEventProgram, m_data.itemTable());
+        m_world.indexNpcLocations(*map.globalEventProgram);
+    }
 }
 
 void AtlasScreen::indexKnownRegions()
 {
+    // Indexing event metadata can append possible residents; retain stable table pointers across it.
+    std::vector<const MapStatsEntry *> maps;
     for (const WorldRecord &record : m_world.records())
+        if ((record.kind == WorldRecordKind::Region
+            || (record.kind == WorldRecordKind::Dungeon && record.id == m_map))
+            && m_world.visible(record, m_knowledge, m_guide)
+            && m_indexedMaps.insert(record.id).second)
+            maps.push_back(record.map);
+    for (const MapStatsEntry *pMap : maps)
     {
-        if ((record.kind != WorldRecordKind::Region
-             && (record.kind != WorldRecordKind::Dungeon || record.id != m_map))
-            || !m_world.visible(record, m_knowledge, m_guide)
-            || !m_indexedMaps.insert(record.id).second)
-            continue;
         try
         {
-            auto map = MapAssetLoader().load(assetFileSystem(), *record.map,
+            auto map = MapAssetLoader().load(assetFileSystem(), *pMap,
                 m_data.monsterTable(), m_data.objectTable(), MapLoadPurpose::HeadlessGameplay);
             if (!map) throw std::runtime_error("Missing map data");
             indexMapData(*map);
@@ -606,7 +624,7 @@ void AtlasScreen::indexKnownRegions()
         catch (const std::exception &error)
         {
             m_locationError = "Some map markers are unavailable in this content package.";
-            std::cerr << "World locations could not be indexed for " << record.map->fileName
+            std::cerr << "World locations could not be indexed for " << pMap->fileName
                       << ": " << error.what() << '\n';
         }
     }
@@ -1470,7 +1488,7 @@ void AtlasScreen::drawReference()
     }
     const bool classes = m_referenceSection == WorldGuideSection::Classes;
     const bool scanSources = m_guide && (m_referenceSection == WorldGuideSection::Items
-        || m_referenceSection == WorldGuideSection::Monsters);
+        || m_referenceSection == WorldGuideSection::Monsters || m_referenceSection == WorldGuideSection::Quests);
     textInRect(canvasRect(285, 89, classes || scanSources ? 410 : 535, 25),
         m_presentation.name + " - active game data",
         "fondamento", 14);
@@ -1781,6 +1799,8 @@ void AtlasScreen::drawDetails()
         text = record->name();
         if (record->lastObservedNpc)
             text += " | Last encountered here";
+        if (record->possibleNpcLocation)
+            text += " | Authored possibility; quest conditions may apply. Current presence is not implied.";
         if (record->house != nullptr)
         {
             text += " | " + record->map->name + " | " + record->house->type;

@@ -1105,3 +1105,12 @@ ReplaceGlobalEvent(922, "MMMerge Kastore final task complete", function(...)
         MM7.MarkAntagarichEndgameComplete()
     end
 end)
+
+-- Possible authored residences; these declarations do not perform or predict the relocations.
+SetGlobalNpcLocations(783, {{340, 215}})
+SetGlobalNpcLocations(802, {{356, 941}})
+SetGlobalNpcLocations(803, {{393, 1158}})
+SetGlobalNpcLocations(804, {{393, 941}})
+SetGlobalNpcLocations(858, {{406, 1169}, {407, 1169}})
+SetGlobalNpcLocations(891, {{416, 244}})
+SetGlobalNpcLocations(893, {{417, 243}})

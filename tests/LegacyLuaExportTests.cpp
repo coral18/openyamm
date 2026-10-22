@@ -96,6 +96,8 @@ OpenYAMM::Game::ScriptedEventProgram exportPressureTrapProgram(
     const std::string lua = generateLegacyEventLuaChunk(
         legacyProgram, StrTable{}, lookups, LegacyLuaExportScope::Map, version)
         + generateLegacyEventItemRewardsLuaChunk(legacyProgram, StrTable{}, lookups,
+            LegacyLuaExportScope::Map, version)
+        + generateLegacyEventNpcLocationsLuaChunk(legacyProgram, StrTable{}, lookups,
             LegacyLuaExportScope::Map, version);
     const std::vector<uint8_t> supportBytes = readBinaryFixture(
         std::filesystem::path(OPENYAMM_SOURCE_DIR) / "assets_dev/engine/scripts/common/event_support.lua");
@@ -1061,5 +1063,83 @@ TEST_CASE("reward metadata exports separately without changing callback code or 
         CHECK(program->itemRewards().at(1) == std::vector<uint32_t>{42});
         CHECK_FALSE(ScriptedEventProgram::loadFromLuaText(prefix + metadata,
             "missing-item-reward-handler", programScope, error));
+    }
+}
+
+TEST_CASE("NPC location declarations are typed callback-owned possibilities with isolated scopes")
+{
+    using namespace OpenYAMM::Game;
+    const auto supportBytes = readBinaryFixture(std::filesystem::path(OPENYAMM_SOURCE_DIR)
+        / "assets_dev/engine/scripts/common/event_support.lua");
+    const std::string support(supportBytes.begin(), supportBytes.end());
+    const auto load = [&](const std::string &code, ScriptedEventScope scope = ScriptedEventScope::Map)
+    {
+        std::string error;
+        return ScriptedEventProgram::loadFromLuaText(support + "\n" + code, "npc-location-test", scope, error);
+    };
+    const std::string base = "RegisterEvent(10, '', function() error('must not execute') end)\n"
+        "SetMapNpcLocations(10, {{42, 12}, {41, 11}, {42, 12}})\n";
+    auto program = load(base);
+    REQUIRE(program);
+    const std::vector<ScriptedEventProgram::NpcLocation> expected{{41, 11}, {42, 12}};
+    CHECK(program->npcLocations().at(10) == expected);
+    program = load(base + "evt.map[10] = function() end\n");
+    REQUIRE(program);
+    CHECK(program->npcLocations().empty());
+    program = load(base + "evt.map[10] = nil\n");
+    REQUIRE(program);
+    CHECK(program->npcLocations().empty());
+    program = load(base + "ReplaceMapEvent(10, '', function() end)\nSetMapNpcLocations(10, {{43, 13}})\n");
+    REQUIRE(program);
+    CHECK(program->npcLocations().at(10) == std::vector<ScriptedEventProgram::NpcLocation>{{43, 13}});
+    CHECK_FALSE(load("SetMapNpcLocations(10, {{42, 11}})"));
+    for (const char *array : {"false", "{false}", "{{0, 11}}", "{{42, 0}}", "{{-1, 11}}", "{{42.5, 11}}",
+        "{{'42', 11}}", "{{4294967296, 11}}", "{{42, 11, 12}}", "{{42}}", "{[2] = {42, 11}}",
+        "{{42, 11, extra = 12}}", "{extra = {42, 11}}"})
+        CHECK_FALSE(load(std::string("RegisterEvent(10, '', function() end)\nSetMapNpcLocations(10, ") + array + ")"));
+    const std::string global = "RegisterGlobalEvent(10, '', function() end)\nSetGlobalNpcLocations(10, {{99, 19}})\n";
+    program = load(base + global);
+    REQUIRE(program);
+    CHECK(program->npcLocations().at(10) == expected);
+    program = load(base + global, ScriptedEventScope::Global);
+    REQUIRE(program);
+    CHECK(program->npcLocations().at(10) == std::vector<ScriptedEventProgram::NpcLocation>{{99, 19}});
+}
+
+TEST_CASE("legacy NPC location metadata respects reachability branches removals and trigger continuations")
+{
+    using namespace OpenYAMM::Game;
+    std::vector<uint8_t> bytes;
+    const auto append = [&](uint16_t eventId, uint8_t step, EvtOpcode opcode, std::vector<uint8_t> payload)
+    {
+        bytes.insert(bytes.end(), {uint8_t(4 + payload.size()), uint8_t(eventId), uint8_t(eventId >> 8),
+            step, uint8_t(opcode)});
+        bytes.insert(bytes.end(), payload.begin(), payload.end());
+    };
+    append(1, 0, EvtOpcode::MoveNpc, {42, 0, 0, 0, 11, 0, 0, 0});
+    appendExitRecord(bytes, 1, 1);
+    append(1, 2, EvtOpcode::MoveNpc, {42, 0, 0, 0, 99, 0, 0, 0}); // Unreachable.
+    append(2, 0, EvtOpcode::Compare, {0x10, 0, 1, 0, 0, 0, 3});
+    append(2, 1, EvtOpcode::MoveNpc, {42, 0, 0, 0, 12, 0, 0, 0});
+    appendExitRecord(bytes, 2, 2);
+    append(2, 3, EvtOpcode::MoveNpc, {42, 0, 0, 0, 13, 0, 0, 0});
+    appendExitRecord(bytes, 2, 4);
+    append(3, 0, EvtOpcode::MoveNpc, {42, 0, 0, 0, 14, 0, 0, 0});
+    appendExitRecord(bytes, 3, 1);
+    append(3, 5, EvtOpcode::OnMapReload, {});
+    append(3, 6, EvtOpcode::MoveNpc, {42, 0, 0, 0, 15, 0, 0, 0});
+    appendExitRecord(bytes, 3, 7);
+    append(4, 0, EvtOpcode::MoveNpc, {42, 0, 0, 0, 0, 0, 0, 0});
+    appendExitRecord(bytes, 4, 1);
+    for (LegacyEventVersion version : {LegacyEventVersion::Mm6, LegacyEventVersion::Mm7, LegacyEventVersion::Mm8})
+    {
+        const ScriptedEventProgram program = exportPressureTrapProgram(bytes, version);
+        CHECK(program.npcLocations().at(1) == std::vector<ScriptedEventProgram::NpcLocation>{{42, 11}});
+        CHECK(program.npcLocations().at(2) == std::vector<ScriptedEventProgram::NpcLocation>{{42, 12}, {42, 13}});
+        CHECK(program.npcLocations().at(3) == std::vector<ScriptedEventProgram::NpcLocation>{{42, 14}});
+        CHECK_FALSE(program.npcLocations().contains(4));
+        REQUIRE(program.onLoadEventIds().size() == 1);
+        CHECK(program.npcLocations().at(program.onLoadEventIds().front())
+            == std::vector<ScriptedEventProgram::NpcLocation>{{42, 15}});
     }
 }

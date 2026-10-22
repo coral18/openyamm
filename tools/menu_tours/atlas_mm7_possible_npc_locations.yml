@@ -1,0 +1,75 @@
+# 1600x900; private npc-relocated save from the strict mm7_npc_relocation scenario.
+output_dir: captures
+exit: true
+steps:
+- expect: gameplay
+- key: F9
+- pause: true
+- click:
+  - 800
+  - 821
+- click:
+  - 1123
+  - 126
+- click:
+  - 179
+  - 126
+- text: Butler
+- key: Return
+- click:
+  - 1280
+  - 265
+- capture: npc-last-encountered
+- click:
+  - 1152
+  - 57
+- click:
+  - 170
+  - 190
+- capture: npc-current-and-possible
+- click:
+  - 1280
+  - 336
+- capture: npc-possible-location
+- click:
+  - 1152
+  - 57
+- click:
+  - 1280
+  - 265
+- capture: npc-discovery-unchanged
+- click:
+  - 450
+  - 57
+- click:
+  - 1450
+  - 126
+- click:
+  - 275
+  - 190
+- text: Clean
+- key: Return
+- click:
+  - 190
+  - 265
+- capture: npc-known-quest-contact
+- click:
+  - 1152
+  - 57
+- click:
+  - 190
+  - 265
+- capture: npc-guide-quest-possibility
+- click:
+  - 1152
+  - 57
+- capture: npc-quest-discovery-again
+- click:
+  - 1450
+  - 57
+- expect: pause
+- click:
+  - 800
+  - 301
+- expect: gameplay
+- key: F9

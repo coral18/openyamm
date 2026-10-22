@@ -1424,3 +1424,44 @@ in this sparse checkout, so these are scoped results. Private logs/settings/save
 `atlas-accuracy-20261022/` under the Windows development root. Public inputs are the fresh scenario,
 legacy/import fixtures in `tests/fixtures/atlas/` and `tools/menu_tours/atlas_mm8_accuracy_quest.yml`.
 Android/controller and the remaining conditional/site/reference checks are still part of the incomplete objective.
+
+### Possible NPC residences and quest contact navigation, 2026-10-22
+
+The shared World Database distinguishes current/last-observed residents from authored possible residences.
+Guide includes the loaded base home when it differs from the current home, plus declared scripted destinations.
+These records are labelled `possible location`, link to their real building/map and carry no inferred future
+training offers, names or availability. Current residences are deduplicated; removing an NPC to house zero creates
+no location. Discovery rejects possible records even if an informed-record key happens to name one.
+
+Quest contact entries expose these alternatives only in Guide. Discovery retains the last encountered address
+and does not follow a secretly relocated NPC. The Quests tab now offers the existing `Scan sources` action to
+collect map-local declarations alongside global contacts; Guide scanning and navigation record no discoveries.
+Global/current-map metadata is reused when rebuilding or switching the viewed world. Map indexing retains stable
+registry pointers while adding records, avoiding invalidation during the region scan.
+
+`SetMapNpcLocations`/`SetGlobalNpcLocations` bind typed NPC/house possibilities to the registered event callback.
+Replacement/removal invalidates old declarations. The legacy exporter derives reachable destinations, keeping
+synthetic trigger continuations separate and excluding removals/unreachable code. Seventeen nonempty generated
+sidecars cover the canonical global script and MM6/MM7/MM8 local scripts. Explicit supplements cover overridden
+MM7 promotion/judge/Butler/Archibald helpers, MM8 lord placements and Regna's timer. Verdant's shared declaration
+uses the same configured meeting places as the actual placement helper.
+
+Regenerate with `tools/regenerate_lua_events.sh --npc-locations-only`. Map supplement catalogs live separately in
+`*_zz_npc_locations.lua`; base catalogs use `*_00_npc_locations.lua`. The lighting exporter validates their exact
+declarative format before excluding them from shadow dependencies. Original generated callbacks, map gameplay
+overlays, installed lighting and its hashes remain unchanged; no stale-bake check was disabled or rewritten.
+The shared NPC registry and save format remain authoritative. This adds no mod-loader Lua entrypoint.
+
+Verification: 138 Windows database/guide/content/package/mod/save-UI regression cases / 15708 assertions,
+28 exporter cases / 420 assertions, curated Linux ASan/UBSan 90 / 4983, and eight lighting-export tests pass.
+The focused metadata checks also validate callback ordering and resolve mounted MM6/MM7/MM8 source declarations
+against shared NPC/house registries. Strict runtime checks execute Butler relocation with controlled quest
+prerequisites and real Talimere-house observation, including persistence; they do not test the castle combat.
+Native AMD OpenGL tours verify MM7 current/possible/last-encountered views and MM8's complete source scan,
+Quixote's alternative contacts, map navigation and Guide-to-Discovery privacy. Post-UI saves retain observed
+addresses and keep unvisited MM8 locations unknown through another save/load. Their private records are in
+`atlas-npc-locations-20261022/` under the Windows development root. Public tours are
+`atlas_mm{7,8}_possible_npc_locations.yml`; matching save verifiers are documented in
+[the fixture guide](tests/fixtures/atlas/README.md#possible-npc-locations-and-guide-privacy).
+Android/controller acceptance, conditional service/recruitment
+eligibility, generated/roaming NPCs and the other coverage-matrix gaps remain open.

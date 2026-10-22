@@ -121,6 +121,25 @@ The MM8 Pure Accuracy supplement uses them to import known legacy states without
 or writing Atlas-specific UI state. Its version/case/original flags and NPC slots are recorded under
 `openyamm.migration.mm8.pure-accuracy-v1`. Ambiguous old bit 134 is preserved. See the quest content audit.
 
+Campaign event metadata can declare possible NPC residences:
+
+```lua
+SetGlobalNpcLocations(803, {{393, 1158}})
+-- Map scope uses SetMapNpcLocations(eventId, {{npcId, houseId}, ...}).
+```
+
+Both IDs must be positive uint32 values; house zero (removal) is not a destination. Declarations bind to the
+registered callback, are invalidated by replacement/removal, and must be redeclared for an appended wrapper.
+They neither execute the event nor forecast branch eligibility. The World Database combines the loaded base
+residence, current state and declared possibilities; Discovery never treats a possibility as an observation.
+Possibilities carry no inferred training topics, future names or availability. The Atlas remains an optional consumer.
+
+The legacy exporter emits nonempty `*_00_npc_locations.lua` sidecars. Explicit map supplements declare their
+destinations in `*_zz_npc_locations.lua` after gameplay overlays. Regenerate using
+`tools/regenerate_lua_events.sh --npc-locations-only`; this leaves callbacks and item-reward sidecars unchanged.
+The lighting exporter validates these reserved catalog formats before excluding them from shadow dependencies;
+arbitrary Lua or malformed declarations in those files are errors. Gameplay-script dependency hashes stay intact.
+
 The shared `engine/data_tables/quest_locations.txt` associates existing journal entries with canonical maps and
 merged NPC, house or item IDs. Core owns the reader and knowledge API; content defines the relationships.
 This is not a general typed quest-patching interface yet. See [the content audit](ATLAS_QUEST_AUDIT.md).

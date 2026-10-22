@@ -1,0 +1,67 @@
+# 1600x900; private fresh MM8 save; Guide scan never executes map events.
+output_dir: captures
+exit: true
+steps:
+- expect: gameplay
+- key: F9
+- pause: true
+- click:
+  - 800
+  - 821
+- click:
+  - 1152
+  - 57
+- click:
+  - 450
+  - 57
+- click:
+  - 1450
+  - 126
+- click:
+  - 1435
+  - 190
+- wait: 45
+- capture: npc-source-scan
+- click:
+  - 275
+  - 190
+- text: Quixote
+- key: Return
+- click:
+  - 190
+  - 265
+- capture: npc-quixote-guide-contacts
+- pointer_move:
+  - 1035
+  - 527
+- wheel: -1000
+- capture: npc-quixote-possible-contacts
+- click:
+  - 1035
+  - 695
+- capture: npc-quixote-possible-destination
+- click:
+  - 1152
+  - 57
+- capture: npc-destination-still-undiscovered
+- click:
+  - 450
+  - 57
+- click:
+  - 1450
+  - 126
+- click:
+  - 275
+  - 190
+- text: Quixote
+- key: Return
+- capture: npc-quixote-undiscovered
+- click:
+  - 1450
+  - 57
+- expect: pause
+- click:
+  - 800
+  - 301
+- expect: gameplay
+- key: F9

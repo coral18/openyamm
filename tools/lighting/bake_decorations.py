@@ -90,6 +90,27 @@ def validate_reward_metadata(text, script):
         raise ValueError('Invalid generated reward metadata overlay: ' + str(script))
 
 
+def validate_npc_metadata(text, script):
+    lines = text.splitlines()
+    header = ('-- generated possible NPC locations from legacy EVT/STR; load after the base handlers'
+              if script.name.endswith('_00_npc_locations.lua') else
+              '-- NPC location metadata; load after gameplay overlays')
+    pair = r'\{[1-9][0-9]*, [1-9][0-9]*\}'
+    declaration = re.compile(r'SetMapNpcLocations\([1-9][0-9]*, \{(?:' + pair
+                             + r'(?:, ' + pair + r')*)?\}\)')
+    if not lines or lines[0] != header:
+        raise ValueError('Invalid NPC location metadata overlay: ' + str(script))
+    for line in lines[1:]:
+        line = line.strip()
+        if not line or line.startswith('--'):
+            continue
+        if not declaration.fullmatch(line):
+            raise ValueError('Invalid NPC location metadata overlay: ' + str(script))
+        ids = [int(value) for value in re.findall(r'[0-9]+', line)]
+        if ids[0] > 65535 or any(value > 4294967295 for value in ids[1:]):
+            raise ValueError('Invalid NPC location metadata overlay: ' + str(script))
+
+
 def export_cards(profile, output):
     assets = ROOT / 'assets_dev'
     world = assets / 'worlds' / profile['world']
@@ -130,6 +151,10 @@ def export_cards(profile, output):
             # This reserved generated format only declares item rewards and cannot change any shadow caster.
             # Keep gameplay callback/overlay dependencies, while reward catalog updates remain independent.
             validate_reward_metadata(text, script)
+            continue
+        if script.name in (source.stem + '_00_npc_locations.lua', source.stem + '_zz_npc_locations.lua'):
+            # Typed catalog declarations cannot affect geometry or shadow-caster state.
+            validate_npc_metadata(text, script)
             continue
         use(script)
         for index, states in sprite_states(text, script).items():

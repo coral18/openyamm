@@ -105,6 +105,34 @@ class DecorationBakeTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, 'Invalid generated reward metadata overlay'):
                     self.export()
 
+    def test_npc_catalogs_do_not_change_shadow_cards_or_dependencies(self):
+        baseline = self.export()
+        for suffix, header in [
+                ('_00_npc_locations.lua', '-- generated possible NPC locations from legacy EVT/STR; '
+                 'load after the base handlers\n'),
+                ('_zz_npc_locations.lua', '-- NPC location metadata; load after gameplay overlays\n')]:
+            metadata = self.world / ('events/maps/test' + suffix)
+            for declaration in ('', 'SetMapNpcLocations(1, {{42, 11}, {43, 12}})\n'):
+                metadata.write_text(header + declaration)
+                result = self.export()
+                for field in ('cards', 'counts', 'dependencies'):
+                    self.assertEqual(result[field], baseline[field])
+            metadata.unlink()
+
+    def test_npc_catalog_cannot_hide_executable_or_invalid_declarations(self):
+        metadata = self.world / 'events/maps/test_zz_npc_locations.lua'
+        header = '-- NPC location metadata; load after gameplay overlays\n'
+        for content in ('evt.SetSprite(7, 0)\n',
+                        header + 'SetMapNpcLocations(1, {{42, 11}}); evt.SetSprite(7, 0)\n',
+                        header + 'RegisterEvent(1, nil, function() end)\n',
+                        header + 'SetMapNpcLocations(1, {{42, 0}})\n',
+                        header + 'SetMapNpcLocations(65536, {{42, 11}})\n',
+                        header + 'SetMapNpcLocations(1, {{4294967296, 11}})\n'):
+            with self.subTest(content=content):
+                metadata.write_text(content)
+                with self.assertRaisesRegex(ValueError, 'Invalid NPC location metadata overlay'):
+                    self.export()
+
 
 if __name__ == '__main__':
     unittest.main()

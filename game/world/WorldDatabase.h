@@ -61,6 +61,7 @@ struct WorldRecord
 
     std::optional<std::string> npcName;
     bool lastObservedNpc = false;
+    bool possibleNpcLocation = false;
     std::vector<uint32_t> npcTopicIds;
     std::string name() const;
     std::string searchText() const;
@@ -144,6 +145,7 @@ public:
     void indexMapItemRewards(const MapStatsEntry &map, const ScriptedEventProgram &program,
         const std::vector<WorldInteractionSite> &sites, const ItemTable &items);
     void indexSharedItemRewards(const ScriptedEventProgram &program, const ItemTable &items);
+    void indexNpcLocations(const ScriptedEventProgram &program);
     std::vector<const WorldItemSource *> itemSources(const WorldKnowledge &knowledge, bool guide) const;
     std::vector<WorldChestObservation> observedChests(const WorldMapFeature &feature,
         const WorldKnowledge &knowledge) const;
@@ -161,6 +163,7 @@ public:
     static const char *kindName(WorldRecordKind kind);
 
 private:
+    void appendPossibleNpcLocation(uint32_t npcId, uint32_t houseId);
     void appendItemSource(const std::string &mapId, WorldItemSource source, const ItemTable &items);
     void indexMapSites(const WorldRecord &source, const std::vector<WorldInteractionSite> &sites,
         const ScriptedEventProgram &events);
@@ -173,5 +176,8 @@ private:
     std::vector<WorldMapLocation> m_locations;
     std::vector<WorldMapFeature> m_features;
     std::vector<WorldItemSource> m_itemSources;
+    const HouseTable *m_pHouses = nullptr;
+    const NpcDialogTable *m_pNpcs = nullptr;
+    bool m_observedNpcs = false;
 };
 } // namespace OpenYAMM::Game

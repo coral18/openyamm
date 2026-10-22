@@ -6,11 +6,11 @@ repo_root="$(cd "${script_dir}/.." && pwd)"
 
 export_args=()
 if [[ $# -gt 0 ]]; then
-    if [[ $# -ne 1 || "$1" != --item-rewards-only ]]; then
-        echo 'Usage: regenerate_lua_events.sh [--item-rewards-only]' >&2
+    if [[ $# -ne 1 || ( "$1" != --item-rewards-only && "$1" != --npc-locations-only ) ]]; then
+        echo 'Usage: regenerate_lua_events.sh [--item-rewards-only|--npc-locations-only]' >&2
         exit 2
     fi
-    export_args=(--item-rewards-only)
+    export_args=("$1")
 fi
 
 cd "${repo_root}"

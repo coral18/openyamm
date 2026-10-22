@@ -596,6 +596,88 @@ bool readItemRewards(lua_State *pLuaState, int metadataIndex, ScriptedEventScope
     lua_settop(pLuaState, stackTop);
     return true;
 }
+
+bool readNpcLocations(lua_State *pLuaState, int metadataIndex, ScriptedEventScope scope,
+    std::unordered_map<uint16_t, std::vector<ScriptedEventProgram::NpcLocation>> &result, std::string &error)
+{
+    const int stackTop = lua_gettop(pLuaState);
+    const auto fail = [&]()
+    {
+        error = "Invalid npcLocations metadata: expected registered handlers and arrays of positive NPC/house ID pairs";
+        lua_settop(pLuaState, stackTop);
+        return false;
+    };
+    lua_getfield(pLuaState, metadataIndex, "npcLocations");
+    if (lua_isnil(pLuaState, -1))
+    {
+        lua_pop(pLuaState, 1);
+        return true;
+    }
+    if (!lua_istable(pLuaState, -1)) return fail();
+    lua_pushnil(pLuaState);
+    while (lua_next(pLuaState, -2) != 0)
+    {
+        if (!lua_isinteger(pLuaState, -2) || lua_tointeger(pLuaState, -2) <= 0
+            || lua_tointeger(pLuaState, -2) > UINT16_MAX || !lua_istable(pLuaState, -1)) return fail();
+        const uint16_t eventId = uint16_t(lua_tointeger(pLuaState, -2));
+        lua_getfield(pLuaState, -1, "handler");
+        if (!lua_isfunction(pLuaState, -1)) return fail();
+        lua_getglobal(pLuaState, "evt");
+        lua_getfield(pLuaState, -1, luaScopeName(scope));
+        if (!lua_istable(pLuaState, -1)) return fail();
+        lua_rawgeti(pLuaState, -1, eventId);
+        const bool ownsHandler = lua_rawequal(pLuaState, -1, -4);
+        lua_pop(pLuaState, 4);
+        if (!ownsHandler)
+        {
+            lua_pop(pLuaState, 1);
+            continue;
+        }
+        lua_getfield(pLuaState, -1, "locations");
+        if (!lua_istable(pLuaState, -1)) return fail();
+        const size_t count = lua_rawlen(pLuaState, -1);
+        size_t entries = 0;
+        std::vector<ScriptedEventProgram::NpcLocation> locations;
+        lua_pushnil(pLuaState);
+        while (lua_next(pLuaState, -2) != 0)
+        {
+            if (!lua_isinteger(pLuaState, -2) || lua_tointeger(pLuaState, -2) <= 0
+                || uint64_t(lua_tointeger(pLuaState, -2)) > count || !lua_istable(pLuaState, -1)
+                || lua_rawlen(pLuaState, -1) != 2) return fail();
+            ++entries;
+            size_t fields = 0;
+            lua_pushnil(pLuaState);
+            while (lua_next(pLuaState, -2) != 0)
+            {
+                if (!lua_isinteger(pLuaState, -2) || lua_tointeger(pLuaState, -2) < 1
+                    || lua_tointeger(pLuaState, -2) > 2 || !lua_isinteger(pLuaState, -1)
+                    || lua_tointeger(pLuaState, -1) <= 0 || uint64_t(lua_tointeger(pLuaState, -1)) > UINT32_MAX)
+                    return fail();
+                ++fields;
+                lua_pop(pLuaState, 1);
+            }
+            if (fields != 2) return fail();
+            lua_rawgeti(pLuaState, -1, 1);
+            const uint32_t npcId = uint32_t(lua_tointeger(pLuaState, -1));
+            lua_pop(pLuaState, 1);
+            lua_rawgeti(pLuaState, -1, 2);
+            const uint32_t houseId = uint32_t(lua_tointeger(pLuaState, -1));
+            lua_pop(pLuaState, 1);
+            locations.push_back({npcId, houseId});
+            lua_pop(pLuaState, 1);
+        }
+        if (entries != count) return fail();
+        std::sort(locations.begin(), locations.end(), [](const auto &a, const auto &b)
+        {
+            return a.npcId < b.npcId || (a.npcId == b.npcId && a.houseId < b.houseId);
+        });
+        locations.erase(std::unique(locations.begin(), locations.end()), locations.end());
+        if (!locations.empty()) result.emplace(eventId, std::move(locations));
+        lua_pop(pLuaState, 2);
+    }
+    lua_settop(pLuaState, stackTop);
+    return true;
+}
 }
 
 bool ScriptedEventProgram::populateMetadataFromLua(
@@ -637,6 +719,7 @@ bool ScriptedEventProgram::populateMetadataFromLua(
     program.m_spriteNames = readStringArrayFromField(pLuaState, -1, "spriteNames");
     program.m_castSpellIds = readIntegerArrayFromField<uint32_t>(pLuaState, -1, "castSpellIds");
     if (!readItemRewards(pLuaState, lua_absindex(pLuaState, -1), scope, program.m_itemRewards, error)) return false;
+    if (!readNpcLocations(pLuaState, lua_absindex(pLuaState, -1), scope, program.m_npcLocations, error)) return false;
     program.m_levitateTrapFaceMask = readOptionalUnsignedField(pLuaState, -1, "levitateTrapFaceMask").value_or(0);
     program.m_levitateTrapEvents = readIntegerArrayFromField<uint16_t>(pLuaState, -1, "levitateTrapEvents", true);
     program.m_timerTriggers = readTimerTriggers(pLuaState, -1, scope);
@@ -647,6 +730,12 @@ bool ScriptedEventProgram::populateMetadataFromLua(
 const std::unordered_map<uint16_t, std::vector<uint32_t>> &ScriptedEventProgram::itemRewards() const
 {
     return m_itemRewards;
+}
+
+const std::unordered_map<uint16_t, std::vector<ScriptedEventProgram::NpcLocation>> &
+ScriptedEventProgram::npcLocations() const
+{
+    return m_npcLocations;
 }
 
 std::optional<ScriptedEventProgram> ScriptedEventProgram::loadFromLuaText(
