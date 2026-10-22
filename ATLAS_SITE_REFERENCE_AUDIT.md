@@ -31,6 +31,18 @@ MM8 out04:101/102, out06:102, out08:101/102 need a live/scene/inherited-decorati
 can have multiple physical sites. The shared exporter also emits 12 MM6 callbacks in eight maps; those receive
 data validation, rather than new MM6 UI acceptance.
 
+The follow-up scene audit also checked the mounted `maps/out12.scene.yml` (MM7) and
+`maps/out04.scene.yml`, `out06.scene.yml`, `out08.scene.yml` (MM8). None contains a matching event/trigger
+binding for these six callbacks, including entity and initial-state fields. Thus applying the packaged scene
+alone does not recover the missing positions. This is an asset/binding investigation, not grounds to invent
+an Atlas-only location or to delete an apparently unused callback.
+
+The outdoor inherited-decoration classifier covers barrels, cauldrons, trash, campfires, casks and crystals;
+it does not classify these as local well callbacks. Local callback declarations and MM8 decompiled EVT
+behavior confirm the intended effects, but do not establish physical coordinates. Live mechanism/save
+state and original map/import provenance still require checking before repairing authoritative geometry.
+This audit does not certify all inherited-decoration Atlas content.
+
 Discovery now retains actually observed synchronous numeric/condition outcomes through the shared Core site
 interaction hook, including at sites without journal notes. This separate history does not expose unexecuted
 branches or turn a generated reference into party knowledge. Deferred/spell-buff/item outcomes remain open.
