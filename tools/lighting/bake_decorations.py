@@ -127,6 +127,40 @@ def validate_autonote_metadata(text, script):
             raise ValueError('Invalid journal reference metadata overlay: ' + str(script))
 
 
+def validate_site_context_metadata(text, script):
+    lines = text.splitlines()
+    declaration = re.compile(r'SetMapContextAction\(([1-9][0-9]*), \{kind = "well", source = "script"\}\)')
+    if not lines or lines[0] != '-- Site context metadata; load after gameplay overlays':
+        raise ValueError('Invalid site context metadata overlay: ' + str(script))
+    for line in lines[1:]:
+        line = line.strip()
+        if not line or line.startswith('--'):
+            continue
+        match = declaration.fullmatch(line)
+        if match is None or int(match[1]) > 65535:
+            raise ValueError('Invalid site context metadata overlay: ' + str(script))
+
+
+def validate_site_reference_metadata(text, script):
+    lines = text.splitlines()
+    header = ('-- generated site references from legacy EVT/STR; load after the base handlers'
+              if script.name.endswith('_00_site_refs.lua') else
+              '-- Site reference metadata; load after gameplay overlays')
+    declaration = re.compile(r'SetMapSiteReference\(([1-9][0-9]*), ("(?:[^"\\\r\n]|\\["\\nrt])*")\)')
+    if not lines or lines[0] != header:
+        raise ValueError('Invalid site reference metadata overlay: ' + str(script))
+    for line in lines[1:]:
+        line = line.strip()
+        if not line or line.startswith('--'):
+            continue
+        match = declaration.fullmatch(line)
+        if match is None or int(match[1]) > 65535:
+            raise ValueError('Invalid site reference metadata overlay: ' + str(script))
+        value = json.loads(match[2])
+        if len(value.encode('utf-8')) > 16384 or '\0' in value:
+            raise ValueError('Invalid site reference metadata overlay: ' + str(script))
+
+
 def export_cards(profile, output):
     assets = ROOT / 'assets_dev'
     world = assets / 'worlds' / profile['world']
@@ -174,6 +208,12 @@ def export_cards(profile, output):
             continue
         if script.name in (source.stem + '_00_autonote_refs.lua', source.stem + '_zz_autonote_refs.lua'):
             validate_autonote_metadata(text, script)
+            continue
+        if script.name in (source.stem + '_00_site_refs.lua', source.stem + '_zz_site_refs.lua'):
+            validate_site_reference_metadata(text, script)
+            continue
+        if script.name == source.stem + '_zz_site_context.lua':
+            validate_site_context_metadata(text, script)
             continue
         use(script)
         for index, states in sprite_states(text, script).items():

@@ -7220,6 +7220,8 @@ bool tryEmitReadableCompareLadder(
 
     while (ladderStep)
     {
+        if (std::find(ladderSteps.begin(), ladderSteps.end(), *ladderStep) != ladderSteps.end())
+            return false;
         const LegacyLuaInstruction *instruction = findInstructionByStep(event, *ladderStep);
 
         if (!instruction
@@ -7480,6 +7482,8 @@ bool tryEmitReadableOptionalPrelude(
 
     while (step)
     {
+        if (std::find(chainSteps.begin(), chainSteps.end(), *step) != chainSteps.end())
+            return false;
         NormalStepInfo stepInfo;
 
         if (!decomposeNormalStep(event, *step, stepInfo)
@@ -7672,6 +7676,8 @@ bool tryEmitReadableGuardChainIfElse(
 
     while (step)
     {
+        if (std::find(chainSteps.begin(), chainSteps.end(), *step) != chainSteps.end())
+            return false;
         const LegacyLuaInstruction *instruction = findInstructionByStep(event, *step);
 
         if (!instruction
@@ -12768,6 +12774,169 @@ void emitAutonoteMetadata(std::ostringstream &stream, std::string_view scopeTabl
     stream << "})\n";
 }
 
+// A read-only projection of a complete supported callback. Never execute a handler to inspect its effects.
+std::optional<std::string> siteNumericLabel(const FormattedSelector &selector)
+{
+    const std::string &key = selector.expression;
+    if (key == "Gold") return "Party gold";
+    if (key == "BankGold") return "Banked gold";
+    if (key == "Food") return "Food";
+    if (key == "CurrentHealth") return "Health";
+    if (key == "CurrentSpellPoints") return "Spell points";
+    constexpr std::pair<std::string_view, std::string_view> attributes[] = {
+        {"Might", "Might"}, {"Intellect", "Intellect"}, {"Personality", "Personality"},
+        {"Endurance", "Endurance"}, {"Accuracy", "Accuracy"}, {"Speed", "Speed"}, {"Luck", "Luck"}};
+    for (const auto &[name, label] : attributes)
+    {
+        if (key == "Base" + std::string(name)) return "Base " + std::string(label);
+        if (key == std::string(name) + "Bonus") return "Temporary " + std::string(label);
+        if (key == "Actual" + std::string(name)) return std::string(label);
+    }
+    return std::nullopt;
+}
+
+bool siteUseCounter(const LegacyLuaEvent &event, const FormattedSelector &selector)
+{
+    if (selector.semantic != SelectorSemantic::MapVar) return false;
+    bool incremented = false;
+    for (const LegacyLuaInstruction &instruction : event.instructions)
+    {
+        if (instruction.arguments.size() < 2) continue;
+        const FormattedSelector other = formatSelector(instruction.arguments[0], {});
+        if (other.expression != selector.expression) continue;
+        if (instruction.operation == LegacyLuaOperation::Add || instruction.operation == LegacyLuaOperation::Set)
+        {
+            if (instruction.arguments[1] != 1) return false;
+            incremented = true;
+        }
+        else if (instruction.operation == LegacyLuaOperation::Subtract)
+            return false;
+    }
+    return incremented;
+}
+
+std::optional<std::string> siteRequirement(const LegacyLuaEvent &event,
+    const LegacyLuaInstruction &instruction, bool success)
+{
+    if (instruction.arguments.size() != 2) return std::nullopt;
+    const FormattedSelector selector = formatSelector(instruction.arguments[0], {});
+    const int32_t value = int32_t(instruction.arguments[1]);
+    if (selector.expression == "MaxHealth")
+        return success ? "Health is full" : "Health is below maximum";
+    if (selector.expression == "MaxSpellPoints")
+        return success ? "Spell points are full" : "Spell points are below maximum";
+    if (siteUseCounter(event, selector) && value > 0 && value <= 255)
+    {
+        // A flag assigned 1 is a one-use gate, not an incrementing multi-use counter.
+        for (const LegacyLuaInstruction &action : event.instructions)
+            if (action.operation == LegacyLuaOperation::Set && !action.arguments.empty()
+                && formatSelector(action.arguments[0], {}).expression == selector.expression && value != 1)
+                return std::nullopt;
+        if (value == 1)
+            return success ? "Already used since this location reset" : "Not used since this location reset";
+        return std::string(success ? "At least " : "Fewer than ") + std::to_string(value)
+            + " uses since this location reset";
+    }
+    if (const auto label = siteNumericLabel(selector))
+        return *label + (success ? " at least " : " below ") + std::to_string(value);
+    return std::nullopt;
+}
+
+std::optional<std::string> buildSiteReference(const LegacyLuaEvent &event)
+{
+    std::vector<uint8_t> steps = collectNormalEventSteps(event);
+    // Unknown-only steps are omitted by the callback formatter; do not silently claim a complete reference.
+    for (const LegacyLuaInstruction &instruction : event.instructions)
+        if (instruction.operation == LegacyLuaOperation::Unknown) steps.push_back(instruction.step);
+    sortAndUnique(steps);
+    if (steps.empty()) return std::nullopt;
+    struct Path
+    {
+        std::vector<std::string> requirements;
+        std::vector<std::string> effects;
+        std::vector<uint8_t> visited;
+        bool mutated = false;
+    };
+    std::vector<Path> outcomes;
+    size_t visits = 0;
+    std::function<bool(std::optional<uint8_t>, Path)> walk;
+    walk = [&](std::optional<uint8_t> step, Path path)
+    {
+        if (++visits > 4096 || outcomes.size() > 64) return false;
+        if (!step)
+        {
+            if (!path.effects.empty()) outcomes.push_back(std::move(path));
+            return true;
+        }
+        if (std::find(steps.begin(), steps.end(), *step) == steps.end()
+            || std::find(path.visited.begin(), path.visited.end(), *step) != path.visited.end()) return false;
+        path.visited.push_back(*step);
+        NormalStepInfo info;
+        if (!decomposeNormalStep(event, *step, info)) return false;
+        for (const LegacyLuaInstruction &instruction : event.instructions)
+            if (instruction.step == *step && instruction.operation == LegacyLuaOperation::Unknown) return false;
+        for (const LegacyLuaInstruction *pAction : info.actions)
+        {
+            switch (pAction->operation)
+            {
+                case LegacyLuaOperation::Add:
+                case LegacyLuaOperation::Set:
+                case LegacyLuaOperation::Subtract:
+                {
+                    if (pAction->arguments.size() != 2) return false;
+                    const FormattedSelector selector = formatSelector(pAction->arguments[0], {});
+                    const int32_t value = int32_t(pAction->arguments[1]);
+                    path.mutated = true;
+                    if (selector.semantic == SelectorSemantic::Autonote) break;
+                    if (siteUseCounter(event, selector)) break;
+                    const auto label = siteNumericLabel(selector);
+                    if (!label || value < 0 || selector.expression.starts_with("Actual")) return false;
+                    const bool subtraction = pAction->operation == LegacyLuaOperation::Subtract;
+                    const std::string action = pAction->operation == LegacyLuaOperation::Set
+                        ? "Set " + *label + " to " : *label + (subtraction ? " -" : " +");
+                    path.effects.push_back(action + std::to_string(value));
+                    break;
+                }
+                case LegacyLuaOperation::StatusText:
+                case LegacyLuaOperation::ShowFace:
+                case LegacyLuaOperation::PlaySound:
+                    break;
+                default:
+                    return false;
+            }
+        }
+        if (!info.terminalInstruction) return walk(nextStepAfter(steps, *step), std::move(path));
+        const LegacyLuaInstruction &terminal = *info.terminalInstruction;
+        if (terminal.operation == LegacyLuaOperation::Exit) return walk(std::nullopt, std::move(path));
+        if (terminal.operation == LegacyLuaOperation::Jump && terminal.jumpTargetStep)
+            return walk(terminal.jumpTargetStep, std::move(path));
+        if (terminal.operation != LegacyLuaOperation::Compare || !terminal.jumpTargetStep || path.mutated)
+            return false;
+        const auto positive = siteRequirement(event, terminal, true);
+        const auto negative = siteRequirement(event, terminal, false);
+        if (!positive || !negative) return false;
+        Path matched = path;
+        matched.requirements.push_back(*positive);
+        path.requirements.push_back(*negative);
+        return walk(terminal.jumpTargetStep, std::move(matched))
+            && walk(nextStepAfter(steps, *step), std::move(path));
+    };
+    if (!walk(steps.front(), {}) || outcomes.empty()) return std::nullopt;
+    std::string text = "Effects apply to the selected character unless the effect concerns party resources.\n"
+        "Health and spell point gains stop at their maximum; attribute increases use the game's normal limits.";
+    for (size_t i = 0; i < outcomes.size(); ++i)
+    {
+        text += "\n\nOutcome " + std::to_string(i + 1) + ":";
+        for (const std::string &effect : outcomes[i].effects) text += "\n" + effect;
+        if (!outcomes[i].requirements.empty())
+        {
+            text += "\nRequirements (all):";
+            for (const std::string &requirement : outcomes[i].requirements) text += "\n- " + requirement;
+        }
+    }
+    return text.size() <= 16384 ? std::optional<std::string>(text) : std::nullopt;
+}
+
 using EventMetadataEmitter = void (*)(std::ostringstream &, std::string_view, const LegacyLuaExportLookups &,
     const LegacyLuaEvent &, uint16_t, std::optional<uint8_t>);
 
@@ -12901,6 +13070,27 @@ std::string generateLegacyEventAutonoteRefsLuaChunk(
         &metadata, emitAutonoteMetadata);
     return metadata.str().empty() ? "" :
         "-- generated journal references from legacy EVT/STR; load after the base handlers\n" + metadata.str();
+}
+
+std::string generateLegacyEventSiteRefsLuaChunk(
+    const EvtProgram &evtProgram, const StrTable &strTable, const LegacyLuaExportLookups &lookups,
+    LegacyLuaExportScope scope, LegacyEventVersion version)
+{
+    if (scope != LegacyLuaExportScope::Map) return "";
+    const std::vector<LegacyLuaEvent> events = decodeEvents(evtProgram, strTable, lookups, version);
+    std::ostringstream metadata;
+    for (size_t i = 0; i < events.size(); ++i)
+    {
+        const auto action = contextActionMetadataForEvent(evtProgram.getEvents()[i], strTable, lookups);
+        if (!action || action->hidden || (action->kind != "well" && action->kind != "fountain"
+            && action->kind != "shrine")) continue;
+        const LegacyLuaEvent direct =
+            directEventWithoutSyntheticTriggerContinuations(events[i], evtProgram.getEvents()[i]);
+        if (const auto reference = buildSiteReference(direct))
+            metadata << "SetMapSiteReference(" << direct.eventId << ", " << luaQuoted(*reference) << ")\n";
+    }
+    return metadata.str().empty() ? "" :
+        "-- generated site references from legacy EVT/STR; load after the base handlers\n" + metadata.str();
 }
 
 std::string generateLegacyEventLuaChunk(

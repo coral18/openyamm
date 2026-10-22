@@ -105,6 +105,50 @@ class DecorationBakeTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, 'Invalid generated reward metadata overlay'):
                     self.export()
 
+    def test_well_context_catalog_is_safe_and_cannot_hide_gameplay(self):
+        baseline = self.export()
+        metadata = self.world / 'events/maps/test_zz_site_context.lua'
+        header = '-- Site context metadata; load after gameplay overlays\n'
+        metadata.write_text(header + 'SetMapContextAction(207, {kind = "well", source = "script"})\n')
+        result = self.export()
+        self.assertEqual(result['dependencies'], baseline['dependencies'])
+        for declaration in ('SetMapContextAction(0, {kind = "well", source = "script"})',
+                            'SetMapContextAction(65536, {kind = "well", source = "script"})',
+                            'SetMapContextAction(1, {kind = "well", source = "script"}); evt.SetSprite(7, 0)',
+                            'SetMapContextAction(1, {kind = "well", source = "script", hidden = true})'):
+            metadata.write_text(header + declaration + '\n')
+            with self.assertRaisesRegex(ValueError, 'Invalid site context metadata overlay'):
+                self.export()
+
+    def test_site_references_do_not_change_shadow_cards_or_dependencies(self):
+        baseline = self.export()
+        for suffix, header in [
+                ('_00_site_refs.lua', '-- generated site references from legacy EVT/STR; '
+                 'load after the base handlers\n'),
+                ('_zz_site_refs.lua', '-- Site reference metadata; load after gameplay overlays\n')]:
+            metadata = self.world / ('events/maps/test' + suffix)
+            for declaration in ('', 'SetMapSiteReference(1, "")\n',
+                                'SetMapSiteReference(1, "Gold +200\\nRequirements: below 199")\n'):
+                metadata.write_text(header + declaration)
+                result = self.export()
+                for field in ('cards', 'counts', 'dependencies'):
+                    self.assertEqual(result[field], baseline[field])
+            metadata.unlink()
+
+    def test_site_reference_cannot_hide_executable_or_invalid_content(self):
+        metadata = self.world / 'events/maps/test_00_site_refs.lua'
+        header = '-- generated site references from legacy EVT/STR; load after the base handlers\n'
+        for declaration in ('SetMapSiteReference(1, "text"); evt.SetSprite(7, 0)\n',
+                            'SetMapSiteReference(65536, "text")\n',
+                            'SetMapSiteReference(0, "text")\n',
+                            'SetMapSiteReference(1, string.rep("x", 3))\n',
+                            'SetMapSiteReference(1, "a" .. "b")\n',
+                            'SetMapSiteReference(1, "' + 'x' * 16385 + '")\n',
+                            'SetMapSiteReference(1, "bad\\u0000")\n'):
+            metadata.write_text(header + declaration)
+            with self.assertRaisesRegex(ValueError, 'Invalid site reference metadata overlay'):
+                self.export()
+
     def test_npc_catalogs_do_not_change_shadow_cards_or_dependencies(self):
         baseline = self.export()
         for suffix, header in [

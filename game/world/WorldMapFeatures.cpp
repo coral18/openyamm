@@ -62,6 +62,9 @@ std::vector<WorldMapFeature> buildWorldMapFeatures(const std::string &mapId,
         if (feature.title.empty())
             feature.title = worldMapFeatureKindName(*kind);
         feature.chestIds = metadata->chestIds;
+        if (const auto reference = events.siteReferences().find(site.eventId);
+            reference != events.siteReferences().end())
+            feature.guideReference = reference->second;
         if (const auto notes = events.autonoteReferences().find(site.eventId);
             notes != events.autonoteReferences().end())
             feature.autonoteIds = notes->second;
@@ -69,6 +72,12 @@ std::vector<WorldMapFeature> buildWorldMapFeatures(const std::string &mapId,
         features.push_back(std::move(feature));
     }
     return features;
+}
+
+std::string_view WorldDatabase::siteReference(const WorldMapFeature &feature,
+    const WorldKnowledge &knowledge, bool guide) const
+{
+    return guide && featureVisible(feature, knowledge, true) ? feature.guideReference : std::string_view{};
 }
 
 std::vector<const JournalAutonoteEntry *> WorldDatabase::siteJournalEntries(const WorldMapFeature &feature,

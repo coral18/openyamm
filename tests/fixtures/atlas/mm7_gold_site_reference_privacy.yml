@@ -1,0 +1,35 @@
+id: atlas.mm7_gold_site_reference_privacy
+title: Reference browsing preserves real resources and local use limits
+world: mm7
+mode: faithful
+steps:
+- load_game:
+    name: before
+    path: saves/before.oysav
+- assert:
+    runtime_event_variable:
+      id: 21
+      value: 0
+- assert:
+    runtime_event_variable:
+      id: 144
+      value: 0
+- assert:
+    runtime_event_variable:
+      id: 17170657
+      value: 0
+- load_game:
+    name: quicksave
+    path: saves/quicksave.oysav
+- assert:
+    runtime_event_variable:
+      id: 21
+      value: 0
+- assert:
+    runtime_event_variable:
+      id: 144
+      value: 0
+- assert:
+    runtime_event_variable:
+      id: 17170657
+      value: 0

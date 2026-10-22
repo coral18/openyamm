@@ -1239,3 +1239,140 @@ TEST_CASE("legacy journal reference metadata follows learned notes branches and 
         CHECK(program.autonoteReferences().at(program.onLoadEventIds().front()) == std::vector<uint32_t>{46});
     }
 }
+
+TEST_CASE("site reference annotations bind callbacks without executing them")
+{
+    using namespace OpenYAMM::Game;
+    const auto supportBytes = readBinaryFixture(std::filesystem::path(OPENYAMM_SOURCE_DIR)
+        / "assets_dev/engine/scripts/common/event_support.lua");
+    const std::string support(supportBytes.begin(), supportBytes.end());
+    const auto load = [&](const std::string &code)
+    {
+        std::string error;
+        return ScriptedEventProgram::loadFromLuaText(support + "\n" + code, "site-reference", ScriptedEventScope::Map,
+            error);
+    };
+    const std::string base = "RegisterEvent(10, '', function() error('must not execute') end)\n"
+        "SetMapSiteReference(10, 'Party gold +200')\n";
+    auto program = load(base);
+    REQUIRE(program);
+    CHECK(program->siteReferences().at(10) == "Party gold +200");
+    for (const char *replacement : {"evt.map[10] = nil\n", "evt.map[10] = function() end\n"})
+    {
+        program = load(base + replacement);
+        REQUIRE(program);
+        CHECK(program->siteReferences().empty());
+    }
+    program = load(base + "ReplaceMapEvent(10, '', function() end)\nSetMapSiteReference(10, 'Modded effect')");
+    REQUIRE(program);
+    CHECK(program->siteReferences().at(10) == "Modded effect");
+    program = load(base + "SetMapSiteReference(10, '')");
+    REQUIRE(program);
+    CHECK(program->siteReferences().empty());
+    CHECK_FALSE(load("SetMapSiteReference(10, 'No callback')"));
+    CHECK_FALSE(load(base + "SetMapSiteReference(10, 123)"));
+    CHECK_FALSE(load(base + "SetMapSiteReference(10, string.rep('x', 16385))"));
+    CHECK_FALSE(load(base + "SetMapSiteReference(10, 'a' .. string.char(0) .. 'b')"));
+    CHECK_FALSE(load(base + "SetMapSiteReference(-1, 'invalid')"));
+    CHECK_FALSE(load(base + "evt.meta.map.siteReferences[10].handler = 42"));
+}
+
+TEST_CASE("site reference export follows branches and rejects incomplete or state-dependent projections")
+{
+    using namespace OpenYAMM::Game;
+    std::vector<uint8_t> bytes;
+    const auto append = [&](uint16_t eventId, uint8_t step, EvtOpcode opcode, std::vector<uint8_t> payload)
+    {
+        bytes.insert(bytes.end(), {uint8_t(4 + payload.size()), uint8_t(eventId), uint8_t(eventId >> 8),
+            step, uint8_t(opcode)});
+        bytes.insert(bytes.end(), payload.begin(), payload.end());
+    };
+    append(1, 0, EvtOpcode::Compare, {0x15, 0, 99, 0, 0, 0, 3});
+    append(1, 1, EvtOpcode::Add, {0x15, 0, 200, 0, 0, 0});
+    appendExitRecord(bytes, 1, 2);
+    appendExitRecord(bytes, 1, 3);
+    append(1, 4, EvtOpcode::CastSpell, std::vector<uint8_t>(27, 0)); // Unreachable.
+    append(2, 0, EvtOpcode::Add, {0x15, 0, 200, 0, 0, 0});
+    append(2, 1, EvtOpcode::CastSpell, std::vector<uint8_t>(27, 0)); // Reject entire callback, not just this effect.
+    appendExitRecord(bytes, 2, 2);
+    append(3, 0, EvtOpcode::Compare, {0x15, 0, 99, 0, 0, 0, 0}); // Cycle.
+    append(3, 1, EvtOpcode::Add, {0x15, 0, 200, 0, 0, 0});
+    appendExitRecord(bytes, 3, 2);
+    append(4, 0, EvtOpcode::Add, {0x15, 0, 200, 0, 0, 0});
+    append(4, 1, EvtOpcode::Compare, {0x15, 0, 99, 0, 0, 0, 3}); // Compares mutated state.
+    appendExitRecord(bytes, 4, 2);
+    appendExitRecord(bytes, 4, 3);
+    append(5, 0, EvtOpcode::Add, {0x27, 0, 2, 0, 0, 0}); // Actual Might is not a writable base stat.
+    appendExitRecord(bytes, 5, 1);
+    append(6, 0, EvtOpcode::Compare, {0x7b, 0, 2, 0, 0, 0, 4});
+    append(6, 1, EvtOpcode::Add, {0x15, 0, 200, 0, 0, 0});
+    append(6, 2, EvtOpcode::Set, {0x7b, 0, 1, 0, 0, 0}); // A boolean assignment cannot count two uses.
+    appendExitRecord(bytes, 6, 3);
+    appendExitRecord(bytes, 6, 4);
+    append(7, 0, EvtOpcode::Compare, {0x15, 0, 99, 0, 0, 0, 2});
+    append(7, 1, EvtOpcode::Jmp, {0}); // A comparison ladder's fallthrough returns to its own condition.
+    appendExitRecord(bytes, 7, 2);
+    EvtProgram events;
+    REQUIRE(events.loadFromBytes(bytes));
+    LegacyLuaExportLookups lookups;
+    for (uint16_t id : {1, 2, 3, 4, 5, 6, 7}) lookups.eventTitles[id] = "Drink from the well";
+    const std::string refs = generateLegacyEventSiteRefsLuaChunk(events, {}, lookups, LegacyLuaExportScope::Map);
+    CHECK(refs.find("SetMapSiteReference(1,") != std::string::npos);
+    CHECK(refs.find("Party gold +200") != std::string::npos);
+    CHECK(refs.find("Party gold below 99") != std::string::npos);
+    for (uint16_t id : {2, 3, 4, 5, 6, 7})
+        CHECK(refs.find("SetMapSiteReference(" + std::to_string(id) + ",") == std::string::npos);
+    // The full exporter must also terminate for a cyclic callback, using its existing labelled representation.
+    const std::string cyclicCallbacks = generateLegacyEventLuaChunk(events, {}, lookups, LegacyLuaExportScope::Map);
+    CHECK(cyclicCallbacks.find("RegisterEvent(3,") != std::string::npos);
+    CHECK(cyclicCallbacks.size() < 65536);
+    const auto supportBytes = readBinaryFixture(std::filesystem::path(OPENYAMM_SOURCE_DIR)
+        / "assets_dev/engine/scripts/common/event_support.lua");
+    std::string error;
+    const auto cyclicProgram = ScriptedEventProgram::loadFromLuaText(
+        std::string(supportBytes.begin(), supportBytes.end()) + "\n" + cyclicCallbacks,
+        "@cyclic-export", ScriptedEventScope::Map, error);
+    REQUIRE_MESSAGE(cyclicProgram, error);
+    CHECK(cyclicProgram->hasEvent(3));
+    CHECK(cyclicProgram->hasEvent(7));
+    // Inspect individual supported write encodings independently of that control-flow regression.
+    std::vector<uint8_t> writes;
+    const auto appendWrite = [&](uint16_t id, uint8_t step, EvtOpcode opcode, std::vector<uint8_t> payload)
+    {
+        writes.insert(writes.end(), {uint8_t(4 + payload.size()), uint8_t(id), 0, step, uint8_t(opcode)});
+        writes.insert(writes.end(), payload.begin(), payload.end());
+    };
+    appendWrite(5, 0, EvtOpcode::Add, {0x27, 0, 2, 0, 0, 0});
+    appendExitRecord(writes, 5, 1);
+    appendWrite(6, 0, EvtOpcode::Set, {0x7b, 0, 1, 0, 0, 0});
+    appendExitRecord(writes, 6, 1);
+    EvtProgram writeEvents;
+    REQUIRE(writeEvents.loadFromBytes(writes));
+    const std::string callbacks = generateLegacyEventLuaChunk(writeEvents, {}, lookups, LegacyLuaExportScope::Map);
+    CHECK(extractLuaEvent(callbacks, "RegisterEvent(5,").find("AddValue(ActualMight, 2)") != std::string::npos);
+    CHECK(extractLuaEvent(callbacks, "RegisterEvent(6,").find("SetValue(MapVar(") != std::string::npos);
+    CHECK(generateLegacyEventSiteRefsLuaChunk(events, {}, lookups, LegacyLuaExportScope::Global).empty());
+}
+
+TEST_CASE("Harmondale unnoted gold well reference uses the real callback thresholds")
+{
+    using namespace OpenYAMM::Game;
+    const std::filesystem::path root =
+        std::filesystem::path(OPENYAMM_SOURCE_DIR) / "assets_dev/worlds/mm7/_legacy/events";
+    EvtProgram events;
+    REQUIRE(events.loadFromBytes(readBinaryFixture(root / "7out02.EVT")));
+    StrTable strings;
+    REQUIRE(strings.loadFromBytes(readBinaryFixture(root / "7out02.STR")));
+    LegacyLuaExportLookups lookups;
+    lookups.eventTitles[223] = "Drink from the Well";
+    const std::string refs = generateLegacyEventSiteRefsLuaChunk(events, strings, lookups,
+        LegacyLuaExportScope::Map, LegacyEventVersion::Mm7);
+    const size_t start = refs.find("SetMapSiteReference(223,");
+    REQUIRE(start != std::string::npos);
+    const std::string well = refs.substr(start, refs.find('\n', start) - start);
+    CHECK(well.find("Party gold +200") != std::string::npos);
+    CHECK(well.find("Banked gold below 99") != std::string::npos);
+    CHECK(well.find("Party gold below 199") != std::string::npos);
+    CHECK(well.find("Not used since this location reset") != std::string::npos);
+    CHECK(well.find("Refreshing") == std::string::npos);
+}

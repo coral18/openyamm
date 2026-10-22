@@ -14,6 +14,7 @@
 #include "game/tables/NpcDialogTable.h"
 
 #include <optional>
+#include <string_view>
 #include <unordered_map>
 #include <unordered_set>
 
@@ -151,6 +152,7 @@ public:
     std::vector<const WorldItemSource *> itemSources(const WorldKnowledge &knowledge, bool guide) const;
     std::vector<WorldChestObservation> observedChests(const WorldMapFeature &feature,
         const WorldKnowledge &knowledge) const;
+    std::string_view siteReference(const WorldMapFeature &feature, const WorldKnowledge &knowledge, bool guide) const;
     std::vector<const JournalAutonoteEntry *> siteJournalEntries(const WorldMapFeature &feature,
         const JournalAutonoteTable &notes, const WorldKnowledge &knowledge, bool guide) const;
     bool featureVisible(const WorldMapFeature &feature, const WorldKnowledge &knowledge, bool guide) const;

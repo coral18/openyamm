@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <string_view>
 
 extern "C"
 {
@@ -534,6 +535,53 @@ std::vector<ScriptedEventProgram::TimerTrigger> readTimerTriggers(
 
 namespace
 {
+bool readSiteReferences(lua_State *pLuaState, int metadataIndex, ScriptedEventScope scope,
+    std::unordered_map<uint16_t, std::string> &result, std::string &error)
+{
+    const int stackTop = lua_gettop(pLuaState);
+    const auto fail = [&]()
+    {
+        error = "Invalid siteReferences metadata: expected registered handlers and reference text";
+        lua_settop(pLuaState, stackTop);
+        return false;
+    };
+    lua_getfield(pLuaState, metadataIndex, "siteReferences");
+    if (lua_isnil(pLuaState, -1))
+    {
+        lua_pop(pLuaState, 1);
+        return true;
+    }
+    if (!lua_istable(pLuaState, -1)) return fail();
+    lua_pushnil(pLuaState);
+    while (lua_next(pLuaState, -2) != 0)
+    {
+        if (!lua_isinteger(pLuaState, -2) || lua_tointeger(pLuaState, -2) <= 0
+            || lua_tointeger(pLuaState, -2) > UINT16_MAX || !lua_istable(pLuaState, -1)) return fail();
+        const uint16_t eventId = uint16_t(lua_tointeger(pLuaState, -2));
+        lua_getfield(pLuaState, -1, "handler");
+        if (!lua_isfunction(pLuaState, -1)) return fail();
+        lua_getglobal(pLuaState, "evt");
+        lua_getfield(pLuaState, -1, luaScopeName(scope));
+        if (!lua_istable(pLuaState, -1)) return fail();
+        lua_rawgeti(pLuaState, -1, eventId);
+        const bool ownsHandler = lua_rawequal(pLuaState, -1, -4);
+        lua_pop(pLuaState, 4);
+        if (ownsHandler)
+        {
+            lua_getfield(pLuaState, -1, "text");
+            if (lua_type(pLuaState, -1) != LUA_TSTRING) return fail();
+            size_t length = 0;
+            const char *pText = lua_tolstring(pLuaState, -1, &length);
+            if (length > 16384 || std::string_view(pText, length).find('\0') != std::string_view::npos) return fail();
+            if (length != 0) result[eventId] = std::string(pText, length);
+            lua_pop(pLuaState, 1);
+        }
+        lua_pop(pLuaState, 1);
+    }
+    lua_pop(pLuaState, 1);
+    return true;
+}
+
 bool readIdReferences(lua_State *pLuaState, int metadataIndex, ScriptedEventScope scope,
     const char *pField, const char *pValues, uint32_t maximumId,
     std::unordered_map<uint16_t, std::vector<uint32_t>> &result, std::string &error)
@@ -717,6 +765,8 @@ bool ScriptedEventProgram::populateMetadataFromLua(
 
     program.m_openedChestIdsByEventId = readOpenedChestIds(pLuaState, -1);
     program.m_contextActionsByEventId = readContextActionMetadataByEventId(pLuaState, -1);
+    if (!readSiteReferences(pLuaState, lua_absindex(pLuaState, -1), scope, program.m_siteReferences, error))
+        return false;
     program.m_textureNames = readStringArrayFromField(pLuaState, -1, "textureNames");
     program.m_spriteNames = readStringArrayFromField(pLuaState, -1, "spriteNames");
     program.m_castSpellIds = readIntegerArrayFromField<uint32_t>(pLuaState, -1, "castSpellIds");
@@ -735,6 +785,11 @@ bool ScriptedEventProgram::populateMetadataFromLua(
 const std::unordered_map<uint16_t, std::vector<uint32_t>> &ScriptedEventProgram::itemRewards() const
 {
     return m_itemRewards;
+}
+
+const std::unordered_map<uint16_t, std::string> &ScriptedEventProgram::siteReferences() const
+{
+    return m_siteReferences;
 }
 
 const std::unordered_map<uint16_t, std::vector<uint32_t>> &ScriptedEventProgram::autonoteReferences() const

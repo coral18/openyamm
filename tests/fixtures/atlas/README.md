@@ -94,3 +94,19 @@ used frozen previous-build saves, not current-engine fabricated legacy state. Th
 note=1 and migration marker=1, then leave the discovery map and round-trip again. Pure `JournalStateTests`
 additionally cover cached-only notes, unrelated named globals, E1/DF alias conflicts, active-map clears,
 canonical zero tombstones and idempotence. Binary saves and large asset packages remain outside Git.
+
+## Guide site effects and requirements
+
+Run `tests/scenarios/atlas/mm7_unnoted_gold_well.yml` in an isolated directory. Its one-Knight, zero-gold party
+is an explicit controlled fixture; it uses the actual Harmondale well 223, verifies +200, reloads and verifies
+no repeated reward. Copy its temporary `before-gold-well.oysav` to private `saves/before.oysav` for the MM7 tour.
+For MM8, use `site-reused.oysav` from the existing MM8 well-journal scenario. Keep them in separate directories.
+
+At 1600x900, run `tools/menu_tours/atlas_mm7_gold_site_reference.yml` and
+`atlas_mm8_intellect_site_reference.yml`. Each searches Guide by effect, opens **Read details**, returns to
+Discovery and saves. Inspect fresh captures: the unnoted MM7 well must have no learned description in Discovery;
+the MM8 case must retain only its learned journal note, not the generated Guide requirements.
+
+Then run `mm7_gold_site_reference_privacy.yml` / `mm8_intellect_site_reference_privacy.yml` here. They compare
+before/after saves: MM7 gold and actual MapVar(21) remain zero; MM8 Intellect bonus and journal note remain
+15/known. Generated reference text is never evidence of an earned reward or present availability.

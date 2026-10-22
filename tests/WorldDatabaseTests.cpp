@@ -1939,6 +1939,7 @@ TEST_CASE("site journal references use the shared registry and require both site
         evt.map[10] = function() error('inspection must not execute the well') end
         evt.meta.map.contextActions = {[10] = {kind = "well", source = "title"}}
         evt.meta.map.autonoteReferences = {[10] = {handler = evt.map[10], notes = {43, 42, 43}}}
+        evt.meta.map.siteReferences = {[10] = {handler = evt.map[10], text = "Effect and requirements"}}
     )lua", "@site-notes", ScriptedEventScope::Map, error);
     REQUIRE_MESSAGE(program, error);
     WorldInteractionSite site;
@@ -1947,21 +1948,36 @@ TEST_CASE("site journal references use the shared registry and require both site
     REQUIRE(features.size() == 1);
     const WorldMapFeature &feature = features[0];
     CHECK(feature.autonoteIds == std::vector<uint32_t>{42, 43});
+    CHECK(world.siteReference(feature, WorldKnowledge{}, false).empty());
+    CHECK(world.siteReference(feature, WorldKnowledge{}, true) == "Effect and requirements");
     JournalAutonoteTable notes;
     REQUIRE(notes.loadFromRows({{"42", "Permanent stat bonus with a character limit", "Stat"},
         {"43", "A second condition-dependent effect", "Misc"}}));
+    OutdoorMapData geometry;
+    geometry.worldId = "mm7";
+    geometry.fileName = "7out02.odm";
+    OutdoorEntity entity;
+    entity.eventIdSecondary = 10;
+    entity.x = 100;
+    entity.y = 200;
+    geometry.entities.push_back(entity);
+    world.indexMapLocations(geometry, *program);
     WorldKnowledge knowledge;
+    CHECK(world.queryFeatures(knowledge, true, "Effect and requirements").size() == 1);
+    CHECK(world.queryFeatures(knowledge, false, "Effect and requirements").empty());
     CHECK(world.siteJournalEntries(feature, notes, knowledge, false).empty());
     CHECK(world.siteJournalEntries(feature, notes, knowledge, true).size() == 2);
     CHECK(knowledge.autonoteIds.empty());
     knowledge.interactedSites["7out02.odm"].insert(worldSiteDiscoveryKey(10, site.id));
     CHECK(world.featureVisible(feature, knowledge, false));
+    CHECK(world.queryFeatures(knowledge, false, "Effect and requirements").empty());
     CHECK(world.siteJournalEntries(feature, notes, knowledge, false).empty());
     knowledge.autonoteIds.insert(42);
     auto known = world.siteJournalEntries(feature, notes, knowledge, false);
     REQUIRE(known.size() == 1);
     CHECK(known[0] == &notes.entries()[0]);
     CHECK(known[0]->text == "Permanent stat bonus with a character limit");
+    CHECK(world.siteReference(feature, knowledge, false).empty());
     const auto originalKnowledge = knowledge.autonoteIds;
     CHECK(world.siteJournalEntries(feature, notes, knowledge, true).size() == 2);
     CHECK(knowledge.autonoteIds == originalKnowledge);

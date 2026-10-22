@@ -1659,11 +1659,11 @@ void AtlasScreen::drawSiteJournal()
     const WorldMapFeature &feature = *m_siteReading;
     const WorldRecord *pMap = m_world.find(feature.mapId);
     textInRect(canvasRect(25, 60, 798, 28), feature.title + " - " + pMap->map->name, "fondamento", 15);
-    textInRect(canvasRect(25, 89, 798, 25), m_guide ? "Journal reference" : "Party's recorded notes",
+    textInRect(canvasRect(25, 89, 798, 25), m_guide ? "Site reference" : "Party's recorded notes",
         "menu_lucida", 11, 0xffc6dfeau);
     const Rect viewport = canvasRect(25, 121, 798, 270);
     outline(viewport, 0xff597284u);
-    std::string content;
+    std::string content(m_world.siteReference(feature, m_knowledge, m_guide));
     try
     {
         for (const JournalAutonoteEntry *pNote : m_world.siteJournalEntries(feature,
@@ -1687,7 +1687,9 @@ void AtlasScreen::drawSiteJournal()
     m_siteJournalHeight = height / designScale() + 20;
     setDesignClip(std::nullopt);
     textInRect(canvasRect(34, 407, 778, 43),
-        "Notes describe this location; effects can depend on the character and previous visits.", "menu_arrus", 11);
+        m_guide ? "Effects depend on the selected character, available resources and previous visits."
+            : "Notes describe this location; effects can depend on the character and previous visits.",
+        "menu_arrus", 11);
 }
 
 void AtlasScreen::drawDetails()
@@ -1718,6 +1720,8 @@ void AtlasScreen::drawDetails()
         {
             const WorldMapFeature &feature = **selected;
             text = feature.title + " | " + worldMapFeatureKindName(feature.kind);
+            hasJournal = !m_world.siteReference(feature, m_knowledge, m_guide).empty();
+            if (hasJournal) text += "\nEffects and requirements available.";
             try
             {
                 const auto notes = m_world.siteJournalEntries(feature,
@@ -1808,7 +1812,8 @@ void AtlasScreen::drawDetails()
         const float textWidth = hasJournal && otherAction ? journalX - 44
             : arrivalCount > 1 ? 565 : otherAction || hasJournal ? 625 : 778;
         textInRect(canvasRect(34, 407, textWidth, 43), text, "menu_arrus", 11);
-        if (hasJournal && button("atlas-site-journal", canvasRect(journalX, 416, 145, 28), "Read notes"))
+        if (hasJournal && button("atlas-site-journal", canvasRect(journalX, 416, 145, 28),
+            m_guide && !(**selected).guideReference.empty() ? "Read details" : "Read notes"))
         {
             m_siteReading = **selected;
             m_siteJournalScroll = m_siteJournalHeight = 0;

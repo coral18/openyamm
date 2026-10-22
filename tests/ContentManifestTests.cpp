@@ -50,6 +50,7 @@ TEST_CASE("typed metadata overlays precede all map and global callback replaceme
     writeTextFile(mapScripts / "metadata_fixture_00_item_rewards.lua", "SetMapItemRewards(10, {42})");
     writeTextFile(mapScripts / "metadata_fixture_00_npc_locations.lua", "SetMapNpcLocations(10, {{42, 11}})");
     writeTextFile(mapScripts / "metadata_fixture_00_autonote_refs.lua", "SetMapAutonoteRefs(10, {42})");
+    writeTextFile(mapScripts / "metadata_fixture_00_site_refs.lua", "SetMapSiteReference(10, 'Base reference')");
     writeTextFile(globals / "Global.lua", "RegisterGlobalEvent(20, '', function() end)");
     writeTextFile(globals / "Global_00_item_rewards.lua", "SetGlobalItemRewards(20, {43})");
     writeTextFile(globals / "Global_00_npc_locations.lua", "SetGlobalNpcLocations(20, {{43, 12}})");
@@ -66,7 +67,7 @@ TEST_CASE("typed metadata overlays precede all map and global callback replaceme
                 writeTextFile(mapScripts / ("metadata_fixture" + suffix),
                     "ReplaceMapEvent(10, '', function() end)\n"
                     + std::string(redeclared ? "SetMapItemRewards(10, {44})\nSetMapNpcLocations(10, {{44, 13}})\n"
-                        "SetMapAutonoteRefs(10, {44})" : ""));
+                        "SetMapAutonoteRefs(10, {44})\nSetMapSiteReference(10, 'Overlay reference')" : ""));
                 writeTextFile(globals / ("Global" + suffix),
                     "ReplaceGlobalEvent(20, '', function() end)\n"
                     + std::string(redeclared
@@ -86,6 +87,7 @@ TEST_CASE("typed metadata overlays precede all map and global callback replaceme
                     REQUIRE(map.globalEventProgram->itemRewards().contains(20));
                     CHECK(map.localEventProgram->itemRewards().at(10) == std::vector<uint32_t>{44});
                     CHECK(map.globalEventProgram->itemRewards().at(20) == std::vector<uint32_t>{45});
+                    CHECK(map.localEventProgram->siteReferences().at(10) == "Overlay reference");
                     CHECK(map.localEventProgram->autonoteReferences().at(10) == std::vector<uint32_t>{44});
                     CHECK(map.globalEventProgram->autonoteReferences().at(20) == std::vector<uint32_t>{45});
                     CHECK(map.localEventProgram->npcLocations().at(10)
@@ -97,6 +99,7 @@ TEST_CASE("typed metadata overlays precede all map and global callback replaceme
                 {
                     CHECK(map.localEventProgram->itemRewards().empty());
                     CHECK(map.globalEventProgram->itemRewards().empty());
+                    CHECK(map.localEventProgram->siteReferences().empty());
                     CHECK(map.localEventProgram->autonoteReferences().empty());
                     CHECK(map.globalEventProgram->autonoteReferences().empty());
                     CHECK(map.localEventProgram->npcLocations().empty());
@@ -465,7 +468,7 @@ TEST_CASE("mounted MM6 MM7 MM8 NPC and journal declarations resolve against shar
         OpenYAMM::Engine::AssetFileSystem fs;
         REQUIRE(fs.initialize(root, root / "assets_dev", OpenYAMM::Engine::AssetScaleTier::X1, world));
         WorldDatabase database(maps, houses, npcs, teachers, world);
-        size_t scripts = 0, declarations = 0, journalReferences = 0;
+        size_t scripts = 0, declarations = 0, journalReferences = 0, siteReferences = 0;
         for (const MapStatsEntry &map : maps.getEntries())
         {
             if (map.worldId != world) continue;
@@ -476,17 +479,34 @@ TEST_CASE("mounted MM6 MM7 MM8 NPC and journal declarations resolve against shar
             std::string error;
             REQUIRE_MESSAGE(GameDataLoader::loadEventPrograms(fs, asset, error), (map.fileName + ": " + error));
             ++scripts;
+            for (const auto &[eventId, text] : asset.localEventProgram->siteReferences())
+            {
+                CHECK(asset.localEventProgram->hasEvent(eventId));
+                CHECK_FALSE(text.empty());
+                CHECK(text.size() <= 16384);
+                const auto metadata = asset.localEventProgram->getContextActionMetadata(eventId);
+                REQUIRE(metadata);
+                CAPTURE(map.fileName);
+                CAPTURE(eventId);
+                CAPTURE(metadata->kind);
+                CHECK((metadata->kind == "well" || metadata->kind == "fountain" || metadata->kind == "shrine"));
+                ++siteReferences;
+            }
             if (world == "mm7" && map.fileName == "7out02.odm")
             {
                 REQUIRE(asset.localEventProgram);
                 CHECK(asset.localEventProgram->autonoteReferences().at(218) == std::vector<uint32_t>{262});
                 CHECK(asset.localEventProgram->autonoteReferences().at(220) == std::vector<uint32_t>{309});
+                CHECK(asset.localEventProgram->siteReferences().at(223).find("Party gold +200") != std::string::npos);
+                CHECK_FALSE(asset.localEventProgram->autonoteReferences().contains(223));
             }
             if (world == "mm8" && map.fileName == "out01.odm")
             {
                 REQUIRE(asset.localEventProgram);
                 CHECK(asset.localEventProgram->autonoteReferences().at(101) == std::vector<uint32_t>{206});
                 CHECK(asset.localEventProgram->autonoteReferences().at(150) == std::vector<uint32_t>{16});
+                CHECK(asset.localEventProgram->siteReferences().at(103).find("Base Luck at least 14")
+                    != std::string::npos);
             }
             if (world == "mm8" && map.fileName == "d38.blv")
             {
@@ -522,6 +542,7 @@ TEST_CASE("mounted MM6 MM7 MM8 NPC and journal declarations resolve against shar
                     }
             }
         }
+        CHECK(siteReferences > 0);
         CHECK(scripts > 50);
         CHECK(declarations > 0);
         CHECK(journalReferences > 0);

@@ -278,8 +278,8 @@ Note bit	Autonote Text	Category
 277	2 Skill Points from the well near Offerings and Blessings in Damocles in Mount Nighon. 	Stat		
 278	2 points of permanent Personality from the well near Fortune's Folly in Damocles in Mount Nighon.	Stat		
 279	"20 points of temporary Air, Earth, Fire, Water, Body, and Mind resistances from the well near the Fire Guild in Damocles in Mount Nighon."	Stat		
-280	50 Spell Points recovered from the well in the eastern village in Mount Nighon.	Stat		
-281	50 Hit Points recovered from the well in the western village in Mount Nighon.	Stat		
+280	25 Spell Points recovered from the well in the eastern village in Mount Nighon.	Stat		
+281	25 Hit Points recovered from the well in the western village in Mount Nighon.	Stat		
 282	25 points of temporary Fire resistance from the well in the southwestern village in the Barrow Downs.	Stat		
 283	2 points of permanent Speed from the well in the western section of Tidewater in Tatalia.	Stat		
 284	20 points of temporary Air resistance from the well in the eastern section of Tidewater in Tatalia.	Stat		

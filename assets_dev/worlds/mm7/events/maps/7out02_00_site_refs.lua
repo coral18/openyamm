@@ -1,0 +1,2 @@
+-- generated site references from legacy EVT/STR; load after the base handlers
+SetMapSiteReference(223, "Effects apply to the selected character unless the effect concerns party resources.\nHealth and spell point gains stop at their maximum; attribute increases use the game's normal limits.\n\nOutcome 1:\nParty gold +200\nRequirements (all):\n- Banked gold below 99\n- Party gold below 199\n- Not used since this location reset")

@@ -1027,6 +1027,14 @@ function support.setGlobalItemRewards(eventId, items)
     setItemRewards("global", eventId, items)
 end
 
+function support.setMapSiteReference(eventId, text)
+    local handler = evt.map[eventId]
+    assert(type(handler) == "function", "Site reference requires a registered event handler")
+    local meta = ensureMetaScope("map")
+    meta.siteReferences = meta.siteReferences or {}
+    meta.siteReferences[eventId] = {handler = handler, text = text}
+end
+
 local function setAutonoteReferences(scopeName, eventId, notes)
     local handler = evt[scopeName][eventId]
     assert(type(handler) == "function", "Autonote metadata requires a registered event handler")
@@ -1633,6 +1641,7 @@ SetMapMetadata = support.setMapMetadata
 SetMapContextAction = support.setMapContextAction
 SetMapItemRewards = support.setMapItemRewards
 SetGlobalItemRewards = support.setGlobalItemRewards
+SetMapSiteReference = support.setMapSiteReference
 SetMapAutonoteRefs = support.setMapAutonoteRefs
 SetGlobalAutonoteRefs = support.setGlobalAutonoteRefs
 SetMapNpcLocations = support.setMapNpcLocations

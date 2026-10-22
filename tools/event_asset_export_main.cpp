@@ -79,7 +79,8 @@ enum class MetadataExport
     None,
     ItemRewards,
     NpcLocations,
-    AutonoteReferences
+    AutonoteReferences,
+    SiteReferences
 };
 
 bool parseArguments(
@@ -198,7 +199,7 @@ bool parseArguments(
         }
 
         if (argument == "--item-rewards-only" || argument == "--npc-locations-only"
-            || argument == "--autonote-refs-only")
+            || argument == "--autonote-refs-only" || argument == "--site-refs-only")
         {
             if (metadataOnly != MetadataExport::None)
             {
@@ -207,7 +208,8 @@ bool parseArguments(
             }
             metadataOnly = argument == "--item-rewards-only" ? MetadataExport::ItemRewards
                 : argument == "--npc-locations-only" ? MetadataExport::NpcLocations
-                : MetadataExport::AutonoteReferences;
+                : argument == "--autonote-refs-only" ? MetadataExport::AutonoteReferences
+                : MetadataExport::SiteReferences;
             continue;
         }
 
@@ -2289,19 +2291,36 @@ bool exportLegacyProgram(
         }
     }
     if (metadataOnly == MetadataExport::NpcLocations) return true;
-    const std::filesystem::path notePath = globalScope
-        ? scriptsRoot / "Global_00_autonote_refs.lua"
-        : scriptsRoot / "maps" / (outputStem + "_00_autonote_refs.lua");
-    const std::string notes = OpenYAMM::Game::generateLegacyEventAutonoteRefsLuaChunk(
-        evtProgram, strTable, lookups, scope, version);
-    if (notes.empty())
-        std::filesystem::remove(notePath);
-    else if (!writeTextFile(notePath, notes))
+    if (metadataOnly == MetadataExport::None || metadataOnly == MetadataExport::AutonoteReferences)
     {
-        std::cerr << "Failed to write journal reference metadata for " << legacyBaseName << '\n';
-        return false;
+        const std::filesystem::path notePath = globalScope
+            ? scriptsRoot / "Global_00_autonote_refs.lua"
+            : scriptsRoot / "maps" / (outputStem + "_00_autonote_refs.lua");
+        const std::string notes = OpenYAMM::Game::generateLegacyEventAutonoteRefsLuaChunk(
+            evtProgram, strTable, lookups, scope, version);
+        if (notes.empty())
+            std::filesystem::remove(notePath);
+        else if (!writeTextFile(notePath, notes))
+        {
+            std::cerr << "Failed to write journal reference metadata for " << legacyBaseName << '\n';
+            return false;
+        }
     }
     if (metadataOnly == MetadataExport::AutonoteReferences) return true;
+    const std::filesystem::path sitePath = scriptsRoot / "maps" / (outputStem + "_00_site_refs.lua");
+    if (!globalScope)
+    {
+        const std::string references = OpenYAMM::Game::generateLegacyEventSiteRefsLuaChunk(
+            evtProgram, strTable, lookups, scope, version);
+        if (references.empty())
+            std::filesystem::remove(sitePath);
+        else if (!writeTextFile(sitePath, references))
+        {
+            std::cerr << "Failed to write site reference metadata for " << legacyBaseName << '\n';
+            return false;
+        }
+    }
+    if (metadataOnly == MetadataExport::SiteReferences) return true;
 
     if (!writeTextFile(luaPath, OpenYAMM::Game::generateLegacyEventLuaChunk(
             evtProgram,

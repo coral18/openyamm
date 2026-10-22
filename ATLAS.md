@@ -1520,3 +1520,48 @@ instructions are under `tests/fixtures/atlas/`. Native tours are `tools/menu_tou
 Original campaigns and the official installation were not used for writes. This checkpoint covers journal-backed
 site descriptions; complete effect predicates, sites without notes, remaining loot semantics, inherited
 scripted decoration events and Android/controller acceptance remain open in `ATLAS_COVERAGE.md`.
+
+### Guide effects and requirements for sites without journal notes, 2026-10-22
+
+Guide now offers **Read details** for supported site callbacks, including the unnoted Harmondale gold well.
+The reference follows each supported branch and describes stat/resource effects, numerical requirements,
+HP/SP fullness and local use gates. It is generated from the same decoded EVT as the callback, rather than
+inferred from community-guide prose or executing an event while browsing. Guide search includes this reference;
+Discovery search and reading continue to expose only actual party knowledge and learned journal descriptions.
+The displayed reference describes rules, not a forecast that a reward is presently available.
+
+`SetMapSiteReference(eventId, text)` binds to the currently registered callback. Replacement/removal invalidates
+it; mods can redeclare it after their callback, or suppress it with empty text. Invalid event IDs, non-string
+values, NULs and text over 16 KiB fail loading. Generated `_00_site_refs.lua` catalogs precede every callback
+overlay. Regenerate just these declarations with `tools/regenerate_lua_events.sh --site-refs-only`.
+
+The initial set has 40 callback references in 26 MM6/MM7/MM8 maps (12/11/17 callbacks, 8/9/9 maps). This projection
+covers supported complete callbacks, not partial guesses: reachable random flow, unsupported effects/predicates,
+character-selection changes, unknown instructions, loops and conditions after state mutations omit the entire
+callback. Unreachable actions do not contaminate the reference. Boolean use flags are not treated as multi-use
+counters; writes to calculated Actual* attributes are not described as base-stat increases. The exporter also
+now terminates when its existing comparison-ladder/guard recognizers encounter backward edges, preserving the
+normal labelled callback representation. The synthetic-cycle test validates finite output and Lua loading.
+
+Data checks exposed two unhinted Mount Nighon wells misclassified as generic events. The explicit
+`out10_zz_site_context.lua` overlay restores their existing category without rewriting generated Lua. Shared
+journal entries 280/281 now correctly report 25 HP/SP instead of 50, matching the actual callbacks. Lighting
+validation recognizes only restricted literal site-reference/context declarations; gameplay script dependencies
+and baked lighting remain protected.
+
+[The site-reference audit](ATLAS_SITE_REFERENCE_AUDIT.md) inventories MM7/MM8 callbacks against packaged base
+geometry. Six declarations have no visible base interaction site and receive no invented marker. Their live,
+scene and inherited-decoration bindings require further investigation. The audit also retains the pre-existing
+Castle Harmondale dimensional-fountain geometry regression; this checkpoint does not certify that separate gate.
+
+Validation includes focused Windows unit/data tests, real gold/bank/use-limit boundary execution, actual Nighon
+HP/SP effects and note grants, Linux ASan/UBSan world logic, strict lighting tests, and native Windows Release
+UI checks. The MM7 scenario uses an explicit controlled zero-gold party and a real physical well interaction;
+it awards +200 once and preserves it through reload. MM7/MM8 Guide-to-Discovery captures were inspected, and
+post-UI save verifiers confirm unchanged gold/use state and learned-note/stat state. All settings, campaigns
+and captures are private QA data; no original player campaign or official installation was written.
+
+Accepted checks for this slice: 176 focused Windows cases / 68,589 assertions, three executed-rule cases /
+63 assertions, 91 ASan/UBSan cases / 5,014 assertions and 13 lighting cases passed. The final Release build,
+two fresh native UI tours, their post-UI save verifiers and the Atlas-disabled MM8 well scenario passed.
+This is a checkpoint within the full MM7/MM8 Atlas goal, not completion of its remaining coverage matrix.

@@ -57,6 +57,7 @@ public:
     const std::vector<uint32_t> &castSpellIds() const;
     const std::unordered_map<uint16_t, std::vector<uint32_t>> &itemRewards() const;
     const std::unordered_map<uint16_t, std::vector<uint32_t>> &autonoteReferences() const;
+    const std::unordered_map<uint16_t, std::string> &siteReferences() const;
     const std::unordered_map<uint16_t, std::vector<NpcLocation>> &npcLocations() const;
     const std::vector<TimerTrigger> &timerTriggers() const;
     bool hasEvent(uint16_t eventId) const;
@@ -93,6 +94,7 @@ private:
     std::vector<uint32_t> m_castSpellIds;
     std::unordered_map<uint16_t, std::vector<uint32_t>> m_itemRewards;
     std::unordered_map<uint16_t, std::vector<uint32_t>> m_autonoteReferences;
+    std::unordered_map<uint16_t, std::string> m_siteReferences;
     std::unordered_map<uint16_t, std::vector<NpcLocation>> m_npcLocations;
     uint32_t m_levitateTrapFaceMask = 0;
     std::vector<uint16_t> m_levitateTrapEvents;

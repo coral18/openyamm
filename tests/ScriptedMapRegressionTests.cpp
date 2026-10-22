@@ -9617,3 +9617,79 @@ RegisterGlobalEvent(16, "Nested failure", function() error("intentional nested f
             ? WorldItemSourceKind::SharedReward : WorldItemSourceKind::MapReward));
     }
 }
+
+TEST_CASE("Harmondale gold well site reference thresholds agree with the executed gameplay callback")
+{
+    using namespace OpenYAMM::Game;
+    const std::filesystem::path source = OPENYAMM_SOURCE_DIR;
+    const auto support = readSourceTextFile(source / "assets_dev/engine/scripts/common/event_support.lua");
+    const auto map = readSourceTextFile(source / "assets_dev/worlds/mm7/events/maps/7out02.lua");
+    REQUIRE(support);
+    REQUIRE(map);
+    std::string error;
+    const auto program = ScriptedEventProgram::loadFromLuaText(*support + "\n" + *map,
+        "@well-boundaries", ScriptedEventScope::Map, error);
+    REQUIRE_MESSAGE(program, error);
+    struct Case
+    {
+        int gold;
+        int bank;
+        uint8_t uses;
+        bool awarded;
+    };
+    for (const Case &test : {Case{0, 0, 0, true}, Case{198, 0, 0, true}, Case{199, 0, 0, false},
+        Case{0, 98, 0, true}, Case{0, 99, 0, false}, Case{0, 0, 1, false}})
+    {
+        CAPTURE(test.gold);
+        CAPTURE(test.bank);
+        CAPTURE(test.uses);
+        PartySeed seed = createRegressionPartySeed();
+        seed.gold = test.gold + test.bank;
+        Party party;
+        party.seed(seed);
+        CHECK(party.depositGoldToBank(test.bank) == test.bank);
+        EventRuntimeState state;
+        state.mapVars[21] = test.uses;
+        EventRuntime runtime;
+        REQUIRE(runtime.executeEventById(program, std::nullopt, 223, state, &party, nullptr));
+        CHECK(party.gold() == test.gold + (test.awarded ? 200 : 0));
+        CHECK(party.bankGold() == test.bank);
+        CHECK(state.mapVars[21] == (test.awarded ? 1 : test.uses));
+        CHECK(state.namedGlobalVars.empty()); // This well has no journal note to award.
+    }
+}
+
+TEST_CASE("Mount Nighon unhinted wells restore 25 points and award their shared journal notes")
+{
+    using namespace OpenYAMM::Game;
+    const std::filesystem::path source = OPENYAMM_SOURCE_DIR;
+    const auto support = readSourceTextFile(source / "assets_dev/engine/scripts/common/event_support.lua");
+    const auto map = readSourceTextFile(source / "assets_dev/worlds/mm7/events/maps/out10.lua");
+    const auto context = readSourceTextFile(source / "assets_dev/worlds/mm7/events/maps/out10_zz_site_context.lua");
+    REQUIRE(support);
+    REQUIRE(map);
+    REQUIRE(context);
+    std::string error;
+    const auto program = ScriptedEventProgram::loadFromLuaText(*support + "\n" + *map + "\n" + *context,
+        "@nighon-wells", ScriptedEventScope::Map, error);
+    REQUIRE_MESSAGE(program, error);
+    CHECK(program->getContextActionMetadata(207)->kind == "well");
+    CHECK(program->getContextActionMetadata(208)->kind == "well");
+    Party party;
+    party.seed(createRegressionPartySeed());
+    Character *pMember = party.activeMember();
+    REQUIRE(pMember);
+    pMember->maxHealth = 200;
+    pMember->health = 50;
+    pMember->maxSpellPoints = 200;
+    pMember->spellPoints = 50;
+    EventRuntimeState state;
+    EventRuntime runtime;
+    REQUIRE(runtime.executeEventById(program, std::nullopt, 207, state, &party, nullptr));
+    CHECK(pMember->spellPoints == 75);
+    CHECK(pMember->health == 50);
+    REQUIRE(runtime.executeEventById(program, std::nullopt, 208, state, &party, nullptr));
+    CHECK(pMember->health == 75);
+    CHECK(journalNoteValue(state, 280) == 1);
+    CHECK(journalNoteValue(state, 281) == 1);
+}

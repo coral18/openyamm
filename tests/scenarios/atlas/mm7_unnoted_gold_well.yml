@@ -1,0 +1,48 @@
+id: atlas.mm7_gold_well_reference
+title: Controlled zero-gold party uses the actual unnoted well without repeated rewards
+world: mm7
+mode: faithful
+steps:
+- new_game_flow:
+    start_map: 7out02.odm
+    party:
+      gold: 0
+      food: 7
+      members:
+      - name: Atlas Tester
+        class: Knight
+        level: 1
+        skills: []
+        equipment: {}
+- assert:
+    runtime_event_variable:
+      id: 21
+      value: 0
+- set_pose: &id001
+    x: -6650
+    y: 10193
+    z: 0
+    yaw: 0
+    pitch: -1.3
+- save_game: before-gold-well
+- press_interact:
+    pose: *id001
+    expect:
+      kind: event_target
+      triggered_event: 223
+      can_activate: true
+- assert:
+    runtime_event_variable:
+      id: 21
+      value: 200
+- save_game: gold-well-used
+- load_game: gold-well-used
+- press_interact:
+    pose: *id001
+    expect:
+      triggered_event: 223
+      can_activate: true
+- assert:
+    runtime_event_variable:
+      id: 21
+      value: 200
