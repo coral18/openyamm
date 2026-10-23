@@ -1727,3 +1727,63 @@ TEST_CASE("world guide starting choices follow race creation rules and never rev
     discovered = buildWorldGuide(source, WorldGuideSection::Classes, knowledge, false);
     CHECK(startingText(discovered[0]).empty());
 }
+
+TEST_CASE("world item comparison validates both known items and uses active base definitions without mutations")
+{
+    const auto row = [](uint32_t id, const std::string &name, const std::string &dice, int bonus)
+    {
+        std::vector<std::string> cells(31);
+        cells[0] = std::to_string(id); cells[2] = name; cells[3] = "500";
+        cells[4] = "Weapon"; cells[5] = "Sword"; cells[6] = dice; cells[7] = std::to_string(bonus);
+        cells[16] = "Authored item notes"; cells[26] = "Knight"; cells[27] = "15"; cells[28] = "10";
+        return cells;
+    };
+    OpenYAMM::Engine::AssetFileSystem assets;
+    ItemTable items;
+    REQUIRE(items.load(assets, {row(3, "Known blade", "2d3", 1), row(97, "Secret blade", "3d4", 5)}, {}));
+    WorldGuideSource source;
+    source.pItems = &items;
+    WorldGuideKnowledge knowledge;
+    knowledge.items.insert(3);
+    CHECK_FALSE(buildWorldItemComparison(source, knowledge, false, 3, 97));
+    CHECK_FALSE(buildWorldItemComparison(source, knowledge, false, 97, 3));
+    CHECK_FALSE(buildWorldItemComparison(source, knowledge, true, 3, 3));
+    CHECK_FALSE(buildWorldItemComparison(source, knowledge, true, 0, 97));
+    CHECK_FALSE(buildWorldItemComparison(source, knowledge, true, 3, UINT32_MAX));
+    const auto guide = buildWorldItemComparison(source, knowledge, true, 3, 97);
+    REQUIRE(guide);
+    CHECK(guide->items[0] == items.get(3));
+    CHECK(guide->items[1] == items.get(97));
+    CHECK(guide->details[0].find("Attack: +1   Damage: 2d3+1") != std::string::npos);
+    CHECK(guide->details[1].find("Attack: +5   Damage: 3d4+5") != std::string::npos);
+    CHECK(guide->details[1].find("Required Might: 15") != std::string::npos);
+    CHECK(guide->details[1].find("Required Accuracy: 10") != std::string::npos);
+    CHECK(guide->details[1].find("Class families: Knight") != std::string::npos);
+    CHECK(guide->details[1].find("Authored item notes") != std::string::npos);
+    CHECK(knowledge.items == std::unordered_set<uint32_t>{3});
+    CHECK_FALSE(buildWorldItemComparison(source, knowledge, false, 3, 97));
+    knowledge.items.insert(97);
+    REQUIRE(buildWorldItemComparison(source, knowledge, false, 3, 97));
+    const auto catalog = buildWorldGuide(source, WorldGuideSection::Items, knowledge, false);
+    const auto selected = std::find_if(catalog.begin(), catalog.end(),
+        [](const WorldGuideEntry &entry) { return entry.id == "97"; });
+    REQUIRE(selected != catalog.end());
+    CHECK(selected->details == guide->details[1]);
+    REQUIRE(items.load(assets, {row(3, "Known blade", "2d3", 1), row(97, "Modded blade", "4d5", -2)}, {}));
+    const auto modded = buildWorldItemComparison(source, knowledge, false, 3, 97);
+    REQUIRE(modded);
+    CHECK(modded->items[1]->name == "Modded blade");
+    CHECK(modded->details[1].find("Attack: -2   Damage: 4d5-2") != std::string::npos);
+    // These historical restrictions are supplied by ItemRuntime even without authored class roots.
+    auto classRow = row(515, "Restricted blade", "2d3", 1);
+    auto raceRow = row(532, "Elven artifact", "3d4", 5);
+    classRow.resize(17); raceRow.resize(17); raceRow[8] = "artifact";
+    REQUIRE(items.load(assets, {classRow, raceRow}, {}));
+    const auto legacy = buildWorldItemComparison(source, knowledge, true, 515, 532);
+    REQUIRE(legacy);
+    CHECK(legacy->details[0].find("Class family: Knight") != std::string::npos);
+    CHECK(legacy->details[1].find("Restriction: Dark Elf or Elf") != std::string::npos);
+    CHECK(legacy->details[1].find("Rarity: Artifact") != std::string::npos);
+    source.pItems = nullptr;
+    CHECK_FALSE(buildWorldItemComparison(source, knowledge, true, 3, 97));
+}

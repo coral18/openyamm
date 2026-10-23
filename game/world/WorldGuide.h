@@ -28,6 +28,7 @@ class NpcDialogTable;
 class WorldDatabase;
 class MergedCharacterSelectionTable;
 struct ClassMultiplierEntry;
+struct ItemDefinition;
 struct WorldKnowledge;
 
 enum class WorldGuideSection { Items, Spells, Classes, Alchemy, Companions, Progress, Monsters, Quests };
@@ -116,6 +117,16 @@ struct WorldClassComparison
     std::vector<std::pair<uint32_t, std::string>> races;
     std::optional<uint32_t> raceId;
 };
+
+// Base definitions from the active item registry, which must outlive this read-only view.
+struct WorldItemComparison
+{
+    std::array<const ItemDefinition *, 2> items{};
+    std::array<std::string, 2> details;
+};
+
+std::optional<WorldItemComparison> buildWorldItemComparison(const WorldGuideSource &source,
+    const WorldGuideKnowledge &knowledge, bool guide, uint32_t pinnedItem, uint32_t selectedItem);
 
 std::optional<WorldClassComparison> buildWorldClassComparison(const WorldGuideSource &source,
     const WorldGuideKnowledge &knowledge, bool guide, const std::string &anchorClass,

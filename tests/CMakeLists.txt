@@ -41,6 +41,7 @@ add_executable(openyamm_unit_tests
     IndoorPortalVisibilityTests.cpp
     IndoorRenderRevisionTests.cpp
     InventoryEquipRegressionTests.cpp
+    ItemInspectionTextTests.cpp
     LegacyLuaExportTests.cpp
     MapStatsRegressionTests.cpp
     JournalStateTests.cpp
@@ -201,6 +202,7 @@ add_executable(openyamm_unit_tests
     ../game/items/ItemEnchantTables.cpp
     ../game/items/ItemGenerator.cpp
     ../game/items/PriceCalculator.cpp
+    ../game/items/ItemInspectionText.cpp
     ../game/items/ItemRuntime.cpp
     ../game/party/Party.cpp
     ../game/party/EventSpellBuffs.cpp

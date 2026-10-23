@@ -1,0 +1,118 @@
+output_dir: captures
+exit: true
+steps:
+- expect: gameplay
+- key: F9
+- pause: true
+- click:
+  - 800
+  - 821
+- click:
+  - 450
+  - 57
+- click:
+  - 150
+  - 126
+- click:
+  - 200
+  - 265
+- capture: discovery-item-icon
+- click:
+  - 980
+  - 190
+- click:
+  - 200
+  - 326
+- capture: discovery-pin-and-second
+- click:
+  - 1250
+  - 190
+- capture: discovery-item-comparison
+- pointer_move:
+  - 1200
+  - 580
+- wheel: -4
+- capture: comparison-description-scroll
+- click:
+  - 1440
+  - 190
+- click:
+  - 1152
+  - 57
+- click:
+  - 275
+  - 190
+- text: Dark Elven Longsword
+- key: Return
+- click:
+  - 200
+  - 265
+- click:
+  - 980
+  - 190
+- capture: guide-pinned-unknown
+- click:
+  - 275
+  - 190
+- key: Backspace
+- key: Backspace
+- key: Backspace
+- key: Backspace
+- key: Backspace
+- key: Backspace
+- key: Backspace
+- key: Backspace
+- key: Backspace
+- key: Backspace
+- key: Backspace
+- key: Backspace
+- key: Backspace
+- key: Backspace
+- key: Backspace
+- key: Backspace
+- key: Backspace
+- key: Backspace
+- key: Backspace
+- key: Backspace
+- text: Iron Longsword
+- key: Return
+- click:
+  - 200
+  - 265
+- click:
+  - 1250
+  - 190
+- capture: guide-item-comparison
+- click:
+  - 1152
+  - 57
+- capture: discovery-clears-unknown-pin
+- click:
+  - 275
+  - 190
+- key: Backspace
+- key: Backspace
+- key: Backspace
+- key: Backspace
+- key: Backspace
+- key: Backspace
+- key: Backspace
+- key: Backspace
+- key: Backspace
+- key: Backspace
+- key: Backspace
+- key: Backspace
+- key: Backspace
+- key: Backspace
+- text: Dark Elven Longsword
+- key: Return
+- capture: discovery-hides-unknown-item
+- click:
+  - 1450
+  - 57
+- expect: pause
+- click:
+  - 800
+  - 301
+- expect: gameplay
+- key: F9

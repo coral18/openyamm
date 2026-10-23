@@ -1631,3 +1631,45 @@ verifiers passed. Fresh captures confirm the Human-only Discovery profile, compl
 scrolling, the existing comparison grid and return to gameplay. Tests use controlled private campaigns under
 `atlas-class-starting-20261022/` in the Windows development directory. This is focused PC acceptance; full
 character-creation, original-source asset gates, Android/controller acceptance and complete Atlas coverage remain open.
+
+
+### Item icons and pinned base-definition comparison, 2026-10-22
+
+Item references now display the mounted inventory artwork at its original aspect ratio. **Pin item**, select
+another catalog entry and **Compare** opens two independently scrollable columns. Either column heading returns
+to its normal item reference; **Details** returns to the selected item. Guide can compare the complete loaded
+catalog, while Discovery requires both type IDs in existing party item knowledge. Changing mode, world or reference
+section clears the pin and comparison so Guide-only items cannot remain in Discovery's comparison or footer.
+
+Both catalog and comparison use the same base-definition formatter. Weapon attack/damage, armor, reagent power
+and wand defaults share `ItemInspectionText` with the actual inventory inspection overlay. The shared instance
+path retains broken status, actual potion power and current/maximum wand charges, and refuses unidentified
+instance details. Negative bonuses now retain their sign instead of dropping a damage penalty or printing `+-`;
+armor text uses widened arithmetic. The reference also displays actual rarity and declared or legacy class/race
+restrictions from `ItemRuntime`. Numeric import material codes are no longer presented as material names.
+
+These are item-definition comparisons, not a simulation of the inspected hero or an enchanted/broken inventory
+instance. The columns use loaded values, requirements and authored notes; they do not equip an item, roll loot,
+spend gold or forecast current shop prices. Existing source links stay in the normal reading view.
+
+The menu renderer's item-art path uses the existing engine image decoder with palette-zero transparency, as
+inventory icons do. It keeps at most 16 item textures per screen, releases them on screen destruction and leaves
+the shared menu-art decoder/cache unchanged. This avoids retaining every viewed item in the global menu cache.
+
+A remaining Discovery debt was identified during this work: its historical known-type set does not distinguish
+an encountered/ever-owned item from a previously identified item. Full identification-aware history and every
+source-name/recipe/loot reference need a separate shared knowledge audit; a known type must not be treated as
+proof of a particular unidentified instance's properties. The new comparison follows the existing type-knowledge
+policy and does not establish that broader identification gate. Full Atlas completion remains open.
+
+Accepted checks for this slice: Windows Release build, 72 focused Guide/inspection/inventory cases /
+1,907 assertions, five image-decoder cases / 174 assertions, four native AMD/OpenGL tours and four 43-step
+post-UI save verifiers passed. Fresh captures were inspected in both worlds, including real overflow of Elven
+Chainmail's description while the other column remains stationary, mode changes and disabled controls for an
+empty search result. Empty filtered results now say that no known records match the query instead of implying
+that all party discoveries are gone. Private records live under `atlas-item-comparison-20261022/` in the Windows
+development directory. These checks do not establish complete-campaign, identification-history or Android acceptance.
+
+The inventory regression fixture for custom skill scrolls also no longer initializes a second global PhysFS
+instance while the shared regression data owns one. Its data-only synthetic item table needs no separate mount;
+all original scroll/equipment assertions remain intact and the entire selected inventory file passes.

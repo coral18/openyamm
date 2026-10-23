@@ -1,0 +1,206 @@
+id: atlas.mm8_item_comparison_privacy
+title: Atlas comparison and Guide browsing preserve equipment skills resources and
+  unknown-item absence
+world: mm8
+mode: faithful
+steps:
+- load_game:
+    name: before
+    path: saves/before.oysav
+- assert:
+    runtime_event_variable:
+      id: 87490577
+      value: 0
+- assert:
+    equipped_item:
+    - member_index: 0
+      slot: main_hand
+      item_id: 1
+    - member_index: 1
+      slot: main_hand
+      item_id: 2
+- assert:
+    runtime_event_variable:
+      id: 2
+      member_index: 0
+      value: 16
+- assert:
+    runtime_event_variable:
+      id: 14
+      member_index: 0
+      value: 0
+- assert:
+    runtime_event_variable:
+      id: 9
+      member_index: 0
+      value: 1
+- assert:
+    runtime_event_variable:
+      id: 13
+      member_index: 0
+      value: 0
+- assert:
+    runtime_event_variable:
+      id: 69
+      member_index: 0
+      value: 1
+- assert:
+    runtime_event_variable:
+      id: 21
+      member_index: 0
+      value: 500
+- assert:
+    runtime_event_variable:
+      id: 23
+      member_index: 0
+      value: 10
+- assert:
+    runtime_event_variable:
+      id: 2
+      member_index: 1
+      value: 16
+- assert:
+    runtime_event_variable:
+      id: 14
+      member_index: 1
+      value: 0
+- assert:
+    runtime_event_variable:
+      id: 9
+      member_index: 1
+      value: 1
+- assert:
+    runtime_event_variable:
+      id: 13
+      member_index: 1
+      value: 0
+- assert:
+    runtime_event_variable:
+      id: 69
+      member_index: 1
+      value: 1
+- assert:
+    runtime_event_variable:
+      id: 21
+      member_index: 1
+      value: 500
+- assert:
+    runtime_event_variable:
+      id: 23
+      member_index: 1
+      value: 10
+- assert:
+    runtime_event_variable:
+      id: 65553
+      value: 1
+- assert:
+    runtime_event_variable:
+      id: 131089
+      value: 1
+- assert:
+    runtime_event_variable:
+      id: 196625
+      value: 0
+- load_game:
+    name: quicksave
+    path: saves/quicksave.oysav
+- assert:
+    runtime_event_variable:
+      id: 87490577
+      value: 0
+- assert:
+    equipped_item:
+    - member_index: 0
+      slot: main_hand
+      item_id: 1
+    - member_index: 1
+      slot: main_hand
+      item_id: 2
+- assert:
+    runtime_event_variable:
+      id: 2
+      member_index: 0
+      value: 16
+- assert:
+    runtime_event_variable:
+      id: 14
+      member_index: 0
+      value: 0
+- assert:
+    runtime_event_variable:
+      id: 9
+      member_index: 0
+      value: 1
+- assert:
+    runtime_event_variable:
+      id: 13
+      member_index: 0
+      value: 0
+- assert:
+    runtime_event_variable:
+      id: 69
+      member_index: 0
+      value: 1
+- assert:
+    runtime_event_variable:
+      id: 21
+      member_index: 0
+      value: 500
+- assert:
+    runtime_event_variable:
+      id: 23
+      member_index: 0
+      value: 10
+- assert:
+    runtime_event_variable:
+      id: 2
+      member_index: 1
+      value: 16
+- assert:
+    runtime_event_variable:
+      id: 14
+      member_index: 1
+      value: 0
+- assert:
+    runtime_event_variable:
+      id: 9
+      member_index: 1
+      value: 1
+- assert:
+    runtime_event_variable:
+      id: 13
+      member_index: 1
+      value: 0
+- assert:
+    runtime_event_variable:
+      id: 69
+      member_index: 1
+      value: 1
+- assert:
+    runtime_event_variable:
+      id: 21
+      member_index: 1
+      value: 500
+- assert:
+    runtime_event_variable:
+      id: 23
+      member_index: 1
+      value: 10
+- assert:
+    runtime_event_variable:
+      id: 65553
+      value: 1
+- assert:
+    runtime_event_variable:
+      id: 131089
+      value: 1
+- assert:
+    runtime_event_variable:
+      id: 196625
+      value: 0
+- save_game: item-reference-roundtrip
+- load_game: item-reference-roundtrip
+- assert:
+    runtime_event_variable:
+      id: 196625
+      value: 0

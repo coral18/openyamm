@@ -94,6 +94,8 @@ protected:
     const GameplayInputFrame &inputFrame() const;
 
     void drawTexture(const std::string &textureName, const Rect &rect);
+    void drawItemIcon(const std::string &textureName, const Rect &rect);
+    std::optional<TextureSize> itemIconSize(const std::string &textureName);
     void drawTextureRegion(const std::string &textureName, const SourceRect &sourceRect, const Rect &rect);
     void drawTextureColor(const std::string &textureName, const Rect &rect, uint32_t colorAbgr);
     void drawPixelsBgra(
@@ -161,6 +163,9 @@ protected:
         bgfx::TextureHandle handle = BGFX_INVALID_HANDLE;
     };
 
+    // Item art uses palette-zero transparency and a bounded cache owned by this screen.
+    std::vector<TextureHandle> m_itemIconHandles;
+
     struct DynamicTextureHandle
     {
         std::string cacheKey;
@@ -184,7 +189,7 @@ protected:
     void ensureRendererInitialized();
     void destroyRendererResources();
     const TextureHandle *findTexture(const std::string &textureName) const;
-    const TextureHandle *ensureTexture(const std::string &textureName);
+    const TextureHandle *ensureTexture(const std::string &textureName, bool itemIcon = false);
     Engine::FontSettings m_fontSettings;
     std::string fontCacheKey(const std::string &fontName, int pixelHeight) const;
     const FontHandle *findFont(const std::string &fontName, int pixelHeight) const;

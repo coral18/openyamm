@@ -1,0 +1,32 @@
+id: atlas.mm7_item_comparison_fixture
+title: Controlled two-Knight equipment fixture for native Atlas comparison
+world: mm7
+mode: faithful
+steps:
+- new_game_flow:
+    start_map: 7out02.odm
+    party:
+      gold: 500
+      food: 10
+      members:
+      - name: Atlas 1
+        class: Knight
+        race_id: 0
+        level: 1
+        skills:
+        - name: Sword
+          level: 1
+          mastery: 1
+        equipment:
+          main_hand: 1
+      - name: Atlas 2
+        class: Knight
+        race_id: 0
+        level: 1
+        skills:
+        - name: Sword
+          level: 1
+          mastery: 1
+        equipment:
+          main_hand: 2
+- save_game: before-item-reference

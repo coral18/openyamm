@@ -153,3 +153,28 @@ Run `mm7_class_starting_privacy.yml` / `mm8_class_starting_privacy.yml` in the c
 It checks the same class/race/level, XP, resources and four known skills before/after browsing, verifies that
 Sword/Axe/Perception were not granted, and round-trips the result. It does not test every starting race's portrait
 availability or the full character-creation workflow. Keep all saves and captures private and outside Git.
+
+
+## Item icons and base comparison
+
+Run `mm7_item_comparison_fixture.yml` / `mm8_item_comparison_fixture.yml` against normal packages in separate
+private working directories. They seed two level-one Human Knights with Sword 1 and equipped base items 1/2,
+500 gold and 10 food. These explicit fixtures are not a test of acquiring either sword in the campaign.
+Copy the resulting temporary `before-item-reference.oysav` from each `atlas_mm*_item_comparison_fixture/`
+scenario-save directory to private `saves/before.oysav`.
+
+Launch at 1600x900 with `tools/menu_tours/atlas_item_comparison.yml`. Inspect the inventory artwork, its transparent
+background/aspect ratio, the known Iron/Trollish sword comparison, scrolling and the Guide-only Dark Elven sword.
+Returning to Discovery must clear that pin/comparison; searching the unseen item must find no entry. The tour
+uses individual Backspace events because Atlas text input does not implement Ctrl+A selection.
+
+Then run `mm7_item_comparison_privacy.yml` / `mm8_item_comparison_privacy.yml` from the respective private
+directories. They compare before/after class, race, level, XP, Sword skill, gold/food and possession counts for
+items 1/2/3/1335 and their equipped member/slot, followed by another save/load. The base-item fixture does not validate enchanted or unidentified
+instance-history privacy; that broader knowledge gate remains explicitly open in `ATLAS_COVERAGE.md`.
+
+The companion `tools/menu_tours/atlas_item_comparison_scroll.yml` uses the same initial fixture in another
+private working directory. It pins the unowned Elven Chainmail (1335) in Guide, compares it to the Iron Longsword,
+and scrolls the long armor description. Inspect both captures: the left column must move while the right stays
+at its original position; the armor's actual race restriction must be visible in the full text. Returning to
+Discovery clears the artifact comparison. Run the same world's privacy verifier against this case's saves too.

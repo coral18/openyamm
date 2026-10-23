@@ -48,6 +48,8 @@ private:
     void rebuildReference();
     WorldGuideSource referenceSource() const;
     void drawClassComparison();
+    void drawItemComparison();
+    bool drawReferenceItemIcon(const ItemDefinition &item, const Rect &box);
     void compareClass(std::optional<uint32_t> raceId = std::nullopt);
     void stepMapSourceScan();
     void indexQuestLocations();
@@ -75,6 +77,9 @@ private:
     std::string m_referenceSelected;
     float m_referenceScroll = 0, m_referenceDetailScroll = 0, m_referenceContentHeight = 0;
     std::optional<WorldClassComparison> m_classComparison;
+    std::optional<uint32_t> m_pinnedItem;
+    std::optional<WorldItemComparison> m_itemComparison;
+    std::array<float, 2> m_itemComparisonScroll{}, m_itemComparisonHeight{};
     size_t m_comparisonPage = 0;
     float m_comparisonScroll = 0;
     std::vector<const MapStatsEntry *> m_sourceMaps;

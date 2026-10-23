@@ -13,11 +13,20 @@
 #include <stdexcept>
 #include <iostream>
 #include <cmath>
+#include <charconv>
 
 namespace OpenYAMM::Game
 {
 namespace
 {
+std::optional<uint32_t> atlasItemId(const std::string &value)
+{
+    uint32_t id = 0;
+    const auto parsed = std::from_chars(value.data(), value.data() + value.size(), id);
+    return parsed.ec == std::errc() && parsed.ptr == value.data() + value.size() && id != 0
+        ? std::optional<uint32_t>{id} : std::nullopt;
+}
+
 std::string initialAtlasWorld(const Engine::AssetFileSystem &assets, const MapAssetInfo *pCurrentMap)
 {
     const std::string world = pCurrentMap != nullptr ? pCurrentMap->map.worldId : assets.getActiveWorldId();
@@ -391,6 +400,8 @@ void AtlasScreen::selectWorld(const std::string &worldId)
         m_selectedFeature.clear();
         m_referenceDirty = true;
         m_referenceSelected.clear();
+        m_pinnedItem.reset();
+        m_itemComparison.reset();
         m_referenceScroll = m_referenceDetailScroll = 0;
         m_sourceMaps.clear(); m_sourceScanIndex = 0;
         m_sourceScanActive = m_sourcesComplete = false;
@@ -449,6 +460,8 @@ void AtlasScreen::drawScreen(float)
     if (button("atlas-mode", canvasRect(526, 17, 177, 27), m_guide ? "Guide Mode: ON" : "Discovery Mode"))
     {
         m_guide = !m_guide;
+        m_pinnedItem.reset();
+        m_itemComparison.reset();
         rebuildWorld();
         if (const WorldRecord *pSelected = m_world.find(m_selected);
             pSelected != nullptr && pSelected->npc != nullptr && m_world.visible(*pSelected, m_knowledge, m_guide))
@@ -1460,6 +1473,59 @@ void AtlasScreen::drawClassComparison()
         "menu_arrus", 11, 0xffc6dfeau, false, true);
 }
 
+bool AtlasScreen::drawReferenceItemIcon(const ItemDefinition &item, const Rect &box)
+{
+    if (item.iconVirtualPath.empty()) return false;
+    const auto size = itemIconSize(item.iconVirtualPath);
+    if (!size || size->width <= 0 || size->height <= 0) return false;
+    const float fit = std::min(box.width / size->width, box.height / size->height);
+    const float width = size->width * fit, height = size->height * fit;
+    drawItemIcon(item.iconVirtualPath,
+        {box.x + (box.width - width) / 2, box.y + (box.height - height) / 2, width, height});
+    return true;
+}
+
+void AtlasScreen::drawItemComparison()
+{
+    textInRect(canvasRect(25, 89, 670, 25), "Base item comparison", "fondamento", 14);
+    if (button("atlas-item-compare-details", canvasRect(711, 89, 110, 25), "Details"))
+    {
+        m_itemComparison.reset();
+        return;
+    }
+    for (size_t i = 0; i < 2; ++i)
+    {
+        const ItemDefinition &item = *m_itemComparison->items[i];
+        const float x = 25 + i * 405;
+        if (button("atlas-item-compare-column-" + std::to_string(i), canvasRect(x, 121, 393, 28), item.name))
+        {
+            m_referenceSelected = std::to_string(item.itemId);
+            m_referenceDirty = true;
+            m_search.clear();
+            m_referenceDetailScroll = 0;
+            m_itemComparison.reset();
+            return;
+        }
+        const Rect viewport = canvasRect(x, 157, 393, 234);
+        drawSolidRect(viewport, 0xff18160fu);
+        scrollViewport(viewport, m_itemComparisonHeight[i], m_itemComparisonScroll[i]);
+        setDesignClip(viewport);
+        const float y = viewport.y + (8 - m_itemComparisonScroll[i]) * designScale();
+        const bool icon = drawReferenceItemIcon(item,
+            {viewport.x + 8 * designScale(), y, viewport.width - 24 * designScale(), 72 * designScale()});
+        float height = 0;
+        textInRect({viewport.x + 8 * designScale(), y + (icon ? 80 : 0) * designScale(),
+            viewport.width - 24 * designScale(), 50000 * designScale()}, m_itemComparison->details[i],
+            "menu_arrus", 12, 0xffc6dfeau, false, true, &height);
+        m_itemComparisonHeight[i] = (icon ? 80 : 0) + height / designScale() + 20;
+        setDesignClip(std::nullopt);
+        outline(viewport, 0xff597284u);
+    }
+    textInRect(canvasRect(34, 407, 778, 43),
+        "Base definitions from the active game data. Character skills, enchantments and equipment condition "
+        "affect actual results. Scroll each column to read its full description.", "menu_arrus", 11);
+}
+
 void AtlasScreen::drawReference()
 {
     stepMapSourceScan();
@@ -1474,11 +1540,18 @@ void AtlasScreen::drawReference()
         {
             m_referenceSection = sections[i].second;
             m_referenceSelected.clear(); m_search.clear();
+            m_pinnedItem.reset();
+            m_itemComparison.reset();
             m_referenceDirty = true;
             m_referenceScroll = m_referenceDetailScroll = 0;
         }
     if (m_referenceDirty)
         rebuildReference();
+    if (m_itemComparison)
+    {
+        drawItemComparison();
+        return;
+    }
     const Rect search = canvasRect(25, 89, 245, 25);
     if (m_searchEditing && (keyPressed(SDL_SCANCODE_TAB) || (leftMouseJustPressed() && !pointerInside(search))))
     {
@@ -1498,11 +1571,41 @@ void AtlasScreen::drawReference()
         drawClassComparison();
         return;
     }
+    const std::string query = toLowerCopy(m_search);
+    const auto matches = [&query](const WorldGuideEntry &entry)
+    {
+        return query.empty() || toLowerCopy(entry.title + " " + entry.details).find(query) != std::string::npos
+            || std::any_of(entry.links.begin(), entry.links.end(), [&](const WorldGuideLink &link)
+                { return toLowerCopy(link.label).find(query) != std::string::npos; });
+    };
     const bool classes = m_referenceSection == WorldGuideSection::Classes;
+    const bool items = m_referenceSection == WorldGuideSection::Items;
+    const bool visibleItem = items && std::any_of(m_referenceEntries.begin(), m_referenceEntries.end(),
+        [&](const WorldGuideEntry &entry) { return entry.id == m_referenceSelected && matches(entry); });
+    const std::optional<uint32_t> itemId = visibleItem ? atlasItemId(m_referenceSelected) : std::nullopt;
+    const ItemDefinition *pSelectedItem = itemId ? m_data.itemTable().get(*itemId) : nullptr;
+    if (items)
+    {
+        if (button("atlas-pin-item", canvasRect(475, 89, 105, 25),
+            itemId && m_pinnedItem == itemId ? "Unpin" : "Pin item", "button", pSelectedItem != nullptr))
+        {
+            if (m_pinnedItem == itemId) m_pinnedItem.reset();
+            else m_pinnedItem = itemId;
+        }
+        const auto comparison = m_pinnedItem && itemId
+            ? buildWorldItemComparison(referenceSource(), m_referenceKnowledge, m_guide, *m_pinnedItem, *itemId)
+            : std::nullopt;
+        if (button("atlas-compare-items", canvasRect(589, 89, 110, 25), "Compare", "button", comparison.has_value()))
+        {
+            m_itemComparison = comparison;
+            m_itemComparisonScroll = m_itemComparisonHeight = {};
+            return;
+        }
+    }
     const bool scanSources = m_guide && (m_referenceSection == WorldGuideSection::Items
         || m_referenceSection == WorldGuideSection::Monsters || m_referenceSection == WorldGuideSection::Quests);
-    textInRect(canvasRect(285, 89, classes || scanSources ? 410 : 535, 25),
-        m_presentation.name + " - active game data",
+    textInRect(canvasRect(285, 89, items ? 180 : classes || scanSources ? 410 : 535, 25),
+        items ? m_presentation.name : m_presentation.name + " - active game data",
         "fondamento", 14);
     if (scanSources && button("atlas-map-sources", canvasRect(711, 89, 110, 25),
         m_sourceScanActive ? "Scan " + std::to_string(m_sourceScanIndex) + "/"
@@ -1531,12 +1634,8 @@ void AtlasScreen::drawReference()
     drawSolidRect(list, 0xff18160fu); outline(list, 0xff597284u);
     drawSolidRect(details, 0xff18160fu); outline(details, 0xff597284u);
     std::vector<const WorldGuideEntry *> entries;
-    const std::string query = toLowerCopy(m_search);
     for (const WorldGuideEntry &entry : m_referenceEntries)
-        if (query.empty() || toLowerCopy(entry.title + " " + entry.details).find(query) != std::string::npos
-            || std::any_of(entry.links.begin(), entry.links.end(), [&](const WorldGuideLink &link)
-                { return toLowerCopy(link.label).find(query) != std::string::npos; }))
-            entries.push_back(&entry);
+        if (matches(entry)) entries.push_back(&entry);
     if (!m_search.empty())
         std::stable_sort(entries.begin(), entries.end(), [&query](const WorldGuideEntry *a, const WorldGuideEntry *b)
         {
@@ -1571,8 +1670,15 @@ void AtlasScreen::drawReference()
         const WorldGuideEntry &entry = **selected;
         scrollViewport(details, m_referenceContentHeight, m_referenceDetailScroll);
         setDesignClip(details);
-        const Rect text{details.x + 8 * designScale(), details.y + (8 - m_referenceDetailScroll) * designScale(),
-                        details.width - 24 * designScale(), 50000 * designScale()};
+        Rect text{details.x + 8 * designScale(), details.y + (8 - m_referenceDetailScroll) * designScale(),
+                  details.width - 24 * designScale(), 50000 * designScale()};
+        float iconHeight = 0;
+        if (pSelectedItem != nullptr && drawReferenceItemIcon(*pSelectedItem,
+            {text.x, text.y, text.width, 72 * designScale()}))
+        {
+            iconHeight = 80;
+            text.y += iconHeight * designScale();
+        }
         float height = 0;
         textInRect(text, entry.details, "menu_arrus", 12, 0xffc6dfeau, false, true, &height);
         float y = text.y + height + 12 * designScale();
@@ -1635,13 +1741,23 @@ void AtlasScreen::drawReference()
             }
             y += 29 * designScale();
         }
-        m_referenceContentHeight = height / designScale() + entry.links.size() * 29 + 24;
+        m_referenceContentHeight = iconHeight + height / designScale() + entry.links.size() * 29 + 24;
         setDesignClip(std::nullopt);
     }
     else
-        textInRect(details, entries.empty() ? (m_guide ? "No records in this section."
+        textInRect(details, entries.empty() ? (!m_search.empty()
+            ? (m_guide ? "No records match this search." : "No known records match this search.")
+            : m_guide ? "No records in this section."
             : "Nothing known yet. Guide Mode opens the full reference catalog.")
             : "Select a record to inspect its details.", "menu_arrus", 13, 0xffc6dfeau, true);
+    if (items && m_pinnedItem)
+    {
+        const ItemDefinition *pPinned = m_data.itemTable().get(*m_pinnedItem);
+        textInRect(canvasRect(34, 407, 778, 43), "Pinned: " + pPinned->name
+            + ". Select another item and Compare. Character skills and enchantments affect actual results.",
+            "menu_arrus", 11);
+        return;
+    }
     textInRect(canvasRect(34, 407, 778, 43), m_sourceScanActive
         ? "Reading authored map sources. Random loot and encounters are never generated."
         : !m_locationError.empty() ? m_locationError : m_referenceSection == WorldGuideSection::Items

@@ -15,6 +15,8 @@
 #include "game/tables/NpcDialogTable.h"
 #include "game/maps/MapIdentity.h"
 #include "game/StringUtils.h"
+#include "game/items/ItemInspectionText.h"
+#include "game/items/ItemRuntime.h"
 #include "game/gameplay/GuildSpellbookRules.h"
 #include "game/party/SpellSchool.h"
 
@@ -29,6 +31,37 @@ namespace OpenYAMM::Game
 {
 namespace
 {
+std::string itemDefinitionText(const ItemDefinition &item)
+{
+    std::string text = item.name + "\n" + item.equipStat + " | " + item.skillGroup
+        + "\nValue: " + std::to_string(item.value) + " gold\n";
+    const std::string statistics = itemInspectDetailText(nullptr, item);
+    if (!statistics.empty()) text += statistics + "\n";
+    switch (item.rarity)
+    {
+    case ItemRarity::Common: text += "Rarity: Common\n"; break;
+    case ItemRarity::Artifact: text += "Rarity: Artifact\n"; break;
+    case ItemRarity::Relic: text += "Rarity: Relic\n"; break;
+    case ItemRarity::Special: text += "Rarity: Special\n"; break;
+    }
+    if (item.requiredMight > 0) text += "Required Might: " + std::to_string(item.requiredMight) + "\n";
+    if (item.requiredAccuracy > 0) text += "Required Accuracy: " + std::to_string(item.requiredAccuracy) + "\n";
+    if (!item.allowedClassRoots.empty())
+    {
+        text += "Class families: ";
+        for (size_t i = 0; i < item.allowedClassRoots.size(); ++i)
+            text += (i == 0 ? "" : ", ") + displayClassName(item.allowedClassRoots[i]);
+        text += "\n";
+    }
+    else if (const auto restriction = ItemRuntime::classRestriction(item))
+        text += "Class family: " + displayClassName(*restriction) + "\n";
+    if (const auto restriction = ItemRuntime::raceRestriction(item))
+        text += "Restriction: " + (*restriction == "DarkElfOrElf" ? "Dark Elf or Elf"
+            : *restriction == "DarkElf" ? "Dark Elf" : *restriction) + "\n";
+    if (!item.notes.empty()) text += "\n" + item.notes;
+    return text;
+}
+
 std::string classStartingSkills(const WorldGuideSource &source, const std::string &className,
     const std::vector<std::pair<uint32_t, std::string>> &races)
 {
@@ -118,6 +151,24 @@ std::vector<CreatureLootReference> creatureLootReferences(const WorldGuideSource
     { return std::tie(a.monsterId, a.itemId, a.provenance) < std::tie(b.monsterId, b.itemId, b.provenance); });
     return result;
 }
+}
+
+std::optional<WorldItemComparison> buildWorldItemComparison(const WorldGuideSource &source,
+    const WorldGuideKnowledge &knowledge, bool guide, uint32_t pinnedItem, uint32_t selectedItem)
+{
+    if (source.pItems == nullptr || pinnedItem == 0 || selectedItem == 0 || pinnedItem == selectedItem)
+        return std::nullopt;
+    WorldItemComparison result;
+    const std::array<uint32_t, 2> ids{pinnedItem, selectedItem};
+    for (size_t i = 0; i < ids.size(); ++i)
+    {
+        const ItemDefinition *pItem = source.pItems->get(ids[i]);
+        if (pItem == nullptr || pItem->name.empty() || (!guide && !knowledge.items.contains(ids[i])))
+            return std::nullopt;
+        result.items[i] = pItem;
+        result.details[i] = itemDefinitionText(*pItem);
+    }
+    return result;
 }
 
 std::optional<WorldClassComparison> buildWorldClassComparison(const WorldGuideSource &source,
@@ -427,13 +478,7 @@ std::vector<WorldGuideEntry> buildWorldGuide(const WorldGuideSource &source, Wor
             if (item.itemId == 0 || item.name.empty() || (!guide && !knowledge.items.contains(item.itemId)))
                 continue;
             WorldGuideEntry entry{std::to_string(item.itemId), item.name};
-            entry.details = item.name + "\n" + item.equipStat + " | " + item.skillGroup
-                + "\nValue: " + std::to_string(item.value) + " gold\n";
-            if (!item.mod1.empty() || !item.mod2.empty())
-                entry.details += "Properties: " + item.mod1 + " " + item.mod2 + "\n";
-            if (!item.materialName.empty())
-                entry.details += "Material: " + item.materialName + "\n";
-            entry.details += item.notes;
+            entry.details = itemDefinitionText(item);
             std::set<std::pair<std::string, std::string>> linkedSources;
             for (const WorldItemSource *pItemSource : sources[item.itemId])
             {

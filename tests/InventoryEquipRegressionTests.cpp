@@ -81,11 +81,7 @@ OpenYAMM::Game::Party makeRegressionParty(const OpenYAMM::Tests::RegressionGameD
 OpenYAMM::Game::ItemTable makeSkillLearningItemTable(const std::string &targetSkills)
 {
     OpenYAMM::Engine::AssetFileSystem assetFileSystem;
-    const std::filesystem::path sourceRoot = OPENYAMM_SOURCE_DIR;
-    REQUIRE(assetFileSystem.initialize(
-        sourceRoot,
-        sourceRoot / "assets_dev",
-        OpenYAMM::Engine::AssetScaleTier::X1));
+    // This data-only fixture shares the regression process; do not initialize a second global PhysFS mount.
 
     std::vector<std::string> itemRow(26);
     itemRow[0] = "10000";

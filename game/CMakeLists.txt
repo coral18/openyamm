@@ -146,6 +146,7 @@ add_library(openyamm_game STATIC
     items/ItemEnchantTables.cpp
     items/ItemEnchantRuntime.cpp
     items/ItemGenerator.cpp
+    items/ItemInspectionText.cpp
     items/ItemRuntime.cpp
     tables/ItemTable.cpp
     indoor/IndoorRenderer.cpp

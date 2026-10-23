@@ -317,8 +317,20 @@ std::optional<std::vector<uint8_t>> loadTexturePixelsBgra(
     const std::vector<uint8_t> &bytes,
     const std::string &path,
     int &width,
-    int &height)
+    int &height, bool itemIcon = false)
 {
+    if (itemIcon)
+    {
+        Engine::ImageDecodeOptions options = {};
+        options.applyPaletteZeroTransparencyKey = true;
+        options.applyMagentaTransparencyKey = true;
+        options.applyTealTransparencyKey = true;
+        const auto image = Engine::decodeImagePixelsBgra(bytes, path, options);
+        if (!image) return std::nullopt;
+        width = image->width;
+        height = image->height;
+        return image->pixels;
+    }
     const std::string lowerPath = toLowerCopy(path);
     constexpr std::array<uint8_t, 8> pngSignature = {137, 80, 78, 71, 13, 10, 26, 10};
     const bool pngBytes = bytes.size() >= pngSignature.size()
@@ -617,6 +629,19 @@ void MenuScreenBase::setClearBackground(bool clearBackground)
 void MenuScreenBase::drawTexture(const std::string &textureName, const Rect &rect)
 {
     drawTextureColor(textureName, rect, 0xffffffffu);
+}
+
+void MenuScreenBase::drawItemIcon(const std::string &textureName, const Rect &rect)
+{
+    if (const TextureHandle *pTexture = ensureTexture(textureName, true))
+        drawTextureHandle(pTexture->handle, rect);
+}
+
+std::optional<MenuScreenBase::TextureSize> MenuScreenBase::itemIconSize(const std::string &textureName)
+{
+    const TextureHandle *pTexture = ensureTexture(textureName, true);
+    if (pTexture == nullptr) return std::nullopt;
+    return TextureSize{float(pTexture->width), float(pTexture->height)};
 }
 
 void MenuScreenBase::drawTextureRegion(const std::string &textureName, const SourceRect &sourceRect, const Rect &rect)
@@ -1241,6 +1266,10 @@ void MenuScreenBase::ensureRendererInitialized()
 
 void MenuScreenBase::destroyRendererResources()
 {
+    for (TextureHandle &texture : m_itemIconHandles)
+        if (Engine::BgfxContext::isBgfxInitialized() && bgfx::isValid(texture.handle))
+            bgfx::destroy(texture.handle);
+    m_itemIconHandles.clear();
     if (Engine::BgfxContext::isBgfxInitialized() && bgfx::isValid(m_texturedProgramHandle))
     {
         bgfx::destroy(m_texturedProgramHandle);
@@ -1268,9 +1297,16 @@ const MenuScreenBase::TextureHandle *MenuScreenBase::findTexture(const std::stri
     return it != s_textureIndexByName.end() ? &s_textureHandles[it->second] : nullptr;
 }
 
-const MenuScreenBase::TextureHandle *MenuScreenBase::ensureTexture(const std::string &textureName)
+const MenuScreenBase::TextureHandle *MenuScreenBase::ensureTexture(const std::string &textureName, bool itemIcon)
 {
-    if (const TextureHandle *pExisting = findTexture(textureName))
+    if (itemIcon)
+    {
+        const std::string key = toLowerCopy(textureName);
+        const auto found = std::find_if(m_itemIconHandles.begin(), m_itemIconHandles.end(),
+            [&key](const TextureHandle &texture) { return texture.normalizedTextureName == key; });
+        if (found != m_itemIconHandles.end()) return &*found;
+    }
+    else if (const TextureHandle *pExisting = findTexture(textureName))
     {
         return pExisting;
     }
@@ -1293,7 +1329,8 @@ const MenuScreenBase::TextureHandle *MenuScreenBase::ensureTexture(const std::st
 
     int width = 0;
     int height = 0;
-    const std::optional<std::vector<uint8_t>> pixels = loadTexturePixelsBgra(*bytes, *resolvedPath, width, height);
+    const std::optional<std::vector<uint8_t>> pixels =
+        loadTexturePixelsBgra(*bytes, *resolvedPath, width, height, itemIcon);
 
     if (!pixels || width <= 0 || height <= 0)
     {
@@ -1330,6 +1367,17 @@ const MenuScreenBase::TextureHandle *MenuScreenBase::ensureTexture(const std::st
         return nullptr;
     }
 
+    if (itemIcon)
+    {
+        constexpr size_t MaximumItemIcons = 16;
+        if (m_itemIconHandles.size() == MaximumItemIcons)
+        {
+            bgfx::destroy(m_itemIconHandles.front().handle);
+            m_itemIconHandles.erase(m_itemIconHandles.begin());
+        }
+        m_itemIconHandles.push_back(std::move(textureHandle));
+        return &m_itemIconHandles.back();
+    }
     s_textureHandles.push_back(std::move(textureHandle));
     s_textureIndexByName[s_textureHandles.back().normalizedTextureName] = s_textureHandles.size() - 1;
     return &s_textureHandles.back();
