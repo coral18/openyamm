@@ -1827,3 +1827,26 @@ Use isolated settings/saves, copy the exported `before-crystal.oysav` to `saves/
 The existing screenshot tour restores the explicit indoor camera pose before ordinary Trigger actions; a prepared
 indoor save alone does not retain that fixture's pitch. Inspect the captures, then run the matching verifier
 against its isolated `saves/quicksave.oysav`. These controls do not add an MM6 Atlas or establish Android acceptance.
+
+
+## Campaign interaction inventory (2026-10-23)
+
+A package-backed regression now loads the actual local programs and physical interaction sites of all 76 MM7
+and 61 MM8 registered maps. It validates 6,695 physical site identities and finite coordinates, and can export
+`maps.tsv` and `interactions.tsv` to an explicitly selected QA directory. The export records the active context
+kind, hidden state, native Sites inclusion and presence of reference/item/autonote declarations. These are event
+sites, often multiple surfaces for one interaction; neither their count nor a passing inventory proves complete
+Atlas coverage. Hint-only and unregistered sites require interpretation rather than automatic guessed markers.
+
+The current inventory has no local `boost` callbacks. The remaining content work is more specific than a generic
+"script-owned barrels" task: conditional Drink/Take a Drink events, Murmurwoods' Stone to Flesh statues, opaque
+conditional entrances such as Escaton's Crystal and the Prison of the Water Lord, and additional bookcase/ore-vein
+semantics. Existing item-source pins already cover many fixed bookcase and ore rewards; an unsupported generic
+context kind does not mean all information about that object is missing. These candidates must be checked against
+actual callbacks and the reference behavior before assigning a native feature or describing its effect.
+
+The focused native regression passes 27,192 assertions without export and 27,194 with both output streams checked.
+Run it after building `openyamm_unit_tests`, with the full runtime packages selected through
+`OPENYAMM_REGRESSION_ASSETS_ROOT`. For the Windows iteration wrapper, set `OPENYAMM_ATLAS_INTERACTION_AUDIT` to an
+existing output directory and select `--test-case='Atlas campaign interaction inventory*'`. The wrapper forwards
+and converts the WSL directory path for the native test process. This inventory does not change gameplay or saves.

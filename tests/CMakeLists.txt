@@ -46,6 +46,7 @@ add_executable(openyamm_unit_tests
     MapStatsRegressionTests.cpp
     JournalStateTests.cpp
     WorldDatabaseTests.cpp
+    WorldInteractionAuditTests.cpp
     WorldSiteObservationTests.cpp
     WorldGuideTests.cpp
     MapDeltaDataTests.cpp

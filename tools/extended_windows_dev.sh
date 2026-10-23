@@ -47,7 +47,8 @@ fi
         if [[ "$mode" == test ]]; then
             printf 'cmake --build %q --target openyamm_unit_tests -j%s\n' "$native_root/build" "$build_jobs"
             printf 'export PATH="$(cygpath -u %q):$PATH"\n' "$native_root/build/game"
-            for test_assets_key in OPENYAMM_ATLAS_AUDIT_ROOT OPENYAMM_REGRESSION_ASSETS_ROOT; do
+            for test_assets_key in OPENYAMM_ATLAS_AUDIT_ROOT OPENYAMM_REGRESSION_ASSETS_ROOT \
+                OPENYAMM_ATLAS_INTERACTION_AUDIT; do
                 if [[ -n "${!test_assets_key:-}" ]]; then
                     test_assets_root="${!test_assets_key}"
                     if [[ "$test_assets_root" == /* ]]; then
