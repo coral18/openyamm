@@ -1,0 +1,53 @@
+id: atlas.mm7_resistance_drink
+title: A real resistance drink grants its temporary bonus once per location reset
+world: mm7
+mode: faithful
+steps:
+- new_game_flow:
+    start_map: d02.blv
+    party:
+      gold: 500
+      food: 10
+      members:
+      - name: Drink Tester
+        class: Knight
+        level: 1
+        race_id: 0
+        endurance: 15
+        skills: []
+        equipment: {}
+- set_pose: &id001
+    x: 4752
+    y: 2304
+    z: 128
+    yaw: 0
+    pitch: -1.45
+- save_game: before-drink
+- assert:
+    runtime_event_variable:
+      id: 63
+      member_index: 0
+      value: 0
+- press_interact:
+    pose: *id001
+    expect: &id002
+      kind: event_target
+      triggered_event: 451
+      can_activate: true
+- &id003
+  assert:
+    runtime_event_variable:
+      id: 63
+      member_index: 0
+      value: 25
+- press_interact:
+    pose: *id001
+    expect: *id002
+- assert:
+    runtime_event_variable:
+      id: 63
+      member_index: 0
+      value: 25
+- save_game: drink-used
+- load_game: drink-used
+- *id003

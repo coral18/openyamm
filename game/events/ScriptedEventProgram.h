@@ -95,6 +95,7 @@ private:
     std::unordered_map<uint16_t, std::vector<uint32_t>> m_itemRewards;
     std::unordered_map<uint16_t, std::vector<uint32_t>> m_autonoteReferences;
     std::unordered_map<uint16_t, std::string> m_siteReferences;
+    std::unordered_map<uint16_t, std::string> m_siteReferenceKinds;
     std::unordered_map<uint16_t, std::vector<NpcLocation>> m_npcLocations;
     uint32_t m_levitateTrapFaceMask = 0;
     std::vector<uint16_t> m_levitateTrapEvents;

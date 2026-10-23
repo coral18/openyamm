@@ -536,7 +536,8 @@ std::vector<ScriptedEventProgram::TimerTrigger> readTimerTriggers(
 namespace
 {
 bool readSiteReferences(lua_State *pLuaState, int metadataIndex, ScriptedEventScope scope,
-    std::unordered_map<uint16_t, std::string> &result, std::string &error)
+    std::unordered_map<uint16_t, std::string> &result,
+    std::unordered_map<uint16_t, std::string> &kinds, std::string &error)
 {
     const int stackTop = lua_gettop(pLuaState);
     const auto fail = [&]()
@@ -574,6 +575,15 @@ bool readSiteReferences(lua_State *pLuaState, int metadataIndex, ScriptedEventSc
             const char *pText = lua_tolstring(pLuaState, -1, &length);
             if (length > 16384 || std::string_view(pText, length).find('\0') != std::string_view::npos) return fail();
             if (length != 0) result[eventId] = std::string(pText, length);
+            lua_pop(pLuaState, 1);
+            lua_getfield(pLuaState, -1, "kind");
+            if (!lua_isnil(pLuaState, -1))
+            {
+                if (scope != ScriptedEventScope::Map || lua_type(pLuaState, -1) != LUA_TSTRING) return fail();
+                const char *pKind = lua_tolstring(pLuaState, -1, &length);
+                if (std::string_view(pKind, length) != "drink") return fail();
+                kinds[eventId] = std::string(pKind, length);
+            }
             lua_pop(pLuaState, 1);
         }
         lua_pop(pLuaState, 1);
@@ -765,7 +775,8 @@ bool ScriptedEventProgram::populateMetadataFromLua(
 
     program.m_openedChestIdsByEventId = readOpenedChestIds(pLuaState, -1);
     program.m_contextActionsByEventId = readContextActionMetadataByEventId(pLuaState, -1);
-    if (!readSiteReferences(pLuaState, lua_absindex(pLuaState, -1), scope, program.m_siteReferences, error))
+    if (!readSiteReferences(pLuaState, lua_absindex(pLuaState, -1), scope,
+        program.m_siteReferences, program.m_siteReferenceKinds, error))
         return false;
     program.m_textureNames = readStringArrayFromField(pLuaState, -1, "textureNames");
     program.m_spriteNames = readStringArrayFromField(pLuaState, -1, "spriteNames");
@@ -951,9 +962,19 @@ std::optional<ScriptedEventProgram::ContextActionMetadata> ScriptedEventProgram:
     uint16_t eventId) const
 {
     const auto iterator = m_contextActionsByEventId.find(eventId);
-    return iterator != m_contextActionsByEventId.end()
+    std::optional<ContextActionMetadata> metadata = iterator != m_contextActionsByEventId.end()
         ? std::optional<ContextActionMetadata>(iterator->second)
         : std::nullopt;
+    const auto kind = m_siteReferenceKinds.find(eventId);
+    if (kind != m_siteReferenceKinds.end() && (!metadata
+        || (metadata->kind == "generic_event" && metadata->source != "script" && metadata->source != "override")
+        || metadata->source == "title"))
+    {
+        if (!metadata) metadata.emplace();
+        metadata->kind = kind->second;
+        metadata->source = "reference";
+    }
+    return metadata;
 }
 
 std::vector<ScriptedEventTimerDefinition> scriptedEventTimerDefinitionsFromPrograms(

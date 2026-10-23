@@ -395,3 +395,23 @@ no sight candidate. `IGameplayWorldRuntime::hasWorldLineOfSight` queries existin
 combat targetability and AI detection range. Outdoor visual rays include walkable occluders and use zero terrain
 height slack; existing combat query defaults remain unchanged. Seeing a corpse does not inspect or acquire its loot.
 Replacement-model recognition still needs its own render-visibility support.
+
+
+### Callback-owned drink references
+
+A map handler can declare `SetMapSiteReference(eventId, text, "drink")` after registration. The optional third
+argument gives an otherwise generic/title-derived interaction the drink category; explicit script/override context
+actions keep precedence. An empty text preserves that category while withholding an unsupported effect description.
+The declaration belongs to the current handler identity. Replacing/removing the callback drops both text and kind
+unless the replacement redeclares them. Global site references retain their existing two-argument form.
+
+The legacy exporter emits these declarations into `*_00_site_refs.lua`; regenerate through
+`tools/regenerate_lua_events.sh`, never edit generated gameplay callbacks. The reserved map metadata format accepts
+only literal declarations, including the exact optional `"drink"` kind. It cannot hide executable Lua or arbitrary
+context kinds from lighting dependency checks.
+
+Drink interactions reuse the shared physical-site observation hook. Discovery records actual synchronous numeric
+and condition changes, including no-change visits, under the existing per-map site keys. Guide effect descriptions
+are a separate read-only projection. Random outcomes list possibilities without drawing RNG; per-character flags
+describe individual use eligibility. Unrepresented reachable behavior suppresses the effect reference rather than
+inventing a complete description. Disabling the Atlas UI does not disable Core observation collection.

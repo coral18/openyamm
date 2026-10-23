@@ -1,0 +1,322 @@
+id: atlas.mm7_personal_drink
+title: Real drinking interaction follows the active character requirements and survives
+  save/load
+world: mm7
+mode: faithful
+steps:
+- new_game_flow:
+    start_map: 7d25.blv
+    party:
+      gold: 500
+      food: 10
+      members:
+      - name: First Tester
+        class: Knight
+        level: 1
+        race_id: 0
+        endurance: 15
+        skills: &id001 []
+        equipment: &id002 {}
+      - name: Second Tester
+        class: Knight
+        level: 1
+        race_id: 0
+        endurance: 15
+        skills: *id001
+        equipment: *id002
+- set_pose: &id003
+    x: -271.615
+    y: 8311.31
+    z: -64
+    yaw: 0
+    pitch: -0.853
+- save_game: before-drink
+- assert:
+    runtime_event_variable:
+      id: 25
+      member_index: 0
+      value: 0
+- assert:
+    runtime_event_variable:
+      id: 26
+      member_index: 0
+      value: 0
+- assert:
+    runtime_event_variable:
+      id: 27
+      member_index: 0
+      value: 0
+- assert:
+    runtime_event_variable:
+      id: 28
+      member_index: 0
+      value: 0
+- assert:
+    runtime_event_variable:
+      id: 29
+      member_index: 0
+      value: 0
+- assert:
+    runtime_event_variable:
+      id: 30
+      member_index: 0
+      value: 0
+- assert:
+    runtime_event_variable:
+      id: 31
+      member_index: 0
+      value: 0
+- assert:
+    runtime_event_variable:
+      id: 1966311
+      member_index: 0
+      value: 0
+- &id004
+  press_interact:
+    pose: *id003
+    expect:
+      kind: event_target
+      triggered_event: 452
+      can_activate: true
+- assert:
+    runtime_event_variable:
+      id: 25
+      member_index: 0
+      value: 25
+- assert:
+    runtime_event_variable:
+      id: 26
+      member_index: 0
+      value: 25
+- assert:
+    runtime_event_variable:
+      id: 27
+      member_index: 0
+      value: 25
+- assert:
+    runtime_event_variable:
+      id: 28
+      member_index: 0
+      value: 25
+- assert:
+    runtime_event_variable:
+      id: 29
+      member_index: 0
+      value: 25
+- assert:
+    runtime_event_variable:
+      id: 30
+      member_index: 0
+      value: 25
+- assert:
+    runtime_event_variable:
+      id: 31
+      member_index: 0
+      value: 25
+- assert:
+    runtime_event_variable:
+      id: 1966311
+      member_index: 0
+      value: 1
+- *id004
+- assert:
+    runtime_event_variable:
+      id: 25
+      member_index: 0
+      value: 25
+- assert:
+    runtime_event_variable:
+      id: 26
+      member_index: 0
+      value: 25
+- assert:
+    runtime_event_variable:
+      id: 27
+      member_index: 0
+      value: 25
+- assert:
+    runtime_event_variable:
+      id: 28
+      member_index: 0
+      value: 25
+- assert:
+    runtime_event_variable:
+      id: 29
+      member_index: 0
+      value: 25
+- assert:
+    runtime_event_variable:
+      id: 30
+      member_index: 0
+      value: 25
+- assert:
+    runtime_event_variable:
+      id: 31
+      member_index: 0
+      value: 25
+- press_action:
+    action: select_member
+    member_index: 1
+- assert:
+    runtime_event_variable:
+      id: 25
+      member_index: 1
+      value: 0
+- assert:
+    runtime_event_variable:
+      id: 26
+      member_index: 1
+      value: 0
+- assert:
+    runtime_event_variable:
+      id: 27
+      member_index: 1
+      value: 0
+- assert:
+    runtime_event_variable:
+      id: 28
+      member_index: 1
+      value: 0
+- assert:
+    runtime_event_variable:
+      id: 29
+      member_index: 1
+      value: 0
+- assert:
+    runtime_event_variable:
+      id: 30
+      member_index: 1
+      value: 0
+- assert:
+    runtime_event_variable:
+      id: 31
+      member_index: 1
+      value: 0
+- assert:
+    runtime_event_variable:
+      id: 1966311
+      member_index: 1
+      value: 0
+- *id004
+- assert:
+    runtime_event_variable:
+      id: 25
+      member_index: 1
+      value: 25
+- assert:
+    runtime_event_variable:
+      id: 26
+      member_index: 1
+      value: 25
+- assert:
+    runtime_event_variable:
+      id: 27
+      member_index: 1
+      value: 25
+- assert:
+    runtime_event_variable:
+      id: 28
+      member_index: 1
+      value: 25
+- assert:
+    runtime_event_variable:
+      id: 29
+      member_index: 1
+      value: 25
+- assert:
+    runtime_event_variable:
+      id: 30
+      member_index: 1
+      value: 25
+- assert:
+    runtime_event_variable:
+      id: 31
+      member_index: 1
+      value: 25
+- assert:
+    runtime_event_variable:
+      id: 1966311
+      member_index: 1
+      value: 1
+- save_game: drink-used
+- load_game: drink-used
+- assert:
+    runtime_event_variable:
+      id: 25
+      member_index: 0
+      value: 25
+- assert:
+    runtime_event_variable:
+      id: 26
+      member_index: 0
+      value: 25
+- assert:
+    runtime_event_variable:
+      id: 27
+      member_index: 0
+      value: 25
+- assert:
+    runtime_event_variable:
+      id: 28
+      member_index: 0
+      value: 25
+- assert:
+    runtime_event_variable:
+      id: 29
+      member_index: 0
+      value: 25
+- assert:
+    runtime_event_variable:
+      id: 30
+      member_index: 0
+      value: 25
+- assert:
+    runtime_event_variable:
+      id: 31
+      member_index: 0
+      value: 25
+- assert:
+    runtime_event_variable:
+      id: 25
+      member_index: 1
+      value: 25
+- assert:
+    runtime_event_variable:
+      id: 26
+      member_index: 1
+      value: 25
+- assert:
+    runtime_event_variable:
+      id: 27
+      member_index: 1
+      value: 25
+- assert:
+    runtime_event_variable:
+      id: 28
+      member_index: 1
+      value: 25
+- assert:
+    runtime_event_variable:
+      id: 29
+      member_index: 1
+      value: 25
+- assert:
+    runtime_event_variable:
+      id: 30
+      member_index: 1
+      value: 25
+- assert:
+    runtime_event_variable:
+      id: 31
+      member_index: 1
+      value: 25
+- assert:
+    runtime_event_variable:
+      id: 1966311
+      member_index: 0
+      value: 1
+- assert:
+    runtime_event_variable:
+      id: 1966311
+      member_index: 1
+      value: 1

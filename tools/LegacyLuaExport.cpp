@@ -12095,6 +12095,7 @@ std::optional<std::string> classifyContextActionFromTitle(const std::string &nor
     {
         return "well";
     }
+    if (normalizedTitle == "drink" || normalizedTitle == "take a drink") return "drink";
 
     if (contextTitleContainsWord(normalizedTitle, "shrine")
         || contextTitleContainsWord(normalizedTitle, "altar"))
@@ -12805,6 +12806,22 @@ bool siteUseCounter(const LegacyLuaEvent &event, const FormattedSelector &select
     return incremented;
 }
 
+bool sitePersonalUseFlag(const LegacyLuaEvent &event, const FormattedSelector &selector)
+{
+    if (selector.semantic != SelectorSemantic::PlayerBit) return false;
+    bool assigned = false;
+    for (const LegacyLuaInstruction &instruction : event.instructions)
+    {
+        if (instruction.arguments.size() < 2) continue;
+        const FormattedSelector other = formatSelector(instruction.arguments[0], {});
+        if (other.expression != selector.expression) continue;
+        if (instruction.operation == LegacyLuaOperation::Add || instruction.operation == LegacyLuaOperation::Set)
+            assigned = true;
+        else if (instruction.operation == LegacyLuaOperation::Subtract) return false;
+    }
+    return assigned;
+}
+
 std::optional<std::string> siteRequirement(const LegacyLuaEvent &event,
     const LegacyLuaInstruction &instruction, bool success)
 {
@@ -12815,6 +12832,11 @@ std::optional<std::string> siteRequirement(const LegacyLuaEvent &event,
         return success ? "Health is full" : "Health is below maximum";
     if (selector.expression == "MaxSpellPoints")
         return success ? "Spell points are full" : "Spell points are below maximum";
+    if (sitePersonalUseFlag(event, selector))
+        return success ? "Already used by this character" : "Not yet used by this character";
+    if (const EventAttributeInfo *pAttribute = eventAttributeInfo(selector.expression);
+        pAttribute != nullptr && pAttribute->kind == EventAttributeValueKind::Condition)
+        return std::string(success ? "Affected by: " : "Not affected by: ") + std::string(pAttribute->label);
     if (siteUseCounter(event, selector) && value > 0 && value <= 255)
     {
         // A flag assigned 1 is a one-use gate, not an incrementing multi-use counter.
@@ -12832,7 +12854,7 @@ std::optional<std::string> siteRequirement(const LegacyLuaEvent &event,
     return std::nullopt;
 }
 
-std::optional<std::string> buildSiteReference(const LegacyLuaEvent &event)
+std::optional<std::string> buildSiteReference(const LegacyLuaEvent &event, bool allowNoEffect = false)
 {
     std::vector<uint8_t> steps = collectNormalEventSteps(event);
     // Unknown-only steps are omitted by the callback formatter; do not silently claim a complete reference.
@@ -12849,6 +12871,7 @@ std::optional<std::string> buildSiteReference(const LegacyLuaEvent &event)
     };
     std::vector<Path> outcomes;
     size_t visits = 0;
+    bool randomOutcomes = false;
     std::function<bool(std::optional<uint8_t>, Path)> walk;
     walk = [&](std::optional<uint8_t> step, Path path)
     {
@@ -12879,6 +12902,15 @@ std::optional<std::string> buildSiteReference(const LegacyLuaEvent &event)
                     path.mutated = true;
                     if (selector.semantic == SelectorSemantic::Autonote) break;
                     if (siteUseCounter(event, selector)) break;
+                    if (sitePersonalUseFlag(event, selector)) break;
+                    if (const EventAttributeInfo *pAttribute = eventAttributeInfo(selector.expression);
+                        pAttribute != nullptr && pAttribute->writable
+                        && pAttribute->kind == EventAttributeValueKind::Condition)
+                    {
+                        path.effects.push_back(std::string(pAction->operation == LegacyLuaOperation::Subtract
+                            ? "Removes: " : "Can apply: ") + std::string(pAttribute->label));
+                        break;
+                    }
                     const auto label = siteNumericLabel(selector);
                     if (!label || value < 0 || selector.expression.starts_with("Actual")) return false;
                     const bool subtraction = pAction->operation == LegacyLuaOperation::Subtract;
@@ -12905,6 +12937,21 @@ std::optional<std::string> buildSiteReference(const LegacyLuaEvent &event)
         if (terminal.operation == LegacyLuaOperation::Exit) return walk(std::nullopt, std::move(path));
         if (terminal.operation == LegacyLuaOperation::Jump && terminal.jumpTargetStep)
             return walk(terminal.jumpTargetStep, std::move(path));
+        if (terminal.operation == LegacyLuaOperation::RandomJump)
+        {
+            if (terminal.arguments.empty()) return false;
+            randomOutcomes = true;
+            std::vector<uint8_t> targets;
+            for (uint32_t target : terminal.arguments)
+            {
+                if (target > UINT8_MAX) return false;
+                targets.push_back(uint8_t(target));
+            }
+            sortAndUnique(targets);
+            for (uint8_t target : targets)
+                if (!walk(target, path)) return false;
+            return true;
+        }
         if (terminal.operation != LegacyLuaOperation::Compare || !terminal.jumpTargetStep || path.mutated)
             return false;
         const auto positive = siteRequirement(event, terminal, true);
@@ -12916,9 +12963,12 @@ std::optional<std::string> buildSiteReference(const LegacyLuaEvent &event)
         return walk(terminal.jumpTargetStep, std::move(matched))
             && walk(nextStepAfter(steps, *step), std::move(path));
     };
-    if (!walk(steps.front(), {}) || outcomes.empty()) return std::nullopt;
+    if (!walk(steps.front(), {})) return std::nullopt;
+    if (outcomes.empty()) return allowNoEffect
+        ? std::optional<std::string>("No attribute or condition change is defined by this interaction.") : std::nullopt;
     std::string text = "Effects apply to the selected character unless the effect concerns party resources.\n"
         "Health and spell point gains stop at their maximum; attribute increases use the game's normal limits.";
+    if (randomOutcomes) text += "\nRandom outcomes are possibilities; their probabilities are not shown.";
     for (size_t i = 0; i < outcomes.size(); ++i)
     {
         text += "\n\nOutcome " + std::to_string(i + 1) + ":";
@@ -13077,10 +13127,16 @@ std::string generateLegacyEventSiteRefsLuaChunk(
     {
         const auto action = contextActionMetadataForEvent(evtProgram.getEvents()[i], strTable, lookups);
         if (scope == LegacyLuaExportScope::Map && (!action || action->hidden
-            || (action->kind != "well" && action->kind != "fountain" && action->kind != "shrine"))) continue;
+            || (action->kind != "well" && action->kind != "fountain" && action->kind != "shrine"
+                && action->kind != "drink"))) continue;
         const LegacyLuaEvent direct =
             directEventWithoutSyntheticTriggerContinuations(events[i], evtProgram.getEvents()[i]);
-        if (const auto reference = buildSiteReference(direct))
+        const bool drink = scope == LegacyLuaExportScope::Map && action && action->kind == "drink";
+        const auto reference = buildSiteReference(direct, drink);
+        if (drink)
+            metadata << "SetMapSiteReference(" << direct.eventId << ", "
+                << luaQuoted(reference.value_or("")) << ", \"drink\")\n";
+        else if (reference)
             metadata << (scope == LegacyLuaExportScope::Global ? "SetGlobalSiteReference(" : "SetMapSiteReference(")
                 << direct.eventId << ", " << luaQuoted(*reference) << ")\n";
     }

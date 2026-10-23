@@ -1412,3 +1412,96 @@ TEST_CASE("Harmondale unnoted gold well reference uses the real callback thresho
     CHECK(well.find("Not used since this location reset") != std::string::npos);
     CHECK(well.find("Refreshing") == std::string::npos);
 }
+
+TEST_CASE("drink site reference kinds are callback owned and preserve explicit context overrides")
+{
+    using namespace OpenYAMM::Game;
+    const auto supportBytes = readBinaryFixture(std::filesystem::path(OPENYAMM_SOURCE_DIR)
+        / "assets_dev/engine/scripts/common/event_support.lua");
+    const std::string support(supportBytes.begin(), supportBytes.end());
+    const std::string base = R"(
+        SetMapMetadata({contextActions = {[10] = {kind = 'generic_event', source = 'opcode'}}})
+        RegisterEvent(10, 'Drink', function() error('must not execute') end)
+        SetMapSiteReference(10, '', 'drink')
+    )";
+    const auto load = [&](const std::string &code)
+    {
+        std::string error;
+        return ScriptedEventProgram::loadFromLuaText(support + code, "drink-context", ScriptedEventScope::Map, error);
+    };
+    auto program = load(base);
+    REQUIRE(program);
+    REQUIRE(program->getContextActionMetadata(10));
+    CHECK(program->getContextActionMetadata(10)->kind == "drink");
+    CHECK(program->siteReferences().empty());
+    for (const char *pReplacement : {"evt.map[10] = function() end", "evt.map[10] = nil",
+        "ReplaceMapEvent(10, '', function() end)"})
+    {
+        program = load(base + pReplacement);
+        REQUIRE(program);
+        const auto context = program->getContextActionMetadata(10);
+        CHECK((!context || context->kind != "drink"));
+    }
+    program = load(base + "SetMapContextAction(10, {kind = 'well', source = 'script'})");
+    REQUIRE(program);
+    CHECK(program->getContextActionMetadata(10)->kind == "well");
+    CHECK_FALSE(load(base + "SetMapSiteReference(10, '', 'teleport')"));
+    CHECK_FALSE(load(base + "SetMapSiteReference(10, '', 1)"));
+    CHECK_FALSE(load(base + "SetMapSiteReference(10, '', 'drink' .. string.char(0))"));
+}
+
+TEST_CASE("drink reference export handles condition application and personal use gates without executing events")
+{
+    using namespace OpenYAMM::Game;
+    std::vector<uint8_t> bytes;
+    const auto append = [&](uint16_t id, uint8_t step, EvtOpcode opcode, std::vector<uint8_t> payload)
+    {
+        bytes.insert(bytes.end(), {uint8_t(4 + payload.size()), uint8_t(id), 0, step, uint8_t(opcode)});
+        bytes.insert(bytes.end(), payload.begin(), payload.end());
+    };
+    append(1, 0, EvtOpcode::Compare, {0x23, 0, 35, 0, 0, 0, 3});
+    append(1, 1, EvtOpcode::Set, {0x75, 0, 0, 0, 0, 0}); // Active engine selector: Paralysis, not numeric zero removal.
+    appendExitRecord(bytes, 1, 2);
+    appendExitRecord(bytes, 1, 3);
+    append(2, 0, EvtOpcode::Compare, {0xe9, 0, 30, 0, 0, 0, 3});
+    append(2, 1, EvtOpcode::Add, {0x19, 0, 25, 0, 0, 0});
+    append(2, 2, EvtOpcode::Add, {0xe9, 0, 30, 0, 0, 0});
+    appendExitRecord(bytes, 2, 3);
+    appendExitRecord(bytes, 3, 0); // A known empty callback has no attribute or condition effects.
+    append(4, 0, EvtOpcode::CastSpell, std::vector<uint8_t>(27, 0));
+    appendExitRecord(bytes, 4, 1);
+    append(5, 0, EvtOpcode::RandomGoTo, {1, 1, 3, 3, 0, 0});
+    append(5, 1, EvtOpcode::Set, {0x71, 0, 0, 0, 0, 0});
+    appendExitRecord(bytes, 5, 2);
+    append(5, 3, EvtOpcode::Set, {0x73, 0, 0, 0, 0, 0});
+    appendExitRecord(bytes, 5, 4);
+    append(6, 0, EvtOpcode::Compare, {0x34, 0, 10, 0, 0, 0, 2});
+    append(6, 1, EvtOpcode::Add, {0x3f, 0, 25, 0, 0, 0});
+    appendExitRecord(bytes, 6, 2);
+    EvtProgram events;
+    REQUIRE(events.loadFromBytes(bytes));
+    LegacyLuaExportLookups lookups;
+    for (uint16_t id : {1, 2, 3, 4, 5, 6}) lookups.eventTitles[id] = "Take a Drink";
+    const std::string references = generateLegacyEventSiteRefsLuaChunk(events, {}, lookups, LegacyLuaExportScope::Map);
+    CHECK(references.find("Can apply: Paralysis") != std::string::npos);
+    CHECK(references.find("Base Endurance below 35") != std::string::npos);
+    CHECK(references.find("Not yet used by this character") != std::string::npos);
+    CHECK(references.find("Temporary Might +25") != std::string::npos);
+    CHECK(references.find("Body resistance below 10") != std::string::npos);
+    CHECK(references.find("Body resistance bonus +25") != std::string::npos);
+    CHECK(references.find("No attribute or condition change") != std::string::npos);
+    CHECK(references.find("Can apply: Medium poison") != std::string::npos);
+    CHECK(references.find("Can apply: Severe poison") != std::string::npos);
+    CHECK(references.find("their probabilities are not shown") != std::string::npos);
+    CHECK(references.find("SetMapSiteReference(4, \"\", \"drink\")") != std::string::npos);
+    const auto supportBytes = readBinaryFixture(std::filesystem::path(OPENYAMM_SOURCE_DIR)
+        / "assets_dev/engine/scripts/common/event_support.lua");
+    const std::string callbacks = generateLegacyEventLuaChunk(events, {}, lookups, LegacyLuaExportScope::Map);
+    std::string error;
+    const auto program = ScriptedEventProgram::loadFromLuaText(std::string(supportBytes.begin(), supportBytes.end())
+        + callbacks + references, "drink-export", ScriptedEventScope::Map, error);
+    REQUIRE_MESSAGE(program, error);
+    REQUIRE(program->getContextActionMetadata(1));
+    CHECK(program->getContextActionMetadata(1)->kind == "drink");
+    CHECK(program->getContextActionMetadata(4)->kind == "drink");
+}

@@ -1,0 +1,46 @@
+id: atlas.mm7_high_drink
+title: Real drinking interaction follows the active character requirements and survives
+  save/load
+world: mm7
+mode: faithful
+steps:
+- new_game_flow:
+    start_map: 7d12.blv
+    party:
+      gold: 500
+      food: 10
+      members:
+      - name: Drink Tester
+        class: Knight
+        level: 1
+        race_id: 0
+        endurance: 40
+        skills: []
+        equipment: {}
+- set_pose: &id001
+    x: -140
+    y: 486.667
+    z: 0
+    yaw: 0
+    pitch: -0.675
+- save_game: before-drink
+- assert:
+    runtime_event_variable:
+      id: 117
+      member_index: 0
+      value: 0
+- press_interact:
+    pose: *id001
+    expect:
+      kind: event_target
+      triggered_event: 451
+      can_activate: true
+- &id002
+  assert:
+    runtime_event_variable:
+      id: 117
+      member_index: 0
+      value: 0
+- save_game: drink-used
+- load_game: drink-used
+- *id002

@@ -1027,16 +1027,16 @@ function support.setGlobalItemRewards(eventId, items)
     setItemRewards("global", eventId, items)
 end
 
-local function setSiteReference(scopeName, eventId, text)
+local function setSiteReference(scopeName, eventId, text, kind)
     local handler = evt[scopeName][eventId]
     assert(type(handler) == "function", "Site reference requires a registered event handler")
     local meta = ensureMetaScope(scopeName)
     meta.siteReferences = meta.siteReferences or {}
-    meta.siteReferences[eventId] = {handler = handler, text = text}
+    meta.siteReferences[eventId] = {handler = handler, text = text, kind = kind}
 end
 
-function support.setMapSiteReference(eventId, text)
-    setSiteReference("map", eventId, text)
+function support.setMapSiteReference(eventId, text, kind)
+    setSiteReference("map", eventId, text, kind)
 end
 
 function support.setGlobalSiteReference(eventId, text)

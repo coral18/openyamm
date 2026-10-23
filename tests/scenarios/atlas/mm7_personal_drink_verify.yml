@@ -1,0 +1,285 @@
+id: atlas.mm7_personal_native_drink
+title: Native drink outcomes and Atlas browsing preserve per-site discovery and character
+  state
+world: mm7
+mode: faithful
+steps:
+- load_game:
+    name: before
+    path: saves/before.oysav
+- assert:
+    named_map_var_changed:
+      name: openyamm.discovery.site/surface/3785/event/452
+      value: 0
+- assert:
+    runtime_event_variable:
+      id: 25
+      value: 0
+      member_index: 0
+- assert:
+    runtime_event_variable:
+      id: 26
+      value: 0
+      member_index: 0
+- assert:
+    runtime_event_variable:
+      id: 27
+      value: 0
+      member_index: 0
+- assert:
+    runtime_event_variable:
+      id: 28
+      value: 0
+      member_index: 0
+- assert:
+    runtime_event_variable:
+      id: 29
+      value: 0
+      member_index: 0
+- assert:
+    runtime_event_variable:
+      id: 30
+      value: 0
+      member_index: 0
+- assert:
+    runtime_event_variable:
+      id: 31
+      value: 0
+      member_index: 0
+- load_game:
+    name: native
+    path: saves/quicksave.oysav
+- &id001
+  assert:
+    named_map_var_changed:
+      name: openyamm.discovery.site/surface/3785/event/452
+      value: 1
+- &id002
+  assert:
+    named_map_var_changed:
+      name: openyamm.discovery.site-effects.v1/surface/3785/event/452/seen
+      value: 1
+- &id003
+  assert:
+    named_map_var_changed:
+      name: openyamm.discovery.site-effects.v1/surface/3785/event/452/changed
+      value: 0
+- &id004
+  assert:
+    named_map_var_changed:
+      name: openyamm.discovery.site/surface/3783/event/452
+      value: 0
+- &id005
+  assert:
+    runtime_event_variable:
+      id: 25
+      value: 25
+      member_index: 0
+- &id006
+  assert:
+    runtime_event_variable:
+      id: 25
+      value: 0
+      member_index: 1
+- &id007
+  assert:
+    named_map_var_changed:
+      name: openyamm.discovery.site-effects.v1/surface/3785/event/452/stat/MightBonus/min-before
+      value: 0
+- &id008
+  assert:
+    named_map_var_changed:
+      name: openyamm.discovery.site-effects.v1/surface/3785/event/452/stat/MightBonus/max-after
+      value: 25
+- &id009
+  assert:
+    runtime_event_variable:
+      id: 26
+      value: 25
+      member_index: 0
+- &id010
+  assert:
+    runtime_event_variable:
+      id: 26
+      value: 0
+      member_index: 1
+- &id011
+  assert:
+    named_map_var_changed:
+      name: openyamm.discovery.site-effects.v1/surface/3785/event/452/stat/IntellectBonus/min-before
+      value: 0
+- &id012
+  assert:
+    named_map_var_changed:
+      name: openyamm.discovery.site-effects.v1/surface/3785/event/452/stat/IntellectBonus/max-after
+      value: 25
+- &id013
+  assert:
+    runtime_event_variable:
+      id: 27
+      value: 25
+      member_index: 0
+- &id014
+  assert:
+    runtime_event_variable:
+      id: 27
+      value: 0
+      member_index: 1
+- &id015
+  assert:
+    named_map_var_changed:
+      name: openyamm.discovery.site-effects.v1/surface/3785/event/452/stat/PersonalityBonus/min-before
+      value: 0
+- &id016
+  assert:
+    named_map_var_changed:
+      name: openyamm.discovery.site-effects.v1/surface/3785/event/452/stat/PersonalityBonus/max-after
+      value: 25
+- &id017
+  assert:
+    runtime_event_variable:
+      id: 28
+      value: 25
+      member_index: 0
+- &id018
+  assert:
+    runtime_event_variable:
+      id: 28
+      value: 0
+      member_index: 1
+- &id019
+  assert:
+    named_map_var_changed:
+      name: openyamm.discovery.site-effects.v1/surface/3785/event/452/stat/EnduranceBonus/min-before
+      value: 0
+- &id020
+  assert:
+    named_map_var_changed:
+      name: openyamm.discovery.site-effects.v1/surface/3785/event/452/stat/EnduranceBonus/max-after
+      value: 25
+- &id021
+  assert:
+    runtime_event_variable:
+      id: 29
+      value: 25
+      member_index: 0
+- &id022
+  assert:
+    runtime_event_variable:
+      id: 29
+      value: 0
+      member_index: 1
+- &id023
+  assert:
+    named_map_var_changed:
+      name: openyamm.discovery.site-effects.v1/surface/3785/event/452/stat/SpeedBonus/min-before
+      value: 0
+- &id024
+  assert:
+    named_map_var_changed:
+      name: openyamm.discovery.site-effects.v1/surface/3785/event/452/stat/SpeedBonus/max-after
+      value: 25
+- &id025
+  assert:
+    runtime_event_variable:
+      id: 30
+      value: 25
+      member_index: 0
+- &id026
+  assert:
+    runtime_event_variable:
+      id: 30
+      value: 0
+      member_index: 1
+- &id027
+  assert:
+    named_map_var_changed:
+      name: openyamm.discovery.site-effects.v1/surface/3785/event/452/stat/AccuracyBonus/min-before
+      value: 0
+- &id028
+  assert:
+    named_map_var_changed:
+      name: openyamm.discovery.site-effects.v1/surface/3785/event/452/stat/AccuracyBonus/max-after
+      value: 25
+- &id029
+  assert:
+    runtime_event_variable:
+      id: 31
+      value: 25
+      member_index: 0
+- &id030
+  assert:
+    runtime_event_variable:
+      id: 31
+      value: 0
+      member_index: 1
+- &id031
+  assert:
+    named_map_var_changed:
+      name: openyamm.discovery.site-effects.v1/surface/3785/event/452/stat/LuckBonus/min-before
+      value: 0
+- &id032
+  assert:
+    named_map_var_changed:
+      name: openyamm.discovery.site-effects.v1/surface/3785/event/452/stat/LuckBonus/max-after
+      value: 25
+- &id033
+  assert:
+    runtime_event_variable:
+      id: 1966311
+      value: 1
+      member_index: 0
+- &id034
+  assert:
+    runtime_event_variable:
+      id: 1966311
+      value: 0
+      member_index: 1
+- &id035
+  assert:
+    runtime_event_variable:
+      id: 21
+      value: 500
+- &id036
+  assert:
+    runtime_event_variable:
+      id: 23
+      value: 10
+- save_game: native-roundtrip
+- load_game: native-roundtrip
+- *id001
+- *id002
+- *id003
+- *id004
+- *id005
+- *id006
+- *id007
+- *id008
+- *id009
+- *id010
+- *id011
+- *id012
+- *id013
+- *id014
+- *id015
+- *id016
+- *id017
+- *id018
+- *id019
+- *id020
+- *id021
+- *id022
+- *id023
+- *id024
+- *id025
+- *id026
+- *id027
+- *id028
+- *id029
+- *id030
+- *id031
+- *id032
+- *id033
+- *id034
+- *id035
+- *id036

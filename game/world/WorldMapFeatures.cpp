@@ -39,7 +39,7 @@ const char *worldMapFeatureKindName(WorldMapFeatureKind kind)
 std::optional<WorldMapFeatureKind> worldMapFeatureKind(std::string_view action)
 {
     if (action == "open_chest") return WorldMapFeatureKind::Chest;
-    if (action == "well" || action == "fountain") return WorldMapFeatureKind::Water;
+    if (action == "well" || action == "fountain" || action == "drink") return WorldMapFeatureKind::Water;
     if (action == "shrine") return WorldMapFeatureKind::Shrine;
     if (action == "obelisk") return WorldMapFeatureKind::Obelisk;
     if (action == "teleport" || action == "passage" || action == "travel"

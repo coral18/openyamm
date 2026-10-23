@@ -72,3 +72,70 @@ TEST_CASE("Atlas campaign interaction inventory reads canonical map programs and
         }
     }
 }
+
+TEST_CASE("canonical drink sites expose active effects only in Guide and retain physical discovery identity")
+{
+    using namespace OpenYAMM::Game;
+    REQUIRE_MESSAGE(OpenYAMM::Tests::regressionMapLoaderLoaded(),
+        OpenYAMM::Tests::regressionMapLoaderFailure());
+    const auto &loader = OpenYAMM::Tests::regressionMapLoader();
+    const auto &data = loader.gameDataLoader;
+    struct Drink
+    {
+        const char *pWorld;
+        const char *pMap;
+        uint16_t event;
+        const char *pReference;
+    };
+    const Drink drinks[] = {
+        {"mm7", "7out06.odm", 460, "Random outcomes"},
+        {"mm7", "7out13.odm", 214, "Random outcomes"},
+        {"mm7", "d02.blv", 451, "+25"},
+        {"mm7", "7d12.blv", 451, "Can apply: Paralysis"},
+        {"mm7", "7d24.blv", 196, "No attribute or condition change"},
+        {"mm7", "7d24.blv", 197, "No attribute or condition change"},
+        {"mm7", "7d24.blv", 198, "No attribute or condition change"},
+        {"mm7", "7d25.blv", 452, "Not yet used by this character"},
+        {"mm8", "d20.blv", 451, "No attribute or condition change"},
+        {"mm8", "d35.blv", 451, "No attribute or condition change"}};
+    for (const Drink &drink : drinks)
+    {
+        CAPTURE(std::string(drink.pWorld));
+        CAPTURE(std::string(drink.pMap));
+        CAPTURE(drink.event);
+        const auto &entries = data.getMapStats().getEntries();
+        const auto entry = std::find_if(entries.begin(), entries.end(), [&](const MapStatsEntry &map)
+            { return map.worldId == drink.pWorld && map.fileName == drink.pMap; });
+        REQUIRE(entry != entries.end());
+        auto map = MapAssetLoader().load(loader.assetFileSystem, *entry, data.getMonsterTable(),
+            data.getObjectTable(), MapLoadPurpose::HeadlessGameplay);
+        REQUIRE(map);
+        std::string error;
+        REQUIRE_MESSAGE(GameDataLoader::loadEventPrograms(loader.assetFileSystem, *map, error), error);
+        REQUIRE(map->localEventProgram);
+        const ScriptedEventProgram &events = *map->localEventProgram;
+        const auto action = events.getContextActionMetadata(drink.event);
+        REQUIRE(action);
+        CHECK(action->kind == "drink");
+        REQUIRE(events.siteReferences().contains(drink.event));
+        CHECK(events.siteReferences().at(drink.event).find(drink.pReference) != std::string::npos);
+        WorldDatabase world(data.getMapStats(), data.getHouseTable(), data.getNpcDialogTable(),
+            data.getMergedTeacherTopicTable(), drink.pWorld);
+        if (map->outdoorMapData) world.indexMapLocations(*map->outdoorMapData, events);
+        else world.indexMapLocations(*entry, *map->indoorMapData, events);
+        const auto &features = world.features();
+        const auto feature = std::find_if(features.begin(), features.end(), [&](const WorldMapFeature &item)
+            { return item.site.eventId == drink.event; });
+        REQUIRE(feature != features.end());
+        CHECK(feature->kind == WorldMapFeatureKind::Water);
+        WorldKnowledge knowledge;
+        knowledge.visitedMaps.insert(drink.pMap);
+        CHECK_FALSE(world.featureVisible(*feature, knowledge, false));
+        CHECK(world.featureVisible(*feature, knowledge, true));
+        CHECK(world.siteReference(*feature, knowledge, false).empty());
+        CHECK(world.siteReference(*feature, knowledge, true) == events.siteReferences().at(drink.event));
+        knowledge.interactedSites[drink.pMap].insert(worldSiteDiscoveryKey(drink.event, feature->site.id));
+        CHECK(world.featureVisible(*feature, knowledge, false));
+        CHECK(world.siteReference(*feature, knowledge, false).empty());
+    }
+}

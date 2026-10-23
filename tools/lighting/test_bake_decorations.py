@@ -154,6 +154,7 @@ class DecorationBakeTests(unittest.TestCase):
                 ('_zz_site_refs.lua', '-- Site reference metadata; load after gameplay overlays\n')]:
             metadata = self.world / ('events/maps/test' + suffix)
             for declaration in ('', 'SetMapSiteReference(1, "")\n',
+                                'SetMapSiteReference(1, "", "drink")\n',
                                 'SetMapSiteReference(1, "Gold +200\\nRequirements: below 199")\n'):
                 metadata.write_text(header + declaration)
                 result = self.export()
@@ -165,6 +166,9 @@ class DecorationBakeTests(unittest.TestCase):
         metadata = self.world / 'events/maps/test_00_site_refs.lua'
         header = '-- generated site references from legacy EVT/STR; load after the base handlers\n'
         for declaration in ('SetMapSiteReference(1, "text"); evt.SetSprite(7, 0)\n',
+                            'SetMapSiteReference(1, "text", "drink"); evt.SetSprite(7, 0)\n',
+                            'SetMapSiteReference(1, "text", "teleport")\n',
+                            'SetMapSiteReference(1, "text", 1)\n',
                             'SetMapSiteReference(65536, "text")\n',
                             'SetMapSiteReference(0, "text")\n',
                             'SetMapSiteReference(1, string.rep("x", 3))\n',

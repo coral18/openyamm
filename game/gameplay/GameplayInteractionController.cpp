@@ -218,6 +218,7 @@ std::string contextActionIconIdFromMetadataKind(const std::string &kind, Gamepla
     {
         return contextActionIconId(fallbackKind);
     }
+    if (kind == "drink") return "context_well";
 
     return "context_" + kind;
 }
@@ -264,6 +265,11 @@ std::string contextActionDefaultLabelFromMetadata(
     if (metadata.kind == "use_pedestal")
     {
         return "Use Pedestal";
+    }
+
+    if (metadata.kind == "drink")
+    {
+        return "Drink";
     }
 
     if (metadata.kind == "fountain")

@@ -153,7 +153,8 @@ def validate_site_reference_metadata(text, script):
     header = ('-- generated site references from legacy EVT/STR; load after the base handlers'
               if script.name.endswith('_00_site_refs.lua') else
               '-- Site reference metadata; load after gameplay overlays')
-    declaration = re.compile(r'SetMapSiteReference\(([1-9][0-9]*), ("(?:[^"\\\r\n]|\\["\\nrt])*")\)')
+    declaration = re.compile(
+        r'SetMapSiteReference\(([1-9][0-9]*), ("(?:[^"\\\r\n]|\\["\\nrt])*")(?:, "drink")?\)')
     if not lines or lines[0] != header:
         raise ValueError('Invalid site reference metadata overlay: ' + str(script))
     for line in lines[1:]:

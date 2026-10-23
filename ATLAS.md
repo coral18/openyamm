@@ -1850,3 +1850,41 @@ Run it after building `openyamm_unit_tests`, with the full runtime packages sele
 `OPENYAMM_REGRESSION_ASSETS_ROOT`. For the Windows iteration wrapper, set `OPENYAMM_ATLAS_INTERACTION_AUDIT` to an
 existing output directory and select `--test-case='Atlas campaign interaction inventory*'`. The wrapper forwards
 and converts the WSL directory path for the native test process. This inventory does not change gameplay or saves.
+
+
+### Conditional drink sites, 2026-10-23
+
+The native Sites layer now includes ten formerly generic MM7/MM8 drinking callbacks, representing twelve physical
+locations in the mounted campaign maps. Callback-owned `"drink"` metadata supplements generic/title-derived
+context without overriding explicit script decisions. The shared Core interaction hook records actual numeric
+and condition changes; Guide reads generated descriptions independently. Visiting a map or browsing Guide alone
+does not discover a drink or copy possible effects into party knowledge.
+
+The exporter now handles condition presence/application/removal, per-character use flags, bounded random branches
+and the audited numeric resistance families. Random paths describe possibilities without rolling gameplay RNG
+or claiming probabilities. A fully inspected feedback-only callback explicitly has no attribute/condition effect.
+Unsupported reachable operations withhold the effect description while retaining the drink category. Existing
+global object references also gain supported random food and resistance descriptions through regeneration.
+
+Metadata was regenerated through `tools/regenerate_lua_events.sh --site-refs-only`. No generated gameplay callback,
+baked-lighting file/hash or save format changed. Forty map metadata catalogs pass the strict literal validator,
+including its optional exact `"drink"` argument; executable or arbitrary-kind additions remain rejected.
+
+Validation: 50 selected native unit cases / 28,434 assertions passed, including all ten mounted drink callbacks
+and Discovery/Guide gates. The separate export of the same 137-map inventory passed / 27,194 assertions; it is a
+repeat of an included case, not another distinct coverage claim. Fourteen lighting-tool tests passed. Windows
+Release built successfully. Five headless interaction scenarios passed, including two-character personal-use
+checks and actual geometry picking; five native UI tours passed with fresh captures visually reviewed. Their
+post-UI verifiers passed 24, 22, 84, 24 and 22 steps for conditional, resistant, personal, resistance-bonus and MM8
+feedback-only cases. They preserve real effects, individual flags, gold/food and unvisited neighboring sites
+through another save/load cycle. Evidence is private under `atlas-drinks-20261023` in the Windows dev directory.
+
+The conditional native fixture has a second resistant companion so applying paralysis to its first member does
+not enter the all-incapacitated game flow before the Atlas can be inspected. Its actual callback applies Paralysis,
+which differs from the GrayFace D12 reference; no gameplay condition remapping is attempted here. The resistance
+bonus pool is in The Maze (d02), not Stone City (7d24), whose drinks are feedback-only in the active scripts.
+
+A broader 86-case selection initially hit six unrelated fixture failures: two missing loose geometry inputs and
+four attempts to initialize PhysicsFS while the package-backed regression fixture already owned it. The accepted
+50-case selection covers the affected site/reference systems; this is not a claim that the full suite passed.
+Android/controller validation, special statues/connections and the remaining full-Atlas matrix stay open.

@@ -1,8 +1,9 @@
 # Atlas site reference audit, 2026-10-22
 
 References are generated from complete supported callbacks. Guide-only reference/search never awards discoveries.
-The shared journal remains authoritative for learned notes. This table matches declarations against the
+The shared journal remains authoritative for learned notes. The initial table below matches the 2026-10-22 declarations against the
 interaction-site extractor on packaged base geometry, before live event, scene or save overrides.
+The drink follow-up at the end records subsequent coverage; the initial counts are historical.
 
 | World | Map | Referenced events | Base physical sites | Events without a base site |
 | --- | --- | --- | --- | --- |
@@ -47,13 +48,16 @@ Discovery now retains actually observed synchronous numeric/condition outcomes t
 interaction hook, including at sites without journal notes. This separate history does not expose unexecuted
 branches or turn a generated reference into party knowledge. Deferred/spell-buff/item outcomes remain open.
 
-The current projection supports acyclic numeric character/resource comparisons, HP/SP fullness, simple local use
-gates, and nonnegative Add/Set/Subtract on supported writable stats/resources. It follows each branch and omits
+The current projection supports acyclic numeric character/resource/resistance comparisons, HP/SP fullness, simple
+local and per-character use gates, condition presence/application/removal, bounded random jumps, and nonnegative
+Add/Set/Subtract on supported writable stats/resources. It follows each branch and omits
 feedback-only paths and unreachable actions. Map-load/timer continuations remain separate from the interaction.
 Comparison-chain recognition also stops on cycles and preserves the normal labelled callback output.
 Callback replacement/removal invalidates the declaration; mods may redeclare it or clear it with empty text.
+Typed drink declarations may retain an empty effect reference so an unsupported callback still has an honest
+interaction category. Random branches describe possibilities without sampling RNG or claiming probabilities.
 
-The whole callback is omitted for unrepresented reachable behavior: random jumps, character-selection changes,
+The effect reference is omitted for unrepresented reachable behavior: character-selection changes,
 spells, damage instructions, quest/item/class predicates, unknown operations, loops, comparisons after mutations,
 and unsupported writes. A flag assigned 1 is not an incrementing multi-use counter. These are remaining content/API
 work; this generated set does not establish complete well/shrine effect coverage.
@@ -66,3 +70,21 @@ Separate existing acceptance debt: the wider dimensional-travel fountain regress
 Harmondale water-face event bindings in the available 7d29 payload. Earlier baseline-fixture and matching-bake
 logs already contain this failure. This checkpoint does not repair or certify that gate; it remains part of
 the connection/content audit. The original assertion is preserved.
+
+
+## Conditional drink follow-up, 2026-10-23
+
+The full 137-map physical inventory identified ten previously generic drink callbacks: MM7 7out06:460,
+7out13:214, d02:451, 7d12:451, 7d24:196/197/198 and 7d25:452; MM8 d20:451 and d35:451. They now have
+callback-owned drink context and Guide references, with nine MM7 and three MM8 real physical sites.
+Repeated event IDs at separate pools retain separate discovery identity.
+
+The real-catalog test validates all ten callbacks, actual physical Water features, nonempty active-game
+references and Discovery/Guide separation. Windows checks exercised conditional paralysis versus high Endurance,
+temporary Body resistance +25 once per location reset, all seven temporary primary stats +25 once per character,
+and an MM8 status-only pool with no invented bonus. Five native UI tours and five post-UI save/roundtrip checks
+validate observed-only findings and untouched neighboring sites. The broader site/content audit remains open.
+
+The active merged 7d12 callback applies Paralysis; the readable GrayFace D12 reference names PoisonedRed.
+This checkpoint describes the active callback and does not alter generated gameplay or silently import vanilla
+condition numbering. Resolving that existing exporter/gameplay discrepancy is separate work.
