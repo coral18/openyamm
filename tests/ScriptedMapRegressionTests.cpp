@@ -9899,3 +9899,57 @@ TEST_CASE("canonical inherited decoration catalogs use real indoor and outdoor b
         }
     }
 }
+
+TEST_CASE("canonical decoration reward catalogs bind declared crystal items to physical objects")
+{
+    using namespace OpenYAMM::Game;
+    const auto &loader = requireRegressionMapLoader();
+    const auto &data = loader.gameDataLoader;
+    const auto decorations = MapAssetLoader::loadDecorationTable(loader.assetFileSystem);
+    REQUIRE(decorations);
+    std::ofstream fixtures;
+    if (const char *pDirectory = std::getenv("OPENYAMM_ATLAS_DECORATION_FIXTURES"))
+    {
+        fixtures.open(std::filesystem::path(pDirectory) / "crystal-sources.tsv");
+        REQUIRE(fixtures.is_open());
+    }
+    for (const std::string world : {"mm7", "mm8", "mm6"})
+    {
+        CAPTURE(world);
+        MapAssetInfo context;
+        context.map.worldId = world;
+        context.map.fileName = world == "mm7" ? "7out02.odm" : world == "mm8" ? "out01.odm" : "oute3.odm";
+        std::string error;
+        REQUIRE_MESSAGE(GameDataLoader::loadEventPrograms(loader.assetFileSystem, context, error), error);
+        REQUIRE(context.globalEventProgram);
+        const std::array<uint32_t, 7> items = {2060, 2056, 2059, 2065, 2057, 2062, 2064};
+        for (size_t i = 0; i < items.size(); ++i)
+        {
+            const uint16_t event = uint16_t(65310 + i);
+            REQUIRE(context.globalEventProgram->itemRewards().contains(event));
+            CHECK(context.globalEventProgram->itemRewards().at(event) == std::vector<uint32_t>{items[i]});
+        }
+        if (!fixtures.is_open()) continue;
+        for (const MapStatsEntry &entry : data.getMapStats().getEntries())
+        {
+            if (entry.worldId != world) continue;
+            // MM7/MM8 receive a full campaign census; MM6 supplies positive shared-engine controls.
+            if (world == "mm6" && entry.fileName != "6d05.blv" && entry.fileName != "6d18.blv") continue;
+            CAPTURE(entry.fileName);
+            auto map = MapAssetLoader().load(loader.assetFileSystem, entry, data.getMonsterTable(),
+                data.getObjectTable(), MapLoadPurpose::HeadlessGameplay);
+            REQUIRE(map);
+            const auto &delta = map->outdoorMapData ? map->outdoorMapDeltaData : map->indoorMapDeltaData;
+            const auto sites = map->outdoorMapData
+                ? worldInheritedDecorationSites(*map->outdoorMapData, *decorations, delta ? &*delta : nullptr)
+                : worldInheritedDecorationSites(*map->indoorMapData, *decorations, delta ? &*delta : nullptr);
+            for (const WorldDecorationSite &site : sites)
+            {
+                if (site.site.eventId < 65310 || site.site.eventId > 65316) continue;
+                fixtures << world << '\t' << entry.fileName << '\t' << uint32_t(site.decorVarIndex) << '\t'
+                    << site.initialEventId << '\t' << items[site.site.eventId - 65310] << '\t'
+                    << site.site.x << '\t' << site.site.y << '\t' << site.site.z << '\n';
+            }
+        }
+    }
+}

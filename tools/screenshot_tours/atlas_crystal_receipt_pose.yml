@@ -1,0 +1,11 @@
+output_dir: pose-captures
+exit: false
+settle_seconds: 0.1
+shots:
+- name: crystal-pose
+  position:
+  - -3764
+  - 5888
+  - 0
+  yaw: 0
+  pitch: -0.6

@@ -2260,3 +2260,47 @@ TEST_CASE("rendered creature discovery uses camera geometry LOS for living sprit
     REQUIRE(crowdObserved.size() == 1);
     CHECK(crowdObserved[0].actorId == 300);
 }
+
+TEST_CASE("decoration reward delivery retains its saved object origin after the active context ends")
+{
+    using namespace OpenYAMM::Game;
+    Party party = makeInventoryParty();
+    for (size_t i = 0; i < party.memberCount(); ++i) fillInventory(*party.member(i), 43);
+    EventRuntimeState state;
+    state.mapFileName = "7out02.odm";
+    state.activeDecorationContext = EventRuntimeState::ActiveDecorationContext{
+        .decorVarIndex = 2, .baseEventId = 65310, .currentEventId = 65310, .eventCount = 1,
+        .hideWhenCleared = true, .position = {{100, -200, 300}}};
+    state.grantedItems.push_back(makeInventoryItem(42, 1, 1));
+    stageWorldItemReward(state, true, 0, 65310, true, 123);
+    state.activeDecorationContext.reset();
+    party.applyEventRuntimeState(state, true);
+    CHECK(worldObservedItemSources(state).empty());
+    GameSaveData save;
+    save.mapFileName = state.mapFileName;
+    save.party = party.snapshot();
+    save.outdoorWorld.eventRuntimeState = state;
+    const auto path = std::filesystem::temp_directory_path() / "openyamm_pending_decoration_reward.oysav";
+    std::string error;
+    REQUIRE_MESSAGE(saveGameDataToPath(path, save, error), error);
+    auto loaded = loadGameDataFromPath(path, error);
+    std::filesystem::remove(path);
+    REQUIRE_MESSAGE(loaded, error);
+    REQUIRE(loaded->outdoorWorld.eventRuntimeState);
+    state = *loaded->outdoorWorld.eventRuntimeState;
+    CHECK_FALSE(state.activeDecorationContext);
+    for (size_t i = 0; i < party.memberCount(); ++i) party.member(i)->inventory.clear();
+    party.applyEventRuntimeState(state, true);
+    const auto rewards = worldObservedItemSources(state);
+    REQUIRE(rewards.size() == 1);
+    CHECK(rewards[0].itemId == 42);
+    CHECK(rewards[0].kind == WorldItemSourceKind::DecorationReward);
+    CHECK(rewards[0].decorationSlot == 2);
+    CHECK(rewards[0].sourceIndex == 65310);
+    CHECK(rewards[0].gameMinutes == 123);
+    REQUIRE(rewards[0].position);
+    CHECK(*rewards[0].position == std::array<int32_t, 3>{100, -200, 300});
+    EventRuntimeState refilled;
+    restoreWorldMapKnowledgeAfterRefill(state, refilled);
+    CHECK(worldObservedItemSources(refilled).size() == 1);
+}

@@ -5219,6 +5219,7 @@ bool OutdoorInteractionController::tryActivateEventTargetInspectEvent(
                 context.currentEventId = *interactiveEventId;
                 context.eventCount = pBinding->eventCount;
                 context.hideWhenCleared = pBinding->hideWhenCleared;
+                context.position = {{decoration.x, decoration.y, decoration.z}};
                 decorationContext = context;
             }
         }
@@ -5251,6 +5252,8 @@ bool OutdoorInteractionController::tryActivateEventTargetInspectEvent(
                     context.currentEventId = *interactiveEventId;
                     context.eventCount = pBinding->eventCount;
                     context.hideWhenCleared = pBinding->hideWhenCleared;
+                    const OutdoorEntity &entity = view.m_pOutdoorMapData->entities[pBinding->entityIndex];
+                    context.position = {{entity.x, entity.y, entity.z}};
                     decorationContext = context;
                 }
             }

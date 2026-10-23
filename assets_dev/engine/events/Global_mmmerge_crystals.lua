@@ -25,4 +25,5 @@ for _, crystal in ipairs(mmmergeCrystalEvents) do
     RegisterGlobalEvent(crystal.event, "Crystals", function()
         harvestMMergeCrystal(crystal.item)
     end)
+    SetGlobalItemRewards(crystal.event, {crystal.item})
 end

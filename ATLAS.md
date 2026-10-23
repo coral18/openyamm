@@ -1786,3 +1786,44 @@ round trip. Preparation/verification scenarios are under `tests/scenarios/atlas/
 `tools/menu_tours/atlas_mm{7,8}_inherited_decoration.yml`. A further native MM8 run with Atlas disabled
 passes the same 22-step persistence checks. Sprite picking requires the real renderer; the headless preparation
 scenarios do not verify that input path.
+
+
+## Object reward provenance and the crystal-source audit (2026-10-23)
+
+Inherited decorations now contribute declared fixed rewards to the shared item-source index. Each possible source
+retains the map, binding slot, initial global callback and authored coordinates. Reindexing ordinary loot or NPC
+rewards preserves these object sources; replacing a callback invalidates its old declaration. The Atlas derives
+clickable Guide links through the existing native item-feature path. Depleted authored objects do not claim an
+initial reward. This is a generic binding and declaration mechanism, with no crystal item IDs in the Core logic.
+The existing handwritten crystal callback table owns its seven reward declarations without duplicating the item
+mapping in Atlas data.
+
+Actual successful delivery records a separate object-reward receipt with the slot, callback and activation point.
+The saved pending grant origin retains that information after the active decoration context ends or changes its
+remaining event. Merely meeting the object, failing its requirement or failing to receive an item does not create
+an item receipt. Full-inventory and save/load unit controls cover deferred delivery, while distinct identical
+objects, malformed origins, callback replacement and NPC-source isolation have explicit checks. This extends the
+existing named-map state and does not change the save format.
+
+The mounted-package census loaded all registered MM7 and MM8 maps and found no inherited crystal bindings of
+these seven shared types in either campaign. Their absence is not replaced with invented points. Positive
+shared-engine controls in MM6 Snergle's Caverns and Gharik's Forge contain 17 such bindings; this is not a full MM6
+campaign audit. Conditional/script-owned crystal interactions and other reward semantics remain part of the wider
+content audit.
+
+Validation: Windows Release build and 54 focused native unit cases / 2,550 assertions. A separate mounted-map
+census invocation passed with 190 assertions; it expands the same catalog test, so it is not another distinct
+unit case. Native AMD/OpenGL controls with Atlas disabled use real sprite interaction at Perception 6 and 7:
+the former retains the crystal and records no item receipt, while the latter gives one Amethyst, clears that
+object and records its exact coordinates. The neighboring identical crystal remains unknown. Native captures
+were inspected, and the 14/15-step receipt scenarios validate delivery and another save/load round trip.
+MM7/MM8 native Atlas regression tours and their 20/22-step post-browsing save scenarios also passed.
+
+The shared-engine controls live under `tests/scenarios/atlas/mm6_{low,high}_crystal_{fixture,verify}.yml`.
+Use isolated settings/saves, copy the exported `before-crystal.oysav` to `saves/before.oysav`, and set
+`startup.save_file=saves/before.oysav`. Set `debug.menu_input_tour_path` to
+`tools/menu_tours/atlas_crystal_receipt.yml` and `debug.screenshot_tour_path` to
+`tools/screenshot_tours/atlas_crystal_receipt_pose.yml` using absolute paths in that isolated directory.
+The existing screenshot tour restores the explicit indoor camera pose before ordinary Trigger actions; a prepared
+indoor save alone does not retain that fixture's pitch. Inspect the captures, then run the matching verifier
+against its isolated `saves/quicksave.oysav`. These controls do not add an MM6 Atlas or establish Android acceptance.

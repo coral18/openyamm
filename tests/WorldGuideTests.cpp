@@ -7,6 +7,7 @@
 #include "game/tables/JournalAutonoteTable.h"
 #include "game/tables/SpriteTables.h"
 #include "game/gameplay/InteractiveDecorationRules.h"
+#include "game/StringUtils.h"
 #include "game/tables/MergedBaseTables.h"
 #include "game/tables/PotionMixingTable.h"
 #include "game/tables/PotionNoteTable.h"
@@ -2064,4 +2065,140 @@ TEST_CASE("shared decoration rules preserve outdoor binding compatibility for ex
     CHECK(indoor->baseEventId == 1748);
     CHECK(outdoor->baseEventId == 281);
     CHECK(outdoor->eventCount == 4);
+}
+
+TEST_CASE("decoration reward catalogs retain object coordinates through other source reindexing")
+{
+    OpenYAMM::Engine::AssetFileSystem assets;
+    ItemTable items;
+    MapStats maps;
+    HouseTable houses;
+    NpcDialogTable npcs;
+    MergedTeacherTopicTable teachers;
+    REQUIRE(items.load(assets, guideTableRows("items.txt"), {}));
+    REQUIRE(maps.loadFromRows(guideTableRows("map_stats.txt")));
+    std::ifstream support(std::string(OPENYAMM_SOURCE_DIR) + "/assets_dev/engine/scripts/common/event_support.lua");
+    REQUIRE(support);
+    const std::string prefix{std::istreambuf_iterator<char>(support), std::istreambuf_iterator<char>()};
+    const std::string code = prefix + R"(
+        RegisterGlobalEvent(65310, 'Crystal', function() error('must not execute') end)
+        SetGlobalItemRewards(65310, {2060})
+    )";
+    std::string error;
+    const auto global = ScriptedEventProgram::loadFromLuaText(code,
+        "crystal-catalog", ScriptedEventScope::Global, error);
+    REQUIRE_MESSAGE(global, error);
+    for (const std::string worldId : {"mm7", "mm8"})
+    {
+        CAPTURE(worldId);
+        WorldDatabase world(maps, houses, npcs, teachers, worldId);
+        const auto region = std::find_if(world.records().begin(), world.records().end(), [](const WorldRecord &record)
+            { return record.kind == WorldRecordKind::Region && record.map; });
+        REQUIRE(region != world.records().end());
+        const MapStatsEntry map = *region->map;
+        WorldDecorationSite first;
+        first.site = {"inherited-decoration/2", 65310, 100, -200, 300};
+        first.decorVarIndex = 2; first.eventCount = 1; first.initialEventId = 65310;
+        WorldDecorationSite second = first;
+        second.site.id = "inherited-decoration/3"; second.site.x = 400; second.decorVarIndex = 3;
+        WorldDecorationSite depleted = first;
+        depleted.decorVarIndex = 4; depleted.initiallyDepleted = true;
+        WorldDecorationSite invalid = first;
+        invalid.site.x = std::numeric_limits<float>::infinity();
+        const std::vector<WorldDecorationSite> sites = {first, second, depleted, invalid};
+        world.indexDecorationItemRewards(map, sites, *global, items);
+        WorldKnowledge known;
+        known.visitedMaps.insert(toLowerCopy(map.fileName));
+        auto sources = world.itemSources(known, true);
+        REQUIRE(sources.size() == 2);
+        CHECK(sources[0]->kind == WorldItemSourceKind::DecorationReward);
+        CHECK(sources[0]->decorationSlot == 2);
+        CHECK(sources[0]->sourceIndex == 65310);
+        REQUIRE(sources[0]->position);
+        CHECK((*sources[0]->position)[0] == 100);
+        CHECK((*sources[1]->position)[0] == 400);
+        CHECK(worldItemSourceLabel(*sources[0]) == "Possible object reward");
+        CHECK(world.itemSources(known, false).empty());
+        world.indexMapItemSources(map, {}, items);
+        world.indexSharedItemRewards(*global, items);
+        world.indexDecorationItemRewards(map, sites, *global, items);
+        CHECK(world.itemSources(known, true).size() == 2);
+        WorldGuideSource source;
+        source.pItems = &items; source.pWorld = &world; source.pWorldKnowledge = &known;
+        const auto guide = buildWorldGuide(source, WorldGuideSection::Items, {}, true);
+        const auto gem = std::find_if(guide.begin(), guide.end(), [](const WorldGuideEntry &entry)
+            { return entry.id == "2060"; });
+        REQUIRE(gem != guide.end());
+        REQUIRE(gem->links.size() == 2);
+        CHECK(gem->links[0].kind == WorldGuideLink::Kind::Feature);
+        CHECK(gem->links[0].label.starts_with("Possible object reward:"));
+        const auto replaced = ScriptedEventProgram::loadFromLuaText(code
+            + "\nReplaceGlobalEvent(65310, '', function() end)", "replaced-crystal", ScriptedEventScope::Global, error);
+        REQUIRE_MESSAGE(replaced, error);
+        world.indexDecorationItemRewards(map, sites, *replaced, items);
+        CHECK(world.itemSources(known, true).empty());
+        CHECK(world.queryFeatures(known, true).empty());
+    }
+}
+
+TEST_CASE("decoration reward receipts keep exact slots and reject corrupt pending object origins")
+{
+    EventRuntimeState state;
+    state.activeDecorationContext = EventRuntimeState::ActiveDecorationContext{
+        .decorVarIndex = 2, .baseEventId = 65310, .currentEventId = 65310, .eventCount = 1,
+        .hideWhenCleared = true, .position = {{100, -200, 300}}};
+    state.grantedItemIds = {2060};
+    // ChangeEvent can clear the object before the handler grants an item.
+    state.activeDecorationContext->currentEventId = 0;
+    stageWorldItemReward(state, false, 0, 65310, true, 123);
+    CHECK(worldObservedItemSources(state).empty());
+    state.activeDecorationContext.reset();
+    confirmWorldItemReward(state, false, 0);
+    auto sources = worldObservedItemSources(state);
+    REQUIRE(sources.size() == 1);
+    CHECK(sources[0].kind == WorldItemSourceKind::DecorationReward);
+    CHECK(sources[0].decorationSlot == 2);
+    CHECK(sources[0].sourceIndex == 65310);
+    REQUIRE(sources[0].position);
+    CHECK(*sources[0].position == std::array<int32_t, 3>{100, -200, 300});
+    CHECK(worldItemSourceLabel(sources[0]) == "Received from object");
+    state.activeDecorationContext = EventRuntimeState::ActiveDecorationContext{
+        .decorVarIndex = 3, .baseEventId = 65310, .currentEventId = 65310, .eventCount = 1,
+        .hideWhenCleared = true, .position = {{400, -200, 300}}};
+    recordWorldItemReward(state, 2060, 65310, true, 124);
+    sources = worldObservedItemSources(state);
+    REQUIRE(sources.size() == 2);
+    CHECK(sources[1].decorationSlot == 3);
+    const auto received = state.namedMapVars;
+    for (const auto &[field, value] : std::vector<std::pair<std::string, int32_t>>{
+        {"decoration-slot", -1}, {"decoration-slot", 125}, {"global", 0}})
+    {
+        state.namedMapVars = received;
+        stageWorldItemReward(state, false, 0, 65310, true, 125);
+        state.namedMapVars["openyamm.item-grant/ids/0/" + field] = value;
+        confirmWorldItemReward(state, false, 0);
+        CHECK(worldObservedItemSources(state).size() == 2);
+    }
+    state.namedMapVars = received;
+    stageWorldItemReward(state, false, 0, 65310, true, 125);
+    state.namedMapVars.erase("openyamm.item-grant/ids/0/z");
+    confirmWorldItemReward(state, false, 0);
+    CHECK(worldObservedItemSources(state).size() == 2);
+    state.namedMapVars = received;
+    stageWorldItemReward(state, false, 0, 65310, true, 125);
+    state.namedMapVars.erase("openyamm.item-grant/ids/0/decoration-slot");
+    confirmWorldItemReward(state, false, 0);
+    CHECK(worldObservedItemSources(state).size() == 2);
+    for (const char *key : {"decoration-reward/125/65310/2060/time", "decoration-reward/2/0/2060/time",
+        "decoration-reward/2/65536/2060/time", "decoration-reward/02/65310/2060/time",
+        "decoration-reward/2/65310/02060/time", "decoration-reward/2/65310/2060/extra/time"})
+        state.namedMapVars[std::string("openyamm.discovery.item/") + key] = 125;
+    CHECK(worldObservedItemSources(state).size() == 2);
+    // An unrelated callback or a map-local event cannot claim this inherited object's provenance.
+    recordWorldItemReward(state, 2060, 65311, true, 126);
+    recordWorldItemReward(state, 2060, 65310, false, 126);
+    sources = worldObservedItemSources(state);
+    REQUIRE(sources.size() == 4);
+    CHECK(std::count_if(sources.begin(), sources.end(), [](const WorldItemSource &source)
+        { return source.decorationSlot.has_value(); }) == 2);
 }

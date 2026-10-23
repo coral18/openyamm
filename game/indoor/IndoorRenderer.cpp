@@ -11154,6 +11154,8 @@ bool IndoorRenderer::tryActivateInspectEvent(const InspectHit &inspectHit)
             context.currentEventId = eventId;
             context.eventCount = binding->eventCount;
             context.hideWhenCleared = binding->hideWhenCleared;
+            const IndoorEntity &entity = m_pIndoorMapData->entities[inspectHit.index];
+            context.position = {{entity.x, entity.y, entity.z}};
             decorationContext = context;
         }
     }

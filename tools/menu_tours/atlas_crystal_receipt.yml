@@ -1,0 +1,10 @@
+output_dir: captures
+exit: true
+steps:
+- expect: gameplay
+- capture: crystal-before
+- action: trigger
+- wait: 0.5
+- capture: crystal-after
+- action: trigger
+- key: F9

@@ -21,7 +21,7 @@ struct GameplayChestItemState;
 struct GameplayWorldItemInspectState;
 struct MapDeltaData;
 
-enum class WorldItemSourceKind { Placed, Chest, Carried, MapReward, SharedReward, DeathDrop };
+enum class WorldItemSourceKind { Placed, Chest, Carried, MapReward, SharedReward, DeathDrop, DecorationReward };
 
 struct WorldItemSource
 {
@@ -33,6 +33,7 @@ struct WorldItemSource
     int32_t gameMinutes = 0;
     std::string providerId;
     int16_t monsterId = 0;
+    std::optional<uint8_t> decorationSlot;
 };
 
 struct WorldChestObservation

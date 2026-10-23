@@ -59,6 +59,9 @@ std::optional<std::array<int32_t, 3>> sourcePosition(float x, float y, float z)
 
 std::string sourceKey(const WorldItemSource &source)
 {
+    if (source.kind == WorldItemSourceKind::DecorationReward)
+        return source.decorationSlot ? "decoration-reward/" + std::to_string(*source.decorationSlot) + "/"
+            + std::to_string(source.sourceIndex) + "/" + std::to_string(source.itemId) : "";
     return std::string(source.kind == WorldItemSourceKind::Chest ? "chest/"
         : source.kind == WorldItemSourceKind::Carried ? "carried/"
         : source.kind == WorldItemSourceKind::DeathDrop ? "death-drop/"
@@ -69,11 +72,44 @@ std::string sourceKey(const WorldItemSource &source)
 
 void record(EventRuntimeState &state, const WorldItemSource &source)
 {
-    const std::string key = ObservationPrefix + sourceKey(source) + "/";
+    const std::string origin = sourceKey(source);
+    if (origin.empty()) return;
+    const std::string key = ObservationPrefix + origin + "/";
     if (source.position)
         for (size_t i = 0; i < 3; ++i) state.namedMapVars[key + std::string(1, "xyz"[i])] = (*source.position)[i];
     state.namedMapVars[key + "time"] = source.gameMinutes;
     if (source.kind == WorldItemSourceKind::Carried) state.namedMapVars[key + "monster"] = source.monsterId;
+}
+
+WorldItemSource rewardOrigin(const EventRuntimeState &state, uint32_t itemId,
+    uint16_t eventId, bool global, int32_t minute)
+{
+    WorldItemSource source;
+    source.itemId = itemId; source.sourceIndex = eventId; source.gameMinutes = minute;
+    source.kind = global ? WorldItemSourceKind::SharedReward : WorldItemSourceKind::MapReward;
+    if (global && state.activeDecorationContext)
+    {
+        const auto &context = *state.activeDecorationContext;
+        if (context.decorVarIndex < state.decorVars.size() && context.baseEventId != 0 && context.eventCount != 0
+            && eventId >= context.baseEventId
+            && uint32_t(eventId) < uint32_t(context.baseEventId) + context.eventCount)
+        {
+            source.kind = WorldItemSourceKind::DecorationReward;
+            source.decorationSlot = context.decorVarIndex;
+            source.position = context.position;
+        }
+    }
+    return source;
+}
+
+bool readRewardPosition(const EventRuntimeState &state, const std::string &prefix, WorldItemSource &source)
+{
+    const auto x = state.namedMapVars.find(prefix + "x"), y = state.namedMapVars.find(prefix + "y"),
+        z = state.namedMapVars.find(prefix + "z");
+    if (x == state.namedMapVars.end() && y == state.namedMapVars.end() && z == state.namedMapVars.end()) return true;
+    if (x == state.namedMapVars.end() || y == state.namedMapVars.end() || z == state.namedMapVars.end()) return false;
+    source.position = {{x->second, y->second, z->second}};
+    return true;
 }
 }
 
@@ -136,6 +172,7 @@ std::string worldItemSourceLabel(const WorldItemSource &source)
         if (source.kind == WorldItemSourceKind::Chest) return "Observed in chest";
         if (source.kind == WorldItemSourceKind::Carried) return "Taken from creature";
         if (source.kind == WorldItemSourceKind::DeathDrop) return "Recovered ground drop";
+        if (source.kind == WorldItemSourceKind::DecorationReward) return "Received from object";
         if (source.kind == WorldItemSourceKind::MapReward || source.kind == WorldItemSourceKind::SharedReward)
             return "Received reward";
         return "Last picked up";
@@ -148,6 +185,7 @@ std::string worldItemSourceLabel(const WorldItemSource &source)
     case WorldItemSourceKind::MapReward: return "Possible event reward";
     case WorldItemSourceKind::SharedReward: return "Possible NPC reward";
     case WorldItemSourceKind::DeathDrop: return "Creature death drop";
+    case WorldItemSourceKind::DecorationReward: return "Possible object reward";
     }
     return "Item source";
 }
@@ -252,10 +290,23 @@ std::vector<WorldItemSource> worldObservedItemSources(const EventRuntimeState &s
         const size_t first = id.find('/'), second = id.find('/', first == std::string::npos ? 0 : first + 1);
         if (first == std::string::npos || second == std::string::npos) continue;
         WorldItemSource source;
-        if (!wholeNumber(id.substr(first + 1, second - first - 1), source.sourceIndex)
-            || !wholeNumber(id.substr(second + 1), source.itemId) || source.itemId == 0) continue;
         const std::string kind = id.substr(0, first);
-        if (kind == "chest") source.kind = WorldItemSourceKind::Chest;
+        if (kind == "decoration-reward")
+        {
+            const size_t third = id.find('/', second + 1);
+            uint32_t slot = 0;
+            if (third == std::string::npos || !wholeNumber(id.substr(first + 1, second - first - 1), slot)
+                || slot >= state.decorVars.size()
+                || !wholeNumber(id.substr(second + 1, third - second - 1), source.sourceIndex)
+                || source.sourceIndex == 0 || source.sourceIndex > UINT16_MAX
+                || !wholeNumber(id.substr(third + 1), source.itemId) || source.itemId == 0) continue;
+            source.kind = WorldItemSourceKind::DecorationReward;
+            source.decorationSlot = uint8_t(slot);
+            if (!readRewardPosition(state, ObservationPrefix + id + "/", source)) continue;
+        }
+        else if (!wholeNumber(id.substr(first + 1, second - first - 1), source.sourceIndex)
+            || !wholeNumber(id.substr(second + 1), source.itemId) || source.itemId == 0) continue;
+        else if (kind == "chest") source.kind = WorldItemSourceKind::Chest;
         else if (kind == "placed" && source.sourceIndex == 0) source.kind = WorldItemSourceKind::Placed;
         else if (kind == "carried") source.kind = WorldItemSourceKind::Carried;
         else if (kind == "death-drop" && source.sourceIndex > 0 && source.sourceIndex <= INT16_MAX)
@@ -297,12 +348,7 @@ void recordWorldItemReward(EventRuntimeState &state, uint32_t itemId,
     uint16_t eventId, bool global, float gameMinutes)
 {
     if (itemId == 0 || eventId == 0 || !validMinute(gameMinutes)) return;
-    WorldItemSource source;
-    source.itemId = itemId;
-    source.sourceIndex = eventId;
-    source.kind = global ? WorldItemSourceKind::SharedReward : WorldItemSourceKind::MapReward;
-    source.gameMinutes = int32_t(gameMinutes);
-    record(state, source);
+    record(state, rewardOrigin(state, itemId, eventId, global, int32_t(gameMinutes)));
 }
 
 void stageWorldItemReward(EventRuntimeState &state, bool detailed, size_t index,
@@ -317,6 +363,14 @@ void stageWorldItemReward(EventRuntimeState &state, bool detailed, size_t index,
     state.namedMapVars[prefix + "event"] = eventId;
     state.namedMapVars[prefix + "global"] = global ? 1 : 0;
     state.namedMapVars[prefix + "time"] = int32_t(gameMinutes);
+    const WorldItemSource source = rewardOrigin(state, itemId, eventId, global, int32_t(gameMinutes));
+    if (source.decorationSlot)
+    {
+        state.namedMapVars[prefix + "decoration-slot"] = *source.decorationSlot;
+        if (source.position)
+            for (size_t i = 0; i < 3; ++i)
+                state.namedMapVars[prefix + std::string(1, "xyz"[i])] = (*source.position)[i];
+    }
 }
 
 void confirmWorldItemReward(EventRuntimeState &state, bool detailed, size_t index)
@@ -336,7 +390,20 @@ void confirmWorldItemReward(EventRuntimeState &state, bool detailed, size_t inde
         source.sourceIndex = uint32_t(event->second);
         source.kind = global->second != 0 ? WorldItemSourceKind::SharedReward : WorldItemSourceKind::MapReward;
         source.gameMinutes = minute->second;
-        record(state, source);
+        const auto slot = state.namedMapVars.find(prefix + "decoration-slot");
+        bool valid = !state.namedMapVars.contains(prefix + "x") && !state.namedMapVars.contains(prefix + "y")
+            && !state.namedMapVars.contains(prefix + "z");
+        if (slot != state.namedMapVars.end())
+        {
+            valid = global->second == 1 && slot->second >= 0 && size_t(slot->second) < state.decorVars.size()
+                && readRewardPosition(state, prefix, source);
+            if (valid)
+            {
+                source.kind = WorldItemSourceKind::DecorationReward;
+                source.decorationSlot = uint8_t(slot->second);
+            }
+        }
+        if (valid) record(state, source);
     }
     std::erase_if(state.namedMapVars, [&](const auto &entry) { return entry.first.starts_with(prefix); });
 }
@@ -382,7 +449,7 @@ void WorldDatabase::indexMapItemSources(const MapStatsEntry &map, std::vector<Wo
     std::erase_if(m_itemSources, [&](const WorldItemSource &source)
     {
         const bool remove = source.mapId == id && !source.observed && source.kind != WorldItemSourceKind::MapReward
-            && source.kind != WorldItemSourceKind::SharedReward;
+            && source.kind != WorldItemSourceKind::SharedReward && source.kind != WorldItemSourceKind::DecorationReward;
         if (remove) replaced.insert(source.id);
         return remove;
     });
@@ -457,6 +524,39 @@ void WorldDatabase::indexSharedItemRewards(const ScriptedEventProgram &program, 
                     }
                 }
             }
+        }
+    }
+}
+
+void WorldDatabase::indexDecorationItemRewards(const MapStatsEntry &map, const std::vector<WorldDecorationSite> &sites,
+    const ScriptedEventProgram &program, const ItemTable &items)
+{
+    const std::string id = mapId(map);
+    if (find(id) == nullptr) return;
+    std::unordered_set<std::string> replaced;
+    std::erase_if(m_itemSources, [&](const WorldItemSource &source)
+    {
+        const bool remove = source.mapId == id && !source.observed
+            && source.kind == WorldItemSourceKind::DecorationReward;
+        if (remove) replaced.insert(source.id);
+        return remove;
+    });
+    std::erase_if(m_features, [&](const WorldMapFeature &feature) { return replaced.contains(feature.id); });
+    for (const WorldDecorationSite &site : sites)
+    {
+        if (site.initiallyDepleted || site.eventCount == 0 || site.decorVarIndex >= 125) continue;
+        const auto rewards = program.itemRewards().find(site.initialEventId);
+        if (rewards == program.itemRewards().end()) continue;
+        for (uint32_t itemId : rewards->second)
+        {
+            WorldItemSource source;
+            source.kind = WorldItemSourceKind::DecorationReward;
+            source.itemId = itemId; source.sourceIndex = site.initialEventId;
+            source.decorationSlot = site.decorVarIndex;
+            source.position = sourcePosition(site.site.x, site.site.y, site.site.z);
+            if (!source.position) continue;
+            source.id = "authored/" + sourceKey(source);
+            appendItemSource(id, std::move(source), items);
         }
     }
 }

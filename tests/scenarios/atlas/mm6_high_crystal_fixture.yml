@@ -1,0 +1,27 @@
+id: atlas.mm6_high_crystal_fixture
+title: Shared engine crystal reward control at the Perception threshold
+world: mm6
+mode: faithful
+steps:
+- new_game_flow:
+    start_map: 6d05.blv
+    party:
+      gold: 500
+      food: 10
+      members:
+      - name: Crystal Tester
+        class: Thief
+        race_id: 0
+        level: 1
+        skills:
+        - name: Perception
+          level: 7
+          mastery: 1
+        equipment: {}
+- set_pose:
+    x: -3764
+    y: 5888
+    z: 0
+    yaw: 0
+    pitch: -0.6
+- save_game: before-crystal

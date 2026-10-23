@@ -25,6 +25,7 @@ struct WorldInteractionSite
 struct WorldDecorationSite
 {
     WorldInteractionSite site;
+    uint8_t decorVarIndex = 0;
     uint8_t eventCount = 0;
     uint16_t initialEventId = 0;
     bool initiallyDepleted = false;

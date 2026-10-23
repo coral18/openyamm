@@ -154,6 +154,8 @@ public:
     void indexMapItemRewards(const MapStatsEntry &map, const ScriptedEventProgram &program,
         const std::vector<WorldInteractionSite> &sites, const ItemTable &items);
     void indexSharedItemRewards(const ScriptedEventProgram &program, const ItemTable &items);
+    void indexDecorationItemRewards(const MapStatsEntry &map, const std::vector<WorldDecorationSite> &sites,
+        const ScriptedEventProgram &program, const ItemTable &items);
     void indexNpcLocations(const ScriptedEventProgram &program);
     std::vector<const WorldItemSource *> itemSources(const WorldKnowledge &knowledge, bool guide) const;
     std::vector<WorldChestObservation> observedChests(const WorldMapFeature &feature,

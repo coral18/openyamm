@@ -286,6 +286,7 @@ struct EventRuntimeState
         uint16_t currentEventId = 0;
         uint8_t eventCount = 0;
         bool hideWhenCleared = false;
+        std::optional<std::array<int32_t, 3>> position;
     };
 
     struct PortraitFxRequest

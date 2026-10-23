@@ -189,6 +189,7 @@ AtlasScreen::AtlasScreen(const Engine::AssetFileSystem &assets, const GameDataRe
             : worldInheritedDecorationSites(*pCurrentMap->indoorMapData, *m_decorationTable,
                 pCurrentMap->indoorMapDeltaData ? &*pCurrentMap->indoorMapDeltaData : nullptr);
         m_world.indexInheritedDecorations(pCurrentMap->map, sites, *m_pGlobalEvents);
+        m_world.indexDecorationItemRewards(pCurrentMap->map, sites, *m_pGlobalEvents, m_data.itemTable());
     }
     if (m_knowledge.partyPosition)
         for (const auto &record : m_world.records())
@@ -648,6 +649,7 @@ void AtlasScreen::indexMapData(MapAssetInfo &map)
                 ? worldInheritedDecorationSites(*map.outdoorMapData, *m_decorationTable, delta ? &*delta : nullptr)
                 : worldInheritedDecorationSites(*map.indoorMapData, *m_decorationTable, delta ? &*delta : nullptr);
             m_world.indexInheritedDecorations(map.map, sites, *map.globalEventProgram);
+            m_world.indexDecorationItemRewards(map.map, sites, *map.globalEventProgram, m_data.itemTable());
         }
         m_world.indexSharedItemRewards(*map.globalEventProgram, m_data.itemTable());
         m_world.indexNpcLocations(*map.globalEventProgram);

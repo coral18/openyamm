@@ -282,12 +282,22 @@ end)
 SetMapItemRewards(123, {42})
 ```
 
-`SetGlobalItemRewards` declares shared callbacks used by NPC topics. Declarations describe possibilities, not
+`SetGlobalItemRewards` declares shared callbacks used by NPC topics or inherited interactive decorations.
+Declarations describe possibilities, not
 eligibility, remaining stock or an entitlement to receive the item. The engine validates positive uint32 item IDs
 in contiguous arrays and binds each declaration to the exact registered handler. Replacing, removing or appending
 a callback invalidates its previous declaration; explicitly declare the replacement's full possibilities.
 Guide links map rewards to their physical event sites where available and shared rewards to current NPC-topic
-providers. Discovery shows only confirmed received rewards and does not guess the NPC who delivered an item.
+providers. Inherited object sources use the initial callback and the existing decoration binding slot, with
+coordinates from mounted geometry. They have a distinct object-reward source kind, so NPC reindexing does not
+erase them or label them as NPC gifts. Discovery shows only confirmed received rewards and does not guess the
+NPC who delivered an item.
+
+Object reward receipts retain their exact decoration slot, global callback and activation coordinates, including
+through the pending grant queue and save/load. Two identical objects remain separate sources. A successful
+interaction alone is not item delivery: failed requirements and failed inventory/held-item transfers do not award
+item-source knowledge. The namespace is `openyamm.discovery.item/decoration-reward/<slot>/<event>/<item>/`.
+Existing map/NPC receipt keys remain readable; older records do not acquire guessed object coordinates.
 
 The legacy exporter emits declarations for reachable fixed `Add`, `Set` and `GiveItem` operations, including
 synthetic trigger continuations. It does not execute the event or roll random rewards. Regenerate with

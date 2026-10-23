@@ -60,6 +60,7 @@ std::vector<WorldDecorationSite> inheritedDecorations(const std::vector<Entity> 
         const auto binding = resolveInteractiveDecorationBindingSpec(*pEntry, entity.name, rules);
         if (!binding || decorVarIndex >= MaximumDecorationVariables) continue;
         WorldDecorationSite decoration;
+        decoration.decorVarIndex = decorVarIndex;
         decoration.site = {"inherited-decoration/" + std::to_string(decorVarIndex++), binding->baseEventId,
             float(entity.x), float(entity.y), float(entity.z)};
         decoration.eventCount = binding->eventCount;

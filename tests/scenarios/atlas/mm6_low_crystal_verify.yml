@@ -1,0 +1,44 @@
+id: atlas.mm6_low_crystal_receipt
+title: Actual object delivery creates an exact receipt only at the required Perception
+  rank
+world: mm6
+mode: faithful
+steps:
+- load_game:
+    name: native
+    path: saves/quicksave.oysav
+- &id001
+  assert:
+    held_item:
+      active: false
+- &id002
+  assert:
+    named_map_var_changed:
+      name: openyamm.discovery.item/decoration-reward/10/65310/2060/x
+      value: 0
+- &id003
+  assert:
+    named_map_var_changed:
+      name: openyamm.discovery.item/decoration-reward/10/65310/2060/y
+      value: 0
+- &id004
+  assert:
+    named_map_var_changed:
+      name: openyamm.discovery.item/decoration-reward/11/65310/2060/x
+      value: 0
+- &id005
+  assert:
+    runtime_event_variable:
+      id: 135004177
+      value: 0
+- save_game: roundtrip
+- load_game: roundtrip
+- *id001
+- *id002
+- *id003
+- *id004
+- *id005
+- assert:
+    named_map_var_changed:
+      name: openyamm.discovery.site/inherited-decoration/10/event/65310
+      value: 1
