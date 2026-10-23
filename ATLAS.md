@@ -1656,11 +1656,10 @@ The menu renderer's item-art path uses the existing engine image decoder with pa
 inventory icons do. It keeps at most 16 item textures per screen, releases them on screen destruction and leaves
 the shared menu-art decoder/cache unchanged. This avoids retaining every viewed item in the global menu cache.
 
-A remaining Discovery debt was identified during this work: its historical known-type set does not distinguish
-an encountered/ever-owned item from a previously identified item. Full identification-aware history and every
-source-name/recipe/loot reference need a separate shared knowledge audit; a known type must not be treated as
-proof of a particular unidentified instance's properties. The new comparison follows the existing type-knowledge
-policy and does not establish that broader identification gate. Full Atlas completion remains open.
+This checkpoint initially followed the existing encountered/ever-owned type-knowledge policy, which did not
+prove identification. The identification-aware checkpoint below adds shared history and gates catalog, comparison,
+map/search, spellbook and loot references. A known base type still does not establish an unidentified instance's
+enchantments. Wider content/observation audits and full Atlas completion remain open.
 
 Accepted checks for this slice: Windows Release build, 72 focused Guide/inspection/inventory cases /
 1,907 assertions, five image-decoder cases / 174 assertions, four native AMD/OpenGL tours and four 43-step
@@ -1673,3 +1672,43 @@ development directory. These checks do not establish complete-campaign, identifi
 The inventory regression fixture for custom skill scrolls also no longer initializes a second global PhysFS
 instance while the shared regression data owns one. Its data-only synthetic item table needs no separate mount;
 all original scroll/equipment assertions remain intact and the entire selected inventory file passes.
+
+
+## Identification-aware item references (2026-10-23)
+
+Discovery separates encountering a type from identifying it. An encountered unidentified item keeps its normal
+unidentified name and artwork, source links and an identification notice. It does not disclose the true name,
+price, base statistics, restrictions, spellbook contents or hidden description, and cannot be pinned or compared.
+Map-item captions, sorting and search apply the same distinction. Recorded creature-loot links remain available
+with the unidentified name. Explicit quest clues and learned alchemy notes may still name their own subjects;
+hearing a name does not unlock the full item reference.
+
+Guide reads the complete active definitions. Switching to Guide never identifies an instance or adds knowledge.
+Comparison remains a comparison of base definitions, without revealing an unidentified instance's enchantments.
+
+The authoritative history is a typed Party set, independent of the optional Atlas UI. Successful identification,
+repair actions that identify an item, created alchemy results, identified acquisitions and actual joining members
+record it. Visible identified chest slots also teach a type without granting ownership; hidden slots do not.
+The history survives losing an item and uses save format 84. Older saves remain readable. Migration uses actual
+identified inventory/equipment flags, never historical possession alone, and never the unvisited inn's stock.
+An older engine that only understands format 83 cannot read a newly written format-84 save.
+
+Focused Windows checks cover possession versus identification, failed/actual identification, repair paths, current
+inventory/equipment migration, hidden chest slots, history replacement/reset and serialization. Frozen unmodified
+MM7/MM8 format-83 fixtures additionally verify the real previous reader layout. The optional fixture tests use
+`OPENYAMM_LEGACY_IDENTIFICATION_FIXTURES` pointing to a private directory containing
+`mm7-identified-current-v83.oysav` and `mm8-identified-current-v83.oysav`; the explicit controlled-fixture test
+exports separate unidentified/identified format-84 snapshots there for native review.
+`tools/menu_tours/atlas_item_identification.yml` checks the unidentified page, disabled comparison, true-name
+search, Guide reference and return to Discovery. The existing item-comparison tour checks both identified swords.
+`OPENYAMM_ATLAS_IDENTIFICATION_REVIEW` enables the post-tour save check for private `mm7/mm8-known/unknown`
+case directories, preserving instance flags, history, equipment, class/race, skills, experience, resources and QBits.
+Original player campaigns and the official installation are not used as test outputs.
+
+
+Validation: Windows Release build; 193 focused unit cases / 5948 assertions; two previous-save/controlled-export
+cases / 55 assertions; one post-tour verifier covering four private campaigns / 121 assertions. Native AMD/OpenGL
+captures checked MM7 and MM8 with both identified and unidentified equipment, exact true-name searches, Guide
+and return to Discovery. The four chest-observation/scripted-item-source headless scenarios also passed on the
+current executable. These checks do not establish Android/controller acceptance or complete the remaining
+content audit in `ATLAS_COVERAGE.md`.

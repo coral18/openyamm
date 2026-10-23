@@ -243,6 +243,7 @@ InventoryItemMixResult InventoryItemMixingRuntime::tryApplyHeldItemToInventoryIt
                 0xFFFFu,
                 alchemyLevel(alchemyMember) + reagentPower(*pHeldDefinition)));
         pTargetItem->identified = true;
+        party.recordIdentifiedItem(pTargetItem->objectDescriptionId);
 
         InventoryItemMixResult result = {};
         result.handled = true;
@@ -262,6 +263,7 @@ InventoryItemMixResult InventoryItemMixingRuntime::tryApplyHeldItemToInventoryIt
                 0xFFFFu,
                 alchemyLevel(alchemyMember) + reagentPower(*pTargetDefinition)));
         pTargetItem->identified = true;
+        party.recordIdentifiedItem(pTargetItem->objectDescriptionId);
 
         InventoryItemMixResult result = {};
         result.handled = true;
@@ -301,6 +303,7 @@ InventoryItemMixResult InventoryItemMixingRuntime::tryApplyHeldItemToInventoryIt
         }
 
         pTargetItem->identified = true;
+        party.recordIdentifiedItem(pTargetItem->objectDescriptionId);
         result.success = true;
         result.heldItemConsumed = true;
         result.targetItemChanged = true;
@@ -336,6 +339,7 @@ InventoryItemMixResult InventoryItemMixingRuntime::tryApplyHeldItemToInventoryIt
     pTargetItem->objectDescriptionId = combination->resultItemId;
     pTargetItem->standardEnchantPower = averagePotionPower(heldItem, *pTargetItem);
     pTargetItem->identified = true;
+    party.recordIdentifiedItem(pTargetItem->objectDescriptionId);
     result.success = true;
     result.heldItemConsumed = true;
     result.targetItemChanged = true;

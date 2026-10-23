@@ -6,6 +6,8 @@
 #include "game/gameplay/GameplayRuntimeInterfaces.h"
 #include "game/maps/MapDeltaData.h"
 #include "game/tables/ItemTable.h"
+#include "game/party/Party.h"
+#include "game/items/ItemRuntime.h"
 #include "game/tables/ObjectTable.h"
 #include "game/SpriteObjectDefs.h"
 #include "game/StringUtils.h"
@@ -150,7 +152,8 @@ std::string worldItemSourceLabel(const WorldItemSource &source)
     return "Item source";
 }
 
-void recordWorldChestView(EventRuntimeState &state, const GameplayChestViewState &view, float gameMinutes)
+void recordWorldChestView(EventRuntimeState &state, const GameplayChestViewState &view, float gameMinutes,
+    Party *pParty)
 {
     if (!validMinute(gameMinutes) || view.items.size() > INT32_MAX) return;
     const std::string key = ChestObservationPrefix + std::to_string(view.chestId) + "/";
@@ -162,6 +165,8 @@ void recordWorldChestView(EventRuntimeState &state, const GameplayChestViewState
     {
         const uint32_t id = item.item.objectDescriptionId != 0 ? item.item.objectDescriptionId : item.itemId;
         if (item.isGold || id == 0) continue;
+        if (pParty != nullptr && item.item.objectDescriptionId != 0 && item.item.identified)
+            pParty->recordIdentifiedItem(id);
         WorldItemSource source;
         source.itemId = id; source.sourceIndex = view.chestId; source.kind = WorldItemSourceKind::Chest;
         source.gameMinutes = int32_t(gameMinutes);
@@ -355,6 +360,13 @@ void WorldDatabase::appendItemSource(const std::string &mapId, WorldItemSource s
         feature.site = {source.id, 0, float((*source.position)[0]), float((*source.position)[1]),
             float((*source.position)[2])};
         feature.title = pItem->name + " - " + worldItemSourceLabel(source);
+        if (ItemRuntime::requiresIdentification(*pItem))
+        {
+            InventoryItem unknown;
+            unknown.identified = false;
+            feature.unidentifiedTitle = ItemRuntime::displayName(unknown, *pItem) + " - "
+                + worldItemSourceLabel(source);
+        }
         feature.itemId = source.itemId; feature.observedItem = source.observed;
         m_features.push_back(std::move(feature));
     }

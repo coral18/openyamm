@@ -138,8 +138,16 @@ AtlasScreen::AtlasScreen(const Engine::AssetFileSystem &assets, const GameDataRe
             }
         }
         for (const ItemDefinition &item : m_data.itemTable().entries())
-            if (m_pParty->hasEverOwnedItem(item.itemId) || m_pParty->hasItemAnywhere(item.itemId))
+        {
+            if (m_pParty->hasEverOwnedItem(item.itemId) || m_pParty->hasItemAnywhere(item.itemId)
+                || m_pParty->hasIdentifiedItem(item.itemId))
                 m_referenceKnowledge.items.insert(item.itemId);
+            if (m_pParty->hasIdentifiedItem(item.itemId))
+            {
+                m_referenceKnowledge.identifiedItems.insert(item.itemId);
+                m_knowledge.identifiedItems.insert(item.itemId);
+            }
+        }
         for (size_t i = 0; i < m_pParty->memberCount(); ++i)
             if (const Character *pMember = m_pParty->member(i))
             {
@@ -1230,7 +1238,7 @@ bool AtlasScreen::drawFeatureMarkers(const WorldRecord &map, const Rect &image, 
             caption.y = std::max(caption.y, viewport.y);
             drawSolidRect(caption, 0xed100e09u);
             textInRect(caption, pin.features.size() > 1 ? std::to_string(pin.features.size()) + " sites"
-                : feature.title, "menu_arrus", 11, 0xffc6dfeau, true);
+                : m_world.featureTitle(feature, m_knowledge, m_guide), "menu_arrus", 11, 0xffc6dfeau, true);
         }
     }
     return hovered;
@@ -1261,7 +1269,7 @@ void AtlasScreen::drawFeatureList()
             m_panX = m_panY = 0; m_zoom = 1;
         }
         textInRect({row.x + 7 * designScale(), row.y, row.width - 14 * designScale(), 18 * designScale()},
-                   feature.title, "menu_arrus", 12);
+                   m_world.featureTitle(feature, m_knowledge, m_guide), "menu_arrus", 12);
         const WorldRecord *pMap = m_world.find(feature.mapId);
         std::string subtitle = worldMapFeatureKindName(feature.kind);
         if (feature.kind == WorldMapFeatureKind::Note && pMap->kind == WorldRecordKind::Dungeon)
@@ -1587,7 +1595,8 @@ void AtlasScreen::drawReference()
     if (items)
     {
         if (button("atlas-pin-item", canvasRect(475, 89, 105, 25),
-            itemId && m_pinnedItem == itemId ? "Unpin" : "Pin item", "button", pSelectedItem != nullptr))
+            itemId && m_pinnedItem == itemId ? "Unpin" : "Pin item", "button", pSelectedItem != nullptr
+                && worldItemPropertiesKnown(*pSelectedItem, m_referenceKnowledge, m_guide)))
         {
             if (m_pinnedItem == itemId) m_pinnedItem.reset();
             else m_pinnedItem = itemId;
@@ -1775,7 +1784,8 @@ void AtlasScreen::drawSiteJournal()
 {
     const WorldMapFeature &feature = *m_siteReading;
     const WorldRecord *pMap = m_world.find(feature.mapId);
-    textInRect(canvasRect(25, 60, 798, 28), feature.title + " - " + pMap->map->name, "fondamento", 15);
+    textInRect(canvasRect(25, 60, 798, 28),
+        m_world.featureTitle(feature, m_knowledge, m_guide) + " - " + pMap->map->name, "fondamento", 15);
     textInRect(canvasRect(25, 89, 798, 25), m_guide ? "Site reference" : "Party's recorded findings",
         "menu_lucida", 11, 0xffc6dfeau);
     const Rect viewport = canvasRect(25, 121, 798, 270);
@@ -1842,7 +1852,7 @@ void AtlasScreen::drawDetails()
         if (selected != features.end())
         {
             const WorldMapFeature &feature = **selected;
-            text = feature.title + " | " + worldMapFeatureKindName(feature.kind);
+            text = m_world.featureTitle(feature, m_knowledge, m_guide) + " | " + worldMapFeatureKindName(feature.kind);
             hasJournal = !m_world.siteReference(feature, m_knowledge, m_guide).empty();
             const auto observations = m_world.siteObservations(feature, m_knowledge);
             if (!observations.empty())

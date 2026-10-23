@@ -2434,6 +2434,7 @@ Party::Snapshot Party::snapshot() const
     snapshot.arcomageWinCount = m_arcomageWinCount;
     snapshot.arcomageLossCount = m_arcomageLossCount;
     snapshot.everOwnedItemIds = m_everOwnedItemIds;
+    snapshot.identifiedItemIds = m_identifiedItemIds;
     snapshot.continentReputations = m_continentReputations;
     snapshot.questBits = m_questBits;
     snapshot.eventVariables = m_eventVariables;
@@ -2481,6 +2482,7 @@ void Party::restoreSnapshot(const Snapshot &snapshot)
     m_arcomageWinCount = snapshot.arcomageWinCount;
     m_arcomageLossCount = snapshot.arcomageLossCount;
     m_everOwnedItemIds = snapshot.everOwnedItemIds;
+    m_identifiedItemIds = snapshot.identifiedItemIds;
     m_continentReputations = snapshot.continentReputations;
     m_questBits = snapshot.questBits;
     m_eventVariables = snapshot.eventVariables;
@@ -2551,6 +2553,7 @@ void Party::seed(const PartySeed &seed)
     m_itemWeeklyEffectSequence = 0;
     m_foundArtifactItems.clear();
     m_everOwnedItemIds.clear();
+    m_identifiedItemIds.clear();
     m_continentReputations.clear();
     m_questBits.clear();
     m_eventVariables.clear();
@@ -3763,6 +3766,7 @@ bool Party::recruitRosterMember(const RosterEntry &rosterEntry)
         m_pStandardItemEnchantTable,
         m_pSpecialItemEnchantTable);
 
+    recordEverOwnedItemsFromCurrentState();
     m_lastStatus = "party member recruited";
     return true;
 }
@@ -3789,6 +3793,7 @@ bool Party::recruitCharacter(const Character &character)
 
     GameMechanics::refreshCharacterBaseResources(m_members.back(), true, m_pClassMultiplierTable);
     initializePortraitRuntimeState(m_members.back());
+    recordEverOwnedItemsFromCurrentState();
     m_lastStatus = "party member recruited";
     return true;
 }
@@ -3845,6 +3850,7 @@ bool Party::hireAdventurersInnMember(size_t innIndex)
     m_members.push_back(m_adventurersInnMembers[innIndex].character);
     applyCharacterIdentityFromDollTable(m_members.back(), m_pCharacterDollTable);
     m_adventurersInnMembers.erase(m_adventurersInnMembers.begin() + innIndex);
+    recordEverOwnedItemsFromCurrentState();
     m_lastStatus = "adventurer hired from inn";
     return true;
 }
@@ -4419,6 +4425,16 @@ bool Party::hasEverOwnedItem(uint32_t objectDescriptionId) const
     return objectDescriptionId != 0 && m_everOwnedItemIds.contains(objectDescriptionId);
 }
 
+void Party::recordIdentifiedItem(uint32_t objectDescriptionId)
+{
+    if (objectDescriptionId != 0) m_identifiedItemIds.insert(objectDescriptionId);
+}
+
+bool Party::hasIdentifiedItem(uint32_t objectDescriptionId) const
+{
+    return objectDescriptionId != 0 && m_identifiedItemIds.contains(objectDescriptionId);
+}
+
 void Party::setHeldItemForQueries(const InventoryItem &item)
 {
     m_heldItemIdForQueries = item.objectDescriptionId;
@@ -4938,6 +4954,7 @@ bool Party::tryIdentifyMemberInventoryItem(
 
     if (identified)
     {
+        recordIdentifiedItem(pItemDefinition->itemId);
         m_lastStatus = "item identified";
     }
 
@@ -5034,6 +5051,7 @@ bool Party::tryRepairMemberInventoryItem(
 
     if (repaired)
     {
+        recordIdentifiedItem(pItemDefinition->itemId);
         rebuildMagicalBonusesFromBuffs();
         m_lastStatus = "item repaired";
     }
@@ -5100,6 +5118,7 @@ bool Party::identifyMemberInventoryItem(
 
     if (identified)
     {
+        recordIdentifiedItem(pItemDefinition->itemId);
         m_lastStatus = "item identified";
     }
 
@@ -5165,6 +5184,7 @@ bool Party::repairMemberInventoryItem(
 
     if (repaired)
     {
+        recordIdentifiedItem(pItemDefinition->itemId);
         rebuildMagicalBonusesFromBuffs();
         m_lastStatus = "item repaired";
     }
@@ -5262,6 +5282,7 @@ bool Party::tryIdentifyEquippedItem(
 
     if (identified)
     {
+        recordIdentifiedItem(pItemDefinition->itemId);
         m_lastStatus = "item identified";
     }
 
@@ -5358,6 +5379,7 @@ bool Party::tryRepairEquippedItem(
 
     if (repaired)
     {
+        recordIdentifiedItem(pItemDefinition->itemId);
         rebuildMagicalBonusesFromBuffs();
         m_lastStatus = "item repaired";
     }
@@ -5421,6 +5443,7 @@ bool Party::identifyEquippedItem(size_t memberIndex, EquipmentSlot slot, std::st
 
     if (identified)
     {
+        recordIdentifiedItem(pItemDefinition->itemId);
         m_lastStatus = "item identified";
     }
 
@@ -5483,6 +5506,7 @@ bool Party::repairEquippedItem(size_t memberIndex, EquipmentSlot slot, std::stri
 
     if (repaired)
     {
+        recordIdentifiedItem(pItemDefinition->itemId);
         rebuildMagicalBonusesFromBuffs();
         m_lastStatus = "item repaired";
     }
@@ -7130,6 +7154,9 @@ void Party::markArtifactItemFoundIfRelevant(const InventoryItem &item)
 void Party::recordEverOwnedItemIfRelevant(const InventoryItem &item)
 {
     recordEverOwnedItem(item.objectDescriptionId);
+    const ItemDefinition *pDefinition = m_pItemTable != nullptr ? m_pItemTable->get(item.objectDescriptionId) : nullptr;
+    if (item.identified || (pDefinition != nullptr && !ItemRuntime::requiresIdentification(*pDefinition)))
+        recordIdentifiedItem(item.objectDescriptionId);
 }
 
 void Party::recordEverOwnedItemsFromCurrentState()
@@ -7162,7 +7189,10 @@ void Party::recordEverOwnedItemsFromCurrentState()
 
         for (EquipmentSlot slot : EquipmentSlots)
         {
-            recordEverOwnedItem(::OpenYAMM::Game::equippedItemId(member.equipment, slot));
+            const uint32_t id = ::OpenYAMM::Game::equippedItemId(member.equipment, slot);
+            if (id != 0)
+                recordEverOwnedItemIfRelevant(makeInventoryItem(m_pItemTable, id,
+                    equippedItemRuntimeState(member.equipmentRuntime, slot)));
         }
     }
 }

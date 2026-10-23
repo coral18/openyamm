@@ -40,6 +40,7 @@ struct WorldMapFeature
     bool userNote = false;
     uint32_t itemId = 0;
     bool observedItem = false;
+    std::string unidentifiedTitle;
     std::optional<int32_t> noteElevation;
     std::optional<WorldMapArrival> arrival;
 };

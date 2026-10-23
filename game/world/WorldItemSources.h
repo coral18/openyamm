@@ -9,6 +9,7 @@
 
 namespace OpenYAMM::Game
 {
+class Party;
 class ItemTable;
 class ObjectTable;
 class ScriptedEventProgram;
@@ -47,7 +48,8 @@ std::vector<WorldItemSource> buildWorldItemSources(const MapDeltaData &delta,
     const ItemTable &items, const ObjectTable &objects);
 std::string worldItemSourceLabel(const WorldItemSource &source);
 // Record only a view actually inspected by the party, including an empty view.
-void recordWorldChestView(EventRuntimeState &state, const GameplayChestViewState &view, float gameMinutes);
+void recordWorldChestView(EventRuntimeState &state, const GameplayChestViewState &view, float gameMinutes,
+    Party *pParty = nullptr);
 std::vector<WorldChestObservation> worldChestObservations(const EventRuntimeState &state);
 void recordWorldItemPickup(EventRuntimeState &state, const GameplayWorldItemInspectState &item, float gameMinutes);
 // Call only after taking an item successfully. Does not inspect or materialize other creature loot.

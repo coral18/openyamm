@@ -21,6 +21,7 @@
 #include <algorithm>
 #include <array>
 #include <filesystem>
+#include <cstdlib>
 #include <fstream>
 #include <iterator>
 #include <limits>
@@ -962,6 +963,278 @@ TEST_CASE("party restore records currently held inventory as ever owned")
     CHECK(restoredParty.hasItemAnywhere(2122));
 }
 
+TEST_CASE("party identification history distinguishes possession from actual identification and persists removal")
+{
+    using namespace OpenYAMM::Game;
+    Party party = makeInventoryParty();
+    InventoryItem unknown = makeInventoryItem(97001, 1, 1);
+    unknown.identified = false;
+    REQUIRE(party.tryGrantInventoryItem(unknown));
+    CHECK(party.hasEverOwnedItem(97001));
+    CHECK_FALSE(party.hasIdentifiedItem(97001));
+    party.recordEverOwnedItem(97002);
+    CHECK_FALSE(party.hasIdentifiedItem(97002));
+    REQUIRE(party.tryGrantInventoryItem(makeInventoryItem(97003, 1, 1)));
+    CHECK(party.hasIdentifiedItem(97003));
+    REQUIRE(party.removeItem(97003));
+    CHECK_FALSE(party.hasItemAnywhere(97003));
+    CHECK(party.hasIdentifiedItem(97003));
+    // A real identified observation is knowledge even when the item was never owned.
+    party.recordIdentifiedItem(97004);
+    CHECK(party.hasIdentifiedItem(97004));
+    CHECK_FALSE(party.hasEverOwnedItem(97004));
+    party.recordIdentifiedItem(0);
+    CHECK_FALSE(party.hasIdentifiedItem(0));
+
+    GameSaveData save;
+    save.mapFileName = "identification.odm";
+    save.party = party.snapshot();
+    const auto path = std::filesystem::temp_directory_path() / "openyamm_identification_roundtrip.oysav";
+    std::string error;
+    REQUIRE(saveGameDataToPath(path, save, error));
+    const auto loaded = loadGameDataFromPath(path, error);
+    std::filesystem::remove(path);
+    REQUIRE_MESSAGE(loaded, error);
+    CHECK(loaded->party.identifiedItemIds == save.party.identifiedItemIds);
+    Party restored;
+    restored.restoreSnapshot(loaded->party);
+    CHECK(restored.hasIdentifiedItem(97003));
+    CHECK(restored.hasIdentifiedItem(97004));
+    CHECK_FALSE(restored.hasIdentifiedItem(97001));
+    CHECK_FALSE(restored.hasIdentifiedItem(97002));
+    restored.restoreSnapshot(Party::Snapshot{});
+    CHECK_FALSE(restored.hasIdentifiedItem(97003));
+    restored.recordIdentifiedItem(97003);
+    restored.seed(createRegressionPartySeed());
+    CHECK_FALSE(restored.hasIdentifiedItem(97003));
+}
+
+TEST_CASE("party identification migration uses actual carried and equipped flags without revealing inn stock")
+{
+    using namespace OpenYAMM::Game;
+    Party::Snapshot legacy;
+    legacy.members.push_back(makeRegressionPartyMember("Known", "Knight", "PC01-01", 1));
+    legacy.members[0].inventory.push_back(makeInventoryItem(97001, 1, 1));
+    InventoryItem unknown = makeInventoryItem(97002, 1, 1);
+    unknown.identified = false;
+    legacy.members[0].inventory.push_back(unknown);
+    legacy.members[0].equipment.mainHand = 97003;
+    legacy.members[0].equipmentRuntime.mainHand.identified = true;
+    legacy.members[0].equipment.armor = 97004;
+    legacy.members[0].equipmentRuntime.armor.identified = false;
+    legacy.everOwnedItemIds = {97002, 97004, 97005};
+    AdventurersInnMember stranger;
+    stranger.character.inventory.push_back(makeInventoryItem(97006, 1, 1));
+    legacy.adventurersInnMembers.push_back(stranger);
+    Party party;
+    party.restoreSnapshot(legacy);
+    CHECK(party.hasIdentifiedItem(97001));
+    CHECK_FALSE(party.hasIdentifiedItem(97002));
+    CHECK(party.hasIdentifiedItem(97003));
+    CHECK_FALSE(party.hasIdentifiedItem(97004));
+    CHECK_FALSE(party.hasIdentifiedItem(97005));
+    CHECK_FALSE(party.hasIdentifiedItem(97006));
+    REQUIRE(party.hireAdventurersInnMember(0));
+    CHECK(party.hasIdentifiedItem(97006));
+    CHECK_FALSE(party.hasIdentifiedItem(97002));
+    CHECK_FALSE(party.hasIdentifiedItem(97004));
+}
+
+TEST_CASE("party identification records visible identified chest contents without owning hidden items")
+{
+    using namespace OpenYAMM::Game;
+    Party party = makeInventoryParty();
+    EventRuntimeState state;
+    GameplayChestViewState view;
+    view.chestId = 7;
+    GameplayChestItemState known, unknown, hidden, gold, noInstance;
+    known.item = makeInventoryItem(97001, 1, 1);
+    unknown.item = makeInventoryItem(97002, 1, 1);
+    unknown.item.identified = false;
+    hidden.item = makeInventoryItem(97003, 1, 1);
+    gold.item = makeInventoryItem(97004, 1, 1);
+    gold.isGold = true;
+    noInstance.itemId = 97005; // Default runtime flags are not evidence without an actual instance.
+    view.items = {known, unknown, gold, noInstance};
+    view.hiddenItems = {hidden};
+    recordWorldChestView(state, view, 123, &party);
+    CHECK(party.hasIdentifiedItem(97001));
+    CHECK_FALSE(party.hasEverOwnedItem(97001));
+    CHECK_FALSE(party.hasIdentifiedItem(97002));
+    CHECK_FALSE(party.hasIdentifiedItem(97003));
+    CHECK_FALSE(party.hasIdentifiedItem(97004));
+    CHECK_FALSE(party.hasIdentifiedItem(97005));
+    CHECK(worldObservedItemSources(state).size() == 3);
+    view.items[1].item.identified = true;
+    recordWorldChestView(state, view, -1, &party);
+    CHECK_FALSE(party.hasIdentifiedItem(97002));
+    recordWorldChestView(state, view, 124, &party);
+    CHECK(party.hasIdentifiedItem(97002));
+}
+
+TEST_CASE("party identification loads actual version 83 campaign fixtures"
+    * doctest::skip(std::getenv("OPENYAMM_LEGACY_IDENTIFICATION_FIXTURES") == nullptr))
+{
+    using namespace OpenYAMM::Game;
+    const char *pDirectory = std::getenv("OPENYAMM_LEGACY_IDENTIFICATION_FIXTURES");
+    REQUIRE(pDirectory != nullptr);
+    for (const char *pWorld : {"mm7", "mm8"})
+    {
+        CAPTURE(pWorld);
+        const auto path = std::filesystem::path(pDirectory) / (std::string(pWorld) + "-identified-current-v83.oysav");
+        std::ifstream file(path, std::ios::binary);
+        REQUIRE(file.is_open());
+        file.seekg(8);
+        uint32_t version = 0;
+        file.read(reinterpret_cast<char *>(&version), sizeof(version));
+        REQUIRE(version == 83); // Real frozen saves, not a rewritten current header.
+        std::string error;
+        const auto loaded = loadGameDataFromPath(path, error);
+        REQUIRE_MESSAGE(loaded, error);
+        CHECK(loaded->party.identifiedItemIds.empty());
+        Party party;
+        party.restoreSnapshot(loaded->party);
+        REQUIRE(party.memberCount() == 2);
+        CHECK(party.member(0)->equipment.mainHand == 1);
+        CHECK(party.member(1)->equipment.mainHand == 2);
+        CHECK(party.hasIdentifiedItem(1));
+        CHECK(party.hasIdentifiedItem(2));
+        CHECK_FALSE(party.hasIdentifiedItem(3));
+        CHECK_FALSE(party.hasIdentifiedItem(1335));
+        const auto migrated = party.snapshot();
+        CHECK(migrated.gold == loaded->party.gold);
+        CHECK(migrated.food == loaded->party.food);
+        CHECK(migrated.questBits == loaded->party.questBits);
+        CHECK(migrated.everOwnedItemIds == loaded->party.everOwnedItemIds);
+    }
+}
+
+TEST_CASE("party identification exports controlled unknown and identified equipment for native review"
+    * doctest::skip(std::getenv("OPENYAMM_LEGACY_IDENTIFICATION_FIXTURES") == nullptr))
+{
+    using namespace OpenYAMM::Game;
+    const char *pDirectory = std::getenv("OPENYAMM_LEGACY_IDENTIFICATION_FIXTURES");
+    REQUIRE(pDirectory != nullptr);
+    REQUIRE(OpenYAMM::Tests::regressionGameDataLoaded());
+    const ItemTable &items = OpenYAMM::Tests::regressionGameData().itemTable;
+    for (const char *pWorld : {"mm7", "mm8"})
+    {
+        CAPTURE(pWorld);
+        std::string error;
+        const std::filesystem::path directory(pDirectory);
+        auto save = loadGameDataFromPath(directory / (std::string(pWorld) + "-identified-current-v83.oysav"), error);
+        REQUIRE_MESSAGE(save, error);
+        REQUIRE(save->party.members.size() == 2);
+        save->party.identifiedItemIds.clear();
+        save->party.members[1].equipmentRuntime.mainHand.identified = false;
+        Party fixture;
+        fixture.setItemTable(&items);
+        fixture.restoreSnapshot(save->party);
+        CHECK(fixture.hasIdentifiedItem(1));
+        CHECK_FALSE(fixture.hasIdentifiedItem(2));
+        CHECK(fixture.hasEverOwnedItem(2));
+        save->party = fixture.snapshot();
+        REQUIRE(saveGameDataToPath(directory / (std::string(pWorld) + "-unidentified-current-v84.oysav"),
+            *save, error));
+        REQUIRE(fixture.identifyEquippedItem(1, EquipmentSlot::MainHand, error));
+        CHECK(fixture.hasIdentifiedItem(2));
+        CHECK(fixture.member(1)->equipmentRuntime.mainHand.identified);
+        CHECK_FALSE(fixture.hasIdentifiedItem(3));
+        save->party = fixture.snapshot();
+        REQUIRE(saveGameDataToPath(directory / (std::string(pWorld) + "-identified-current-v84.oysav"), *save, error));
+    }
+}
+
+TEST_CASE("party identification repair records knowledge for forced and skill based inventory and equipment actions")
+{
+    using namespace OpenYAMM::Game;
+    REQUIRE(OpenYAMM::Tests::regressionGameDataLoaded());
+    Party party = makeInventoryParty();
+    party.setItemTable(&OpenYAMM::Tests::regressionGameData().itemTable);
+    party.member(1)->skills["RepairItem"] = {"RepairItem", 1, SkillMastery::Grandmaster};
+    InventoryItem item = makeInventoryItem(3, 1, 1);
+    item.identified = false;
+    item.broken = true;
+    REQUIRE(party.tryGrantInventoryItemToMember(0, item));
+    party.member(0)->equipment.mainHand = 2;
+    party.member(0)->equipmentRuntime.mainHand.identified = false;
+    party.member(0)->equipmentRuntime.mainHand.broken = true;
+    CHECK_FALSE(party.hasIdentifiedItem(2));
+    CHECK_FALSE(party.hasIdentifiedItem(3));
+    std::string status;
+    SUBCASE("forced inventory")
+    {
+        REQUIRE(party.repairMemberInventoryItem(0, 0, 0, status));
+        CHECK(party.hasIdentifiedItem(3));
+        CHECK_FALSE(party.hasIdentifiedItem(2));
+    }
+    SUBCASE("skill inventory")
+    {
+        REQUIRE(party.tryRepairMemberInventoryItem(0, 0, 0, 1, status));
+        CHECK(party.hasIdentifiedItem(3));
+        CHECK_FALSE(party.hasIdentifiedItem(2));
+    }
+    SUBCASE("forced equipment")
+    {
+        REQUIRE(party.repairEquippedItem(0, EquipmentSlot::MainHand, status));
+        CHECK(party.hasIdentifiedItem(2));
+        CHECK_FALSE(party.hasIdentifiedItem(3));
+    }
+    SUBCASE("skill equipment")
+    {
+        REQUIRE(party.tryRepairEquippedItem(0, EquipmentSlot::MainHand, 1, status));
+        CHECK(party.hasIdentifiedItem(2));
+        CHECK_FALSE(party.hasIdentifiedItem(3));
+    }
+}
+
+TEST_CASE("party identification native Atlas review preserves instance flags history and progression"
+    * doctest::skip(std::getenv("OPENYAMM_ATLAS_IDENTIFICATION_REVIEW") == nullptr))
+{
+    using namespace OpenYAMM::Game;
+    const char *pDirectory = std::getenv("OPENYAMM_ATLAS_IDENTIFICATION_REVIEW");
+    REQUIRE(pDirectory != nullptr);
+    for (const char *pWorld : {"mm7", "mm8"})
+        for (const char *pMode : {"known", "unknown"})
+        {
+            const std::string name = std::string(pWorld) + "-" + pMode;
+            CAPTURE(name);
+            const auto directory = std::filesystem::path(pDirectory) / name / "saves";
+            std::string error;
+            const auto before = loadGameDataFromPath(directory / "before.oysav", error);
+            REQUIRE_MESSAGE(before, error);
+            const auto after = loadGameDataFromPath(directory / "quicksave.oysav", error);
+            REQUIRE_MESSAGE(after, error);
+            Party original, reviewed;
+            original.restoreSnapshot(before->party);
+            reviewed.restoreSnapshot(after->party);
+            REQUIRE(original.memberCount() == 2);
+            REQUIRE(reviewed.memberCount() == 2);
+            CHECK(reviewed.snapshot().identifiedItemIds == original.snapshot().identifiedItemIds);
+            CHECK(reviewed.hasIdentifiedItem(1));
+            CHECK(reviewed.hasIdentifiedItem(2) == (std::string(pMode) == "known"));
+            CHECK_FALSE(reviewed.hasIdentifiedItem(3));
+            CHECK_FALSE(reviewed.hasIdentifiedItem(1335));
+            CHECK(after->party.gold == before->party.gold);
+            CHECK(after->party.food == before->party.food);
+            CHECK(after->party.questBits == before->party.questBits);
+            CHECK(after->party.everOwnedItemIds == before->party.everOwnedItemIds);
+            CHECK(after->heldInventoryItemActive == before->heldInventoryItemActive);
+            for (size_t i = 0; i < 2; ++i)
+            {
+                const Character &a = *original.member(i), &b = *reviewed.member(i);
+                CHECK(a.equipment.mainHand == b.equipment.mainHand);
+                CHECK(a.equipmentRuntime.mainHand.identified == b.equipmentRuntime.mainHand.identified);
+                CHECK(a.experience == b.experience);
+                CHECK(a.level == b.level);
+                CHECK(a.className == b.className);
+                CHECK(a.raceId == b.raceId);
+                CHECK(a.skills.at("Sword").level == b.skills.at("Sword").level);
+                CHECK(a.skills.at("Sword").mastery == b.skills.at("Sword").mastery);
+            }
+        }
+}
+
 TEST_CASE("monster target selection prefers matching living members")
 {
     OpenYAMM::Game::Party party = {};
@@ -1328,6 +1601,7 @@ TEST_CASE("inventory identify and repair use best party utility skill")
     const OpenYAMM::Game::InventoryItem *pItem = pActiveMember->inventoryItemAt(0, 0);
     REQUIRE(pItem != nullptr);
     CHECK(pItem->identified);
+    CHECK(party.hasIdentifiedItem(pDifficultItemDefinition->itemId));
 
     CHECK(party.tryRepairMemberInventoryItem(0, 0, 0, 0, statusText));
     pItem = pActiveMember->inventoryItemAt(0, 0);
@@ -1370,11 +1644,13 @@ TEST_CASE("Scholar hireling identifies inventory and equipment without character
 
     std::string statusText;
     CHECK_FALSE(party.tryIdentifyMemberInventoryItem(0, 0, 0, 0, statusText));
+    CHECK_FALSE(party.hasIdentifiedItem(pDefinition->itemId));
     party.addHiredNpcFollower({1001, 1, 100});
     CHECK_FALSE(party.canIdentifyItem(*pDefinition));
     party.addHiredNpcFollower({1002, 4, 100});
     CHECK(party.tryIdentifyMemberInventoryItem(0, 0, 0, 0, statusText));
     CHECK(party.memberInventoryItem(0, 0, 0)->identified);
+    CHECK(party.hasIdentifiedItem(pDefinition->itemId));
     CHECK_FALSE(party.tryIdentifyMemberInventoryItem(0, 0, 0, 0, statusText));
     party.member(0)->equipment.armor = pDefinition->itemId;
     party.member(0)->equipmentRuntime.armor.identified = false;

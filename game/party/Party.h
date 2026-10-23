@@ -318,6 +318,7 @@ public:
         uint32_t arcomageLossCount = 0;
         std::vector<HouseStockState> houseStockStates;
         std::unordered_set<uint32_t> everOwnedItemIds;
+        std::unordered_set<uint32_t> identifiedItemIds;
         std::unordered_map<uint32_t, int32_t> continentReputations;
         std::unordered_set<uint32_t> questBits;
         std::unordered_map<uint16_t, int32_t> eventVariables;
@@ -457,6 +458,9 @@ public:
     int inventoryItemCount(uint32_t objectDescriptionId, std::optional<size_t> memberIndex = std::nullopt) const;
     void recordEverOwnedItem(uint32_t objectDescriptionId);
     bool hasEverOwnedItem(uint32_t objectDescriptionId) const;
+    // Type knowledge persists after losing an instance; ownership alone never implies identification.
+    void recordIdentifiedItem(uint32_t objectDescriptionId);
+    bool hasIdentifiedItem(uint32_t objectDescriptionId) const;
     void setHeldItemForQueries(const InventoryItem &item);
     uint32_t heldItemIdForQueries() const;
     void clearHeldItemForQueries();
@@ -671,6 +675,7 @@ private:
     std::unordered_set<uint32_t> m_foundArtifactItems;
     std::unordered_set<uint32_t> m_arcomageWonHouseIds;
     std::unordered_set<uint32_t> m_everOwnedItemIds;
+    std::unordered_set<uint32_t> m_identifiedItemIds;
     std::unordered_map<uint32_t, int32_t> m_continentReputations;
     std::unordered_set<uint32_t> m_questBits;
     uint64_t m_dialogueEligibilityRevision = 1;

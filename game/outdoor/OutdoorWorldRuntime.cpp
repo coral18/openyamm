@@ -4646,7 +4646,7 @@ void OutdoorWorldRuntime::activateChestView(uint32_t chestId)
 
     if (EventRuntimeState *pEventRuntimeState = eventRuntimeState())
     {
-        recordWorldChestView(*pEventRuntimeState, *m_activeChestView, gameMinutes());
+        recordWorldChestView(*pEventRuntimeState, *m_activeChestView, gameMinutes(), m_pParty);
         pEventRuntimeState->lastChestOpened = EventRuntimeState::ChestOpenedTrace{
             .sceneKind = "outdoor",
             .map = mapName(),
@@ -16973,7 +16973,7 @@ void OutdoorWorldRuntime::commitActiveChestView()
         m_materializedChestViews[chestId] = *m_activeChestView;
     }
     if (EventRuntimeState *pState = eventRuntimeState())
-        recordWorldChestView(*pState, *m_activeChestView, gameMinutes());
+        recordWorldChestView(*pState, *m_activeChestView, gameMinutes(), m_pParty);
     removeDepletedSemanticLootContainer(chestId);
 }
 
@@ -17033,7 +17033,7 @@ void OutdoorWorldRuntime::closeActiveChestView()
 {
     if (m_activeChestView)
         if (EventRuntimeState *pState = eventRuntimeState())
-            recordWorldChestView(*pState, *m_activeChestView, gameMinutes());
+            recordWorldChestView(*pState, *m_activeChestView, gameMinutes(), m_pParty);
     m_activeChestView.reset();
 }
 

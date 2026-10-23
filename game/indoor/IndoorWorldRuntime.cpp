@@ -14888,7 +14888,7 @@ void IndoorWorldRuntime::commitActiveChestView()
         m_materializedChestViews[chestId] = *m_activeChestView;
     }
     if (EventRuntimeState *pState = eventRuntimeState())
-        recordWorldChestView(*pState, *m_activeChestView, gameMinutes());
+        recordWorldChestView(*pState, *m_activeChestView, gameMinutes(), m_pParty);
     removeDepletedSemanticLootContainer(chestId);
 }
 
@@ -14950,7 +14950,7 @@ void IndoorWorldRuntime::closeActiveChestView()
 {
     if (m_activeChestView)
         if (EventRuntimeState *pState = eventRuntimeState())
-            recordWorldChestView(*pState, *m_activeChestView, gameMinutes());
+            recordWorldChestView(*pState, *m_activeChestView, gameMinutes(), m_pParty);
     m_activeChestView.reset();
 }
 
@@ -16695,7 +16695,7 @@ void IndoorWorldRuntime::activateChestView(uint32_t chestId)
 
     if (EventRuntimeState *pEventRuntimeState = eventRuntimeState())
     {
-        recordWorldChestView(*pEventRuntimeState, *m_activeChestView, gameMinutes());
+        recordWorldChestView(*pEventRuntimeState, *m_activeChestView, gameMinutes(), m_pParty);
         pEventRuntimeState->lastChestOpened = EventRuntimeState::ChestOpenedTrace{
             .sceneKind = "indoor",
             .map = mapName(),

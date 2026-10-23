@@ -22,7 +22,7 @@ namespace OpenYAMM::Game
 {
 namespace
 {
-constexpr uint32_t SaveVersion = 83;
+constexpr uint32_t SaveVersion = 84;
 constexpr uint32_t SaveVersionAttackSpell = 19;
 constexpr uint32_t SaveVersionIndoorCorpseViews = 21;
 constexpr uint32_t SaveVersionIndoorChestViews = 22;
@@ -89,6 +89,7 @@ constexpr uint32_t SaveVersionOutdoorDestructibles = 81;
 constexpr uint32_t SaveVersionMm9Barrels = 82;
 constexpr uint32_t SaveVersionTemporaryEventBonuses = 83;
 constexpr uint32_t SaveVersionConsumedCorpseMarkers = 83;
+constexpr uint32_t SaveVersionPartyIdentifiedItems = 84;
 constexpr char SaveMagic[8] = {'O', 'Y', 'S', 'A', 'V', 'E', '1', '\0'};
 
 std::string toLowerCopy(const std::string &value)
@@ -1034,6 +1035,7 @@ void writeValue(BinaryWriter &writer, const Party::Snapshot &value)
     writeValue(writer, value.npcItemOverrides);
     writeValue(writer, value.unavailableNpcIds);
     writeValue(writer, value.hiredNpcFollowers);
+    writeValue(writer, value.identifiedItemIds);
 }
 
 bool readValue(BinaryReader &reader, Party::Snapshot &value)
@@ -1076,7 +1078,8 @@ bool readValue(BinaryReader &reader, Party::Snapshot &value)
         && (reader.version() < SaveVersionGlobalNpcState || readValue(reader, value.npcHouseOverrides))
         && (reader.version() < SaveVersionGlobalNpcState || readValue(reader, value.npcItemOverrides))
         && (reader.version() < SaveVersionGlobalNpcState || readValue(reader, value.unavailableNpcIds))
-        && (reader.version() < SaveVersionPartyHiredNpcFollowers || readValue(reader, value.hiredNpcFollowers));
+        && (reader.version() < SaveVersionPartyHiredNpcFollowers || readValue(reader, value.hiredNpcFollowers))
+        && (reader.version() < SaveVersionPartyIdentifiedItems || readValue(reader, value.identifiedItemIds));
 }
 
 void writeValue(BinaryWriter &writer, const OutdoorMoveState &value)

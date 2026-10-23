@@ -132,7 +132,8 @@ std::vector<CreatureLootReference> creatureLootReferences(const WorldGuideSource
         const auto *pMonster = source.pMonsters->findStatsById(monsterId);
         const ItemDefinition *pItem = source.pItems->get(itemId);
         if (monsterId <= 0 || pMonster == nullptr || pMonster->name.empty() || pItem == nullptr || pItem->name.empty()
-            || (!guide && (!knowledge.monsters.contains(monsterId) || !knowledge.items.contains(itemId)))) return;
+            || (!guide && (!knowledge.monsters.contains(monsterId)
+                || (!knowledge.items.contains(itemId) && !knowledge.identifiedItems.contains(itemId))))) return;
         if (included.emplace(monsterId, itemId, provenance).second)
             result.push_back({monsterId, itemId, provenance});
     };
@@ -153,6 +154,12 @@ std::vector<CreatureLootReference> creatureLootReferences(const WorldGuideSource
 }
 }
 
+bool worldItemPropertiesKnown(const ItemDefinition &item, const WorldGuideKnowledge &knowledge, bool guide)
+{
+    return guide || knowledge.identifiedItems.contains(item.itemId)
+        || (knowledge.items.contains(item.itemId) && !ItemRuntime::requiresIdentification(item));
+}
+
 std::optional<WorldItemComparison> buildWorldItemComparison(const WorldGuideSource &source,
     const WorldGuideKnowledge &knowledge, bool guide, uint32_t pinnedItem, uint32_t selectedItem)
 {
@@ -163,7 +170,7 @@ std::optional<WorldItemComparison> buildWorldItemComparison(const WorldGuideSour
     for (size_t i = 0; i < ids.size(); ++i)
     {
         const ItemDefinition *pItem = source.pItems->get(ids[i]);
-        if (pItem == nullptr || pItem->name.empty() || (!guide && !knowledge.items.contains(ids[i])))
+        if (pItem == nullptr || pItem->name.empty() || !worldItemPropertiesKnown(*pItem, knowledge, guide))
             return std::nullopt;
         result.items[i] = pItem;
         result.details[i] = itemDefinitionText(*pItem);
@@ -368,7 +375,8 @@ std::vector<WorldGuideEntry> buildWorldGuide(const WorldGuideSource &source, Wor
                     else if (conditional && learned && !available) entry.details += " (recorded earlier)";
                     // Merely hearing an item's name does not disclose its full mechanics or hidden description.
                     if (!target.empty() && (kind != WorldGuideLink::Kind::Item || guide
-                        || knowledge.items.contains(uint32_t(std::stoul(location.target)))))
+                        || worldItemPropertiesKnown(*source.pItems->get(uint32_t(std::stoul(location.target))),
+                            knowledge, false)))
                     {
                         entry.links.push_back({kind, role + ": " + name, target, 0,
                             learned && location.kind != JournalQuestLocation::Kind::Npc});
@@ -429,8 +437,14 @@ std::vector<WorldGuideEntry> buildWorldGuide(const WorldGuideSource &source, Wor
                 + std::to_string(monster.loot.itemChance) + "% | Item level: " + std::to_string(monster.loot.itemLevel)
                 + "\n\nShared base definition. Runtime scaling and effects may change these values.";
             for (const CreatureLootReference &reference : loot[int16_t(id)])
+            {
+                const ItemDefinition &item = *source.pItems->get(reference.itemId);
+                InventoryItem display;
+                display.identified = worldItemPropertiesKnown(item, knowledge, guide);
                 entry.links.push_back({WorldGuideLink::Kind::Item,
-                    reference.provenance + ": " + itemName(reference.itemId), std::to_string(reference.itemId)});
+                    reference.provenance + ": " + ItemRuntime::displayName(display, item),
+                    std::to_string(reference.itemId)});
+            }
             if (!loot[int16_t(id)].empty())
                 entry.details += "\n\nCreature loot links distinguish drop chances, initial carried items "
                     "and recovered loot. They do not guarantee a drop from every creature.";
@@ -475,10 +489,16 @@ std::vector<WorldGuideEntry> buildWorldGuide(const WorldGuideSource &source, Wor
                 sources[pItemSource->itemId].push_back(pItemSource);
         for (const ItemDefinition &item : source.pItems->entries())
         {
-            if (item.itemId == 0 || item.name.empty() || (!guide && !knowledge.items.contains(item.itemId)))
+            if (item.itemId == 0 || item.name.empty() || (!guide && !knowledge.items.contains(item.itemId)
+                && !knowledge.identifiedItems.contains(item.itemId)))
                 continue;
-            WorldGuideEntry entry{std::to_string(item.itemId), item.name};
-            entry.details = itemDefinitionText(item);
+            const bool identified = worldItemPropertiesKnown(item, knowledge, guide);
+            InventoryItem unknown;
+            unknown.identified = false;
+            WorldGuideEntry entry{std::to_string(item.itemId), identified ? item.name
+                : ItemRuntime::displayName(unknown, item)};
+            entry.details = identified ? itemDefinitionText(item)
+                : entry.title + "\nNot identified by this party.";
             std::set<std::pair<std::string, std::string>> linkedSources;
             for (const WorldItemSource *pItemSource : sources[item.itemId])
             {
@@ -515,7 +535,7 @@ std::vector<WorldGuideEntry> buildWorldGuide(const WorldGuideSource &source, Wor
             if (!sources[item.itemId].empty() || !loot[item.itemId].empty())
                 entry.details += "\n\nSources below describe authored data or recorded observations. "
                     "They do not guarantee remaining loot, random drops or quest availability.";
-            if (source.pSpells != nullptr)
+            if (identified && source.pSpells != nullptr)
                 if (const auto spell = spellbookSpellId(item))
                     if (const SpellEntry *pSpell = source.pSpells->findById(int(*spell)))
                         entry.links.push_back({WorldGuideLink::Kind::Spell, "Spell: " + pSpell->name,
@@ -536,7 +556,7 @@ std::vector<WorldGuideEntry> buildWorldGuide(const WorldGuideSource &source, Wor
         {
             const std::vector<const ItemDefinition *> &spellbooks = books[uint32_t(spell.id)];
             const bool knownBook = std::any_of(spellbooks.begin(), spellbooks.end(),
-                [&](const ItemDefinition *pBook) { return knowledge.items.contains(pBook->itemId); });
+                [&](const ItemDefinition *pBook) { return worldItemPropertiesKnown(*pBook, knowledge, false); });
             if (spell.name.empty() || (!guide && !knowledge.spells.contains(uint32_t(spell.id)) && !knownBook))
                 continue;
             const auto skill = resolveMagicSkillName(uint32_t(spell.id));
@@ -552,7 +572,7 @@ std::vector<WorldGuideEntry> buildWorldGuide(const WorldGuideSource &source, Wor
                 + "Grandmaster (" + std::to_string(spell.grandmasterManaCost) + " SP): "
                 + spell.grandmasterText + "\n\n" + spell.statsText;
             for (const ItemDefinition *pBook : spellbooks)
-                if (guide || knowledge.items.contains(pBook->itemId))
+                if (worldItemPropertiesKnown(*pBook, knowledge, guide))
                     entry.links.push_back({WorldGuideLink::Kind::Item, "Spellbook: " + pBook->name,
                         std::to_string(pBook->itemId)});
             size_t guilds = 0;
@@ -735,7 +755,11 @@ std::vector<WorldGuideEntry> buildWorldGuide(const WorldGuideSource &source, Wor
         for (const MergedReagentSettingEntry &reagent : source.pReagents->entries())
         {
             ingredients.insert(reagent.itemId);
-            if (guide || (knowledge.items.contains(reagent.itemId) && knowledge.items.contains(reagent.resultItemId)))
+            const ItemDefinition *pReagent = source.pItems->get(reagent.itemId);
+            const ItemDefinition *pResult = source.pItems->get(reagent.resultItemId);
+            if (guide || (pReagent != nullptr && pResult != nullptr
+                && worldItemPropertiesKnown(*pReagent, knowledge, false)
+                && worldItemPropertiesKnown(*pResult, knowledge, false)))
                 recipes.push_back({reagent.resultItemId, reagent.itemId, 0});
         }
         const auto &potions = source.pPotions->entries();
@@ -766,7 +790,8 @@ std::vector<WorldGuideEntry> buildWorldGuide(const WorldGuideSource &source, Wor
             std::set<uint32_t> linked;
             const auto linkInput = [&](uint32_t input)
             {
-                if (input != 0 && linked.insert(input).second && (guide || knowledge.items.contains(input)))
+                if (const ItemDefinition *pInput = source.pItems->get(input); input != 0 && pInput != nullptr
+                    && linked.insert(input).second && worldItemPropertiesKnown(*pInput, knowledge, guide))
                     entry.links.push_back({source.pPotions->getByItemId(input) != nullptr
                         ? WorldGuideLink::Kind::Alchemy : WorldGuideLink::Kind::Item,
                         "Inspect " + itemName(input), std::to_string(input)});

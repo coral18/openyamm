@@ -1,0 +1,80 @@
+output_dir: captures
+exit: true
+steps:
+- expect: gameplay
+- key: F9
+- pause: true
+- click:
+  - 800
+  - 821
+- click:
+  - 450
+  - 57
+- click:
+  - 150
+  - 126
+- click:
+  - 200
+  - 326
+- capture: discovery-unidentified-type
+- click:
+  - 980
+  - 190
+- click:
+  - 1250
+  - 190
+- capture: discovery-unidentified-comparison-disabled
+- click:
+  - 275
+  - 190
+- text: Trollish War Sword
+- key: Return
+- capture: discovery-search-hides-true-name
+- click:
+  - 1152
+  - 57
+- click:
+  - 200
+  - 265
+- capture: guide-unidentified-reference
+- click:
+  - 1152
+  - 57
+- capture: discovery-after-guide-still-unknown
+- click:
+  - 275
+  - 190
+- &id001
+  key: Backspace
+- *id001
+- *id001
+- *id001
+- *id001
+- *id001
+- *id001
+- *id001
+- *id001
+- *id001
+- *id001
+- *id001
+- *id001
+- *id001
+- *id001
+- *id001
+- *id001
+- *id001
+- text: Longsword
+- key: Return
+- click:
+  - 200
+  - 326
+- capture: discovery-still-unidentified
+- click:
+  - 1450
+  - 57
+- expect: pause
+- click:
+  - 800
+  - 301
+- expect: gameplay
+- key: F9

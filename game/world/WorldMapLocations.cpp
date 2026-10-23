@@ -266,6 +266,13 @@ bool WorldDatabase::featureVisible(const WorldMapFeature &feature, const WorldKn
     return false;
 }
 
+const std::string &WorldDatabase::featureTitle(const WorldMapFeature &feature,
+    const WorldKnowledge &knowledge, bool guide) const
+{
+    return guide || feature.unidentifiedTitle.empty() || knowledge.identifiedItems.contains(feature.itemId)
+        ? feature.title : feature.unidentifiedTitle;
+}
+
 std::vector<const WorldMapFeature *> WorldDatabase::queryFeatures(const WorldKnowledge &knowledge, bool guide,
     const std::string &search, const std::string &withinMap) const
 {
@@ -277,14 +284,19 @@ std::vector<const WorldMapFeature *> WorldDatabase::queryFeatures(const WorldKno
         if (pMap == nullptr || (!withinMap.empty() && feature.mapId != withinMap)
             || !featureVisible(feature, knowledge, guide))
             continue;
-        const std::string text = feature.title + " " + worldMapFeatureKindName(feature.kind) + " " + pMap->name()
+        const std::string text = featureTitle(feature, knowledge, guide) + " "
+            + worldMapFeatureKindName(feature.kind) + " " + pMap->name()
             + " " + std::string(siteReference(feature, knowledge, guide))
             + " " + siteObservationText(feature, knowledge);
         if (query.empty() || toLowerCopy(text).find(query) != std::string::npos)
             result.push_back(&feature);
     }
-    std::sort(result.begin(), result.end(), [](const WorldMapFeature *a, const WorldMapFeature *b)
-    { return a->title < b->title || (a->title == b->title && a->id < b->id); });
+    std::sort(result.begin(), result.end(), [&](const WorldMapFeature *a, const WorldMapFeature *b)
+    {
+        const std::string &aTitle = featureTitle(*a, knowledge, guide);
+        const std::string &bTitle = featureTitle(*b, knowledge, guide);
+        return aTitle < bTitle || (aTitle == bTitle && a->id < b->id);
+    });
     return result;
 }
 

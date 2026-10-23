@@ -134,7 +134,7 @@ bool applyWorldItemOperation(
     size_t worldItemIndex,
     const ItemTable &itemTable,
     ActiveLootOperation operation,
-    const Party *pParty,
+    Party *pParty,
     std::string &statusText)
 {
     GameplayWorldItemInspectState worldItemState = {};
@@ -152,7 +152,9 @@ bool applyWorldItemOperation(
         return false;
     }
 
-    return worldRuntime.updateWorldItemInspectState(worldItemIndex, lootItem.item);
+    if (!worldRuntime.updateWorldItemInspectState(worldItemIndex, lootItem.item)) return false;
+    if (pParty != nullptr) pParty->recordIdentifiedItem(lootItem.item.objectDescriptionId);
+    return true;
 }
 
 std::string lowerAscii(std::string value)
@@ -868,6 +870,7 @@ bool GameplayItemService::identifyInspectedItem(
             return false;
         }
 
+        pParty->recordIdentifiedItem(pChestView->items[overlay.sourceLootItemIndex].item.objectDescriptionId);
         pWorldRuntime->commitActiveChestView();
         return true;
     }
@@ -891,6 +894,7 @@ bool GameplayItemService::identifyInspectedItem(
             return false;
         }
 
+        pParty->recordIdentifiedItem(pCorpseView->items[overlay.sourceLootItemIndex].item.objectDescriptionId);
         pWorldRuntime->commitActiveCorpseView();
         return true;
     }
@@ -902,7 +906,7 @@ bool GameplayItemService::identifyInspectedItem(
             overlay.sourceWorldItemIndex,
             *pItemTable,
             ActiveLootOperation::ForceIdentify,
-            nullptr,
+            pParty,
             statusText);
     }
 
@@ -970,6 +974,7 @@ bool GameplayItemService::tryIdentifyInspectedItem(
             return false;
         }
 
+        pParty->recordIdentifiedItem(pChestView->items[overlay.sourceLootItemIndex].item.objectDescriptionId);
         pWorldRuntime->commitActiveChestView();
         return true;
     }
@@ -993,6 +998,7 @@ bool GameplayItemService::tryIdentifyInspectedItem(
             return false;
         }
 
+        pParty->recordIdentifiedItem(pCorpseView->items[overlay.sourceLootItemIndex].item.objectDescriptionId);
         pWorldRuntime->commitActiveCorpseView();
         return true;
     }
@@ -1072,6 +1078,7 @@ bool GameplayItemService::tryRepairInspectedItem(
             return false;
         }
 
+        pParty->recordIdentifiedItem(pChestView->items[overlay.sourceLootItemIndex].item.objectDescriptionId);
         pWorldRuntime->commitActiveChestView();
         return true;
     }
@@ -1095,6 +1102,7 @@ bool GameplayItemService::tryRepairInspectedItem(
             return false;
         }
 
+        pParty->recordIdentifiedItem(pCorpseView->items[overlay.sourceLootItemIndex].item.objectDescriptionId);
         pWorldRuntime->commitActiveCorpseView();
         return true;
     }

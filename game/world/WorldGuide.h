@@ -59,6 +59,7 @@ struct WorldGuideSource
 struct WorldGuideKnowledge
 {
     std::unordered_set<uint32_t> items, spells, recipes, roster;
+    std::unordered_set<uint32_t> identifiedItems;
     std::unordered_set<std::string> classes;
     std::unordered_set<uint32_t> houses, arcomageWins;
     std::array<int32_t, 4> arenaWins{};
@@ -124,6 +125,8 @@ struct WorldItemComparison
     std::array<const ItemDefinition *, 2> items{};
     std::array<std::string, 2> details;
 };
+
+bool worldItemPropertiesKnown(const ItemDefinition &item, const WorldGuideKnowledge &knowledge, bool guide);
 
 std::optional<WorldItemComparison> buildWorldItemComparison(const WorldGuideSource &source,
     const WorldGuideKnowledge &knowledge, bool guide, uint32_t pinnedItem, uint32_t selectedItem);

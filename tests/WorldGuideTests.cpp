@@ -332,6 +332,8 @@ TEST_CASE("world guide links spellbooks and possible local guilds without disclo
         CHECK_FALSE(local.front().links.front().informed);
         CHECK(discoveries.regionMaps.empty()); // A source link is not a terrain discovery.
         knowledge.spells.clear(); knowledge.items.insert(400);
+        CHECK(buildWorldGuide(source, WorldGuideSection::Spells, knowledge, false).empty());
+        knowledge.identifiedItems.insert(400);
         const auto ownedBook = buildWorldGuide(source, WorldGuideSection::Spells, knowledge, false);
         REQUIRE(ownedBook.size() == 1);
         CHECK(ownedBook.front().id == "1");
@@ -609,6 +611,15 @@ TEST_CASE("world guide canonical class comparisons use the gameplay race evaluat
 TEST_CASE("world guide alchemy counts reused reagents and reveals only known formulas")
 {
     ItemTable items;
+    OpenYAMM::Engine::AssetFileSystem assets;
+    std::vector<std::vector<std::string>> itemRows;
+    for (uint32_t id : {100, 101, 102, 221, 222, 223, 224})
+    {
+        std::vector<std::string> cells(17);
+        cells[0] = std::to_string(id); cells[2] = "Item " + std::to_string(id);
+        itemRows.push_back(std::move(cells));
+    }
+    REQUIRE(items.load(assets, itemRows, {}));
     MergedPotionSettingTable potions;
     MergedReagentSettingTable reagents;
     PotionMixingTable mixes;
@@ -1786,4 +1797,112 @@ TEST_CASE("world item comparison validates both known items and uses active base
     CHECK(legacy->details[1].find("Rarity: Artifact") != std::string::npos);
     source.pItems = nullptr;
     CHECK_FALSE(buildWorldItemComparison(source, knowledge, true, 3, 97));
+}
+
+
+TEST_CASE("world item identification hides true names statistics and comparisons until actually learned")
+{
+    const auto row = [](uint32_t id, const std::string &name)
+    {
+        std::vector<std::string> cells(31);
+        cells[0] = std::to_string(id); cells[2] = name; cells[3] = "999";
+        cells[4] = "Weapon"; cells[5] = "Sword"; cells[6] = "7d9"; cells[7] = "5";
+        cells[9] = "20"; cells[10] = "Sword"; cells[16] = "Secret item powers";
+        return cells;
+    };
+    OpenYAMM::Engine::AssetFileSystem assets;
+    ItemTable items;
+    REQUIRE(items.load(assets, {row(3, "Secret blade"), row(97, "Hidden blade")}, {}));
+    WorldGuideSource source;
+    source.pItems = &items;
+    WorldGuideKnowledge knowledge;
+    knowledge.items = {3, 97};
+    const auto unknown = buildWorldGuide(source, WorldGuideSection::Items, knowledge, false);
+    REQUIRE(unknown.size() == 2);
+    for (const WorldGuideEntry &entry : unknown)
+    {
+        CHECK(entry.title == "Sword");
+        CHECK(entry.details.find("Not identified") != std::string::npos);
+        for (const char *pSecret : {"Secret", "Hidden", "999", "7d9", "Attack", "Value"})
+            CHECK(entry.details.find(pSecret) == std::string::npos);
+    }
+    CHECK_FALSE(buildWorldItemComparison(source, knowledge, false, 3, 97));
+    const auto guide = buildWorldGuide(source, WorldGuideSection::Items, knowledge, true);
+    REQUIRE(guide.size() == 2);
+    CHECK(guide[0].details.find("Secret item powers") != std::string::npos);
+    CHECK(buildWorldItemComparison(source, knowledge, true, 3, 97));
+    CHECK(knowledge.identifiedItems.empty());
+    CHECK_FALSE(buildWorldItemComparison(source, knowledge, false, 3, 97));
+    knowledge.identifiedItems.insert(3);
+    CHECK_FALSE(buildWorldItemComparison(source, knowledge, false, 3, 97));
+    knowledge.identifiedItems.insert(97);
+    const auto known = buildWorldGuide(source, WorldGuideSection::Items, knowledge, false);
+    REQUIRE(known.size() == 2);
+    CHECK(known[0].title == "Hidden blade");
+    CHECK(known[1].title == "Secret blade");
+    CHECK(buildWorldItemComparison(source, knowledge, false, 3, 97));
+    // An inspected chest can teach a type without granting ownership.
+    knowledge.items.clear();
+    CHECK(buildWorldGuide(source, WorldGuideSection::Items, knowledge, false).size() == 2);
+    CHECK(buildWorldItemComparison(source, knowledge, false, 3, 97));
+}
+
+TEST_CASE("world item map titles and search honor identification history in Discovery and remain pure in Guide")
+{
+    std::vector<std::string> row(31);
+    row[0] = "97"; row[2] = "Secret blade"; row[4] = "Weapon"; row[5] = "Sword";
+    row[9] = "20"; row[10] = "Sword";
+    OpenYAMM::Engine::AssetFileSystem assets;
+    ItemTable items;
+    REQUIRE(items.load(assets, {row}, {}));
+    std::vector<std::string> mapRow(35);
+    mapRow[0] = "63"; mapRow[1] = "Harmondale"; mapRow[2] = "7out02.odm"; mapRow[34] = "mm7";
+    MapStats maps;
+    REQUIRE(maps.loadFromRows({mapRow}));
+    HouseTable houses;
+    NpcDialogTable npcs;
+    MergedTeacherTopicTable teachers;
+    WorldDatabase database(maps, houses, npcs, teachers, "mm7");
+    WorldItemSource item;
+    item.id = "test"; item.itemId = 97; item.observed = true;
+    item.position = {{100, 200, 0}};
+    WorldKnowledge knowledge;
+    knowledge.visitedMaps.insert("7out02.odm");
+    knowledge.itemObservations["7out02.odm"] = {item};
+    database.indexObservedItemSources(knowledge, items);
+    REQUIRE(database.features().size() == 1);
+    const WorldMapFeature &feature = database.features()[0];
+    CHECK(database.featureTitle(feature, knowledge, false).find("Secret") == std::string::npos);
+    CHECK(database.featureTitle(feature, knowledge, false).find("Sword") != std::string::npos);
+    CHECK(database.queryFeatures(knowledge, false, "Secret").empty());
+    CHECK(database.queryFeatures(knowledge, false, "Sword").size() == 1);
+    CHECK(database.queryFeatures(knowledge, true, "Secret").size() == 1);
+    CHECK(knowledge.identifiedItems.empty());
+    CHECK(database.queryFeatures(knowledge, false, "Secret").empty());
+    knowledge.identifiedItems.insert(97);
+    CHECK(database.queryFeatures(knowledge, false, "Secret").size() == 1);
+    CHECK(database.featureTitle(feature, knowledge, false).find("Secret") != std::string::npos);
+    // A recovered unknown item still has a real creature source; conceal its name rather than dropping the link.
+    std::vector<std::string> monsterRow(38, "0");
+    monsterRow[0] = "1"; monsterRow[1] = "Test beast"; monsterRow[2] = "Beast A";
+    MonsterTable monsters;
+    REQUIRE(monsters.loadStatsFromRows({monsterRow}));
+    knowledge.itemObservations["7out02.odm"][0].kind = WorldItemSourceKind::Carried;
+    knowledge.itemObservations["7out02.odm"][0].monsterId = 1;
+    database.indexObservedItemSources(knowledge, items);
+    WorldGuideSource source;
+    source.pItems = &items; source.pMonsters = &monsters;
+    source.pWorld = &database; source.pWorldKnowledge = &knowledge;
+    WorldGuideKnowledge references;
+    references.monsters.insert(1); references.items.insert(97);
+    const auto bestiary = buildWorldGuide(source, WorldGuideSection::Monsters, references, false);
+    REQUIRE(bestiary.size() == 1);
+    REQUIRE(bestiary[0].links.size() == 1);
+    CHECK(bestiary[0].links[0].label == "Recovered loot: Sword");
+    CHECK(bestiary[0].links[0].target == "97");
+    const auto catalog = buildWorldGuide(source, WorldGuideSection::Items, references, false);
+    REQUIRE(catalog.size() == 1);
+    CHECK(catalog[0].title == "Sword");
+    CHECK(std::any_of(catalog[0].links.begin(), catalog[0].links.end(), [](const WorldGuideLink &link)
+        { return link.kind == WorldGuideLink::Kind::Monster && link.target == "1"; }));
 }
