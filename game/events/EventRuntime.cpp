@@ -2,6 +2,8 @@
 
 #include "game/gameplay/JournalState.h"
 #include "game/world/WorldItemSources.h"
+#include "game/world/WorldMapFeatures.h"
+#include "game/world/WorldSiteObservations.h"
 #include "game/events/EventRuntime.h"
 #include "engine/scripting/LuaStateOwner.h"
 #include "game/audio/SoundIds.h"
@@ -9385,7 +9387,28 @@ bool EventRuntime::executeEventById(
             + " event_id=" + std::to_string(eventId)
             + " continue_step="
             + (continueStep.has_value() ? std::to_string(*continueStep) : std::string("none")));
+        std::optional<WorldSiteValueSnapshot> beforeDecoration;
+        std::string decorationSite, observationMap;
+        if (!continueStep && pParty != nullptr && pSceneEventContext != nullptr && runtimeState.activeDecorationContext)
+        {
+            const auto &decoration = *runtimeState.activeDecorationContext;
+            if (decoration.baseEventId != 0 && decoration.decorVarIndex < runtimeState.decorVars.size()
+                && decoration.eventCount != 0
+                && decoration.currentEventId == eventId && eventId >= decoration.baseEventId
+                && uint32_t(eventId) < uint32_t(decoration.baseEventId) + decoration.eventCount)
+            {
+                beforeDecoration = captureWorldSiteValues(runtimeState, *pParty);
+                decorationSite = "inherited-decoration/" + std::to_string(decoration.decorVarIndex);
+                observationMap = runtimeState.mapFileName;
+            }
+        }
         const bool invoked = invokeLuaHandler(*this, globalIterator->second, executionContext, continueStep);
+        if (invoked && beforeDecoration && runtimeState.mapFileName == observationMap)
+        {
+            recordWorldSiteDiscovery(runtimeState, eventId, decorationSite);
+            recordWorldSiteObservation(runtimeState, decorationSite, eventId, *beforeDecoration,
+                captureWorldSiteValues(runtimeState, *pParty), pSceneEventContext->currentGameMinutes());
+        }
 
         if (invoked)
         {

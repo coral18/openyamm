@@ -147,6 +147,8 @@ public:
         const WorldKnowledge &knowledge) const;
     const std::vector<WorldMapLocation> &locations() const;
     const std::vector<WorldMapFeature> &features() const;
+    void indexInheritedDecorations(const MapStatsEntry &map, const std::vector<WorldDecorationSite> &sites,
+        const ScriptedEventProgram &globalEvents);
     void indexMapItemSources(const MapStatsEntry &map, std::vector<WorldItemSource> sources, const ItemTable &items);
     void indexObservedItemSources(const WorldKnowledge &knowledge, const ItemTable &items);
     void indexMapItemRewards(const MapStatsEntry &map, const ScriptedEventProgram &program,

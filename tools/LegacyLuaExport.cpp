@@ -12887,6 +12887,11 @@ std::optional<std::string> buildSiteReference(const LegacyLuaEvent &event)
                     path.effects.push_back(action + std::to_string(value));
                     break;
                 }
+                case LegacyLuaOperation::ChangeEvent:
+                    if (pAction->arguments.size() != 1) return false;
+                    path.mutated = true;
+                    path.effects.push_back("Remaining contents change after use.");
+                    break;
                 case LegacyLuaOperation::StatusText:
                 case LegacyLuaOperation::ShowFace:
                 case LegacyLuaOperation::PlaySound:
@@ -13066,18 +13071,18 @@ std::string generateLegacyEventSiteRefsLuaChunk(
     const EvtProgram &evtProgram, const StrTable &strTable, const LegacyLuaExportLookups &lookups,
     LegacyLuaExportScope scope, LegacyEventVersion version)
 {
-    if (scope != LegacyLuaExportScope::Map) return "";
     const std::vector<LegacyLuaEvent> events = decodeEvents(evtProgram, strTable, lookups, version);
     std::ostringstream metadata;
     for (size_t i = 0; i < events.size(); ++i)
     {
         const auto action = contextActionMetadataForEvent(evtProgram.getEvents()[i], strTable, lookups);
-        if (!action || action->hidden || (action->kind != "well" && action->kind != "fountain"
-            && action->kind != "shrine")) continue;
+        if (scope == LegacyLuaExportScope::Map && (!action || action->hidden
+            || (action->kind != "well" && action->kind != "fountain" && action->kind != "shrine"))) continue;
         const LegacyLuaEvent direct =
             directEventWithoutSyntheticTriggerContinuations(events[i], evtProgram.getEvents()[i]);
         if (const auto reference = buildSiteReference(direct))
-            metadata << "SetMapSiteReference(" << direct.eventId << ", " << luaQuoted(*reference) << ")\n";
+            metadata << (scope == LegacyLuaExportScope::Global ? "SetGlobalSiteReference(" : "SetMapSiteReference(")
+                << direct.eventId << ", " << luaQuoted(*reference) << ")\n";
     }
     return metadata.str().empty() ? "" :
         "-- generated site references from legacy EVT/STR; load after the base handlers\n" + metadata.str();

@@ -4,13 +4,14 @@
 #include "game/world/WorldMapKnowledge.h"
 #include <optional>
 #include <string_view>
+#include <unordered_map>
 
 namespace OpenYAMM::Game
 {
 class ScriptedEventProgram;
 struct EventRuntimeState;
 
-enum class WorldMapFeatureKind { Chest, Water, Shrine, Obelisk, Connection, Monster, Note, Item };
+enum class WorldMapFeatureKind { Chest, Water, Shrine, Obelisk, Connection, Monster, Note, Item, Decoration };
 
 struct WorldMonsterFeature
 {
@@ -43,6 +44,8 @@ struct WorldMapFeature
     std::string unidentifiedTitle;
     std::optional<int32_t> noteElevation;
     std::optional<WorldMapArrival> arrival;
+    std::vector<uint16_t> relatedEventIds;
+    std::unordered_map<uint16_t, std::vector<uint32_t>> relatedAutonotes;
 };
 
 std::vector<WorldMapFeature> buildWorldMapFeatures(const std::string &mapId,

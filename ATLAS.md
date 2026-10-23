@@ -97,8 +97,9 @@ Dungeon plans currently project all elevations together; floor
 selection and floor-specific annotations are not yet shown in the Atlas. The index uses current or last-observed
 resident locations/topics, but conditional/shared venues, generated/roaming NPCs and more information learned from
 books or rumours require additional shared integration. Dynamically moved entrances require runtime metadata.
-Sites currently cover explicit map-local event bindings; inherited decoration/global-event bindings need their
-runtime resolver exposed to the index. The Android implementation
+Sites cover explicit map-local event bindings and inherited decoration/global-event bindings through the shared
+runtime binding rules. Conditional effects and source semantics still have the gaps listed in ATLAS_COVERAGE.md.
+The Android implementation
 uses shared native code but this slice has not yet been
 built or physically tested on Android/controller hardware.
 
@@ -1750,3 +1751,38 @@ refresh; MM7/MM8 native AMD/OpenGL source scans and inspected captures. Two cont
 possible reward before/after Guide, and a second save/load round trip. Native source scans reached Sources ready
 without indexing or stale-lighting errors. Original campaigns remain outside test writes. Android/controller and
 the remaining content matrix are not established by this checkpoint.
+
+
+## Inherited interactive objects (2026-10-23)
+
+The native Sites layer now indexes inherited barrels, campfires, cauldrons, crystals and other shared decorations
+from actual indoor/outdoor entities and the gameplay decoration registry. It uses the same binding rules,
+deterministic initial variants and authored decor variables as the runtime. Outdoor bindings retain their existing
+container set and save-slot ordering; indoor-only container rules are not silently enabled outdoors. Direct map
+callbacks remain distinct. No geometry, caster bake, existing gameplay callback or save schema was rewritten.
+
+Each inherited object has a map-scoped identity based on its existing saved decoration slot. Successful actual
+shared interactions record its event variant and synchronous numeric/condition effects in the existing Core
+knowledge namespaces, including when the optional Atlas UI is disabled. A failed handler or an unrelated global
+NPC callback does not discover an object. Reusing an empty container records that use without awarding another
+bonus. Initial Guide information is explicitly separate from recorded findings and is not a live contents check.
+Discovery connects journal notes only to the variants actually observed at that object; knowing another barrel's
+note elsewhere does not expose its effect here.
+
+The exporter produces callback-owned `Global_00_site_refs.lua` through `tools/regenerate_lua_events.sh --site-refs-only`.
+`SetGlobalSiteReference` shares the map-reference metadata validation and replacement ownership rules. Unsupported
+branches remain unprojected rather than being asserted as unconditional effects. Crystal positions are indexed,
+but their fixed loot links and script-owned container effect references still need separate work. The six missing
+physical bindings, special connections, wider content audit and Android/controller checks remain open.
+
+Validation: Windows Release build; 48 focused native unit cases / 1,382 assertions; 14 lighting producer tests.
+The real-map regression includes MM7/MM8 outdoor maps, negative controls for script-owned indoor maps, and a positive
+MM6 indoor binding regression against the full mounted packages. Native AMD/OpenGL tours use the ordinary Trigger
+action: the Harmondale contest grants exactly five skill points, and a Dagger Wound red barrel changes Might 15 to
+17 exactly once. Inspected native Atlas captures show their recorded effects, the barrel's initial Guide reference,
+and Discovery after returning from Guide. The two post-tour scenarios (20 and 22 steps) validate previously absent
+facts, unchanged party resources, exact object identities, an undiscovered neighboring barrel and another save/load
+round trip. Preparation/verification scenarios are under `tests/scenarios/atlas/`; reproducible tours are under
+`tools/menu_tours/atlas_mm{7,8}_inherited_decoration.yml`. A further native MM8 run with Atlas disabled
+passes the same 22-step persistence checks. Sprite picking requires the real renderer; the headless preparation
+scenarios do not verify that input path.

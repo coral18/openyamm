@@ -4,6 +4,9 @@
 #include "game/tables/ClassSkillTable.h"
 #include "game/tables/SpellTable.h"
 #include "game/tables/ItemTable.h"
+#include "game/tables/JournalAutonoteTable.h"
+#include "game/tables/SpriteTables.h"
+#include "game/gameplay/InteractiveDecorationRules.h"
 #include "game/tables/MergedBaseTables.h"
 #include "game/tables/PotionMixingTable.h"
 #include "game/tables/PotionNoteTable.h"
@@ -22,6 +25,7 @@
 #include "game/tables/ObjectTable.h"
 #include "game/maps/MapDeltaData.h"
 #include "game/outdoor/OutdoorMapData.h"
+#include "game/indoor/IndoorMapData.h"
 
 #include <doctest/doctest.h>
 #include <algorithm>
@@ -1905,4 +1909,159 @@ TEST_CASE("world item map titles and search honor identification history in Disc
     CHECK(catalog[0].title == "Sword");
     CHECK(std::any_of(catalog[0].links.begin(), catalog[0].links.end(), [](const WorldGuideLink &link)
         { return link.kind == WorldGuideLink::Kind::Monster && link.target == "1"; }));
+}
+
+
+TEST_CASE("inherited decoration sites share binding slots and keep script-owned entities separate")
+{
+    DecorationTable decorations;
+    const auto row = [](int id, const char *pName, const char *pHint)
+    {
+        std::vector<std::string> cells(15, "0");
+        cells[0] = std::to_string(id); cells[1] = pName; cells[2] = pHint; cells[14].clear();
+        return cells;
+    };
+    REQUIRE(decorations.loadRows({row(1, "tree", "Tree"), row(2, "dec32", "Barrel"),
+        row(3, "crystl0", "Crystal")}));
+    OutdoorMapData map;
+    map.entities.resize(5);
+    map.entities[0].name = "tree";
+    map.entities[1].name = "dec32"; map.entities[1].eventIdSecondary = 42;
+    map.entities[2].name = "dec32"; map.entities[2].eventIdPrimary = 55; map.entities[2].x = 100;
+    map.entities[3].name = "dec32"; map.entities[3].x = 200;
+    map.entities[4].name = "crystl0"; map.entities[4].x = 300;
+    const auto sites = worldInheritedDecorationSites(map, decorations);
+    REQUIRE(sites.size() == 3);
+    CHECK(sites[0].site.id == "inherited-decoration/0");
+    CHECK(sites[0].site.eventId == 268);
+    CHECK(sites[0].name == "Barrel");
+    CHECK(sites[0].eventCount == 8);
+    CHECK(sites[0].site.x == 100);
+    CHECK(sites[0].initialEventId >= 269);
+    CHECK(sites[0].initialEventId <= 275);
+    MapDeltaData authored;
+    authored.eventVariables.decorVars[0] = 4;
+    const auto original = authored.eventVariables.decorVars;
+    const auto authoredSites = worldInheritedDecorationSites(map, decorations, &authored);
+    REQUIRE(authoredSites.size() == 3);
+    CHECK(authoredSites[0].initialEventId == 272);
+    CHECK(authoredSites[1].initialEventId == 268);
+    CHECK(authored.eventVariables.decorVars == original);
+    CHECK(sites[1].site.id == "inherited-decoration/1");
+    CHECK(sites[1].site.x == 200);
+    CHECK(sites[2].site.eventId == 65310);
+    CHECK(sites[2].name == "Crystal");
+    CHECK(sites[2].eventCount == 1);
+    CHECK(sites[2].site.x == 300);
+    const auto direct = worldInteractionSites(map);
+    REQUIRE(direct.size() == 1);
+    CHECK(direct[0].eventId == 42);
+    IndoorMapData indoor;
+    for (const auto &entity : map.entities)
+    {
+        IndoorEntity copy;
+        copy.name = entity.name; copy.eventIdPrimary = entity.eventIdPrimary;
+        copy.eventIdSecondary = entity.eventIdSecondary; copy.x = entity.x;
+        indoor.entities.push_back(copy);
+    }
+    const auto indoorSites = worldInheritedDecorationSites(indoor, decorations);
+    REQUIRE(indoorSites.size() == sites.size());
+    for (size_t i = 0; i < sites.size(); ++i)
+    {
+        CHECK(indoorSites[i].site.id == sites[i].site.id);
+        CHECK(indoorSites[i].site.eventId == sites[i].site.eventId);
+        CHECK(indoorSites[i].site.x == sites[i].site.x);
+    }
+    map.entities.assign(130, map.entities[3]);
+    const auto bounded = worldInheritedDecorationSites(map, decorations);
+    REQUIRE(bounded.size() == 125);
+    CHECK(bounded.back().site.id == "inherited-decoration/124");
+}
+
+TEST_CASE("shared decoration variants discover only the interacted object and preserve local indexing")
+{
+    std::ifstream support(std::string(OPENYAMM_SOURCE_DIR) + "/assets_dev/engine/scripts/common/event_support.lua");
+    REQUIRE(support);
+    const std::string prefix{std::istreambuf_iterator<char>(support), std::istreambuf_iterator<char>()};
+    std::string error;
+    const auto global = ScriptedEventProgram::loadFromLuaText(prefix + R"(
+        RegisterGlobalEvent(268, 'Empty barrel', function() error('must not execute') end)
+        RegisterGlobalEvent(269, 'Red barrel', function() error('must not execute') end)
+        RegisterGlobalEvent(270, 'Yellow barrel', function() error('must not execute') end)
+        SetGlobalAutonoteRefs(270, {21})
+        SetGlobalSiteReference(270, 'Accuracy +2')
+        SetGlobalSiteReference(269, 'Might +2; contents change after use.')
+        SetGlobalAutonoteRefs(269, {17})
+    )", "shared-decoration-catalog", ScriptedEventScope::Global, error);
+    REQUIRE_MESSAGE(global, error);
+    const auto local = ScriptedEventProgram::loadFromLuaText(prefix + R"(
+        RegisterEvent(269, 'Unrelated map event', function() error('must not execute') end)
+    )", "local-decoration-catalog", ScriptedEventScope::Map, error);
+    REQUIRE_MESSAGE(local, error);
+    MapStats maps;
+    std::vector<std::string> row(35);
+    row[0] = "63"; row[1] = "Harmondale"; row[2] = "7out02.odm"; row[34] = "mm7";
+    REQUIRE(maps.loadFromRows({row}));
+    HouseTable houses;
+    NpcDialogTable npcs;
+    MergedTeacherTopicTable teachers;
+    WorldDatabase world(maps, houses, npcs, teachers, "mm7");
+    WorldDecorationSite first, second;
+    first.site = {"inherited-decoration/0", 268, 100, 200, 300};
+    first.eventCount = 8; first.initialEventId = 269; first.name = "Barrel";
+    second = first; second.site.id = "inherited-decoration/1"; second.site.x = 400;
+    world.indexInheritedDecorations(*maps.findById(63), {first, second}, *global);
+    WorldKnowledge knowledge;
+    knowledge.visitedMaps.insert("7out02.odm");
+    CHECK(world.queryFeatures(knowledge, false).empty());
+    REQUIRE(world.queryFeatures(knowledge, true).size() == 2);
+    CHECK(knowledge.interactedSites.empty());
+    knowledge.interactedSites["7out02.odm"].insert(worldSiteDiscoveryKey(270, second.site.id));
+    const auto known = world.queryFeatures(knowledge, false);
+    REQUIRE(known.size() == 1);
+    CHECK(known[0]->site.x == 400);
+    CHECK(world.siteReference(*known[0], knowledge, false).empty());
+    CHECK(world.siteReference(*known[0], knowledge, true).find("Might +2") != std::string::npos);
+    CHECK(known[0]->autonoteIds == std::vector<uint32_t>{17});
+    CHECK(world.siteReference(*known[0], knowledge, true).find("Accuracy") == std::string::npos);
+    knowledge.siteObservations[known[0]->mapId].push_back({second.site.id, 270, 100});
+    CHECK(world.siteObservations(*known[0], knowledge).size() == 1);
+    JournalAutonoteTable notes;
+    REQUIRE(notes.loadFromRows(guideTableRows("english/autonote.txt")));
+    knowledge.autonoteIds = {17, 21};
+    const auto learned = world.siteJournalEntries(*known[0], notes, knowledge, false);
+    REQUIRE(learned.size() == 1);
+    CHECK((learned[0]->noteBit >> 16) == 21);
+    const auto initial = world.siteJournalEntries(*known[0], notes, knowledge, true);
+    REQUIRE(initial.size() == 1);
+    CHECK((initial[0]->noteBit >> 16) == 17);
+    OutdoorMapData geometry;
+    geometry.worldId = "mm7"; geometry.fileName = "7out02.odm";
+    world.indexMapLocations(geometry, *local);
+    CHECK(world.queryFeatures(knowledge, true).size() == 2);
+    world.indexInheritedDecorations(*maps.findById(63), {first, second}, *global);
+    CHECK(world.queryFeatures(knowledge, true).size() == 2);
+    CHECK(world.queryFeatures(knowledge, false).size() == 1);
+}
+
+
+TEST_CASE("shared decoration rules preserve outdoor binding compatibility for existing container saves")
+{
+    DecorationEntry flour;
+    flour.internalName = "floursac"; flour.hint = "Sack";
+    const auto shared = resolveInteractiveDecorationBindingSpec(flour, "floursac");
+    REQUIRE(shared);
+    CHECK(shared->baseEventId == 1741);
+    CHECK_FALSE(resolveInteractiveDecorationBindingSpec(flour, "floursac",
+        InteractiveDecorationRuleSet::OutdoorBindings));
+    DecorationEntry trash;
+    trash.internalName = "trasheap"; trash.hint = "Trash heap";
+    const auto indoor = resolveInteractiveDecorationBindingSpec(trash, "trasheap");
+    const auto outdoor = resolveInteractiveDecorationBindingSpec(trash, "trasheap",
+        InteractiveDecorationRuleSet::OutdoorBindings);
+    REQUIRE(indoor);
+    REQUIRE(outdoor);
+    CHECK(indoor->baseEventId == 1748);
+    CHECK(outdoor->baseEventId == 281);
+    CHECK(outdoor->eventCount == 4);
 }

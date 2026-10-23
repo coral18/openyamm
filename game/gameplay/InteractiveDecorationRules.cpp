@@ -286,7 +286,7 @@ std::optional<uint16_t> resolveCrystalEventId(
 
 std::optional<InteractiveDecorationFamily> classifyInteractiveDecorationFamily(
     const DecorationEntry &decoration,
-    const std::string &instanceName)
+    const std::string &instanceName, InteractiveDecorationRuleSet rules)
 {
     const std::vector<std::string> keys = collectDecorationKeys(decoration, instanceName);
 
@@ -305,7 +305,7 @@ std::optional<InteractiveDecorationFamily> classifyInteractiveDecorationFamily(
         return InteractiveDecorationFamily::Cauldron;
     }
 
-    if (decorationMatchesAnyKey(keys, {"trasheap"}))
+    if (rules == InteractiveDecorationRuleSet::Shared && decorationMatchesAnyKey(keys, {"trasheap"}))
     {
         return InteractiveDecorationFamily::MightAndMagicSixTrashHeap;
     }
@@ -325,17 +325,17 @@ std::optional<InteractiveDecorationFamily> classifyInteractiveDecorationFamily(
         return InteractiveDecorationFamily::Cask;
     }
 
-    if (decorationMatchesAnyKey(keys, {"floursac"}))
+    if (rules == InteractiveDecorationRuleSet::Shared && decorationMatchesAnyKey(keys, {"floursac"}))
     {
         return InteractiveDecorationFamily::FlourSack;
     }
 
-    if (decorationMatchesAnyKey(keys, {"bag01", "bag_a"}))
+    if (rules == InteractiveDecorationRuleSet::Shared && decorationMatchesAnyKey(keys, {"bag01", "bag_a"}))
     {
         return InteractiveDecorationFamily::LargeBag;
     }
 
-    if (decorationMatchesAnyKey(keys, {"bucket"}))
+    if (rules == InteractiveDecorationRuleSet::Shared && decorationMatchesAnyKey(keys, {"bucket"}))
     {
         return InteractiveDecorationFamily::Bucket;
     }
@@ -345,10 +345,10 @@ std::optional<InteractiveDecorationFamily> classifyInteractiveDecorationFamily(
 
 std::optional<InteractiveDecorationBindingSpec> resolveInteractiveDecorationBindingSpec(
     const DecorationEntry &decoration,
-    const std::string &instanceName)
+    const std::string &instanceName, InteractiveDecorationRuleSet rules)
 {
     const std::optional<InteractiveDecorationFamily> family =
-        classifyInteractiveDecorationFamily(decoration, instanceName);
+        classifyInteractiveDecorationFamily(decoration, instanceName, rules);
 
     if (family)
     {

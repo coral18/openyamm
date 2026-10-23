@@ -4,6 +4,7 @@
 #include "game/world/WorldDatabase.h"
 #include "game/world/WorldAtlasPresentation.h"
 #include "game/world/WorldGuide.h"
+#include "game/tables/SpriteTables.h"
 
 namespace OpenYAMM::Game
 {
@@ -69,6 +70,7 @@ private:
     const ScriptedEventProgram *m_pGlobalEvents = nullptr;
     const ScriptedEventProgram *m_pLocalEvents = nullptr;
     WorldGuideKnowledge m_referenceKnowledge;
+    std::optional<DecorationTable> m_decorationTable;
     std::vector<WorldGuideEntry> m_referenceEntries;
     WorldGuideSection m_referenceSection = WorldGuideSection::Items;
     bool m_referenceOpen = false, m_referenceDirty = true;

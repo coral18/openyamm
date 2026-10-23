@@ -372,6 +372,8 @@ public:
         MapAssetLoadSharedCache *pSharedCache = nullptr
     ) const;
 
+    static std::optional<DecorationTable> loadDecorationTable(const Engine::AssetFileSystem &assetFileSystem);
+
     // Shared package-aware geometry lookup for read-only world tools such as the Atlas.
     static std::optional<std::string> findAssetPath(
         const Engine::AssetFileSystem &assetFileSystem,

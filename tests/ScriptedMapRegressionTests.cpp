@@ -17,6 +17,7 @@
 #include "game/world/WorldItemSources.h"
 #include "game/world/WorldDatabase.h"
 #include "game/world/WorldGuide.h"
+#include "game/world/WorldSiteObservations.h"
 
 #include "tests/RegressionGameData.h"
 #include "tests/RegressionMapLoader.h"
@@ -24,6 +25,7 @@
 #include <algorithm>
 #include <array>
 #include <cstring>
+#include <cstdlib>
 #include <fstream>
 #include <filesystem>
 #include <optional>
@@ -9774,4 +9776,126 @@ TEST_CASE("Mount Nighon unhinted wells restore 25 points and award their shared 
     CHECK(pMember->health == 75);
     CHECK(journalNoteValue(state, 280) == 1);
     CHECK(journalNoteValue(state, 281) == 1);
+}
+
+
+TEST_CASE("inherited decoration execution records actual shared effects without observing ordinary global calls")
+{
+    using namespace OpenYAMM::Game;
+    const auto support = readSourceTextFile(std::filesystem::path(OPENYAMM_SOURCE_DIR)
+        / "assets_dev/engine/scripts/common/event_support.lua");
+    REQUIRE(support);
+    std::string error;
+    const auto global = ScriptedEventProgram::loadFromLuaText(*support + R"(
+        RegisterGlobalEvent(269, 'Red barrel', function()
+            evt.ForPlayer(Players.Member0)
+            AddValue(BaseMight, 2)
+            evt.ChangeEvent(268)
+        end)
+        RegisterGlobalEvent(270, 'Broken callback', function() error('failed') end)
+    )", "shared-decoration-observation", ScriptedEventScope::Global, error);
+    REQUIRE_MESSAGE(global, error);
+    EventRuntime runtime;
+    EventRuntimeState state;
+    state.mapFileName = "7out02.odm";
+    Party party = makeScriptedRegressionParty();
+    RecordingSceneEventContext scene;
+    scene.setCurrentGameMinutes(100);
+    const int might = party.member(0)->might;
+    state.activeDecorationContext = EventRuntimeState::ActiveDecorationContext{
+        .decorVarIndex = 2, .baseEventId = 268, .currentEventId = 269, .eventCount = 8};
+    REQUIRE(runtime.executeEventById(std::nullopt, global, 269, state, &party, &scene, std::nullopt, true));
+    CHECK(party.member(0)->might == might + 2);
+    CHECK(state.namedMapVars.at(worldSiteDiscoveryKey(269, "inherited-decoration/2")) == 1);
+    auto observations = worldSiteObservations(state);
+    REQUIRE(observations.size() == 1);
+    CHECK(observations[0].siteId == "inherited-decoration/2");
+    CHECK(observations[0].eventId == 269);
+    CHECK(observations[0].gameMinutes == 100);
+    CHECK(observations[0].lastChanged);
+    state.activeDecorationContext.reset();
+    scene.setCurrentGameMinutes(200);
+    REQUIRE(runtime.executeEventById(std::nullopt, global, 269, state, &party, &scene, std::nullopt, true));
+    CHECK(worldSiteObservations(state)[0].gameMinutes == 100);
+    state.activeDecorationContext = EventRuntimeState::ActiveDecorationContext{
+        .decorVarIndex = 3, .baseEventId = 268, .currentEventId = 270, .eventCount = 8};
+    CHECK_FALSE(runtime.executeEventById(std::nullopt, global, 270, state, &party, &scene, std::nullopt, true));
+    CHECK_FALSE(state.namedMapVars.contains(worldSiteDiscoveryKey(270, "inherited-decoration/3")));
+    CHECK(worldSiteObservations(state).size() == 1);
+}
+
+
+TEST_CASE("shared decoration references load from the canonical generated global catalog")
+{
+    using namespace OpenYAMM::Game;
+    const auto &loader = requireRegressionMapLoader();
+    for (const char *pWorld : {"mm7", "mm8"})
+    {
+        MapAssetInfo map;
+        map.map.worldId = pWorld;
+        map.map.fileName = std::string(pWorld) == "mm7" ? "7out02.odm" : "out01.odm";
+        std::string error;
+        REQUIRE_MESSAGE(GameDataLoader::loadEventPrograms(loader.assetFileSystem, map, error), error);
+        REQUIRE(map.globalEventProgram);
+        REQUIRE(map.globalEventProgram->siteReferences().contains(269));
+        CHECK(map.globalEventProgram->siteReferences().at(269).find("Base Might +2") != std::string::npos);
+        CHECK(map.globalEventProgram->siteReferences().at(269).find("Remaining contents change after use")
+            != std::string::npos);
+    }
+}
+
+
+TEST_CASE("canonical inherited decoration catalogs use real indoor and outdoor bindings")
+{
+    using namespace OpenYAMM::Game;
+    const auto &loader = requireRegressionMapLoader();
+    const auto &data = loader.gameDataLoader;
+    const auto decorations = MapAssetLoader::loadDecorationTable(loader.assetFileSystem);
+    REQUIRE(decorations);
+    std::ofstream fixtures;
+    if (const char *pDirectory = std::getenv("OPENYAMM_ATLAS_DECORATION_FIXTURES"))
+    {
+        fixtures.open(std::filesystem::path(pDirectory) / "canonical-sites.tsv");
+        REQUIRE(fixtures.is_open());
+    }
+    for (const auto &[world, file] : std::vector<std::pair<std::string, std::string>>{
+        {"mm7", "7out02.odm"}, {"mm7", "7d06.blv"}, {"mm8", "out01.odm"}, {"mm8", "d05.blv"}, {"mm6", "6d06.blv"}})
+    {
+        CAPTURE(world);
+        CAPTURE(file);
+        const auto &maps = data.getMapStats().getEntries();
+        const auto found = std::find_if(maps.begin(), maps.end(), [&](const MapStatsEntry &map)
+            { return map.worldId == world && toLowerCopy(map.fileName) == file; });
+        REQUIRE(found != maps.end());
+        auto map = MapAssetLoader().load(loader.assetFileSystem, *found, data.getMonsterTable(),
+            data.getObjectTable(), MapLoadPurpose::HeadlessGameplay);
+        REQUIRE(map);
+        const auto &delta = map->outdoorMapData ? map->outdoorMapDeltaData : map->indoorMapDeltaData;
+        const auto sites = map->outdoorMapData
+            ? worldInheritedDecorationSites(*map->outdoorMapData, *decorations, delta ? &*delta : nullptr)
+            : worldInheritedDecorationSites(*map->indoorMapData, *decorations, delta ? &*delta : nullptr);
+        // These campaign temples own their interactions through map callbacks, not inherited slots.
+        const bool hasInheritedSites = file != "7d06.blv" && file != "d05.blv";
+        CHECK(sites.empty() != hasInheritedSites);
+        CHECK(sites.size() <= 125);
+        std::string error;
+        REQUIRE_MESSAGE(GameDataLoader::loadEventPrograms(loader.assetFileSystem, *map, error), error);
+        REQUIRE(map->globalEventProgram);
+        WorldDatabase database(data.getMapStats(), data.getHouseTable(), data.getNpcDialogTable(),
+            data.getMergedTeacherTopicTable(), world);
+        database.indexInheritedDecorations(*found, sites, *map->globalEventProgram);
+        WorldKnowledge knowledge;
+        knowledge.visitedMaps.insert(file);
+        CHECK(database.queryFeatures(knowledge, false).empty());
+        CHECK(database.queryFeatures(knowledge, true).empty() != hasInheritedSites);
+        for (const WorldDecorationSite &site : sites)
+        {
+            CHECK(site.initialEventId >= site.site.eventId);
+            CHECK(uint32_t(site.initialEventId) < uint32_t(site.site.eventId) + site.eventCount);
+            if (fixtures.is_open())
+                fixtures << world << '\t' << file << '\t' << site.site.id << '\t' << site.site.eventId << '\t'
+                    << site.initialEventId << '\t' << site.site.x << '\t' << site.site.y << '\t' << site.site.z
+                    << '\t' << site.name << '\n';
+        }
+    }
 }

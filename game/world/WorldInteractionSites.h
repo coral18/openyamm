@@ -8,6 +8,8 @@ namespace OpenYAMM::Game
 {
 struct OutdoorMapData;
 struct IndoorMapData;
+class DecorationTable;
+struct MapDeltaData;
 
 // A physical interactive surface/component or decoration, before interpreting its event.
 struct WorldInteractionSite
@@ -19,6 +21,20 @@ struct WorldInteractionSite
     std::string surfacePrefix;
 };
 
+// Possible shared callbacks for one inherited decoration. No state is seeded or loot rolled.
+struct WorldDecorationSite
+{
+    WorldInteractionSite site;
+    uint8_t eventCount = 0;
+    uint16_t initialEventId = 0;
+    bool initiallyDepleted = false;
+    std::string name;
+};
+
+std::vector<WorldDecorationSite> worldInheritedDecorationSites(const OutdoorMapData &map,
+    const DecorationTable &decorations, const MapDeltaData *pInitialState = nullptr);
+std::vector<WorldDecorationSite> worldInheritedDecorationSites(const IndoorMapData &map,
+    const DecorationTable &decorations, const MapDeltaData *pInitialState = nullptr);
 std::vector<WorldInteractionSite> worldInteractionSites(const OutdoorMapData &map);
 std::vector<WorldInteractionSite> worldInteractionSites(const IndoorMapData &map);
 }

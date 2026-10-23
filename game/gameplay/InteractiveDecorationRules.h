@@ -9,6 +9,9 @@
 
 namespace OpenYAMM::Game
 {
+// Outdoor bindings retain their existing container set and saved decor-var ordering.
+enum class InteractiveDecorationRuleSet { Shared, OutdoorBindings };
+
 enum class InteractiveDecorationFamily : uint8_t
 {
     None = 0,
@@ -36,11 +39,13 @@ struct InteractiveDecorationBindingSpec
 
 std::optional<InteractiveDecorationFamily> classifyInteractiveDecorationFamily(
     const DecorationEntry &decoration,
-    const std::string &instanceName);
+    const std::string &instanceName,
+    InteractiveDecorationRuleSet rules = InteractiveDecorationRuleSet::Shared);
 
 std::optional<InteractiveDecorationBindingSpec> resolveInteractiveDecorationBindingSpec(
     const DecorationEntry &decoration,
-    const std::string &instanceName);
+    const std::string &instanceName,
+    InteractiveDecorationRuleSet rules = InteractiveDecorationRuleSet::Shared);
 
 uint32_t makeInteractiveDecorationSeed(
     size_t entityIndex,

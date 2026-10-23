@@ -361,7 +361,8 @@ std::vector<std::string> buildLuaGlobalScriptOverlayPathCandidates(const Engine:
         {
             if (toLowerCopy(entryName) == "global_00_item_rewards.lua"
                 || toLowerCopy(entryName) == "global_00_npc_locations.lua"
-                || toLowerCopy(entryName) == "global_00_autonote_refs.lua")
+                || toLowerCopy(entryName) == "global_00_autonote_refs.lua"
+                || toLowerCopy(entryName) == "global_00_site_refs.lua")
                 candidates.insert(candidates.begin(), "events/" + entryName);
             else
                 candidates.push_back("events/" + entryName);

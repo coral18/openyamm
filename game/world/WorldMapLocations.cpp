@@ -61,7 +61,7 @@ void WorldDatabase::indexMapSites(const WorldRecord &source, const std::vector<W
     std::erase_if(m_features, [pSource](const WorldMapFeature &feature)
     { return feature.mapId == pSource->id && feature.kind != WorldMapFeatureKind::Monster
         && feature.kind != WorldMapFeatureKind::Note && feature.kind != WorldMapFeatureKind::Item
-        && !feature.arrival; });
+        && !feature.arrival && !feature.site.id.starts_with("inherited-decoration/"); });
     auto features = buildWorldMapFeatures(pSource->id, sites, events);
     m_features.insert(m_features.end(), features.begin(), features.end());
     for (const WorldInteractionSite &site : sites)
@@ -244,6 +244,8 @@ bool WorldDatabase::featureVisible(const WorldMapFeature &feature, const WorldKn
     {
         if (known->second.contains(worldSiteDiscoveryKey(feature.site.eventId, feature.site.id)))
             return true;
+        for (uint16_t event : feature.relatedEventIds)
+            if (known->second.contains(worldSiteDiscoveryKey(event, feature.site.id))) return true;
         for (uint32_t face : feature.site.faceIds)
             if (known->second.contains(worldSiteDiscoveryKey(feature.site.eventId,
                 feature.site.surfacePrefix + "surface/" + std::to_string(face))))

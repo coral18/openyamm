@@ -1277,6 +1277,38 @@ TEST_CASE("site reference annotations bind callbacks without executing them")
     CHECK_FALSE(load(base + "evt.meta.map.siteReferences[10].handler = 42"));
 }
 
+TEST_CASE("global site references are callback owned and isolated from map references")
+{
+    using namespace OpenYAMM::Game;
+    const auto bytes = readBinaryFixture(std::filesystem::path(OPENYAMM_SOURCE_DIR)
+        / "assets_dev/engine/scripts/common/event_support.lua");
+    const std::string support(bytes.begin(), bytes.end());
+    const std::string base = "RegisterEvent(10, '', function() error('must not execute') end)\n"
+        "SetMapSiteReference(10, 'Local')\n"
+        "RegisterGlobalEvent(10, '', function() error('must not execute') end)\n"
+        "SetGlobalSiteReference(10, 'Shared')\n";
+    const auto load = [&](const std::string &code, ScriptedEventScope scope)
+    {
+        std::string error;
+        return ScriptedEventProgram::loadFromLuaText(support + code, "global-site-references", scope, error);
+    };
+    const auto local = load(base, ScriptedEventScope::Map);
+    auto global = load(base, ScriptedEventScope::Global);
+    REQUIRE(local);
+    REQUIRE(global);
+    CHECK(local->siteReferences().at(10) == "Local");
+    CHECK(global->siteReferences().at(10) == "Shared");
+    global = load(base + "ReplaceGlobalEvent(10, '', function() end)", ScriptedEventScope::Global);
+    REQUIRE(global);
+    CHECK(global->siteReferences().empty());
+    global = load(base + "ReplaceGlobalEvent(10, '', function() end)\nSetGlobalSiteReference(10, 'Modded')",
+        ScriptedEventScope::Global);
+    REQUIRE(global);
+    CHECK(global->siteReferences().at(10) == "Modded");
+    CHECK_FALSE(load("SetGlobalSiteReference(10, 'No handler')", ScriptedEventScope::Global));
+    CHECK_FALSE(load(base + "SetGlobalSiteReference(10, 42)", ScriptedEventScope::Global));
+}
+
 TEST_CASE("site reference export follows branches and rejects incomplete or state-dependent projections")
 {
     using namespace OpenYAMM::Game;
@@ -1351,7 +1383,11 @@ TEST_CASE("site reference export follows branches and rejects incomplete or stat
     const std::string callbacks = generateLegacyEventLuaChunk(writeEvents, {}, lookups, LegacyLuaExportScope::Map);
     CHECK(extractLuaEvent(callbacks, "RegisterEvent(5,").find("AddValue(ActualMight, 2)") != std::string::npos);
     CHECK(extractLuaEvent(callbacks, "RegisterEvent(6,").find("SetValue(MapVar(") != std::string::npos);
-    CHECK(generateLegacyEventSiteRefsLuaChunk(events, {}, lookups, LegacyLuaExportScope::Global).empty());
+    const std::string globalRefs =
+        generateLegacyEventSiteRefsLuaChunk(events, {}, lookups, LegacyLuaExportScope::Global);
+    CHECK(globalRefs.find("SetGlobalSiteReference(1,") != std::string::npos);
+    CHECK(globalRefs.find("Party gold +200") != std::string::npos);
+    CHECK(globalRefs.find("SetMapSiteReference(") == std::string::npos);
 }
 
 TEST_CASE("Harmondale unnoted gold well reference uses the real callback thresholds")

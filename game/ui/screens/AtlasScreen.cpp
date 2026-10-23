@@ -66,6 +66,8 @@ AtlasScreen::AtlasScreen(const Engine::AssetFileSystem &assets, const GameDataRe
       m_writeNote(std::move(writeNote)), m_close(std::move(close)), m_paused(paused)
 {
     loadDesign("menu/main_menu");
+    m_decorationTable = MapAssetLoader::loadDecorationTable(assets);
+    if (!m_decorationTable) throw std::runtime_error("Missing or invalid decoration registry");
     if (!m_world.transportIssues().empty())
     {
         m_locationError = "Some saved transport offers are unavailable.";
@@ -177,6 +179,16 @@ AtlasScreen::AtlasScreen(const Engine::AssetFileSystem &assets, const GameDataRe
         m_world.indexMapMonsters(pCurrentMap->map, *pCurrentMap->indoorMapData, m_data.monsterTable(),
             m_knowledge.monsterObservations[toLowerCopy(pCurrentMap->map.fileName)]);
         m_indexedMaps.insert(WorldDatabase::mapId(pCurrentMap->map));
+    }
+    if (pCurrentMap != nullptr && m_pGlobalEvents != nullptr
+        && (pCurrentMap->outdoorMapData || pCurrentMap->indoorMapData))
+    {
+        const auto sites = pCurrentMap->outdoorMapData
+            ? worldInheritedDecorationSites(*pCurrentMap->outdoorMapData, *m_decorationTable,
+                pCurrentMap->outdoorMapDeltaData ? &*pCurrentMap->outdoorMapDeltaData : nullptr)
+            : worldInheritedDecorationSites(*pCurrentMap->indoorMapData, *m_decorationTable,
+                pCurrentMap->indoorMapDeltaData ? &*pCurrentMap->indoorMapDeltaData : nullptr);
+        m_world.indexInheritedDecorations(pCurrentMap->map, sites, *m_pGlobalEvents);
     }
     if (m_knowledge.partyPosition)
         for (const auto &record : m_world.records())
@@ -554,7 +566,7 @@ void AtlasScreen::drawScreen(float)
         textInRect(canvasRect(168, 89, 403, 25), map->name(), "fondamento", 14);
         if (m_featureView)
             textInRect(canvasRect(375, 94, 195, 16),
-                       "C Chests W Water S Shrines O Obelisks P Passages M Monsters N Notes I Items",
+                       "C Chests W Water S Shrines O Obelisks P Passages M Monsters N Notes I Items D Objects",
                        "menu_lucida", 7, 0xffc6dfeau);
         else if (map->kind == WorldRecordKind::Region)
             textInRect(canvasRect(375, 94, 195, 16), m_filter == WorldRecordKind::Travel
@@ -630,6 +642,13 @@ void AtlasScreen::indexMapData(MapAssetInfo &map)
     if (map.localEventProgram) m_world.indexNpcLocations(*map.localEventProgram);
     if (map.globalEventProgram)
     {
+        if (m_decorationTable)
+        {
+            const auto sites = map.outdoorMapData
+                ? worldInheritedDecorationSites(*map.outdoorMapData, *m_decorationTable, delta ? &*delta : nullptr)
+                : worldInheritedDecorationSites(*map.indoorMapData, *m_decorationTable, delta ? &*delta : nullptr);
+            m_world.indexInheritedDecorations(map.map, sites, *map.globalEventProgram);
+        }
         m_world.indexSharedItemRewards(*map.globalEventProgram, m_data.itemTable());
         m_world.indexNpcLocations(*map.globalEventProgram);
     }
@@ -1225,7 +1244,7 @@ bool AtlasScreen::drawFeatureMarkers(const WorldRecord &map, const Rect &image, 
             m_selectedFeature = feature.id;
             m_scroll = 0;
         }
-        const char *labels[] = {"C", "W", "S", "O", "P", "M", "N", "I"};
+        const char *labels[] = {"C", "W", "S", "O", "P", "M", "N", "I", "D"};
         textInRect(marker, pin.features.size() > 1 ? std::to_string(pin.features.size())
             : feature.arrival ? "A" : labels[size_t(feature.kind)],
                    "menu_lucida", 7, 0xffc6dfeau, true);
@@ -1836,7 +1855,8 @@ void AtlasScreen::drawDetails()
         { return pFeature->id == m_selectedFeature
             && (m_siteSelection.empty() || m_siteSelection.contains(pFeature->id)); });
         std::string text = "Select a site to inspect it. "
-            "C Chests, W Wells/Fountains, S Shrines, O Obelisks, P Passages, A Arrivals, M Monsters, N Notes, I Items.";
+            "C Chests, W Wells/Fountains, S Shrines, O Obelisks, P Passages, A Arrivals, "
+            "M Monsters, N Notes, I Items, D Objects.";
         const WorldRecord *pDestination = nullptr;
         const WorldMapFeature *pArrivalDestination = nullptr;
         size_t arrivalCount = 0;

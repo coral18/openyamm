@@ -2307,8 +2307,8 @@ bool exportLegacyProgram(
         }
     }
     if (metadataOnly == MetadataExport::AutonoteReferences) return true;
-    const std::filesystem::path sitePath = scriptsRoot / "maps" / (outputStem + "_00_site_refs.lua");
-    if (!globalScope)
+    const std::filesystem::path sitePath = globalScope
+        ? scriptsRoot / "Global_00_site_refs.lua" : scriptsRoot / "maps" / (outputStem + "_00_site_refs.lua");
     {
         const std::string references = OpenYAMM::Game::generateLegacyEventSiteRefsLuaChunk(
             evtProgram, strTable, lookups, scope, version);

@@ -1,0 +1,35 @@
+id: atlas.mm7_inherited_decoration
+title: Prepare an isolated shared-decoration fixture for the native Atlas interaction
+  tour
+world: mm7
+mode: faithful
+steps:
+- new_game_flow:
+    start_map: 7out02.odm
+    party:
+      gold: 500
+      food: 10
+      members:
+      - name: Atlas Tester
+        class: Knight
+        race_id: 0
+        level: 1
+        endurance: 60
+        skills: []
+        equipment: {}
+- assert:
+    runtime_event_variable:
+      id: 243
+      member_index: 0
+      value: 0
+- assert:
+    named_map_var_changed:
+      name: openyamm.discovery.site/inherited-decoration/0/event/551
+      value: 0
+- set_pose:
+    x: -4111.0
+    y: 7443.0
+    z: 2617.0
+    yaw: 0
+    pitch: -0.6
+- save_game: before-decoration

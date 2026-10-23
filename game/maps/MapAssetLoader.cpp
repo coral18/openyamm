@@ -4206,6 +4206,14 @@ void clearMapRenderSourcePixels(MapAssetInfo &mapAssetInfo)
     }
 }
 
+std::optional<DecorationTable> MapAssetLoader::loadDecorationTable(const Engine::AssetFileSystem &assetFileSystem)
+{
+    std::vector<std::vector<std::string>> rows;
+    DecorationTable table;
+    if (!loadDecorationRows(assetFileSystem, rows, nullptr) || !table.loadRows(rows)) return std::nullopt;
+    return table;
+}
+
 std::optional<MapAssetInfo> MapAssetLoader::load(
     const Engine::AssetFileSystem &assetFileSystem,
     const MapStatsEntry &map,

@@ -1,0 +1,67 @@
+id: atlas.mm7_native_decoration_persistence
+title: Actual native sprite interaction and repeated use persist across save/load
+world: mm7
+mode: faithful
+steps:
+- load_game:
+    name: before
+    path: saves/before.oysav
+- assert:
+    runtime_event_variable:
+      id: 243
+      member_index: 0
+      value: 0
+- assert:
+    named_map_var_changed:
+      name: openyamm.discovery.site/inherited-decoration/0/event/551
+      value: 0
+- load_game:
+    name: native
+    path: saves/quicksave.oysav
+- &id001
+  assert:
+    runtime_event_variable:
+      id: 243
+      member_index: 0
+      value: 5
+- &id002
+  assert:
+    named_map_var_changed:
+      name: openyamm.discovery.site/inherited-decoration/0/event/551
+      value: 1
+- &id003
+  assert:
+    named_map_var_changed:
+      name: openyamm.discovery.site-effects.v1/inherited-decoration/0/event/551/seen
+      value: 1
+- &id004
+  assert:
+    named_map_var_changed:
+      name: openyamm.discovery.site-effects.v1/inherited-decoration/0/event/551/stat/SkillPoints/min-before
+      value: 0
+- &id005
+  assert:
+    named_map_var_changed:
+      name: openyamm.discovery.site-effects.v1/inherited-decoration/0/event/551/stat/SkillPoints/max-after
+      value: 5
+- &id006
+  assert:
+    named_map_var_changed:
+      name: openyamm.discovery.site-effects.v1/inherited-decoration/0/event/551/changed
+      value: 0
+- save_game: native-roundtrip
+- load_game: native-roundtrip
+- *id001
+- *id002
+- *id003
+- *id004
+- *id005
+- *id006
+- assert:
+    runtime_event_variable:
+      id: 21
+      value: 500
+- assert:
+    runtime_event_variable:
+      id: 23
+      value: 10

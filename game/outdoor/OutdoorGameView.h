@@ -1,6 +1,7 @@
 #pragma once
 
 #include "game/world/WorldMonsterKnowledge.h"
+#include "game/gameplay/InteractiveDecorationRules.h"
 
 #include "game/render/SpriteAtlasCache.h"
 #include "game/render/NativeSpriteTextureCache.h"
@@ -560,16 +561,7 @@ private:
     using SpriteLoadCache = GameplayAssetLoadCache;
 
 public:
-    enum class InteractiveDecorationFamily
-    {
-        None,
-        Barrel,
-        Cauldron,
-        TrashHeap,
-        CampFire,
-        Cask,
-        Crystal,
-    };
+    using InteractiveDecorationFamily = OpenYAMM::Game::InteractiveDecorationFamily;
 
     struct InteractiveDecorationBinding
     {
