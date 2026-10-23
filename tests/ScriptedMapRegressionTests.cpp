@@ -15,6 +15,8 @@
 #include "game/outdoor/OutdoorWorldRuntime.h"
 #include "game/party/Party.h"
 #include "game/world/WorldItemSources.h"
+#include "game/world/WorldDatabase.h"
+#include "game/world/WorldGuide.h"
 
 #include "tests/RegressionGameData.h"
 #include "tests/RegressionMapLoader.h"
@@ -9358,22 +9360,102 @@ TEST_CASE("handwritten MM7 rewards describe the final loaded callbacks")
 {
     using namespace OpenYAMM::Game;
     const auto &loader = requireRegressionMapLoader();
-    for (const auto &[file, item] : {std::pair{"7d27.blv", 1463u}, std::pair{"7d37.blv", 1423u}})
+    struct RewardCase
+    {
+        const char *pFile;
+        uint16_t event;
+        uint32_t item;
+    };
+    for (const RewardCase &rewardCase : std::vector<RewardCase>{
+        {"7d27.blv", 376, 1463}, {"7d37.blv", 376, 1423},
+        {"7out02.odm", 65003, 774}, {"7out03.odm", 65004, 774},
+        {"7out04.odm", 401, 1502}, {"out12.odm", 65012, 866}})
     {
         MapAssetInfo map;
-        map.map.fileName = file;
+        map.map.fileName = rewardCase.pFile;
         map.map.worldId = "mm7";
         std::string error;
         REQUIRE_MESSAGE(GameDataLoader::loadEventPrograms(loader.assetFileSystem, map, error), error);
         REQUIRE(map.localEventProgram.has_value());
-        REQUIRE(map.localEventProgram->itemRewards().contains(376));
-        CHECK(map.localEventProgram->itemRewards().at(376) == std::vector<uint32_t>{item});
+        REQUIRE(map.localEventProgram->itemRewards().contains(rewardCase.event));
+        CHECK(map.localEventProgram->itemRewards().at(rewardCase.event) == std::vector<uint32_t>{rewardCase.item});
         REQUIRE(map.globalEventProgram.has_value());
-        for (const auto &[event, reward] : {std::pair{769, 947u}, std::pair{816, 1345u}, std::pair{820, 1345u}})
+        for (const auto &[event, reward] : {std::pair{769, 947u}, std::pair{816, 1345u}, std::pair{820, 1345u},
+            std::pair{1788, 624u}})
         {
             REQUIRE(map.globalEventProgram->itemRewards().contains(event));
             CHECK(map.globalEventProgram->itemRewards().at(event) == std::vector<uint32_t>{reward});
         }
+    }
+}
+
+TEST_CASE("handwritten rewards reach Atlas through real map bindings without granting discoveries")
+{
+    using namespace OpenYAMM::Game;
+    const auto &loader = requireRegressionMapLoader();
+    const GameDataLoader &data = loader.gameDataLoader;
+    struct SourceCase
+    {
+        const char *pWorld, *pFile;
+        uint16_t event;
+        std::vector<uint32_t> items;
+        bool hasPhysicalSource;
+    };
+    for (const SourceCase &test : std::vector<SourceCase>{
+        {"mm7", "7out02.odm", 65003, {774}, false}, {"mm7", "7out03.odm", 65004, {774}, false},
+        {"mm7", "7out04.odm", 401, {1502}, false}, {"mm7", "out12.odm", 65012, {866}, false},
+        {"mm8", "out07.odm", 455, {132, 179, 181, 183, 250, 271, 655, 656}, true}})
+    {
+        CAPTURE(test.pWorld);
+        CAPTURE(test.pFile);
+        const auto &maps = data.getMapStats().getEntries();
+        const auto found = std::find_if(maps.begin(), maps.end(), [&](const MapStatsEntry &map)
+        { return map.worldId == test.pWorld && toLowerCopy(map.fileName) == test.pFile; });
+        REQUIRE(found != maps.end());
+        auto map = MapAssetLoader().load(loader.assetFileSystem, *found, data.getMonsterTable(),
+            data.getObjectTable(), MapLoadPurpose::HeadlessGameplay,
+            MapCompanionLoadOptions{.allowSceneYml = true, .allowLegacyCompanion = true});
+        REQUIRE(map);
+        REQUIRE(map->outdoorMapData);
+        std::string error;
+        REQUIRE_MESSAGE(GameDataLoader::loadEventPrograms(loader.assetFileSystem, *map, error), error);
+        REQUIRE(map->localEventProgram);
+        WorldDatabase database(data.getMapStats(), data.getHouseTable(), data.getNpcDialogTable(),
+            data.getMergedTeacherTopicTable(), test.pWorld);
+        database.indexMapItemRewards(*found, *map->localEventProgram,
+            worldInteractionSites(*map->outdoorMapData), data.getItemTable());
+        WorldKnowledge knowledge;
+        knowledge.visitedMaps.insert(toLowerCopy(found->fileName));
+        CHECK(database.itemSources(knowledge, false).empty());
+        std::unordered_set<uint32_t> declared;
+        size_t located = 0;
+        for (const WorldItemSource *pSource : database.itemSources(knowledge, true))
+            if (pSource->sourceIndex == test.event && pSource->kind == WorldItemSourceKind::MapReward)
+            {
+                CHECK_FALSE(pSource->observed);
+                declared.insert(pSource->itemId);
+                located += pSource->position.has_value();
+                CHECK(worldItemSourceLabel(*pSource) == "Possible event reward");
+            }
+        CHECK(declared == std::unordered_set<uint32_t>(test.items.begin(), test.items.end()));
+        CHECK((located > 0) == test.hasPhysicalSource);
+        WorldGuideSource source;
+        source.worldId = test.pWorld; source.pItems = &data.getItemTable();
+        source.pWorld = &database; source.pWorldKnowledge = &knowledge;
+        WorldGuideKnowledge referenceKnowledge;
+        CHECK(buildWorldGuide(source, WorldGuideSection::Items, referenceKnowledge, false).empty());
+        const auto guide = buildWorldGuide(source, WorldGuideSection::Items, referenceKnowledge, true);
+        for (uint32_t id : test.items)
+        {
+            const auto entry = std::find_if(guide.begin(), guide.end(),
+                [id](const WorldGuideEntry &item) { return item.id == std::to_string(id); });
+            REQUIRE(entry != guide.end());
+            CHECK(std::any_of(entry->links.begin(), entry->links.end(), [&](const WorldGuideLink &link)
+                { return link.target.starts_with(WorldDatabase::mapId(*found)); }));
+        }
+        CHECK(referenceKnowledge.items.empty());
+        CHECK(referenceKnowledge.identifiedItems.empty());
+        CHECK(knowledge.itemObservations.empty());
     }
 }
 

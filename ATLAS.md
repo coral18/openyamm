@@ -1712,3 +1712,41 @@ captures checked MM7 and MM8 with both identified and unidentified equipment, ex
 and return to Discovery. The four chest-observation/scripted-item-source headless scenarios also passed on the
 current executable. These checks do not establish Android/controller acceptance or complete the remaining
 content audit in `ATLAS_COVERAGE.md`.
+
+
+## Late handwritten reward sources (2026-10-23)
+
+The loaded-handler registry now includes possible rewards from these existing authored callbacks:
+
+| Scope | Callback | Declared item source |
+| --- | --- | --- |
+| MM7 Harmondale | Timer 65003 | Scavenger hunt advertisement (774) |
+| MM7 Erathia | Timer 65004 | Scavenger hunt advertisement (774) |
+| MM7 Tularean Forest | On-load 401 | Message from Erathia (1502) |
+| MM7 Land of the Giants | On-load 65012 | Archibald's Blaster handoff (866 in the active merged tables) |
+| Shared Verdant topic | Global 1788 | Charged connector stone, read from `CrossContinents.Config` |
+| MM8 Murmurwoods tree | Map 455 | Fixed rewards from the current gem exchange rules |
+
+Separate `_zz_item_rewards.lua` overlays bind to the final gameplay callbacks. They preserve the original
+callback/common-script bytes and existing baked-lighting dependencies. The explicit MM8 catalog is checked
+against the actual `GemExchangeEntries` table: positive fixed item rewards are included once, while gold and
+random-item branches are excluded. Replacing a callback still invalidates its prior declaration unless the
+replacement explicitly supplies new metadata.
+
+The lighting producer now validates the late literal reward-only format as well as generated `_00` catalogs.
+It rejects executable statements and invalid event/item ranges before excluding metadata from shadow inputs.
+No baked hash was rewritten and runtime validation remains enabled. Timer/on-load gifts retain map-level links
+without invented positions; the actual MM8 tree has geometry-backed source pins. Guide's existing `Scan sources`
+action indexes these possibilities. Discovery still requires a recorded successful delivery or observation.
+
+These declarations do not complete all handwritten/world-state sources. Shared automatic CrossContinents
+callbacks, inherited crystal decorations and other conditional source semantics still need their own audit.
+
+
+Validation: 32 focused native Windows unit cases / 1,220 assertions, including real geometry bindings across
+five maps and the existing MM8 fixed-item/gold exchange behavior; 26 lighting-tool tests; Windows Release package
+refresh; MM7/MM8 native AMD/OpenGL source scans and inspected captures. Two controlled fixture scenarios and two
+16-step post-browsing save scenarios passed. The latter verify unchanged equipment, gold and food, absence of the
+possible reward before/after Guide, and a second save/load round trip. Native source scans reached Sources ready
+without indexing or stale-lighting errors. Original campaigns remain outside test writes. Android/controller and
+the remaining content matrix are not established by this checkpoint.

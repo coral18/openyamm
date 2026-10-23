@@ -93,10 +93,13 @@ recipe profile, or `bake_all_outdoors.py --sun-direct-only --install`. Migration
 face/vertex and model/sprite probe bytes, validates every installed dependency, and adds producer provenance.
 Atlas placement or dimension mismatches reject migration instead of silently misaligning the new contribution.
 
-Generated item-reward overlays (`<map>_00_item_rewards.lua`) are catalog declarations, not lighting inputs.
-The decoration producer validates their generated header and literal `SetMapItemRewards` rows, then excludes
-them from shadow-card dependencies. Executable code in this reserved format rejects the bake. Ordinary map
-callbacks and gameplay overlays keep their full dependency hashes; catalog updates never rewrite baked hashes.
+Generated item-reward overlays (`<map>_00_item_rewards.lua`) and explicit late declarations
+(`<map>_zz_item_rewards.lua`) are catalog metadata, not lighting inputs. The decoration producer validates
+the respective required header and literal `SetMapItemRewards` rows, including event/item integer ranges,
+then excludes them from shadow-card dependencies. Late declarations use
+`-- Item reward metadata; load after gameplay overlays` and describe the active replacement callback.
+Executable code in this reserved format rejects the bake. Ordinary map callbacks and gameplay overlays keep
+their full dependency hashes; catalog updates never rewrite baked hashes.
 
 Possible-NPC-location catalogs follow the same rule. Generated `<map>_00_npc_locations.lua` and explicit
 `<map>_zz_npc_locations.lua` files contain only their required header, comments and literal

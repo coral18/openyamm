@@ -1,0 +1,74 @@
+id: atlas.mm7_handwritten_rewards_privacy
+title: Guide browsing preserves equipment and resources without granting a possible
+  reward
+world: mm7
+mode: faithful
+steps:
+- load_game:
+    name: before
+    path: saves/before.oysav
+- assert:
+    equipped_item:
+    - member_index: 0
+      slot: main_hand
+      item_id: 1
+    - member_index: 1
+      slot: main_hand
+      item_id: 2
+- assert:
+    runtime_event_variable:
+      id: 50724881
+      value: 0
+- assert:
+    runtime_event_variable:
+      id: 21
+      value: 500
+- assert:
+    runtime_event_variable:
+      id: 23
+      value: 10
+- load_game:
+    name: quicksave
+    path: saves/quicksave.oysav
+- assert:
+    equipped_item:
+    - member_index: 0
+      slot: main_hand
+      item_id: 1
+    - member_index: 1
+      slot: main_hand
+      item_id: 2
+- assert:
+    runtime_event_variable:
+      id: 50724881
+      value: 0
+- assert:
+    runtime_event_variable:
+      id: 21
+      value: 500
+- assert:
+    runtime_event_variable:
+      id: 23
+      value: 10
+- save_game: reward-reference-roundtrip
+- load_game: reward-reference-roundtrip
+- assert:
+    equipped_item:
+    - member_index: 0
+      slot: main_hand
+      item_id: 1
+    - member_index: 1
+      slot: main_hand
+      item_id: 2
+- assert:
+    runtime_event_variable:
+      id: 50724881
+      value: 0
+- assert:
+    runtime_event_variable:
+      id: 21
+      value: 500
+- assert:
+    runtime_event_variable:
+      id: 23
+      value: 10

@@ -1,4 +1,5 @@
 from pathlib import Path
+import re
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -83,27 +84,52 @@ class DecorationBakeTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'Unresolved decoration or sprite state: missing_tree'):
             self.export()
 
-    def test_generated_reward_metadata_does_not_change_shadow_cards_or_dependencies(self):
+    def test_reward_metadata_does_not_change_shadow_cards_or_dependencies(self):
         baseline = self.export()
-        metadata = self.world / 'events/maps/test_00_item_rewards.lua'
-        header = '-- generated reward metadata from legacy EVT/STR; load after the base handlers\n'
-        for declarations in ('', 'SetMapItemRewards(1, {42, 43})\n', 'SetMapItemRewards(2, {44})\n'):
-            with self.subTest(declarations=declarations):
-                metadata.write_text(header + declarations)
-                result = self.export()
-                for field in ('cards', 'counts', 'dependencies'):
-                    self.assertEqual(result[field], baseline[field])
+        formats = [('00', '-- generated reward metadata from legacy EVT/STR; load after the base handlers'),
+                   ('zz', '-- Item reward metadata; load after gameplay overlays')]
+        for suffix, header in formats:
+            metadata = self.world / f'events/maps/test_{suffix}_item_rewards.lua'
+            for declarations in ('', 'SetMapItemRewards(1, {42, 43})\n', 'SetMapItemRewards(2, {44})\n'):
+                with self.subTest(suffix=suffix, declarations=declarations):
+                    metadata.write_text(header + '\n' + declarations)
+                    result = self.export()
+                    for field in ('cards', 'counts', 'dependencies'):
+                        self.assertEqual(result[field], baseline[field])
+            metadata.unlink()
 
     def test_reserved_reward_metadata_cannot_hide_executable_visual_changes(self):
-        metadata = self.world / 'events/maps/test_00_item_rewards.lua'
-        header = '-- generated reward metadata from legacy EVT/STR; load after the base handlers\n'
-        for content in ('evt.SetSprite(7, 0, "0")\n',
-                        header + 'RegisterEvent(1, nil, function() evt.SetSprite(7, 0) end)\n',
-                        header + 'SetMapItemRewards(1, {42}); evt.SetSprite(7, 0)\n'):
-            with self.subTest(content=content):
-                metadata.write_text(content)
-                with self.assertRaisesRegex(ValueError, 'Invalid generated reward metadata overlay'):
-                    self.export()
+        formats = [('00', '-- generated reward metadata from legacy EVT/STR; load after the base handlers'),
+                   ('zz', '-- Item reward metadata; load after gameplay overlays')]
+        for suffix, header in formats:
+            metadata = self.world / f'events/maps/test_{suffix}_item_rewards.lua'
+            for declaration in ('evt.SetSprite(7, 0, "0")',
+                                'RegisterEvent(1, nil, function() evt.SetSprite(7, 0) end)',
+                                'SetMapItemRewards(1, {42}); evt.SetSprite(7, 0)',
+                                'SetMapItemRewards(65536, {42})',
+                                'SetMapItemRewards(1, {4294967296})'):
+                with self.subTest(suffix=suffix, declaration=declaration):
+                    metadata.write_text(header + '\n' + declaration + '\n')
+                    with self.assertRaisesRegex(ValueError, 'Invalid reward metadata overlay'):
+                        self.export()
+            metadata.unlink()
+
+    def test_mm8_late_reward_catalog_matches_the_actual_fixed_gem_exchange_rules(self):
+        maps = bake_decorations.ROOT / 'assets_dev/worlds/mm8/events/maps'
+        script = (maps / 'out07_mmmerge.lua').read_text()
+        table = re.search(r'local GemExchangeEntries = \{(.*?)\n\}', script, re.S)
+        self.assertIsNotNone(table)
+        row = r'\{\s*([1-9][0-9]*)\s*,\s*(-?[0-9]+)\s*\},?'
+        exchanges = re.findall(row, table[1])
+        self.assertTrue(exchanges)
+        self.assertFalse(re.sub(row, '', table[1]).strip())
+        expected = sorted({int(reward) for _, reward in exchanges if int(reward) > 0})
+        metadata = maps / 'out07_zz_item_rewards.lua'
+        text = metadata.read_text()
+        bake_decorations.validate_reward_metadata(text, metadata)
+        declarations = re.findall(r'SetMapItemRewards\(455, \{([^}]+)\}\)', text)
+        self.assertEqual(len(declarations), 1)
+        self.assertEqual([int(value) for value in declarations[0].split(', ')], expected)
 
     def test_well_context_catalog_is_safe_and_cannot_hide_gameplay(self):
         baseline = self.export()

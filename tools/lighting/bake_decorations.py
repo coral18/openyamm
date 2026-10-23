@@ -82,12 +82,19 @@ def intersect_states(states):
 
 def validate_reward_metadata(text, script):
     lines = text.splitlines()
-    header = '-- generated reward metadata from legacy EVT/STR; load after the base handlers'
+    header = ('-- generated reward metadata from legacy EVT/STR; load after the base handlers'
+              if script.name.endswith('_00_item_rewards.lua') else
+              '-- Item reward metadata; load after gameplay overlays')
     declaration = re.compile(r'SetMapItemRewards\([1-9][0-9]*, \{[1-9][0-9]*(?:, [1-9][0-9]*)*\}\)')
     if not lines or lines[0] != header or any(
             line.strip() and not line.lstrip().startswith('--') and not declaration.fullmatch(line.strip())
             for line in lines[1:]):
-        raise ValueError('Invalid generated reward metadata overlay: ' + str(script))
+        raise ValueError('Invalid reward metadata overlay: ' + str(script))
+    for line in lines[1:]:
+        if line.strip() and not line.lstrip().startswith('--'):
+            ids = [int(value) for value in re.findall(r'[0-9]+', line)]
+            if ids[0] > 65535 or any(value > 4294967295 for value in ids[1:]):
+                raise ValueError('Invalid reward metadata overlay: ' + str(script))
 
 
 def validate_npc_metadata(text, script):
@@ -197,8 +204,8 @@ def export_cards(profile, output):
         # Lua strings/comments retain legacy STR bytes and need not be UTF-8. Latin-1
         # maps bytes losslessly for this ASCII syntax scanner; it does not transcode assets.
         text = script.read_bytes().decode('latin-1')
-        if script.name == source.stem + '_00_item_rewards.lua':
-            # This reserved generated format only declares item rewards and cannot change any shadow caster.
+        if script.name in (source.stem + '_00_item_rewards.lua', source.stem + '_zz_item_rewards.lua'):
+            # Reserved literal declarations cannot change any shadow caster.
             # Keep gameplay callback/overlay dependencies, while reward catalog updates remain independent.
             validate_reward_metadata(text, script)
             continue
