@@ -6176,7 +6176,26 @@ int luaSetOutdoorFog(lua_State *pLuaState)
 int luaOpenDimensionDoor(lua_State *pLuaState)
 {
     EventRuntimeState *pRuntimeState = writableRuntimeState(pLuaState);
+    pRuntimeState->pendingDimensionDoorOverlay = false;
+    pRuntimeState->pendingDimensionDoorEventId = 0;
+    pRuntimeState->pendingDimensionDoorNetwork.clear();
+    if (!lua_isnoneornil(pLuaState, 1))
+    {
+        if (lua_type(pLuaState, 1) != LUA_TSTRING) return luaL_error(pLuaState, "Gate network must be a string");
+        size_t size = 0;
+        const char *pNetwork = lua_tolstring(pLuaState, 1, &size);
+        const std::string network(pNetwork, size);
+        if (network.empty() || size > 128 || network.front() == '.' || network.back() == '.'
+            || network.find("..") != std::string::npos
+            || network.find_first_not_of("abcdefghijklmnopqrstuvwxyz0123456789._-") != std::string::npos)
+            return luaL_error(pLuaState, "Invalid gate network ID");
+        pRuntimeState->pendingDimensionDoorNetwork = network;
+    }
     pRuntimeState->pendingDimensionDoorOverlay = true;
+    const LuaExecutionContext *pContext = executionContextFromLua(pLuaState);
+    if (pContext != nullptr && !pContext->currentHandlerGlobalScope.value_or(pContext->executingGlobalHandler))
+        pRuntimeState->pendingDimensionDoorEventId = pContext->currentHandlerEventId != 0
+            ? pContext->currentHandlerEventId : pContext->currentEventId;
     pRuntimeState->lastActivationResult = "You feel high magic presence here.";
     return 0;
 }
@@ -6185,6 +6204,8 @@ int luaClearDimensionDoorOverlay(lua_State *pLuaState)
 {
     EventRuntimeState *pRuntimeState = writableRuntimeState(pLuaState);
     pRuntimeState->pendingDimensionDoorOverlay = false;
+    pRuntimeState->pendingDimensionDoorEventId = 0;
+    pRuntimeState->pendingDimensionDoorNetwork.clear();
     return 0;
 }
 

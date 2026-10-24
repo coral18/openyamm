@@ -2411,6 +2411,9 @@ PartySpellCastResult PartySpellSystem::castSpell(
                 move.directionDegrees = request.utilityMapMoveDirectionDegrees;
                 move.useMapStartPosition = request.utilityMapMoveUseMapStartPosition;
                 move.useFullscreenLoading = request.utilityMapMoveUseFullscreenLoading;
+                move.sourceCanonicalMapId = request.utilityMapMoveSourceMapId;
+                move.sourceMapFileName = request.utilityMapMoveSourceMapFileName;
+                move.sourceMapEventId = request.utilityMapMoveSourceEventId;
                 pEventRuntimeState->pendingMapMove = move;
                 castSucceeded = true;
             }

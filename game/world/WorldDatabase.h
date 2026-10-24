@@ -24,6 +24,9 @@ namespace OpenYAMM::Game
 struct OutdoorMapData;
 class ScriptedEventProgram;
 class SpellTable;
+class WorldGateCatalog;
+struct WorldGateChoice;
+class Party;
 class JournalAutonoteTable;
 struct JournalAutonoteEntry;
 enum class WorldRecordKind { Region, Dungeon, House, Npc, Trainer, Travel };
@@ -109,6 +112,7 @@ struct WorldKnowledge
     std::unordered_map<std::string, std::vector<WorldChestObservation>> chestObservations;
     // Canonical world/map IDs; raw filenames can collide between worlds.
     std::unordered_map<std::string, std::vector<WorldSiteObservation>> siteObservations;
+    std::unordered_map<std::string, std::vector<WorldGateOffer>> gateOffers;
     bool knows(const WorldRecord &record) const;
 };
 
@@ -148,6 +152,12 @@ public:
         const WorldKnowledge &knowledge) const;
     const std::vector<WorldMapLocation> &locations() const;
     const std::vector<WorldMapFeature> &features() const;
+    const MapStatsEntry *mapDefinition(const std::string &canonicalId) const;
+    std::vector<WorldGateChoice> gateDestinations(const WorldMapFeature &feature, const WorldKnowledge &knowledge,
+        const WorldGateCatalog &gates, const Party *pParty, bool guide) const;
+    void indexMapGateReferences(const MapStatsEntry &map, const WorldGateCatalog &gates, const Party *pParty);
+    std::string gateOfferText(const WorldMapFeature &feature, const WorldKnowledge &knowledge,
+        const WorldGateCatalog &gates) const;
     void indexMapInteractionReferences(const MapStatsEntry &map, const ItemTable &items, const SpellTable &spells);
     void indexInheritedDecorations(const MapStatsEntry &map, const std::vector<WorldDecorationSite> &sites,
         const ScriptedEventProgram &globalEvents);
@@ -197,6 +207,7 @@ private:
     std::vector<WorldMapLocation> m_locations;
     std::vector<WorldMapFeature> m_features;
     std::vector<WorldItemSource> m_itemSources;
+    const MapStats *m_pMaps = nullptr;
     const HouseTable *m_pHouses = nullptr;
     const NpcDialogTable *m_pNpcs = nullptr;
     bool m_observedNpcs = false;

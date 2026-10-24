@@ -46,6 +46,7 @@ add_executable(openyamm_unit_tests
     MapStatsRegressionTests.cpp
     JournalStateTests.cpp
     WorldDatabaseTests.cpp
+    WorldGateCatalogTests.cpp
     WorldInteractionAuditTests.cpp
     WorldSiteObservationTests.cpp
     WorldGuideTests.cpp
@@ -248,6 +249,7 @@ add_executable(openyamm_unit_tests
     ../game/world/WorldMapLocations.cpp
     ../game/world/WorldInteractionSites.cpp
     ../game/world/WorldMapFeatures.cpp
+    ../game/world/WorldGateCatalog.cpp
     ../game/world/WorldMapKnowledge.cpp
     ../game/world/WorldSiteObservations.cpp
     ../game/world/WorldMapNotes.cpp

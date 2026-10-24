@@ -656,13 +656,13 @@ bool readInteractionReferences(lua_State *pLuaState, int metadataIndex, Scripted
                     (key == "consumesItem" ? reference.consumesItem : reference.addsFollower)
                         = lua_toboolean(pLuaState, -1);
                 }
-                else if (key == "kind" || key == "openedMapFlag" || key == "targetMap")
+                else if (key == "kind" || key == "openedMapFlag" || key == "targetMap" || key == "network")
                 {
                     if (lua_type(pLuaState, -1) != LUA_TSTRING) return fail();
                     const char *pValue = lua_tolstring(pLuaState, -1, &size);
                     if (size == 0 || size > 128 || std::string_view(pValue, size).find('\0') != std::string_view::npos)
                         return fail();
-                    std::string &value = key == "kind" ? reference.kind
+                    std::string &value = key == "kind" ? reference.kind : key == "network" ? reference.network
                         : key == "openedMapFlag" ? reference.openedMapFlag : reference.targetMap;
                     value.assign(pValue, size);
                 }
@@ -687,7 +687,17 @@ bool readInteractionReferences(lua_State *pLuaState, int metadataIndex, Scripted
                     if (character >= 'A' && character <= 'Z') character += 'a' - 'A';
                 }
             }
-            if (reference.kind == "enter_dungeon")
+            if (reference.kind != "dimension_door" && !reference.network.empty()) valid = false;
+            if (reference.kind == "dimension_door")
+                valid = valid && !reference.network.empty() && reference.network.front() != '.'
+                    && reference.network.back() != '.'
+                    && reference.network.find_first_not_of("abcdefghijklmnopqrstuvwxyz0123456789._-")
+                        == std::string::npos && reference.network.find("..") == std::string::npos
+                    && reference.itemId == 0 && reference.spellId == 0 && reference.npcId == 0
+                    && reference.spriteId == 0 && reference.completionQBit == 0
+                    && !reference.consumesItem && !reference.addsFollower
+                    && reference.targetMap.empty() && reference.openedMapFlag.empty();
+            else if (reference.kind == "enter_dungeon")
                 valid = valid && reference.itemId > 0 && !reference.targetMap.empty()
                     && !reference.openedMapFlag.empty() && reference.npcId == 0 && reference.spriteId == 0
                     && reference.spellId == 0 && reference.completionQBit == 0

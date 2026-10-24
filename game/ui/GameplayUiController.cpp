@@ -524,6 +524,10 @@ void GameplayUiController::openUtilitySpellOverlay(
     state.utilitySpellOverlay.bypassGameplayCasterValidation = false;
     state.utilitySpellOverlay.bypassTownPortalFailureChecks = false;
     state.utilitySpellOverlay.lloydRecallMode = lloydRecallMode;
+    state.utilitySpellOverlay.gateNetworkId.clear();
+    state.utilitySpellOverlay.gateSourceMapId.clear();
+    state.utilitySpellOverlay.gateSourceMapFileName.clear();
+    state.utilitySpellOverlay.gateSourceEventId = 0;
 }
 
 void GameplayUiController::closeUtilitySpellOverlay()

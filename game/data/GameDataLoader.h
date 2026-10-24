@@ -26,6 +26,7 @@
 #include "game/mm9/Mm9SkillTrainer.h"
 #include "game/mm9/Mm9TransportRoute.h"
 #include "game/tables/MapStats.h"
+#include "game/world/WorldGateCatalog.h"
 #include "game/tables/MonsterProjectileTable.h"
 #include "game/tables/MonsterTable.h"
 #include "game/tables/MergedBaseTables.h"
@@ -158,6 +159,7 @@ public:
     const MergedOutdoorTravelTable &getMergedOutdoorTravelTable() const;
     const MergedOverlayTable &getMergedOverlayTable() const;
     const MergedTownPortalSwitchTable &getMergedTownPortalSwitchTable() const;
+    const WorldGateCatalog &getWorldGateCatalog() const;
     const MergedTransportIndexTable &getMergedTransportIndexTable() const;
     const MergedTransportLocationTable &getMergedTransportLocationTable() const;
 
@@ -302,6 +304,7 @@ private:
     MergedOutdoorTravelTable m_mergedOutdoorTravelTable;
     MergedOverlayTable m_mergedOverlayTable;
     MergedTownPortalSwitchTable m_mergedTownPortalSwitchTable;
+    WorldGateCatalog m_worldGateCatalog;
     MergedTransportIndexTable m_mergedTransportIndexTable;
     MergedTransportLocationTable m_mergedTransportLocationTable;
     MapAssetLoadSharedCache m_mapAssetLoadSharedCache;

@@ -96,24 +96,24 @@ void WorldDatabase::indexMapArrivals(const WorldKnowledge &knowledge)
     for (const auto &[file, arrivals] : knowledge.arrivals)
         for (const WorldMapArrival &arrival : arrivals)
         {
-            const WorldRecord *pDestination = nullptr;
-            for (const WorldRecord &record : m_records)
-                if ((record.kind == WorldRecordKind::Region || record.kind == WorldRecordKind::Dungeon)
-                    && toLowerCopy(record.map->fileName) == file && file == toLowerCopy(arrival.mapFileName))
-                    pDestination = &record;
-            const WorldRecord *pSource = find(arrival.sourceMapId);
+            const MapStatsEntry *pDestination = mapDefinition(file);
+            if (pDestination == nullptr && !file.starts_with("world."))
+                for (const WorldRecord &record : m_records)
+                    if ((record.kind == WorldRecordKind::Region || record.kind == WorldRecordKind::Dungeon)
+                        && toLowerCopy(record.map->fileName) == file) pDestination = record.map;
+            const MapStatsEntry *pSource = mapDefinition(arrival.sourceMapId);
             if (pDestination == nullptr || pSource == nullptr || arrival.eventId == 0
-                || (pSource->kind != WorldRecordKind::Region && pSource->kind != WorldRecordKind::Dungeon))
-                continue;
+                || toLowerCopy(pDestination->fileName) != toLowerCopy(arrival.mapFileName)) continue;
             WorldMapFeature feature;
-            feature.id = pDestination->id + "/arrival/" + arrival.sourceMapId
+            feature.id = mapId(*pDestination) + "/arrival/" + arrival.sourceMapId
                 + "/event/" + std::to_string(arrival.eventId);
-            feature.mapId = pDestination->id;
+            feature.mapId = mapId(*pDestination);
             feature.kind = WorldMapFeatureKind::Connection;
             feature.site = {"arrival/" + arrival.sourceMapId + "/event/" + std::to_string(arrival.eventId),
                 0, float(arrival.x), float(arrival.y), float(arrival.z)};
-            feature.title = "Arrival from " + pSource->name();
-            feature.targetMap = pSource->map->fileName;
+            feature.title = "Arrival from " + pSource->name;
+            feature.targetMap = pSource->fileName;
+            feature.targetMapId = mapId(*pSource);
             feature.arrival = arrival;
             m_features.push_back(std::move(feature));
         }
@@ -126,7 +126,9 @@ std::vector<const WorldMapFeature *> WorldDatabase::connectionArrivals(const Wor
     if (source.kind != WorldMapFeatureKind::Connection || source.arrival) return result;
     for (const WorldMapFeature &feature : m_features)
         if (feature.arrival && feature.arrival->sourceMapId == source.mapId
-            && feature.arrival->eventId == source.site.eventId && featureVisible(feature, knowledge, false))
+            && feature.arrival->eventId == source.site.eventId
+            && (find(feature.mapId) != nullptr ? featureVisible(feature, knowledge, false)
+                : knowledge.visitedMaps.contains(toLowerCopy(feature.arrival->mapFileName))))
             result.push_back(&feature);
     std::sort(result.begin(), result.end(), [](const WorldMapFeature *a, const WorldMapFeature *b)
     {

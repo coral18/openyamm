@@ -423,7 +423,7 @@ public:
     void collectGameplayMinimapLines(std::vector<GameplayMinimapLineState> &lines);
     void collectGameplayMinimapMarkers(std::vector<GameplayMinimapMarkerState> &markers) const;
     bool ensureTownPortalDestinationsLoaded();
-    bool ensureDimensionDoorDestinationsLoaded();
+    bool ensureDimensionDoorDestinationsLoaded(const std::string &networkId = {});
     bool shouldTownPortalCastOpenDimensionDoor() const;
     bool openDimensionDoorOverlay(
         size_t casterMemberIndex,

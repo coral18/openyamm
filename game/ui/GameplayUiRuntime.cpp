@@ -41,19 +41,6 @@ constexpr int32_t MergedYawUnitsPerTurn = 2048;
 constexpr int32_t DegreesPerTurn = 360;
 constexpr size_t MaxPerformanceAssetLoadEvents = 32;
 constexpr std::string_view EagerGameplayHudScreen = "outdoorhud";
-struct TownPortalDestinationOverride
-{
-    uint32_t mapId = 0;
-    std::string iconName;
-    bool useMapStartPosition = false;
-    bool clearUnlockQBit = false;
-    bool clearDirection = false;
-    int32_t hitX = 0;
-    int32_t hitY = 0;
-    uint32_t hitWidth = 0;
-    uint32_t hitHeight = 0;
-};
-
 int32_t directionDegreesFromMergedYawUnits(int32_t yawUnits)
 {
     const int32_t normalizedYawUnits =
@@ -147,19 +134,16 @@ bool appendTownPortalDestination(
     std::vector<GameplayTownPortalDestination> &destinations,
     const MergedTownPortalSwitchGroup &group,
     const MergedTownPortalDestination &sourceDestination,
-    const std::vector<MapStatsEntry> &mapEntries,
-    const TownPortalDestinationOverride *pOverride = nullptr)
+    const std::vector<MapStatsEntry> &mapEntries)
 {
-    const std::string &iconName =
-        pOverride != nullptr && !pOverride->iconName.empty() ? pOverride->iconName : sourceDestination.iconName;
+    const std::string &iconName = sourceDestination.iconName;
 
     if (iconName.empty() || toLowerCopy(iconName) == "none")
     {
         return false;
     }
 
-    const uint32_t mapId =
-        pOverride != nullptr && pOverride->mapId != 0 ? pOverride->mapId : sourceDestination.mapId;
+    const uint32_t mapId = sourceDestination.mapId;
     const MapStatsEntry *pDestinationMap = findMapEntryById(mapEntries, mapId);
 
     if (pDestinationMap == nullptr)
@@ -176,76 +160,18 @@ bool appendTownPortalDestination(
     destination.x = sourceDestination.x;
     destination.y = sourceDestination.y;
     destination.z = sourceDestination.z;
-    if (pOverride == nullptr || !pOverride->clearDirection)
-    {
-        destination.directionDegrees = directionDegreesFromMergedYawUnits(sourceDestination.direction);
-    }
-    destination.useMapStartPosition = pOverride != nullptr && pOverride->useMapStartPosition;
-    destination.unlockQBitId =
-        pOverride != nullptr && pOverride->clearUnlockQBit ? 0 : sourceDestination.qbitIndex;
+    destination.directionDegrees = directionDegreesFromMergedYawUnits(sourceDestination.direction);
+    destination.unlockQBitId = sourceDestination.qbitIndex;
     destination.iconX = sourceDestination.iconX;
     destination.iconY = sourceDestination.iconY;
     destination.iconWidth = sourceDestination.iconWidth.value_or(0);
     destination.iconHeight = sourceDestination.iconHeight.value_or(0);
-    destination.hitX = pOverride != nullptr && pOverride->hitWidth != 0
-        ? pOverride->hitX
-        : destination.iconX;
-    destination.hitY = pOverride != nullptr && pOverride->hitHeight != 0
-        ? pOverride->hitY
-        : destination.iconY;
-    destination.hitWidth = pOverride != nullptr && pOverride->hitWidth != 0
-        ? pOverride->hitWidth
-        : destination.iconWidth;
-    destination.hitHeight = pOverride != nullptr && pOverride->hitHeight != 0
-        ? pOverride->hitHeight
-        : destination.iconHeight;
+    destination.hitX = destination.iconX;
+    destination.hitY = destination.iconY;
+    destination.hitWidth = destination.iconWidth;
+    destination.hitHeight = destination.iconHeight;
     destinations.push_back(std::move(destination));
     return true;
-}
-
-bool resolveDimensionDoorDestinationOverride(
-    const MergedTownPortalDestination &sourceDestination,
-    uint32_t /*dayIndex*/,
-    TownPortalDestinationOverride &destinationOverride)
-{
-    const std::string description = toLowerCopy(sourceDestination.description);
-
-    destinationOverride = {};
-    destinationOverride.clearUnlockQBit = true;
-    destinationOverride.clearDirection = true;
-    destinationOverride.iconName = "ui/gameplay/dimensional_travel/" + toLowerCopy(sourceDestination.iconName);
-
-    if (description == "jadame")
-    {
-        destinationOverride.mapId = 1;
-        destinationOverride.hitX = 0;
-        destinationOverride.hitY = 0;
-        destinationOverride.hitWidth = 213;
-        destinationOverride.hitHeight = 480;
-        return true;
-    }
-
-    if (description == "antagarich")
-    {
-        destinationOverride.mapId = 62;
-        destinationOverride.hitX = 427;
-        destinationOverride.hitY = 0;
-        destinationOverride.hitWidth = 213;
-        destinationOverride.hitHeight = 480;
-        return true;
-    }
-
-    if (description == "enroth")
-    {
-        destinationOverride.mapId = 151;
-        destinationOverride.hitX = 213;
-        destinationOverride.hitY = 0;
-        destinationOverride.hitWidth = 214;
-        destinationOverride.hitHeight = 480;
-        return true;
-    }
-
-    return false;
 }
 
 uint32_t currentAnimationTicks()
@@ -733,61 +659,53 @@ bool GameplayUiRuntime::ensureTownPortalDestinationsLoaded(const std::string &cu
     return !m_townPortalDestinations.empty();
 }
 
-bool GameplayUiRuntime::ensureDimensionDoorDestinationsLoaded(uint32_t dayIndex, bool crossContinentsUnlocked)
+bool GameplayUiRuntime::ensureDimensionDoorDestinationsLoaded(uint32_t dayIndex, bool crossContinentsUnlocked,
+    const Party *pParty, const std::string &networkId)
 {
-    const std::string cacheKey = "__dimension_door:" + std::to_string(dayIndex)
-        + (crossContinentsUnlocked ? ":unlocked" : ":locked");
-
-    if (m_townPortalDestinationsLoaded
-        && toLowerCopy(m_townPortalDestinationsMapFileName) == toLowerCopy(cacheKey))
+    if (m_pDataRepository == nullptr || !m_pDataRepository->isBound()) return false;
+    const WorldGateCatalog &catalog = m_pDataRepository->worldGateCatalog();
+    const WorldGateNetwork *pNetwork = networkId.empty() ? catalog.defaultNetwork() : catalog.find(networkId);
+    if (pNetwork == nullptr)
     {
-        return !m_townPortalDestinations.empty();
+        m_townPortalDestinations.clear();
+        m_townPortalBackgroundTextureName.clear();
+        m_townPortalDestinationsMapFileName.clear();
+        m_townPortalDestinationsLoaded = false;
+        return false;
     }
-
+    const std::vector<WorldGateChoice> choices = catalog.choices(*pNetwork, pParty);
+    std::string cacheKey = "__dimension_door:" + pNetwork->id + ":" + std::to_string(dayIndex)
+        + (crossContinentsUnlocked ? ":unlocked" : ":locked");
+    for (const WorldGateChoice &choice : choices)
+        cacheKey += ":" + choice.pDestination->id + "/" + std::to_string(choice.pLanding->requiredQuestBit);
+    if (m_townPortalDestinationsLoaded && m_townPortalDestinationsMapFileName == cacheKey)
+        return !m_townPortalDestinations.empty();
     m_townPortalDestinationsMapFileName = cacheKey;
     m_townPortalBackgroundTextureName.clear();
     m_townPortalDestinations.clear();
-    m_townPortalDestinationsLoaded = false;
-
-    if (!crossContinentsUnlocked)
-    {
-        m_townPortalDestinationsLoaded = true;
-        return false;
-    }
-
-    if (m_pDataRepository == nullptr || !m_pDataRepository->isBound())
-    {
-        return false;
-    }
-
-    const MergedTownPortalSwitchGroup *pGroup = findTownPortalGroup(
-        m_pDataRepository->mergedTownPortalSwitchTable(),
-        "TPGlobal");
-
-    if (pGroup == nullptr)
-    {
-        return false;
-    }
-
-    std::vector<GameplayTownPortalDestination> destinations;
-    const std::vector<MapStatsEntry> &mapEntries = m_pDataRepository->mapEntries();
-
-    for (const MergedTownPortalDestination &sourceDestination : pGroup->destinations)
-    {
-        TownPortalDestinationOverride destinationOverride = {};
-        const bool hasOverride =
-            resolveDimensionDoorDestinationOverride(sourceDestination, dayIndex, destinationOverride);
-        appendTownPortalDestination(
-            destinations,
-            *pGroup,
-            sourceDestination,
-            mapEntries,
-            hasOverride ? &destinationOverride : nullptr);
-    }
-
-    m_townPortalBackgroundTextureName = "ui/gameplay/dimensional_travel/tpglobal";
-    m_townPortalDestinations = std::move(destinations);
     m_townPortalDestinationsLoaded = true;
+    if (!crossContinentsUnlocked) return false;
+    for (const WorldGateChoice &choice : choices)
+    {
+        const WorldGateDestination &source = *choice.pDestination;
+        const WorldGateLanding &landing = *choice.pLanding;
+        GameplayTownPortalDestination destination;
+        destination.id = source.id;
+        destination.label = source.label;
+        destination.iconTextureName = source.icon;
+        destination.iconX = source.iconX;
+        destination.iconY = source.iconY;
+        destination.iconWidth = source.iconWidth;
+        destination.iconHeight = source.iconHeight;
+        destination.mapName = landing.mapFileName;
+        destination.x = landing.x; destination.y = landing.y; destination.z = landing.z;
+        destination.directionDegrees = landing.directionDegrees;
+        destination.useMapStartPosition = landing.useMapStartPosition;
+        destination.hitX = source.hitX; destination.hitY = source.hitY;
+        destination.hitWidth = source.hitWidth; destination.hitHeight = source.hitHeight;
+        m_townPortalDestinations.push_back(std::move(destination));
+    }
+    m_townPortalBackgroundTextureName = pNetwork->background;
     return !m_townPortalDestinations.empty();
 }
 

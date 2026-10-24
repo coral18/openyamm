@@ -92,6 +92,7 @@ updates = {
     "engine/data_tables/house_data.txt": repo / "assets_dev/engine/data_tables/house_data.txt",
     "engine/data_tables/quest_locations.txt": repo / "assets_dev/engine/data_tables/quest_locations.txt",
     "engine/data_tables/map_stats.txt": repo / "assets_dev/engine/data_tables/map_stats.txt",
+    "engine/world/gates.yml": repo / "assets_dev/engine/world/gates.yml",
     "engine/world/atlas/mm7.yml": repo / "assets_dev/engine/world/atlas/mm7.yml",
     "engine/world/atlas/mm8.yml": repo / "assets_dev/engine/world/atlas/mm8.yml",
     "worlds/mm7/events/maps/7out02_zz_extended.lua": repo / "assets_dev/worlds/mm7/events/maps/7out02_zz_extended.lua",
@@ -102,6 +103,10 @@ updates = {
     "worlds/mm8/maps/out02.lighting": repo / "assets_dev/worlds/mm8/maps/out02.lighting",
     "worlds/mm8/maps/out02.bake.json": repo / "assets_dev/worlds/mm8/maps/out02.bake.json",
 }
+# Upstream's native gate selector artwork is newer than the bootstrap release payload.
+for name in ("tpglobal", "tpjadam1", "tpantag1", "tpenroth1"):
+    virtual = "engine/ui/gameplay/dimensional_travel/" + name + ".bmp"
+    updates[virtual] = repo / "assets_dev" / virtual
 updates["engine/scripts/common/event_support.lua"] = repo / "assets_dev/engine/scripts/common/event_support.lua"
 for relative in ["engine/events", "worlds/mm6/events", "worlds/mm7/events", "worlds/mm8/events"]:
     for source in (repo / "assets_dev" / relative).rglob("*.lua"):

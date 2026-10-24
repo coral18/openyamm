@@ -2006,3 +2006,63 @@ cross-world destination/transition is integrated into the Atlas. Controlled inpu
 `tests/scenarios/atlas/mm7_castle_fountain_*.yml`, `tools/menu_tours/atlas_mm7_castle_fountain.yml` and
 `tools/screenshot_tours/atlas_mm7_castle_fountain_pose.yml`. Evidence stays private under `atlas-fountains-20261024`.
 The remaining full-Atlas matrix, six well declarations, Gate destination semantics and device checks stay open.
+
+
+### Shared dimensional-gateway destinations and cross-world history, 2026-10-24
+
+The native dimensional selector and Atlas now share `engine/world/gates.yml` and `WorldGateCatalog`.
+The catalog preserves the existing MMerge landing policy, Verdant unlock variable, QBits 4/519, original
+Town Portal labels and icon placement. It replaces the duplicated C++ landing overrides; it adds no new
+campaign requirements or automatic return passage. Unknown maps, malformed/ambiguous branches and unknown
+fields fail loading. `evt.OpenDimensionDoor()` uses the default network; an optional network ID selects another
+catalog entry. Replacing/cancelling a selector clears its previous physical origin.
+
+Five physical MM7/MM8 sources have callback-owned `dimension_door` references. Explicit site groups describe the
+multipart MM7 desert guild gate and MM8 Ravenshore fountain. Their actual raw component/face discoveries remain
+independent. Atlas Guide reads current authored landing choices; Discovery retains the destinations actually
+shown by a source gateway, with observation dates and an availability warning. These offers inform destination
+names without granting a visit, terrain, remote sites or party arrow. Only successful native moves record actual
+arrivals, with canonical source-map identity propagated through the existing move/spell path. Source maps retain
+both offered choices and travelled arrivals; matching arrivals enrich a choice instead of hiding its siblings.
+
+MM7/MM8 Atlas navigation can switch to an offered destination, an actual arrival or the recorded source in the
+other world. A world without an Atlas catalog, such as MM6 here, has descriptive information and disabled map
+navigation. The existing serializer/refill retention preserves offers and arrivals without a new save version.
+The Core records these observations with the Atlas UI mod disabled too; Guide browsing creates none.
+
+Validation for this checkpoint:
+
+- Windows Release build passed. The current focused native unit selection passed 72 cases / 33,779 assertions,
+  including all five physical source bindings, strict catalog/Lua validation, progression changes, malformed
+  historical offers, discovery privacy and cross-world arrival projection. Three runtime UI cases / 147 assertions
+  passed for original artwork/hover geometry, party-dependent selector caching and replacement/cancellation.
+- All five literal gateway sidecars passed the lighting metadata validator. The Windows overlay now includes the
+  required catalog and four unchanged upstream dimensional-selector bitmaps missing from its bootstrap payload.
+  Full source Android packaging already includes these engine assets; no APK acceptance is claimed here.
+- Native Windows AMD/OpenGL tours passed for locked first contact, actual offers plus undiscovered Jadame,
+  MM7 Castle Harmondale to MM8 Dagger Wound Island, and the same transfer with the Atlas mod disabled. Inspected
+  captures verify selector art, offer/Guide separation, preserved black undiscovered terrain, source/destination
+  navigation and all offered choices remaining available after one was travelled.
+- A reverse native transfer passed from MM8 Ravenshore to MM7 Emerald Island. Its physical mesh pick hit
+  model 84/face 31/event 104 at 173 units, rather than replaying an event ID. The source is a grouped fountain,
+  while the actual observation retains face 31. Ordinary Escape dismisses the existing first-continent intro
+  movies in the travel tours; no debug cutscene bypass or forced quest unlock is used.
+- Post-UI faithful save/load verifiers passed: 17 steps for offers, 17 for locked Guide browsing, 28 for the
+  forward transfer, 28 for the Atlas-disabled transfer and 30 for reverse travel. They preserve canonical arrival
+  keys, source offers, the actually touched MM8 face, unchanged mana (21), gold (500) and food (10), including
+  another save/load and a controlled source-map revisit. All campaigns/settings/captures are isolated.
+
+Reproduction inputs are `tests/scenarios/atlas/mm7_gate_*`, `mm8_gate_return_*`,
+`tools/menu_tours/atlas_mm7_gate_*`, `atlas_mm8_gate_return.yml` and the matching screenshot poses. Use the existing
+Castle Harmondale pose for MM7. The shared MM7 travel fixture starts a controlled new game and accepts Verdant's
+quest through four real dialogue actions; copy its exported save as `saves/before.oysav` for the travel/offer tours.
+For locked first contact use the previous Castle fountain fixture. The reverse fixture's `saves/seed.oysav` is the
+successful forward tour's quicksave; its controlled Ravenshore setup is not itself claimed as a travelled route.
+Restore each fixture before rerunning its tour, then run its verifier against the fresh quicksave. The Atlas-off
+control needs its own one-mod fixture/profile because a save requiring Atlas cannot be silently stripped of it.
+Evidence stays private under `atlas-gates-20261024` in the Windows development root.
+
+This checkpoint does not complete the Atlas objective. The full conditional/proximity Gate audit, complex
+Barrows/Regna graphs, six unresolved well bindings, remaining quest/service/item content, localization and
+Android/controller checks remain open in `ATLAS_COVERAGE.md`. Arbitrary community-world map-filename collisions
+still require runtime routing work; the verified travel paths use the current official mounted maps.

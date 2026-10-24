@@ -37,8 +37,6 @@ namespace
 constexpr uint64_t PartyPortraitDoubleClickWindowMs = 500;
 constexpr uint64_t CharacterDismissConfirmWindowMs = 2000;
 constexpr float MaxUiScale = 8.0f;
-constexpr uint32_t DaderossLetterDeliveredQBit = 4;
-constexpr uint32_t EmeraldIslandFinishedQBit = 519;
 
 void latchGameplayMenuEscape(GameplayScreenRuntime &context)
 {
@@ -111,16 +109,6 @@ struct CharacterSkillUiData
     std::vector<CharacterSkillUiRow> magicRows;
     std::vector<CharacterSkillUiRow> armorRows;
     std::vector<CharacterSkillUiRow> miscRows;
-};
-
-struct DimensionDoorLanding
-{
-    std::string mapName;
-    int32_t x = 0;
-    int32_t y = 0;
-    int32_t z = 0;
-    std::optional<int32_t> directionDegrees;
-    bool useMapStartPosition = false;
 };
 
 constexpr const char *WeaponSkillNames[] = {
@@ -298,88 +286,6 @@ void applyDimensionDoorCastOverrides(PartySpellCastRequest &request)
     request.spendMana = false;
     request.applyRecovery = false;
     request.utilityMapMoveUseFullscreenLoading = true;
-}
-
-std::optional<DimensionDoorLanding> resolveDimensionDoorLanding(
-    const Party *pParty,
-    const GameplayTownPortalDestination &destination)
-{
-    if (destination.id == "TPGlobal:0")
-    {
-        if (pParty != nullptr && pParty->hasQuestBit(DaderossLetterDeliveredQBit))
-        {
-            return DimensionDoorLanding{
-                "out02.odm",
-                10296,
-                -12283,
-                1,
-                0,
-                false};
-        }
-
-        return DimensionDoorLanding{
-            "out01.odm",
-            0,
-            0,
-            0,
-            std::nullopt,
-            true};
-    }
-
-    if (destination.id == "TPGlobal:2")
-    {
-        if (pParty != nullptr && pParty->hasQuestBit(EmeraldIslandFinishedQBit))
-        {
-            return DimensionDoorLanding{
-                "7out02.odm",
-                -16832,
-                12512,
-                372,
-                0,
-                false};
-        }
-
-        return DimensionDoorLanding{
-            "7out01.odm",
-            12552,
-            800,
-            193,
-            90,
-            false};
-    }
-
-    if (destination.id == "TPGlobal:4")
-    {
-        return DimensionDoorLanding{
-            "oute3.odm",
-            -9728,
-            -11319,
-            160,
-            90,
-            false};
-    }
-
-    return std::nullopt;
-}
-
-void applyDimensionDoorLandingOverride(
-    PartySpellCastRequest &request,
-    const Party *pParty,
-    const GameplayTownPortalDestination &destination)
-{
-    const std::optional<DimensionDoorLanding> landing = resolveDimensionDoorLanding(pParty, destination);
-
-    if (!landing.has_value())
-    {
-        return;
-    }
-
-    request.utilityMapMoveMapName = landing->mapName;
-    request.utilityMapMoveX = landing->x;
-    request.utilityMapMoveY = landing->y;
-    request.utilityMapMoveZ = landing->z;
-    request.utilityMapMoveDirectionDegrees = landing->directionDegrees;
-    request.utilityMapMoveUseMapStartPosition = landing->useMapStartPosition;
 }
 
 std::optional<std::pair<int, int>> computeHeldInventoryPlacement(
@@ -918,7 +824,10 @@ void GameplayPartyOverlayInputController::handleUtilitySpellOverlayInput(
                 if (isDimensionDoorOverlayMode(context.utilitySpellOverlayReadOnly().mode))
                 {
                     applyDimensionDoorCastOverrides(request);
-                    applyDimensionDoorLandingOverride(request, pParty, destination);
+                    request.utilityMapMoveSourceMapId = context.utilitySpellOverlayReadOnly().gateSourceMapId;
+                    request.utilityMapMoveSourceMapFileName
+                        = context.utilitySpellOverlayReadOnly().gateSourceMapFileName;
+                    request.utilityMapMoveSourceEventId = context.utilitySpellOverlayReadOnly().gateSourceEventId;
                 }
                 context.tryCastSpellRequest(request, resolveSpellName());
             });

@@ -431,6 +431,10 @@ public:
         bool bypassRequiredMastery = false;
         bool bypassGameplayCasterValidation = false;
         bool bypassTownPortalFailureChecks = false;
+        std::string gateNetworkId;
+        std::string gateSourceMapId;
+        std::string gateSourceMapFileName;
+        uint16_t gateSourceEventId = 0;
         bool lloydRecallMode = false;
         bool lloydSetPreviewCapturePending = false;
         bool lloydSetPreviewScreenshotRequested = false;

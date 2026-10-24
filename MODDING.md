@@ -256,8 +256,51 @@ Old saves and restored pending moves without runtime event identity receive no i
 
 `WorldDatabase::indexMapArrivals` derives arrival features; `connectionArrivals` links them to local source events
 in deterministic latest-first order. Arrival features identify historical observations, not live transport offers,
-current portal eligibility or proof of a return passage. Recording and querying them reveal no terrain. Scheduled
-coach/boat arrivals and cross-world presentation are separate remaining work.
+current portal eligibility or proof of a return passage. Recording and querying them reveal no terrain. Canonical
+sources and destinations can span mounted worlds; MM7/MM8 Atlas navigation follows these records. A destination
+without an installed Atlas catalog remains descriptive, with navigation disabled. Scheduled coach/boat arrivals
+remain separate work.
+
+## Shared dimensional gateway catalog
+
+`engine/world/gates.yml` version 1 owns the existing dimensional selector's landing rules. Both the native selector
+and Atlas read `WorldGateCatalog`; the Atlas does not duplicate landing coordinates or infer them from prose.
+The current catalog moves the existing MMerge three-continent policy out of C++, including QBits 4/519 and the
+unlocked Verdant quest variable. It does not add a new campaign or change these requirements.
+
+Each named network declares its title, `portal_group`, `unlock_variable`, `unlock_description`, background and
+destinations. A destination's `source_id` references the existing merged Town Portal table for its label and icon
+placement/size; `icon` and `hit_rect: [x, y, width, height]` select its native artwork and interaction region.
+Each landing uses a canonical map ID, either `position: [x, y, z]` or `map_start: true`, and optional direction in
+degrees. Ordered `requires_qbit` branches must have distinct positive bits and end with exactly one unconditional
+landing. Unknown maps, missing table entries, duplicate/unknown fields and ambiguous positions fail loading.
+
+`evt.OpenDimensionDoor()` uses `default_network`; `evt.OpenDimensionDoor("example.network")` selects an explicit
+network. Unknown or locked networks do not open a selector or record offers. Names use lowercase letters, digits,
+dots, underscores and hyphens, with no empty component or leading/trailing dot. These runtime calls retain local
+map-event identity; global dialogue/scroll openings have no invented physical gateway origin.
+
+Declare a physical source with callback-owned metadata:
+
+```lua
+SetMapInteractionReference(104, {kind = "dimension_door", network = "merge.dimension_doors"})
+```
+
+It accepts no item, rescue or keyed-entrance fields. Callback replacement/removal invalidates the declaration;
+literal `*_zz_site_interactions.lua` sidecars are supported by the lighting validator. Multiple physical components
+of one gateway can use `SetMapSiteGroups`; proximity/timer callbacks are not guessed onto unrelated physical sites.
+
+The Core records the choices actually displayed by a local gateway, even with the Atlas UI mod disabled. Source
+map named state uses `openyamm.discovery.gate/<event>/<network>/<choice>/<canonical-destination>/seen` and `/time`.
+Only that event/network's last offers are replaced. The existing serializer and refill retention preserve them
+without a new save version. Restored offers must still match the catalog before they inform a destination name.
+They reveal no terrain, visit, arrow, remote sites or actual arrival. Guide reads current authored choices without
+writing offers; Discovery reads historical offers and clearly labels their potentially changed availability.
+
+Only a successful native transfer records a canonical arrival at the destination. Pending provenance is transient;
+old saved pending moves receive no invented origin. The source Atlas retains both offered and travelled choices;
+an arrival links to its source without claiming a return passage. Raw runtime map filenames still follow the
+existing engine move mechanism; arbitrary community worlds with colliding filenames need separate routing work.
 
 ## Shared item-source knowledge
 

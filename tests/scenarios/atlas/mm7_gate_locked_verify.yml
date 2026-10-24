@@ -1,0 +1,51 @@
+id: atlas.mm7_gate_locked_verify
+title: Native gateway observations survive save/load without Guide creating offers
+world: mm7
+mode: faithful
+steps:
+- load_game:
+    name: native
+    path: saves/quicksave.oysav
+- &id001
+  assert:
+    map: 7d29.blv
+- &id002
+  assert:
+    runtime_event_variable:
+      id: 21
+      value: 500
+- &id003
+  assert:
+    runtime_event_variable:
+      id: 23
+      value: 10
+- &id004
+  assert:
+    runtime_event_variable:
+      id: 5
+      member_index: 0
+      value: 21
+- &id005
+  assert:
+    named_map_var_changed:
+      name: openyamm.discovery.gate/65031/merge.dimension_doors/TPGlobal:0/world.mm8.map.out01/seen
+      value: 0
+- &id006
+  assert:
+    named_map_var_changed:
+      name: openyamm.discovery.gate/65031/merge.dimension_doors/TPGlobal:2/world.mm7.map.7out01/seen
+      value: 0
+- &id007
+  assert:
+    named_map_var_changed:
+      name: openyamm.discovery.gate/65031/merge.dimension_doors/TPGlobal:4/world.mm6.map.oute3/seen
+      value: 0
+- save_game: gate-roundtrip
+- load_game: gate-roundtrip
+- *id001
+- *id002
+- *id003
+- *id004
+- *id005
+- *id006
+- *id007

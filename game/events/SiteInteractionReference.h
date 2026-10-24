@@ -9,6 +9,7 @@ namespace OpenYAMM::Game
 struct SiteInteractionReference
 {
     std::string kind;
+    std::string network;
     uint32_t itemId = 0;
     uint32_t spellId = 0;
     uint32_t npcId = 0;

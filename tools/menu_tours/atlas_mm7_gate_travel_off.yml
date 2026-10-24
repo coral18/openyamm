@@ -1,0 +1,23 @@
+output_dir: captures
+exit: true
+steps:
+- expect: gameplay
+- wait: 0.5
+- capture: before-gate
+- action: trigger
+- wait: 0.6
+- pointer_move:
+  - 400
+  - 400
+- wait: 0.2
+- capture: destination-selector
+- click:
+  - 400
+  - 400
+- wait: 5
+- capture: arrival-state-before-expect
+- key: Escape
+- wait: 0.5
+- expect: gameplay
+- capture: jadame-arrival
+- key: F9

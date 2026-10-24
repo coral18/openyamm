@@ -8822,7 +8822,8 @@ bool GameApplication::openAtlasScreen(bool paused)
     WorldKnowledge knowledge;
     if (paused)
     {
-        const auto collectSites = [&knowledge](const std::string &file, const EventRuntimeState &state,
+        const WorldGateCatalog &gateCatalog = m_gameDataRepository.worldGateCatalog();
+        const auto collectSites = [&knowledge, &gateCatalog](const std::string &file, const EventRuntimeState &state,
             const std::string &canonicalMapId)
         {
             knowledge.monsterObservations[toLowerCopy(file)] = worldMonsterObservations(state);
@@ -8830,9 +8831,17 @@ bool GameApplication::openAtlasScreen(bool paused)
             knowledge.chestObservations[toLowerCopy(file)] = worldChestObservations(state);
             // New observations belong to canonical snapshots, never ambiguous legacy filename aliases.
             if (!canonicalMapId.empty())
+            {
                 knowledge.siteObservations[canonicalMapId] = worldSiteObservations(state);
+                knowledge.gateOffers[canonicalMapId] = worldGateOffers(state);
+            }
             knowledge.notes[toLowerCopy(file)] = worldMapNotes(state, file);
-            knowledge.arrivals[toLowerCopy(file)] = worldMapArrivals(state, file);
+            knowledge.arrivals[canonicalMapId.empty() ? toLowerCopy(file) : canonicalMapId]
+                = worldMapArrivals(state, file);
+            if (!canonicalMapId.empty())
+                for (const WorldGateOffer &offer : knowledge.gateOffers[canonicalMapId])
+                    if (gateCatalog.match(offer.networkId, offer.choiceId, offer.mapId))
+                        knowledge.informedRecords.insert(offer.mapId);
             for (const auto &[key, value] : state.namedMapVars)
                 if (value > 0 && key.starts_with("openyamm.discovery.site/"))
                     knowledge.interactedSites[toLowerCopy(file)].insert(key);
@@ -10375,7 +10384,8 @@ bool GameApplication::processPendingMapMove()
 
     const MapStatsEntry *pSourceMap = m_gameDataRepository.mapStats().findByFileName(
         pendingMapMove->sourceMapFileName);
-    const std::string sourceMapId = pSourceMap != nullptr ? WorldDatabase::mapId(*pSourceMap) : "";
+    const std::string sourceMapId = !pendingMapMove->sourceCanonicalMapId.empty()
+        ? pendingMapMove->sourceCanonicalMapId : pSourceMap != nullptr ? WorldDatabase::mapId(*pSourceMap) : "";
     const auto rememberArrival = [this, &pendingMapMove, &sourceMapId]()
     {
         IGameplayWorldRuntime *pRuntime = m_gameSession.activeWorldRuntime();
@@ -10855,11 +10865,15 @@ bool GameApplication::processPendingDimensionDoorOverlay()
         return false;
     }
 
+    const uint16_t sourceEventId = pRuntimeState->pendingDimensionDoorEventId;
+    const std::string networkId = pRuntimeState->pendingDimensionDoorNetwork;
     pRuntimeState->pendingDimensionDoorOverlay = false;
+    pRuntimeState->pendingDimensionDoorEventId = 0;
+    pRuntimeState->pendingDimensionDoorNetwork.clear();
 
     GameplayScreenRuntime &screenRuntime = m_gameSession.gameplayScreenRuntime();
 
-    if (!screenRuntime.ensureDimensionDoorDestinationsLoaded())
+    if (!screenRuntime.ensureDimensionDoorDestinationsLoaded(networkId))
     {
         screenRuntime.setStatusBarEvent("Dimension Door destinations unavailable");
         return false;
@@ -10872,6 +10886,20 @@ bool GameApplication::processPendingDimensionDoorOverlay()
         spellIdValue(SpellId::TownPortal),
         casterMemberIndex);
     screenRuntime.resetUtilitySpellOverlayInteractionState();
+    const auto &map = m_gameDataLoader.getSelectedMap();
+    const WorldGateCatalog &gates = m_gameDataRepository.worldGateCatalog();
+    const WorldGateNetwork *pNetwork = networkId.empty() ? gates.defaultNetwork() : gates.find(networkId);
+    screenRuntime.utilitySpellOverlay().gateNetworkId = pNetwork != nullptr ? pNetwork->id : "";
+    if (sourceEventId != 0 && map && pNetwork != nullptr
+        && toLowerCopy(map->map.fileName) == toLowerCopy(pRuntimeState->mapFileName))
+    {
+        auto &selection = screenRuntime.utilitySpellOverlay();
+        selection.gateSourceMapId = WorldDatabase::mapId(map->map);
+        selection.gateSourceMapFileName = map->map.fileName;
+        selection.gateSourceEventId = sourceEventId;
+        recordWorldGateOffers(*pRuntimeState, sourceEventId, pNetwork->id,
+            gates.choices(*pNetwork, pParty), m_gameSession.gameMinutes());
+    }
     screenRuntime.setStatusBarEvent("You feel high magic presence here.", 4.0f);
     return true;
 }

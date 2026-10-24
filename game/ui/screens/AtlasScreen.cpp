@@ -182,6 +182,7 @@ AtlasScreen::AtlasScreen(const Engine::AssetFileSystem &assets, const GameDataRe
     }
     if (pCurrentMap != nullptr && pCurrentMap->localEventProgram)
         m_world.indexMapInteractionReferences(pCurrentMap->map, m_data.itemTable(), m_data.spellTable());
+        m_world.indexMapGateReferences(pCurrentMap->map, m_data.worldGateCatalog(), m_pParty);
     if (pCurrentMap != nullptr && m_pGlobalEvents != nullptr
         && (pCurrentMap->outdoorMapData || pCurrentMap->indoorMapData))
     {
@@ -643,6 +644,7 @@ void AtlasScreen::indexMapData(MapAssetInfo &map)
     else
         throw std::runtime_error("Missing map geometry");
     m_world.indexMapInteractionReferences(map.map, m_data.itemTable(), m_data.spellTable());
+    m_world.indexMapGateReferences(map.map, m_data.worldGateCatalog(), m_pParty);
     if (map.localEventProgram) m_world.indexNpcLocations(*map.localEventProgram);
     if (map.globalEventProgram)
     {
@@ -1815,6 +1817,8 @@ void AtlasScreen::drawSiteJournal()
     const Rect viewport = canvasRect(25, 121, 798, 270);
     outline(viewport, 0xff597284u);
     std::string content(m_world.siteReference(feature, m_knowledge, m_guide));
+    const std::string offers = m_world.gateOfferText(feature, m_knowledge, m_data.worldGateCatalog());
+    if (!offers.empty()) content += (content.empty() ? "" : "\n\n") + offers;
     try
     {
         const std::string observed = m_world.siteObservationText(feature, m_knowledge);
@@ -1863,6 +1867,7 @@ void AtlasScreen::drawDetails()
             "C Chests, W Wells/Fountains, S Shrines, O Obelisks, P Passages, A Arrivals, "
             "M Monsters, N Notes, I Items, D Objects.";
         const WorldRecord *pDestination = nullptr;
+        const MapStatsEntry *pConnectedMap = nullptr;
         const WorldMapFeature *pArrivalDestination = nullptr;
         size_t arrivalCount = 0;
         if (m_connectionContext != m_selectedFeature)
@@ -1878,7 +1883,8 @@ void AtlasScreen::drawDetails()
         {
             const WorldMapFeature &feature = **selected;
             text = m_world.featureTitle(feature, m_knowledge, m_guide) + " | " + worldMapFeatureKindName(feature.kind);
-            hasJournal = !m_world.siteReference(feature, m_knowledge, m_guide).empty();
+            hasJournal = !m_world.siteReference(feature, m_knowledge, m_guide).empty()
+                || !m_world.gateOfferText(feature, m_knowledge, m_data.worldGateCatalog()).empty();
             const auto observations = m_world.siteObservations(feature, m_knowledge);
             if (!observations.empty())
             {
@@ -1908,27 +1914,54 @@ void AtlasScreen::drawDetails()
             if (feature.kind == WorldMapFeatureKind::Connection)
             {
                 const auto arrivals = m_world.connectionArrivals(feature, m_knowledge);
-                arrivalCount = arrivals.size();
-                if (!arrivals.empty())
+                const auto gates = m_world.gateDestinations(feature, m_knowledge,
+                    m_data.worldGateCatalog(), m_pParty, m_guide);
+                std::vector<const WorldMapFeature *> additionalArrivals = arrivals;
+                std::erase_if(additionalArrivals, [&](const WorldMapFeature *pArrival)
                 {
-                    m_connectionChoice %= arrivals.size();
-                    pArrivalDestination = arrivals[m_connectionChoice];
-                    pDestination = m_world.find(pArrivalDestination->mapId);
-                    text += "\nTravelled to: " + pDestination->name() + " | Day "
-                        + std::to_string(pArrivalDestination->arrival->gameMinutes / (24 * 60) + 1)
-                        + (arrivalCount > 1 ? " | " + std::to_string(m_connectionChoice + 1)
-                            + "/" + std::to_string(arrivalCount) + " known destinations" : "");
+                    return std::any_of(gates.begin(), gates.end(), [&](const WorldGateChoice &choice)
+                        { return choice.pLanding->mapId == pArrival->mapId; });
+                });
+                arrivalCount = gates.size() + additionalArrivals.size();
+                if (arrivalCount != 0) m_connectionChoice %= arrivalCount;
+                if (m_connectionChoice < gates.size())
+                {
+                    const WorldGateChoice &choice = gates[m_connectionChoice];
+                    pConnectedMap = m_world.mapDefinition(choice.pLanding->mapId);
+                    text += std::string(m_guide ? "\nConfigured destination: " : "\nPreviously offered: ")
+                        + choice.pDestination->label + " - " + choice.pLanding->mapLabel;
+                    const auto arrival = std::find_if(arrivals.begin(), arrivals.end(),
+                        [&](const WorldMapFeature *pValue) { return pValue->mapId == choice.pLanding->mapId; });
+                    if (arrival != arrivals.end()) pArrivalDestination = *arrival;
                 }
+                else if (arrivalCount != 0)
+                {
+                    pArrivalDestination = additionalArrivals[m_connectionChoice - gates.size()];
+                    pConnectedMap = m_world.mapDefinition(pArrivalDestination->mapId);
+                }
+                else if (feature.arrival && !feature.targetMapId.empty())
+                    pConnectedMap = m_world.mapDefinition(feature.targetMapId);
                 else for (const WorldRecord &record : m_world.records())
                     if ((record.kind == WorldRecordKind::Region || record.kind == WorldRecordKind::Dungeon)
                         && toLowerCopy(record.map->fileName) == toLowerCopy(feature.targetMap)
                         && m_world.visible(record, m_knowledge, m_guide))
+                    {
                         pDestination = &record;
+                        pConnectedMap = record.map;
+                    }
+                if (pArrivalDestination != nullptr)
+                    text += "\nTravelled to: " + pConnectedMap->name + " | Day "
+                        + std::to_string(pArrivalDestination->arrival->gameMinutes / (24 * 60) + 1);
+                if (arrivalCount > 1)
+                    text += " | " + std::to_string(m_connectionChoice + 1) + "/" + std::to_string(arrivalCount);
                 if (feature.arrival)
                     text += "\nRecorded arrival | Day "
                         + std::to_string(feature.arrival->gameMinutes / (24 * 60) + 1)
                         + ". This does not establish a return passage.";
-                else if (arrivals.empty()) text += feature.targetMap.empty() ? "\nDestination not mapped"
+                else if (arrivalCount == 0) text += feature.interactionReference
+                    && feature.interactionReference->kind == "dimension_door"
+                    ? "\nUse this gateway to learn its destinations."
+                    : feature.targetMap.empty() ? "\nDestination not mapped"
                     : pDestination != nullptr ? "\nDeclared connection: " + pDestination->name()
                     : m_guide ? "\nDestination outside this catalog" : "\nDestination undiscovered";
             }
@@ -1972,7 +2005,7 @@ void AtlasScreen::drawDetails()
         }
         if (!m_locationError.empty())
             text += "\n" + m_locationError;
-        const bool otherAction = pDestination != nullptr || creatureId > 0 || itemId > 0 || pNote != nullptr;
+        const bool otherAction = pConnectedMap != nullptr || creatureId > 0 || itemId > 0 || pNote != nullptr;
         const float journalX = otherAction ? (arrivalCount > 1 ? 454 : 514) : 669;
         const float textWidth = hasJournal && otherAction ? journalX - 44
             : arrivalCount > 1 ? 565 : otherAction || hasJournal ? 625 : 778;
@@ -2015,12 +2048,18 @@ void AtlasScreen::drawDetails()
             m_search.clear();
             m_referenceScroll = m_referenceDetailScroll = m_referenceContentHeight = 0;
         }
-        if (pDestination != nullptr && button("atlas-feature-destination", canvasRect(669, 416, 145, 28),
-            pArrivalDestination != nullptr ? "View arrival"
-                : selected != features.end() && (*selected)->arrival ? "View origin" : "Open connected map"))
+        const bool hasWorldAtlas = pConnectedMap != nullptr && std::find(m_availableWorlds.begin(),
+            m_availableWorlds.end(), pConnectedMap->worldId) != m_availableWorlds.end();
+        if (pConnectedMap != nullptr && button("atlas-feature-destination", canvasRect(669, 416, 145, 28),
+            !hasWorldAtlas ? "Atlas unavailable" : pArrivalDestination != nullptr ? "View arrival"
+                : selected != features.end() && (*selected)->arrival ? "View origin" : "Open connected map",
+            "button", hasWorldAtlas))
         {
             const std::string arrivalId = pArrivalDestination != nullptr ? pArrivalDestination->id : "";
-            select(*pDestination);
+            const std::string mapId = WorldDatabase::mapId(*pConnectedMap);
+            const std::string worldId = pConnectedMap->worldId;
+            selectWorld(worldId);
+            if (const WorldRecord *pMap = m_world.find(mapId)) select(*pMap);
             m_siteSelection.clear();
             m_floorLayerContext.clear();
             if (!arrivalId.empty())

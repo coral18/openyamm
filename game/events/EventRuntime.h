@@ -134,6 +134,7 @@ struct EventRuntimeState
         bool useFullscreenLoading = false;
         // Runtime provenance. Restored legacy/queued requests do not infer an event origin.
         std::string sourceMapFileName;
+        std::string sourceCanonicalMapId;
         uint16_t sourceMapEventId = 0;
         std::string traceSourceKind;
         uint32_t traceSourceId = 0;
@@ -519,6 +520,8 @@ struct EventRuntimeState
     std::unordered_set<uint32_t> unavailableNpcIds;
     std::vector<HiredNpcFollower> hiredNpcFollowers;
     bool pendingDimensionDoorOverlay = false;
+    uint16_t pendingDimensionDoorEventId = 0;
+    std::string pendingDimensionDoorNetwork;
     DialogueRuntimeState dialogueState;
     std::array<uint8_t, 125> decorVars = {};
     std::optional<ActiveDecorationContext> activeDecorationContext;

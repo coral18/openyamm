@@ -1,0 +1,50 @@
+id: atlas.mm7_gate_travel_fixture
+title: Gate contact and actual Verdant quest preparation
+world: mm7
+mode: faithful
+steps:
+- new_game_flow:
+    start_map: 7d29.blv
+    party:
+      gold: 500
+      food: 10
+      members:
+      - name: Interaction Tester
+        class: Sorcerer
+        level: 1
+        race_id: 0
+        skills:
+        - name: Earth
+          level: 8
+          mastery: 2
+        equipment: {}
+        spells:
+        - 40
+- press_interact:
+    pose:
+      x: -4640
+      y: 736
+      z: 0
+      yaw: 3.141592653589793
+      pitch: -0.35
+    expect:
+      kind: event_target
+      triggered_event: 65031
+      can_activate: true
+- select_topic:
+    kind: npc_topic
+    action_id: 1778
+- select_topic:
+    kind: npc_topic
+    action_id: 1778
+- select_topic:
+    kind: npc_topic
+    action_id: 1778
+- select_topic:
+    kind: npc_topic
+    action_id: 1778
+- assert:
+    named_global_var_changed:
+      name: MMerge.CrossContinents.GotMainQuest
+      value: 1
+- save_game: before-gate

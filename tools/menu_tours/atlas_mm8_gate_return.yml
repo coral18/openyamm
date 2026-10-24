@@ -1,0 +1,53 @@
+output_dir: captures
+exit: true
+steps:
+- expect: gameplay
+- wait: 0.5
+- capture: before-gate
+- action: trigger
+- wait: 0.6
+- pointer_move:
+  - 1200
+  - 400
+- wait: 0.2
+- capture: destination-selector
+- click:
+  - 1200
+  - 400
+- wait: 5
+- capture: arrival-state-before-expect
+- key: Escape
+- wait: 0.5
+- expect: gameplay
+- capture: antagarich-arrival
+- key: F9
+- pause: true
+- click:
+  - 800
+  - 821
+- click:
+  - 1480
+  - 126
+- click:
+  - 275
+  - 126
+- text: Arrival from Ravenshore
+- key: Return
+- capture: arrival-list
+- click:
+  - 1250
+  - 260
+- capture: arrival-details
+- click:
+  - 1395
+  - 806
+- capture: origin-ravenshore-map
+- click:
+  - 1450
+  - 57
+- expect: pause
+- click:
+  - 800
+  - 301
+- expect: gameplay
+- key: F9

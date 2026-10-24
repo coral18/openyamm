@@ -3,6 +3,7 @@
 #include "game/events/ScriptedEventProgram.h"
 #include "game/events/EventRuntime.h"
 #include "game/world/WorldDatabase.h"
+#include "game/world/WorldGateCatalog.h"
 #include "game/tables/JournalAutonoteTable.h"
 #include "game/tables/ItemTable.h"
 #include "game/tables/SpellTable.h"
@@ -58,7 +59,7 @@ std::optional<WorldMapFeatureKind> worldMapFeatureKind(std::string_view action)
     if (action == "shrine") return WorldMapFeatureKind::Shrine;
     if (action == "obelisk") return WorldMapFeatureKind::Obelisk;
     if (action == "rescue" || action == "stone_to_flesh") return WorldMapFeatureKind::Decoration;
-    if (action == "teleport" || action == "passage" || action == "travel"
+    if (action == "dimension_door" || action == "teleport" || action == "passage" || action == "travel"
         || action == "enter_dungeon" || action == "leave_dungeon") return WorldMapFeatureKind::Connection;
     return std::nullopt;
 }
@@ -127,6 +128,7 @@ void WorldDatabase::indexMapInteractionReferences(const MapStatsEntry &map,
     {
         if (feature.mapId != id || !feature.interactionReference) continue;
         const SiteInteractionReference &reference = *feature.interactionReference;
+        if (reference.kind == "dimension_door") continue;
         const ItemDefinition *pItem = items.get(reference.itemId);
         if (pItem == nullptr) throw std::invalid_argument("Unknown interaction item: " + feature.id);
         std::string text;
@@ -164,6 +166,64 @@ void WorldDatabase::indexMapInteractionReferences(const MapStatsEntry &map,
         }
         feature.guideReference = std::move(text);
     }
+}
+
+void WorldDatabase::indexMapGateReferences(const MapStatsEntry &map, const WorldGateCatalog &gates,
+    const Party *pParty)
+{
+    for (WorldMapFeature &feature : m_features)
+    {
+        if (feature.mapId != mapId(map) || !feature.interactionReference
+            || feature.interactionReference->kind != "dimension_door") continue;
+        const WorldGateNetwork *pNetwork = gates.find(feature.interactionReference->network);
+        if (pNetwork == nullptr) throw std::invalid_argument("Unknown gate network: " + feature.id);
+        feature.title = pNetwork->title;
+        feature.guideReference = pNetwork->unlockDescription + "\nDestinations are chosen at this gateway.\n";
+        for (const WorldGateChoice &choice : gates.choices(*pNetwork, pParty))
+            feature.guideReference += "\n" + choice.pDestination->label + " - " + choice.pLanding->mapLabel;
+        feature.guideReference += "\n\nLanding sites follow the party's current campaign progress.";
+    }
+}
+
+std::vector<WorldGateChoice> WorldDatabase::gateDestinations(const WorldMapFeature &feature,
+    const WorldKnowledge &knowledge, const WorldGateCatalog &gates, const Party *pParty, bool guide) const
+{
+    if (!feature.interactionReference || feature.interactionReference->kind != "dimension_door"
+        || !featureVisible(feature, knowledge, guide)) return {};
+    const WorldGateNetwork *pNetwork = gates.find(feature.interactionReference->network);
+    if (pNetwork == nullptr) return {};
+    if (guide) return gates.choices(*pNetwork, pParty);
+    std::vector<WorldGateChoice> result;
+    const auto found = knowledge.gateOffers.find(feature.mapId);
+    if (found == knowledge.gateOffers.end()) return result;
+    for (const WorldGateOffer &offer : found->second)
+        if (offer.eventId == feature.site.eventId && offer.networkId == pNetwork->id)
+            if (const auto choice = gates.match(offer.networkId, offer.choiceId, offer.mapId))
+                result.push_back(*choice);
+    return result;
+}
+
+std::string WorldDatabase::gateOfferText(const WorldMapFeature &feature, const WorldKnowledge &knowledge,
+    const WorldGateCatalog &gates) const
+{
+    if (!feature.interactionReference || feature.interactionReference->kind != "dimension_door"
+        || !featureVisible(feature, knowledge, false)) return {};
+    const auto found = knowledge.gateOffers.find(feature.mapId);
+    if (found == knowledge.gateOffers.end()) return {};
+    const WorldGateNetwork *pNetwork = gates.find(feature.interactionReference->network);
+    if (pNetwork == nullptr) return "Recorded gateway network is unavailable.";
+    std::string text;
+    for (const WorldGateOffer &offer : found->second)
+    {
+        if (offer.eventId != feature.site.eventId || offer.networkId != pNetwork->id) continue;
+        if (const auto choice = gates.match(offer.networkId, offer.choiceId, offer.mapId))
+        {
+            if (text.empty()) text = "Previously offered destinations (availability may change):";
+            text += "\n" + choice->pDestination->label + " - " + choice->pLanding->mapLabel + " | Day "
+                + std::to_string(offer.gameMinutes / (24 * 60) + 1);
+        }
+    }
+    return text;
 }
 
 void WorldDatabase::indexInheritedDecorations(const MapStatsEntry &map,

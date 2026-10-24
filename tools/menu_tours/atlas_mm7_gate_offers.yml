@@ -1,0 +1,60 @@
+output_dir: captures
+exit: true
+steps:
+- expect: gameplay
+- wait: 0.5
+- capture: before-gate
+- action: trigger
+- wait: 0.6
+- pointer_move:
+  - 400
+  - 400
+- wait: 0.2
+- capture: destination-selector
+- key: Escape
+- key: F9
+- pause: true
+- click:
+  - 800
+  - 821
+- click:
+  - 1480
+  - 126
+- click:
+  - 275
+  - 126
+- text: Dimensional travel
+- key: Return
+- capture: known-gate-list
+- click:
+  - 1250
+  - 260
+- capture: known-gate-destination
+- click:
+  - 1000
+  - 806
+- capture: remembered-offers
+- click:
+  - 1152
+  - 57
+- capture: guide-rules
+- click:
+  - 450
+  - 57
+- click:
+  - 1152
+  - 57
+- capture: discovery-after-guide
+- click:
+  - 1395
+  - 806
+- capture: offered-jadame-map
+- click:
+  - 1450
+  - 57
+- expect: pause
+- click:
+  - 800
+  - 301
+- expect: gameplay
+- key: F9

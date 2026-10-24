@@ -181,7 +181,7 @@ def validate_interaction_reference_metadata(text, script):
     field = re.compile(r'([a-zA-Z]+) = ("(?:[^"\\\r\n]|\\["\\nrt])*"|true|false|[1-9][0-9]*)')
     numbers = {'itemId', 'spellId', 'npcId', 'spriteId', 'completionQBit'}
     flags = {'consumesItem', 'addsFollower'}
-    strings = {'kind', 'openedMapFlag', 'targetMap'}
+    strings = {'kind', 'openedMapFlag', 'targetMap', 'network'}
     for line in lines[1:]:
         line = line.strip()
         if not line or line.startswith('--'):
@@ -214,6 +214,13 @@ def validate_interaction_reference_metadata(text, script):
                 if position == len(body):
                     raise ValueError(failure)
         kind = values.get('kind')
+        if kind == 'dimension_door':
+            if set(values) != {'kind', 'network'} or not re.fullmatch(r'[a-z0-9_-]+(?:\.[a-z0-9_-]+)*',
+                                                                    values['network']):
+                raise ValueError(failure)
+            continue
+        if 'network' in values:
+            raise ValueError(failure)
         if not values.get('itemId'):
             raise ValueError(failure)
         if kind == 'enter_dungeon':

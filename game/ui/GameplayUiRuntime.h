@@ -180,7 +180,8 @@ public:
     GameplayHudScreenState renderedInspectableHudScreenState() const;
     void setRenderedInspectableHudScreenState(GameplayHudScreenState state);
     bool ensureTownPortalDestinationsLoaded(const std::string &currentMapFileName);
-    bool ensureDimensionDoorDestinationsLoaded(uint32_t dayIndex, bool crossContinentsUnlocked);
+    bool ensureDimensionDoorDestinationsLoaded(uint32_t dayIndex, bool crossContinentsUnlocked,
+        const Party *pParty = nullptr, const std::string &networkId = {});
     const std::string &townPortalBackgroundTextureName() const;
     const std::vector<GameplayTownPortalDestination> &townPortalDestinations() const;
 

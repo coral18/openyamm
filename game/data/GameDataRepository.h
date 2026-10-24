@@ -22,6 +22,7 @@
 #include "game/tables/JournalHistoryTable.h"
 #include "game/tables/JournalQuestTable.h"
 #include "game/tables/MapStats.h"
+#include "game/world/WorldGateCatalog.h"
 #include "game/tables/MonsterProjectileTable.h"
 #include "game/tables/MonsterTable.h"
 #include "game/tables/MergedBaseTables.h"
@@ -90,6 +91,7 @@ public:
     const FaceAnimationTable &faceAnimationTable() const;
     const TransitionTable &transitionTable() const;
     const MergedTownPortalSwitchTable &mergedTownPortalSwitchTable() const;
+    const WorldGateCatalog &worldGateCatalog() const;
     const MergedCharacterSelectionTable &mergedCharacterSelectionTable() const;
     const MergedNewsTopicTable &mergedNewsAreaTopicTable() const;
     const MergedNewsTopicTable &mergedNewsContinentTopicTable() const;
@@ -145,6 +147,7 @@ private:
     const PortraitFxEventTable *m_pPortraitFxEventTable = nullptr;
     const FaceAnimationTable *m_pFaceAnimationTable = nullptr;
     const TransitionTable *m_pTransitionTable = nullptr;
+    const WorldGateCatalog *m_pWorldGateCatalog = nullptr;
     const MergedTownPortalSwitchTable *m_pMergedTownPortalSwitchTable = nullptr;
     const MergedCharacterSelectionTable *m_pMergedCharacterSelectionTable = nullptr;
     const MergedNewsTopicTable *m_pMergedNewsAreaTopicTable = nullptr;

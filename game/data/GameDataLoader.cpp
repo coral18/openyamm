@@ -1749,6 +1749,14 @@ bool GameDataLoader::loadInternal(
         return false;
     }
 
+    const auto gates = assetFileSystem.readTextFile("engine/world/gates.yml");
+    std::string gateError;
+    if (!gates || !m_worldGateCatalog.loadFromText(*gates, m_mapStats, m_mergedTownPortalSwitchTable, gateError))
+    {
+        std::cerr << "Failed to load world gate catalog: " << (gates ? gateError : "Missing gates.yml") << '\n';
+        return false;
+    }
+
     if (!applyMergedRuntimeTables())
     {
         return false;
@@ -2246,6 +2254,11 @@ const MergedOutdoorTravelTable &GameDataLoader::getMergedOutdoorTravelTable() co
 const MergedOverlayTable &GameDataLoader::getMergedOverlayTable() const
 {
     return m_mergedOverlayTable;
+}
+
+const WorldGateCatalog &GameDataLoader::getWorldGateCatalog() const
+{
+    return m_worldGateCatalog;
 }
 
 const MergedTownPortalSwitchTable &GameDataLoader::getMergedTownPortalSwitchTable() const

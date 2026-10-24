@@ -25,6 +25,13 @@ bool isOutdoor(const MapStatsEntry &map)
 }
 } // namespace
 
+const MapStatsEntry *WorldDatabase::mapDefinition(const std::string &canonicalId) const
+{
+    for (const MapStatsEntry &map : m_pMaps->getEntries())
+        if (mapId(map) == canonicalId) return &map;
+    return nullptr;
+}
+
 std::string WorldDatabase::mapId(const MapStatsEntry &map)
 {
     return map.canonicalId.empty() ? buildCanonicalMapId(map.worldId, map.fileName) : map.canonicalId;
@@ -109,7 +116,7 @@ WorldDatabase::WorldDatabase(const MapStats &maps, const HouseTable &houses, con
     const MergedTeacherTopicTable &teachers, const std::string &worldId,
     const std::vector<WorldMapPresentation> &presentation, const WorldNpcState &npcsState,
     const WorldTransportState &transportState)
-    : m_pHouses(&houses), m_pNpcs(&npcs), m_observedNpcs(npcsState.observedOnly)
+    : m_pMaps(&maps), m_pHouses(&houses), m_pNpcs(&npcs), m_observedNpcs(npcsState.observedOnly)
 {
     m_transportIssues = transportState.issues;
     std::unordered_map<std::string, const WorldMapPresentation *> layouts;

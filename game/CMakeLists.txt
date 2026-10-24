@@ -31,6 +31,7 @@ add_library(openyamm_game STATIC
     world/WorldMapLocations.cpp
     world/WorldInteractionSites.cpp
     world/WorldMapFeatures.cpp
+    world/WorldGateCatalog.cpp
     world/WorldMapKnowledge.cpp
     world/WorldSiteObservations.cpp
     world/WorldNpcKnowledge.cpp

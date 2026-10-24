@@ -158,6 +158,22 @@ class DecorationBakeTests(unittest.TestCase):
         for key in ('cards', 'counts', 'dependencies'):
             self.assertEqual(result[key], baseline[key])
 
+    def test_gate_reference_is_literal_metadata_and_rejects_mixed_effect_fields(self):
+        baseline = self.export()
+        metadata = self.world / 'events/maps/test_zz_site_interactions.lua'
+        header = '-- Site interaction metadata; load after gameplay overlays\n'
+        good = 'SetMapInteractionReference(1, {kind = "dimension_door", network = "merge.dimension_doors"})'
+        metadata.write_text(header + good + '\n')
+        result = self.export()
+        for key in ('cards', 'counts', 'dependencies'):
+            self.assertEqual(result[key], baseline[key])
+        for bad in (good + '; evt.SetSprite(1, 0)', good.replace('})', ', itemId = 1})'),
+                    good.replace('merge.dimension_doors', '../network'),
+                    good.replace('merge.dimension_doors', 'bad..network')):
+            metadata.write_text(header + bad + '\n')
+            with self.assertRaisesRegex(ValueError, 'Invalid site interaction metadata overlay'):
+                self.export()
+
     def test_typed_interaction_references_reject_unknown_fields_and_executable_content(self):
         metadata = self.world / 'events/maps/test_zz_site_interactions.lua'
         header = '-- Site interaction metadata; load after gameplay overlays\n'

@@ -7,6 +7,17 @@
 namespace OpenYAMM::Game
 {
 struct EventRuntimeState;
+struct WorldGateChoice;
+
+struct WorldGateOffer
+{
+    uint16_t eventId = 0;
+    std::string networkId, choiceId, mapId;
+    int32_t gameMinutes = 0;
+};
+void recordWorldGateOffers(EventRuntimeState &state, uint16_t eventId, const std::string &networkId,
+    const std::vector<WorldGateChoice> &choices, float gameMinutes);
+std::vector<WorldGateOffer> worldGateOffers(const EventRuntimeState &state);
 
 struct WorldMapArrival
 {

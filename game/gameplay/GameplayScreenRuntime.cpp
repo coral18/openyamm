@@ -4009,15 +4009,14 @@ bool GameplayScreenRuntime::ensureTownPortalDestinationsLoaded()
 {
     if (utilitySpellOverlayReadOnly().mode == GameplayUiController::UtilitySpellOverlayMode::DimensionDoor)
     {
-        return ensureDimensionDoorDestinationsLoaded();
+        return ensureDimensionDoorDestinationsLoaded(utilitySpellOverlayReadOnly().gateNetworkId);
     }
 
     return uiRuntime().ensureTownPortalDestinationsLoaded(m_session.currentMapFileName());
 }
 
-bool GameplayScreenRuntime::ensureDimensionDoorDestinationsLoaded()
+bool GameplayScreenRuntime::ensureDimensionDoorDestinationsLoaded(const std::string &networkId)
 {
-    constexpr const char *CrossContinentsGotMainQuestVar = "MMerge.CrossContinents.GotMainQuest";
     constexpr float MinutesPerDay = 24.0f * 60.0f;
 
     const IGameplayWorldRuntime *pWorldRuntime = worldRuntime();
@@ -4025,15 +4024,12 @@ bool GameplayScreenRuntime::ensureDimensionDoorDestinationsLoaded()
     const uint32_t dayIndex = static_cast<uint32_t>(std::floor(gameMinutes / MinutesPerDay));
     const EventRuntimeState *pEventRuntimeState =
         pWorldRuntime != nullptr ? pWorldRuntime->eventRuntimeState() : nullptr;
-    bool crossContinentsUnlocked = false;
-
-    if (pEventRuntimeState != nullptr)
-    {
-        const auto iterator = pEventRuntimeState->namedGlobalVars.find(CrossContinentsGotMainQuestVar);
-        crossContinentsUnlocked = iterator != pEventRuntimeState->namedGlobalVars.end() && iterator->second != 0;
-    }
-
-    return uiRuntime().ensureDimensionDoorDestinationsLoaded(dayIndex, crossContinentsUnlocked);
+    const WorldGateCatalog &catalog = m_session.data().worldGateCatalog();
+    const WorldGateNetwork *pNetwork = networkId.empty() ? catalog.defaultNetwork() : catalog.find(networkId);
+    const bool unlocked = pNetwork != nullptr && pEventRuntimeState != nullptr
+        && catalog.unlocked(*pNetwork, pEventRuntimeState->namedGlobalVars);
+    return uiRuntime().ensureDimensionDoorDestinationsLoaded(dayIndex, unlocked,
+        pWorldRuntime != nullptr ? pWorldRuntime->party() : nullptr, networkId);
 }
 
 bool GameplayScreenRuntime::shouldTownPortalCastOpenDimensionDoor() const

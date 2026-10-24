@@ -1,0 +1,22 @@
+id: atlas.mm8_return_gate_fixture
+title: Ravenshore native gateway physical interaction probe
+world: mm8
+mode: faithful
+steps:
+- load_game:
+    name: seed
+    path: saves/seed.oysav
+- load_map:
+    map: out02.odm
+- press_interact:
+    pose:
+      x: 10752
+      y: -12520
+      z: 48
+      yaw: 0
+      pitch: -1.5
+    expect:
+      kind: event_target
+      triggered_event: 104
+      can_activate: true
+- save_game: before-gate

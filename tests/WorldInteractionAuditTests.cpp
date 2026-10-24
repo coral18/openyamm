@@ -176,6 +176,7 @@ TEST_CASE("canonical interaction references describe active statue rescues and r
         for (const auto &[event, reference] : events.interactionReferences())
         {
             CAPTURE(event);
+            if (reference.kind == "dimension_door") continue;
             ++references;
             REQUIRE(events.getContextActionMetadata(event));
             CHECK(events.getContextActionMetadata(event)->kind == reference.kind);

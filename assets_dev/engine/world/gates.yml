@@ -1,0 +1,38 @@
+version: 1
+default_network: merge.dimension_doors
+networks:
+  - id: merge.dimension_doors
+    title: Dimensional travel
+    portal_group: TPGlobal
+    unlock_description: Accept Verdant's quest before using this network.
+    unlock_variable: MMerge.CrossContinents.GotMainQuest
+    background: ui/gameplay/dimensional_travel/tpglobal
+    destinations:
+      - source_id: 0
+        icon: ui/gameplay/dimensional_travel/tpjadam1
+        hit_rect: [0, 0, 213, 480]
+        landings:
+          - requires_qbit: 4
+            map: world.mm8.map.out02
+            position: [10296, -12283, 1]
+            direction: 0
+          - map: world.mm8.map.out01
+            map_start: true
+      - source_id: 2
+        icon: ui/gameplay/dimensional_travel/tpantag1
+        hit_rect: [427, 0, 213, 480]
+        landings:
+          - requires_qbit: 519
+            map: world.mm7.map.7out02
+            position: [-16832, 12512, 372]
+            direction: 0
+          - map: world.mm7.map.7out01
+            position: [12552, 800, 193]
+            direction: 90
+      - source_id: 4
+        icon: ui/gameplay/dimensional_travel/tpenroth1
+        hit_rect: [213, 0, 214, 480]
+        landings:
+          - map: world.mm6.map.oute3
+            position: [-9728, -11319, 160]
+            direction: 90

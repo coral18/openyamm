@@ -3,6 +3,7 @@
 
 #include "tools/LegacyLuaExport.h"
 #include "game/events/ScriptedEventProgram.h"
+#include "game/events/EventRuntime.h"
 
 #include <cctype>
 #include <array>
@@ -1590,4 +1591,63 @@ TEST_CASE("passage site groups belong to current callbacks and reject malformed 
         "SetMapSiteGroups(10, {{'surface/4', 'surface/5'}})");
     REQUIRE(program);
     CHECK(program->siteGroups().at(10)[0][0] == "surface/4");
+}
+
+TEST_CASE("gate references are callback-owned and opening named networks preserves only local event provenance")
+{
+    using namespace OpenYAMM::Game;
+    std::string error;
+    const auto load = [&](const std::string &code, ScriptedEventScope scope = ScriptedEventScope::Map)
+    { return ScriptedEventProgram::loadFromLuaText(code, "@gate-api", scope, error); };
+    const auto bytes = readBinaryFixture(std::filesystem::path(OPENYAMM_SOURCE_DIR)
+        / "assets_dev/engine/scripts/common/event_support.lua");
+    const std::string support(bytes.begin(), bytes.end());
+    const std::string handler = "evt.map[10] = function() end\n";
+    const std::string reference = "SetMapInteractionReference(10, {kind='dimension_door', network='test.gate'})\n";
+    auto program = load(support + handler + reference);
+    REQUIRE_MESSAGE(program, error);
+    CHECK(program->interactionReferences().at(10).network == "test.gate");
+    for (const char *pChanged : {"evt.map[10]=function() end", "evt.map[10]=nil"})
+    {
+        program = load(support + handler + reference + pChanged);
+        REQUIRE(program);
+        CHECK(program->interactionReferences().empty());
+    }
+    for (const char *pFields : {"kind='dimension_door', network=''", "kind='dimension_door', network='bad/path'",
+        "kind='dimension_door', network='bad..path'", "kind='dimension_door', network='.bad'",
+        "kind='dimension_door', network='test.gate', itemId=1"})
+        CHECK_FALSE(load(support + handler + "SetMapInteractionReference(10, {" + pFields + "})"));
+    EventRuntime runtime;
+    EventRuntimeState state;
+    state.mapFileName = "7d29.blv";
+    program = load("evt.map[10] = function() evt.OpenDimensionDoor('test.gate') end");
+    REQUIRE(program);
+    REQUIRE(runtime.executeEventById(program, std::nullopt, 10, state));
+    CHECK(state.pendingDimensionDoorOverlay);
+    CHECK(state.pendingDimensionDoorNetwork == "test.gate");
+    CHECK(state.pendingDimensionDoorEventId == 10);
+    program = load("evt.global[10] = function() evt.OpenDimensionDoor() end", ScriptedEventScope::Global);
+    REQUIRE(program);
+    REQUIRE(runtime.executeEventById(std::nullopt, program, 10, state));
+    CHECK(state.pendingDimensionDoorOverlay);
+    CHECK(state.pendingDimensionDoorNetwork.empty());
+    CHECK(state.pendingDimensionDoorEventId == 0);
+    for (const char *pArgument : {"'bad/path'", "'bad..network'", "'.bad'", "''", "12"})
+    {
+        program = load("evt.map[10] = function() evt.OpenDimensionDoor(" + std::string(pArgument) + ") end");
+        REQUIRE(program);
+        state.pendingDimensionDoorOverlay = true;
+        state.pendingDimensionDoorNetwork = "test.gate";
+        state.pendingDimensionDoorEventId = 10;
+        CHECK_FALSE(runtime.executeEventById(program, std::nullopt, 10, state));
+        CHECK_FALSE(state.pendingDimensionDoorOverlay);
+        CHECK(state.pendingDimensionDoorNetwork.empty());
+        CHECK(state.pendingDimensionDoorEventId == 0);
+    }
+    program = load("evt.map[10] = function() evt.OpenDimensionDoor('test.gate'); evt.ClearDimensionDoorOverlay() end");
+    REQUIRE(program);
+    REQUIRE(runtime.executeEventById(program, std::nullopt, 10, state));
+    CHECK_FALSE(state.pendingDimensionDoorOverlay);
+    CHECK(state.pendingDimensionDoorNetwork.empty());
+    CHECK(state.pendingDimensionDoorEventId == 0);
 }
