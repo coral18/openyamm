@@ -287,3 +287,50 @@ TEST_CASE("canonical elemental prison passages group their physical components a
     }
     CHECK(components == 21);
 }
+
+TEST_CASE("canonical Harmondale dimensional fountain uses all six packaged water bindings in the Atlas")
+{
+    using namespace OpenYAMM::Game;
+    REQUIRE_MESSAGE(OpenYAMM::Tests::regressionMapLoaderLoaded(),
+        OpenYAMM::Tests::regressionMapLoaderFailure());
+    const auto &loader = OpenYAMM::Tests::regressionMapLoader();
+    const auto &data = loader.gameDataLoader;
+    const auto &entries = data.getMapStats().getEntries();
+    const auto entry = std::find_if(entries.begin(), entries.end(), [](const MapStatsEntry &map)
+        { return map.worldId == "mm7" && map.fileName == "7d29.blv"; });
+    REQUIRE(entry != entries.end());
+    auto map = MapAssetLoader().load(loader.assetFileSystem, *entry, data.getMonsterTable(),
+        data.getObjectTable(), MapLoadPurpose::HeadlessGameplay);
+    REQUIRE(map);
+    REQUIRE(map->indoorMapData);
+    std::string error;
+    REQUIRE_MESSAGE(GameDataLoader::loadEventPrograms(loader.assetFileSystem, *map, error), error);
+    REQUIRE(map->localEventProgram);
+    WorldDatabase world(data.getMapStats(), data.getHouseTable(), data.getNpcDialogTable(),
+        data.getMergedTeacherTopicTable(), "mm7");
+    world.indexMapLocations(*entry, *map->indoorMapData, *map->localEventProgram);
+    const auto feature = std::find_if(world.features().begin(), world.features().end(),
+        [](const WorldMapFeature &value) { return value.site.eventId == 65031; });
+    REQUIRE(feature != world.features().end());
+    CHECK(feature->kind == WorldMapFeatureKind::Connection);
+    CHECK(std::count_if(world.features().begin(), world.features().end(),
+        [](const WorldMapFeature &value) { return value.site.eventId == 65031; }) == 1);
+    CHECK(feature->site.faceIds.size() == 6);
+    for (uint32_t face : {1668, 1669, 1689, 1697, 4669, 4670})
+    {
+        CAPTURE(face);
+        CHECK(worldMapFeatureContainsSite(*feature, "surface/" + std::to_string(face)));
+        WorldKnowledge knowledge;
+        knowledge.visitedMaps.insert(entry->fileName);
+        CHECK_FALSE(world.featureVisible(*feature, knowledge, false));
+        CHECK(world.featureVisible(*feature, knowledge, true));
+        knowledge.interactedSites[entry->fileName].insert(worldSiteDiscoveryKey(65031, "surface/"
+            + std::to_string(face)));
+        CHECK(world.featureVisible(*feature, knowledge, false));
+        CHECK(knowledge.interactedSites.at(entry->fileName).size() == 1);
+        CHECK(world.connectionArrivals(*feature, knowledge).empty());
+    }
+    WorldKnowledge unrelated;
+    unrelated.interactedSites[entry->fileName].insert(worldSiteDiscoveryKey(65031, "surface/4229"));
+    CHECK_FALSE(world.featureVisible(*feature, unrelated, false));
+}

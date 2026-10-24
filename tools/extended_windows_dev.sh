@@ -95,6 +95,9 @@ updates = {
     "engine/world/atlas/mm7.yml": repo / "assets_dev/engine/world/atlas/mm7.yml",
     "engine/world/atlas/mm8.yml": repo / "assets_dev/engine/world/atlas/mm8.yml",
     "worlds/mm7/events/maps/7out02_zz_extended.lua": repo / "assets_dev/worlds/mm7/events/maps/7out02_zz_extended.lua",
+    # Required upstream geometry bindings, absent from the bootstrap release payload.
+    "worlds/mm7/maps/7d29_dimension_travel.scene.yml":
+        repo / "assets_dev/worlds/mm7/maps/7d29_dimension_travel.scene.yml",
     # The current Ravenshore supplement requires the matching upstream bake and its recipe.
     "worlds/mm8/maps/out02.lighting": repo / "assets_dev/worlds/mm8/maps/out02.lighting",
     "worlds/mm8/maps/out02.bake.json": repo / "assets_dev/worlds/mm8/maps/out02.bake.json",

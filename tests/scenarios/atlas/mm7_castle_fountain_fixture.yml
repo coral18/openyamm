@@ -1,0 +1,29 @@
+id: atlas.mm7_castle_fountain_fixture
+title: Isolated Castle Harmondale water fixture
+world: mm7
+mode: faithful
+steps:
+- new_game_flow:
+    start_map: 7d29.blv
+    party:
+      gold: 500
+      food: 10
+      members:
+      - name: Interaction Tester
+        class: Sorcerer
+        level: 1
+        race_id: 0
+        skills:
+        - name: Earth
+          level: 8
+          mastery: 2
+        equipment: {}
+        spells:
+        - 40
+- set_pose:
+    x: -4640
+    y: 736
+    z: 0
+    yaw: 3.141592653589793
+    pitch: -0.35
+- save_game: before-interaction

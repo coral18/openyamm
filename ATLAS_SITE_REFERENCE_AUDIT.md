@@ -109,3 +109,23 @@ The 21 base components for pbp:502/503/504/505 now form four explicit callback-o
 physical sites remain in the inventory and retain their discovery keys; World Database features/locations expose
 one representative per declared group. The real-catalog regression validates every member and verifies that one
 member's discovery does not reveal any other prison. Other multipart entrance bindings still require an audit.
+
+
+## Packaged courtyard binding follow-up, 2026-10-24
+
+The former Castle Harmondale failure was an incomplete Windows development overlay. Its base BLV and scene
+matched current source, but the existing upstream `7d29_dimension_travel.scene.yml` supplement was absent from
+the public bootstrap payload and the local overlay list. The Windows wrapper now includes that exact source
+file. The original regression passes all 71 assertions, including all six bindings and restored/unrestored
+runtime state. The Atlas regression finds one connected passage and recognizes interaction at every water face.
+No source geometry, gameplay callback, lighting or save format was changed. Full-source Android packaging already
+collects this file; this follow-up does not establish Android/device acceptance or complete Gate destinations.
+
+The six well declarations remain unresolved. Their four ODM/base-scene pairs match Git blobs exactly; all
+source scene-overlay filenames are present in the mounted release/overlay packages. Raw inspection finds no
+matching event in any model face's cog fields or any sprite's primary/secondary event fields, including hidden
+geometry. MM7 out12's authored well uses event 201 and its wishing surface 205, rather than 202. MM8 out06's
+well uses 101; its fountains use 104/449, rather than the missing 102. The readable GrayFace EVT references
+confirm the six callback effects but supply no coordinates. This rules out the visible-only site extractor and
+missing small supplements as explanations; it does not justify inventing a placement or declaring the callbacks
+unused in every possible runtime state. Keep their content/binding audit open.

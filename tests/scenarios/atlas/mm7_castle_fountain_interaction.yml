@@ -1,0 +1,22 @@
+id: atlas.mm7_castle_fountain_interaction
+title: Actual courtyard water activation
+world: mm7
+mode: faithful
+steps:
+- load_game:
+    name: before
+    path: saves/before.oysav
+- press_interact:
+    pose:
+      x: -4640
+      y: 736
+      z: 0
+      yaw: 3.141592653589793
+      pitch: -0.35
+    expect:
+      kind: event_target
+      triggered_event: 65031
+      can_activate: true
+- assert:
+    map: 7d29.blv
+- save_game: after-water

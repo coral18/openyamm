@@ -125,6 +125,17 @@ An unchanged focused Atlas run took about one second with the prepared native ca
 
 For packaged-data checks, explicitly set `OPENYAMM_REGRESSION_ASSETS_ROOT` to the isolated `runtime/assets`
 directory and `OPENYAMM_ATLAS_AUDIT_ROOT` to a data-only cache prepared by `tools/prepare_atlas_audit.py`.
+A sparse checkout must also materialize the small upstream courtyard binding overlay before `build`:
+
+```bash
+git restore --source HEAD --worktree --ignore-skip-worktree-bits \
+  assets_dev/worlds/mm7/maps/7d29_dimension_travel.scene.yml
+```
+
+This restores that tracked data file only; it does not check out the multi-GB maps directories. The Windows build
+overlay includes it because the bootstrap public payload lacks this upstream scene supplement. Its six water-face
+bindings are required for the Castle Harmondale dimensional fountain and its Atlas site.
+
 The wrapper converts WSL paths for native tests. Without the regression override, tests retain their normal
 `assets_dev` source. Neither variable silently substitutes a different payload when data is missing.
 Upstream Direct3D shader generation needed two portability fixes: scalar vector initialization through
@@ -1971,3 +1982,27 @@ Reproduction inputs are `tests/scenarios/atlas/mm8_prison_groups_{fixture,intera
 running the native tour. Captures and receipts stay private under `atlas-passages-20261024` in the Windows dev root.
 These checks do not certify every multipart entrance, conditional connection graph, Android or controller UX;
 the remaining full-Atlas matrix is still open.
+
+
+### Castle Harmondale courtyard payload repair, 2026-10-24
+
+The previously failing dimensional-fountain gate is repaired by packaging the existing upstream scene supplement.
+The public bootstrap's base BLV/scene match source, but its `7d29_dimension_travel.scene.yml` file was absent.
+The Windows iteration wrapper now mounts that exact tracked file in the small runtime overlay. It adds the six
+intended water-face bindings; existing callbacks and runtime handling supply the behavior. No geometry binary,
+generated script, bake, Core gameplay rule or save version changed. Other source scene-overlay filenames were
+checked against the mounted packages; none was missing after this correction.
+
+Before correction, the existing fountain test failed 18 of 71 assertions. After correction, 66 selected native
+unit cases / 33,489 assertions pass, including its full original 71 assertions, both restoration states and the
+Atlas projection of all six water faces as one physical site. Merely visiting the map does not discover it, and
+an unrelated face cannot reveal it. The Windows Release target passed; the asset-only rebuild took two seconds.
+
+An actual headless mesh pick activates face 1668/event 65031 at 372 units without forced event replay. A native
+Windows AMD/OpenGL control confirms first-contact dialogue with Verdant, one discovered Atlas passage, its Guide
+view and the return to the unchanged discovered floor plan. A 25-step post-UI save/load verifier preserves Town
+Portal discovery, restoration state, resources and the one actually touched face without seeding its siblings. This is the first-contact path, not proof that every
+cross-world destination/transition is integrated into the Atlas. Controlled input/pose and save verifiers live in
+`tests/scenarios/atlas/mm7_castle_fountain_*.yml`, `tools/menu_tours/atlas_mm7_castle_fountain.yml` and
+`tools/screenshot_tours/atlas_mm7_castle_fountain_pose.yml`. Evidence stays private under `atlas-fountains-20261024`.
+The remaining full-Atlas matrix, six well declarations, Gate destination semantics and device checks stay open.
