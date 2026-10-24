@@ -1026,6 +1026,14 @@ function support.setMapSiteGroups(eventId, groups)
     meta.siteGroups[eventId] = {handler = handler, groups = groups}
 end
 
+function support.setMapConnectionTargets(eventId, maps)
+    local handler = evt.map[eventId]
+    assert(type(handler) == "function", "Connection targets require a registered map callback")
+    local meta = ensureMetaScope("map")
+    meta.connectionTargets = meta.connectionTargets or {}
+    meta.connectionTargets[eventId] = {handler = handler, maps = maps}
+end
+
 local function setItemRewards(scopeName, eventId, items)
     local handler = evt[scopeName][eventId]
     assert(type(handler) == "function", "Item reward metadata requires a registered event handler")
@@ -1665,6 +1673,7 @@ SetMapMetadata = support.setMapMetadata
 SetMapContextAction = support.setMapContextAction
 SetMapInteractionReference = support.setMapInteractionReference
 SetMapSiteGroups = support.setMapSiteGroups
+SetMapConnectionTargets = support.setMapConnectionTargets
 SetMapItemRewards = support.setMapItemRewards
 SetGlobalItemRewards = support.setGlobalItemRewards
 SetMapSiteReference = support.setMapSiteReference

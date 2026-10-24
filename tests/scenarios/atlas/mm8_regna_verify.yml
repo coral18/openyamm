@@ -1,0 +1,57 @@
+id: atlas.mm8_regna_verify
+title: Native conditional route observations survive roundtrip without inventing the
+  alternative journey
+world: mm8
+mode: faithful
+steps:
+- load_game:
+    name: native
+    path: saves/quicksave.oysav
+- &id001
+  assert:
+    map: d06.blv
+- &id002
+  assert:
+    named_map_var_changed:
+      name: openyamm.discovery.arrival/world.mm8.map.d34/event/451/seen
+      value: 1
+- &id003
+  assert:
+    named_map_var_changed:
+      name: openyamm.discovery.arrival/d34.blv/event/451/seen
+      value: 0
+- &id004
+  assert:
+    runtime_event_variable:
+      id: 21
+      value: 500
+- &id005
+  assert:
+    runtime_event_variable:
+      id: 23
+      value: 10
+- &id006
+  assert:
+    runtime_event_variable:
+      id: 5
+      member_index: 0
+      value: 21
+- save_game: connection-roundtrip
+- load_game: connection-roundtrip
+- *id001
+- *id002
+- *id003
+- *id004
+- *id005
+- *id006
+- load_map:
+    map: d34.blv
+- assert:
+    map: d34.blv
+- assert:
+    named_map_var_changed:
+      name: openyamm.discovery.site/surface/524/event/451
+      value: 1
+- assert:
+    qbit_clear:
+    - 214

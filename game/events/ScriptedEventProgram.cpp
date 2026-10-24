@@ -718,6 +718,70 @@ bool readInteractionReferences(lua_State *pLuaState, int metadataIndex, Scripted
     return true;
 }
 
+bool readConnectionTargets(lua_State *pLuaState, int metadataIndex, ScriptedEventScope scope,
+    std::unordered_map<uint16_t, std::vector<std::string>> &result, std::string &error)
+{
+    const int stackTop = lua_gettop(pLuaState);
+    const auto fail = [&]()
+    {
+        error = "Invalid connectionTargets: expected callback-owned dense arrays of distinct map filenames";
+        lua_settop(pLuaState, stackTop);
+        return false;
+    };
+    lua_getfield(pLuaState, metadataIndex, "connectionTargets");
+    if (lua_isnil(pLuaState, -1)) { lua_pop(pLuaState, 1); return true; }
+    if (scope != ScriptedEventScope::Map || !lua_istable(pLuaState, -1)) return fail();
+    lua_pushnil(pLuaState);
+    while (lua_next(pLuaState, -2) != 0)
+    {
+        if (!lua_isinteger(pLuaState, -2) || lua_tointeger(pLuaState, -2) <= 0
+            || lua_tointeger(pLuaState, -2) > UINT16_MAX || !lua_istable(pLuaState, -1)) return fail();
+        const uint16_t eventId = uint16_t(lua_tointeger(pLuaState, -2));
+        lua_getfield(pLuaState, -1, "handler");
+        lua_getglobal(pLuaState, "evt");
+        lua_getfield(pLuaState, -1, "map");
+        lua_rawgeti(pLuaState, -1, eventId);
+        const bool ownsHandler = lua_isfunction(pLuaState, -4) && lua_rawequal(pLuaState, -1, -4);
+        lua_pop(pLuaState, 4);
+        if (!ownsHandler) { lua_pop(pLuaState, 1); continue; }
+        lua_getfield(pLuaState, -1, "maps");
+        if (!lua_isnil(pLuaState, -1))
+        {
+            if (!lua_istable(pLuaState, -1) || lua_rawlen(pLuaState, -1) > 64) return fail();
+            const size_t count = lua_rawlen(pLuaState, -1);
+            size_t entries = 0;
+            lua_pushnil(pLuaState);
+            while (lua_next(pLuaState, -2) != 0)
+            {
+                if (!lua_isinteger(pLuaState, -2) || lua_tointeger(pLuaState, -2) <= 0
+                    || uint64_t(lua_tointeger(pLuaState, -2)) > count) return fail();
+                ++entries;
+                lua_pop(pLuaState, 1);
+            }
+            if (entries != count) return fail();
+            std::vector<std::string> maps;
+            std::set<std::string> used;
+            for (size_t index = 1; index <= count; ++index)
+            {
+                lua_rawgeti(pLuaState, -1, lua_Integer(index));
+                if (lua_type(pLuaState, -1) != LUA_TSTRING) return fail();
+                size_t size = 0;
+                const char *pValue = lua_tolstring(pLuaState, -1, &size);
+                const std::string map(pValue, size);
+                if (size <= 4 || size > 128 || (!map.ends_with(".blv") && !map.ends_with(".odm"))
+                    || map.substr(0, size - 4).find_first_not_of("abcdefghijklmnopqrstuvwxyz0123456789_-")
+                        != std::string::npos || !used.insert(map).second) return fail();
+                maps.push_back(map);
+                lua_pop(pLuaState, 1);
+            }
+            if (!maps.empty()) result.emplace(eventId, std::move(maps));
+        }
+        lua_pop(pLuaState, 2);
+    }
+    lua_pop(pLuaState, 1);
+    return true;
+}
+
 bool readSiteGroups(lua_State *pLuaState, int metadataIndex, ScriptedEventScope scope,
     std::unordered_map<uint16_t, std::vector<std::vector<std::string>>> &result, std::string &error)
 {
@@ -1007,6 +1071,8 @@ bool ScriptedEventProgram::populateMetadataFromLua(
     if (!readInteractionReferences(pLuaState, lua_absindex(pLuaState, -1), scope,
         program.m_interactionReferences, error)) return false;
     if (!readSiteGroups(pLuaState, lua_absindex(pLuaState, -1), scope, program.m_siteGroups, error)) return false;
+    if (!readConnectionTargets(pLuaState, lua_absindex(pLuaState, -1), scope,
+        program.m_connectionTargets, error)) return false;
     program.m_textureNames = readStringArrayFromField(pLuaState, -1, "textureNames");
     program.m_spriteNames = readStringArrayFromField(pLuaState, -1, "spriteNames");
     program.m_castSpellIds = readIntegerArrayFromField<uint32_t>(pLuaState, -1, "castSpellIds");
@@ -1025,6 +1091,11 @@ bool ScriptedEventProgram::populateMetadataFromLua(
 const std::unordered_map<uint16_t, std::vector<uint32_t>> &ScriptedEventProgram::itemRewards() const
 {
     return m_itemRewards;
+}
+
+const std::unordered_map<uint16_t, std::vector<std::string>> &ScriptedEventProgram::connectionTargets() const
+{
+    return m_connectionTargets;
 }
 
 const std::unordered_map<uint16_t, SiteInteractionReference> &ScriptedEventProgram::interactionReferences() const
@@ -1204,6 +1275,19 @@ std::optional<ScriptedEventProgram::ContextActionMetadata> ScriptedEventProgram:
     std::optional<ContextActionMetadata> metadata = iterator != m_contextActionsByEventId.end()
         ? std::optional<ContextActionMetadata>(iterator->second)
         : std::nullopt;
+    if (const auto targets = m_connectionTargets.find(eventId); targets != m_connectionTargets.end())
+    {
+        if (!metadata)
+        {
+            metadata.emplace();
+            metadata->kind = "passage";
+            metadata->source = "reference";
+        }
+        metadata->targetMaps = targets->second;
+        metadata->targetMap = targets->second.size() == 1
+            ? std::optional(targets->second.front()) : std::nullopt;
+        if (targets->second.size() != 1) metadata->targetName.reset();
+    }
     const auto kind = m_siteReferenceKinds.find(eventId);
     if (kind != m_siteReferenceKinds.end() && (!metadata
         || (metadata->kind == "generic_event" && metadata->source != "script" && metadata->source != "override")

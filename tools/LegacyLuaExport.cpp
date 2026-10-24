@@ -13117,6 +13117,30 @@ std::string generateLegacyEventAutonoteRefsLuaChunk(
         "-- generated journal references from legacy EVT/STR; load after the base handlers\n" + metadata.str();
 }
 
+namespace
+{
+void emitConnectionTargetMetadata(std::ostringstream &stream, const LegacyLuaEvent &event)
+{
+    // Read possible destinations from reachable instructions; never execute callbacks or predict eligibility.
+    const std::vector<uint8_t> steps = collectNormalEventSteps(event);
+    if (steps.empty()) return;
+    std::vector<std::string> targets;
+    for (uint8_t step : collectReachableSteps(event, steps, steps.front()))
+        for (const LegacyLuaInstruction *pInstruction : collectMeaningfulInstructionsForStep(event, step))
+            if (pInstruction->operation == LegacyLuaOperation::MoveToMap && pInstruction->text
+                && !pInstruction->text->empty())
+            {
+                const std::string target = toLowerCopy(*pInstruction->text);
+                if (std::find(targets.begin(), targets.end(), target) == targets.end()) targets.push_back(target);
+            }
+    if (targets.empty()) return;
+    stream << "SetMapConnectionTargets(" << event.eventId << ", {";
+    for (size_t index = 0; index < targets.size(); ++index)
+        stream << (index == 0 ? "" : ", ") << luaQuoted(targets[index]);
+    stream << "})\n";
+}
+}
+
 std::string generateLegacyEventSiteRefsLuaChunk(
     const EvtProgram &evtProgram, const StrTable &strTable, const LegacyLuaExportLookups &lookups,
     LegacyLuaExportScope scope, LegacyEventVersion version)
@@ -13125,12 +13149,13 @@ std::string generateLegacyEventSiteRefsLuaChunk(
     std::ostringstream metadata;
     for (size_t i = 0; i < events.size(); ++i)
     {
+        const LegacyLuaEvent direct =
+            directEventWithoutSyntheticTriggerContinuations(events[i], evtProgram.getEvents()[i]);
+        if (scope == LegacyLuaExportScope::Map) emitConnectionTargetMetadata(metadata, direct);
         const auto action = contextActionMetadataForEvent(evtProgram.getEvents()[i], strTable, lookups);
         if (scope == LegacyLuaExportScope::Map && (!action || action->hidden
             || (action->kind != "well" && action->kind != "fountain" && action->kind != "shrine"
                 && action->kind != "drink"))) continue;
-        const LegacyLuaEvent direct =
-            directEventWithoutSyntheticTriggerContinuations(events[i], evtProgram.getEvents()[i]);
         const bool drink = scope == LegacyLuaExportScope::Map && action && action->kind == "drink";
         const auto reference = buildSiteReference(direct, drink);
         if (drink)

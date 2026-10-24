@@ -37,6 +37,7 @@ struct WorldMapFeature
     std::vector<uint32_t> autonoteIds;
     std::string guideReference;
     std::string targetMap;
+    std::vector<std::string> targetMaps;
     std::string targetMapId;
     std::optional<WorldMonsterFeature> monster;
     uint32_t noteId = 0;

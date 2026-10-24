@@ -466,7 +466,7 @@ bool loadLuaExportConfig(const std::filesystem::path &path, LuaExportTablePaths 
 bool writeTextFile(const std::filesystem::path &path, const std::string &text)
 {
     std::filesystem::create_directories(path.parent_path());
-    std::ofstream outputStream(path);
+    std::ofstream outputStream(path, std::ios::binary);
 
     if (!outputStream)
     {

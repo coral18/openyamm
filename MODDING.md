@@ -261,6 +261,35 @@ sources and destinations can span mounted worlds; MM7/MM8 Atlas navigation follo
 without an installed Atlas catalog remains descriptive, with navigation disabled. Scheduled coach/boat arrivals
 remain separate work.
 
+## Conditional map connection targets
+
+`SetMapConnectionTargets(eventId, {"mdt01.blv", "mdr01.blv"})` attaches possible destinations to the current
+map callback. It describes authored possibilities, including conditional branches, without executing the event,
+advancing RNG or predicting the current lever/quest state. Targets are dense arrays of at most 64 distinct,
+lowercase `.blv`/`.odm` import filenames (up to 128 bytes each). They resolve inside the callback's owning world
+to the authoritative `MapStats` records and canonical IDs, rather than guessing globally by filename.
+
+The declaration belongs to the actual callback. Replacement/removal invalidates it; redeclare the targets after
+a gameplay overlay. Empty arrays or `nil` remove the annotation without modifying gameplay. Invalid arrays,
+paths, extensions and duplicate names fail program loading; unknown active physical destinations fail map
+indexing. This import annotation does not provide cross-world routing; dimensional gateways use canonical IDs
+in the shared gate catalog below.
+
+`tools/regenerate_lua_events.sh --site-refs-only` derives base declarations from reachable decoded `MoveToMap`
+instructions and writes the existing `*_00_site_refs.lua` files. It includes all possible branch targets instead
+of retaining only the first `MoveToMap`. No generated callback needs manual editing. The exporter writes text in
+binary mode to retain deterministic LF output on Windows as well as Linux. Handwritten replacements can declare
+literal targets in `*_zz_site_refs.lua`; the lighting validator excludes only validated presentation metadata,
+rejecting executable additions or expressions. MM8's existing submarine replacements use this form.
+
+`ScriptedEventProgram::ContextActionMetadata::targetMaps` exposes these possibilities. With multiple targets,
+the old single `targetMap`/`targetName` fields are cleared so consumers cannot silently assert the first branch.
+`WorldDatabase::connectionTargets` supplies Guide-only map references; Discovery continues using actual arrival
+history. Guide choices are merged with observed arrivals without duplicating a destination or hiding alternatives.
+The UI labels possibilities separately from travelled routes. Merely visiting either destination elsewhere or
+browsing Guide does not establish that a particular exit leads there, reveal terrain or create a return passage.
+This data supports future dungeon graph presentation; it is not yet a current-state route solver.
+
 ## Shared dimensional gateway catalog
 
 `engine/world/gates.yml` version 1 owns the existing dimensional selector's landing rules. Both the native selector

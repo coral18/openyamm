@@ -1,0 +1,11 @@
+output_dir: pose-captures
+settle_seconds: 0
+exit: false
+shots:
+- name: connection-pose
+  position:
+  - 360
+  - -1000
+  - 0
+  yaw: -0.785398163
+  pitch: 0

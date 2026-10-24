@@ -1,3 +1,12 @@
 -- generated site references from legacy EVT/STR; load after the base handlers
 SetMapSiteReference(202, "Effects apply to the selected character unless the effect concerns party resources.\nHealth and spell point gains stop at their maximum; attribute increases use the game's normal limits.\n\nOutcome 1:\nParty gold +200\nRequirements (all):\n- Banked gold below 99\n- Party gold below 199\n- Not used since this location reset")
 SetMapSiteReference(452, "Effects apply to the selected character unless the effect concerns party resources.\nHealth and spell point gains stop at their maximum; attribute increases use the game's normal limits.\n\nOutcome 1:\nBase Luck +10\nRequirements (all):\n- Not yet used by this character")
+SetMapConnectionTargets(501, {"d01.blv"})
+SetMapConnectionTargets(502, {"7d31.blv"})
+SetMapConnectionTargets(503, {"7d33.blv"})
+SetMapConnectionTargets(504, {"7d33.blv"})
+SetMapConnectionTargets(505, {"7d31.blv"})
+SetMapConnectionTargets(506, {"d01.blv"})
+SetMapConnectionTargets(507, {"d01.blv"})
+SetMapConnectionTargets(508, {"mdt11.blv"})
+SetMapConnectionTargets(509, {"mdt14.blv"})

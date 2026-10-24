@@ -3,3 +3,8 @@ SetMapSiteReference(101, "Effects apply to the selected character unless the eff
 SetMapSiteReference(102, "Effects apply to the selected character unless the effect concerns party resources.\nHealth and spell point gains stop at their maximum; attribute increases use the game's normal limits.\n\nOutcome 1:\nBase Luck +2\nRequirements (all):\n- Base Luck below 16")
 SetMapSiteReference(103, "Effects apply to the selected character unless the effect concerns party resources.\nHealth and spell point gains stop at their maximum; attribute increases use the game's normal limits.\n\nOutcome 1:\nParty gold +1000\nRequirements (all):\n- Fewer than 2 uses since this location reset\n- Party gold below 99\n- Banked gold below 99\n- Base Luck at least 14")
 SetMapSiteReference(104, "Effects apply to the selected character unless the effect concerns party resources.\nHealth and spell point gains stop at their maximum; attribute increases use the game's normal limits.\n\nOutcome 1:\nHealth +25\nRequirements (all):\n- Health is below maximum")
+SetMapConnectionTargets(501, {"d05.blv"})
+SetMapConnectionTargets(502, {"d06.blv"})
+SetMapConnectionTargets(503, {"d40.blv"})
+SetMapConnectionTargets(504, {"d05.blv"})
+SetMapConnectionTargets(505, {"eleme.blv"})

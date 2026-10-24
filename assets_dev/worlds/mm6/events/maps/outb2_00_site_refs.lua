@@ -1,4 +1,6 @@
 -- generated site references from legacy EVT/STR; load after the base handlers
+SetMapConnectionTargets(90, {"6t8.blv"})
+SetMapConnectionTargets(91, {"6d17.blv"})
 SetMapSiteReference(100, "Effects apply to the selected character unless the effect concerns party resources.\nHealth and spell point gains stop at their maximum; attribute increases use the game's normal limits.\n\nOutcome 1:\nSet Temporary Luck to 50\nRequirements (all):\n- Temporary Luck below 50")
 SetMapSiteReference(101, "Effects apply to the selected character unless the effect concerns party resources.\nHealth and spell point gains stop at their maximum; attribute increases use the game's normal limits.\n\nOutcome 1:\nCan apply: Unconsciousness\nRequirements (all):\n- Already used by this character\n\nOutcome 2:\nFire resistance +5\nCan apply: Unconsciousness\nRequirements (all):\n- Not yet used by this character")
 SetMapSiteReference(102, "Effects apply to the selected character unless the effect concerns party resources.\nHealth and spell point gains stop at their maximum; attribute increases use the game's normal limits.\n\nOutcome 1:\nCan apply: Unconsciousness\nRequirements (all):\n- Already used by this character\n\nOutcome 2:\nBase Intellect +5\nBase Personality +5\nCan apply: Unconsciousness\nRequirements (all):\n- Not yet used by this character")

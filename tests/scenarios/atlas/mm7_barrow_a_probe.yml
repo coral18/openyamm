@@ -1,0 +1,35 @@
+id: atlas.mm7_barrow_a_fixture_probe
+title: Physical dungeon exit pick follows actual current runtime route
+world: mm7
+mode: faithful
+steps:
+- new_game_flow:
+    party:
+      food: 10
+      gold: 500
+      members:
+      - class: Sorcerer
+        equipment: {}
+        level: 1
+        name: Interaction Tester
+        race_id: 0
+        skills:
+        - level: 8
+          mastery: 2
+          name: Earth
+        spells:
+        - 40
+    start_map: mdk01.blv
+- press_interact:
+    pose:
+      x: 360
+      y: -1000
+      z: 0
+      yaw: -0.785398163
+      pitch: 0
+    expect:
+      kind: event_target
+      triggered_event: 502
+      can_activate: true
+- assert:
+    map: mdt01.blv

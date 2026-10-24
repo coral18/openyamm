@@ -251,11 +251,21 @@ def validate_site_reference_metadata(text, script):
               '-- Site reference metadata; load after gameplay overlays')
     declaration = re.compile(
         r'SetMapSiteReference\(([1-9][0-9]*), ("(?:[^"\\\r\n]|\\["\\nrt])*")(?:, "drink")?\)')
+    map_name = r'"[a-z0-9_-]+\.(?:blv|odm)"'
+    connection = re.compile(r'SetMapConnectionTargets\(([1-9][0-9]*), \{('
+                            + map_name + r'(?:, ' + map_name + r'){0,63})\}\)')
     if not lines or lines[0] != header:
         raise ValueError('Invalid site reference metadata overlay: ' + str(script))
     for line in lines[1:]:
         line = line.strip()
         if not line or line.startswith('--'):
+            continue
+        targets = connection.fullmatch(line)
+        if targets:
+            names = re.findall(map_name, targets[2])
+            if int(targets[1]) > 65535 or len(names) != len(set(names)) or any(
+                    len(name) - 2 > 128 for name in names):
+                raise ValueError('Invalid connection target metadata overlay: ' + str(script))
             continue
         match = declaration.fullmatch(line)
         if match is None or int(match[1]) > 65535:

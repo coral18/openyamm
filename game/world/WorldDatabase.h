@@ -150,6 +150,8 @@ public:
     void indexMapArrivals(const WorldKnowledge &knowledge);
     std::vector<const WorldMapFeature *> connectionArrivals(const WorldMapFeature &source,
         const WorldKnowledge &knowledge) const;
+    std::vector<const MapStatsEntry *> connectionTargets(const WorldMapFeature &source,
+        const WorldKnowledge &knowledge, bool guide) const;
     const std::vector<WorldMapLocation> &locations() const;
     const std::vector<WorldMapFeature> &features() const;
     const MapStatsEntry *mapDefinition(const std::string &canonicalId) const;

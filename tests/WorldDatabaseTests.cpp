@@ -2103,3 +2103,37 @@ TEST_CASE("explicit passage components share one entry without sharing discovery
     geometry.faces[1].cogTriggered = 11;
     CHECK_THROWS_AS(world.indexMapLocations(map, geometry, *program), std::invalid_argument);
 }
+
+
+TEST_CASE("connection target queries expose authored alternatives only in Guide and preserve actual travel history")
+{
+    Fixture f;
+    auto world = f.database();
+    WorldMapFeature passage;
+    passage.kind = WorldMapFeatureKind::Connection;
+    passage.mapId = "world.mm7.map.7out02";
+    passage.site = {"surface/1", 502};
+    passage.targetMaps = {"7d21.blv", "7out02.odm"};
+    WorldKnowledge knowledge;
+    knowledge.visitedMaps = {"7out02.odm", "7d21.blv"};
+    CHECK(world.connectionTargets(passage, knowledge, false).empty());
+    const auto guide = world.connectionTargets(passage, knowledge, true);
+    REQUIRE(guide.size() == 2);
+    CHECK(guide[0]->name == "White Cliff Cave");
+    CHECK(guide[1]->name == "Harmondale");
+    CHECK(world.connectionArrivals(passage, knowledge).empty());
+    EventRuntimeState destination;
+    destination.mapFileName = "7d21.blv";
+    REQUIRE(recordWorldMapArrival(destination, passage.mapId, 502, 100, 200, 300, 1440));
+    knowledge.arrivals["world.mm7.map.7d21"] = worldMapArrivals(destination, destination.mapFileName);
+    world.indexMapArrivals(knowledge);
+    CHECK(world.connectionArrivals(passage, knowledge).size() == 1);
+    CHECK(world.connectionTargets(passage, knowledge, false).empty());
+    CHECK(world.connectionTargets(passage, knowledge, true).size() == 2);
+    passage.targetMaps = {"out01.odm"}; // A raw alias in another world cannot declare a local route.
+    CHECK(world.connectionTargets(passage, knowledge, true).empty());
+    CHECK(knowledge.interactedSites.empty());
+    CHECK(knowledge.floorPlans.empty());
+    CHECK(knowledge.regionMaps.empty());
+    CHECK(knowledge.variables.empty());
+}

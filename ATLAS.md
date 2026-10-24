@@ -2066,3 +2066,54 @@ This checkpoint does not complete the Atlas objective. The full conditional/prox
 Barrows/Regna graphs, six unresolved well bindings, remaining quest/service/item content, localization and
 Android/controller checks remain open in `ATLAS_COVERAGE.md`. Arbitrary community-world map-filename collisions
 still require runtime routing work; the verified travel paths use the current official mounted maps.
+
+
+### Conditional dungeon destination references, 2026-10-24
+
+The previous single-target metadata selected the first `MoveToMap` in an event. In Barrow VII that described
+Barrow IX even though the same exit leads to Barrow X after the lever changes state. The exporter now reads
+all reachable destination possibilities, attaching callback-owned `SetMapConnectionTargets` annotations to the
+existing generated site-reference sidecars. The shared program/World Database exposes all branches; multiple
+possibilities clear the misleading single-target/name fields. Guide can cycle the possible destinations, enriched
+with actual arrival observations, while Discovery retains only the recorded trips. Possibilities are explicitly
+not an evaluation of the current lever/quest condition. No gameplay callback, quest state, RNG, geometry or save version
+was changed to obtain these references.
+
+The source catalogs contain 375 base event declarations / 403 possible targets across MM6–MM8, including
+28 multi-target events in MM7. They were regenerated with `tools/regenerate_lua_events.sh --site-refs-only`.
+Current callback replacement still invalidates stale base annotations. Literal post-overlay references describe
+the two existing MM8 submarine replacements, including the Small Sub Pen return trip that does not require a key.
+The exporter now preserves LF output on Windows; generated text is not manually patched or normalized.
+All 191 generated map site catalogs and both submarine sidecars pass the strict lighting metadata validator.
+
+Validation for this checkpoint:
+
+- Windows Release compiled successfully. After mounting the regenerated sidecars, 67 selected unit cases /
+  34,740 assertions passed. They include strict callback ownership, malformed declarations, an actual Barrow
+  callback executed with both lever settings, read-only Guide/Discovery queries, canonical arrival history and
+  an audit resolving every active connection declaration against its owning world's MM6/MM7/MM8 map registry.
+  The focused Python lighting suite passed 20 tests, including rejection of executable/invalid connection data.
+- Actual headless mesh picks exercised Barrow VII's face 250/event 502 in both states: before the lever it reaches
+  Barrow IX; using lever face 356/event 451 switches MapVar 2 to 2 and the same exit reaches Barrow X. These are
+  real interactions, not event-ID replay or injected map-variable changes. The independent submarine pick hits
+  Small Sub Pen face 524/event 451, confirms the native transition prompt and reaches Pirate Outpost without
+  setting the pirate-key quest bit.
+- Three native Windows AMD/OpenGL tours passed for both Barrow states and the submarine return. Inspected
+  captures show Guide's two Barrow choices, its matching travelled destination, Discovery's one actually travelled
+  route in each state and the current submarine destination. Source-map navigation preserves discovered plans;
+  Guide neither grants the other trip nor replaces the actual route with its first authored possibility.
+- Faithful post-UI verifiers passed 22 steps for each Barrow state and 19 for the submarine. Another save/load
+  retains canonical arrivals, the actual source faces, the lever state and gold 500 / food 10 / spell points 21.
+  Controlled revisits of the untravelled Barrow branch find no fabricated arrival; the submarine control retains
+  QBit 214 clear. All saves, profiles, settings and captures are isolated.
+
+Reproduction files are `tests/scenarios/atlas/mm7_barrow_{a,b}_{fixture,probe,verify}.yml`,
+`mm8_regna_{fixture,probe,verify}.yml`, and matching `tools/menu_tours/atlas_mm7_barrow_*` /
+`atlas_mm8_regna.yml` and screenshot poses. Copy each exported `before-connection.oysav` fixture to
+`saves/before.oysav`, restore its one-shot pose, run the native tour, then verify its fresh quicksave. The submarine
+needs ordinary transition confirmation (Return in the native tour, `map_transition_confirm` in the headless probe).
+Evidence stays private under `atlas-connections-20261024` in the Windows development root.
+
+This completes the conditional destination-data correction and native choice navigation, not the full Atlas
+objective or dungeon graph presentation. Barrows/Regna graph views, current-condition explanations/eligibility,
+remaining handwritten connection declarations, the full content matrix, localization and device checks stay open.

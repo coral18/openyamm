@@ -92,6 +92,7 @@ std::vector<WorldMapFeature> buildWorldMapFeatures(const std::string &mapId,
             notes != events.autonoteReferences().end())
             feature.autonoteIds = notes->second;
         feature.targetMap = metadata->targetMap.value_or("");
+        feature.targetMaps = metadata->targetMaps;
         features.push_back(std::move(feature));
     }
     std::vector<bool> grouped(features.size(), false);

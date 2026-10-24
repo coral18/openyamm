@@ -5,6 +5,7 @@
 #include "game/events/ScriptedEventProgram.h"
 #include "game/events/EventRuntime.h"
 
+#include <algorithm>
 #include <cctype>
 #include <array>
 #include <cstdint>
@@ -1650,4 +1651,77 @@ TEST_CASE("gate references are callback-owned and opening named networks preserv
     CHECK_FALSE(state.pendingDimensionDoorOverlay);
     CHECK(state.pendingDimensionDoorNetwork.empty());
     CHECK(state.pendingDimensionDoorEventId == 0);
+}
+
+
+TEST_CASE("connection targets are strict callback-owned possibilities without executing travel")
+{
+    using namespace OpenYAMM::Game;
+    const auto bytes = readBinaryFixture(std::filesystem::path(OPENYAMM_SOURCE_DIR)
+        / "assets_dev/engine/scripts/common/event_support.lua");
+    const std::string support(bytes.begin(), bytes.end());
+    std::string error;
+    const auto load = [&](const std::string &code)
+    {
+        return ScriptedEventProgram::loadFromLuaText(support + code, "@connection-api", ScriptedEventScope::Map, error);
+    };
+    const std::string handler = "evt.map[10] = function() error('Must not execute travel') end\n";
+    const std::string targets = "SetMapConnectionTargets(10, {'mdt01.blv', 'mdr01.blv'})\n";
+    auto program = load(handler + targets);
+    REQUIRE_MESSAGE(program, error);
+    REQUIRE(program->getContextActionMetadata(10));
+    CHECK(program->getContextActionMetadata(10)->kind == "passage");
+    CHECK(program->getContextActionMetadata(10)->targetMaps.size() == 2);
+    CHECK_FALSE(program->getContextActionMetadata(10)->targetMap);
+    for (const char *pReplacement : {"evt.map[10] = function() end", "evt.map[10] = nil",
+        "ReplaceMapEvent(10, '', function() end)", "SetMapConnectionTargets(10, nil)",
+        "SetMapConnectionTargets(10, {})"})
+    {
+        program = load(handler + targets + pReplacement);
+        REQUIRE(program);
+        CHECK(program->connectionTargets().empty());
+    }
+    for (const char *pMaps : {"{'../map.blv'}", "{'MAP.BLV'}", "{'test.blv', 'test.blv'}", "{1}",
+        "{[1]='a.blv', [3]='b.blv'}", "{bad='a.blv'}", "{'a.lua'}", "{'a.blv', false}", "'a.blv'"})
+        CHECK_FALSE(load(handler + "SetMapConnectionTargets(10, " + pMaps + ")"));
+    CHECK_FALSE(load("SetMapConnectionTargets(10, {'a.blv'})"));
+}
+
+TEST_CASE("connection target export retains both real Barrow lever routes instead of the first branch")
+{
+    using namespace OpenYAMM::Game;
+    const auto root = std::filesystem::path(OPENYAMM_SOURCE_DIR);
+    EvtProgram events;
+    REQUIRE(events.loadFromBytes(readBinaryFixture(root / "assets_dev/worlds/mm7/_legacy/events/MDK01.EVT")));
+    LegacyLuaExportLookups lookups;
+    lookups.sourceMapFile = "mdk01.blv";
+    const std::string references = generateLegacyEventSiteRefsLuaChunk(events, {}, lookups,
+        LegacyLuaExportScope::Map, LegacyEventVersion::Mm7);
+    const auto support = readBinaryFixture(root / "assets_dev/engine/scripts/common/event_support.lua");
+    const std::string callbacks = generateLegacyEventLuaChunk(events, {}, lookups,
+        LegacyLuaExportScope::Map, LegacyEventVersion::Mm7);
+    std::string error;
+    const auto program = ScriptedEventProgram::loadFromLuaText(
+        std::string(support.begin(), support.end()) + callbacks + references,
+        "@barrow-connection-targets", ScriptedEventScope::Map, error);
+    REQUIRE_MESSAGE(program, error);
+    const auto metadata = program->getContextActionMetadata(502);
+    REQUIRE(metadata);
+    REQUIRE(metadata->targetMaps.size() == 2);
+    CHECK_FALSE(metadata->targetMap);
+    CHECK_FALSE(metadata->targetName);
+    EventRuntime runtime;
+    for (uint8_t setting : {1, 2})
+    {
+        EventRuntimeState state;
+        state.mapFileName = "mdk01.blv";
+        state.mapVars[2] = setting;
+        REQUIRE(runtime.executeEventById(program, std::nullopt, 502, state));
+        REQUIRE(state.pendingMapMove);
+        const std::string expected = setting == 1 ? "mdt01.blv" : "mdr01.blv";
+        CHECK(state.pendingMapMove->mapName == expected);
+        CHECK(std::find(metadata->targetMaps.begin(), metadata->targetMaps.end(), expected)
+            != metadata->targetMaps.end());
+        CHECK(state.mapVars[2] == setting);
+    }
 }

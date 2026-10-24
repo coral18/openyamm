@@ -1,0 +1,59 @@
+output_dir: captures
+exit: true
+steps:
+- expect: gameplay
+- wait: 0.3
+- capture: before-passage
+- action: trigger
+- wait: 0.5
+- capture: transition-confirm
+- key: Return
+- wait: 0.5
+- expect: gameplay
+- capture: actual-destination
+- key: F9
+- pause: true
+- click:
+  - 800
+  - 821
+- click:
+  - 1480
+  - 126
+- click:
+  - 275
+  - 126
+- text: Arrival from Small Sub Pen
+- key: Return
+- click:
+  - 1250
+  - 260
+- capture: arrival-details
+- click:
+  - 1395
+  - 806
+- capture: source-map
+- click:
+  - 1152
+  - 57
+- click:
+  - 275
+  - 126
+- text: Enter the Submarine
+- key: Return
+- click:
+  - 1250
+  - 260
+- capture: guide-first-choice
+- click:
+  - 1152
+  - 57
+- capture: discovery-actual-route
+- click:
+  - 1450
+  - 57
+- expect: pause
+- click:
+  - 800
+  - 301
+- expect: gameplay
+- key: F9

@@ -335,3 +335,48 @@ TEST_CASE("canonical Harmondale dimensional fountain uses all six packaged water
     unrelated.interactedSites[entry->fileName].insert(worldSiteDiscoveryKey(65031, "surface/4229"));
     CHECK_FALSE(world.featureVisible(*feature, unrelated, false));
 }
+
+
+TEST_CASE("connection target inventory resolves every active MM6 MM7 MM8 declaration inside its owning world")
+{
+    using namespace OpenYAMM::Game;
+    REQUIRE_MESSAGE(OpenYAMM::Tests::regressionMapLoaderLoaded(), OpenYAMM::Tests::regressionMapLoaderFailure());
+    const auto &fixture = OpenYAMM::Tests::regressionMapLoader();
+    const auto &data = fixture.gameDataLoader;
+    const auto &entries = data.getMapStats().getEntries();
+    size_t maps = 0, connections = 0, multiple = 0;
+    for (const MapStatsEntry &entry : entries)
+    {
+        if (entry.worldId != "mm6" && entry.worldId != "mm7" && entry.worldId != "mm8") continue;
+        CAPTURE(entry.worldId);
+        CAPTURE(entry.fileName);
+        MapAssetInfo map;
+        map.map = entry;
+        std::string error;
+        REQUIRE_MESSAGE(GameDataLoader::loadEventPrograms(fixture.assetFileSystem, map, error), error);
+        REQUIRE(map.localEventProgram);
+        ++maps;
+        for (const auto &[event, targets] : map.localEventProgram->connectionTargets())
+        {
+            CAPTURE(event);
+            ++connections;
+            if (targets.size() > 1) ++multiple;
+            CHECK(map.localEventProgram->hasEvent(event));
+            for (const std::string &target : targets)
+            {
+                CAPTURE(target);
+                CHECK(std::any_of(entries.begin(), entries.end(), [&](const MapStatsEntry &destination)
+                    { return destination.worldId == entry.worldId && destination.fileName == target; }));
+            }
+        }
+        if (entry.worldId == "mm7" && entry.fileName == "mdk01.blv")
+            CHECK(map.localEventProgram->connectionTargets().at(502).size() == 2);
+        if (entry.worldId == "mm8" && entry.fileName == "d34.blv")
+            CHECK(map.localEventProgram->connectionTargets().at(451) == std::vector<std::string>{"d06.blv"});
+        if (entry.worldId == "mm8" && entry.fileName == "d06.blv")
+            CHECK(map.localEventProgram->connectionTargets().at(451) == std::vector<std::string>{"d34.blv"});
+    }
+    CHECK(maps > 150);
+    CHECK(connections > maps);
+    CHECK(multiple > 10);
+}

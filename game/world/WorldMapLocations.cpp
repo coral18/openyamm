@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <stdexcept>
 
 namespace OpenYAMM::Game
 {
@@ -63,6 +64,13 @@ void WorldDatabase::indexMapSites(const WorldRecord &source, const std::vector<W
         && feature.kind != WorldMapFeatureKind::Note && feature.kind != WorldMapFeatureKind::Item
         && !feature.arrival && !feature.site.id.starts_with("inherited-decoration/"); });
     auto features = buildWorldMapFeatures(pSource->id, sites, events);
+    for (const WorldMapFeature &feature : features)
+        for (const std::string &file : feature.targetMaps)
+            if (std::none_of(m_pMaps->getEntries().begin(), m_pMaps->getEntries().end(),
+                [&](const MapStatsEntry &map)
+                { return map.worldId == pSource->map->worldId && toLowerCopy(map.fileName) == file; }))
+                throw std::invalid_argument("Unknown connection destination: " + feature.id + "/" + file);
+
     m_features.insert(m_features.end(), features.begin(), features.end());
     for (const WorldInteractionSite &site : sites)
     {
@@ -137,6 +145,20 @@ std::vector<const WorldMapFeature *> WorldDatabase::connectionArrivals(const Wor
         return a->id < b->id;
     });
     return result;
+}
+
+std::vector<const MapStatsEntry *> WorldDatabase::connectionTargets(const WorldMapFeature &source,
+    const WorldKnowledge &knowledge, bool guide) const
+{
+    std::vector<const MapStatsEntry *> targets;
+    if (!guide || source.kind != WorldMapFeatureKind::Connection || source.arrival
+        || !featureVisible(source, knowledge, guide)) return targets;
+    const MapStatsEntry *pSource = mapDefinition(source.mapId);
+    if (pSource == nullptr) return targets;
+    for (const std::string &file : source.targetMaps)
+        for (const MapStatsEntry &map : m_pMaps->getEntries())
+            if (map.worldId == pSource->worldId && toLowerCopy(map.fileName) == file) targets.push_back(&map);
+    return targets;
 }
 
 void WorldDatabase::replaceMapMonsterFeatures(const MapStatsEntry &map, std::vector<WorldMapFeature> features,

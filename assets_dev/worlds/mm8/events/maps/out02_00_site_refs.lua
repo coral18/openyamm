@@ -1,3 +1,10 @@
 -- generated site references from legacy EVT/STR; load after the base handlers
 SetMapSiteReference(101, "Effects apply to the selected character unless the effect concerns party resources.\nHealth and spell point gains stop at their maximum; attribute increases use the game's normal limits.\n\nOutcome 1:\nTemporary Might +25\nRequirements (all):\n- Temporary Might below 25")
 SetMapSiteReference(102, "Effects apply to the selected character unless the effect concerns party resources.\nHealth and spell point gains stop at their maximum; attribute increases use the game's normal limits.\n\nOutcome 1:\nCan apply: Severe poison")
+SetMapConnectionTargets(501, {"d07.blv"})
+SetMapConnectionTargets(502, {"d08.blv"})
+SetMapConnectionTargets(503, {"d09.blv"})
+SetMapConnectionTargets(504, {"d10.blv"})
+SetMapConnectionTargets(505, {"d09.blv"})
+SetMapConnectionTargets(506, {"d28.blv"})
+SetMapConnectionTargets(507, {"d45.blv"})

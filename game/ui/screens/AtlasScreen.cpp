@@ -1916,13 +1916,16 @@ void AtlasScreen::drawDetails()
                 const auto arrivals = m_world.connectionArrivals(feature, m_knowledge);
                 const auto gates = m_world.gateDestinations(feature, m_knowledge,
                     m_data.worldGateCatalog(), m_pParty, m_guide);
+                const auto declared = m_world.connectionTargets(feature, m_knowledge, m_guide);
                 std::vector<const WorldMapFeature *> additionalArrivals = arrivals;
                 std::erase_if(additionalArrivals, [&](const WorldMapFeature *pArrival)
                 {
                     return std::any_of(gates.begin(), gates.end(), [&](const WorldGateChoice &choice)
-                        { return choice.pLanding->mapId == pArrival->mapId; });
+                        { return choice.pLanding->mapId == pArrival->mapId; })
+                        || std::any_of(declared.begin(), declared.end(), [&](const MapStatsEntry *pMap)
+                            { return WorldDatabase::mapId(*pMap) == pArrival->mapId; });
                 });
-                arrivalCount = gates.size() + additionalArrivals.size();
+                arrivalCount = gates.size() + declared.size() + additionalArrivals.size();
                 if (arrivalCount != 0) m_connectionChoice %= arrivalCount;
                 if (m_connectionChoice < gates.size())
                 {
@@ -1934,9 +1937,18 @@ void AtlasScreen::drawDetails()
                         [&](const WorldMapFeature *pValue) { return pValue->mapId == choice.pLanding->mapId; });
                     if (arrival != arrivals.end()) pArrivalDestination = *arrival;
                 }
+                else if (m_connectionChoice < gates.size() + declared.size())
+                {
+                    pConnectedMap = declared[m_connectionChoice - gates.size()];
+                    text += "\nAuthored possibility: " + pConnectedMap->name + ". Conditions may apply.";
+                    const auto arrival = std::find_if(arrivals.begin(), arrivals.end(),
+                        [&](const WorldMapFeature *pValue)
+                        { return pValue->mapId == WorldDatabase::mapId(*pConnectedMap); });
+                    if (arrival != arrivals.end()) pArrivalDestination = *arrival;
+                }
                 else if (arrivalCount != 0)
                 {
-                    pArrivalDestination = additionalArrivals[m_connectionChoice - gates.size()];
+                    pArrivalDestination = additionalArrivals[m_connectionChoice - gates.size() - declared.size()];
                     pConnectedMap = m_world.mapDefinition(pArrivalDestination->mapId);
                 }
                 else if (feature.arrival && !feature.targetMapId.empty())
@@ -1961,6 +1973,7 @@ void AtlasScreen::drawDetails()
                 else if (arrivalCount == 0) text += feature.interactionReference
                     && feature.interactionReference->kind == "dimension_door"
                     ? "\nUse this gateway to learn its destinations."
+                    : !feature.targetMaps.empty() ? "\nTravel through this passage to learn its destinations."
                     : feature.targetMap.empty() ? "\nDestination not mapped"
                     : pDestination != nullptr ? "\nDeclared connection: " + pDestination->name()
                     : m_guide ? "\nDestination outside this catalog" : "\nDestination undiscovered";

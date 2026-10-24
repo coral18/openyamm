@@ -220,7 +220,8 @@ class DecorationBakeTests(unittest.TestCase):
                  'load after the base handlers\n'),
                 ('_zz_site_refs.lua', '-- Site reference metadata; load after gameplay overlays\n')]:
             metadata = self.world / ('events/maps/test' + suffix)
-            for declaration in ('', 'SetMapSiteReference(1, "")\n',
+            for declaration in ('', 'SetMapConnectionTargets(1, {"a.blv", "b.odm"})\n',
+                                'SetMapSiteReference(1, "")\n',
                                 'SetMapSiteReference(1, "", "drink")\n',
                                 'SetMapSiteReference(1, "Gold +200\\nRequirements: below 199")\n'):
                 metadata.write_text(header + declaration)
@@ -228,6 +229,19 @@ class DecorationBakeTests(unittest.TestCase):
                 for field in ('cards', 'counts', 'dependencies'):
                     self.assertEqual(result[field], baseline[field])
             metadata.unlink()
+
+    def test_connection_targets_cannot_hide_executable_or_invalid_content(self):
+        metadata = self.world / 'events/maps/test_00_site_refs.lua'
+        header = '-- generated site references from legacy EVT/STR; load after the base handlers\n'
+        for declaration in ('SetMapConnectionTargets(1, {"../a.blv"})',
+                            'SetMapConnectionTargets(1, {"A.BLV"})',
+                            'SetMapConnectionTargets(1, {"a.blv", "a.blv"})',
+                            'SetMapConnectionTargets(65536, {"a.blv"})',
+                            'SetMapConnectionTargets(1, {"a.blv"}); evt.MoveToMap(0)',
+                            'SetMapConnectionTargets(1, {name})'):
+            metadata.write_text(header + declaration + '\n')
+            with self.assertRaises(ValueError):
+                self.export()
 
     def test_site_reference_cannot_hide_executable_or_invalid_content(self):
         metadata = self.world / 'events/maps/test_00_site_refs.lua'
