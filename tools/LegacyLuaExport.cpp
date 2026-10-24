@@ -13,6 +13,7 @@
 #include <iostream>
 #include <limits>
 #include <map>
+#include <set>
 #include <optional>
 #include <sstream>
 #include <string_view>
@@ -13119,13 +13120,100 @@ std::string generateLegacyEventAutonoteRefsLuaChunk(
 
 namespace
 {
+struct ConnectionControl
+{
+    uint16_t eventId = 0;
+};
+
+std::map<uint32_t, ConnectionControl> connectionControls(const std::vector<LegacyLuaEvent> &events,
+    const EvtProgram &program, const StrTable &strings, const LegacyLuaExportLookups &lookups)
+{
+    std::map<uint32_t, ConnectionControl> controls;
+    for (size_t index = 0; index < events.size(); ++index)
+    {
+        const LegacyLuaEvent &event = events[index];
+        const auto action = contextActionMetadataForEvent(program.getEvents()[index], strings, lookups);
+        if (!action || action->kind != "use_lever") continue;
+        if (std::any_of(event.instructions.begin(), event.instructions.end(), [](const LegacyLuaInstruction &entry)
+            { return entry.operation == LegacyLuaOperation::Unknown; })) continue;
+        const std::vector<uint8_t> steps = collectNormalEventSteps(event);
+        if (steps.empty()) continue;
+        NormalStepInfo first;
+        if (!decomposeNormalStep(event, steps.front(), first) || !first.actions.empty()
+            || !first.terminalInstruction) continue;
+        const LegacyLuaInstruction &compare = *first.terminalInstruction;
+        if (compare.operation != LegacyLuaOperation::Compare || compare.arguments.size() != 2
+            || !compare.jumpTargetStep || compare.arguments[1] != 2) continue;
+        const FormattedSelector selector = formatSelector(compare.arguments[0], {});
+        if (selector.semantic != SelectorSemantic::MapVar) continue;
+        bool uniqueWriter = true;
+        for (const LegacyLuaEvent &other : events)
+            if (other.eventId != event.eventId)
+                for (const LegacyLuaInstruction &instruction : other.instructions)
+                    if ((instruction.operation == LegacyLuaOperation::Set
+                        || instruction.operation == LegacyLuaOperation::Add
+                        || instruction.operation == LegacyLuaOperation::Subtract) && !instruction.arguments.empty()
+                        && formatSelector(instruction.arguments[0], {}).expression == selector.expression)
+                        uniqueWriter = false;
+        if (!uniqueWriter) continue;
+        const auto branch = [&](std::optional<uint8_t> step, uint32_t position, uint32_t doorState)
+            -> std::optional<uint32_t>
+        {
+            std::set<uint8_t> visited;
+            std::optional<uint32_t> door;
+            bool assigned = false;
+            while (step)
+            {
+                if (!visited.insert(*step).second || std::find(steps.begin(), steps.end(), *step) == steps.end())
+                    return std::nullopt;
+                NormalStepInfo info;
+                if (!decomposeNormalStep(event, *step, info)) return std::nullopt;
+                for (const LegacyLuaInstruction *pAction : info.actions)
+                {
+                    if (pAction->operation == LegacyLuaOperation::Set && pAction->arguments.size() == 2
+                        && formatSelector(pAction->arguments[0], {}).expression == selector.expression
+                        && pAction->arguments[1] == position
+                        && !assigned) assigned = true;
+                    else if (pAction->operation == LegacyLuaOperation::ChangeDoorState
+                        && pAction->arguments.size() == 2 && pAction->arguments[1] == doorState && !door)
+                        door = pAction->arguments[0];
+                    else return std::nullopt;
+                }
+                if (!info.terminalInstruction) step = nextStepAfter(steps, *step);
+                else if (info.terminalInstruction->operation == LegacyLuaOperation::Exit) step.reset();
+                else if (info.terminalInstruction->operation == LegacyLuaOperation::Jump)
+                {
+                    step = info.terminalInstruction->jumpTargetStep;
+                    if (!step) return std::nullopt;
+                }
+                else return std::nullopt;
+            }
+            return assigned ? door : std::nullopt;
+        };
+        // Match an entire two-position toggle, including its physical door action, without executing it.
+        const auto firstPosition = branch(compare.jumpTargetStep, 1, 1);
+        const auto secondPosition = branch(nextStepAfter(steps, steps.front()), 2, 0);
+        if (firstPosition && secondPosition && *firstPosition == *secondPosition)
+            controls.emplace(selector.index, ConnectionControl{event.eventId});
+    }
+    return controls;
+}
+
 // These are requirements of complete supported paths, never a live availability query.
 std::optional<std::string> connectionRequirement(const LegacyLuaInstruction &instruction,
-    const LegacyLuaExportLookups &lookups, EvtPartySelector player, bool success)
+    const LegacyLuaExportLookups &lookups, EvtPartySelector player, bool success,
+    const std::map<uint32_t, ConnectionControl> &controls, std::set<uint16_t> &dependencies)
 {
     if (instruction.arguments.size() != 2) return std::nullopt;
     const FormattedSelector selector = formatSelector(instruction.arguments[0], lookups.qbitRemaps);
     const uint32_t value = instruction.arguments[1];
+    if (selector.semantic == SelectorSemantic::MapVar && value == 2)
+    {
+        const auto control = controls.find(selector.index);
+        if (control == controls.end()) return std::nullopt;
+        dependencies.insert(control->second.eventId);
+        return success ? "Controlling lever: second position" : "Controlling lever: first position";
+    }
     if (selector.semantic == SelectorSemantic::QBit && selectorValueMatches(selector, value))
     {
         const auto note = lookupText(lookups.questNotes, selector.index);
@@ -13152,7 +13240,8 @@ std::optional<std::string> connectionRequirement(const LegacyLuaInstruction &ins
 }
 
 std::optional<std::string> buildConnectionReference(const LegacyLuaEvent &event,
-    const LegacyLuaExportLookups &lookups)
+    const LegacyLuaExportLookups &lookups, const std::map<uint32_t, ConnectionControl> &controls,
+    std::set<uint16_t> &dependencies)
 {
     std::vector<uint8_t> steps = collectNormalEventSteps(event);
     for (const LegacyLuaInstruction &instruction : event.instructions)
@@ -13170,7 +13259,7 @@ std::optional<std::string> buildConnectionReference(const LegacyLuaEvent &event,
         bool mutated = false;
     };
     std::vector<Path> routes;
-    bool hasBlockedPath = false;
+    bool hasBlockedPath = false, randomRouting = false;
     size_t visits = 0;
     std::function<bool(std::optional<uint8_t>, Path)> walk;
     walk = [&](std::optional<uint8_t> step, Path path)
@@ -13228,10 +13317,25 @@ std::optional<std::string> buildConnectionReference(const LegacyLuaEvent &event,
         if (terminal.operation == LegacyLuaOperation::Exit) return walk(std::nullopt, std::move(path));
         if (terminal.operation == LegacyLuaOperation::Jump && terminal.jumpTargetStep)
             return walk(terminal.jumpTargetStep, std::move(path));
+        if (terminal.operation == LegacyLuaOperation::RandomJump && path.destination.empty())
+        {
+            if (terminal.arguments.empty()) return false;
+            randomRouting = true;
+            std::vector<uint8_t> targets;
+            for (uint32_t target : terminal.arguments)
+            {
+                if (target > UINT8_MAX) return false;
+                targets.push_back(uint8_t(target));
+            }
+            sortAndUnique(targets);
+            for (uint8_t target : targets)
+                if (!walk(target, path)) return false;
+            return true;
+        }
         if (terminal.operation != LegacyLuaOperation::Compare || !terminal.jumpTargetStep || path.mutated
             || !path.destination.empty()) return false;
-        const auto positive = connectionRequirement(terminal, lookups, path.player, true);
-        const auto negative = connectionRequirement(terminal, lookups, path.player, false);
+        const auto positive = connectionRequirement(terminal, lookups, path.player, true, controls, dependencies);
+        const auto negative = connectionRequirement(terminal, lookups, path.player, false, controls, dependencies);
         if (!positive || !negative) return false;
         const std::string predicate = std::to_string(terminal.arguments[0]) + "/"
             + std::to_string(terminal.arguments[1]) + "/" + std::to_string(uint8_t(path.player));
@@ -13250,7 +13354,8 @@ std::optional<std::string> buildConnectionReference(const LegacyLuaEvent &event,
             && walk(nextStepAfter(steps, *step), std::move(path));
     };
     if (!walk(steps.front(), {}) || routes.empty()
-        || std::none_of(routes.begin(), routes.end(), [](const Path &path) { return !path.requirements.empty(); }))
+        || (!randomRouting && std::none_of(routes.begin(), routes.end(),
+            [](const Path &path) { return !path.requirements.empty(); })))
         return std::nullopt;
     const auto sameLanding = [](const Path &a, const Path &b)
     {
@@ -13261,6 +13366,7 @@ std::optional<std::string> buildConnectionReference(const LegacyLuaEvent &event,
         { return sameLanding(routes.front(), route); })) return std::nullopt;
     std::string text = "Routing requirements from this interaction. These describe possible paths, not current "
         "availability. Other gameplay effects are not listed.";
+    if (randomRouting) text += "\nThe script can choose a destination at random; probabilities are not shown.";
     std::vector<bool> included(routes.size(), false);
     for (size_t index = 0; index < routes.size(); ++index)
     {
@@ -13313,6 +13419,8 @@ std::string generateLegacyEventSiteRefsLuaChunk(
     LegacyLuaExportScope scope, LegacyEventVersion version)
 {
     const std::vector<LegacyLuaEvent> events = decodeEvents(evtProgram, strTable, lookups, version);
+    const auto controls = scope == LegacyLuaExportScope::Map ? connectionControls(events, evtProgram, strTable, lookups)
+        : std::map<uint32_t, ConnectionControl>{};
     std::ostringstream metadata;
     for (size_t i = 0; i < events.size(); ++i)
     {
@@ -13321,8 +13429,19 @@ std::string generateLegacyEventSiteRefsLuaChunk(
         if (scope == LegacyLuaExportScope::Map)
         {
             emitConnectionTargetMetadata(metadata, direct);
-            if (const auto reference = buildConnectionReference(direct, lookups))
-                metadata << "SetMapSiteReference(" << direct.eventId << ", " << luaQuoted(*reference) << ")\n";
+            std::set<uint16_t> dependencies;
+            if (const auto reference = buildConnectionReference(direct, lookups, controls, dependencies))
+            {
+                metadata << "SetMapSiteReference(" << direct.eventId << ", " << luaQuoted(*reference);
+                if (!dependencies.empty())
+                {
+                    metadata << ", nil, {";
+                    size_t index = 0;
+                    for (uint16_t dependency : dependencies) metadata << (index++ == 0 ? "" : ", ") << dependency;
+                    metadata << "}";
+                }
+                metadata << ")\n";
+            }
         }
         const auto action = contextActionMetadataForEvent(evtProgram.getEvents()[i], strTable, lookups);
         if (scope == LegacyLuaExportScope::Map && (!action || action->hidden

@@ -1,0 +1,75 @@
+id: atlas.mm7_barrow_a_control_reference_verify
+title: Reading lever routing requirements preserves the actual lever state and recorded
+  journey
+world: mm7
+mode: faithful
+steps:
+- load_game:
+    name: before
+    path: saves/before.oysav
+- &id001
+  assert:
+    named_global_var_changed:
+      name: openyamm.discovery.world.mm7.map.mdr01
+      value: 0
+- load_game:
+    name: native
+    path: saves/quicksave.oysav
+- *id001
+- &id002
+  assert:
+    map: mdt01.blv
+- &id003
+  assert:
+    named_map_var_changed:
+      name: openyamm.discovery.arrival/world.mm7.map.mdk01/event/502/seen
+      value: 1
+- &id004
+  assert:
+    named_map_var_changed:
+      name: openyamm.discovery.arrival/mdk01.blv/event/502/seen
+      value: 0
+- &id005
+  assert:
+    runtime_event_variable:
+      id: 21
+      value: 500
+- &id006
+  assert:
+    runtime_event_variable:
+      id: 23
+      value: 10
+- &id007
+  assert:
+    runtime_event_variable:
+      id: 5
+      member_index: 0
+      value: 21
+- save_game: connection-roundtrip
+- load_game: connection-roundtrip
+- *id002
+- *id003
+- *id004
+- *id005
+- *id006
+- *id007
+- load_map:
+    map: mdk01.blv
+- assert:
+    map: mdk01.blv
+- assert:
+    named_map_var_changed:
+      name: openyamm.discovery.site/surface/250/event/502
+      value: 1
+- assert:
+    map_var_changed:
+      index: 2
+      value: 0
+- load_map:
+    map: mdr01.blv
+- assert:
+    map: mdr01.blv
+- assert:
+    named_map_var_changed:
+      name: openyamm.discovery.arrival/world.mm7.map.mdk01/event/502/seen
+      value: 0

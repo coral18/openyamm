@@ -397,6 +397,8 @@ TEST_CASE("canonical connection requirement references stay Guide-only after dis
     };
     const Route routes[] = {
         {"mm7", "t04.blv", 502, "Any one of these alternatives:"},
+        {"mm7", "mdk01.blv", 502, "Controlling lever: second position"},
+        {"mm7", "7d13.blv", 501, "at random; probabilities are not shown"},
         {"mm8", "pbp.odm", 507, "Selected character carries: Flute"}};
     for (const Route &route : routes)
     {
@@ -431,4 +433,61 @@ TEST_CASE("canonical connection requirement references stay Guide-only after dis
         CHECK(world.siteReference(*feature, knowledge, false).empty());
         CHECK(knowledge.visitedMaps.size() == 1);
     }
+}
+
+TEST_CASE("canonical Barrow control references have physical exits and levers across the full authored network")
+{
+    using namespace OpenYAMM::Game;
+    REQUIRE_MESSAGE(OpenYAMM::Tests::regressionMapLoaderLoaded(),
+        OpenYAMM::Tests::regressionMapLoaderFailure());
+    const auto &loader = OpenYAMM::Tests::regressionMapLoader();
+    const auto &data = loader.gameDataLoader;
+    size_t references = 0, levers = 0, maps = 0;
+    for (const MapStatsEntry &entry : data.getMapStats().getEntries())
+    {
+        if (entry.worldId != "mm7") continue;
+        MapAssetInfo metadata;
+        metadata.map = entry;
+        std::string error;
+        REQUIRE_MESSAGE(GameDataLoader::loadEventPrograms(loader.assetFileSystem, metadata, error), error);
+        REQUIRE(metadata.localEventProgram);
+        const ScriptedEventProgram &events = *metadata.localEventProgram;
+        const auto &descriptions = events.siteReferences();
+        if (std::none_of(descriptions.begin(), descriptions.end(), [](const auto &item)
+            { return item.second.find("Controlling lever:") != std::string::npos; })) continue;
+        CAPTURE(entry.fileName);
+        ++maps;
+        auto map = MapAssetLoader().load(loader.assetFileSystem, entry, data.getMonsterTable(),
+            data.getObjectTable(), MapLoadPurpose::HeadlessGameplay);
+        REQUIRE(map);
+        REQUIRE(map->indoorMapData);
+        const auto sites = worldInteractionSites(*map->indoorMapData);
+        size_t localReferences = 0, localLevers = 0;
+        for (const auto &[event, description] : descriptions)
+        {
+            if (description.find("Controlling lever:") == std::string::npos) continue;
+            ++localReferences;
+            CAPTURE(event);
+            CHECK(std::any_of(sites.begin(), sites.end(), [&](const WorldInteractionSite &site)
+                { return site.eventId == event; }));
+            const auto action = events.getContextActionMetadata(event);
+            REQUIRE(action);
+            CHECK(action->targetMaps.size() == 2);
+        }
+        for (uint16_t event : events.eventIds())
+        {
+            const auto action = events.getContextActionMetadata(event);
+            if (!action || action->kind != "use_lever") continue;
+            ++localLevers;
+            CAPTURE(event);
+            CHECK(std::any_of(sites.begin(), sites.end(), [&](const WorldInteractionSite &site)
+                { return site.eventId == event; }));
+        }
+        CHECK(localReferences == localLevers);
+        references += localReferences;
+        levers += localLevers;
+    }
+    CHECK(maps == 15);
+    CHECK(references == 27);
+    CHECK(levers == 27);
 }

@@ -2213,3 +2213,53 @@ the continent overview to the Guide source; they never travel there. Private evi
 
 This adds initial routing explanations. It does not complete current eligibility, lever-state explanations,
 handwritten references, the full Atlas content matrix, localization or Android/controller validation.
+
+
+### Complete Barrow toggle references and controller ownership, 2026-10-24
+
+Guide's routing details now explain the first/second lever positions for 27 authored passages across the fifteen
+MM7 Barrows. The exporter matches the complete two-position callback, including both assignments, its threshold
+and matching door actions. A competing base writer, unknown instruction, partial toggle or unsupported controller
+suppresses inference. The references contain no raw local-variable IDs and do not claim the current position.
+The remaining multi-target exit in this network, Zokarr's Tomb, is explicitly described as choosing between
+Barrow IV and Barrow VI at random; reading its possibilities does not roll the game RNG or assert probabilities.
+
+The optional fourth argument of `SetMapSiteReference(eventId, text, nil, {controllerIds...})` captures additional
+map callbacks. An explanation is valid only while both its owner and every captured dependency remain registered
+with the same function identity. A mod replacing/removing a lever therefore discards the old description even
+when the exit itself is unchanged. Unrelated callback changes leave it intact, and explicit redeclaration can
+supply new text. Dependency arrays are dense, distinct, bounded at 64 and exclude the owner; malformed values or
+unregistered callbacks fail loading. Metadata remains presentation-only, with no save-format or gameplay change.
+
+All sidecars were regenerated through the exporter. The 28 additional references use shared callback metadata;
+there is no handwritten Atlas destination/control list. Runtime geometry and existing observed journeys still
+own map placement and Discovery navigation. More complex controls, live local/remote eligibility and other
+handwritten event semantics remain outside this checkpoint.
+
+Validation for this checkpoint:
+
+- Windows Release, the exporter and focused tests compiled. All 191 generated map sidecars passed the strict
+  literal validator, and the Python lighting suite passed 21 tests, including rejection of invalid dependencies
+  and executable additions. Runtime overlays were refreshed only with no game process running.
+- 35 selected Windows unit cases passed 7,374 assertions. New checks cover dependency replacement/removal,
+  malformed references, actual Barrow source control flow, threshold positions 0/1/2/255, competing state writers
+  and random reference generation without executing callbacks. The mounted-content audit verifies all 27 physical
+  exit bindings and 27 lever bindings across the fifteen Barrows. Geometry-backed Barrow and Zokarr descriptions,
+  plus existing MM7/MM8 passages, remain Guide-only after discovery.
+- Four native Windows AMD/OpenGL tours passed with inspected screenshots: Barrow VII routing details from the
+  two accepted pre/post-lever journey saves, Zokarr's random exit details, and an MM8 Flute-reference regression.
+  The tours browse the Atlas only; no movement, lever use or quest-state injection is used to read the descriptions.
+- Faithful post-UI verifiers passed 25/26/35/28 steps respectively. They preserve actual map/arrival history and
+  gold 500 / food 10 / spell points 21 through another save/load. The original Barrow lever settings and physical
+  exit discoveries remain intact, as does the actually used lever face in the second setting. Unvisited alternative
+  maps and Zokarr source/destinations remain undiscovered, and the MM8 pirate-key bit stays clear.
+
+Reproduction uses `tools/menu_tours/atlas_mm7_barrow_controls_{a,b}.yml`, `atlas_mm7_zokarr_routing.yml` and matching
+`tests/scenarios/atlas/mm7_barrow_controls_{a,b}_verify.yml`, `mm7_zokarr_routing_verify.yml`. The two control seeds
+are accepted actual-journey quicksaves from the earlier Barrow a/b native tours, copied as `saves/before.oysav`;
+Zokarr uses the same before-UI seed as the MM7 routing-requirements tour. No pose tour is needed. MM8 reuses
+`atlas_mm8_routing_requirements.yml` and its verifier. Private evidence is under `atlas-controls-20261024` in the
+Windows development root.
+
+This completes the initial Barrow control and random-exit explanations. The full Atlas goal still includes the
+remaining condition/content matrix, complex floors, localization and Android/controller validation.

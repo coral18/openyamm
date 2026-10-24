@@ -583,12 +583,34 @@ current-member inventory is explicitly described as selected-character inventory
 The analysis follows both conditional branches and explicit jumps. It prunes repeated contradictory predicates,
 groups equivalent landing paths as alternatives and omits entry flags when every path reaches the identical
 landing. It preserves full move parameters when grouping, so two different landings in one map remain distinct.
-A state mutation followed by another predicate, cycles, random/unsupported control flow, multiple moves on one
+A state mutation followed by another predicate, cycles, unsupported control flow, multiple moves on one
 path or any unsupported action/predicate suppress the entire reference. No partial requirement list is presented
 as complete. Other gameplay effects are deliberately outside this routing reference and remain governed by the
 actual callback. It is not a live eligibility evaluator or a forecast for remote map state.
 
 Generate these catalogs with `tools/regenerate_lua_events.sh --site-refs-only`. Do not edit generated Lua by hand.
-The existing strict literal metadata validator and 16 KiB text limit apply. Controller/lever states and handwritten
-Lua callbacks still need explicit or exporter-supported semantics; a first destination is never substituted for
-an unsupported conditional analysis.
+The existing strict literal metadata validator and 16 KiB text limit apply. Other controller/state families and
+handwritten Lua callbacks still need explicit or exporter-supported semantics; a first destination is never
+substituted for an unsupported conditional analysis.
+
+### Routing controls and callback dependencies
+
+`SetMapSiteReference(eventId, text, nil, {controllerEventId})` binds an explanation to both its own callback and
+other registered map callbacks. The fourth argument is an optional dense array of up to 64 distinct positive
+16-bit event IDs, excluding the owner. Capture metadata immediately after the base handlers, before gameplay
+overlays, just like ordinary site references. Replacing/removing any captured callback discards the entire
+explanation; unrelated callback changes do not. A mod may explicitly redeclare updated text and dependencies.
+The existing optional `"drink"` kind also accepts dependencies. Global references retain their two-argument API.
+Malformed arrays, missing callbacks and invalid captured metadata fail loading. The lighting metadata validator
+accepts only literal dependency arrays and rejects executable additions.
+
+The exporter recognizes a complete two-position lever callback: one local-state threshold, one assignment and a
+matching door open/close action in each branch, with no competing base writer for the control variable. It maps
+that variable's routing predicate to first/second lever positions and records the controller dependency. It does
+not print raw MapVar numbers or infer arbitrary counters, partial toggles or complex mechanisms as lever states.
+The base catalog includes 27 such passages across the fifteen MM7 Barrows.
+
+Supported random jumps enumerate their distinct reachable route outcomes without rolling the game RNG. Repeated
+branch slots do not create duplicate destinations, and the reference explicitly leaves probabilities unspecified.
+The initial content is Zokarr's Tomb's two possible exits. This describes possible routing; it neither predicts the
+next random choice nor evaluates a remote location's current state. All references remain Guide-only.

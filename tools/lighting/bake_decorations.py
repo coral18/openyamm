@@ -250,7 +250,8 @@ def validate_site_reference_metadata(text, script):
               if script.name.endswith('_00_site_refs.lua') else
               '-- Site reference metadata; load after gameplay overlays')
     declaration = re.compile(
-        r'SetMapSiteReference\(([1-9][0-9]*), ("(?:[^"\\\r\n]|\\["\\nrt])*")(?:, "drink")?\)')
+        r'SetMapSiteReference\(([1-9][0-9]*), ("(?:[^"\\\r\n]|\\["\\nrt])*")'
+        r'(?:, (?:"drink"|nil), \{([1-9][0-9]*(?:, [1-9][0-9]*)*)?\}|, "drink")?\)')
     map_name = r'"[a-z0-9_-]+\.(?:blv|odm)"'
     connection = re.compile(r'SetMapConnectionTargets\(([1-9][0-9]*), \{('
                             + map_name + r'(?:, ' + map_name + r'){0,63})\}\)')
@@ -270,6 +271,10 @@ def validate_site_reference_metadata(text, script):
         match = declaration.fullmatch(line)
         if match is None or int(match[1]) > 65535:
             raise ValueError('Invalid site reference metadata overlay: ' + str(script))
+        dependencies = [int(value) for value in match[3].split(', ')] if match[3] else []
+        if (len(dependencies) > 64 or len(dependencies) != len(set(dependencies))
+                or any(value > 65535 or value == int(match[1]) for value in dependencies)):
+            raise ValueError('Invalid site reference dependency overlay: ' + str(script))
         value = json.loads(match[2])
         if len(value.encode('utf-8')) > 16384 or '\0' in value:
             raise ValueError('Invalid site reference metadata overlay: ' + str(script))

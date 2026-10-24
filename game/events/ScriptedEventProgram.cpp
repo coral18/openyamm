@@ -567,8 +567,32 @@ bool readSiteReferences(lua_State *pLuaState, int metadataIndex, ScriptedEventSc
         lua_getfield(pLuaState, -1, luaScopeName(scope));
         if (!lua_istable(pLuaState, -1)) return fail();
         lua_rawgeti(pLuaState, -1, eventId);
-        const bool ownsHandler = lua_rawequal(pLuaState, -1, -4);
+        bool ownsHandler = lua_rawequal(pLuaState, -1, -4);
         lua_pop(pLuaState, 4);
+        if (ownsHandler)
+        {
+            lua_getfield(pLuaState, -1, "dependencies");
+            if (!lua_isnil(pLuaState, -1))
+            {
+                if (scope != ScriptedEventScope::Map || !lua_istable(pLuaState, -1)) return fail();
+                size_t count = 0;
+                lua_pushnil(pLuaState);
+                while (lua_next(pLuaState, -2) != 0)
+                {
+                    if (++count > 64 || !lua_isinteger(pLuaState, -2)
+                        || lua_tointeger(pLuaState, -2) <= 0 || lua_tointeger(pLuaState, -2) > UINT16_MAX
+                        || lua_tointeger(pLuaState, -2) == eventId || !lua_isfunction(pLuaState, -1)) return fail();
+                    const uint16_t dependency = uint16_t(lua_tointeger(pLuaState, -2));
+                    lua_getglobal(pLuaState, "evt");
+                    lua_getfield(pLuaState, -1, "map");
+                    if (!lua_istable(pLuaState, -1)) return fail();
+                    lua_rawgeti(pLuaState, -1, dependency);
+                    ownsHandler = lua_rawequal(pLuaState, -1, -4) && ownsHandler;
+                    lua_pop(pLuaState, 4);
+                }
+            }
+            lua_pop(pLuaState, 1);
+        }
         if (ownsHandler)
         {
             lua_getfield(pLuaState, -1, "text");

@@ -1051,16 +1051,32 @@ function support.setGlobalItemRewards(eventId, items)
     setItemRewards("global", eventId, items)
 end
 
-local function setSiteReference(scopeName, eventId, text, kind)
+local function setSiteReference(scopeName, eventId, text, kind, dependencies)
     local handler = evt[scopeName][eventId]
     assert(type(handler) == "function", "Site reference requires a registered event handler")
     local meta = ensureMetaScope(scopeName)
     meta.siteReferences = meta.siteReferences or {}
-    meta.siteReferences[eventId] = {handler = handler, text = text, kind = kind}
+    local captured = nil
+    if dependencies ~= nil then
+        assert(scopeName == "map" and type(dependencies) == "table" and #dependencies <= 64,
+            "Site reference dependencies require a dense array of map callbacks")
+        captured = {}
+        local count = 0
+        for index, id in pairs(dependencies) do
+            assert(math.type(index) == "integer" and index >= 1 and index <= #dependencies
+                and math.type(id) == "integer" and id > 0 and id <= 65535 and id ~= eventId
+                and captured[id] == nil, "Invalid site reference dependency")
+            assert(type(evt.map[id]) == "function", "Site reference dependency requires a registered map callback")
+            captured[id] = evt.map[id]
+            count = count + 1
+        end
+        assert(count == #dependencies, "Site reference dependencies must be dense")
+    end
+    meta.siteReferences[eventId] = {handler = handler, text = text, kind = kind, dependencies = captured}
 end
 
-function support.setMapSiteReference(eventId, text, kind)
-    setSiteReference("map", eventId, text, kind)
+function support.setMapSiteReference(eventId, text, kind, dependencies)
+    setSiteReference("map", eventId, text, kind, dependencies)
 end
 
 function support.setGlobalSiteReference(eventId, text)

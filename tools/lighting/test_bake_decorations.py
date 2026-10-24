@@ -230,6 +230,23 @@ class DecorationBakeTests(unittest.TestCase):
                     self.assertEqual(result[field], baseline[field])
             metadata.unlink()
 
+    def test_site_reference_dependencies_are_literal_distinct_bounded_callbacks(self):
+        script = Path('test_00_site_refs.lua')
+        header = '-- generated site references from legacy EVT/STR; load after the base handlers\n'
+        for declaration in ('SetMapSiteReference(10, "Lever", nil, {11, 12})',
+                            'SetMapSiteReference(10, "", "drink", {})'):
+            bake_decorations.validate_site_reference_metadata(header + declaration, script)
+        for declaration in ('SetMapSiteReference(10, "Lever", nil, {10})',
+                            'SetMapSiteReference(10, "Lever", nil, {11, 11})',
+                            'SetMapSiteReference(10, "Lever", nil, {0})',
+                            'SetMapSiteReference(10, "Lever", nil, {65536})',
+                            'SetMapSiteReference(10, "Lever", nil, {callback})',
+                            'SetMapSiteReference(10, "Lever", nil, {11}); evt.Set(1, 2)',
+                            'SetMapSiteReference(10, "Lever", nil, {'
+                            + ', '.join(str(value) for value in range(100, 165)) + '})'):
+            with self.subTest(declaration=declaration), self.assertRaises(ValueError):
+                bake_decorations.validate_site_reference_metadata(header + declaration, script)
+
     def test_connection_targets_cannot_hide_executable_or_invalid_content(self):
         metadata = self.world / 'events/maps/test_00_site_refs.lua'
         header = '-- generated site references from legacy EVT/STR; load after the base handlers\n'

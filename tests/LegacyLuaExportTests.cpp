@@ -1919,3 +1919,130 @@ TEST_CASE("connection requirement references describe exact gold boundaries and 
     REQUIRE(f.program()->siteReferences().contains(10));
     CHECK(f.program()->siteReferences().at(10).find("The council has recognized the party.") != std::string::npos);
 }
+
+
+TEST_CASE("site reference dependencies invalidate stale controller descriptions without executing callbacks")
+{
+    using namespace OpenYAMM::Game;
+    const auto bytes = readBinaryFixture(std::filesystem::path(OPENYAMM_SOURCE_DIR)
+        / "assets_dev/engine/scripts/common/event_support.lua");
+    const std::string support(bytes.begin(), bytes.end());
+    const std::string handlers = "evt.map[10]=function() error('exit must not execute') end\n"
+        "evt.map[11]=function() error('lever must not execute') end\n"
+        "evt.map[12]=function() error('second controller must not execute') end\n";
+    const auto load = [&](const std::string &code)
+    {
+        std::string error;
+        return ScriptedEventProgram::loadFromLuaText(support + handlers + code, "@reference-dependencies",
+            ScriptedEventScope::Map, error);
+    };
+    const std::string reference = "SetMapSiteReference(10, 'Lever controls the exit', nil, {11, 12})\n";
+    auto program = load(reference);
+    REQUIRE(program);
+    CHECK(program->siteReferences().at(10) == "Lever controls the exit");
+    for (const std::string replacement : {"evt.map[10]=nil", "evt.map[11]=nil", "evt.map[12]=function() end",
+        "ReplaceMapEvent(11, '', function() end)"})
+    {
+        program = load(reference + replacement);
+        REQUIRE(program);
+        CHECK(program->siteReferences().empty());
+    }
+    program = load(reference + "evt.map[13]=function() end");
+    REQUIRE(program);
+    CHECK(program->siteReferences().contains(10));
+    program = load(reference + "evt.map[11]=function() end\nSetMapSiteReference(10,'Updated',nil,{11})");
+    REQUIRE(program);
+    CHECK(program->siteReferences().at(10) == "Updated");
+    for (const char *pDependencies : {"false", "'11'", "{11, 11}", "{10}", "{13}", "{0}", "{65536}",
+        "{11.5}", "{[1]=11,[3]=12}", "{named=11}", "{11,false}"})
+        CHECK_FALSE(load("SetMapSiteReference(10,'text',nil," + std::string(pDependencies) + ")"));
+    CHECK_FALSE(load(reference + "evt.meta.map.siteReferences[10].dependencies[11]=false"));
+    CHECK_FALSE(load(reference + "evt.meta.map.siteReferences[10].dependencies[0]=function() end"));
+}
+
+TEST_CASE("Barrow routing requirements bind both the exit and its complete two-position lever")
+{
+    using namespace OpenYAMM::Game;
+    const auto root = std::filesystem::path(OPENYAMM_SOURCE_DIR);
+    const auto bytes = readBinaryFixture(root / "assets_dev/worlds/mm7/_legacy/events/MDK01.EVT");
+    EvtProgram events;
+    REQUIRE(events.loadFromBytes(bytes));
+    LegacyLuaExportLookups lookups;
+    lookups.sourceMapFile = "mdk01.blv";
+    lookups.eventTitles[451] = "Lever";
+    lookups.mapNamesByFile = {{"out11.odm", "Barrow Downs"}, {"mdt01.blv", "Barrow IX"},
+        {"mdr01.blv", "Barrow X"}};
+    const auto support = readBinaryFixture(root / "assets_dev/engine/scripts/common/event_support.lua");
+    const std::string callbacks = generateLegacyEventLuaChunk(events, {}, lookups,
+        LegacyLuaExportScope::Map, LegacyEventVersion::Mm7);
+    const std::string refs = generateLegacyEventSiteRefsLuaChunk(events, {}, lookups,
+        LegacyLuaExportScope::Map, LegacyEventVersion::Mm7);
+    const auto load = [&](const std::string &overlay)
+    {
+        std::string error;
+        const auto result = ScriptedEventProgram::loadFromLuaText(std::string(support.begin(), support.end())
+            + callbacks + refs + overlay, "@barrow-controls", ScriptedEventScope::Map, error);
+        REQUIRE_MESSAGE(result, error);
+        return result;
+    };
+    const auto program = load("");
+    REQUIRE(program->siteReferences().contains(502));
+    const std::string &text = program->siteReferences().at(502);
+    CHECK(text.find("Destination: Barrow IX\nRequirements (all):\n- Controlling lever: first position")
+        != std::string::npos);
+    CHECK(text.find("Destination: Barrow X\nRequirements (all):\n- Controlling lever: second position")
+        != std::string::npos);
+    CHECK(text.find("MapVar") == std::string::npos);
+    CHECK(refs.find(", nil, {451})") != std::string::npos);
+    for (const std::string overlay : {"evt.map[451]=function() end", "evt.map[451]=nil"})
+    {
+        const auto replaced = load(overlay);
+        CHECK_FALSE(replaced->siteReferences().contains(502));
+        CHECK(replaced->connectionTargets().at(502).size() == 2);
+    }
+    EventRuntime runtime;
+    for (uint8_t position : {0, 1, 2, 255})
+    {
+        EventRuntimeState state;
+        state.mapFileName = "mdk01.blv";
+        state.mapVars[2] = position;
+        REQUIRE(runtime.executeEventById(program, std::nullopt, 502, state));
+        REQUIRE(state.pendingMapMove);
+        CHECK(state.pendingMapMove->mapName == (position < 2 ? "mdt01.blv" : "mdr01.blv"));
+        CHECK(state.mapVars[2] == position);
+    }
+    // A second source of this control state makes its inferred ownership ambiguous.
+    std::vector<uint8_t> competing = bytes;
+    competing.insert(competing.end(), {10, 0x60, 0xea, 0, uint8_t(EvtOpcode::Set), 0x7d, 0, 3, 0, 0, 0});
+    appendExitRecord(competing, 60000, 1);
+    EvtProgram modified;
+    REQUIRE(modified.loadFromBytes(competing));
+    CHECK(generateLegacyEventSiteRefsLuaChunk(modified, {}, lookups, LegacyLuaExportScope::Map,
+        LegacyEventVersion::Mm7).find("Controlling lever") == std::string::npos);
+}
+
+
+TEST_CASE("Zokarr routing references describe random destinations without claiming a lever requirement")
+{
+    using namespace OpenYAMM::Game;
+    const auto root = std::filesystem::path(OPENYAMM_SOURCE_DIR);
+    EvtProgram events;
+    REQUIRE(events.loadFromBytes(readBinaryFixture(root / "assets_dev/worlds/mm7/_legacy/events/7D13.EVT")));
+    LegacyLuaExportLookups lookups;
+    lookups.sourceMapFile = "7d13.blv";
+    lookups.mapNamesByFile = {{"mdk02.blv", "Barrow IV"}, {"mdt02.blv", "Barrow VI"}};
+    const std::string refs = generateLegacyEventSiteRefsLuaChunk(events, {}, lookups,
+        LegacyLuaExportScope::Map, LegacyEventVersion::Mm7);
+    const auto support = readBinaryFixture(root / "assets_dev/engine/scripts/common/event_support.lua");
+    std::string error;
+    const auto program = ScriptedEventProgram::loadFromLuaText(std::string(support.begin(), support.end())
+        + "evt.map[501]=function() error('Do not roll the destination while reading metadata') end\n" + refs,
+        "@random-connection-reference", ScriptedEventScope::Map, error);
+    REQUIRE_MESSAGE(program, error);
+    REQUIRE(program->siteReferences().contains(501));
+    const std::string &text = program->siteReferences().at(501);
+    CHECK(text.find("Destination: Barrow IV") != std::string::npos);
+    CHECK(text.find("Destination: Barrow VI") != std::string::npos);
+    CHECK(text.find("at random; probabilities are not shown") != std::string::npos);
+    CHECK(text.find("Controlling lever") == std::string::npos);
+}

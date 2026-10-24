@@ -1,0 +1,61 @@
+output_dir: captures
+exit: true
+steps:
+- expect: gameplay
+- key: F9
+- pause: true
+- click:
+  - 800
+  - 821
+- click:
+  - 951
+  - 190
+- capture: discovery-recorded-network
+- click:
+  - 1152
+  - 57
+- wait: 8
+- capture: guide-network
+- click:
+  - 921
+  - 381
+- capture: barrow-vii-connections
+- click:
+  - 1250
+  - 330
+- capture: conditional-route
+- click:
+  - 1100
+  - 806
+- capture: graph-departure-site
+- click:
+  - 990
+  - 806
+- capture: lever-route-requirements
+- click:
+  - 450
+  - 57
+- click:
+  - 951
+  - 190
+- click:
+  - 1250
+  - 330
+- capture: departure-selected-route
+- click:
+  - 1395
+  - 806
+- capture: graph-destination-plan
+- click:
+  - 1152
+  - 57
+- capture: discovery-after-guide
+- click:
+  - 1450
+  - 57
+- expect: pause
+- click:
+  - 800
+  - 301
+- expect: gameplay
+- key: F9
