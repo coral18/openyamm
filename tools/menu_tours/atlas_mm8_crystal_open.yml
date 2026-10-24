@@ -1,0 +1,15 @@
+output_dir: captures
+exit: true
+steps:
+- expect: gameplay
+- action: combat
+- wait: 0.5
+- capture: before-interaction
+- action: trigger
+- wait: 0.5
+- capture: after-interaction
+- key: Return
+- wait: 0.1
+- action: combat
+- capture: destination
+- key: F9

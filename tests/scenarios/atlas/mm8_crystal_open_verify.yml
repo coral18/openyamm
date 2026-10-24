@@ -1,0 +1,48 @@
+id: atlas.mm8_crystal_native_verify
+title: A keyed entrance retains actual travel or refusal without Guide discoveries
+world: mm8
+mode: faithful
+steps:
+- load_game:
+    name: native
+    path: saves/quicksave.oysav
+- &id001
+  assert:
+    map: d10.blv
+- &id002
+  assert:
+    runtime_event_variable:
+      id: 39976977
+      value: 1
+- &id003
+  assert:
+    runtime_event_variable:
+      id: 21
+      value: 500
+- &id004
+  assert:
+    runtime_event_variable:
+      id: 23
+      value: 10
+- &id005
+  assert:
+    named_map_var_changed:
+      name: openyamm.discovery.arrival/world.mm8.map.out02/event/504/seen
+      value: 1
+- save_game: native-roundtrip
+- load_game: native-roundtrip
+- *id001
+- *id002
+- *id003
+- *id004
+- *id005
+- load_map:
+    map: out02.odm
+- assert:
+    named_map_var_changed:
+      name: CrystalOpened
+      value: 1
+- assert:
+    named_map_var_changed:
+      name: openyamm.discovery.site/bmodel/77/surface/28/event/504
+      value: 1

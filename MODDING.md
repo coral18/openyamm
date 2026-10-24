@@ -415,3 +415,42 @@ and condition changes, including no-change visits, under the existing per-map si
 are a separate read-only projection. Random outcomes list possibilities without drawing RNG; per-character flags
 describe individual use eligibility. Unrepresented reachable behavior suppresses the effect reference rather than
 inventing a complete description. Disabling the Atlas UI does not disable Core observation collection.
+
+
+### Typed special-interaction references
+
+`SetMapInteractionReference(eventId, reference)` declares possibilities for the current map callback. It never
+executes the callback. Replacement/removal invalidates its reference by function identity; a replacement must
+redeclare its own data. Pass `nil` to clear the reference explicitly.
+
+The current flat schema supports three families:
+
+- `rescue`: `itemId`, `npcId`, `spriteId`, `completionQBit`; optional `consumesItem` and `addsFollower`.
+- `stone_to_flesh`: `itemId`, `spellId`, `npcId`, `spriteId`; optional `consumesItem` applies to the item route.
+- `enter_dungeon`: `itemId`, `openedMapFlag`, `targetMap`; describes a reusable entrance opened with a key.
+
+Every record needs `kind`. IDs refer to the active merged game registries; `spriteId` is the event key used by
+`evt.SetSprite`, not an artwork ID or renderer-list index. `completionQBit` is a declared rescue gate. The entrance
+flag belongs to its source map; the reference does not predict a remote map's current state. Unsupported fields,
+invalid types, unsafe map paths and incomplete family definitions fail loading. These are authored reference
+contracts, not a general interpreter for arbitrary Lua.
+
+Keep handwritten declarations in `<map>_zz_site_interactions.lua`, beginning with
+`-- Site interaction metadata; load after gameplay overlays`. The lighting producer validates this reserved file
+as literal, flat `SetMapInteractionReference` calls only. Executable statements, expressions, duplicate fields and
+unknown keys are rejected. Ordinary gameplay scripts retain their existing dependency hashes.
+
+References supplement missing/title-derived/generic context. Explicit script context remains authoritative.
+`WorldDatabase::indexMapInteractionReferences` resolves item, spell, NPC and destination names from the active
+shared tables. Atlas displays the derived descriptions only in Guide; reading one never learns a requirement,
+rescues someone, grants a quest bit or marks another object as used.
+
+`WorldSiteInteractionObservation` collects actual input/spell activations independently of Atlas enablement. An
+optional `object-removed` boolean in the existing per-map site-effect namespace records a declared object's
+observed visible-to-hidden transition. It retains historical removals across repeat visits and save/refill; it is
+not current occupancy. Missing old fields imply no removal history. Invalid saved values report an error.
+
+`GameplayEventTargetHit::sourceEntityIndex` supplies canonical map identity for renderer-backed decorations.
+`targetIndex` continues to address the renderer's activation list. Entity hits already address map entities.
+An unbound decoration does not acquire guessed discovery/effect records, and press/release matching includes
+canonical identity. Old records written with an incorrect renderer index are not reassigned speculatively.

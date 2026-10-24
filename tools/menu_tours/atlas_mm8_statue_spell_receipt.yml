@@ -1,0 +1,23 @@
+output_dir: captures
+exit: true
+steps:
+- expect: gameplay
+- action: cast
+- click:
+  - 650
+  - 230
+- capture: selected-spell
+- click:
+  - 230
+  - 770
+- capture: quick-spell-set
+- key: Escape
+- action: cast_ready
+- capture: spell-targeting
+- click:
+  - 800
+  - 450
+- wait: 0.2
+- capture: after-interaction
+- key: Escape
+- key: F9

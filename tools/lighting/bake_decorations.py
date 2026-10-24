@@ -148,6 +148,71 @@ def validate_site_context_metadata(text, script):
             raise ValueError('Invalid site context metadata overlay: ' + str(script))
 
 
+def validate_interaction_reference_metadata(text, script):
+    lines = text.splitlines()
+    failure = 'Invalid site interaction metadata overlay: ' + str(script)
+    if not lines or lines[0] != '-- Site interaction metadata; load after gameplay overlays':
+        raise ValueError(failure)
+    declaration = re.compile(r'SetMapInteractionReference\(([1-9][0-9]*), \{(.*)\}\)')
+    field = re.compile(r'([a-zA-Z]+) = ("(?:[^"\\\r\n]|\\["\\nrt])*"|true|false|[1-9][0-9]*)')
+    numbers = {'itemId', 'spellId', 'npcId', 'spriteId', 'completionQBit'}
+    flags = {'consumesItem', 'addsFollower'}
+    strings = {'kind', 'openedMapFlag', 'targetMap'}
+    for line in lines[1:]:
+        line = line.strip()
+        if not line or line.startswith('--'):
+            continue
+        match = declaration.fullmatch(line)
+        if not match or int(match[1]) > 65535:
+            raise ValueError(failure)
+        body, position, values = match[2], 0, {}
+        while position < len(body):
+            entry = field.match(body, position)
+            if not entry or entry[1] in values:
+                raise ValueError(failure)
+            key, value = entry[1], json.loads(entry[2])
+            if key in numbers:
+                valid = type(value) is int and 0 < value <= 2147483647
+            elif key in flags:
+                valid = type(value) is bool
+            elif key in strings:
+                valid = type(value) is str and 0 < len(value.encode('utf-8')) <= 128 and '\0' not in value
+            else:
+                valid = False
+            if not valid:
+                raise ValueError(failure)
+            values[key] = value
+            position = entry.end()
+            if position < len(body):
+                if body[position:position + 2] != ', ':
+                    raise ValueError(failure)
+                position += 2
+                if position == len(body):
+                    raise ValueError(failure)
+        kind = values.get('kind')
+        if not values.get('itemId'):
+            raise ValueError(failure)
+        if kind == 'enter_dungeon':
+            target = values.get('targetMap', '')
+            flag = values.get('openedMapFlag', '')
+            valid = bool(re.fullmatch(r'[A-Za-z0-9_-]+\.(blv|odm)', target)
+                         and re.fullmatch(r'[A-Za-z0-9_]+', flag))
+            valid = valid and not any(values.get(key) for key in
+                                      ('spellId', 'npcId', 'spriteId', 'completionQBit', *flags))
+        elif kind in ('rescue', 'stone_to_flesh'):
+            valid = bool(values.get('npcId') and values.get('spriteId')
+                         and not values.get('targetMap') and not values.get('openedMapFlag'))
+            if kind == 'rescue':
+                valid = valid and bool(values.get('completionQBit')) and not values.get('spellId')
+            else:
+                valid = valid and bool(values.get('spellId')) and not values.get('completionQBit')
+                valid = valid and not values.get('addsFollower')
+        else:
+            valid = False
+        if not valid:
+            raise ValueError(failure)
+
+
 def validate_site_reference_metadata(text, script):
     lines = text.splitlines()
     header = ('-- generated site references from legacy EVT/STR; load after the base handlers'
@@ -219,6 +284,9 @@ def export_cards(profile, output):
             continue
         if script.name in (source.stem + '_00_site_refs.lua', source.stem + '_zz_site_refs.lua'):
             validate_site_reference_metadata(text, script)
+            continue
+        if script.name == source.stem + '_zz_site_interactions.lua':
+            validate_interaction_reference_metadata(text, script)
             continue
         if script.name == source.stem + '_zz_site_context.lua':
             validate_site_context_metadata(text, script)

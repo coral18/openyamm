@@ -1010,6 +1010,14 @@ function support.setMapContextAction(eventId, metadata)
     meta.contextActions[eventId] = metadata
 end
 
+function support.setMapInteractionReference(eventId, reference)
+    local handler = evt.map[eventId]
+    assert(type(handler) == "function", "Interaction reference requires a registered event handler")
+    local meta = ensureMetaScope("map")
+    meta.interactionReferences = meta.interactionReferences or {}
+    meta.interactionReferences[eventId] = {handler = handler, reference = reference}
+end
+
 local function setItemRewards(scopeName, eventId, items)
     local handler = evt[scopeName][eventId]
     assert(type(handler) == "function", "Item reward metadata requires a registered event handler")
@@ -1647,6 +1655,7 @@ PickRandomOption = support.pickRandomOption
 AskQuestionWithAnswerSteps = support.askQuestionWithAnswerSteps
 SetMapMetadata = support.setMapMetadata
 SetMapContextAction = support.setMapContextAction
+SetMapInteractionReference = support.setMapInteractionReference
 SetMapItemRewards = support.setMapItemRewards
 SetGlobalItemRewards = support.setGlobalItemRewards
 SetMapSiteReference = support.setMapSiteReference

@@ -8,6 +8,7 @@
 #include "game/party/SpellSchool.h"
 #include "game/party/SpellIds.h"
 #include "game/tables/SpellTable.h"
+#include "game/world/WorldSiteObservations.h"
 
 #include <algorithm>
 #include <array>
@@ -2018,7 +2019,9 @@ PartySpellCastResult PartySpellSystem::castSpell(
             && request.targetWorldHit.has_value()
             && isStoneToFleshWorldTarget(*request.targetWorldHit))
         {
+            const WorldSiteInteractionObservation observation(worldRuntime, *request.targetWorldHit);
             castSucceeded = worldRuntime.activateWorldHitFromSpell(*request.targetWorldHit, request.spellId);
+            observation.finish(worldRuntime, castSucceeded);
         }
         else
         {

@@ -88,3 +88,17 @@ validate observed-only findings and untouched neighboring sites. The broader sit
 The active merged 7d12 callback applies Paralysis; the readable GrayFace D12 reference names PoisonedRed.
 This checkpoint describes the active callback and does not alter generated gameplay or silently import vanilla
 condition numbering. Resolving that existing exporter/gameplay discrepancy is separate work.
+
+
+## Active special-interaction follow-up, 2026-10-24
+
+Seventeen callback-owned typed declarations now cover seven Red Dwarf Mines rescues, five Murmurwoods statues,
+Escaton's Crystal and four elemental prisons. Their mounted geometry contains twelve statue sites and twenty-two
+keyed-entrance components. They use the active Merge overlays: dwarves require the retained Elixir; MM8 statues
+accept an expended Stone to Flesh item or the actual spell; opened gates retain their source-map flags. Base EVT
+alone is insufficient because those callbacks are replaced. Names resolve through the current shared tables.
+
+The 137-map interaction inventory now counts either generated text or a typed interaction declaration in its
+reference column. The dedicated catalog test checks all seventeen definitions against real physical sites,
+item/NPC/spell/destination tables, event-to-entity keys and Discovery/Guide gates. These are reference possibilities,
+not forecasts of remote availability or a claim that all special interactions have been catalogued.

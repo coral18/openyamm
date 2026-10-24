@@ -5,6 +5,7 @@
 #include "game/party/Party.h"
 #include "game/world/WorldMapKnowledge.h"
 #include "game/world/WorldSiteObservations.h"
+#include "tests/PartySpellTestHarness.h"
 
 using namespace OpenYAMM::Game;
 
@@ -181,4 +182,102 @@ TEST_CASE("site observations record only conditions actually applied or removed"
     CHECK(history.find("Applied and removed: Mild poison") != std::string::npos);
     CHECK(history.find("Severe poison") == std::string::npos);
     CHECK(history.find("Spell points") == std::string::npos);
+}
+
+
+TEST_CASE("object observations retain only actual local removals and reject mismatched object bindings")
+{
+    Party party;
+    PartySeed seed;
+    seed.members.push_back(Character{});
+    party.seed(seed);
+    OpenYAMM::Tests::PartySpellTestWorldRuntime world;
+    world.bindParty(&party);
+    EventRuntimeState &state = *world.eventRuntimeState();
+    state.mapFileName = "out07.odm";
+    GameplayWorldHit hit;
+    hit.hasHit = true;
+    hit.kind = GameplayWorldHitKind::EventTarget;
+    hit.eventTarget.emplace();
+    hit.eventTarget->targetKind = GameplayWorldEventTargetKind::Decoration;
+    hit.eventTarget->targetIndex = 1370;
+    hit.eventTarget->sourceEntityIndex = 1418;
+    hit.eventTarget->eventIdPrimary = 20;
+    hit.eventTarget->eventIdSecondary = 132;
+    hit.eventTarget->contextActionMetadata.emplace();
+    hit.eventTarget->contextActionMetadata->kind = "stone_to_flesh";
+    hit.eventTarget->contextActionMetadata->interactionReference.emplace();
+    hit.eventTarget->contextActionMetadata->interactionReference->spriteId = 20;
+    const std::string root = "openyamm.discovery.site-effects.v1/decoration/1418/event/132/";
+    {
+        const WorldSiteInteractionObservation observation(world, hit);
+        observation.finish(world, true);
+    }
+    REQUIRE(state.namedMapVars.contains(root + "object-removed"));
+    CHECK(state.namedMapVars.at(root + "object-removed") == 0);
+    {
+        const WorldSiteInteractionObservation observation(world, hit);
+        state.spriteOverrides[20].hidden = true;
+        observation.finish(world, false);
+    }
+    CHECK(state.namedMapVars.at(root + "object-removed") == 0);
+    state.spriteOverrides.clear();
+    {
+        const WorldSiteInteractionObservation observation(world, hit);
+        state.spriteOverrides[20].hidden = true;
+        observation.finish(world, true);
+    }
+    auto observations = worldSiteObservations(state);
+    REQUIRE(observations.size() == 1);
+    CHECK(observations[0].objectRemoved == true);
+    CHECK(describeWorldSiteObservation(observations[0]).find("Observed object removed") != std::string::npos);
+    {
+        const WorldSiteInteractionObservation observation(world, hit);
+        observation.finish(world, true);
+    }
+    CHECK(worldSiteObservations(state)[0].objectRemoved == true);
+    CHECK_FALSE(worldSiteObservations(state)[0].lastChanged);
+    state.namedMapVars[root + "object-removed"] = 2;
+    CHECK_FALSE(worldSiteObservations(state)[0].error.empty());
+    state.namedMapVars.clear();
+    state.spriteOverrides.clear();
+    hit.eventTarget->contextActionMetadata->interactionReference->spriteId = 21;
+    {
+        const WorldSiteInteractionObservation observation(world, hit);
+        state.spriteOverrides[21].hidden = true;
+        observation.finish(world, true);
+    }
+    CHECK_FALSE(worldSiteObservations(state)[0].objectRemoved.has_value());
+    state.namedMapVars.clear();
+    {
+        const WorldSiteInteractionObservation observation(world, hit);
+        state.mapFileName = "out02.odm";
+        state.namedMapVars.clear();
+        observation.finish(world, true);
+    }
+    CHECK(state.namedMapVars.empty());
+    hit.eventTarget->sourceEntityIndex = GameplayInvalidWorldIndex;
+    {
+        const WorldSiteInteractionObservation observation(world, hit);
+        observation.finish(world, true);
+    }
+    CHECK(state.namedMapVars.empty());
+}
+
+
+TEST_CASE("object observations distinguish canonical entities that reuse one renderer index")
+{
+    GameplayEventTargetHit pressed;
+    pressed.targetKind = GameplayWorldEventTargetKind::Decoration;
+    pressed.targetIndex = 1370;
+    pressed.sourceEntityIndex = 1418;
+    GameplayEventTargetHit released = pressed;
+    CHECK(pressed.isSameTarget(released));
+    released.sourceEntityIndex = 1419;
+    CHECK_FALSE(pressed.isSameTarget(released));
+    released.sourceEntityIndex = GameplayInvalidWorldIndex;
+    CHECK_FALSE(pressed.isSameTarget(released));
+    released = pressed;
+    released.targetIndex = 1371;
+    CHECK_FALSE(pressed.isSameTarget(released));
 }

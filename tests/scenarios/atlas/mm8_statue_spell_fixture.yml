@@ -1,0 +1,29 @@
+id: atlas.mm8_spell
+title: Isolated native statue or keyed entrance fixture
+world: mm8
+mode: faithful
+steps:
+- new_game_flow:
+    start_map: out07.odm
+    party:
+      gold: 500
+      food: 10
+      members:
+      - name: Interaction Tester
+        class: Sorcerer
+        level: 1
+        race_id: 0
+        skills:
+        - name: Earth
+          level: 8
+          mastery: 2
+        equipment: {}
+        spells:
+        - 40
+- set_pose:
+    x: 15488
+    y: 15072
+    z: 989
+    yaw: 0
+    pitch: -0.12
+- save_game: before-interaction

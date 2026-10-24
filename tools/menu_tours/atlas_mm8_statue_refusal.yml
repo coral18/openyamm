@@ -1,0 +1,52 @@
+output_dir: captures
+exit: true
+steps:
+- expect: gameplay
+- action: combat
+- wait: 0.5
+- capture: before-interaction
+- action: trigger
+- wait: 0.5
+- capture: after-interaction
+- key: F9
+- pause: true
+- click:
+  - 800
+  - 821
+- click:
+  - 1480
+  - 126
+- click:
+  - 275
+  - 126
+- text: Statue
+- key: Return
+- capture: discovery-list
+- click:
+  - 1250
+  - 260
+- capture: discovery-site
+- click:
+  - 1390
+  - 806
+- capture: discovery-findings
+- click:
+  - 1152
+  - 57
+- capture: guide-reference
+- click:
+  - 1152
+  - 57
+- capture: discovery-after-guide
+- click:
+  - 450
+  - 57
+- click:
+  - 1450
+  - 57
+- expect: pause
+- click:
+  - 800
+  - 301
+- expect: gameplay
+- key: F9

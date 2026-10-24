@@ -8,6 +8,8 @@
 
 namespace OpenYAMM::Game
 {
+class IGameplayWorldRuntime;
+struct GameplayWorldHit;
 class Party;
 struct EventRuntimeState;
 
@@ -47,6 +49,22 @@ struct WorldSiteObservation
     bool lastChanged = false;
     std::vector<WorldSiteEffectRange> effects;
     std::string error;
+    std::optional<bool> objectRemoved;
+};
+
+// One actual event-target activation, shared by ordinary input and world-targeted spells.
+class WorldSiteInteractionObservation
+{
+public:
+    WorldSiteInteractionObservation(IGameplayWorldRuntime &world, const GameplayWorldHit &hit);
+    void finish(IGameplayWorldRuntime &world, bool activated) const;
+
+private:
+    std::optional<WorldSiteValueSnapshot> m_before;
+    std::string m_map, m_site;
+    uint16_t m_event = 0;
+    uint32_t m_sprite = 0;
+    bool m_wasHidden = false;
 };
 
 WorldSiteValueSnapshot captureWorldSiteValues(const EventRuntimeState &state, const Party &party);

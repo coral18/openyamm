@@ -180,6 +180,8 @@ AtlasScreen::AtlasScreen(const Engine::AssetFileSystem &assets, const GameDataRe
             m_knowledge.monsterObservations[toLowerCopy(pCurrentMap->map.fileName)]);
         m_indexedMaps.insert(WorldDatabase::mapId(pCurrentMap->map));
     }
+    if (pCurrentMap != nullptr && pCurrentMap->localEventProgram)
+        m_world.indexMapInteractionReferences(pCurrentMap->map, m_data.itemTable(), m_data.spellTable());
     if (pCurrentMap != nullptr && m_pGlobalEvents != nullptr
         && (pCurrentMap->outdoorMapData || pCurrentMap->indoorMapData))
     {
@@ -640,6 +642,7 @@ void AtlasScreen::indexMapData(MapAssetInfo &map)
     }
     else
         throw std::runtime_error("Missing map geometry");
+    m_world.indexMapInteractionReferences(map.map, m_data.itemTable(), m_data.spellTable());
     if (map.localEventProgram) m_world.indexNpcLocations(*map.localEventProgram);
     if (map.globalEventProgram)
     {

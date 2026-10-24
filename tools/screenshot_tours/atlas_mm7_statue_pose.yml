@@ -1,0 +1,11 @@
+output_dir: pose-captures
+exit: false
+settle_seconds: 0.1
+shots:
+- name: interaction-pose
+  position:
+  - -3984
+  - 5280
+  - -128
+  yaw: 0
+  pitch: 0

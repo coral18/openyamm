@@ -1067,6 +1067,8 @@ TEST_CASE("party spell backend stone to flesh targets characters and marked worl
     OpenYAMM::Game::PartySpellCastRequest worldRequest = characterRequest;
     worldRequest.targetCharacterIndex.reset();
     worldRequest.targetWorldHit = makeEventTargetHit(132, "stone_to_flesh");
+    worldRequest.targetWorldHit->eventTarget->targetIndex = 1370;
+    worldRequest.targetWorldHit->eventTarget->sourceEntityIndex = 1418;
 
     const OpenYAMM::Game::PartySpellCastResult worldResult = OpenYAMM::Game::PartySpellSystem::castSpell(
         worldParty,
@@ -1076,6 +1078,8 @@ TEST_CASE("party spell backend stone to flesh targets characters and marked worl
 
     REQUIRE(worldResult.succeeded());
     CHECK_EQ(worldRuntime.activatedWorldHitCount(), 1u);
+    CHECK(worldRuntime.eventRuntimeState()->namedMapVars.at(
+        "openyamm.discovery.site/decoration/1418/event/132") == 1);
     CHECK_EQ(
         worldRuntime.activatedWorldHitSpellIds(),
         std::vector<uint32_t>{OpenYAMM::Game::spellIdValue(OpenYAMM::Game::SpellId::StoneToFlesh)});

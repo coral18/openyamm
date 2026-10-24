@@ -23,6 +23,7 @@ namespace OpenYAMM::Game
 {
 struct OutdoorMapData;
 class ScriptedEventProgram;
+class SpellTable;
 class JournalAutonoteTable;
 struct JournalAutonoteEntry;
 enum class WorldRecordKind { Region, Dungeon, House, Npc, Trainer, Travel };
@@ -147,6 +148,7 @@ public:
         const WorldKnowledge &knowledge) const;
     const std::vector<WorldMapLocation> &locations() const;
     const std::vector<WorldMapFeature> &features() const;
+    void indexMapInteractionReferences(const MapStatsEntry &map, const ItemTable &items, const SpellTable &spells);
     void indexInheritedDecorations(const MapStatsEntry &map, const std::vector<WorldDecorationSite> &sites,
         const ScriptedEventProgram &globalEvents);
     void indexMapItemSources(const MapStatsEntry &map, std::vector<WorldItemSource> sources, const ItemTable &items);

@@ -1,0 +1,22 @@
+id: atlas.mm8_crystal_no_action
+title: Real keyed entrance activation
+world: mm8
+mode: faithful
+steps:
+- load_game:
+    name: before
+    path: saves/before.oysav
+- press_interact:
+    pose:
+      x: 15736
+      y: -9888
+      z: 320
+      yaw: 3.141592653589793
+      pitch: 0
+    expect:
+      kind: event_target
+      triggered_event: 504
+      can_activate: true
+- assert:
+    map: out02.odm
+- save_game: after-gate

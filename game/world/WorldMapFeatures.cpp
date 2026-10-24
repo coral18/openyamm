@@ -4,6 +4,8 @@
 #include "game/events/EventRuntime.h"
 #include "game/world/WorldDatabase.h"
 #include "game/tables/JournalAutonoteTable.h"
+#include "game/tables/ItemTable.h"
+#include "game/tables/SpellTable.h"
 #include "game/StringUtils.h"
 
 #include <algorithm>
@@ -42,6 +44,7 @@ std::optional<WorldMapFeatureKind> worldMapFeatureKind(std::string_view action)
     if (action == "well" || action == "fountain" || action == "drink") return WorldMapFeatureKind::Water;
     if (action == "shrine") return WorldMapFeatureKind::Shrine;
     if (action == "obelisk") return WorldMapFeatureKind::Obelisk;
+    if (action == "rescue" || action == "stone_to_flesh") return WorldMapFeatureKind::Decoration;
     if (action == "teleport" || action == "passage" || action == "travel"
         || action == "enter_dungeon" || action == "leave_dungeon") return WorldMapFeatureKind::Connection;
     return std::nullopt;
@@ -67,6 +70,7 @@ std::vector<WorldMapFeature> buildWorldMapFeatures(const std::string &mapId,
         if (feature.title.empty())
             feature.title = worldMapFeatureKindName(*kind);
         feature.chestIds = metadata->chestIds;
+        feature.interactionReference = metadata->interactionReference;
         if (const auto reference = events.siteReferences().find(site.eventId);
             reference != events.siteReferences().end())
             feature.guideReference = reference->second;
@@ -77,6 +81,53 @@ std::vector<WorldMapFeature> buildWorldMapFeatures(const std::string &mapId,
         features.push_back(std::move(feature));
     }
     return features;
+}
+
+void WorldDatabase::indexMapInteractionReferences(const MapStatsEntry &map,
+    const ItemTable &items, const SpellTable &spells)
+{
+    const std::string id = mapId(map);
+    for (WorldMapFeature &feature : m_features)
+    {
+        if (feature.mapId != id || !feature.interactionReference) continue;
+        const SiteInteractionReference &reference = *feature.interactionReference;
+        const ItemDefinition *pItem = items.get(reference.itemId);
+        if (pItem == nullptr) throw std::invalid_argument("Unknown interaction item: " + feature.id);
+        std::string text;
+        if (reference.kind == "enter_dungeon")
+        {
+            const auto destination = std::find_if(m_records.begin(), m_records.end(), [&](const WorldRecord &record)
+            { return (record.kind == WorldRecordKind::Region || record.kind == WorldRecordKind::Dungeon)
+                && record.map != nullptr && record.map->worldId == map.worldId
+                && toLowerCopy(record.map->fileName) == reference.targetMap; });
+            if (destination == m_records.end())
+                throw std::invalid_argument("Unknown interaction destination: " + feature.id);
+            text = "Destination: " + destination->name() + ".\nFirst opening requires carrying: " + pItem->name
+                + ".\nThe key is not consumed. Once opened, this entrance can be reused without the key"
+                  " while this location retains its open state.";
+        }
+        else
+        {
+            const NpcEntry *pNpc = m_pNpcs->getNpc(reference.npcId);
+            if (pNpc == nullptr) throw std::invalid_argument("Unknown interaction NPC: " + feature.id);
+            if (reference.spellId != 0)
+            {
+                const SpellEntry *pSpell = spells.findById(int(reference.spellId));
+                if (pSpell == nullptr) throw std::invalid_argument("Unknown interaction spell: " + feature.id);
+                text += "Use item: " + pItem->name + ".\nAlternative: cast " + pSpell->name
+                    + " at this object.\n";
+                text += reference.consumesItem ? "The item is consumed when used; casting does not consume it.\n"
+                    : "The item is not consumed.\n";
+            }
+            else
+                text += "Requires carrying: " + pItem->name
+                    + (reference.consumesItem ? ". The item is consumed.\n" : ". The item is not consumed.\n");
+            if (reference.completionQBit != 0) text += "Available only while this person has not been rescued.\n";
+            text += "On success: remove this statue and speak with " + pNpc->name + ".";
+            if (reference.addsFollower) text += " The rescued person joins the followers.";
+        }
+        feature.guideReference = std::move(text);
+    }
 }
 
 void WorldDatabase::indexInheritedDecorations(const MapStatsEntry &map,

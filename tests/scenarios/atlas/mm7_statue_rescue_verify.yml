@@ -1,0 +1,68 @@
+id: atlas.mm7_dwarf_native_verify
+title: Native statue observation, items and quest state survive Atlas browsing and
+  save/load
+world: mm7
+mode: faithful
+steps:
+- load_game:
+    name: before
+    path: saves/before.oysav
+- assert:
+    named_map_var_changed:
+      name: openyamm.discovery.site/decoration/7/event/376
+      value: 0
+- assert:
+    qbit_clear:
+    - 1689
+- load_game:
+    name: native
+    path: saves/quicksave.oysav
+- &id001
+  assert:
+    named_map_var_changed:
+      name: openyamm.discovery.site/decoration/7/event/376
+      value: 1
+- &id002
+  assert:
+    named_map_var_changed:
+      name: openyamm.discovery.site-effects.v1/decoration/7/event/376/seen
+      value: 1
+- &id003
+  assert:
+    named_map_var_changed:
+      name: openyamm.discovery.site-effects.v1/decoration/7/event/376/object-removed
+      value: 1
+- &id004
+  assert:
+    named_map_var_changed:
+      name: openyamm.discovery.site/decoration/6/event/377
+      value: 0
+- &id005
+  assert:
+    runtime_event_variable:
+      id: 93782033
+      value: 1
+- &id006
+  assert:
+    runtime_event_variable:
+      id: 21
+      value: 500
+- &id007
+  assert:
+    runtime_event_variable:
+      id: 23
+      value: 10
+- &id008
+  assert:
+    qbit_set:
+    - 1689
+- save_game: native-roundtrip
+- load_game: native-roundtrip
+- *id001
+- *id002
+- *id003
+- *id004
+- *id005
+- *id006
+- *id007
+- *id008

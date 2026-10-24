@@ -1,0 +1,37 @@
+id: atlas.mm8_crystal
+title: Isolated native statue or keyed entrance fixture
+world: mm8
+mode: faithful
+steps:
+- new_game_flow:
+    start_map: out02.odm
+    party:
+      gold: 500
+      food: 10
+      members:
+      - name: Interaction Tester
+        class: Sorcerer
+        level: 1
+        race_id: 0
+        skills:
+        - name: Earth
+          level: 8
+          mastery: 2
+        equipment: {}
+        spells:
+        - 40
+- set_pose:
+    x: 15736
+    y: -9888
+    z: 320
+    yaw: 3.141592653589793
+    pitch: 0
+- setup_shortcut:
+    kind: grant_item
+    item_id: 610
+- save_game: before-interaction
+- load_game: before-interaction
+- assert:
+    runtime_event_variable:
+      id: 39976977
+      value: 1

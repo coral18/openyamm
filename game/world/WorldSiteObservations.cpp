@@ -2,6 +2,8 @@
 
 #include "game/events/EventAttributeInfo.h"
 #include "game/events/EventRuntime.h"
+#include "game/gameplay/GameplayRuntimeInterfaces.h"
+#include "game/world/WorldMapFeatures.h"
 #include "game/party/Party.h"
 
 #include <algorithm>
@@ -39,6 +41,11 @@ WorldSiteObservation readObservation(const EventRuntimeState &state, const std::
         return value->second;
     };
     const auto time = field("time"), changed = field("changed"), seen = field("seen");
+    if (const auto removed = field("object-removed"))
+    {
+        if (*removed != 0 && *removed != 1) result.error = "Invalid recorded object outcome for this site.";
+        else result.objectRemoved = *removed != 0;
+    }
     if (!time || *time < 0 || !changed || (*changed != 0 && *changed != 1) || seen != 1)
         result.error = "Invalid recorded outcome data for this site.";
     else
@@ -110,6 +117,64 @@ WorldSiteValueSnapshot captureWorldSiteValues(const EventRuntimeState &state, co
                     EventRuntime::getVariableValue(state, variable, &party, i)});
     }
     return result;
+}
+
+WorldSiteInteractionObservation::WorldSiteInteractionObservation(IGameplayWorldRuntime &world,
+    const GameplayWorldHit &hit)
+{
+    if (!hit.hasHit || hit.kind != GameplayWorldHitKind::EventTarget
+        || !hit.eventTarget || !hit.eventTarget->contextActionMetadata
+        || hit.eventTarget->contextActionMetadata->hidden) return;
+    const GameplayEventTargetHit &target = *hit.eventTarget;
+    if (target.targetIndex == GameplayInvalidWorldIndex
+        || (target.targetKind == GameplayWorldEventTargetKind::Surface && !world.isIndoorMap()
+            && target.secondaryIndex == GameplayInvalidWorldIndex)) return;
+    m_event = target.targetKind == GameplayWorldEventTargetKind::Surface
+        ? target.triggeredEventId : target.eventIdSecondary;
+    if (target.targetKind == GameplayWorldEventTargetKind::Surface)
+        m_site = world.isIndoorMap() ? "surface/" + std::to_string(target.targetIndex)
+            : "bmodel/" + std::to_string(target.targetIndex) + "/surface/" + std::to_string(target.secondaryIndex);
+    else if (target.targetKind == GameplayWorldEventTargetKind::Entity)
+        m_site = "decoration/" + std::to_string(target.targetIndex);
+    else if (target.targetKind == GameplayWorldEventTargetKind::Decoration
+        && target.sourceEntityIndex != GameplayInvalidWorldIndex)
+        m_site = "decoration/" + std::to_string(target.sourceEntityIndex);
+    EventRuntimeState *pState = world.eventRuntimeState();
+    if (pState == nullptr) return;
+    recordWorldSiteDiscovery(*pState, m_event, m_site);
+    const auto kind = worldMapFeatureKind(target.contextActionMetadata->kind);
+    if (m_event == 0 || m_site.empty() || world.party() == nullptr || !kind
+        || (*kind != WorldMapFeatureKind::Water && *kind != WorldMapFeatureKind::Shrine
+            && *kind != WorldMapFeatureKind::Obelisk && *kind != WorldMapFeatureKind::Decoration)) return;
+    m_before = captureWorldSiteValues(*pState, *world.party());
+    m_map = pState->mapFileName;
+    if (target.contextActionMetadata->interactionReference
+        && target.contextActionMetadata->interactionReference->spriteId == target.eventIdPrimary)
+    {
+        m_sprite = target.contextActionMetadata->interactionReference->spriteId;
+        const auto found = pState->spriteOverrides.find(m_sprite);
+        m_wasHidden = found != pState->spriteOverrides.end() && found->second.hidden;
+    }
+}
+
+void WorldSiteInteractionObservation::finish(IGameplayWorldRuntime &world, bool activated) const
+{
+    if (!activated || !m_before) return;
+    EventRuntimeState *pState = world.eventRuntimeState();
+    const Party *pParty = world.party();
+    if (pState == nullptr || pParty == nullptr || pState->mapFileName != m_map) return;
+    if (!recordWorldSiteObservation(*pState, m_site, m_event, *m_before,
+        captureWorldSiteValues(*pState, *pParty), world.gameMinutes()) || m_sprite == 0) return;
+    const auto found = pState->spriteOverrides.find(m_sprite);
+    const bool removed = !m_wasHidden && found != pState->spriteOverrides.end() && found->second.hidden;
+    const std::string key = prefix(m_site, m_event);
+    if (removed)
+    {
+        pState->namedMapVars[key + "object-removed"] = 1;
+        pState->namedMapVars[key + "changed"] = 1;
+    }
+    else if (!pState->namedMapVars.contains(key + "object-removed"))
+        pState->namedMapVars[key + "object-removed"] = 0;
 }
 
 bool recordWorldSiteObservation(EventRuntimeState &state, const std::string &siteId, uint16_t eventId,
@@ -206,6 +271,7 @@ std::string describeWorldSiteObservation(const WorldSiteObservation &observation
     if (!observation.error.empty()) return observation.error;
     std::string text = "Recorded use: day " + std::to_string(observation.gameMinutes / (24 * 60) + 1) + ".";
     if (!observation.lastChanged) text += " No additional changes recorded.";
+    if (observation.objectRemoved == true) text += "\nObserved object removed after interaction.";
     const auto amount = [](int64_t value)
     {
         return (value > 0 ? "+" : "") + std::to_string(value);

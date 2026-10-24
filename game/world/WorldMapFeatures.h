@@ -2,6 +2,7 @@
 
 #include "game/world/WorldInteractionSites.h"
 #include "game/world/WorldMapKnowledge.h"
+#include "game/events/SiteInteractionReference.h"
 #include <optional>
 #include <string_view>
 #include <unordered_map>
@@ -46,6 +47,7 @@ struct WorldMapFeature
     std::optional<WorldMapArrival> arrival;
     std::vector<uint16_t> relatedEventIds;
     std::unordered_map<uint16_t, std::vector<uint32_t>> relatedAutonotes;
+    std::optional<SiteInteractionReference> interactionReference;
 };
 
 std::vector<WorldMapFeature> buildWorldMapFeatures(const std::string &mapId,

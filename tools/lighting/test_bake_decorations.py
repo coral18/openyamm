@@ -146,6 +146,33 @@ class DecorationBakeTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'Invalid site context metadata overlay'):
                 self.export()
 
+    def test_typed_interaction_references_preserve_shadow_cards_and_dependencies(self):
+        baseline = self.export()
+        metadata = self.world / 'events/maps/test_zz_site_interactions.lua'
+        metadata.write_text('-- Site interaction metadata; load after gameplay overlays\n'
+                            'SetMapInteractionReference(1, {kind = "enter_dungeon", itemId = 610, '
+                            'openedMapFlag = "CrystalOpened", targetMap = "d10.blv"})\n'
+                            'SetMapInteractionReference(2, {kind = "stone_to_flesh", itemId = 339, '
+                            'spellId = 40, npcId = 42, spriteId = 20, consumesItem = true})\n')
+        result = self.export()
+        for key in ('cards', 'counts', 'dependencies'):
+            self.assertEqual(result[key], baseline[key])
+
+    def test_typed_interaction_references_reject_unknown_fields_and_executable_content(self):
+        metadata = self.world / 'events/maps/test_zz_site_interactions.lua'
+        header = '-- Site interaction metadata; load after gameplay overlays\n'
+        declaration = ('SetMapInteractionReference(1, {kind = "enter_dungeon", itemId = 610, '
+                       'openedMapFlag = "CrystalOpened", targetMap = "d10.blv"})')
+        for line in (declaration + '; evt.SetSprite(7, 0)', declaration.replace('610', 'true'),
+                     declaration.replace('610', '1.5'), declaration.replace('610', '2147483648'),
+                     declaration.replace('d10.blv', '../d10.blv'), declaration.replace('610', '0'),
+                     declaration.replace('})', ', typo = 1})'), declaration.replace('610', 'ItemId()'),
+                     declaration.replace('610', '610, itemId = 611'),
+                     declaration.replace('CrystalOpened', 'Crystal/Opened')):
+            metadata.write_text(header + line + '\n')
+            with self.assertRaisesRegex(ValueError, 'Invalid site interaction metadata overlay'):
+                self.export()
+
     def test_site_references_do_not_change_shadow_cards_or_dependencies(self):
         baseline = self.export()
         for suffix, header in [

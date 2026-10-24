@@ -1,0 +1,80 @@
+id: atlas.mm8_spell_native_verify
+title: Native statue observation, items and quest state survive Atlas browsing and
+  save/load
+world: mm8
+mode: faithful
+steps:
+- load_game:
+    name: before
+    path: saves/before.oysav
+- assert:
+    named_map_var_changed:
+      name: openyamm.discovery.site/decoration/1418/event/132
+      value: 0
+- assert:
+    qbit_clear:
+    - 40
+    - 430
+- assert:
+    runtime_event_variable:
+      id: 5
+      member_index: 0
+      value: 21
+- load_game:
+    name: native
+    path: saves/quicksave.oysav
+- &id001
+  assert:
+    named_map_var_changed:
+      name: openyamm.discovery.site/decoration/1418/event/132
+      value: 1
+- &id002
+  assert:
+    named_map_var_changed:
+      name: openyamm.discovery.site-effects.v1/decoration/1418/event/132/seen
+      value: 1
+- &id003
+  assert:
+    named_map_var_changed:
+      name: openyamm.discovery.site-effects.v1/decoration/1418/event/132/object-removed
+      value: 1
+- &id004
+  assert:
+    named_map_var_changed:
+      name: openyamm.discovery.site/decoration/1419/event/133
+      value: 0
+- &id005
+  assert:
+    runtime_event_variable:
+      id: 22216721
+      value: 0
+- &id006
+  assert:
+    runtime_event_variable:
+      id: 21
+      value: 500
+- &id007
+  assert:
+    runtime_event_variable:
+      id: 23
+      value: 10
+- &id008
+  assert:
+    qbit_set:
+    - 40
+    - 430
+- save_game: native-roundtrip
+- load_game: native-roundtrip
+- *id001
+- *id002
+- *id003
+- *id004
+- *id005
+- *id006
+- *id007
+- *id008
+- assert:
+    runtime_event_variable:
+      id: 5
+      member_index: 0
+      value: 11

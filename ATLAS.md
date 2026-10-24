@@ -1888,3 +1888,56 @@ A broader 86-case selection initially hit six unrelated fixture failures: two mi
 four attempts to initialize PhysicsFS while the package-backed regression fixture already owned it. The accepted
 50-case selection covers the affected site/reference systems; this is not a claim that the full suite passed.
 Android/controller validation, special statues/connections and the remaining full-Atlas matrix stay open.
+
+
+### Special rescues, keyed entrances and canonical object discoveries, 2026-10-24
+
+Seventeen callback-owned typed interaction references now cover seven Red Dwarf Mines rescues, five Murmurwoods
+statues, Escaton's Crystal and the four elemental prisons. The mounted maps contain twelve statue sites and
+twenty-two entrance components for these definitions. Item, spell, NPC and destination labels resolve through
+active game tables. Generated EVT alone would describe stale behavior: the active Merge overlays add rescued dwarf
+followers, actual spell targeting and source-map flags that allow already-opened entrances to be reused.
+
+`SetMapInteractionReference` attaches a small validated descriptor to the current handler. Replacement/removal
+invalidates it; explicit context overrides keep precedence. Literal handwritten catalogs live in reserved
+`*_zz_site_interactions.lua` sidecars. The lighting producer validates their fields and syntax before excluding
+these metadata-only declarations from shadow dependencies. No generated gameplay callback, existing map supplement,
+baked-lighting payload/hash or save version changed.
+
+The shared physical-site observer now handles input and Stone to Flesh world casts. It records a declared object's
+actual visible-to-hidden transition in the existing discovery namespace and retains that historical removal after
+later visits. Guide descriptions remain separate: unsuccessful interactions and browsing do not learn a possible
+rescue, item requirement or NPC identity. Existing observed effects keep their previous numeric/condition meanings.
+
+Native validation exposed a separate outdoor identity defect: decoration activation indexes a compact renderer
+list, while Atlas sites index original map entities. `GameplayEventTargetHit::sourceEntityIndex` now carries that
+canonical identity from the world hook. Activation still uses its renderer index. Observation and pointer-release
+matching cannot confuse different entities reusing one renderer slot. Indoor entity identity remains unchanged.
+Unknown source bindings do not fabricate observations; historical records with incorrect indexes are not guessed
+into different objects.
+
+Validation: 58 selected native unit cases / 29,064 assertions passed, including callback ownership/schema errors,
+all seventeen real definitions, physical entity keys, current table names, target connections, discovery privacy,
+observed object transitions and canonical identity. The same inventory/catalog cases were also exported separately:
+two cases / 27,654 assertions passed across all 137 maps. These repeated cases are not additional distinct coverage.
+Sixteen lighting-tool tests and all four strict interaction catalogs passed validation. Windows Release built.
+
+Seven isolated native controls passed with fresh captures inspected: MM7 rescue/refusal, MM8 item rescue/refusal,
+a real Stone to Flesh cast without an item, a locked entrance's Guide/Discovery views and actual keyed dungeon
+entry. Two existing MM7/MM8 drink tours also passed after the shared observer change, with fresh findings captures
+and 24/22-step post-UI save checks. The cast used ordinary spellbook quick-spell assignment and targeting with
+unlimited mana disabled; SP fell from 21 to 11. An additional native cast with Atlas disabled (`Loaded 1 mod`) produced the same Core receipt.
+Eight post-UI verifiers passed 22/22/22/22/24/15/16/24 steps, checking individual object history, untouched neighboring
+objects, quest bits, item retention/consumption, gold/food, actual arrival and source-map unlock persistence through
+save/load. Gate input also passed two actual headless mesh-picking scenarios with and without the key.
+
+Controlled fixture exports and native input tours are retained under `tests/scenarios/atlas/*statue*`,
+`*crystal*` and `tools/menu_tours/atlas_mm{7,8}_*`. Native snapshots/captures are private under
+`atlas-interaction-references-20261023` in the Windows dev directory; its folder date marks the start of this run.
+Restore the matching `tools/screenshot_tours/atlas_mm{7,8}_*pose.yml` before native input, since indoor saves do not
+retain camera pitch.
+The no-item outdoor control uses turn mode to prevent unrelated hostile attacks from ending the test. The spell
+control uses normal real-time casting and a real item-free target; it does not inject an event or spell ID into Lua.
+
+This checkpoint does not complete Atlas content, component grouping, special connection graphs or device coverage.
+Android/controller checks and the remaining feature matrix stay open.

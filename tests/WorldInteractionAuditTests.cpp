@@ -2,6 +2,8 @@
 
 #include "game/data/GameDataLoader.h"
 #include "game/maps/MapAssetLoader.h"
+#include "game/indoor/IndoorMapData.h"
+#include "game/outdoor/OutdoorMapData.h"
 #include "game/world/WorldDatabase.h"
 #include "tests/RegressionMapLoader.h"
 
@@ -67,7 +69,9 @@ TEST_CASE("Atlas campaign interaction inventory reads canonical map programs and
                 << (metadata ? metadata->kind : events.hasEvent(site.eventId) ? "unclassified" : "unregistered")
                 << '\t' << (metadata && metadata->hidden) << '\t' << title << '\t'
                 << site.x << '\t' << site.y << '\t' << site.z << '\t' << indexed << '\t'
-                << events.siteReferences().contains(site.eventId) << '\t' << events.itemRewards().contains(site.eventId)
+                << (events.siteReferences().contains(site.eventId)
+                    || events.interactionReferences().contains(site.eventId))
+                << '\t' << events.itemRewards().contains(site.eventId)
                 << '\t' << events.autonoteReferences().contains(site.eventId) << '\n';
         }
     }
@@ -138,4 +142,90 @@ TEST_CASE("canonical drink sites expose active effects only in Guide and retain 
         CHECK(world.featureVisible(*feature, knowledge, false));
         CHECK(world.siteReference(*feature, knowledge, false).empty());
     }
+}
+
+TEST_CASE("canonical interaction references describe active statue rescues and reusable keyed entrances")
+{
+    using namespace OpenYAMM::Game;
+    REQUIRE_MESSAGE(OpenYAMM::Tests::regressionMapLoaderLoaded(),
+        OpenYAMM::Tests::regressionMapLoaderFailure());
+    const auto &loader = OpenYAMM::Tests::regressionMapLoader();
+    const auto &data = loader.gameDataLoader;
+    const std::pair<std::string, std::string> maps[] = {
+        {"mm7", "7d34.blv"}, {"mm8", "out07.odm"}, {"mm8", "out02.odm"}, {"mm8", "pbp.odm"}};
+    size_t references = 0;
+    for (const auto &[worldId, file] : maps)
+    {
+        CAPTURE(file);
+        const auto &entries = data.getMapStats().getEntries();
+        const auto entry = std::find_if(entries.begin(), entries.end(), [&](const MapStatsEntry &map)
+            { return map.worldId == worldId && map.fileName == file; });
+        REQUIRE(entry != entries.end());
+        auto map = MapAssetLoader().load(loader.assetFileSystem, *entry, data.getMonsterTable(),
+            data.getObjectTable(), MapLoadPurpose::HeadlessGameplay);
+        REQUIRE(map);
+        std::string error;
+        REQUIRE_MESSAGE(GameDataLoader::loadEventPrograms(loader.assetFileSystem, *map, error), error);
+        REQUIRE(map->localEventProgram);
+        const ScriptedEventProgram &events = *map->localEventProgram;
+        WorldDatabase world(data.getMapStats(), data.getHouseTable(), data.getNpcDialogTable(),
+            data.getMergedTeacherTopicTable(), worldId);
+        if (map->outdoorMapData) world.indexMapLocations(*map->outdoorMapData, events);
+        else world.indexMapLocations(*entry, *map->indoorMapData, events);
+        world.indexMapInteractionReferences(*entry, data.getItemTable(), data.getSpellTable());
+        for (const auto &[event, reference] : events.interactionReferences())
+        {
+            CAPTURE(event);
+            ++references;
+            REQUIRE(events.getContextActionMetadata(event));
+            CHECK(events.getContextActionMetadata(event)->kind == reference.kind);
+            size_t sites = 0;
+            for (const WorldMapFeature &feature : world.features())
+            {
+                if (feature.site.eventId != event) continue;
+                ++sites;
+                WorldKnowledge knowledge;
+                knowledge.visitedMaps.insert(file);
+                CHECK_FALSE(world.featureVisible(feature, knowledge, false));
+                CHECK(world.featureVisible(feature, knowledge, true));
+                CHECK(world.siteReference(feature, knowledge, false).empty());
+                const std::string guide(world.siteReference(feature, knowledge, true));
+                REQUIRE_FALSE(guide.empty());
+                CHECK(guide.find(data.getItemTable().get(reference.itemId)->name) != std::string::npos);
+                if (reference.kind == "enter_dungeon")
+                {
+                    CHECK(feature.kind == WorldMapFeatureKind::Connection);
+                    CHECK(feature.targetMap == reference.targetMap);
+                    CHECK(guide.find("reused without the key") != std::string::npos);
+                    CHECK(std::any_of(world.locations().begin(), world.locations().end(),
+                        [&](const WorldMapLocation &location) { return location.eventId == event; }));
+                }
+                else
+                {
+                    CHECK(feature.kind == WorldMapFeatureKind::Decoration);
+                    REQUIRE(feature.site.id.starts_with("decoration/"));
+                    const size_t index = std::stoul(feature.site.id.substr(11));
+                    if (map->outdoorMapData)
+                    {
+                        REQUIRE(index < map->outdoorMapData->entities.size());
+                        CHECK(map->outdoorMapData->entities[index].eventIdPrimary == reference.spriteId);
+                    }
+                    else
+                    {
+                        REQUIRE(index < map->indoorMapData->entities.size());
+                        CHECK(map->indoorMapData->entities[index].eventIdPrimary == reference.spriteId);
+                    }
+                    CHECK(guide.find(data.getNpcDialogTable().getNpc(reference.npcId)->name) != std::string::npos);
+                    if (reference.spellId != 0)
+                        CHECK(guide.find(data.getSpellTable().findById(int(reference.spellId))->name)
+                            != std::string::npos);
+                }
+                knowledge.interactedSites[file].insert(worldSiteDiscoveryKey(event, feature.site.id));
+                CHECK(world.featureVisible(feature, knowledge, false));
+                CHECK(world.siteReference(feature, knowledge, false).empty());
+            }
+            CHECK(sites > 0);
+        }
+    }
+    CHECK(references == 17);
 }

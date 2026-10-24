@@ -1558,6 +1558,7 @@ static GameplayEventTargetContextActionMetadata toGameplayContextActionMetadata(
     gameplayMetadata.targetName = metadata.targetName;
     gameplayMetadata.chestIds = metadata.chestIds;
     gameplayMetadata.hidden = metadata.hidden;
+    gameplayMetadata.interactionReference = metadata.interactionReference;
     return gameplayMetadata;
 }
 

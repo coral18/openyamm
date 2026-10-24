@@ -1505,3 +1505,48 @@ TEST_CASE("drink reference export handles condition application and personal use
     CHECK(program->getContextActionMetadata(1)->kind == "drink");
     CHECK(program->getContextActionMetadata(4)->kind == "drink");
 }
+
+TEST_CASE("typed interaction references bind active callbacks and validate semantic fields")
+{
+    using namespace OpenYAMM::Game;
+    const auto bytes = readBinaryFixture(std::filesystem::path(OPENYAMM_SOURCE_DIR)
+        / "assets_dev/engine/scripts/common/event_support.lua");
+    const std::string support(bytes.begin(), bytes.end());
+    const auto load = [&](const std::string &code)
+    {
+        std::string error;
+        return ScriptedEventProgram::loadFromLuaText(support + code, "interaction-reference",
+            ScriptedEventScope::Map, error);
+    };
+    const std::string handler = "RegisterEvent(1, 'Door', function() error('must not execute') end)\n";
+    const std::string definition = "SetMapInteractionReference(1, {kind = 'enter_dungeon', itemId = 610, "
+        "openedMapFlag = 'CrystalOpened', targetMap = 'd10.blv'})\n";
+    auto program = load(handler + definition);
+    REQUIRE(program);
+    REQUIRE(program->interactionReferences().contains(1));
+    CHECK(program->interactionReferences().at(1).itemId == 610);
+    REQUIRE(program->getContextActionMetadata(1));
+    CHECK(program->getContextActionMetadata(1)->kind == "enter_dungeon");
+    CHECK(program->getContextActionMetadata(1)->targetMap == "d10.blv");
+    for (const char *pReplacement : {"evt.map[1] = nil", "evt.map[1] = function() end",
+        "ReplaceMapEvent(1, '', function() end)", "SetMapInteractionReference(1, nil)"})
+    {
+        program = load(handler + definition + pReplacement);
+        REQUIRE(program);
+        CHECK(program->interactionReferences().empty());
+    }
+    CHECK_FALSE(load(definition));
+    for (const char *pFields : {"kind = 'enter_dungeon', itemId = 610, targetMap = 'd10.blv'",
+        "kind = 'enter_dungeon', itemId = true, openedMapFlag = 'Opened', targetMap = 'd10.blv'",
+        "kind = 'enter_dungeon', itemId = 1.5, openedMapFlag = 'Opened', targetMap = 'd10.blv'",
+        "kind = 'enter_dungeon', itemId = 610, openedMapFlag = 'Opened', targetMap = '../d10.blv'",
+        "kind = 'enter_dungeon', itemId = 610, openedMapFlag = 'Opened/', targetMap = 'd10.blv'",
+        "kind = 'enter_dungeon', itemId = 610, openedMapFlag = 'Opened', targetMap = 'd10.blv', typo = 1",
+        "kind = 'stone_to_flesh', itemId = 339, npcId = 42, spriteId = 20",
+        "kind = 'rescue', itemId = 1431, npcId = 400, spriteId = 1, completionQBit = 0"})
+        CHECK_FALSE(load(handler + "SetMapInteractionReference(1, {" + pFields + "})"));
+    program = load(handler + definition + "SetMapContextAction(1, {kind = 'well', source = 'script'})");
+    REQUIRE(program);
+    CHECK(program->getContextActionMetadata(1)->kind == "well");
+    CHECK_FALSE(program->getContextActionMetadata(1)->targetMap);
+}

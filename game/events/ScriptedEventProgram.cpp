@@ -592,6 +592,120 @@ bool readSiteReferences(lua_State *pLuaState, int metadataIndex, ScriptedEventSc
     return true;
 }
 
+bool readInteractionReferences(lua_State *pLuaState, int metadataIndex, ScriptedEventScope scope,
+    std::unordered_map<uint16_t, SiteInteractionReference> &result, std::string &error)
+{
+    const int stackTop = lua_gettop(pLuaState);
+    const auto fail = [&]()
+    {
+        error = "Invalid interactionReferences metadata: expected a callback-owned typed reference";
+        lua_settop(pLuaState, stackTop);
+        return false;
+    };
+    lua_getfield(pLuaState, metadataIndex, "interactionReferences");
+    if (lua_isnil(pLuaState, -1))
+    {
+        lua_pop(pLuaState, 1);
+        return true;
+    }
+    if (scope != ScriptedEventScope::Map || !lua_istable(pLuaState, -1)) return fail();
+    lua_pushnil(pLuaState);
+    while (lua_next(pLuaState, -2) != 0)
+    {
+        if (!lua_isinteger(pLuaState, -2) || lua_tointeger(pLuaState, -2) <= 0
+            || lua_tointeger(pLuaState, -2) > UINT16_MAX || !lua_istable(pLuaState, -1)) return fail();
+        const uint16_t eventId = uint16_t(lua_tointeger(pLuaState, -2));
+        lua_getfield(pLuaState, -1, "handler");
+        lua_getglobal(pLuaState, "evt");
+        lua_getfield(pLuaState, -1, "map");
+        lua_rawgeti(pLuaState, -1, eventId);
+        const bool ownsHandler = lua_isfunction(pLuaState, -4) && lua_rawequal(pLuaState, -1, -4);
+        lua_pop(pLuaState, 4);
+        if (ownsHandler)
+        {
+            lua_getfield(pLuaState, -1, "reference");
+            if (lua_isnil(pLuaState, -1))
+            {
+                lua_pop(pLuaState, 2);
+                continue;
+            }
+            if (!lua_istable(pLuaState, -1)) return fail();
+            SiteInteractionReference reference;
+            bool valid = true;
+            lua_pushnil(pLuaState);
+            while (lua_next(pLuaState, -2) != 0)
+            {
+                if (lua_type(pLuaState, -2) != LUA_TSTRING) return fail();
+                size_t size = 0;
+                const char *pKey = lua_tolstring(pLuaState, -2, &size);
+                const std::string_view key(pKey, size);
+                uint32_t *pNumber = key == "itemId" ? &reference.itemId : key == "spellId" ? &reference.spellId
+                    : key == "npcId" ? &reference.npcId : key == "spriteId" ? &reference.spriteId
+                    : key == "completionQBit" ? &reference.completionQBit : nullptr;
+                if (pNumber != nullptr)
+                {
+                    if (!lua_isinteger(pLuaState, -1) || lua_tointeger(pLuaState, -1) <= 0
+                        || lua_tointeger(pLuaState, -1) > INT32_MAX) return fail();
+                    *pNumber = uint32_t(lua_tointeger(pLuaState, -1));
+                }
+                else if (key == "consumesItem" || key == "addsFollower")
+                {
+                    if (!lua_isboolean(pLuaState, -1)) return fail();
+                    (key == "consumesItem" ? reference.consumesItem : reference.addsFollower)
+                        = lua_toboolean(pLuaState, -1);
+                }
+                else if (key == "kind" || key == "openedMapFlag" || key == "targetMap")
+                {
+                    if (lua_type(pLuaState, -1) != LUA_TSTRING) return fail();
+                    const char *pValue = lua_tolstring(pLuaState, -1, &size);
+                    if (size == 0 || size > 128 || std::string_view(pValue, size).find('\0') != std::string_view::npos)
+                        return fail();
+                    std::string &value = key == "kind" ? reference.kind
+                        : key == "openedMapFlag" ? reference.openedMapFlag : reference.targetMap;
+                    value.assign(pValue, size);
+                }
+                else return fail();
+                lua_pop(pLuaState, 1);
+            }
+            if (!reference.openedMapFlag.empty())
+                for (char character : reference.openedMapFlag)
+                    valid = valid && ((character >= 'a' && character <= 'z')
+                        || (character >= 'A' && character <= 'Z') || (character >= '0' && character <= '9')
+                        || character == '_');
+            if (!reference.targetMap.empty())
+            {
+                valid = valid && reference.targetMap.size() > 4
+                    && (reference.targetMap.ends_with(".blv") || reference.targetMap.ends_with(".odm"));
+                for (size_t index = 0; index + 4 < reference.targetMap.size(); ++index)
+                {
+                    char &character = reference.targetMap[index];
+                    valid = valid && ((character >= 'a' && character <= 'z')
+                        || (character >= 'A' && character <= 'Z') || (character >= '0' && character <= '9')
+                        || character == '_' || character == '-');
+                    if (character >= 'A' && character <= 'Z') character += 'a' - 'A';
+                }
+            }
+            if (reference.kind == "enter_dungeon")
+                valid = valid && reference.itemId > 0 && !reference.targetMap.empty()
+                    && !reference.openedMapFlag.empty() && reference.npcId == 0 && reference.spriteId == 0
+                    && reference.spellId == 0 && reference.completionQBit == 0
+                    && !reference.consumesItem && !reference.addsFollower;
+            else if (reference.kind == "rescue" || reference.kind == "stone_to_flesh")
+                valid = valid && reference.itemId > 0 && reference.npcId > 0 && reference.spriteId > 0
+                    && reference.targetMap.empty() && reference.openedMapFlag.empty()
+                    && (reference.kind == "rescue" ? reference.completionQBit > 0 && reference.spellId == 0
+                        : reference.spellId > 0 && reference.completionQBit == 0 && !reference.addsFollower);
+            else valid = false;
+            if (!valid) return fail();
+            result.emplace(eventId, std::move(reference));
+            lua_pop(pLuaState, 1);
+        }
+        lua_pop(pLuaState, 1);
+    }
+    lua_pop(pLuaState, 1);
+    return true;
+}
+
 bool readIdReferences(lua_State *pLuaState, int metadataIndex, ScriptedEventScope scope,
     const char *pField, const char *pValues, uint32_t maximumId,
     std::unordered_map<uint16_t, std::vector<uint32_t>> &result, std::string &error)
@@ -778,6 +892,8 @@ bool ScriptedEventProgram::populateMetadataFromLua(
     if (!readSiteReferences(pLuaState, lua_absindex(pLuaState, -1), scope,
         program.m_siteReferences, program.m_siteReferenceKinds, error))
         return false;
+    if (!readInteractionReferences(pLuaState, lua_absindex(pLuaState, -1), scope,
+        program.m_interactionReferences, error)) return false;
     program.m_textureNames = readStringArrayFromField(pLuaState, -1, "textureNames");
     program.m_spriteNames = readStringArrayFromField(pLuaState, -1, "spriteNames");
     program.m_castSpellIds = readIntegerArrayFromField<uint32_t>(pLuaState, -1, "castSpellIds");
@@ -796,6 +912,11 @@ bool ScriptedEventProgram::populateMetadataFromLua(
 const std::unordered_map<uint16_t, std::vector<uint32_t>> &ScriptedEventProgram::itemRewards() const
 {
     return m_itemRewards;
+}
+
+const std::unordered_map<uint16_t, SiteInteractionReference> &ScriptedEventProgram::interactionReferences() const
+{
+    return m_interactionReferences;
 }
 
 const std::unordered_map<uint16_t, std::string> &ScriptedEventProgram::siteReferences() const
@@ -973,6 +1094,19 @@ std::optional<ScriptedEventProgram::ContextActionMetadata> ScriptedEventProgram:
         if (!metadata) metadata.emplace();
         metadata->kind = kind->second;
         metadata->source = "reference";
+    }
+    if (const auto reference = m_interactionReferences.find(eventId); reference != m_interactionReferences.end())
+    {
+        const bool inferContext = !metadata || metadata->source == "title"
+            || (metadata->kind == "generic_event" && metadata->source != "script" && metadata->source != "override");
+        if (!metadata) metadata.emplace();
+        metadata->interactionReference = reference->second;
+        if (inferContext)
+        {
+            metadata->kind = reference->second.kind;
+            metadata->source = "script";
+            if (!reference->second.targetMap.empty()) metadata->targetMap = reference->second.targetMap;
+        }
     }
     return metadata;
 }

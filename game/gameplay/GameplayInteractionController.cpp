@@ -219,6 +219,7 @@ std::string contextActionIconIdFromMetadataKind(const std::string &kind, Gamepla
         return contextActionIconId(fallbackKind);
     }
     if (kind == "drink") return "context_well";
+    if (kind == "rescue") return contextActionIconId(fallbackKind);
 
     return "context_" + kind;
 }
@@ -745,45 +746,9 @@ bool tryActivateWorldHit(
 
     if (hit.kind == GameplayWorldHitKind::Actor && hit.actor)
         recordWorldActorObservation(*pWorldRuntime, hit.actor->actorIndex);
-    std::optional<WorldSiteValueSnapshot> before;
-    std::string observedMap, observedSite;
-    uint16_t observedEvent = 0;
-    if (hit.eventTarget && hit.eventTarget->contextActionMetadata && !hit.eventTarget->contextActionMetadata->hidden)
-    {
-        const GameplayEventTargetHit &target = *hit.eventTarget;
-        const uint16_t eventId = target.targetKind == GameplayWorldEventTargetKind::Surface
-            ? target.triggeredEventId : target.eventIdSecondary;
-        std::string siteId;
-        if (target.targetKind == GameplayWorldEventTargetKind::Surface)
-            siteId = pWorldRuntime->isIndoorMap() ? "surface/" + std::to_string(target.targetIndex)
-                : "bmodel/" + std::to_string(target.targetIndex) + "/surface/" + std::to_string(target.secondaryIndex);
-        else if (target.targetKind == GameplayWorldEventTargetKind::Entity
-                 || target.targetKind == GameplayWorldEventTargetKind::Decoration)
-            siteId = "decoration/" + std::to_string(target.targetIndex);
-        if (EventRuntimeState *pState = pWorldRuntime->eventRuntimeState())
-        {
-            recordWorldSiteDiscovery(*pState, eventId, siteId);
-            const auto kind = worldMapFeatureKind(target.contextActionMetadata->kind);
-            if (eventId != 0 && !siteId.empty() && pWorldRuntime->party() != nullptr && kind
-                && (*kind == WorldMapFeatureKind::Water || *kind == WorldMapFeatureKind::Shrine
-                    || *kind == WorldMapFeatureKind::Obelisk))
-            {
-                before = captureWorldSiteValues(*pState, *pWorldRuntime->party());
-                observedMap = pState->mapFileName;
-                observedSite = siteId;
-                observedEvent = eventId;
-            }
-        }
-    }
+    const WorldSiteInteractionObservation observation(*pWorldRuntime, hit);
     const bool activated = pWorldRuntime->activateWorldHit(hit);
-    if (activated && before)
-    {
-        EventRuntimeState *pState = pWorldRuntime->eventRuntimeState();
-        const Party *pParty = pWorldRuntime->party();
-        if (pState != nullptr && pParty != nullptr && pState->mapFileName == observedMap)
-            recordWorldSiteObservation(*pState, observedSite, observedEvent, *before,
-                captureWorldSiteValues(*pState, *pParty), pWorldRuntime->gameMinutes());
-    }
+    observation.finish(*pWorldRuntime, activated);
     return activated;
 }
 
@@ -2079,13 +2044,7 @@ bool GameplayInteractionController::isSameActivationTarget(
     {
         return lhs.eventTarget.has_value()
             && rhs.eventTarget.has_value()
-            && lhs.eventTarget->targetKind == rhs.eventTarget->targetKind
-            && lhs.eventTarget->targetIndex == rhs.eventTarget->targetIndex
-            && lhs.eventTarget->secondaryIndex == rhs.eventTarget->secondaryIndex
-            && lhs.eventTarget->eventIdPrimary == rhs.eventTarget->eventIdPrimary
-            && lhs.eventTarget->eventIdSecondary == rhs.eventTarget->eventIdSecondary
-            && lhs.eventTarget->triggeredEventId == rhs.eventTarget->triggeredEventId
-            && lhs.eventTarget->specialTrigger == rhs.eventTarget->specialTrigger;
+            && lhs.eventTarget->isSameTarget(*rhs.eventTarget);
     }
 
     if (lhs.kind == GameplayWorldHitKind::Object)
