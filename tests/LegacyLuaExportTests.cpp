@@ -1725,3 +1725,197 @@ TEST_CASE("connection target export retains both real Barrow lever routes instea
         CHECK(state.mapVars[2] == setting);
     }
 }
+
+
+namespace
+{
+struct ConnectionReferenceFixture
+{
+    std::vector<uint8_t> bytes;
+    OpenYAMM::Game::LegacyLuaExportLookups lookups;
+
+    ConnectionReferenceFixture()
+    {
+        lookups.sourceMapFile = "source.blv";
+        lookups.mapNamesByFile = {{"a.blv", "First destination"}, {"b.blv", "Second destination"}};
+        lookups.questNotes[519] = "The council has recognized the party.";
+        lookups.itemNames[619] = "Pirate Leader's Key";
+    }
+    void append(uint8_t step, OpenYAMM::Game::EvtOpcode opcode, const std::vector<uint8_t> &payload)
+    {
+        bytes.insert(bytes.end(), {uint8_t(4 + payload.size()), 10, 0, step, uint8_t(opcode)});
+        bytes.insert(bytes.end(), payload.begin(), payload.end());
+    }
+    void move(uint8_t step, const std::string &file)
+    {
+        std::vector<uint8_t> payload(26);
+        payload.insert(payload.end(), file.begin(), file.end());
+        payload.push_back(0);
+        append(step, OpenYAMM::Game::EvtOpcode::MoveToMap, payload);
+    }
+    std::optional<OpenYAMM::Game::ScriptedEventProgram> program(bool realCallbacks = false) const
+    {
+        using namespace OpenYAMM::Game;
+        EvtProgram legacy;
+        REQUIRE(legacy.loadFromBytes(bytes));
+        const auto support = readBinaryFixture(std::filesystem::path(OPENYAMM_SOURCE_DIR)
+            / "assets_dev/engine/scripts/common/event_support.lua");
+        const std::string reference = generateLegacyEventSiteRefsLuaChunk(legacy, {}, lookups,
+            LegacyLuaExportScope::Map, LegacyEventVersion::Mm7);
+        std::string error;
+        const std::string callbacks = realCallbacks
+            ? generateLegacyEventLuaChunk(legacy, {}, lookups, LegacyLuaExportScope::Map, LegacyEventVersion::Mm7)
+            : "evt.map[10] = function() error('Metadata must not execute travel') end\n";
+        const auto result = ScriptedEventProgram::loadFromLuaText(std::string(support.begin(), support.end())
+            + callbacks + reference,
+            "@connection-requirements", ScriptedEventScope::Map, error);
+        REQUIRE_MESSAGE(result, error);
+        return result;
+    }
+};
+}
+
+TEST_CASE("connection requirement references retain complete positive and negative paths and inventory scope")
+{
+    using namespace OpenYAMM::Game;
+    for (bool allMembers : {false, true})
+    {
+        ConnectionReferenceFixture f;
+        f.append(0, EvtOpcode::ForPartyMember, {uint8_t(allMembers ? 5 : 4)});
+        f.append(1, EvtOpcode::Compare, {0x10, 0, 7, 2, 0, 0, 5}); // QBit 519.
+        f.move(2, "a.blv");
+        f.append(3, EvtOpcode::Exit, {});
+        f.append(5, EvtOpcode::Compare, {0x11, 0, 0x6b, 2, 0, 0, 8}); // Item 619.
+        f.move(6, "a.blv");
+        f.append(7, EvtOpcode::Exit, {});
+        f.move(8, "b.blv");
+        f.append(9, EvtOpcode::Exit, {});
+        const auto program = f.program();
+        REQUIRE(program->siteReferences().contains(10));
+        const std::string &text = program->siteReferences().at(10);
+        CHECK(text.find("Destination: First destination") != std::string::npos);
+        CHECK(text.find("Destination: Second destination") != std::string::npos);
+        CHECK(text.find("Campaign record absent: The council has recognized the party.") != std::string::npos);
+        CHECK(text.find("Campaign record present: The council has recognized the party.") != std::string::npos);
+        CHECK(text.find(allMembers ? "A party member carries: Pirate Leader's Key"
+            : "Selected character carries: Pirate Leader's Key") != std::string::npos);
+        CHECK(text.find(allMembers ? "No party member carries: Pirate Leader's Key"
+            : "Selected character does not carry: Pirate Leader's Key") != std::string::npos);
+        CHECK(text.find("not current availability") != std::string::npos);
+        CHECK(text.find("Other gameplay effects are not listed") != std::string::npos);
+        CHECK(text.find("QBit") == std::string::npos);
+        CHECK(text.find("a.blv") == std::string::npos);
+        CHECK(text.find("Any one of these alternatives:") != std::string::npos);
+        EventRuntime runtime;
+        const auto executable = f.program(true);
+        for (bool quest : {false, true})
+            for (bool item : {false, true})
+            {
+                Party::Snapshot seed;
+                seed.members.resize(2);
+                Party party;
+                party.restoreSnapshot(seed);
+                REQUIRE(party.memberCount() == 2);
+                party.setQuestBit(519, quest);
+                if (item)
+                {
+                    InventoryItem key;
+                    key.objectDescriptionId = 619;
+                    REQUIRE(party.member(1)->addInventoryItem(key));
+                }
+                EventRuntimeState state;
+                state.mapFileName = "source.blv";
+                REQUIRE(runtime.executeEventById(executable, std::nullopt, 10, state, &party));
+                REQUIRE(state.pendingMapMove);
+                REQUIRE(state.pendingMapMove->mapName);
+                CHECK(*state.pendingMapMove->mapName == (quest && item && allMembers ? "b.blv" : "a.blv"));
+                CHECK(party.hasQuestBit(519) == quest);
+            }
+    }
+}
+
+TEST_CASE("connection requirement references reject incomplete or state-dependent path explanations")
+{
+    using namespace OpenYAMM::Game;
+    for (const std::string variation : {"unknown predicate", "mutated before predicate", "cycle", "unmapped target",
+        "missing quest text", "unknown action", "unconditional", "two moves"})
+    {
+        ConnectionReferenceFixture f;
+        const bool mutated = variation == "mutated before predicate";
+        if (mutated) f.append(0, EvtOpcode::Set, {0x10, 0, 7, 2, 0, 0});
+        const uint8_t selector = variation == "unknown predicate" ? 0x7d : 0x10; // Unlabelled map state.
+        if (variation != "unconditional")
+            f.append(1, EvtOpcode::Compare, {selector, 0, 7, 2, 0, 0, 5});
+        if (variation == "unknown action") f.append(2, EvtOpcode::CastSpell, std::vector<uint8_t>(22));
+        f.move(3, "a.blv");
+        f.append(4, EvtOpcode::Exit, {});
+        if (variation == "cycle") f.append(5, EvtOpcode::Jmp, {5});
+        else f.move(5, variation == "unmapped target" ? "missing.blv" : "b.blv");
+        if (variation == "two moves") f.move(6, "a.blv");
+        f.append(7, EvtOpcode::Exit, {});
+        if (variation == "missing quest text") f.lookups.questNotes.clear();
+        const auto program = f.program();
+        CHECK_MESSAGE(program->siteReferences().empty(), variation);
+        CHECK_FALSE(program->connectionTargets().empty());
+    }
+}
+
+
+TEST_CASE("connection references omit entry bookkeeping and prune contradictory repeated predicates")
+{
+    using namespace OpenYAMM::Game;
+    ConnectionReferenceFixture f;
+    f.append(0, EvtOpcode::Compare, {0x10, 0, 7, 2, 0, 0, 4});
+    f.append(1, EvtOpcode::Set, {0x10, 0, 7, 2, 0, 0});
+    f.move(2, "a.blv");
+    f.append(3, EvtOpcode::Exit, {});
+    f.move(4, "a.blv");
+    f.append(5, EvtOpcode::Exit, {});
+    CHECK(f.program()->siteReferences().empty());
+    f.bytes.clear();
+    f.append(0, EvtOpcode::Compare, {0x10, 0, 7, 2, 0, 0, 4});
+    f.append(1, EvtOpcode::Exit, {});
+    f.append(4, EvtOpcode::Compare, {0x10, 0, 7, 2, 0, 0, 7});
+    f.move(5, "b.blv"); // Unreachable: requires the same quest bit both set and unset.
+    f.append(6, EvtOpcode::Exit, {});
+    f.move(7, "a.blv");
+    f.append(8, EvtOpcode::Exit, {});
+    const auto program = f.program();
+    REQUIRE(program->siteReferences().contains(10));
+    CHECK(program->siteReferences().at(10).find("Second destination") == std::string::npos);
+    CHECK(program->siteReferences().at(10).find("First destination") != std::string::npos);
+}
+
+TEST_CASE("connection requirement references describe exact gold boundaries and remapped campaign records")
+{
+    using namespace OpenYAMM::Game;
+    ConnectionReferenceFixture f;
+    f.append(0, EvtOpcode::Compare, {0x15, 0, 100, 0, 0, 0, 3});
+    f.append(1, EvtOpcode::Exit, {});
+    f.move(3, "a.blv");
+    f.append(4, EvtOpcode::Exit, {});
+    const auto program = f.program(true);
+    REQUIRE(program->siteReferences().contains(10));
+    CHECK(program->siteReferences().at(10).find("Party gold at least 100") != std::string::npos);
+    EventRuntime runtime;
+    for (int gold : {99, 100})
+    {
+        Party::Snapshot seed;
+        seed.members.resize(1);
+        seed.gold = gold;
+        Party party;
+        party.restoreSnapshot(seed);
+        EventRuntimeState state;
+        REQUIRE(runtime.executeEventById(program, std::nullopt, 10, state, &party));
+        CHECK(state.pendingMapMove.has_value() == (gold == 100));
+        CHECK(party.gold() == gold);
+    }
+    f.bytes.clear();
+    f.lookups.qbitRemaps[99] = 519;
+    f.append(0, EvtOpcode::Compare, {0x10, 0, 99, 0, 0, 0, 3});
+    f.append(1, EvtOpcode::Exit, {});
+    f.move(3, "a.blv");
+    f.append(4, EvtOpcode::Exit, {});
+    REQUIRE(f.program()->siteReferences().contains(10));
+    CHECK(f.program()->siteReferences().at(10).find("The council has recognized the party.") != std::string::npos);
+}

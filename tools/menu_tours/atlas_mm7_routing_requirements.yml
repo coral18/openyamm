@@ -1,0 +1,60 @@
+output_dir: captures
+exit: true
+steps:
+- expect: gameplay
+- key: F9
+- pause: true
+- click:
+  - 800
+  - 821
+- click:
+  - 1152
+  - 57
+- click:
+  - 180
+  - 190
+- click:
+  - 920
+  - 126
+- click:
+  - 275
+  - 126
+- text: The Hall of the Pit
+- key: Return
+- capture: guide-map-result
+- click:
+  - 1250
+  - 260
+- click:
+  - 1480
+  - 126
+- click:
+  - 275
+  - 126
+- text: Enter the Pit
+- key: Return
+- capture: guide-source-list
+- click:
+  - 1250
+  - 260
+- capture: guide-source-details
+- click:
+  - 1100
+  - 806
+- capture: route-requirements
+- click:
+  - 1152
+  - 57
+- capture: discovery-no-requirements
+- click:
+  - 450
+  - 57
+- click:
+  - 1450
+  - 57
+- expect: pause
+- click:
+  - 800
+  - 301
+- expect: gameplay
+- key: F9

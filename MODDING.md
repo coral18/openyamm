@@ -570,3 +570,25 @@ Guide indexes one map program per frame while Connections is open. This metadata
 failure state; it neither marks the separate item-source scan complete nor loads remote dungeon geometry. The
 view currently represents one world. Cross-world gate navigation remains in the existing gate/arrival details.
 Possible routes do not evaluate current lever/quest eligibility, and viewing them never writes discoveries.
+
+### Exported routing requirements
+
+The site-reference export pass derives Guide-only routing requirements for complete supported callbacks. It reuses
+`SetMapSiteReference` and its callback ownership/invalidation, rather than running Lua or adding an Atlas state copy.
+Supported predicates are canonical QBit records with nonblank quest text, current/all-member item checks with known
+item names, and party/banked-gold thresholds. Source-world names and remapped campaign records come from exporter
+lookups; unknown labels are not replaced by raw IDs. All-member inventory means an item on any party member;
+current-member inventory is explicitly described as selected-character inventory.
+
+The analysis follows both conditional branches and explicit jumps. It prunes repeated contradictory predicates,
+groups equivalent landing paths as alternatives and omits entry flags when every path reaches the identical
+landing. It preserves full move parameters when grouping, so two different landings in one map remain distinct.
+A state mutation followed by another predicate, cycles, random/unsupported control flow, multiple moves on one
+path or any unsupported action/predicate suppress the entire reference. No partial requirement list is presented
+as complete. Other gameplay effects are deliberately outside this routing reference and remain governed by the
+actual callback. It is not a live eligibility evaluator or a forecast for remote map state.
+
+Generate these catalogs with `tools/regenerate_lua_events.sh --site-refs-only`. Do not edit generated Lua by hand.
+The existing strict literal metadata validator and 16 KiB text limit apply. Controller/lever states and handwritten
+Lua callbacks still need explicit or exporter-supported semantics; a first destination is never substituted for
+an unsupported conditional analysis.

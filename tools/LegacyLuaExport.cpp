@@ -13119,6 +13119,173 @@ std::string generateLegacyEventAutonoteRefsLuaChunk(
 
 namespace
 {
+// These are requirements of complete supported paths, never a live availability query.
+std::optional<std::string> connectionRequirement(const LegacyLuaInstruction &instruction,
+    const LegacyLuaExportLookups &lookups, EvtPartySelector player, bool success)
+{
+    if (instruction.arguments.size() != 2) return std::nullopt;
+    const FormattedSelector selector = formatSelector(instruction.arguments[0], lookups.qbitRemaps);
+    const uint32_t value = instruction.arguments[1];
+    if (selector.semantic == SelectorSemantic::QBit && selectorValueMatches(selector, value))
+    {
+        const auto note = lookupText(lookups.questNotes, selector.index);
+        if (!note || *note == "0") return std::nullopt;
+        return std::string(success ? "Campaign record present: " : "Campaign record absent: ") + *note;
+    }
+    if (selector.semantic == SelectorSemantic::InventoryItem && selectorValueMatches(selector, value))
+    {
+        const auto item = lookupText(lookups.itemNames, selector.index);
+        if (!item) return std::nullopt;
+        if (player == EvtPartySelector::All)
+            return std::string(success ? "A party member carries: " : "No party member carries: ") + *item;
+        if (player == EvtPartySelector::Current)
+            return std::string(success ? "Selected character carries: " : "Selected character does not carry: ")
+                + *item;
+        return std::nullopt;
+    }
+    // Keep character selectors out until their member/quantifier semantics can be described exactly.
+    if (selector.semantic != SelectorSemantic::FixedGold && selector.semantic != SelectorSemantic::BankGold)
+        return std::nullopt;
+    const auto label = siteNumericLabel(selector);
+    if (!label || int32_t(value) < 0) return std::nullopt;
+    return *label + (success ? " at least " : " below ") + std::to_string(value);
+}
+
+std::optional<std::string> buildConnectionReference(const LegacyLuaEvent &event,
+    const LegacyLuaExportLookups &lookups)
+{
+    std::vector<uint8_t> steps = collectNormalEventSteps(event);
+    for (const LegacyLuaInstruction &instruction : event.instructions)
+        if (instruction.operation == LegacyLuaOperation::Unknown) steps.push_back(instruction.step);
+    sortAndUnique(steps);
+    if (steps.empty()) return std::nullopt;
+    struct Path
+    {
+        std::vector<std::string> requirements;
+        std::vector<uint8_t> visited;
+        std::string destination, destinationFile;
+        std::vector<uint32_t> landing;
+        std::map<std::string, bool> predicates;
+        EvtPartySelector player = EvtPartySelector::Current;
+        bool mutated = false;
+    };
+    std::vector<Path> routes;
+    bool hasBlockedPath = false;
+    size_t visits = 0;
+    std::function<bool(std::optional<uint8_t>, Path)> walk;
+    walk = [&](std::optional<uint8_t> step, Path path)
+    {
+        if (++visits > 4096 || routes.size() >= 64) return false;
+        if (!step)
+        {
+            if (!path.destination.empty()) routes.push_back(std::move(path));
+            else hasBlockedPath = true;
+            return true;
+        }
+        if (std::find(steps.begin(), steps.end(), *step) == steps.end()
+            || std::find(path.visited.begin(), path.visited.end(), *step) != path.visited.end()) return false;
+        path.visited.push_back(*step);
+        NormalStepInfo info;
+        if (!decomposeNormalStep(event, *step, info)) return false;
+        for (const LegacyLuaInstruction &instruction : event.instructions)
+            if (instruction.step == *step && instruction.operation == LegacyLuaOperation::Unknown) return false;
+        for (const LegacyLuaInstruction *pAction : info.actions)
+        {
+            switch (pAction->operation)
+            {
+                case LegacyLuaOperation::MoveToMap:
+                {
+                    if (!pAction->text || pAction->arguments.size() != 8 || !path.destination.empty()) return false;
+                    const auto name = lookups.mapNamesByFile.find(toLowerCopy(*pAction->text));
+                    if (name == lookups.mapNamesByFile.end() || name->second.empty()) return false;
+                    path.destination = name->second;
+                    path.destinationFile = name->first;
+                    path.landing = pAction->arguments;
+                    break;
+                }
+                case LegacyLuaOperation::ForPartyMember:
+                    if (pAction->arguments.size() != 1) return false;
+                    path.player = EvtPartySelector(pAction->arguments[0]);
+                    if (path.player != EvtPartySelector::All && path.player != EvtPartySelector::Current) return false;
+                    break;
+                case LegacyLuaOperation::Add:
+                case LegacyLuaOperation::Subtract:
+                case LegacyLuaOperation::Set:
+                    // Mutations may add other effects, but a subsequent predicate is no longer an entry condition.
+                    if (pAction->arguments.size() != 2) return false;
+                    path.mutated = true;
+                    break;
+                case LegacyLuaOperation::StatusText:
+                case LegacyLuaOperation::ShowFace:
+                case LegacyLuaOperation::PlaySound:
+                    break;
+                default:
+                    return false;
+            }
+        }
+        if (!info.terminalInstruction) return walk(nextStepAfter(steps, *step), std::move(path));
+        const LegacyLuaInstruction &terminal = *info.terminalInstruction;
+        if (terminal.operation == LegacyLuaOperation::Exit) return walk(std::nullopt, std::move(path));
+        if (terminal.operation == LegacyLuaOperation::Jump && terminal.jumpTargetStep)
+            return walk(terminal.jumpTargetStep, std::move(path));
+        if (terminal.operation != LegacyLuaOperation::Compare || !terminal.jumpTargetStep || path.mutated
+            || !path.destination.empty()) return false;
+        const auto positive = connectionRequirement(terminal, lookups, path.player, true);
+        const auto negative = connectionRequirement(terminal, lookups, path.player, false);
+        if (!positive || !negative) return false;
+        const std::string predicate = std::to_string(terminal.arguments[0]) + "/"
+            + std::to_string(terminal.arguments[1]) + "/" + std::to_string(uint8_t(path.player));
+        if (const auto previous = path.predicates.find(predicate); previous != path.predicates.end())
+        {
+            const std::optional<uint8_t> next = previous->second
+                ? terminal.jumpTargetStep : nextStepAfter(steps, *step);
+            return walk(next, std::move(path));
+        }
+        Path matched = path;
+        matched.predicates.emplace(predicate, true);
+        matched.requirements.push_back(*positive);
+        path.predicates.emplace(predicate, false);
+        path.requirements.push_back(*negative);
+        return walk(terminal.jumpTargetStep, std::move(matched))
+            && walk(nextStepAfter(steps, *step), std::move(path));
+    };
+    if (!walk(steps.front(), {}) || routes.empty()
+        || std::none_of(routes.begin(), routes.end(), [](const Path &path) { return !path.requirements.empty(); }))
+        return std::nullopt;
+    const auto sameLanding = [](const Path &a, const Path &b)
+    {
+        return a.destinationFile == b.destinationFile && a.landing == b.landing;
+    };
+    // Flags set on first entry do not restrict a route that every complete path reaches identically.
+    if (!hasBlockedPath && std::all_of(routes.begin(), routes.end(), [&](const Path &route)
+        { return sameLanding(routes.front(), route); })) return std::nullopt;
+    std::string text = "Routing requirements from this interaction. These describe possible paths, not current "
+        "availability. Other gameplay effects are not listed.";
+    std::vector<bool> included(routes.size(), false);
+    for (size_t index = 0; index < routes.size(); ++index)
+    {
+        if (included[index]) continue;
+        std::vector<const Path *> alternatives;
+        for (size_t other = index; other < routes.size(); ++other)
+            if (sameLanding(routes[index], routes[other]))
+            {
+                included[other] = true;
+                alternatives.push_back(&routes[other]);
+            }
+        text += "\n\nDestination: " + routes[index].destination;
+        if (alternatives.size() > 1) text += "\nAny one of these alternatives:";
+        for (size_t alternative = 0; alternative < alternatives.size(); ++alternative)
+        {
+            if (alternatives.size() > 1) text += "\nAlternative " + std::to_string(alternative + 1);
+            text += "\nRequirements (all):";
+            if (alternatives[alternative]->requirements.empty()) text += "\n- No branch requirement";
+            for (const std::string &requirement : alternatives[alternative]->requirements)
+                text += "\n- " + requirement;
+        }
+    }
+    return text.size() <= 16384 ? std::optional<std::string>(text) : std::nullopt;
+}
+
 void emitConnectionTargetMetadata(std::ostringstream &stream, const LegacyLuaEvent &event)
 {
     // Read possible destinations from reachable instructions; never execute callbacks or predict eligibility.
@@ -13151,7 +13318,12 @@ std::string generateLegacyEventSiteRefsLuaChunk(
     {
         const LegacyLuaEvent direct =
             directEventWithoutSyntheticTriggerContinuations(events[i], evtProgram.getEvents()[i]);
-        if (scope == LegacyLuaExportScope::Map) emitConnectionTargetMetadata(metadata, direct);
+        if (scope == LegacyLuaExportScope::Map)
+        {
+            emitConnectionTargetMetadata(metadata, direct);
+            if (const auto reference = buildConnectionReference(direct, lookups))
+                metadata << "SetMapSiteReference(" << direct.eventId << ", " << luaQuoted(*reference) << ")\n";
+        }
         const auto action = contextActionMetadataForEvent(evtProgram.getEvents()[i], strTable, lookups);
         if (scope == LegacyLuaExportScope::Map && (!action || action->hidden
             || (action->kind != "well" && action->kind != "fountain" && action->kind != "shrine"

@@ -4,3 +4,4 @@ SetMapSiteReference(460, "Effects apply to the selected character unless the eff
 SetMapConnectionTargets(501, {"7d14.blv"})
 SetMapConnectionTargets(502, {"7d34.blv"})
 SetMapConnectionTargets(503, {"7d25.blv"})
+SetMapSiteReference(503, "Routing requirements from this interaction. These describe possible paths, not current availability. Other gameplay effects are not listed.\n\nDestination: Celeste\nAny one of these alternatives:\nAlternative 1\nRequirements (all):\n- Campaign record present: Chose the path of Light\nAlternative 2\nRequirements (all):\n- Campaign record absent: Chose the path of Light\n- Campaign record present: Chose the path of Dark")

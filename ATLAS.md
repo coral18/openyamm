@@ -2166,3 +2166,50 @@ against its fresh quicksave. Private evidence is under `atlas-graphs-20261024` i
 This completes the initial graph presentation, not the full Atlas objective. Current-condition explanations,
 remaining handwritten/conditional Gate and entrance references, complex floor separation, six unresolved well
 bindings, the remaining quest/service/item matrix, localization and Android/controller validation remain open.
+
+
+### Script-derived routing requirements, 2026-10-24
+
+Guide's existing Read details panel now explains selected conditional passages using site references generated
+from the actual legacy event control flow. It follows both comparison branches and explicit jumps, retaining
+positive and negative campaign records, current/all-member item ownership and party/banked-gold thresholds.
+Repeated contradictory predicates are pruned. Paths to an identical landing are grouped as alternatives, while
+flags that merely record first entry are omitted when every path reaches the same landing. Landing identity
+includes the full move parameters, not just the destination map's display name.
+
+Nine current base declarations are exported: five shared MM6 references, three MM7 references (Harmondale's
+altar, Celeste and The Pit) and the MM8 Plane Between Planes flute passage. They reuse callback-owned
+`SetMapSiteReference`; overlays replacing the callback invalidate the base explanation. Names and QBit remaps
+come from the current exporter lookups. Generated Lua was regenerated, not manually edited. No gameplay callback,
+geometry, save format or party knowledge was changed to supply these references.
+
+The analysis requires every reachable path to be supported. Unknown predicates/actions, cycles, multiple moves
+on one path, missing labels and comparisons after state mutation suppress the whole explanation. A requirement
+list is a description of the interaction's routing branches, not a live eligibility check, and explicitly excludes
+other gameplay effects. Raw event/quest IDs and unlabelled local variables are not substituted into player text.
+Lever/local-state routing, random paths, other predicate families and handwritten Lua remain open work.
+
+Validation for this checkpoint:
+
+- The Windows exporter compiled and regenerated the catalogs. All 191 generated map sidecars passed the strict
+  literal metadata validator, and the Python lighting suite passed 20 tests. The Windows Release runtime overlay
+  was refreshed with no game process running.
+- 31 selected Windows unit cases passed 6,969 assertions. New cases cover positive/negative paths, alternative
+  grouping, contradictory predicates, first-entry bookkeeping, unsupported paths, a gold threshold's exact boundary,
+  canonical QBit remaps and actual execution with the required item on a different party member. Mounted MM7/MM8
+  geometry-backed passage references remain Guide-only even after their physical sites are discovered.
+- Two native Windows AMD/OpenGL tours passed with fresh captures inspected. The Pit shows its Light/Dark
+  alternatives; the MM8 giant's-sword passage shows the selected character's Flute requirement. Returning to
+  Discovery hides the unvisited source/reference and does not convert Guide browsing into exploration.
+- Faithful post-UI scenarios passed 33 MM7 and 28 MM8 steps, retaining actual current maps, canonical arrival history,
+  gold 500 / food 10 / spell points 21 through save/load. Unvisited source/destination discovery bits remain clear;
+  MM7 Light/Dark bits remain clear, along with the previous source lever/face and MM8 pirate-key invariants.
+
+Reproduction files are `tools/menu_tours/atlas_mm{7,8}_routing_requirements.yml` and
+`tests/scenarios/atlas/mm{7,8}_routing_requirements_verify.yml`. Use the same before-UI saves as the graph
+checkpoint (MM7 Barrow IX and MM8 Pirate Outpost), with only the menu input tour enabled. The tours navigate from
+the continent overview to the Guide source; they never travel there. Private evidence is under
+`atlas-requirements-20261024` in the Windows development root.
+
+This adds initial routing explanations. It does not complete current eligibility, lever-state explanations,
+handwritten references, the full Atlas content matrix, localization or Android/controller validation.

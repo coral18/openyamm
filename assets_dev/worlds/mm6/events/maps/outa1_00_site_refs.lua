@@ -1,3 +1,4 @@
 -- generated site references from legacy EVT/STR; load after the base handlers
 SetMapConnectionTargets(90, {"hive.blv"})
+SetMapSiteReference(90, "Routing requirements from this interaction. These describe possible paths, not current availability. Other gameplay effects are not listed.\n\nDestination: The Hive\nRequirements (all):\n- Campaign record absent: NPC")
 SetMapSiteReference(102, "Effects apply to the selected character unless the effect concerns party resources.\nHealth and spell point gains stop at their maximum; attribute increases use the game's normal limits.\n\nOutcome 1:\nSet Temporary Might to 50\nSet Temporary Intellect to 50\nSet Temporary Personality to 50\nSet Temporary Endurance to 50\nSet Temporary Speed to 50\nSet Temporary Accuracy to 50\nSet Temporary Luck to 50\nRequirements (all):\n- Temporary Might below 50")

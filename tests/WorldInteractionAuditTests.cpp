@@ -380,3 +380,55 @@ TEST_CASE("connection target inventory resolves every active MM6 MM7 MM8 declara
     CHECK(connections > maps);
     CHECK(multiple > 10);
 }
+
+TEST_CASE("canonical connection requirement references stay Guide-only after discovering their physical sites")
+{
+    using namespace OpenYAMM::Game;
+    REQUIRE_MESSAGE(OpenYAMM::Tests::regressionMapLoaderLoaded(),
+        OpenYAMM::Tests::regressionMapLoaderFailure());
+    const auto &loader = OpenYAMM::Tests::regressionMapLoader();
+    const auto &data = loader.gameDataLoader;
+    struct Route
+    {
+        const char *pWorld;
+        const char *pMap;
+        uint16_t event;
+        const char *pRequirement;
+    };
+    const Route routes[] = {
+        {"mm7", "t04.blv", 502, "Any one of these alternatives:"},
+        {"mm8", "pbp.odm", 507, "Selected character carries: Flute"}};
+    for (const Route &route : routes)
+    {
+        CAPTURE(route.pWorld);
+        CAPTURE(route.pMap);
+        const auto &entries = data.getMapStats().getEntries();
+        const auto entry = std::find_if(entries.begin(), entries.end(), [&](const MapStatsEntry &map)
+            { return map.worldId == route.pWorld && map.fileName == route.pMap; });
+        REQUIRE(entry != entries.end());
+        auto map = MapAssetLoader().load(loader.assetFileSystem, *entry, data.getMonsterTable(),
+            data.getObjectTable(), MapLoadPurpose::HeadlessGameplay);
+        REQUIRE(map);
+        std::string error;
+        REQUIRE_MESSAGE(GameDataLoader::loadEventPrograms(loader.assetFileSystem, *map, error), error);
+        REQUIRE(map->localEventProgram);
+        WorldDatabase world(data.getMapStats(), data.getHouseTable(), data.getNpcDialogTable(),
+            data.getMergedTeacherTopicTable(), route.pWorld);
+        if (map->outdoorMapData) world.indexMapLocations(*map->outdoorMapData, *map->localEventProgram);
+        else world.indexMapLocations(*entry, *map->indoorMapData, *map->localEventProgram);
+        const auto feature = std::find_if(world.features().begin(), world.features().end(),
+            [&](const WorldMapFeature &value) { return value.site.eventId == route.event; });
+        REQUIRE(feature != world.features().end());
+        CHECK(feature->kind == WorldMapFeatureKind::Connection);
+        WorldKnowledge knowledge;
+        knowledge.visitedMaps.insert(route.pMap);
+        CHECK(world.siteReference(*feature, knowledge, true).find(route.pRequirement) != std::string::npos);
+        CHECK(world.siteReference(*feature, knowledge, false).empty());
+        CHECK(knowledge.interactedSites.empty());
+        CHECK(knowledge.variables.empty());
+        knowledge.interactedSites[route.pMap].insert(worldSiteDiscoveryKey(route.event, feature->site.id));
+        CHECK(world.featureVisible(*feature, knowledge, false));
+        CHECK(world.siteReference(*feature, knowledge, false).empty());
+        CHECK(knowledge.visitedMaps.size() == 1);
+    }
+}

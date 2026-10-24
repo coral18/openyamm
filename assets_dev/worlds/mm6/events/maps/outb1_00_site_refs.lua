@@ -1,5 +1,6 @@
 -- generated site references from legacy EVT/STR; load after the base handlers
 SetMapConnectionTargets(90, {"6t7.blv"})
+SetMapSiteReference(90, "Routing requirements from this interaction. These describe possible paths, not current availability. Other gameplay effects are not listed.\n\nDestination: Superior Temple of Baa\nRequirements (all):\n- A party member carries: Cloak of Baa")
 SetMapConnectionTargets(91, {"6d19.blv"})
 SetMapConnectionTargets(92, {"6d20.blv"})
 SetMapConnectionTargets(93, {"cd3.blv"})
