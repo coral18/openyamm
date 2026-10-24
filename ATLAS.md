@@ -2117,3 +2117,52 @@ Evidence stays private under `atlas-connections-20261024` in the Windows develop
 This completes the conditional destination-data correction and native choice navigation, not the full Atlas
 objective or dungeon graph presentation. Barrows/Regna graph views, current-condition explanations/eligibility,
 remaining handwritten connection declarations, the full content matrix, localization and device checks stay open.
+
+
+### Native dungeon connection graphs, 2026-10-24
+
+The map header now opens a native Connections view backed by the shared World Database. It derives directed
+source/event/destination edges from active callback-owned connection declarations and canonical actual-arrival
+history. Discovery shows only actual journeys, even when a different possible destination was visited by another
+route. Guide adds dashed possibilities; solid arrows retain observed travel dates. Replacing/removing declarations
+does not erase independently observed trips, and an arrow never asserts a return route or current availability.
+
+The graph expands connected indoor maps and stops at outdoor boundary nodes. Focus reroots at the selected node,
+including an outdoor endpoint when its adjacent network is wanted. The Barrows catalog contains all fifteen
+barrows, Zokarr's Tomb and the Barrow Downs (17 nodes); focusing Regna exposes an eight-node local network including
+the submarine/Pirate Outpost route. These are derived from active programs, not hardcoded graph map lists.
+Cross-world Gate navigation remains in the existing offer/arrival details, outside this local-world graph.
+
+Nodes and incident routes have separate pagination. Selecting a node emphasizes its routes, with subdued unrelated
+edges and separate lanes for parallel/opposite directions. Routes can be searched and open either endpoint's map
+plan. Departure navigation selects genuine local connection sites and retains the selected conditional destination,
+including Barrow X rather than silently resetting to Barrow IX. Unrelated inherited objects sharing a callback ID
+are excluded. Multiple genuine source sites remain selectable; missing source geometry is not replaced by invented
+coordinates. Destination navigation highlights an actual arrival when the selected trip has one.
+
+The Guide connection scan reads one map event program per frame while the view is open. It does not load remote
+dungeon geometry or falsely complete the independent item-source scan; failures leave an explicit partial catalog.
+The graph adds no save namespace/version and browsing it changes neither knowledge nor gameplay state.
+
+Validation for this checkpoint:
+
+- Windows Release compiled and linked successfully. Four focused graph unit cases passed 638 assertions, including
+  active MM7/MM8 program indexing without map geometry, Barrows/Regna topology, directional/outdoor boundaries,
+  malformed ownership, Discovery privacy and replacement/removal without erasing observed history.
+- Two native Windows AMD/OpenGL tours passed with fresh screenshots inspected. They cover Discovery's two-node
+  actual journey, Guide's 17-node Barrows network, Regna Focus/eight nodes/route page two, source/destination plans,
+  the untravelled Barrow X branch retained in source details and returning to Discovery after Guide browsing.
+- Faithful post-UI scenarios passed 25 MM7 and 24 MM8 steps. They compare unvisited destination discovery bits
+  before/after browsing, preserve the actual current map and canonical arrival, reject raw-alias/fabricated trips,
+  and retain gold 500, food 10 and spell points 21 through another save/load. Source-face discoveries, the unchanged
+  Barrow lever and clear pirate-key QBit 214 also survive. All settings, saves and captures are isolated.
+
+Reproduction uses `tools/menu_tours/atlas_mm7_barrow_graph.yml`, `atlas_mm8_regna_graph.yml` and
+`tests/scenarios/atlas/mm7_barrow_graph_verify.yml`, `mm8_regna_graph_verify.yml`. Start from the accepted native
+journey quicksaves produced by `atlas_mm7_barrow_a.yml` and `atlas_mm8_regna.yml`, copied to `saves/before.oysav`.
+Launch directly from that save with only the graph input tour (no pose/screenshot tour), then run the verifier
+against its fresh quicksave. Private evidence is under `atlas-graphs-20261024` in the Windows development root.
+
+This completes the initial graph presentation, not the full Atlas objective. Current-condition explanations,
+remaining handwritten/conditional Gate and entrance references, complex floor separation, six unresolved well
+bindings, the remaining quest/service/item matrix, localization and Android/controller validation remain open.

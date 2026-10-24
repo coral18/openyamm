@@ -31,6 +31,8 @@ private:
     void selectWorld(const std::string &worldId);
     std::string regionTexture(const WorldRecord &record) const;
     void drawMap();
+    void drawConnectionGraph();
+    void stepConnectionScan();
     void drawTravelLinks(const Rect &image);
     void indexKnownRegions();
     void indexMapData(MapAssetInfo &map);
@@ -95,6 +97,14 @@ private:
     std::string m_noteError;
     bool m_noteEditorOpen = false, m_placingNote = false;
     bool m_featureView = false;
+    bool m_connectionView = false, m_connectionCatalogComplete = false;
+    std::vector<const MapStatsEntry *> m_connectionScanMaps;
+    size_t m_connectionScanIndex = 0, m_connectionScanFailures = 0;
+    size_t m_graphPage = 0, m_graphEdgePage = 0;
+    std::string m_graphNode, m_graphEdge;
+    uint16_t m_connectionJumpEvent = 0;
+    std::string m_connectionJumpMap;
+    std::string m_connectionJumpDestination;
     std::string m_selectedFeature;
     std::string m_connectionContext;
     size_t m_connectionChoice = 0;

@@ -32,6 +32,7 @@ add_library(openyamm_game STATIC
     world/WorldInteractionSites.cpp
     world/WorldMapFeatures.cpp
     world/WorldGateCatalog.cpp
+    world/WorldConnectionGraph.cpp
     world/WorldMapKnowledge.cpp
     world/WorldSiteObservations.cpp
     world/WorldNpcKnowledge.cpp
@@ -41,6 +42,7 @@ add_library(openyamm_game STATIC
     world/WorldItemSources.cpp
     gameplay/MapEncounterDefinition.cpp
     ui/screens/AtlasScreen.cpp
+    ui/screens/AtlasConnections.cpp
     app/GameSession.cpp
     audio/GameAudioSystem.cpp
     tables/ChestTable.cpp

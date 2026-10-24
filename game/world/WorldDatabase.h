@@ -4,6 +4,7 @@
 #include "game/world/WorldFloorPlan.h"
 #include "game/world/WorldMapExploration.h"
 #include "game/world/WorldMapFeatures.h"
+#include "game/world/WorldConnectionGraph.h"
 #include "game/world/WorldMonsterKnowledge.h"
 #include "game/world/WorldMapNotes.h"
 #include "game/world/WorldSiteObservations.h"
@@ -154,6 +155,8 @@ public:
         const WorldKnowledge &knowledge, bool guide) const;
     const std::vector<WorldMapLocation> &locations() const;
     const std::vector<WorldMapFeature> &features() const;
+    void indexMapConnections(const MapStatsEntry &map, const ScriptedEventProgram &events);
+    const std::vector<WorldConnection> &connections() const;
     const MapStatsEntry *mapDefinition(const std::string &canonicalId) const;
     std::vector<WorldGateChoice> gateDestinations(const WorldMapFeature &feature, const WorldKnowledge &knowledge,
         const WorldGateCatalog &gates, const Party *pParty, bool guide) const;
@@ -208,6 +211,7 @@ private:
     std::unordered_map<std::string, size_t> m_byId;
     std::vector<WorldMapLocation> m_locations;
     std::vector<WorldMapFeature> m_features;
+    std::vector<WorldConnection> m_connections;
     std::vector<WorldItemSource> m_itemSources;
     const MapStats *m_pMaps = nullptr;
     const HouseTable *m_pHouses = nullptr;

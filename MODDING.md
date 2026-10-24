@@ -547,3 +547,26 @@ The group becomes known when an actual component is explored/interacted with; ob
 component keys. Reused events outside the declared group, unknown maps and Guide-only descriptions stay separate.
 Existing face discoveries therefore work without save migration. Four authored MM8 elemental prison groups are
 the initial content; other multipart entrances still require a geometry/content audit.
+
+### Derived dungeon connection graphs
+
+`WorldDatabase::indexMapConnections` reads the active callback-owned `SetMapConnectionTargets` catalog without
+loading map geometry. Reindexing replaces that source map's declarations transactionally. Canonical destinations
+must resolve in the source world. No separate Atlas map list or new saved graph namespace is required.
+
+`buildWorldConnectionGraph` combines these Guide-only possibilities with independently recorded actual journeys.
+Discovery uses actual journeys only, including when other possible destinations were visited by another route.
+Replaced declarations do not erase travel history. Arrows preserve direction, event-distinct passages stay separate,
+and a trip never implies a return path. Canonical source/owner identity and visited endpoints are required for
+observations; legacy filename owners are resolved only inside the current world's catalog.
+
+Indoor neighbors expand the cluster; outdoor endpoints bound it. The root expands once even when outdoors, so
+focusing an outdoor node can expose its adjacent dungeon network without recursively expanding the whole world.
+The native Connections view pages nodes/routes, highlights the selected node's routes and opens either endpoint's
+plan. Departure navigation preserves the chosen branch and selects the genuine local connection components;
+it does not guess coordinates or select an unrelated inherited object that happens to share the event number.
+
+Guide indexes one map program per frame while Connections is open. This metadata scan has its own completion and
+failure state; it neither marks the separate item-source scan complete nor loads remote dungeon geometry. The
+view currently represents one world. Cross-world gate navigation remains in the existing gate/arrival details.
+Possible routes do not evaluate current lever/quest eligibility, and viewing them never writes discoveries.

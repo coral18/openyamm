@@ -399,6 +399,11 @@ void AtlasScreen::rebuildWorld()
     m_sourceMaps.clear(); m_sourceScanIndex = 0;
     m_sourceScanActive = m_sourcesComplete = false;
     m_sourceScanFailures = 0;
+    m_connectionScanMaps.clear();
+    m_connectionScanIndex = m_connectionScanFailures = 0;
+    m_connectionCatalogComplete = false;
+    m_graphNode.clear(); m_graphEdge.clear();
+    m_graphPage = m_graphEdgePage = 0;
     m_indexedMaps.clear();
     m_floorPlanKey.clear();
 }
@@ -429,6 +434,9 @@ void AtlasScreen::selectWorld(const std::string &worldId)
         m_referenceScroll = m_referenceDetailScroll = 0;
         m_sourceMaps.clear(); m_sourceScanIndex = 0;
         m_sourceScanActive = m_sourcesComplete = false;
+        m_connectionView = m_connectionCatalogComplete = false;
+        m_connectionScanMaps.clear(); m_connectionScanIndex = m_connectionScanFailures = 0;
+        m_graphNode.clear(); m_graphEdge.clear(); m_graphPage = m_graphEdgePage = 0;
         m_sourceScanFailures = 0;
         m_presentation = std::move(presentation);
         if (m_pGlobalEvents != nullptr) m_world.indexNpcLocations(*m_pGlobalEvents);
@@ -509,6 +517,7 @@ void AtlasScreen::drawScreen(float)
         || (!m_suppressEscape && !m_searchEditing && keyPressed(SDL_SCANCODE_ESCAPE)))
     {
         if (m_siteReading) m_siteReading.reset();
+        else if (m_connectionView) m_connectionView = false;
         else m_close();
         return;
     }
@@ -534,7 +543,8 @@ void AtlasScreen::drawScreen(float)
         m_searchEditing = true;
         setTextEditing(true);
     }
-    textInRect(canvasRect(35, 57, 253, 20), m_search.empty() ? (m_guide ? "Search the world..." : "Search discovered places...") : m_search + (m_searchEditing ? "_" : ""),
+    textInRect(canvasRect(35, 57, 253, 20), m_search.empty() ? (m_connectionView ? "Search these connections..."
+        : m_guide ? "Search the world..." : "Search discovered places...") : m_search + (m_searchEditing ? "_" : ""),
         "menu_lucida", 11);
     const std::pair<const char *, std::optional<WorldRecordKind>> filters[] = {
         {"All", {}}, {"Regions", WorldRecordKind::Region}, {"Dungeons", WorldRecordKind::Dungeon},
@@ -546,6 +556,7 @@ void AtlasScreen::drawScreen(float)
         if (button("atlas-filter-" + std::to_string(i), rect, i == 7 ? "Sites" : filters[i].first,
                    "button", true, i == 7 ? m_featureView : !m_featureView && m_filter == filters[i].second))
         {
+            m_connectionView = false;
             m_featureView = i == 7;
             m_filter = i == 7 ? std::nullopt : filters[i].second;
             m_selectedFeature.clear();
@@ -558,6 +569,7 @@ void AtlasScreen::drawScreen(float)
     }
     if (button("atlas-world", canvasRect(25, 89, 132, 25), m_presentation.name, "button", true, m_map.empty()))
     {
+        m_connectionView = false;
         m_map.clear();
         m_selected.clear();
         m_selectedFeature.clear();
@@ -567,20 +579,46 @@ void AtlasScreen::drawScreen(float)
     }
     if (const auto *map = m_world.find(m_map))
     {
-        textInRect(canvasRect(168, 89, 403, 25), map->name(), "fondamento", 14);
-        if (m_featureView)
-            textInRect(canvasRect(375, 94, 195, 16),
-                       "C Chests W Water S Shrines O Obelisks P Passages M Monsters N Notes I Items D Objects",
-                       "menu_lucida", 7, 0xffc6dfeau);
-        else if (map->kind == WorldRecordKind::Region)
-            textInRect(canvasRect(375, 94, 195, 16), m_filter == WorldRecordKind::Travel
-                ? "C Coaches   B Boats" : "B Buildings   T Trainers   D Dungeons",
-                       "menu_lucida", 8, 0xffc6dfeau);
+        textInRect(canvasRect(168, 89, 265, 25), map->name(), "fondamento", 14);
+        if (button("atlas-connections", canvasRect(445, 89, 125, 25),
+            m_connectionView ? "Map plan" : "Connections"))
+        {
+            m_connectionView = !m_connectionView;
+            m_placingNote = false;
+            m_graphNode = m_map; m_graphEdge.clear(); m_graphPage = m_graphEdgePage = 0;
+        }
     }
+    else m_connectionView = false;
     if (m_map.empty() && m_filter == WorldRecordKind::Travel)
         textInRect(canvasRect(168, 89, 403, 25),
             "Walk: solid   Coach: dashed   Boat: dotted   |   Arrows show direction", "menu_lucida", 9);
     indexKnownRegions();
+    if (m_connectionJumpEvent != 0)
+    {
+        bool matched = false;
+        if (m_map == m_connectionJumpMap)
+        {
+            m_siteSelection.clear();
+            for (const WorldMapFeature &feature : m_world.features())
+                if (feature.mapId == m_map && feature.site.eventId == m_connectionJumpEvent
+                    && feature.kind == WorldMapFeatureKind::Connection
+                    && !feature.site.id.starts_with("inherited-decoration/")
+                    && m_world.featureVisible(feature, m_knowledge, m_guide))
+                {
+                    matched = true;
+                    m_siteSelection.insert(feature.id);
+                    if (m_selectedFeature.empty()) m_selectedFeature = feature.id;
+                }
+        }
+        if (!matched) m_connectionJumpDestination.clear();
+        m_connectionJumpEvent = 0;
+        m_connectionJumpMap.clear();
+    }
+    if (m_connectionView)
+    {
+        drawConnectionGraph();
+        return;
+    }
     const std::string listHeading = !m_siteSelection.empty() ? "Clear selection"
         : m_filter == WorldRecordKind::Travel ? (m_guide ? "All recorded routes" : "Known routes")
         : m_map.empty() ? (m_guide ? "All recorded locations" : "Your party's discoveries")
@@ -624,6 +662,7 @@ void AtlasScreen::indexMapData(MapAssetInfo &map)
     std::string error;
     if (!GameDataLoader::loadEventPrograms(assetFileSystem(), map, error) || !map.localEventProgram)
         throw std::runtime_error(error.empty() ? "Missing event metadata" : error);
+    m_world.indexMapConnections(map.map, *map.localEventProgram);
     const auto &observations = m_knowledge.monsterObservations[toLowerCopy(map.map.fileName)];
     if (map.outdoorMapData)
     {
@@ -667,7 +706,7 @@ void AtlasScreen::indexKnownRegions()
     std::vector<const MapStatsEntry *> maps;
     for (const WorldRecord &record : m_world.records())
         if ((record.kind == WorldRecordKind::Region
-            || (record.kind == WorldRecordKind::Dungeon && record.id == m_map))
+            || (record.kind == WorldRecordKind::Dungeon && !m_connectionView && record.id == m_map))
             && m_world.visible(record, m_knowledge, m_guide)
             && m_indexedMaps.insert(record.id).second)
             maps.push_back(record.map);
@@ -1926,6 +1965,19 @@ void AtlasScreen::drawDetails()
                             { return WorldDatabase::mapId(*pMap) == pArrival->mapId; });
                 });
                 arrivalCount = gates.size() + declared.size() + additionalArrivals.size();
+                if (!m_connectionJumpDestination.empty())
+                {
+                    size_t index = 0;
+                    const auto choose = [&](const std::string &mapId)
+                    {
+                        if (mapId == m_connectionJumpDestination) m_connectionChoice = index;
+                        ++index;
+                    };
+                    for (const WorldGateChoice &choice : gates) choose(choice.pLanding->mapId);
+                    for (const MapStatsEntry *pMap : declared) choose(WorldDatabase::mapId(*pMap));
+                    for (const WorldMapFeature *pArrival : additionalArrivals) choose(pArrival->mapId);
+                    m_connectionJumpDestination.clear();
+                }
                 if (arrivalCount != 0) m_connectionChoice %= arrivalCount;
                 if (m_connectionChoice < gates.size())
                 {
@@ -1940,7 +1992,7 @@ void AtlasScreen::drawDetails()
                 else if (m_connectionChoice < gates.size() + declared.size())
                 {
                     pConnectedMap = declared[m_connectionChoice - gates.size()];
-                    text += "\nAuthored possibility: " + pConnectedMap->name + ". Conditions may apply.";
+                    text += "\nPossible destination: " + pConnectedMap->name + ". Conditions may apply.";
                     const auto arrival = std::find_if(arrivals.begin(), arrivals.end(),
                         [&](const WorldMapFeature *pValue)
                         { return pValue->mapId == WorldDatabase::mapId(*pConnectedMap); });
