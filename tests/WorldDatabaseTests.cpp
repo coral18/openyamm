@@ -6,6 +6,7 @@
 #include "game/tables/JournalQuestTable.h"
 #include "game/tables/JournalAutonoteTable.h"
 #include "game/world/WorldAtlasPresentation.h"
+#include "game/world/WorldFloorPlan.h"
 #include "engine/TextTable.h"
 #include <filesystem>
 #include <cstdlib>
@@ -2039,4 +2040,66 @@ TEST_CASE("site observations belong to canonical maps even when worlds share fil
     CHECK(first.siteObservations(feature, knowledge).size() == 1);
     feature.site.eventId = 224;
     CHECK(first.siteObservations(feature, knowledge).empty());
+}
+
+TEST_CASE("explicit passage components share one entry without sharing discovery with reused event sites")
+{
+    Fixture fixture;
+    WorldDatabase world = fixture.database();
+    std::string error;
+    const auto program = ScriptedEventProgram::loadFromLuaText(R"lua(
+        evt.map[10] = function() error('must not execute') end
+        evt.meta.map.hint = {[10] = 'Entrance'}
+        evt.meta.map.contextActions = {[10] = {kind = 'enter_dungeon', source = 'opcode', targetMap = '7d21.blv'}}
+        evt.meta.map.siteGroups = {[10] = {handler = evt.map[10], groups = {{'surface/0', 'surface/1'}}}}
+    )lua", "@passage-components", ScriptedEventScope::Map, error);
+    REQUIRE_MESSAGE(program, error);
+    IndoorMapData geometry;
+    geometry.vertices = {{0, 0, 0}, {10, 0, 0}, {0, 10, 0},
+        {100, 100, 1024}, {110, 100, 1024}, {100, 110, 1024},
+        {200, 200, 0}, {210, 200, 0}, {200, 210, 0}};
+    geometry.faces.resize(3);
+    for (size_t index = 0; index < 3; ++index)
+    {
+        geometry.faces[index].cogTriggered = 10;
+        geometry.faces[index].vertexIndices = {uint16_t(index * 3), uint16_t(index * 3 + 1), uint16_t(index * 3 + 2)};
+    }
+    const MapStatsEntry &map = *fixture.maps.findById(95);
+    world.indexMapLocations(map, geometry, *program);
+    REQUIRE(world.features().size() == 2);
+    const WorldMapFeature &group = world.features().front();
+    REQUIRE(group.components.size() == 2);
+    CHECK(group.site.id == "surface/0");
+    CHECK(group.components[1].id == "surface/1");
+    CHECK(worldMapFeatureOnFloorLayer(group, worldFloorPlanLayer(0)));
+    CHECK(worldMapFeatureOnFloorLayer(group, worldFloorPlanLayer(1024)));
+    CHECK_FALSE(worldMapFeatureOnFloorLayer(group, worldFloorPlanLayer(4096)));
+    WorldKnowledge knowledge;
+    knowledge.visitedMaps.insert("7d21.blv");
+    CHECK(world.queryFeatures(knowledge, false).empty());
+    CHECK(world.queryFeatures(knowledge, true).size() == 2);
+    EventRuntimeState state;
+    recordWorldSiteDiscovery(state, 10, "surface/1");
+    knowledge.interactedSites["7d21.blv"].insert(state.namedMapVars.begin()->first);
+    auto known = world.queryFeatures(knowledge, false);
+    REQUIRE(known.size() == 1);
+    CHECK(known.front()->id == group.id);
+    CHECK_FALSE(world.featureVisible(world.features().back(), knowledge, false));
+    WorldSiteValueSnapshot values{{"Hero"}, {{"Gold", std::nullopt, 0}}};
+    REQUIRE(recordWorldSiteObservation(state, "surface/1", 10, values, values, 1));
+    REQUIRE(recordWorldSiteObservation(state, "surface/2", 10, values, values, 2));
+    knowledge.siteObservations[group.mapId] = worldSiteObservations(state);
+    REQUIRE(world.siteObservations(group, knowledge).size() == 1);
+    CHECK(world.siteObservations(group, knowledge).front()->siteId == "surface/1");
+    CHECK(knowledge.interactedSites.at("7d21.blv").size() == 1);
+    knowledge.interactedSites.clear();
+    knowledge.floorPlans["7d21.blv"].faceAttributes = {0, faceAttributeBit(FaceAttribute::SeenByParty), 0};
+    CHECK(world.featureVisible(group, knowledge, false));
+    CHECK_FALSE(world.featureVisible(world.features().back(), knowledge, false));
+    knowledge.floorPlans["7d21.blv"].invisibleFaces.insert(1);
+    CHECK_FALSE(world.featureVisible(group, knowledge, false));
+    world.indexMapLocations(map, geometry, *program);
+    CHECK(world.features().size() == 2);
+    geometry.faces[1].cogTriggered = 11;
+    CHECK_THROWS_AS(world.indexMapLocations(map, geometry, *program), std::invalid_argument);
 }

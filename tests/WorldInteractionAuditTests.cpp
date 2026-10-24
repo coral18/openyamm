@@ -64,7 +64,7 @@ TEST_CASE("Atlas campaign interaction inventory reads canonical map programs and
             std::replace(title.begin(), title.end(), '\n', ' ');
             std::replace(title.begin(), title.end(), '\r', ' ');
             const bool indexed = std::any_of(features.begin(), features.end(), [&](const WorldMapFeature &feature)
-                { return feature.site.id == site.id && feature.site.eventId == site.eventId; });
+                { return worldMapFeatureContainsSite(feature, site.id) && feature.site.eventId == site.eventId; });
             inventory << entry.worldId << '\t' << entry.fileName << '\t' << site.id << '\t' << site.eventId << '\t'
                 << (metadata ? metadata->kind : events.hasEvent(site.eventId) ? "unclassified" : "unregistered")
                 << '\t' << (metadata && metadata->hidden) << '\t' << title << '\t'
@@ -228,4 +228,62 @@ TEST_CASE("canonical interaction references describe active statue rescues and r
         }
     }
     CHECK(references == 17);
+}
+
+TEST_CASE("canonical elemental prison passages group their physical components and preserve independent knowledge")
+{
+    using namespace OpenYAMM::Game;
+    REQUIRE_MESSAGE(OpenYAMM::Tests::regressionMapLoaderLoaded(),
+        OpenYAMM::Tests::regressionMapLoaderFailure());
+    const auto &loader = OpenYAMM::Tests::regressionMapLoader();
+    const auto &data = loader.gameDataLoader;
+    const auto &entries = data.getMapStats().getEntries();
+    const auto entry = std::find_if(entries.begin(), entries.end(), [](const MapStatsEntry &map)
+        { return map.worldId == "mm8" && map.fileName == "pbp.odm"; });
+    REQUIRE(entry != entries.end());
+    auto map = MapAssetLoader().load(loader.assetFileSystem, *entry, data.getMonsterTable(),
+        data.getObjectTable(), MapLoadPurpose::HeadlessGameplay);
+    REQUIRE(map);
+    REQUIRE(map->outdoorMapData);
+    std::string error;
+    REQUIRE_MESSAGE(GameDataLoader::loadEventPrograms(loader.assetFileSystem, *map, error), error);
+    REQUIRE(map->localEventProgram);
+    WorldDatabase world(data.getMapStats(), data.getHouseTable(), data.getNpcDialogTable(),
+        data.getMergedTeacherTopicTable(), "mm8");
+    world.indexMapLocations(*map->outdoorMapData, *map->localEventProgram);
+    world.indexMapInteractionReferences(*entry, data.getItemTable(), data.getSpellTable());
+    const auto &groups = map->localEventProgram->siteGroups();
+    REQUIRE(groups.size() == 4);
+    size_t components = 0;
+    for (const auto &[event, declared] : groups)
+    {
+        CAPTURE(event);
+        REQUIRE(declared.size() == 1);
+        const auto features = world.queryFeatures({}, true, "", WorldDatabase::mapId(*entry));
+        const auto feature = std::find_if(features.begin(), features.end(), [&](const WorldMapFeature *pFeature)
+            { return pFeature->site.eventId == event; });
+        REQUIRE(feature != features.end());
+        CHECK(std::count_if(features.begin(), features.end(), [&](const WorldMapFeature *pFeature)
+            { return pFeature->site.eventId == event; }) == 1);
+        CHECK(std::count_if(world.locations().begin(), world.locations().end(), [&](const WorldMapLocation &location)
+            { return location.eventId == event; }) == 1);
+        CHECK((*feature)->components.size() == declared.front().size());
+        components += (*feature)->components.size();
+        for (const WorldInteractionSite &site : (*feature)->components)
+        {
+            CAPTURE(site.id);
+            WorldKnowledge knowledge;
+            knowledge.visitedMaps.insert(entry->fileName);
+            CHECK(world.queryFeatures(knowledge, false).empty());
+            knowledge.interactedSites[entry->fileName].insert(worldSiteDiscoveryKey(event, site.id));
+            const auto known = world.queryFeatures(knowledge, false);
+            REQUIRE(known.size() == 1);
+            CHECK(known.front()->id == (*feature)->id);
+            CHECK(world.siteReference(**feature, knowledge, false).empty());
+            CHECK(world.locationVisible(*std::find_if(world.locations().begin(), world.locations().end(),
+                [&](const WorldMapLocation &location) { return location.eventId == event; }), knowledge, false));
+            CHECK(knowledge.interactedSites.at(entry->fileName).size() == 1);
+        }
+    }
+    CHECK(components == 21);
 }

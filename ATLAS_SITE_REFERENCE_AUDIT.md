@@ -102,3 +102,10 @@ The 137-map interaction inventory now counts either generated text or a typed in
 reference column. The dedicated catalog test checks all seventeen definitions against real physical sites,
 item/NPC/spell/destination tables, event-to-entity keys and Discovery/Guide gates. These are reference possibilities,
 not forecasts of remote availability or a claim that all special interactions have been catalogued.
+
+## Elemental prison component grouping, 2026-10-24
+
+The 21 base components for pbp:502/503/504/505 now form four explicit callback-owned passage groups. All raw
+physical sites remain in the inventory and retain their discovery keys; World Database features/locations expose
+one representative per declared group. The real-catalog regression validates every member and verifies that one
+member's discovery does not reveal any other prison. Other multipart entrance bindings still require an audit.

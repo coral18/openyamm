@@ -4,6 +4,8 @@
 
 #include <algorithm>
 #include <atomic>
+#include <charconv>
+#include <set>
 #include <string_view>
 
 extern "C"
@@ -706,6 +708,106 @@ bool readInteractionReferences(lua_State *pLuaState, int metadataIndex, Scripted
     return true;
 }
 
+bool readSiteGroups(lua_State *pLuaState, int metadataIndex, ScriptedEventScope scope,
+    std::unordered_map<uint16_t, std::vector<std::vector<std::string>>> &result, std::string &error)
+{
+    const int stackTop = lua_gettop(pLuaState);
+    const auto fail = [&]()
+    {
+        error = "Invalid siteGroups metadata: expected callback-owned disjoint arrays of physical site IDs";
+        lua_settop(pLuaState, stackTop);
+        return false;
+    };
+    lua_getfield(pLuaState, metadataIndex, "siteGroups");
+    if (lua_isnil(pLuaState, -1)) { lua_pop(pLuaState, 1); return true; }
+    if (scope != ScriptedEventScope::Map || !lua_istable(pLuaState, -1)) return fail();
+    const auto validSiteId = [](std::string_view id)
+    {
+        const auto number = [](std::string_view value)
+        {
+            uint32_t parsed = 0;
+            const auto result = std::from_chars(value.data(), value.data() + value.size(), parsed);
+            return !value.empty() && result.ec == std::errc{} && result.ptr == value.data() + value.size()
+                && std::to_string(parsed) == value;
+        };
+        if (id.starts_with("bmodel/"))
+        {
+            id.remove_prefix(7);
+            const size_t slash = id.find('/');
+            if (slash == std::string_view::npos || !number(id.substr(0, slash))) return false;
+            id.remove_prefix(slash + 1);
+            return id.starts_with("surface/") && number(id.substr(8));
+        }
+        if (id.starts_with("surface/")) return number(id.substr(8));
+        return id.starts_with("decoration/") && number(id.substr(11));
+    };
+    const auto arraySize = [&](int index, size_t minimum, size_t maximum) -> std::optional<size_t>
+    {
+        if (!lua_istable(pLuaState, index)) return std::nullopt;
+        index = lua_absindex(pLuaState, index);
+        const size_t count = lua_rawlen(pLuaState, index);
+        if (count < minimum || count > maximum) return std::nullopt;
+        size_t entries = 0;
+        lua_pushnil(pLuaState);
+        while (lua_next(pLuaState, index) != 0)
+        {
+            const bool valid = lua_isinteger(pLuaState, -2) && lua_tointeger(pLuaState, -2) > 0
+                && uint64_t(lua_tointeger(pLuaState, -2)) <= count;
+            lua_pop(pLuaState, 1);
+            if (!valid) { lua_pop(pLuaState, 1); return std::nullopt; }
+            ++entries;
+        }
+        return entries == count ? std::optional(count) : std::nullopt;
+    };
+    lua_pushnil(pLuaState);
+    while (lua_next(pLuaState, -2) != 0)
+    {
+        if (!lua_isinteger(pLuaState, -2) || lua_tointeger(pLuaState, -2) <= 0
+            || lua_tointeger(pLuaState, -2) > UINT16_MAX || !lua_istable(pLuaState, -1)) return fail();
+        const uint16_t eventId = uint16_t(lua_tointeger(pLuaState, -2));
+        lua_getfield(pLuaState, -1, "handler");
+        lua_getglobal(pLuaState, "evt");
+        lua_getfield(pLuaState, -1, "map");
+        lua_rawgeti(pLuaState, -1, eventId);
+        const bool ownsHandler = lua_isfunction(pLuaState, -4) && lua_rawequal(pLuaState, -1, -4);
+        lua_pop(pLuaState, 4);
+        if (!ownsHandler) { lua_pop(pLuaState, 1); continue; }
+        lua_getfield(pLuaState, -1, "groups");
+        if (!lua_isnil(pLuaState, -1))
+        {
+            const auto count = arraySize(-1, 0, 64);
+            if (!count) return fail();
+            std::vector<std::vector<std::string>> groups;
+            std::set<std::string> used;
+            for (size_t groupIndex = 1; groupIndex <= *count; ++groupIndex)
+            {
+                lua_rawgeti(pLuaState, -1, lua_Integer(groupIndex));
+                const auto members = arraySize(-1, 2, 256);
+                if (!members) return fail();
+                std::vector<std::string> group;
+                for (size_t index = 1; index <= *members; ++index)
+                {
+                    lua_rawgeti(pLuaState, -1, lua_Integer(index));
+                    if (lua_type(pLuaState, -1) != LUA_TSTRING) return fail();
+                    size_t length = 0;
+                    const char *pValue = lua_tolstring(pLuaState, -1, &length);
+                    if (length == 0 || length > 80) return fail();
+                    const std::string value(pValue, length);
+                    if (!validSiteId(value) || !used.insert(value).second) return fail();
+                    group.push_back(value);
+                    lua_pop(pLuaState, 1);
+                }
+                groups.push_back(std::move(group));
+                lua_pop(pLuaState, 1);
+            }
+            if (!groups.empty()) result.emplace(eventId, std::move(groups));
+        }
+        lua_pop(pLuaState, 2);
+    }
+    lua_settop(pLuaState, stackTop);
+    return true;
+}
+
 bool readIdReferences(lua_State *pLuaState, int metadataIndex, ScriptedEventScope scope,
     const char *pField, const char *pValues, uint32_t maximumId,
     std::unordered_map<uint16_t, std::vector<uint32_t>> &result, std::string &error)
@@ -894,6 +996,7 @@ bool ScriptedEventProgram::populateMetadataFromLua(
         return false;
     if (!readInteractionReferences(pLuaState, lua_absindex(pLuaState, -1), scope,
         program.m_interactionReferences, error)) return false;
+    if (!readSiteGroups(pLuaState, lua_absindex(pLuaState, -1), scope, program.m_siteGroups, error)) return false;
     program.m_textureNames = readStringArrayFromField(pLuaState, -1, "textureNames");
     program.m_spriteNames = readStringArrayFromField(pLuaState, -1, "spriteNames");
     program.m_castSpellIds = readIntegerArrayFromField<uint32_t>(pLuaState, -1, "castSpellIds");
@@ -917,6 +1020,11 @@ const std::unordered_map<uint16_t, std::vector<uint32_t>> &ScriptedEventProgram:
 const std::unordered_map<uint16_t, SiteInteractionReference> &ScriptedEventProgram::interactionReferences() const
 {
     return m_interactionReferences;
+}
+
+const std::unordered_map<uint16_t, std::vector<std::vector<std::string>>> &ScriptedEventProgram::siteGroups() const
+{
+    return m_siteGroups;
 }
 
 const std::unordered_map<uint16_t, std::string> &ScriptedEventProgram::siteReferences() const

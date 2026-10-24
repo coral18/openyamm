@@ -1,0 +1,29 @@
+id: atlas.mm8_prison_groups_fixture
+title: Isolated elemental prison passage fixture
+world: mm8
+mode: faithful
+steps:
+- new_game_flow:
+    start_map: pbp.odm
+    party:
+      gold: 500
+      food: 10
+      members:
+      - name: Interaction Tester
+        class: Sorcerer
+        level: 1
+        race_id: 0
+        skills:
+        - name: Earth
+          level: 8
+          mastery: 2
+        equipment: {}
+        spells:
+        - 40
+- set_pose:
+    x: -19970
+    y: -20200
+    z: 760
+    yaw: 1.5707963267948966
+    pitch: 0
+- save_game: before-interaction

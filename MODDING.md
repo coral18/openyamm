@@ -454,3 +454,24 @@ not current occupancy. Missing old fields imply no removal history. Invalid save
 `targetIndex` continues to address the renderer's activation list. Entity hits already address map entities.
 An unbound decoration does not acquire guessed discovery/effect records, and press/release matching includes
 canonical identity. Old records written with an incorrect renderer index are not reassigned speculatively.
+
+### Explicit passage components
+
+`SetMapSiteGroups(eventId, {{"bmodel/1/surface/2", "bmodel/2/surface/3"}})` declares that the listed physical
+components belong to one passage. Multiple disjoint groups may share a callback; unlisted sites remain separate.
+Use the canonical component IDs returned by `worldInteractionSites`, rather than arbitrary individual faces.
+The first component supplies the stable feature/location ID and marker position. Every component must exist in
+that map, carry this callback and classify as a connection. Invalid bindings fail indexing instead of inventing
+positions or merging unrelated objects by event number, title or distance.
+
+Groups belong to the currently registered map callback. Replacing/removing it invalidates the declaration;
+`SetMapSiteGroups(eventId, {})` or `nil` clears it. Arrays must be dense and disjoint, with at most 64 groups of
+2–256 distinct canonical site IDs. Define geometry-specific declarations in `*_zz_site_groups.lua`, headed by
+`-- Site group metadata; load after gameplay overlays`. The lighting tool validates literal declarations before
+excluding this presentation-only catalog from shadow dependencies. It rejects expressions and executable additions.
+
+Grouping is a derived World Database view. It does not modify hit testing, gameplay events or saved discoveries.
+The group becomes known when an actual component is explored/interacted with; observations retain their original
+component keys. Reused events outside the declared group, unknown maps and Guide-only descriptions stay separate.
+Existing face discoveries therefore work without save migration. Four authored MM8 elemental prison groups are
+the initial content; other multipart entrances still require a geometry/content audit.

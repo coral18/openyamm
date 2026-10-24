@@ -148,6 +148,30 @@ def validate_site_context_metadata(text, script):
             raise ValueError('Invalid site context metadata overlay: ' + str(script))
 
 
+def validate_site_groups_metadata(text, script):
+    lines = text.splitlines()
+    failure = 'Invalid site group metadata overlay: ' + str(script)
+    if not lines or lines[0] != '-- Site group metadata; load after gameplay overlays':
+        raise ValueError(failure)
+    number = r'(?:0|[1-9][0-9]*)'
+    site = r'"(?:surface/' + number + r'|bmodel/' + number + r'/surface/' + number + r'|decoration/' + number + r')"'
+    group = r'\{' + site + r'(?:, ' + site + r'){1,255}\}'
+    declaration = re.compile(r'SetMapSiteGroups\(([1-9][0-9]*), \{(' + group + r'(?:, ' + group + r'){0,63})?\}\)')
+    events = set()
+    for line in lines[1:]:
+        line = line.strip()
+        if not line or line.startswith('--'):
+            continue
+        match = declaration.fullmatch(line)
+        if not match or int(match[1]) > 65535 or int(match[1]) in events:
+            raise ValueError(failure)
+        events.add(int(match[1]))
+        sites = re.findall(site, match[2] or '')
+        if len(set(sites)) != len(sites) or any(
+                int(value) > 4294967295 for value in re.findall(r'[0-9]+', match[2] or '')):
+            raise ValueError(failure)
+
+
 def validate_interaction_reference_metadata(text, script):
     lines = text.splitlines()
     failure = 'Invalid site interaction metadata overlay: ' + str(script)
@@ -287,6 +311,9 @@ def export_cards(profile, output):
             continue
         if script.name == source.stem + '_zz_site_interactions.lua':
             validate_interaction_reference_metadata(text, script)
+            continue
+        if script.name == source.stem + '_zz_site_groups.lua':
+            validate_site_groups_metadata(text, script)
             continue
         if script.name == source.stem + '_zz_site_context.lua':
             validate_site_context_metadata(text, script)

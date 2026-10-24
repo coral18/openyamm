@@ -48,6 +48,8 @@ struct WorldMapFeature
     std::vector<uint16_t> relatedEventIds;
     std::unordered_map<uint16_t, std::vector<uint32_t>> relatedAutonotes;
     std::optional<SiteInteractionReference> interactionReference;
+    // Explicit components of one authored passage. The first real site anchors its stable ID and marker.
+    std::vector<WorldInteractionSite> components;
 };
 
 std::vector<WorldMapFeature> buildWorldMapFeatures(const std::string &mapId,
@@ -55,6 +57,7 @@ std::vector<WorldMapFeature> buildWorldMapFeatures(const std::string &mapId,
 std::optional<WorldMapFeatureKind> worldMapFeatureKind(std::string_view action);
 const char *worldMapFeatureKindName(WorldMapFeatureKind kind);
 bool worldMapFeatureOnFloorLayer(const WorldMapFeature &feature, std::optional<int32_t> layer);
+bool worldMapFeatureContainsSite(const WorldMapFeature &feature, const std::string &siteId);
 std::string worldSiteDiscoveryKey(uint16_t eventId, const std::string &siteId);
 void recordWorldSiteDiscovery(EventRuntimeState &state, uint16_t eventId, const std::string &siteId);
 }

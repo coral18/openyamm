@@ -18,7 +18,20 @@ bool worldMapFeatureOnFloorLayer(const WorldMapFeature &feature, std::optional<i
 {
     if (feature.kind == WorldMapFeatureKind::Note)
         return !feature.noteElevation || worldFloorPlanLayerMatches(layer, float(*feature.noteElevation));
+    if (!feature.components.empty())
+        return std::any_of(feature.components.begin(), feature.components.end(), [&](const WorldInteractionSite &site)
+            { return worldFloorPlanLayerMatches(layer, site.z); });
     return worldFloorPlanLayerMatches(layer, feature.site.z);
+}
+
+bool worldMapFeatureContainsSite(const WorldMapFeature &feature, const std::string &siteId)
+{
+    const auto matches = [&](const WorldInteractionSite &site)
+    {
+        return siteId == site.id || std::any_of(site.faceIds.begin(), site.faceIds.end(), [&](uint32_t face)
+            { return siteId == site.surfacePrefix + "surface/" + std::to_string(face); });
+    };
+    return matches(feature.site) || std::any_of(feature.components.begin(), feature.components.end(), matches);
 }
 
 const char *worldMapFeatureKindName(WorldMapFeatureKind kind)
@@ -80,6 +93,29 @@ std::vector<WorldMapFeature> buildWorldMapFeatures(const std::string &mapId,
         feature.targetMap = metadata->targetMap.value_or("");
         features.push_back(std::move(feature));
     }
+    std::vector<bool> grouped(features.size(), false);
+    for (const auto &[event, groups] : events.siteGroups())
+        for (const std::vector<std::string> &group : groups)
+        {
+            std::vector<size_t> indices;
+            for (const std::string &id : group)
+            {
+                const auto found = std::find_if(features.begin(), features.end(), [&](const WorldMapFeature &feature)
+                    { return feature.site.id == id && feature.site.eventId == event; });
+                if (found == features.end() || found->kind != WorldMapFeatureKind::Connection)
+                    throw std::invalid_argument("Passage group has no matching physical connection: "
+                        + mapId + "/" + id);
+                indices.push_back(size_t(found - features.begin()));
+            }
+            WorldMapFeature &anchor = features[indices.front()];
+            for (size_t index : indices)
+            {
+                anchor.components.push_back(features[index].site);
+                if (index != indices.front()) grouped[index] = true;
+            }
+        }
+    size_t index = 0;
+    std::erase_if(features, [&](const WorldMapFeature &) { return grouped[index++]; });
     return features;
 }
 
@@ -187,10 +223,7 @@ std::vector<const WorldSiteObservation *> WorldDatabase::siteObservations(const 
         if (observation.eventId != feature.site.eventId
             && std::find(feature.relatedEventIds.begin(), feature.relatedEventIds.end(), observation.eventId)
                 == feature.relatedEventIds.end()) continue;
-        const bool matches = observation.siteId == feature.site.id
-            || std::any_of(feature.site.faceIds.begin(), feature.site.faceIds.end(), [&](uint32_t face)
-            { return observation.siteId == feature.site.surfacePrefix + "surface/" + std::to_string(face); });
-        if (matches) result.push_back(&observation);
+        if (worldMapFeatureContainsSite(feature, observation.siteId)) result.push_back(&observation);
     }
     return result;
 }

@@ -1941,3 +1941,33 @@ control uses normal real-time casting and a real item-free target; it does not i
 
 This checkpoint does not complete Atlas content, component grouping, special connection graphs or device coverage.
 Android/controller checks and the remaining feature matrix stay open.
+
+### Explicit passage groups, 2026-10-24
+
+The four elemental prison entrances in Plane Between Planes now each have one native Sites entry and one
+location entry. Previously their disconnected geometry produced 21 components (8/5/4/4 for Air/Fire/Water/Earth).
+An explicit callback-owned `SetMapSiteGroups` catalog maps those real components to four passages; matching
+names, callback IDs or proximity alone never merge sites. Unlisted components and unrelated reused events stay
+independent. This shared World Database projection also supports MM7 and mod-authored connections.
+
+The first declared component anchors a stable ID/position. Exploration or interaction at any real member reveals
+the passage; existing saved face/component keys remain authoritative. No synthetic group discovery, copied Guide
+knowledge or save migration is introduced. Component observations and indoor height filtering use the same members.
+Invalid, overlapping, sparse or stale bindings are rejected; replacing the callback invalidates its declarations.
+The strict metadata-only lighting exclusion preserves existing shadow dependencies and payloads.
+
+Validation: 64 selected native unit cases / 33,367 assertions passed, including schema/ownership errors, reused
+callbacks at separate objects, indoor floor/visibility checks, actual member bindings in the mounted MM8 map and
+every one of the 21 component discoveries. Eighteen lighting-tool tests and the strict mounted catalog passed.
+Windows Release built successfully. One isolated native UI tour passed; inspected captures show four Guide rows,
+one explored Water entrance in Discovery, correct Ring of Keys requirements and unchanged fog after leaving Guide.
+A 25-step post-UI verifier checked untouched unlock/discovery keys, gold/food and a further save/load roundtrip.
+A separate 26-step headless control activated the real Water prison face (bmodel 24, face 4) without a key.
+Its raw component discovery survived save/load; the group anchor, sibling component and other prisons stayed
+undiscovered and locked. The input used an actual mesh pick at 213 units, without event replay or forced IDs.
+
+Reproduction inputs are `tests/scenarios/atlas/mm8_prison_groups_{fixture,interaction,verify}.yml` and
+`tools/menu_tours/atlas_mm8_prison_groups.yml`. Restore the controlled fixture as `saves/before.oysav` before
+running the native tour. Captures and receipts stay private under `atlas-passages-20261024` in the Windows dev root.
+These checks do not certify every multipart entrance, conditional connection graph, Android or controller UX;
+the remaining full-Atlas matrix is still open.

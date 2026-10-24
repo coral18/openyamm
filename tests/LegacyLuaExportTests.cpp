@@ -1550,3 +1550,44 @@ TEST_CASE("typed interaction references bind active callbacks and validate seman
     CHECK(program->getContextActionMetadata(1)->kind == "well");
     CHECK_FALSE(program->getContextActionMetadata(1)->targetMap);
 }
+
+TEST_CASE("passage site groups belong to current callbacks and reject malformed or overlapping members")
+{
+    using namespace OpenYAMM::Game;
+    const auto bytes = readBinaryFixture(std::filesystem::path(OPENYAMM_SOURCE_DIR)
+        / "assets_dev/engine/scripts/common/event_support.lua");
+    const std::string support(bytes.begin(), bytes.end());
+    const auto load = [&](const std::string &code)
+    {
+        std::string error;
+        return ScriptedEventProgram::loadFromLuaText(support + code, "site-groups", ScriptedEventScope::Map, error);
+    };
+    const std::string handler = "RegisterEvent(10, 'Door', function() error('must not execute') end)\n";
+    const std::string declaration = "SetMapSiteGroups(10, {{'surface/0', 'surface/2'}, "
+        "{'bmodel/1/surface/0', 'bmodel/2/surface/0'}})\n";
+    auto program = load(handler + declaration);
+    REQUIRE(program);
+    REQUIRE(program->siteGroups().contains(10));
+    REQUIRE(program->siteGroups().at(10).size() == 2);
+    CHECK(program->siteGroups().at(10)[0] == std::vector<std::string>{"surface/0", "surface/2"});
+    for (const char *pReplacement : {"evt.map[10] = nil", "evt.map[10] = function() end",
+        "ReplaceMapEvent(10, '', function() end)", "SetMapSiteGroups(10, {})", "SetMapSiteGroups(10, nil)"})
+    {
+        program = load(handler + declaration + pReplacement);
+        REQUIRE(program);
+        CHECK(program->siteGroups().empty());
+    }
+    CHECK_FALSE(load(declaration));
+    for (const char *pValue : {"false", "{'surface/0', 'surface/1'}", "{{'surface/0'}}",
+        "{{'surface/0', 'surface/0'}}", "{{'surface/0', 'surface/1'}, {'surface/1', 'surface/2'}}",
+        "{{'surface/0', 1}}", "{{'surface/0', '../surface/2'}}",
+        "{{'surface/0', 'surface/01'}}", "{{'surface/0', 'surface/4294967296'}}",
+        "{{'surface/0', 'bmodel/0/decoration/1'}}", "{{'surface/0', 'invented/1'}}",
+        "{[1] = {'surface/0', 'surface/1'}, [3] = {'surface/2', 'surface/3'}}",
+        "{{'surface/0', 'surface/1', extra = 'surface/2'}}"})
+        CHECK_FALSE(load(handler + "SetMapSiteGroups(10, " + pValue + ")"));
+    program = load(handler + declaration + "ReplaceMapEvent(10, '', function() end)\n"
+        "SetMapSiteGroups(10, {{'surface/4', 'surface/5'}})");
+    REQUIRE(program);
+    CHECK(program->siteGroups().at(10)[0][0] == "surface/4");
+}

@@ -65,7 +65,15 @@ void WorldDatabase::indexMapSites(const WorldRecord &source, const std::vector<W
     auto features = buildWorldMapFeatures(pSource->id, sites, events);
     m_features.insert(m_features.end(), features.begin(), features.end());
     for (const WorldInteractionSite &site : sites)
+    {
+        const bool groupedComponent = std::any_of(features.begin(), features.end(), [&](const WorldMapFeature &feature)
+        {
+            return !feature.components.empty() && feature.site.eventId == site.eventId
+                && feature.site.id != site.id && worldMapFeatureContainsSite(feature, site.id);
+        });
+        if (groupedComponent) continue;
         add(site.id, site.eventId, site.x, site.y, site.z);
+    }
 }
 
 const std::vector<WorldMapLocation> &WorldDatabase::locations() const { return m_locations; }
@@ -240,32 +248,35 @@ bool WorldDatabase::featureVisible(const WorldMapFeature &feature, const WorldKn
     if (feature.kind == WorldMapFeatureKind::Item)
         return feature.observedItem && visible(*pMap, knowledge, false);
     const std::string file = toLowerCopy(pMap->map->fileName);
-    if (const auto known = knowledge.interactedSites.find(file); known != knowledge.interactedSites.end())
+    const auto siteVisible = [&](const WorldInteractionSite &site)
     {
-        if (known->second.contains(worldSiteDiscoveryKey(feature.site.eventId, feature.site.id)))
-            return true;
-        for (uint16_t event : feature.relatedEventIds)
-            if (known->second.contains(worldSiteDiscoveryKey(event, feature.site.id))) return true;
-        for (uint32_t face : feature.site.faceIds)
-            if (known->second.contains(worldSiteDiscoveryKey(feature.site.eventId,
-                feature.site.surfacePrefix + "surface/" + std::to_string(face))))
-                return true;
-    }
-    if (pMap->kind == WorldRecordKind::Region)
-    {
-        const auto exploration = knowledge.regionMaps.find(file);
-        return exploration != knowledge.regionMaps.end()
-            && worldRegionPointExplored(exploration->second, feature.site.x, feature.site.y);
-    }
-    const auto exploration = knowledge.floorPlans.find(file);
-    if (exploration != knowledge.floorPlans.end())
-        for (uint32_t face : feature.site.faceIds)
-            if (face < exploration->second.faceAttributes.size()
-                && !exploration->second.invisibleFaces.contains(face)
-                && !hasFaceAttribute(exploration->second.faceAttributes[face], FaceAttribute::Invisible)
-                && hasFaceAttribute(exploration->second.faceAttributes[face], FaceAttribute::SeenByParty))
-                return true;
-    return false;
+        if (const auto known = knowledge.interactedSites.find(file); known != knowledge.interactedSites.end())
+        {
+            if (known->second.contains(worldSiteDiscoveryKey(site.eventId, site.id))) return true;
+            for (uint16_t event : feature.relatedEventIds)
+                if (known->second.contains(worldSiteDiscoveryKey(event, site.id))) return true;
+            for (uint32_t face : site.faceIds)
+                if (known->second.contains(worldSiteDiscoveryKey(site.eventId,
+                    site.surfacePrefix + "surface/" + std::to_string(face)))) return true;
+        }
+        if (pMap->kind == WorldRecordKind::Region)
+        {
+            const auto exploration = knowledge.regionMaps.find(file);
+            return exploration != knowledge.regionMaps.end()
+                && worldRegionPointExplored(exploration->second, site.x, site.y);
+        }
+        const auto exploration = knowledge.floorPlans.find(file);
+        if (exploration != knowledge.floorPlans.end())
+            for (uint32_t face : site.faceIds)
+                if (face < exploration->second.faceAttributes.size()
+                    && !exploration->second.invisibleFaces.contains(face)
+                    && !hasFaceAttribute(exploration->second.faceAttributes[face], FaceAttribute::Invisible)
+                    && hasFaceAttribute(exploration->second.faceAttributes[face], FaceAttribute::SeenByParty))
+                    return true;
+        return false;
+    };
+    return feature.components.empty() ? siteVisible(feature.site)
+        : std::any_of(feature.components.begin(), feature.components.end(), siteVisible);
 }
 
 const std::string &WorldDatabase::featureTitle(const WorldMapFeature &feature,
@@ -314,6 +325,9 @@ bool WorldDatabase::locationVisible(const WorldMapLocation &location, const Worl
         return false;
     if (pTarget->kind == WorldRecordKind::Dungeon)
     {
+        const auto group = std::find_if(m_features.begin(), m_features.end(), [&](const WorldMapFeature &feature)
+            { return feature.id == location.id && !feature.components.empty(); });
+        if (group != m_features.end()) return featureVisible(*group, knowledge, false);
         const auto exploration = knowledge.regionMaps.find(toLowerCopy(pSource->map->fileName));
         return exploration != knowledge.regionMaps.end()
             && worldRegionPointExplored(exploration->second, location.x, location.y);

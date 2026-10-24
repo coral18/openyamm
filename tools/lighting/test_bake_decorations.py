@@ -173,6 +173,30 @@ class DecorationBakeTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'Invalid site interaction metadata overlay'):
                 self.export()
 
+    def test_passage_groups_do_not_change_shadow_cards_or_dependencies(self):
+        baseline = self.export()
+        metadata = self.world / 'events/maps/test_zz_site_groups.lua'
+        metadata.write_text('-- Site group metadata; load after gameplay overlays\n'
+                            'SetMapSiteGroups(1, {{"bmodel/0/surface/1", "bmodel/1/surface/0"}})\n')
+        result = self.export()
+        for field in ('cards', 'counts', 'dependencies'):
+            self.assertEqual(result[field], baseline[field])
+
+    def test_passage_groups_reject_executable_or_ambiguous_metadata(self):
+        metadata = self.world / 'events/maps/test_zz_site_groups.lua'
+        header = '-- Site group metadata; load after gameplay overlays\n'
+        valid = 'SetMapSiteGroups(1, {{"surface/0", "surface/1"}})'
+        for line in (valid + '; evt.SetSprite(1, 0)', valid.replace('1,', '65536,'),
+                     valid.replace('"surface/1"', '"surface/0"'),
+                     valid.replace('"surface/1"', 'SiteId()'),
+                     valid.replace('"surface/1"', '"../surface/1"'),
+                     valid.replace('"surface/1"', '"surface/01"'),
+                     valid.replace('"surface/1"', '"surface/4294967296"'),
+                     'SetMapSiteGroups(1, {{"surface/0"}})', valid + '\n' + valid):
+            metadata.write_text(header + line + '\n')
+            with self.assertRaisesRegex(ValueError, 'Invalid site group metadata overlay'):
+                self.export()
+
     def test_site_references_do_not_change_shadow_cards_or_dependencies(self):
         baseline = self.export()
         for suffix, header in [
