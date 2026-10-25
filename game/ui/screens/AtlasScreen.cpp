@@ -181,8 +181,11 @@ AtlasScreen::AtlasScreen(const Engine::AssetFileSystem &assets, const GameDataRe
         m_indexedMaps.insert(WorldDatabase::mapId(pCurrentMap->map));
     }
     if (pCurrentMap != nullptr && pCurrentMap->localEventProgram)
+    {
+        m_world.indexMapNpcTopics(pCurrentMap->map, *pCurrentMap->localEventProgram);
         m_world.indexMapInteractionReferences(pCurrentMap->map, m_data.itemTable(), m_data.spellTable());
         m_world.indexMapGateReferences(pCurrentMap->map, m_data.worldGateCatalog(), m_pParty);
+    }
     if (pCurrentMap != nullptr && m_pGlobalEvents != nullptr
         && (pCurrentMap->outdoorMapData || pCurrentMap->indoorMapData))
     {
@@ -663,6 +666,7 @@ void AtlasScreen::indexMapData(MapAssetInfo &map)
     if (!GameDataLoader::loadEventPrograms(assetFileSystem(), map, error) || !map.localEventProgram)
         throw std::runtime_error(error.empty() ? "Missing event metadata" : error);
     m_world.indexMapConnections(map.map, *map.localEventProgram);
+    m_world.indexMapNpcTopics(map.map, *map.localEventProgram);
     const auto &observations = m_knowledge.monsterObservations[toLowerCopy(map.map.fileName)];
     if (map.outdoorMapData)
     {

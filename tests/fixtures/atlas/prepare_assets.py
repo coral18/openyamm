@@ -25,6 +25,9 @@ def prepare(assets, output, fixture_name="hidden-expert-bow"):
     if fixture_name == "legacy-pure-accuracy":
         target = "worlds/mm8/events/Global_mm8_accuracy.lua"
         fixture = b"-- Test fixture: retain generated legacy Pure Accuracy handlers without the modern supplement.\n"
+    elif fixture_name == "remote-companion-contact":
+        target = "worlds/mm8/events/maps/d19_zz_companion_contact_fixture.lua"
+        fixture = Path(__file__).with_name("d19_zz_companion_contact_fixture.lua").read_bytes()
     else:
         target = "engine/events/Global_zz_hide_bow.lua"
         fixture = Path(__file__).with_name("Global_zz_hide_bow.lua").read_bytes()
@@ -48,7 +51,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--assets", required=True, type=Path)
     parser.add_argument("--output", required=True, type=Path, help="A new directory on the input filesystem")
-    parser.add_argument("--fixture", choices=["hidden-expert-bow", "legacy-pure-accuracy"],
+    parser.add_argument("--fixture", choices=["hidden-expert-bow", "legacy-pure-accuracy", "remote-companion-contact"],
                         default="hidden-expert-bow")
     args = parser.parse_args()
     prepare(args.assets.resolve(), args.output.resolve(), args.fixture)

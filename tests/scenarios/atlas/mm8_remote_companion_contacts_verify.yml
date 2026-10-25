@@ -1,0 +1,39 @@
+id: atlas.mm8_remote_companion_contacts_verify
+title: Remote reference scans navigate to authored residences without executing topic assignments
+world: mm8
+mode: faithful
+# Run after atlas_mm8_remote_companion_contacts.yml against the remote-companion-contact asset fixture.
+steps:
+- load_game: {name: native, path: saves/quicksave.oysav}
+- &remote_unknown
+  assert:
+    named_global_var_changed: {name: openyamm.discovery.world.mm8.map.d19, value: 0}
+- &residence_unknown
+  assert:
+    named_global_var_changed: {name: openyamm.discovery.world.mm8.map.out01, value: 0}
+- &npc_unseen
+  assert:
+    named_global_var_changed: {name: openyamm.discovery.npc/28, value: 0}
+- &rescue_unknown
+  assert:
+    named_global_var_changed: {name: openyamm.discovery.world.mm8.map.out07, value: 0}
+- &campaign
+  assert:
+    map: out02.odm
+    qbit_clear: [430]
+    runtime_event_variable: {id: 21, value: 500}
+- save_game: remote-contact-roundtrip
+- load_game: remote-contact-roundtrip
+- *remote_unknown
+- *residence_unknown
+- *npc_unseen
+- *rescue_unknown
+- *campaign
+- speak_npc: {source_id: 28}
+- assert:
+    dialog:
+      active: true
+      source_id: 28
+      actions:
+      - {kind: npc_topic, id: 10}
+      - {kind: npc_topic, id: 11}

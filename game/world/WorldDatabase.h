@@ -44,6 +44,14 @@ struct WorldMapLocation
     float z = 0;
 };
 
+// A possible assignment from a loaded map program, not a physical NPC placement or a discovery.
+struct WorldNpcTopicReference
+{
+    std::string mapId;
+    uint32_t npcId = 0;
+    uint32_t topicId = 0;
+};
+
 // Presentation metadata only. Names, services, requirements and schedules belong to the game tables.
 struct WorldMapPresentation
 {
@@ -174,6 +182,8 @@ public:
     void indexDecorationItemRewards(const MapStatsEntry &map, const std::vector<WorldDecorationSite> &sites,
         const ScriptedEventProgram &program, const ItemTable &items);
     void indexNpcLocations(const ScriptedEventProgram &program);
+    void indexMapNpcTopics(const MapStatsEntry &map, const ScriptedEventProgram &program);
+    const std::vector<WorldNpcTopicReference> &npcTopicReferences() const;
     std::vector<const WorldItemSource *> itemSources(const WorldKnowledge &knowledge, bool guide) const;
     std::vector<WorldChestObservation> observedChests(const WorldMapFeature &feature,
         const WorldKnowledge &knowledge) const;
@@ -213,6 +223,7 @@ private:
     std::vector<WorldMapFeature> m_features;
     std::vector<WorldConnection> m_connections;
     std::vector<WorldItemSource> m_itemSources;
+    std::vector<WorldNpcTopicReference> m_npcTopicReferences;
     const MapStats *m_pMaps = nullptr;
     const HouseTable *m_pHouses = nullptr;
     const NpcDialogTable *m_pNpcs = nullptr;

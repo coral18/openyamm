@@ -2307,5 +2307,42 @@ scenario temporary save root to `saves/before.oysav`, then `tools/menu_tours/atl
 `tests/scenarios/atlas/mm8_companion_contacts_verify.yml`. Private captures, fixture scripts and logs are under
 `atlas-companions-20261025` in the Windows development root. Original user campaigns remain untouched.
 
-This implements live roster state and initial recruitment sources. Full dialogue eligibility, arbitrary off-map
-mod topic declarations, Inn venue navigation and the remaining Atlas coverage matrix are still open.
+This implements live roster state and initial recruitment sources. At this checkpoint remote map-topic indexing
+was still open; the follow-up below adds it. Full dialogue eligibility, Inn venue navigation and the remaining
+Atlas coverage matrix remain open.
+
+
+## Remote companion topic declarations (2026-10-25)
+
+World Database now retains Guide-only possible NPC-topic assignments from scanned map programs. Each canonical
+map owns one replaceable snapshot: reindexing clears removed/replaced declarations without erasing another map's
+sources or accumulating stale unions. Snapshot values are independent of the temporary loaded program's lifetime.
+Foreign-world programs and observed-only databases do not add these references. A declaration's owner map is
+provenance, never an inferred NPC position. The Guide still resolves topics through the shared roster resolver
+and links only independently authored/current/possible NPC residences or physical interaction references.
+
+The native source scan and current-map indexing populate this same database. Declared future invitations are
+labelled **Possible scripted contact**, distinct from configured topics or actually observed invitations. The
+Atlas constructor also now keeps current-map gate indexing inside its existing optional-current-map guard.
+
+Validation:
+
+- Windows Release built. Focused World Database/companion/mounted-program tests passed 32 cases / 1966 assertions,
+  including stale snapshot replacement, independent owners, copies, wrong-world filtering, observed-only privacy,
+  actual Fredrick/Cauri content and loading every MM7/MM8 map program. The existing opt-in packaged-house geometry
+  audit requires its separate audit root and was not run as part of this focused command.
+- Four inspected native AMD/OpenGL captures use a separate synthetic asset fixture: a remote dungeon callback
+  can assign a Cauri invitation to Fredrick. Before scanning, that reference is absent; after scanning it appears
+  beside Cauri's ordinary rescue source. The link navigates to Fredrick's independently authored Dagger Wound
+  residence, not the remote dungeon. Discovery still contains only the two owned companions.
+- A 15-step faithful post-UI verifier passed. It keeps the remote dungeon, Dagger Wound and Murmurwoods unknown,
+  NPC 28 unseen, gold 500/current map/unlock flag unchanged through another save/load. Opening Fredrick's actual
+  dialogue afterwards still shows topics 10/11, proving the reference scan did not execute the fixture's topic-630
+  assignment. The normal asset overlay has no QA script; the private copy differs by exactly that one declaration.
+
+Reproduction: `tests/fixtures/atlas/prepare_assets.py --fixture remote-companion-contact`,
+`tools/menu_tours/atlas_mm8_remote_companion_contacts.yml` and
+`tests/scenarios/atlas/mm8_remote_companion_contacts_verify.yml`; setup and the synthetic-content limitation are
+explained in `tests/fixtures/atlas/README.md`. Private evidence is under `atlas-remote-contacts-20261025` in the
+Windows development root. This completes remote declaration indexing, not full recruitment eligibility or the
+full MM7/MM8 Atlas objective.

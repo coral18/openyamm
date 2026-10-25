@@ -2276,7 +2276,9 @@ TEST_CASE("world guide companion contacts follow typed topics while Discovery us
     MapStats maps;
     std::vector<std::string> mapRow(35);
     mapRow[0] = "1"; mapRow[1] = "Island"; mapRow[2] = "out01.odm"; mapRow[34] = "mm8";
-    REQUIRE(maps.loadFromRows({mapRow}));
+    std::vector<std::string> remoteRow = mapRow;
+    remoteRow[0] = "2"; remoteRow[1] = "Remote island"; remoteRow[2] = "out02.odm";
+    REQUIRE(maps.loadFromRows({mapRow, remoteRow}));
     HouseTable houses;
     std::vector<std::string> house(24);
     house[0] = "11"; house[2] = "House"; house[3] = "1"; house[5] = "Contact house";
@@ -2305,6 +2307,28 @@ TEST_CASE("world guide companion contacts follow typed topics while Discovery us
     CHECK(guide[0].links[0].target == "mm8:npc/42");
     CHECK(guide[0].details.find("Different NPC alias") != std::string::npos);
     CHECK(buildWorldGuide(source, WorldGuideSection::Companions, referenceKnowledge, false)[0].links.empty());
+    source.pGlobalEvents = nullptr;
+    const auto remote = ScriptedEventProgram::loadFromLuaText(support
+        + "evt.map[10]=function() error('Do not execute a remote callback') end\n"
+          "SetMapNpcTopicRefs(10, {{42, 602}})", "@remote-companion-contacts", ScriptedEventScope::Map, error);
+    REQUIRE_MESSAGE(remote, error);
+    const MapStatsEntry *pRemote = maps.findByFileName("out02.odm");
+    REQUIRE(pRemote);
+    world.indexMapNpcTopics(*pRemote, *remote);
+    const auto remoteGuide = buildWorldGuide(source, WorldGuideSection::Companions, referenceKnowledge, true);
+    REQUIRE(remoteGuide[0].links.size() == 1);
+    // The assignment's map must never replace the NPC's independently authored residence.
+    CHECK(remoteGuide[0].links[0].target == "mm8:npc/42");
+    CHECK(remoteGuide[0].links[0].label.find("Possible scripted contact") != std::string::npos);
+    CHECK(remoteGuide[0].links[0].label.find("Remote island") == std::string::npos);
+    CHECK(buildWorldGuide(source, WorldGuideSection::Companions, referenceKnowledge, false)[0].links.empty());
+    const auto removed = ScriptedEventProgram::loadFromLuaText(support
+        + "evt.map[10]=function() end", "@removed-companion-contacts", ScriptedEventScope::Map, error);
+    REQUIRE_MESSAGE(removed, error);
+    world.indexMapNpcTopics(*pRemote, *removed);
+    CHECK(buildWorldGuide(source, WorldGuideSection::Companions, referenceKnowledge, true)[0].links.empty());
+    CHECK(knowledge.visitedMaps.empty());
+    CHECK(knowledge.variables.empty());
     EventRuntimeState observed;
     recordWorldNpcObservation(observed, 42, 11, {});
     recordWorldRosterOfferObservation(observed, 42, 2);

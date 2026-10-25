@@ -8,6 +8,7 @@
 #include <bit>
 #include <cmath>
 #include <stdexcept>
+#include <set>
 
 namespace OpenYAMM::Game
 {
@@ -306,6 +307,26 @@ void WorldDatabase::indexNpcLocations(const ScriptedEventProgram &program)
     std::sort(locations.begin(), locations.end());
     locations.erase(std::unique(locations.begin(), locations.end()), locations.end());
     for (const auto &[npcId, houseId] : locations) appendPossibleNpcLocation(npcId, houseId);
+}
+
+void WorldDatabase::indexMapNpcTopics(const MapStatsEntry &map, const ScriptedEventProgram &program)
+{
+    const std::string owner = mapId(map);
+    // A database belongs to one world. A callback's map is provenance, never the NPC's location.
+    if (m_observedNpcs || find(owner) == nullptr) return;
+    std::set<std::pair<uint32_t, uint32_t>> references;
+    for (const auto &[event, topics] : program.npcTopicReferences())
+        for (const ScriptedEventProgram::NpcTopicReference &topic : topics)
+            references.emplace(topic.npcId, topic.topicId);
+    std::erase_if(m_npcTopicReferences, [&](const WorldNpcTopicReference &reference)
+        { return reference.mapId == owner; });
+    for (const auto &[npcId, topicId] : references)
+        m_npcTopicReferences.push_back({owner, npcId, topicId});
+}
+
+const std::vector<WorldNpcTopicReference> &WorldDatabase::npcTopicReferences() const
+{
+    return m_npcTopicReferences;
 }
 
 const std::vector<WorldRecord> &WorldDatabase::records() const { return m_records; }

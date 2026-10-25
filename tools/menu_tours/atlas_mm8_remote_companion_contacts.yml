@@ -1,0 +1,63 @@
+output_dir: captures
+exit: true
+steps:
+- expect: gameplay
+- key: F9
+- pause: true
+- click:
+  - 800
+  - 821
+- click:
+  - 450
+  - 57
+- click:
+  - 885
+  - 126
+- click:
+  - 1152
+  - 57
+- click:
+  - 275
+  - 190
+- text: Cauri
+- key: Return
+- click:
+  - 200
+  - 265
+- pointer_move:
+  - 1035
+  - 527
+- wheel: -1000
+- capture: before-remote-source-scan
+- click:
+  - 1430
+  - 190
+- wait: 8
+- pointer_move:
+  - 1035
+  - 527
+- wheel: -1000
+- capture: remote-dialogue-and-rescue-contacts
+- click:
+  - 1035
+  - 640
+- capture: remote-contact-real-residence
+- click:
+  - 450
+  - 57
+- click:
+  - 1152
+  - 57
+- click:
+  - 885
+  - 126
+- capture: discovery-after-remote-source-scan
+- click:
+  - 1450
+  - 57
+- expect: pause
+- click:
+  - 800
+  - 301
+- expect: gameplay
+- key: F9

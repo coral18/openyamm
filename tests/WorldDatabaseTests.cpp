@@ -1931,6 +1931,55 @@ TEST_CASE("world database possible NPC residences stay guide-only and never inve
     CHECK(copy.find("mm7:npc/42/possible-house/11")->npc == fixture.npcs.getNpc(42));
 }
 
+TEST_CASE("world database replaces remote NPC topic snapshots per map without creating locations or discoveries")
+{
+    Fixture fixture;
+    WorldDatabase world = fixture.database();
+    const size_t records = world.records().size();
+    const MapStatsEntry *pRegion = fixture.maps.findByFileName("7out02.odm");
+    const MapStatsEntry *pDungeon = fixture.maps.findByFileName("7d21.blv");
+    const MapStatsEntry *pForeign = fixture.maps.findByFileName("out01.odm");
+    REQUIRE(pRegion);
+    REQUIRE(pDungeon);
+    REQUIRE(pForeign);
+    const auto load = [](const std::string &references)
+    {
+        std::string error;
+        const auto program = ScriptedEventProgram::loadFromLuaText(
+            "evt.map[10]=function() error('Metadata indexing must not run a callback') end\n"
+            "evt.meta.map.npcTopicReferences={[10]={handler=evt.map[10], topics={" + references + "}}}",
+            "@remote-npc-topics", ScriptedEventScope::Map, error);
+        REQUIRE_MESSAGE(program, error);
+        return *program;
+    };
+    world.indexMapNpcTopics(*pRegion, load("{42, 601},{42, 601}"));
+    REQUIRE(world.npcTopicReferences().size() == 1);
+    CHECK(world.npcTopicReferences()[0].mapId == WorldDatabase::mapId(*pRegion));
+    world.indexMapNpcTopics(*pDungeon, load("{42, 602}"));
+    CHECK(world.npcTopicReferences().size() == 2);
+    world.indexMapNpcTopics(*pRegion, load("{42, 603}"));
+    CHECK(world.npcTopicReferences().size() == 2);
+    CHECK(std::none_of(world.npcTopicReferences().begin(), world.npcTopicReferences().end(),
+        [](const WorldNpcTopicReference &reference) { return reference.topicId == 601; }));
+    world.indexMapNpcTopics(*pForeign, load("{42, 604}"));
+    CHECK(world.npcTopicReferences().size() == 2);
+    WorldDatabase copied = world;
+    world.indexMapNpcTopics(*pRegion, load(""));
+    REQUIRE(world.npcTopicReferences().size() == 1);
+    CHECK(world.npcTopicReferences()[0].topicId == 602);
+    CHECK(copied.npcTopicReferences().size() == 2);
+    world.indexMapNpcTopics(*pDungeon, load(""));
+    CHECK(world.npcTopicReferences().empty());
+    CHECK(world.records().size() == records);
+    CHECK(world.locations().empty());
+    CHECK(world.features().empty());
+    WorldNpcState state;
+    state.observedOnly = true;
+    WorldDatabase observed(fixture.maps, fixture.houses, fixture.npcs, fixture.teachers, "mm7", {}, state);
+    observed.indexMapNpcTopics(*pRegion, load("{42, 601}"));
+    CHECK(observed.npcTopicReferences().empty());
+}
+
 TEST_CASE("site journal references use the shared registry and require both site and note knowledge")
 {
     Fixture fixture;

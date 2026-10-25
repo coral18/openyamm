@@ -634,8 +634,12 @@ a replacement may explicitly redeclare its own. Loading metadata never executes 
 These are possible sources, not an observation or a complete/live eligibility result. The Atlas joins declared
 roster topics through `NpcDialogTable` and possible unlock grants through the shared `RosterTable`, then reuses
 World Database NPC locations and physical interaction references. It never joins companions by display name.
-Current Guide inputs include the loaded global and current local programs; arbitrary declarations in remote
-mod-authored map callbacks still need wider indexing. Do not assume that an absent annotation proves no source.
+Guide inputs include the loaded global/current local programs and World Database topic snapshots from scanned
+map programs, including remote world/mod overlays. `indexMapNpcTopics` replaces each canonical map owner's previous
+snapshot, even when a replacement has no references; another map owner's declarations remain independent.
+These records do not assign an NPC to the map that changed their topics, and observed-only databases do not
+index them. The Companions source scan supplies remote map data; an incomplete/unperformed scan is not proof
+that no source exists. Do not assume that an absent annotation proves no source.
 
 Regenerate base catalogs using `tools/regenerate_lua_events.sh --npc-topic-refs-only`. It writes the shared
 `Global_00_npc_topic_refs.lua` once and world-local `*_00_npc_topic_refs.lua` sidecars. Base metadata loads before

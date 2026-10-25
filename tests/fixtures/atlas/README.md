@@ -178,3 +178,33 @@ private working directory. It pins the unowned Elven Chainmail (1335) in Guide, 
 and scrolls the long armor description. Inspect both captures: the left column must move while the right stays
 at its original position; the armor's actual race restriction must be visible in the full text. Returning to
 Discovery clears the artifact comparison. Run the same world's privacy verifier against this case's saves too.
+
+
+## Remote companion topic declarations
+
+Prepare a separate package view with `--fixture remote-companion-contact` using the same helper:
+
+```bash
+python3 tests/fixtures/atlas/prepare_assets.py --assets /path/to/runtime/assets \
+  --output /same-volume/remote-contact-assets --fixture remote-companion-contact
+```
+
+The QA-only `d19_zz_companion_contact_fixture.lua` declares a possible Cauri invitation at the existing NPC 28
+(Fredrick) from a callback owned by the distant Mad Necromancer's Lab map. No physical site or automatic trigger
+calls it. This is deliberately synthetic content: it tests modded declarations and ID-based joins, not a claim
+about ordinary MM8 recruitment. Its callback must never run during an Atlas scan.
+
+Create the isolated seed with `tests/scenarios/atlas/mm8_companion_contacts.yml` against normal packages, then copy
+its temporary `before.oysav` to the test working directory's `saves/before.oysav`. Copy normal settings/profiles;
+point only this directory's asset setting to the fixture package view. Run
+`tools/menu_tours/atlas_mm8_remote_companion_contacts.yml` with the native menu-input tour option. Before the source
+scan, the extra contact is absent. Afterwards Cauri has a possible scripted contact at Fredrick's independently
+authored Dagger Wound residence, plus her ordinary Murmurwoods rescue site. Follow the first link and return to
+Discovery: only the two owned companions remain visible.
+
+Run `tests/scenarios/atlas/mm8_remote_companion_contacts_verify.yml` against the resulting private quicksave.
+It checks that the remote dungeon, Dagger Wound residence and Murmurwoods remain undiscovered, the resident was
+not observed by reading Guide, gold/map/unlock state are intact across resave/load, and subsequently opening his
+actual dialogue still shows the original topics 10/11 rather than the fixture's unexecuted assignment 630.
+Never install this overlay in the normal runtime, modify generated Lua, or run a package writer on the hard-linked
+fixture world archives.

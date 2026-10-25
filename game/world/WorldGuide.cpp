@@ -36,42 +36,51 @@ namespace
 void appendCompanionContacts(WorldGuideEntry &entry, const WorldGuideSource &source, uint32_t rosterId, bool guide)
 {
     if (source.pNpcs == nullptr || source.pWorld == nullptr || source.pWorldKnowledge == nullptr) return;
-    std::map<uint32_t, bool> contacts;
+    enum class ContactKind { Unlock, Declared, Configured, Observed };
+    std::map<uint32_t, ContactKind> contacts;
     const RosterEntry *pDefinition = source.pRoster != nullptr ? source.pRoster->get(rosterId) : nullptr;
-    const auto include = [&](uint32_t npcId, uint32_t topic)
+    const auto include = [&](uint32_t npcId, uint32_t topic, bool declared)
     {
         const auto offer = source.pNpcs->getRosterJoinOfferForTopic(topic);
         if (source.pNpcs->getNpc(npcId) == nullptr) return;
-        if (offer && offer->rosterId == rosterId) contacts[npcId] = false;
+        if (offer && offer->rosterId == rosterId)
+        {
+            ContactKind &kind = contacts[npcId];
+            kind = std::max(kind, declared ? ContactKind::Declared : ContactKind::Configured);
+        }
         else if (pDefinition != nullptr && pDefinition->unlockQuestBitId != 0 && source.pGlobalEvents != nullptr)
         {
             const auto grants = source.pGlobalEvents->qbitGrants().find(uint16_t(topic));
             if (topic <= UINT16_MAX && grants != source.pGlobalEvents->qbitGrants().end()
                 && std::find(grants->second.begin(), grants->second.end(), pDefinition->unlockQuestBitId)
-                    != grants->second.end()) contacts.try_emplace(npcId, true);
+                    != grants->second.end()) contacts.try_emplace(npcId, ContactKind::Unlock);
         }
     };
     for (const NpcEntry &npc : source.pNpcs->entries())
     {
-        if (worldRosterOfferKnown(source.pWorldKnowledge->variables, npc.id, rosterId)) contacts[npc.id] = false;
+        if (worldRosterOfferKnown(source.pWorldKnowledge->variables, npc.id, rosterId))
+            contacts[npc.id] = ContactKind::Observed;
         if (guide)
-            for (uint32_t topic : npc.topicIds) include(npc.id, topic);
+            for (uint32_t topic : npc.topicIds) include(npc.id, topic, false);
     }
     if (guide)
     {
         for (const WorldRecord &record : source.pWorld->records())
             if (record.kind == WorldRecordKind::Npc && !record.possibleNpcLocation)
-                for (uint32_t topic : record.npcTopicIds) include(record.npc->id, topic);
+                for (uint32_t topic : record.npcTopicIds) include(record.npc->id, topic, false);
+        for (const WorldNpcTopicReference &reference : source.pWorld->npcTopicReferences())
+            include(reference.npcId, reference.topicId, true);
         for (const ScriptedEventProgram *pProgram : {source.pGlobalEvents, source.pLocalEvents})
             if (pProgram != nullptr)
                 for (const auto &[event, references] : pProgram->npcTopicReferences())
                     for (const ScriptedEventProgram::NpcTopicReference &reference : references)
-                        include(reference.npcId, reference.topicId);
+                        include(reference.npcId, reference.topicId, true);
     }
     std::set<std::string> linked;
     std::string text;
-    for (const auto &[npcId, unlockContact] : contacts)
+    for (const auto &[npcId, contactKind] : contacts)
     {
+        const bool unlockContact = contactKind == ContactKind::Unlock;
         bool located = false;
         const NpcEntry &npc = *source.pNpcs->getNpc(npcId);
         for (const WorldRecord &record : source.pWorld->records())
@@ -79,7 +88,7 @@ void appendCompanionContacts(WorldGuideEntry &entry, const WorldGuideSource &sou
             if (record.kind != WorldRecordKind::Npc || record.npc->id != npcId
                 || !source.pWorld->visible(record, *source.pWorldKnowledge, guide)) continue;
             const std::string label = std::string(unlockContact ? "Possible unlock contact: "
-                : record.possibleNpcLocation ? "Possible scripted contact: "
+                : record.possibleNpcLocation || contactKind == ContactKind::Declared ? "Possible scripted contact: "
                 : record.lastObservedNpc ? "Last observed recruitment contact: " : "Configured recruitment contact: ")
                 + record.name() + " | " + record.house->name + " - " + record.map->name;
             text += "\n" + label;
