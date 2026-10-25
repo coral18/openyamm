@@ -3,6 +3,7 @@
 #include "doctest/doctest.h"
 #include "game/world/WorldDatabase.h"
 #include "game/world/WorldGuide.h"
+#include "game/tables/SpellTable.h"
 #include "game/tables/JournalQuestTable.h"
 #include "game/tables/JournalAutonoteTable.h"
 #include "game/world/WorldAtlasPresentation.h"
@@ -2029,6 +2030,15 @@ TEST_CASE("site journal references use the shared registry and require both site
     knowledge.siteObservations[feature.mapId] = worldSiteObservations(outcomeState);
     CHECK(world.siteObservationText(feature, knowledge).find("Party gold +200") != std::string::npos);
     CHECK(world.queryFeatures(knowledge, false, "Party gold +200").size() == 1);
+    SpellTable spells;
+    REQUIRE(spells.loadFromRows({{"38", "", "Shared Stoneskin Name", "Earth", "", ""}}));
+    CHECK(world.queryFeatures(knowledge, false, "Shared Stoneskin Name", "", &spells).empty());
+    after.buffs.push_back({std::nullopt, 0, 38, 120, 10, 5, 3});
+    REQUIRE(recordWorldSiteObservation(outcomeState, site.id, 10, before, after, 1));
+    knowledge.siteObservations[feature.mapId] = worldSiteObservations(outcomeState);
+    CHECK(world.queryFeatures(knowledge, false, "Shared Stoneskin Name", "", &spells).size() == 1);
+    CHECK(world.siteObservationText(feature, knowledge, &spells).find("Applied effect from: Shared Stoneskin Name")
+        != std::string::npos);
     CHECK(world.siteReference(feature, knowledge, false).empty());
     CHECK(world.queryFeatures(knowledge, false, "Effect and requirements").empty());
     WorldMapFeature other = feature;

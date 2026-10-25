@@ -3,6 +3,8 @@
 #include "game/events/EventAttributeInfo.h"
 #include "game/events/EventRuntime.h"
 #include "game/party/Party.h"
+#include "game/party/EventSpellBuffs.h"
+#include "game/tables/SpellTable.h"
 #include "game/world/WorldMapKnowledge.h"
 #include "game/world/WorldSiteObservations.h"
 #include "tests/PartySpellTestHarness.h"
@@ -16,6 +18,130 @@ const std::string Root = "openyamm.discovery.site-effects.v1/bmodel/38/surface/1
 WorldSiteValueSnapshot gold(int32_t value)
 {
     return {{"Hero"}, {{"Gold", std::nullopt, value}}};
+}
+
+TEST_CASE("site observations persist actual party and character spell effects using active spell names")
+{
+    Party party;
+    party.seed(Party::createDefaultSeed());
+    EventRuntimeState state;
+    const auto before = captureWorldSiteValues(state, party, 42);
+    REQUIRE(tryApplyEventSpellBuffs(party, 38, 4, 3));
+    REQUIRE(tryApplyEventSpellBuffs(party, 46, 4, 3));
+    const auto after = captureWorldSiteValues(state, party, 42);
+    REQUIRE(recordWorldSiteObservation(state, Site, 223, before, after, 42));
+    auto observations = worldSiteObservations(state);
+    REQUIRE(observations.size() == 1);
+    REQUIRE(observations[0].spells.size() == 2);
+    CHECK(observations[0].lastChanged);
+    CHECK(state.namedMapVars.at(Root + "spell/party/38/actions") == WorldSiteSpellObservation::Applied);
+    CHECK(state.namedMapVars.at(Root + "spell/character/46/actions") == WorldSiteSpellObservation::Applied);
+    SpellTable spells;
+    REQUIRE(spells.loadFromRows({{"38", "", "Custom Stoneskin", "Earth", "", ""},
+        {"46", "", "Custom Bless", "Spirit", "", ""}}));
+    const std::string text = describeWorldSiteObservation(observations[0], &spells);
+    CHECK(text.find("Applied effect from: Custom Stoneskin") != std::string::npos);
+    CHECK(text.find("Applied effect from: Custom Bless") != std::string::npos);
+    CHECK(text.find("at least one character") != std::string::npos);
+    REQUIRE(recordWorldSiteObservation(state, Site, 223, after, after, 43));
+    CHECK_FALSE(worldSiteObservations(state)[0].lastChanged);
+    CHECK(worldSiteObservations(state)[0].spells.size() == 2);
+    EventRuntimeState refilled;
+    restoreWorldMapKnowledgeAfterRefill(state, refilled);
+    CHECK(worldSiteObservations(refilled)[0].spells.size() == 2);
+    CHECK(refilled.namedGlobalVars.empty());
+    EventRuntimeState unidentified;
+    auto unknown = gold(0), unknownAfter = gold(200);
+    unknown.buffs.push_back({std::nullopt, 0, 0, 120, 1, 0, 0});
+    unknownAfter.buffs = unknown.buffs;
+    REQUIRE(recordWorldSiteObservation(unidentified, Site, 223, unknown, unknownAfter, 43));
+    REQUIRE(worldSiteObservations(unidentified)[0].effects.size() == 1);
+    CHECK(worldSiteObservations(unidentified)[0].spells.empty());
+}
+
+TEST_CASE("site spell observations distinguish refresh removal expiry and roster replacement")
+{
+    Party party;
+    party.seed(Party::createDefaultSeed());
+    EventRuntimeState state;
+    party.applyPartyBuff(PartyBuffId::Stoneskin, 120, 10, 38, 5, SkillMastery::Master, 0);
+    auto before = captureWorldSiteValues(state, party, 10);
+    party.advanceTimedStates(60);
+    auto decayed = captureWorldSiteValues(state, party, 11);
+    REQUIRE(recordWorldSiteObservation(state, Site, 223, before, decayed, 11));
+    CHECK(worldSiteObservations(state)[0].spells.empty());
+    party.applyPartyBuff(PartyBuffId::Stoneskin, 120, 10, 38, 5, SkillMastery::Master, 0);
+    auto refreshed = captureWorldSiteValues(state, party, 11);
+    REQUIRE(recordWorldSiteObservation(state, Site, 223, decayed, refreshed, 11));
+    CHECK(state.namedMapVars.at(Root + "spell/party/38/actions") == WorldSiteSpellObservation::Updated);
+    party.clearPartyBuff(PartyBuffId::Stoneskin);
+    auto removed = captureWorldSiteValues(state, party, 11);
+    REQUIRE(recordWorldSiteObservation(state, Site, 223, refreshed, removed, 11));
+    CHECK(state.namedMapVars.at(Root + "spell/party/38/actions")
+        == (WorldSiteSpellObservation::Updated | WorldSiteSpellObservation::Removed));
+    EventRuntimeState expiry;
+    party.applyPartyBuff(PartyBuffId::Stoneskin, 5, 10, 38, 5, SkillMastery::Master, 0);
+    before = captureWorldSiteValues(expiry, party, 11);
+    party.advanceTimedStates(60);
+    const auto expired = captureWorldSiteValues(expiry, party, 12);
+    REQUIRE(recordWorldSiteObservation(expiry, Site, 223, before, expired, 12));
+    CHECK(worldSiteObservations(expiry)[0].spells.empty());
+    auto oldRoster = gold(0), newRoster = gold(0);
+    oldRoster.buffs.push_back({0, 0, 46, 120, 10, 5, 3});
+    newRoster.members[0] = "Replacement";
+    newRoster.buffs.push_back({0, 0, 46, 240, 10, 5, 3});
+    REQUIRE(recordWorldSiteObservation(expiry, "surface/other", 223, oldRoster, newRoster, 12));
+    CHECK_FALSE(expiry.namedMapVars.contains(
+        "openyamm.discovery.site-effects.v1/surface/other/event/223/spell/character/46/actions"));
+}
+
+TEST_CASE("site spell observations aggregate composite spell components without claiming the whole buff was removed")
+{
+    Party party;
+    party.seed(Party::createDefaultSeed());
+    EventRuntimeState state;
+    const auto before = captureWorldSiteValues(state, party);
+    REQUIRE(tryApplyEventSpellBuffs(party, 85, 4, 3));
+    const auto applied = captureWorldSiteValues(state, party);
+    CHECK(applied.buffs.size() > 1);
+    REQUIRE(recordWorldSiteObservation(state, Site, 223, before, applied, 1));
+    REQUIRE(worldSiteObservations(state)[0].spells.size() == 1);
+    party.clearPartyBuff(PartyBuffId::FireResistance);
+    CHECK(party.hasPartyBuff(PartyBuffId::MindResistance));
+    const auto partial = captureWorldSiteValues(state, party);
+    REQUIRE(recordWorldSiteObservation(state, Site, 223, applied, partial, 1));
+    CHECK(state.namedMapVars.at(Root + "spell/party/85/actions")
+        == (WorldSiteSpellObservation::Applied | WorldSiteSpellObservation::Removed));
+    CHECK(describeWorldSiteObservation(worldSiteObservations(state)[0]).find("Removed effect from:")
+        != std::string::npos);
+}
+
+TEST_CASE("site spell observations reject malformed snapshots atomically and flag corrupt saved spell keys")
+{
+    const auto before = gold(0);
+    for (int variant = 0; variant < 5; ++variant)
+    {
+        auto after = gold(200);
+        after.buffs.push_back({std::nullopt, 0, 38, 120, 10, 5, 3});
+        if (variant == 0) after.buffs[0].mastery = 255;
+        if (variant == 1) after.buffs[0].member = 10;
+        if (variant == 2) after.buffs[0].remainingSeconds = -1;
+        if (variant == 3) after.buffs[0].slot = 255;
+        if (variant == 4) after.buffs.push_back(after.buffs[0]);
+        EventRuntimeState state;
+        CHECK_FALSE(recordWorldSiteObservation(state, Site, 223, before, after, 1));
+        CHECK(state.namedMapVars.empty());
+    }
+    for (const char *pKey : {"party/0/actions", "party/038/actions", "party/38/extra", "invalid/38/actions"})
+    {
+        EventRuntimeState state;
+        REQUIRE(recordWorldSiteObservation(state, Site, 223, before, before, 1));
+        state.namedMapVars[Root + "spell/" + pKey] = 1;
+        CHECK_FALSE(worldSiteObservations(state)[0].error.empty());
+        const auto saved = state.namedMapVars;
+        CHECK_FALSE(recordWorldSiteObservation(state, Site, 223, before, gold(200), 2));
+        CHECK(state.namedMapVars == saved);
+    }
 }
 }
 

@@ -46,7 +46,8 @@ This audit does not certify all inherited-decoration Atlas content.
 
 Discovery now retains actually observed synchronous numeric/condition outcomes through the shared Core site
 interaction hook, including at sites without journal notes. This separate history does not expose unexecuted
-branches or turn a generated reference into party knowledge. Deferred/spell-buff/item outcomes remain open.
+branches or turn a generated reference into party knowledge. Synchronous identified spell-buff changes are now recorded by the shared site observer; deferred effects,
+unidentified spell sources and item outcomes remain open.
 
 The current projection supports acyclic numeric character/resource/resistance comparisons, HP/SP fullness, simple
 local and per-character use gates, condition presence/application/removal, bounded random jumps, and nonnegative
@@ -129,3 +130,16 @@ well uses 101; its fountains use 104/449, rather than the missing 102. The reada
 confirm the six callback effects but supply no coordinates. This rules out the visible-only site extractor and
 missing small supplements as explanations; it does not justify inventing a placement or declaring the callbacks
 unused in every possible runtime state. Keep their content/binding audit open.
+
+
+## Synchronous spell-effect observations, 2026-10-25
+
+Actual site interactions now retain applied, updated and removed identified spell effects, separately for party
+and character buffs. This extends discovery history, not the generated Guide prediction language. Timed expiry
+is excluded using before/after game time; roster replacements do not establish character attribution. Composite
+spells aggregate observed component changes without claiming the entire enchantment was applied or removed.
+Unidentified source ID zero does not become a guessed spell or prevent independent numeric findings.
+
+The six unbound well declarations above still require original-map/import provenance before any placement repair.
+The new spell controls use explicitly synthetic private callbacks at existing MM7/MM8 well surfaces; they do not
+change ordinary campaign well rewards or resolve those six missing bindings.

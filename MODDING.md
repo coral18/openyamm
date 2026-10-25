@@ -650,3 +650,21 @@ map declarations for this metadata family, so metadata alone does not require a 
 Actual displayed roster invitations persist as `openyamm.discovery.npc/<npcId>/roster/<rosterId> = 1` in existing
 named global state. This records the seen NPC/roster relationship without assigning a map or residence, changing
 recruitment state or disclosing an unowned companion profile. It remains active when the optional Atlas UI is off.
+
+
+### Observed spell effects at sites
+
+Core records actual synchronous party and character buff changes around successful eligible site interactions.
+The existing `openyamm.discovery.site-effects.v1/<site>/event/<event>/` namespace now accepts
+`spell/party/<canonicalSpellId>/actions` and `spell/character/<canonicalSpellId>/actions`. Each positive-ID record
+is a nonzero bit mask: 1 applied, 2 updated, 4 removed; repeated observations merge these flags. A composite spell
+can contribute several buff components and a character spell can affect only some members. The record establishes
+that at least one corresponding effect changed, not that every component/member received a whole spell.
+
+The observer compares source ID, power, skill/mastery and remaining duration against elapsed game time. Ordinary
+expiry is not a site removal; changed roster identity does not prove a character effect. Source ID zero is valid
+unidentified gameplay state and is not assigned a spell by guessing its buff slot. Numeric findings remain usable.
+The Atlas displays/searches current shared spell names and preserves discovery gates. It does not expose a spell
+book as learned, predict future duration/power or record queued effects that arrive after the synchronous action.
+Malformed snapshot/new saved fields are rejected without overwriting the old observation. Missing spell fields
+in older records mean no spell history, and the existing save/refill ownership remains unchanged.

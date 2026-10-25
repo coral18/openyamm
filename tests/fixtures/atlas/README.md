@@ -208,3 +208,20 @@ not observed by reading Guide, gold/map/unlock state are intact across resave/lo
 actual dialogue still shows the original topics 10/11 rather than the fixture's unexecuted assignment 630.
 Never install this overlay in the normal runtime, modify generated Lua, or run a package writer on the hard-linked
 fixture world archives.
+
+
+## Synchronous site spell-effect history
+
+Use `prepare_assets.py --fixture site-spells-mm7` or `site-spells-mm8` to create separate package views using the
+same `--assets` / fresh `--output` arguments above. Each view changes only one well callback in private assets:
+Harmondale 223 or Dagger Wound 101 applies Stone Skin and Bless through the ordinary event-spell API. These are
+synthetic observation controls, not changes to normal well rewards. Keep the overlays out of normal packages.
+
+Run `tests/scenarios/atlas/mm*_site_spell_effects_fixture.yml` with isolated settings/mods and that world's private
+asset view. Copy its temporary `before.oysav` to `saves/before.oysav`. The faithful scenario interacts with the
+real surface and checks previously absent party/character spell receipts plus save/load and unchanged gold.
+Launch the native game with `tools/menu_tours/atlas_mm*_site_spell_effects.yml` as its menu-input tour. Searching
+Stone Skin should find the observed site, whose reading page shows the two actual effects in both modes.
+Run the matching `mm*_site_spell_effects_verify.yml` against the private quicksave after the UI closes.
+The same fixture scenario can be run with Atlas disabled (`profile.yaml` enabling only `karol.test`) to verify that
+Core observation is independent of UI activation. Never run archive writers on these hard-linked world packages.

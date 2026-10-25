@@ -5,6 +5,7 @@
 #include "game/gameplay/GameplayRuntimeInterfaces.h"
 #include "game/world/WorldMapFeatures.h"
 #include "game/party/Party.h"
+#include "game/tables/SpellTable.h"
 
 #include <algorithm>
 #include <charconv>
@@ -26,6 +27,62 @@ bool validSite(const std::string &siteId)
 {
     return !siteId.empty() && siteId.size() <= 256 && siteId.find("/event/") == std::string::npos
         && siteId.find('\0') == std::string::npos;
+}
+
+bool recordBuffChanges(WorldSiteObservation &observation,
+    const WorldSiteValueSnapshot &before, const WorldSiteValueSnapshot &after, bool &changed)
+{
+    using Buff = WorldSiteValueSnapshot::Buff;
+    if (!std::isfinite(before.gameMinutes) || !std::isfinite(after.gameMinutes)
+        || before.gameMinutes < 0 || after.gameMinutes < before.gameMinutes) return false;
+    for (const WorldSiteValueSnapshot *pSnapshot : {&before, &after})
+    {
+        std::set<std::pair<std::optional<size_t>, uint8_t>> slots;
+        for (const Buff &buff : pSnapshot->buffs)
+            if ((buff.member && *buff.member >= pSnapshot->members.size())
+                || buff.slot >= (buff.member ? CharacterBuffCount : PartyBuffCount)
+                || !std::isfinite(buff.remainingSeconds) || buff.remainingSeconds <= 0
+                || buff.mastery > uint8_t(SkillMastery::Grandmaster)
+                || !slots.emplace(buff.member, buff.slot).second) return false;
+    }
+    const double elapsed = (double(after.gameMinutes) - before.gameMinutes) * 60;
+    const auto find = [](const std::vector<Buff> &values, const Buff &buff) -> const Buff *
+    {
+        const auto value = std::find_if(values.begin(), values.end(), [&](const Buff &candidate)
+            { return candidate.member == buff.member && candidate.slot == buff.slot; });
+        return value == values.end() ? nullptr : &*value;
+    };
+    const auto record = [&](const Buff &buff, WorldSiteSpellObservation::Action action)
+    {
+        // Zero is a legitimate unidentified source (for example a diagnostic/legacy buff), not a spell ID.
+        if (buff.spellId == 0) return;
+        const bool party = !buff.member;
+        const auto value = std::find_if(observation.spells.begin(), observation.spells.end(), [&](const auto &entry)
+            { return entry.spellId == buff.spellId && entry.party == party; });
+        if (value == observation.spells.end())
+            observation.spells.push_back({buff.spellId, party, uint8_t(action)});
+        else value->actions |= action;
+        changed = true;
+    };
+    for (const Buff &buff : before.buffs)
+    {
+        if (buff.member && before.members != after.members) continue;
+        const Buff *pNext = find(after.buffs, buff);
+        if (buff.remainingSeconds > elapsed && (pNext == nullptr || pNext->spellId != buff.spellId))
+            record(buff, WorldSiteSpellObservation::Removed);
+    }
+    for (const Buff &buff : after.buffs)
+    {
+        if (buff.member && before.members != after.members) continue;
+        const Buff *pPrevious = find(before.buffs, buff);
+        if (pPrevious == nullptr || pPrevious->spellId != buff.spellId || pPrevious->remainingSeconds <= elapsed)
+            record(buff, WorldSiteSpellObservation::Applied);
+        else if (pPrevious->power != buff.power || pPrevious->skillLevel != buff.skillLevel
+            || pPrevious->mastery != buff.mastery
+            || std::abs(double(buff.remainingSeconds) - (pPrevious->remainingSeconds - elapsed)) > 0.01)
+            record(buff, WorldSiteSpellObservation::Updated);
+    }
+    return true;
 }
 
 WorldSiteObservation readObservation(const EventRuntimeState &state, const std::string &siteId, uint16_t eventId)
@@ -94,13 +151,36 @@ WorldSiteObservation readObservation(const EventRuntimeState &state, const std::
     {
         return a.attribute < b.attribute;
     });
+    const std::string spells = key + "spell/";
+    for (const auto &[name, value] : state.namedMapVars)
+    {
+        if (!name.starts_with(spells)) continue;
+        const std::string_view entry(name.data() + spells.size(), name.size() - spells.size());
+        const size_t separator = entry.find('/');
+        if (separator == std::string_view::npos || !entry.ends_with("/actions")
+            || (entry.substr(0, separator) != "party" && entry.substr(0, separator) != "character"))
+        {
+            result.error = "Invalid recorded spell effect for this site.";
+            continue;
+        }
+        const std::string_view number = entry.substr(separator + 1, entry.size() - separator - 9);
+        uint32_t spellId = 0;
+        const auto parsed = std::from_chars(number.data(), number.data() + number.size(), spellId);
+        if (parsed.ec != std::errc() || parsed.ptr != number.data() + number.size() || spellId == 0
+            || number != std::to_string(spellId) || value <= 0 || value > 7)
+            result.error = "Invalid recorded spell effect for this site.";
+        else result.spells.push_back({spellId, entry.substr(0, separator) == "party", uint8_t(value)});
+    }
+    std::sort(result.spells.begin(), result.spells.end(), [](const auto &a, const auto &b)
+        { return std::pair{a.party, a.spellId} < std::pair{b.party, b.spellId}; });
     return result;
 }
 }
 
-WorldSiteValueSnapshot captureWorldSiteValues(const EventRuntimeState &state, const Party &party)
+WorldSiteValueSnapshot captureWorldSiteValues(const EventRuntimeState &state, const Party &party, float gameMinutes)
 {
     WorldSiteValueSnapshot result;
+    result.gameMinutes = gameMinutes;
     for (const Character &member : party.members())
         result.members.push_back(member.name + "/" + std::to_string(member.rosterId) + "/"
             + std::to_string(member.characterDataId) + "/" + std::to_string(member.portraitPictureId));
@@ -116,6 +196,17 @@ WorldSiteValueSnapshot captureWorldSiteValues(const EventRuntimeState &state, co
                 result.values.push_back({std::string(attribute.symbol), i,
                     EventRuntime::getVariableValue(state, variable, &party, i)});
     }
+    const auto append = [&](std::optional<size_t> member, uint8_t slot, const auto *pBuff)
+    {
+        if (pBuff != nullptr && pBuff->active())
+            result.buffs.push_back({member, slot, pBuff->spellId, pBuff->remainingSeconds,
+                pBuff->power, pBuff->skillLevel, uint8_t(pBuff->skillMastery)});
+    };
+    for (uint8_t slot = 0; slot < PartyBuffCount; ++slot)
+        append(std::nullopt, slot, party.partyBuff(PartyBuffId(slot)));
+    for (size_t member = 0; member < party.memberCount(); ++member)
+        for (uint8_t slot = 0; slot < CharacterBuffCount; ++slot)
+            append(member, slot, party.characterBuff(member, CharacterBuffId(slot)));
     return result;
 }
 
@@ -146,7 +237,7 @@ WorldSiteInteractionObservation::WorldSiteInteractionObservation(IGameplayWorldR
     if (m_event == 0 || m_site.empty() || world.party() == nullptr || !kind
         || (*kind != WorldMapFeatureKind::Water && *kind != WorldMapFeatureKind::Shrine
             && *kind != WorldMapFeatureKind::Obelisk && *kind != WorldMapFeatureKind::Decoration)) return;
-    m_before = captureWorldSiteValues(*pState, *world.party());
+    m_before = captureWorldSiteValues(*pState, *world.party(), world.gameMinutes());
     m_map = pState->mapFileName;
     if (target.contextActionMetadata->interactionReference
         && target.contextActionMetadata->interactionReference->spriteId == target.eventIdPrimary)
@@ -164,7 +255,7 @@ void WorldSiteInteractionObservation::finish(IGameplayWorldRuntime &world, bool 
     const Party *pParty = world.party();
     if (pState == nullptr || pParty == nullptr || pState->mapFileName != m_map) return;
     if (!recordWorldSiteObservation(*pState, m_site, m_event, *m_before,
-        captureWorldSiteValues(*pState, *pParty), world.gameMinutes()) || m_sprite == 0) return;
+        captureWorldSiteValues(*pState, *pParty, world.gameMinutes()), world.gameMinutes()) || m_sprite == 0) return;
     const auto found = pState->spriteOverrides.find(m_sprite);
     const bool removed = !m_wasHidden && found != pState->spriteOverrides.end() && found->second.hidden;
     const std::string key = prefix(m_site, m_event);
@@ -223,6 +314,7 @@ bool recordWorldSiteObservation(EventRuntimeState &state, const std::string &sit
             }
         }
     }
+    if (!recordBuffChanges(observation, before, after, changed)) return false;
     state.namedMapVars[key + "seen"] = 1;
     state.namedMapVars[key + "time"] = int32_t(time);
     state.namedMapVars[key + "changed"] = changed ? 1 : 0;
@@ -235,6 +327,9 @@ bool recordWorldSiteObservation(EventRuntimeState &state, const std::string &sit
         state.namedMapVars[stat + "max-before"] = range.maxBefore;
         state.namedMapVars[stat + "max-after"] = range.maxAfter;
     }
+    for (const WorldSiteSpellObservation &spell : observation.spells)
+        state.namedMapVars[key + "spell/" + (spell.party ? "party/" : "character/")
+            + std::to_string(spell.spellId) + "/actions"] = spell.actions;
     return true;
 }
 
@@ -266,7 +361,7 @@ std::vector<WorldSiteObservation> worldSiteObservations(const EventRuntimeState 
     return result;
 }
 
-std::string describeWorldSiteObservation(const WorldSiteObservation &observation)
+std::string describeWorldSiteObservation(const WorldSiteObservation &observation, const SpellTable *pSpells)
 {
     if (!observation.error.empty()) return observation.error;
     std::string text = "Recorded use: day " + std::to_string(observation.gameMinutes / (24 * 60) + 1) + ".";
@@ -300,6 +395,26 @@ std::string describeWorldSiteObservation(const WorldSiteObservation &observation
                 if (range.minDelta() != range.maxDelta())
                     text += " to " + amount(range.maxDelta()) + " (observed range)";
             }
+        }
+    }
+    for (const bool party : {true, false})
+    {
+        bool heading = false;
+        for (const WorldSiteSpellObservation &spell : observation.spells)
+        {
+            if (spell.party != party) continue;
+            if (!heading)
+            {
+                text += party ? "\nParty spell effects observed:" : "\nSpell effects on at least one character:";
+                heading = true;
+            }
+            const SpellEntry *pSpell = pSpells != nullptr && spell.spellId <= INT32_MAX
+                ? pSpells->findById(int(spell.spellId)) : nullptr;
+            const std::string name = pSpell != nullptr ? pSpell->name : "Unknown spell";
+            for (const auto &[action, label] : {std::pair{WorldSiteSpellObservation::Applied, "Applied effect from: "},
+                {WorldSiteSpellObservation::Updated, "Updated effect from: "},
+                {WorldSiteSpellObservation::Removed, "Removed effect from: "}})
+                if (spell.actions & action) text += "\n" + std::string(label) + name;
         }
     }
     return text;

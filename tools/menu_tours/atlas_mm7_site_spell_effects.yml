@@ -1,0 +1,45 @@
+output_dir: captures
+exit: true
+steps:
+- expect: gameplay
+- key: F9
+- pause: true
+- click:
+  - 800
+  - 821
+- click:
+  - 1480
+  - 126
+- click:
+  - 275
+  - 126
+- text: Stone Skin
+- key: Return
+- click:
+  - 1250
+  - 260
+- capture: known-spell-site
+- click:
+  - 1390
+  - 806
+- capture: recorded-spell-effects
+- click:
+  - 1152
+  - 57
+- capture: guide-retains-actual-effects
+- click:
+  - 1152
+  - 57
+- capture: discovery-retains-observed-effects
+- click:
+  - 450
+  - 57
+- click:
+  - 1450
+  - 57
+- expect: pause
+- click:
+  - 800
+  - 301
+- expect: gameplay
+- key: F9

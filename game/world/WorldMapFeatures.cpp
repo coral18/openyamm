@@ -289,13 +289,14 @@ std::vector<const WorldSiteObservation *> WorldDatabase::siteObservations(const 
     return result;
 }
 
-std::string WorldDatabase::siteObservationText(const WorldMapFeature &feature, const WorldKnowledge &knowledge) const
+std::string WorldDatabase::siteObservationText(const WorldMapFeature &feature, const WorldKnowledge &knowledge,
+    const SpellTable *pSpells) const
 {
     std::string result;
     for (const WorldSiteObservation *pObservation : siteObservations(feature, knowledge))
     {
         if (!result.empty()) result += "\n\n";
-        result += describeWorldSiteObservation(*pObservation);
+        result += describeWorldSiteObservation(*pObservation, pSpells);
     }
     return result;
 }

@@ -187,7 +187,8 @@ public:
     std::vector<const WorldItemSource *> itemSources(const WorldKnowledge &knowledge, bool guide) const;
     std::vector<WorldChestObservation> observedChests(const WorldMapFeature &feature,
         const WorldKnowledge &knowledge) const;
-    std::string siteObservationText(const WorldMapFeature &feature, const WorldKnowledge &knowledge) const;
+    std::string siteObservationText(const WorldMapFeature &feature, const WorldKnowledge &knowledge,
+        const SpellTable *pSpells = nullptr) const;
     std::vector<const WorldSiteObservation *> siteObservations(const WorldMapFeature &feature,
         const WorldKnowledge &knowledge) const;
     std::string_view siteReference(const WorldMapFeature &feature, const WorldKnowledge &knowledge, bool guide) const;
@@ -197,7 +198,7 @@ public:
         const WorldKnowledge &knowledge, bool guide) const;
     bool featureVisible(const WorldMapFeature &feature, const WorldKnowledge &knowledge, bool guide) const;
     std::vector<const WorldMapFeature *> queryFeatures(const WorldKnowledge &knowledge, bool guide,
-        const std::string &search = {}, const std::string &withinMap = {}) const;
+        const std::string &search = {}, const std::string &withinMap = {}, const SpellTable *pSpells = nullptr) const;
     bool locationVisible(const WorldMapLocation &location, const WorldKnowledge &knowledge, bool guide) const;
     std::vector<const WorldRecord *> recordsAtLocation(const WorldMapLocation &location,
         const WorldKnowledge &knowledge, bool guide, bool includeTravel = false) const;

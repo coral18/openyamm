@@ -11,6 +11,7 @@ namespace OpenYAMM::Game
 class IGameplayWorldRuntime;
 struct GameplayWorldHit;
 class Party;
+class SpellTable;
 struct EventRuntimeState;
 
 struct WorldSiteValue
@@ -22,8 +23,28 @@ struct WorldSiteValue
 
 struct WorldSiteValueSnapshot
 {
+    struct Buff
+    {
+        std::optional<size_t> member;
+        uint8_t slot = 0;
+        uint32_t spellId = 0;
+        float remainingSeconds = 0;
+        int32_t power = 0;
+        uint32_t skillLevel = 0;
+        uint8_t mastery = 0;
+    };
     std::vector<std::string> members;
     std::vector<WorldSiteValue> values;
+    std::vector<Buff> buffs;
+    float gameMinutes = 0;
+};
+
+struct WorldSiteSpellObservation
+{
+    enum Action : uint8_t { Applied = 1, Updated = 2, Removed = 4 };
+    uint32_t spellId = 0;
+    bool party = true;
+    uint8_t actions = 0;
 };
 
 struct WorldSiteEffectRange
@@ -50,6 +71,7 @@ struct WorldSiteObservation
     std::vector<WorldSiteEffectRange> effects;
     std::string error;
     std::optional<bool> objectRemoved;
+    std::vector<WorldSiteSpellObservation> spells;
 };
 
 // One actual event-target activation, shared by ordinary input and world-targeted spells.
@@ -67,11 +89,12 @@ private:
     bool m_wasHidden = false;
 };
 
-WorldSiteValueSnapshot captureWorldSiteValues(const EventRuntimeState &state, const Party &party);
+WorldSiteValueSnapshot captureWorldSiteValues(const EventRuntimeState &state, const Party &party,
+    float gameMinutes = 0);
 // Synchronous before/after values only. Does not inspect possible branches or infer unobserved conditions.
 // Numeric named map state uses stable attribute symbols, survives refill and requires no save-format change.
 bool recordWorldSiteObservation(EventRuntimeState &state, const std::string &siteId, uint16_t eventId,
     const WorldSiteValueSnapshot &before, const WorldSiteValueSnapshot &after, float gameMinutes);
 std::vector<WorldSiteObservation> worldSiteObservations(const EventRuntimeState &state);
-std::string describeWorldSiteObservation(const WorldSiteObservation &observation);
+std::string describeWorldSiteObservation(const WorldSiteObservation &observation, const SpellTable *pSpells = nullptr);
 } // namespace OpenYAMM::Game

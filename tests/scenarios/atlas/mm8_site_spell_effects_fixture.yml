@@ -1,0 +1,63 @@
+# Requires the site-spells-mm8 isolated asset fixture. Ordinary campaign callbacks remain unchanged.
+id: atlas.mm8_site_spell_effects_fixture
+title: Controlled spell well records actual shared event buffs without assigning unobserved
+  effects
+world: mm8
+mode: faithful
+steps:
+- new_game_flow:
+    start_map: out01.odm
+    party:
+      gold: 500
+      food: 10
+      members:
+      - name: Spell Site Tester
+        class: Knight
+        level: 1
+        skills: []
+        equipment: {}
+- assert:
+    named_map_var_changed:
+      name: openyamm.discovery.site-effects.v1/bmodel/22/surface/33/event/101/spell/party/38/actions
+      value: 0
+- assert:
+    named_map_var_changed:
+      name: openyamm.discovery.site-effects.v1/bmodel/22/surface/33/event/101/spell/character/46/actions
+      value: 0
+- press_interact:
+    pose:
+      x: 6500
+      y: 9896
+      z: 864
+      yaw: 0
+      pitch: 0
+    expect:
+      kind: event_target
+      triggered_event: 101
+      can_activate: true
+- assert:
+    named_map_var_changed:
+      name: openyamm.discovery.site-effects.v1/bmodel/22/surface/33/event/101/spell/party/38/actions
+      value: 1
+- assert:
+    named_map_var_changed:
+      name: openyamm.discovery.site-effects.v1/bmodel/22/surface/33/event/101/spell/character/46/actions
+      value: 1
+- assert:
+    named_map_var_changed:
+      name: openyamm.discovery.site-effects.v1/bmodel/22/surface/33/event/101/changed
+      value: 1
+- save_game: before
+- load_game: before
+- assert:
+    named_map_var_changed:
+      name: openyamm.discovery.site-effects.v1/bmodel/22/surface/33/event/101/spell/party/38/actions
+      value: 1
+- assert:
+    named_map_var_changed:
+      name: openyamm.discovery.site-effects.v1/bmodel/22/surface/33/event/101/spell/character/46/actions
+      value: 1
+- assert:
+    runtime_event_variable:
+      id: 21
+      value: 500

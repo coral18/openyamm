@@ -9418,7 +9418,8 @@ bool EventRuntime::executeEventById(
                 && decoration.currentEventId == eventId && eventId >= decoration.baseEventId
                 && uint32_t(eventId) < uint32_t(decoration.baseEventId) + decoration.eventCount)
             {
-                beforeDecoration = captureWorldSiteValues(runtimeState, *pParty);
+                beforeDecoration = captureWorldSiteValues(runtimeState, *pParty,
+                    pSceneEventContext->currentGameMinutes());
                 decorationSite = "inherited-decoration/" + std::to_string(decoration.decorVarIndex);
                 observationMap = runtimeState.mapFileName;
             }
@@ -9428,7 +9429,8 @@ bool EventRuntime::executeEventById(
         {
             recordWorldSiteDiscovery(runtimeState, eventId, decorationSite);
             recordWorldSiteObservation(runtimeState, decorationSite, eventId, *beforeDecoration,
-                captureWorldSiteValues(runtimeState, *pParty), pSceneEventContext->currentGameMinutes());
+                captureWorldSiteValues(runtimeState, *pParty, pSceneEventContext->currentGameMinutes()),
+                pSceneEventContext->currentGameMinutes());
         }
 
         if (invoked)

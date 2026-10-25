@@ -2346,3 +2346,44 @@ Reproduction: `tests/fixtures/atlas/prepare_assets.py --fixture remote-companion
 explained in `tests/fixtures/atlas/README.md`. Private evidence is under `atlas-remote-contacts-20261025` in the
 Windows development root. This completes remote declaration indexing, not full recruitment eligibility or the
 full MM7/MM8 Atlas objective.
+
+
+## Recorded spell effects at interaction sites (2026-10-25)
+
+The shared Core site observer now snapshots actual party/character buffs around a successful synchronous
+interaction, including inherited-decoration callbacks. It records whether identified spell effects were applied,
+updated or removed. Snapshot game time excludes ordinary timer decay/expiry from site attribution; roster changes
+exclude character-buff attribution. A source spell can own several buff components, so the text describes changes
+to effects from that spell, not receipt/removal of the complete composite enchantment. Duration, power and mastery
+are compared to detect a change but are not presented as a future outcome or saved as an exact reward forecast.
+
+The native Atlas resolves spell names through the active shared SpellTable for both findings and search. Knowing
+an unrelated active buff alone does not discover an object's effects. Unknown source ID zero stays unidentified
+and cannot suppress otherwise valid numeric findings. Empty/no-change visits retain earlier spell observations.
+The existing named map namespace preserves history through save/load and map refill without a binary save change;
+old records without spell fields still load. Invalid new fields produce an explicit invalid-record result and
+cannot be silently overwritten by another observation. Recording remains active when the optional Atlas is off.
+
+Validation:
+
+- Windows Release built. Focused site/World Database suites passed 41 cases / 1499 assertions. They cover actual
+  event buff application, party/character separation, active table names and search, unchanged visits, refresh,
+  removal, natural expiry, roster replacement, partial composite removal, unidentified sources, corrupt keys and
+  atomic rejection. The existing opt-in packaged-house geometry audit was outside this focused run.
+- Explicit private MM7/MM8 fixtures replace one existing well callback with Stone Skin/Bless. Both faithful
+  12-step scenarios used the real physical target, recorded initially absent spell receipts and survived save/load.
+  The MM8 scenario also passed with Atlas disabled. These are controlled API tests, not ordinary well reward edits.
+- Two native AMD/OpenGL tours passed and produced eight captures. Inspected findings and Discovery-after-Guide
+  captures show both named spells in both worlds; searching Stone Skin selects the actual observed site. Both
+  nine-step post-UI verifiers preserve map, gold 500 and exact action flags through another save/load.
+- Each private package copy differs from the normal assets overlay by exactly its one QA script. No fixture was
+  installed in the normal runtime or original user campaign.
+
+Reproduction uses `tests/fixtures/atlas/prepare_assets.py --fixture site-spells-mm7` / `site-spells-mm8`,
+`tests/scenarios/atlas/mm*_site_spell_effects_{fixture,verify}.yml` and
+`tools/menu_tours/atlas_mm*_site_spell_effects.yml`. Setup is in the fixture README; private evidence is under
+`atlas-site-spells-20261025` in the Windows development root.
+
+Deferred effects after the synchronous activation, unidentified spell sources, broader item/quest/site semantics,
+the six unresolved original well bindings and the remaining Atlas coverage matrix are still open. This does not
+add Guide predictions for spell-casting callbacks or establish Android/controller acceptance.

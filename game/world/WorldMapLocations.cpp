@@ -311,7 +311,7 @@ const std::string &WorldDatabase::featureTitle(const WorldMapFeature &feature,
 }
 
 std::vector<const WorldMapFeature *> WorldDatabase::queryFeatures(const WorldKnowledge &knowledge, bool guide,
-    const std::string &search, const std::string &withinMap) const
+    const std::string &search, const std::string &withinMap, const SpellTable *pSpells) const
 {
     const std::string query = toLowerCopy(search);
     std::vector<const WorldMapFeature *> result;
@@ -324,7 +324,7 @@ std::vector<const WorldMapFeature *> WorldDatabase::queryFeatures(const WorldKno
         const std::string text = featureTitle(feature, knowledge, guide) + " "
             + worldMapFeatureKindName(feature.kind) + " " + pMap->name()
             + " " + std::string(siteReference(feature, knowledge, guide))
-            + " " + siteObservationText(feature, knowledge);
+            + " " + siteObservationText(feature, knowledge, pSpells);
         if (query.empty() || toLowerCopy(text).find(query) != std::string::npos)
             result.push_back(&feature);
     }

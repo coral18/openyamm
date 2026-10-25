@@ -1,0 +1,35 @@
+id: atlas.mm7_site_spell_effects_verify
+title: Atlas spell findings persist without awarding spells or changing resources
+world: mm7
+mode: faithful
+steps:
+- load_game:
+    name: native
+    path: saves/quicksave.oysav
+- assert:
+    named_map_var_changed:
+      name: openyamm.discovery.site-effects.v1/bmodel/38/surface/10/event/223/spell/party/38/actions
+      value: 1
+- assert:
+    named_map_var_changed:
+      name: openyamm.discovery.site-effects.v1/bmodel/38/surface/10/event/223/spell/character/46/actions
+      value: 1
+- assert:
+    named_map_var_changed:
+      name: openyamm.discovery.site-effects.v1/bmodel/38/surface/10/event/223/seen
+      value: 1
+- assert:
+    map: 7out02.odm
+    runtime_event_variable:
+      id: 21
+      value: 500
+- save_game: spell-findings-roundtrip
+- load_game: spell-findings-roundtrip
+- assert:
+    named_map_var_changed:
+      name: openyamm.discovery.site-effects.v1/bmodel/38/surface/10/event/223/spell/party/38/actions
+      value: 1
+- assert:
+    named_map_var_changed:
+      name: openyamm.discovery.site-effects.v1/bmodel/38/surface/10/event/223/spell/character/46/actions
+      value: 1
