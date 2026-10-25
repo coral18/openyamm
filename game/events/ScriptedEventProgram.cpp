@@ -971,17 +971,20 @@ bool readIdReferences(lua_State *pLuaState, int metadataIndex, ScriptedEventScop
     return true;
 }
 
-bool readNpcLocations(lua_State *pLuaState, int metadataIndex, ScriptedEventScope scope,
-    std::unordered_map<uint16_t, std::vector<ScriptedEventProgram::NpcLocation>> &result, std::string &error)
+template <typename Reference, typename Less>
+bool readNpcReferences(lua_State *pLuaState, int metadataIndex, ScriptedEventScope scope,
+    const char *pField, const char *pValues,
+    std::unordered_map<uint16_t, std::vector<Reference>> &result, Less less, std::string &error)
 {
     const int stackTop = lua_gettop(pLuaState);
     const auto fail = [&]()
     {
-        error = "Invalid npcLocations metadata: expected registered handlers and arrays of positive NPC/house ID pairs";
+        error = "Invalid " + std::string(pField)
+            + " metadata: expected registered handlers and arrays of positive NPC/target ID pairs";
         lua_settop(pLuaState, stackTop);
         return false;
     };
-    lua_getfield(pLuaState, metadataIndex, "npcLocations");
+    lua_getfield(pLuaState, metadataIndex, pField);
     if (lua_isnil(pLuaState, -1))
     {
         lua_pop(pLuaState, 1);
@@ -1007,11 +1010,11 @@ bool readNpcLocations(lua_State *pLuaState, int metadataIndex, ScriptedEventScop
             lua_pop(pLuaState, 1);
             continue;
         }
-        lua_getfield(pLuaState, -1, "locations");
+        lua_getfield(pLuaState, -1, pValues);
         if (!lua_istable(pLuaState, -1)) return fail();
         const size_t count = lua_rawlen(pLuaState, -1);
         size_t entries = 0;
-        std::vector<ScriptedEventProgram::NpcLocation> locations;
+        std::vector<Reference> references;
         lua_pushnil(pLuaState);
         while (lua_next(pLuaState, -2) != 0)
         {
@@ -1035,18 +1038,15 @@ bool readNpcLocations(lua_State *pLuaState, int metadataIndex, ScriptedEventScop
             const uint32_t npcId = uint32_t(lua_tointeger(pLuaState, -1));
             lua_pop(pLuaState, 1);
             lua_rawgeti(pLuaState, -1, 2);
-            const uint32_t houseId = uint32_t(lua_tointeger(pLuaState, -1));
+            const uint32_t targetId = uint32_t(lua_tointeger(pLuaState, -1));
             lua_pop(pLuaState, 1);
-            locations.push_back({npcId, houseId});
+            references.push_back({npcId, targetId});
             lua_pop(pLuaState, 1);
         }
         if (entries != count) return fail();
-        std::sort(locations.begin(), locations.end(), [](const auto &a, const auto &b)
-        {
-            return a.npcId < b.npcId || (a.npcId == b.npcId && a.houseId < b.houseId);
-        });
-        locations.erase(std::unique(locations.begin(), locations.end()), locations.end());
-        if (!locations.empty()) result.emplace(eventId, std::move(locations));
+        std::sort(references.begin(), references.end(), less);
+        references.erase(std::unique(references.begin(), references.end()), references.end());
+        if (!references.empty()) result.emplace(eventId, std::move(references));
         lua_pop(pLuaState, 2);
     }
     lua_settop(pLuaState, stackTop);
@@ -1104,7 +1104,14 @@ bool ScriptedEventProgram::populateMetadataFromLua(
         "itemRewards", "items", UINT32_MAX, program.m_itemRewards, error)) return false;
     if (!readIdReferences(pLuaState, lua_absindex(pLuaState, -1), scope,
         "autonoteReferences", "notes", UINT16_MAX, program.m_autonoteReferences, error)) return false;
-    if (!readNpcLocations(pLuaState, lua_absindex(pLuaState, -1), scope, program.m_npcLocations, error)) return false;
+    if (!readIdReferences(pLuaState, lua_absindex(pLuaState, -1), scope,
+        "qbitGrants", "qbits", UINT32_MAX, program.m_qbitGrants, error)) return false;
+    if (!readNpcReferences(pLuaState, lua_absindex(pLuaState, -1), scope, "npcLocations", "locations",
+        program.m_npcLocations, [](const NpcLocation &a, const NpcLocation &b)
+        { return a.npcId < b.npcId || (a.npcId == b.npcId && a.houseId < b.houseId); }, error)) return false;
+    if (!readNpcReferences(pLuaState, lua_absindex(pLuaState, -1), scope, "npcTopicReferences", "topics",
+        program.m_npcTopicReferences, [](const NpcTopicReference &a, const NpcTopicReference &b)
+        { return a.npcId < b.npcId || (a.npcId == b.npcId && a.topicId < b.topicId); }, error)) return false;
     program.m_levitateTrapFaceMask = readOptionalUnsignedField(pLuaState, -1, "levitateTrapFaceMask").value_or(0);
     program.m_levitateTrapEvents = readIntegerArrayFromField<uint16_t>(pLuaState, -1, "levitateTrapEvents", true);
     program.m_timerTriggers = readTimerTriggers(pLuaState, -1, scope);
@@ -1146,6 +1153,17 @@ const std::unordered_map<uint16_t, std::vector<ScriptedEventProgram::NpcLocation
 ScriptedEventProgram::npcLocations() const
 {
     return m_npcLocations;
+}
+
+const std::unordered_map<uint16_t, std::vector<ScriptedEventProgram::NpcTopicReference>> &
+ScriptedEventProgram::npcTopicReferences() const
+{
+    return m_npcTopicReferences;
+}
+
+const std::unordered_map<uint16_t, std::vector<uint32_t>> &ScriptedEventProgram::qbitGrants() const
+{
+    return m_qbitGrants;
 }
 
 std::optional<ScriptedEventProgram> ScriptedEventProgram::loadFromLuaText(

@@ -614,3 +614,35 @@ Supported random jumps enumerate their distinct reachable route outcomes without
 branch slots do not create duplicate destinations, and the reference explicitly leaves probabilities unspecified.
 The initial content is Zokarr's Tomb's two possible exits. This describes possible routing; it neither predicts the
 next random choice nor evaluates a remote location's current state. All references remain Guide-only.
+
+
+### Possible NPC topics and campaign flag grants
+
+After registering a callback, authors can annotate possible NPC-topic assignments and campaign flag grants:
+
+```lua
+SetGlobalNpcTopicRefs(12, {{28, 602}})
+SetGlobalQBitGrants(12, {8})
+```
+
+The equivalent map APIs are `SetMapNpcTopicRefs` and `SetMapQBitGrants`. Topic references are dense arrays of
+positive NPC/topic ID pairs; flag references are dense arrays of positive canonical QBit IDs. Values are uint32,
+owner event IDs are positive uint16, duplicates are deduplicated, and an empty array clears a declaration.
+The metadata captures the actual registered function. Replacing/removing that callback discards its annotations;
+a replacement may explicitly redeclare its own. Loading metadata never executes the gameplay callback.
+
+These are possible sources, not an observation or a complete/live eligibility result. The Atlas joins declared
+roster topics through `NpcDialogTable` and possible unlock grants through the shared `RosterTable`, then reuses
+World Database NPC locations and physical interaction references. It never joins companions by display name.
+Current Guide inputs include the loaded global and current local programs; arbitrary declarations in remote
+mod-authored map callbacks still need wider indexing. Do not assume that an absent annotation proves no source.
+
+Regenerate base catalogs using `tools/regenerate_lua_events.sh --npc-topic-refs-only`. It writes the shared
+`Global_00_npc_topic_refs.lua` once and world-local `*_00_npc_topic_refs.lua` sidecars. Base metadata loads before
+all gameplay overlays so it cannot attach itself to a replacement callback. Annotate handwritten replacements
+explicitly; do not edit generated files. The lighting dependency collector accepts only strictly validated literal
+map declarations for this metadata family, so metadata alone does not require a shadow bake.
+
+Actual displayed roster invitations persist as `openyamm.discovery.npc/<npcId>/roster/<rosterId> = 1` in existing
+named global state. This records the seen NPC/roster relationship without assigning a map or residence, changing
+recruitment state or disclosing an unowned companion profile. It remains active when the optional Atlas UI is off.

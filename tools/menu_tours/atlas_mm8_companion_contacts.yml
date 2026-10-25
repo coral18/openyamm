@@ -1,0 +1,91 @@
+output_dir: captures
+exit: true
+steps:
+- expect: gameplay
+- key: F9
+- pause: true
+- click:
+  - 800
+  - 821
+- click:
+  - 450
+  - 57
+- click:
+  - 885
+  - 126
+- click:
+  - 200
+  - 265
+- capture: discovery-inn-companion
+- click:
+  - 200
+  - 325
+- capture: discovery-active-companion
+- click:
+  - 1152
+  - 57
+- click:
+  - 275
+  - 190
+- text: Fredrick
+- key: Return
+- click:
+  - 200
+  - 265
+- capture: guide-fredrick-profile
+- pointer_move:
+  - 1035
+  - 527
+- wheel: -1000
+- capture: guide-fredrick-contacts
+- click:
+  - 885
+  - 126
+- click:
+  - 1430
+  - 190
+- wait: 8
+- click:
+  - 275
+  - 190
+- text: Cauri
+- key: Return
+- click:
+  - 200
+  - 265
+- capture: guide-cauri-profile
+- pointer_move:
+  - 1035
+  - 527
+- wheel: -1000
+- capture: guide-cauri-contact
+- click:
+  - 1035
+  - 695
+- capture: guide-cauri-rescue-site
+- click:
+  - 1395
+  - 806
+- capture: guide-cauri-rescue-requirements
+- click:
+  - 450
+  - 57
+- click:
+  - 450
+  - 57
+- click:
+  - 1152
+  - 57
+- click:
+  - 885
+  - 126
+- capture: discovery-after-guide
+- click:
+  - 1450
+  - 57
+- expect: pause
+- click:
+  - 800
+  - 301
+- expect: gameplay
+- key: F9

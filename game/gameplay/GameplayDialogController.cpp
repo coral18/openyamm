@@ -4050,8 +4050,20 @@ GameplayDialogController::PresentPendingDialogResult GameplayDialogController::p
             }
             recordWorldNpcObservation(context.eventRuntimeState, observedContext.sourceId,
                 observedContext.hostHouseId, teacherTopics);
+            if (context.pNpcDialogTable != nullptr)
+                for (const EventDialogAction &action : context.activeEventDialog.actions)
+                    if (action.kind == EventDialogActionKind::RosterJoinOffer)
+                        if (const auto offer = context.pNpcDialogTable->getRosterJoinOfferForTopic(action.id))
+                            recordWorldRosterOfferObservation(context.eventRuntimeState, observedContext.sourceId,
+                                offer->rosterId);
         }
     }
+    if (observedContext.kind == DialogueContextKind::NpcTalk
+        && context.eventRuntimeState.dialogueState.currentOffer
+        && context.eventRuntimeState.dialogueState.currentOffer->kind == DialogueOfferKind::RosterJoin
+        && context.eventRuntimeState.dialogueState.currentOffer->npcId == observedContext.sourceId)
+        recordWorldRosterOfferObservation(context.eventRuntimeState, observedContext.sourceId,
+            context.eventRuntimeState.dialogueState.currentOffer->rosterId);
     playIndoorExitReactionIfNeeded(context, originalContext, result.wasDialogAlreadyActive);
     return result;
 }

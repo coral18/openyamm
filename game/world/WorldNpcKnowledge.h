@@ -29,4 +29,8 @@ void recordWorldNpcObservation(EventRuntimeState &state, uint32_t npcId, uint32_
     const std::vector<uint32_t> &visibleTeacherTopics);
 std::string worldNpcHouseKey(uint32_t npcId);
 std::string worldNpcTeacherKey(uint32_t npcId, uint32_t topicId);
+std::string worldNpcRosterOfferKey(uint32_t npcId, uint32_t rosterId);
+void recordWorldRosterOfferObservation(EventRuntimeState &state, uint32_t npcId, uint32_t rosterId);
+bool worldRosterOfferKnown(const std::unordered_map<std::string, int32_t> &variables,
+    uint32_t npcId, uint32_t rosterId);
 }

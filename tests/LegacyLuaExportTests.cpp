@@ -2046,3 +2046,74 @@ TEST_CASE("Zokarr routing references describe random destinations without claimi
     CHECK(text.find("at random; probabilities are not shown") != std::string::npos);
     CHECK(text.find("Controlling lever") == std::string::npos);
 }
+
+TEST_CASE("NPC topic references are typed callback-owned possibilities and do not execute dialogue")
+{
+    using namespace OpenYAMM::Game;
+    const auto bytes = readBinaryFixture(std::filesystem::path(OPENYAMM_SOURCE_DIR)
+        / "assets_dev/engine/scripts/common/event_support.lua");
+    const std::string support(bytes.begin(), bytes.end());
+    for (bool global : {false, true})
+    {
+        const std::string scope = global ? "global" : "map";
+        const std::string setter = global ? "SetGlobalNpcTopicRefs" : "SetMapNpcTopicRefs";
+        const std::string handler = "evt." + scope + "[10]=function() error('Must not execute dialogue') end\n";
+        const auto load = [&](const std::string &code)
+        {
+            std::string error;
+            return ScriptedEventProgram::loadFromLuaText(support + handler + code, "@npc-topic-references",
+                global ? ScriptedEventScope::Global : ScriptedEventScope::Map, error);
+        };
+        const std::string refs = setter + "(10, {{49, 611}, {28, 602}, {28, 602}})\n"
+            + (global ? "SetGlobalQBitGrants" : "SetMapQBitGrants") + "(10, {430})\n";
+        auto program = load(refs);
+        REQUIRE(program);
+        CHECK(program->qbitGrants().at(10) == std::vector<uint32_t>{430});
+        CHECK(program->npcTopicReferences().at(10)
+            == std::vector<ScriptedEventProgram::NpcTopicReference>{{28, 602}, {49, 611}});
+        for (const char *pReplacement : {"nil", "function() end"})
+        {
+            program = load(refs + "evt." + scope + "[10]=" + pReplacement);
+            REQUIRE(program);
+            CHECK(program->npcTopicReferences().empty());
+            CHECK(program->qbitGrants().empty());
+        }
+        for (const char *pRefs : {"false", "{{28, 0}}", "{{0, 602}}", "{{28, 602, 7}}", "{{28, true}}",
+            "{[1]={28, 602},[3]={49, 611}}", "{{4294967296, 602}}"})
+            CHECK_FALSE(load(setter + "(10," + pRefs + ")"));
+        REQUIRE(load(setter + "(10,{})"));
+        CHECK(load(setter + "(10,{})")->npcTopicReferences().empty());
+    }
+}
+
+TEST_CASE("NPC topic reference export follows reachable branches and omits cleared or unreachable topics")
+{
+    using namespace OpenYAMM::Game;
+    std::vector<uint8_t> bytes;
+    const auto append = [&](uint16_t event, uint8_t step, EvtOpcode opcode, std::vector<uint8_t> payload)
+    {
+        bytes.insert(bytes.end(), {uint8_t(4 + payload.size()), uint8_t(event), uint8_t(event >> 8),
+            step, uint8_t(opcode)});
+        bytes.insert(bytes.end(), payload.begin(), payload.end());
+    };
+    append(10, 0, EvtOpcode::Compare, {0x10, 0, 1, 0, 0, 0, 3});
+    append(10, 1, EvtOpcode::SetNpcTopic, {28, 0, 0, 0, 2, 0x5a, 2, 0, 0}); // Topic 602.
+    appendExitRecord(bytes, 10, 2);
+    append(10, 3, EvtOpcode::SetNpcTopic, {49, 0, 0, 0, 0, 0x63, 2, 0, 0}); // Topic 611.
+    appendExitRecord(bytes, 10, 4);
+    append(10, 5, EvtOpcode::SetNpcTopic, {99, 0, 0, 0, 0, 0x64, 2, 0, 0}); // Unreachable.
+    append(11, 0, EvtOpcode::SetNpcTopic, {28, 0, 0, 0, 2, 0, 0, 0, 0}); // Clears a topic.
+    appendExitRecord(bytes, 11, 1);
+    append(12, 0, EvtOpcode::Set, {0x10, 0, 0xae, 1, 0, 0}); // Grants QBit 430.
+    appendExitRecord(bytes, 12, 1);
+    append(13, 0, EvtOpcode::Subtract, {0x10, 0, 0xae, 1, 0, 0}); // Clearing is not a grant.
+    appendExitRecord(bytes, 13, 1);
+    EvtProgram events;
+    REQUIRE(events.loadFromBytes(bytes));
+    const std::string refs = generateLegacyEventNpcTopicRefsLuaChunk(events, {}, {}, LegacyLuaExportScope::Global);
+    CHECK(refs.find("SetGlobalNpcTopicRefs(10, {{28, 602}, {49, 611}})") != std::string::npos);
+    CHECK(refs.find("99, 612") == std::string::npos);
+    CHECK(refs.find("SetGlobalNpcTopicRefs(11") == std::string::npos);
+    CHECK(refs.find("SetGlobalQBitGrants(12, {430})") != std::string::npos);
+    CHECK(refs.find("SetGlobalQBitGrants(13") == std::string::npos);
+}

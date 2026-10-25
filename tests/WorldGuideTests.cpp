@@ -24,6 +24,9 @@
 #include "game/world/WorldMapKnowledge.h"
 #include "game/events/ScriptedEventProgram.h"
 #include "game/tables/ObjectTable.h"
+#include "game/tables/RosterTable.h"
+#include "game/party/Party.h"
+#include "game/events/EventRuntime.h"
 #include "game/maps/MapDeltaData.h"
 #include "game/outdoor/OutdoorMapData.h"
 #include "game/indoor/IndoorMapData.h"
@@ -2201,4 +2204,122 @@ TEST_CASE("decoration reward receipts keep exact slots and reject corrupt pendin
     REQUIRE(sources.size() == 4);
     CHECK(std::count_if(sources.begin(), sources.end(), [](const WorldItemSource &source)
         { return source.decorationSlot.has_value(); }) == 2);
+}
+
+
+TEST_CASE("world guide companions retain Inn members in Discovery and distinguish current from starting profiles")
+{
+    std::vector<std::vector<std::string>> rows(2);
+    for (uint32_t id : {1, 2, 3})
+    {
+        std::vector<std::string> row(124);
+        row[0] = std::to_string(id); row[1] = "Companion " + std::to_string(id); row[2] = "knight";
+        row[7] = "5"; row[8] = "20"; row[123] = "Authored biography";
+        rows.push_back(row);
+    }
+    RosterTable roster;
+    REQUIRE(roster.loadFromRows(rows));
+    Party::Snapshot seed;
+    Character active;
+    active.rosterId = 1; active.name = "Renamed champion"; active.className = "champion"; active.level = 27;
+    seed.members.push_back(active);
+    AdventurersInnMember waiting;
+    waiting.character.rosterId = 2; waiting.character.name = "Waiting ally";
+    waiting.character.className = "cavalier"; waiting.character.level = 18;
+    seed.adventurersInnMembers.push_back(waiting);
+    Party party;
+    party.restoreSnapshot(seed);
+    WorldGuideSource source;
+    source.pRoster = &roster;
+    source.pParty = &party;
+    const WorldGuideKnowledge knowledge;
+    const auto entries = buildWorldGuide(source, WorldGuideSection::Companions, knowledge, false);
+    REQUIRE(entries.size() == 2);
+    CHECK(entries[0].id == "1");
+    CHECK(entries[0].details.find("Travelling with the party") != std::string::npos);
+    CHECK(entries[0].details.find("Renamed champion") != std::string::npos);
+    CHECK(entries[0].details.find("Level 27") != std::string::npos);
+    CHECK(entries[0].details.find("Starting profile: Companion 1") != std::string::npos);
+    CHECK(entries[0].details.find("Level: 5") != std::string::npos);
+    CHECK(entries[1].id == "2");
+    CHECK(entries[1].details.find("In the Adventurer's Inn roster") != std::string::npos);
+    CHECK(entries[1].details.find("Level 18") != std::string::npos);
+    const auto guide = buildWorldGuide(source, WorldGuideSection::Companions, knowledge, true);
+    REQUIRE(guide.size() == 3);
+    CHECK(guide[1].details.find("Inn unlock not recorded yet") == std::string::npos);
+    CHECK(knowledge.roster.empty());
+    CHECK(party.memberCount() == 1);
+    CHECK(party.adventurersInnMembers().size() == 1);
+    source.pParty = nullptr;
+    CHECK(buildWorldGuide(source, WorldGuideSection::Companions, knowledge, false).empty());
+    const auto reference = buildWorldGuide(source, WorldGuideSection::Companions, knowledge, true);
+    REQUIRE(reference.size() == 3);
+    CHECK(reference[0].details.find("Load a campaign") != std::string::npos);
+}
+
+TEST_CASE("world guide companion contacts follow typed topics while Discovery uses actual recorded invitations")
+{
+    std::vector<std::vector<std::string>> rows(2);
+    std::vector<std::string> rosterRow(124);
+    rosterRow[0] = "2"; rosterRow[1] = "Roster definition name"; rosterRow[2] = "cleric"; rosterRow[7] = "5";
+    rows.push_back(rosterRow);
+    RosterTable roster;
+    REQUIRE(roster.loadFromRows(rows));
+    NpcDialogTable npcs;
+    REQUIRE(npcs.loadTextsFromRows({{"202", "Invitation"}, {"203", "Party full"}}));
+    REQUIRE(npcs.loadTopicsFromRows({{"602", "Roster Join Event", "", "", "", ""}}));
+    std::vector<std::string> npcRow(16);
+    npcRow[0] = "42"; npcRow[1] = "Different NPC alias"; npcRow[6] = "11";
+    REQUIRE(npcs.loadNpcRows({npcRow}));
+    npcs.resolveSpecialTopics(roster);
+    REQUIRE(npcs.getRosterJoinOfferForTopic(602));
+    MapStats maps;
+    std::vector<std::string> mapRow(35);
+    mapRow[0] = "1"; mapRow[1] = "Island"; mapRow[2] = "out01.odm"; mapRow[34] = "mm8";
+    REQUIRE(maps.loadFromRows({mapRow}));
+    HouseTable houses;
+    std::vector<std::string> house(24);
+    house[0] = "11"; house[2] = "House"; house[3] = "1"; house[5] = "Contact house";
+    REQUIRE(houses.loadFromRows({house}));
+    MergedTeacherTopicTable teachers;
+    std::ifstream input(std::filesystem::path(OPENYAMM_SOURCE_DIR)
+        / "assets_dev/engine/scripts/common/event_support.lua");
+    REQUIRE(input.is_open());
+    const std::string support{std::istreambuf_iterator<char>(input), {}};
+    std::string error;
+    const auto program = ScriptedEventProgram::loadFromLuaText(support
+        + "evt.global[10]=function() error('Never run recruitment') end\n"
+          "SetGlobalNpcTopicRefs(10, {{42, 602}})", "@companion-contacts", ScriptedEventScope::Global, error);
+    REQUIRE_MESSAGE(program, error);
+    WorldDatabase world(maps, houses, npcs, teachers, "mm8");
+    WorldKnowledge knowledge;
+    WorldGuideKnowledge referenceKnowledge;
+    referenceKnowledge.roster.insert(2);
+    WorldGuideSource source;
+    source.pRoster = &roster; source.pNpcs = &npcs; source.pHouses = &houses; source.pMaps = &maps;
+    source.pWorld = &world; source.pWorldKnowledge = &knowledge; source.pGlobalEvents = &*program;
+    source.worldId = "mm8";
+    const auto guide = buildWorldGuide(source, WorldGuideSection::Companions, referenceKnowledge, true);
+    REQUIRE(guide.size() == 1);
+    REQUIRE(guide[0].links.size() == 1);
+    CHECK(guide[0].links[0].target == "mm8:npc/42");
+    CHECK(guide[0].details.find("Different NPC alias") != std::string::npos);
+    CHECK(buildWorldGuide(source, WorldGuideSection::Companions, referenceKnowledge, false)[0].links.empty());
+    EventRuntimeState observed;
+    recordWorldNpcObservation(observed, 42, 11, {});
+    recordWorldRosterOfferObservation(observed, 42, 2);
+    knowledge.variables = observed.namedGlobalVars;
+    WorldDatabase recorded(maps, houses, npcs, teachers, "mm8", {},
+        worldObservedNpcs(npcs, teachers, knowledge.variables));
+    source.pWorld = &recorded;
+    CHECK(buildWorldGuide(source, WorldGuideSection::Companions, referenceKnowledge, false)[0].links.empty());
+    knowledge.visitedMaps.insert("out01.odm");
+    const auto known = buildWorldGuide(source, WorldGuideSection::Companions, referenceKnowledge, false);
+    REQUIRE(known.size() == 1);
+    REQUIRE(known[0].links.size() == 1);
+    CHECK(known[0].details.find("Last observed recruitment contact") != std::string::npos);
+    CHECK(knowledge.visitedMaps.size() == 1);
+    CHECK_THROWS_AS(recordWorldRosterOfferObservation(observed, 42, 0), std::invalid_argument);
+    observed.namedGlobalVars[worldNpcRosterOfferKey(42, 2)] = 7;
+    CHECK_THROWS_AS(worldRosterOfferKnown(observed.namedGlobalVars, 42, 2), std::invalid_argument);
 }

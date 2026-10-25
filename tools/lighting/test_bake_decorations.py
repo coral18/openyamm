@@ -291,6 +291,22 @@ class DecorationBakeTests(unittest.TestCase):
                     self.assertEqual(result[field], baseline[field])
             metadata.unlink()
 
+    def test_npc_topic_references_are_literal_and_do_not_change_shadow_dependencies(self):
+        baseline = self.export()
+        metadata = self.world / 'events/maps/test_00_npc_topic_refs.lua'
+        header = '-- generated possible NPC topics and campaign flags from legacy EVT/STR; load after the base handlers\n'
+        metadata.write_text(header + 'SetMapNpcTopicRefs(10, {{28, 602}})\nSetMapQBitGrants(10, {402})\n')
+        result = self.export()
+        for field in ('cards', 'counts', 'dependencies'):
+            self.assertEqual(result[field], baseline[field])
+        for declaration in ('SetMapNpcTopicRefs(10, {{28, 0}})',
+                            'SetMapNpcTopicRefs(65536, {{28, 602}})',
+                            'SetMapNpcTopicRefs(10, {{28, 602}}); evt.SetSprite(1, 0)',
+                            'SetMapNpcTopicRefs(10, {computed})'):
+            metadata.write_text(header + declaration)
+            with self.subTest(declaration=declaration), self.assertRaises(ValueError):
+                self.export()
+
     def test_npc_catalog_cannot_hide_executable_or_invalid_declarations(self):
         metadata = self.world / 'events/maps/test_zz_npc_locations.lua'
         header = '-- NPC location metadata; load after gameplay overlays\n'

@@ -2263,3 +2263,49 @@ Windows development root.
 
 This completes the initial Barrow control and random-exit explanations. The full Atlas goal still includes the
 remaining condition/content matrix, complex floors, localization and Android/controller validation.
+
+
+## Companion campaign state and recruitment contacts (2026-10-25)
+
+The Companions reference now distinguishes the active party from the Adventurer's Inn roster. Discovery retains
+Inn members instead of dropping them when they leave the active party. Current campaign name, class and level
+are separate from the explicitly labelled starting profile. Unowned companions remain hidden in Discovery;
+seeing an invitation alone does not disclose their full profile. Guide explains an unowned companion's existing
+Inn-unlock flag when the shared roster declares one; it does not equate that flag with every recruitment condition.
+
+Contacts are joined by the shared NPC-topic/roster resolver, not by matching names or assuming that an unplaced
+roster-proxy NPC is a map location. Guide reads configured/current topics and callback-owned possible topic
+assignments. A declared global callback that can grant a companion's Inn-unlock flag supplies a possible unlock
+contact. Existing physical interaction references connect such contacts to rescue/statue sites. In particular,
+Fredrick links to his actual dialogue NPC and Cauri links to the Murmurwoods statue, whose native details explain
+both item and spell alternatives. The Guide source scan is available in Companions to index remote physical sites.
+
+Discovery contact history records only actual displayed roster invitations/confirmation offers in the shared
+dialogue controller, even with the Atlas mod disabled. Links still require known containing geography and observed
+NPC locations; invitations do not invent a residence. Named global discovery state persists through ordinary saves,
+without a save-format change. Existing saves keep party/Inn status but do not invent historical invitations.
+Possible metadata remains Guide-only and cannot establish that a campaign actually completed a recruitment.
+
+Validation:
+
+- Windows Release built. The focused guide/dialogue/metadata suites passed 40 cases / 1563 assertions; the mounted
+  Fredrick/Cauri content regression passed 1 case / 22 assertions. Lighting metadata validation passed 22 tests. A separate two-case mounted-content/connection audit passed
+  596 assertions and loaded every MM7/MM8 map program with the new metadata.
+- Generated one shared global catalog and 134 map catalogs (43 MM6, 53 MM7, 38 MM8) from the canonical exporter.
+  All map catalogs passed the strict literal validator. Callback replacement/removal invalidates stale references,
+  including early-named overlays; the handwritten MM8 promotion replacements explicitly redeclare their sources.
+- The faithful 16-step dialogue/save roundtrip passed with Atlas enabled and disabled. It directly opens existing
+  roster proxy NPCs as a test fixture, not as evidence of their physical placement. It recruits Rohani into the
+  fifth slot and sends Fredrick to the Inn when the party is full.
+- Nine native Windows OpenGL captures were inspected for party/Inn state, Fredrick's contacts, Cauri's possible
+  contact, navigation to her statue and its item/spell requirements, and return to Discovery with only the two
+  owned profiles. The 13-step post-UI verifier preserved invitation history, gold, current map and the clear Cauri
+  unlock flag across another save/load; Murmurwoods and Cauri remained undiscovered.
+
+Reproduction uses `tests/scenarios/atlas/mm8_companion_contacts.yml` for the isolated seed, copied from the
+scenario temporary save root to `saves/before.oysav`, then `tools/menu_tours/atlas_mm8_companion_contacts.yml` and
+`tests/scenarios/atlas/mm8_companion_contacts_verify.yml`. Private captures, fixture scripts and logs are under
+`atlas-companions-20261025` in the Windows development root. Original user campaigns remain untouched.
+
+This implements live roster state and initial recruitment sources. Full dialogue eligibility, arbitrary off-map
+mod topic declarations, Inn venue navigation and the remaining Atlas coverage matrix are still open.

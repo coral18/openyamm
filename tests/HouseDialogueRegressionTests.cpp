@@ -1,4 +1,5 @@
 #include "game/gameplay/JournalState.h"
+#include "game/world/WorldNpcKnowledge.h"
 #include "game/gameplay/GuildSpellbookRules.h"
 #include "doctest/doctest.h"
 
@@ -5560,6 +5561,8 @@ TEST_CASE("synthetic roster join accept")
     const std::optional<size_t> yesIndex = findActionIndexByLabel(dialog, "Yes");
 
     REQUIRE(yesIndex.has_value());
+    CHECK(OpenYAMM::Game::worldRosterOfferKnown(harness.eventRuntimeState().namedGlobalVars, FredrickNpcId, 2));
+    CHECK_FALSE(harness.party().hasRosterMember(2));
     const OpenYAMM::Game::EventDialogContent &resultDialog = harness.executeAndPresent(*yesIndex);
 
     CHECK_EQ(harness.party().members().size(), 5u);

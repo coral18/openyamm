@@ -12744,6 +12744,47 @@ void emitNpcLocationMetadata(std::ostringstream &stream, std::string_view scopeT
     stream << "})\n";
 }
 
+void emitNpcTopicMetadata(std::ostringstream &stream, std::string_view scopeTableName,
+    const LegacyLuaExportLookups &lookups, const LegacyLuaEvent &event, uint16_t handlerId,
+    std::optional<uint8_t> entryStep = std::nullopt)
+{
+    const std::vector<uint8_t> steps = collectNormalEventSteps(event);
+    if (steps.empty()) return;
+    std::vector<std::pair<uint32_t, uint32_t>> topics;
+    std::vector<uint32_t> grants;
+    for (uint8_t step : collectReachableSteps(event, steps, entryStep.value_or(steps.front())))
+        for (const LegacyLuaInstruction *pInstruction : collectMeaningfulInstructionsForStep(event, step))
+        {
+            const auto &args = pInstruction->arguments;
+            if (pInstruction->operation == LegacyLuaOperation::SetNpcTopic && args.size() >= 3
+                && args[0] > 0 && args[2] > 0) topics.emplace_back(args[0], args[2]);
+            if ((pInstruction->operation == LegacyLuaOperation::Set
+                || pInstruction->operation == LegacyLuaOperation::Add) && args.size() >= 2 && args[1] != 0)
+            {
+                const FormattedSelector selector = formatSelector(args[0], lookups.qbitRemaps);
+                if (selector.semantic == SelectorSemantic::QBit && selector.index > 0) grants.push_back(selector.index);
+            }
+        }
+    std::sort(topics.begin(), topics.end());
+    topics.erase(std::unique(topics.begin(), topics.end()), topics.end());
+    if (!topics.empty())
+    {
+        stream << (scopeTableName == LuaScopeGlobal ? "SetGlobalNpcTopicRefs(" : "SetMapNpcTopicRefs(")
+            << handlerId << ", {";
+        for (size_t index = 0; index < topics.size(); ++index)
+            stream << (index == 0 ? "" : ", ") << "{" << topics[index].first << ", " << topics[index].second << "}";
+        stream << "})\n";
+    }
+    sortAndUnique(grants);
+    if (!grants.empty())
+    {
+        stream << (scopeTableName == LuaScopeGlobal ? "SetGlobalQBitGrants(" : "SetMapQBitGrants(")
+            << handlerId << ", {";
+        for (size_t index = 0; index < grants.size(); ++index) stream << (index == 0 ? "" : ", ") << grants[index];
+        stream << "})\n";
+    }
+}
+
 void emitAutonoteMetadata(std::ostringstream &stream, std::string_view scopeTableName,
     const LegacyLuaExportLookups &lookups, const LegacyLuaEvent &event, uint16_t handlerId,
     std::optional<uint8_t> entryStep = std::nullopt)
@@ -13095,6 +13136,26 @@ std::string generateLegacyEventNpcLocationsLuaChunk(
         &metadata, emitNpcLocationMetadata);
     return metadata.str().empty() ? "" :
         "-- generated possible NPC locations from legacy EVT/STR; load after the base handlers\n" + metadata.str();
+}
+
+std::string generateLegacyEventNpcTopicRefsLuaChunk(
+    const EvtProgram &evtProgram, const StrTable &strTable, const LegacyLuaExportLookups &lookups,
+    LegacyLuaExportScope scope, LegacyEventVersion version)
+{
+    const std::string_view scopeTableName = scope == LegacyLuaExportScope::Global ? LuaScopeGlobal : LuaScopeMap;
+    const std::vector<LegacyLuaEvent> events = decodeEvents(evtProgram, strTable, lookups, version);
+    const std::vector<SyntheticTriggerEvent> triggers = collectSyntheticTriggerEvents(evtProgram);
+    std::ostringstream metadata;
+    for (size_t index = 0; index < events.size(); ++index)
+        emitNpcTopicMetadata(metadata, scopeTableName, lookups,
+            directEventWithoutSyntheticTriggerContinuations(events[index], evtProgram.getEvents()[index]),
+            events[index].eventId);
+    std::ostringstream handlers;
+    emitSyntheticTriggerEventFunctions(handlers, scopeTableName, events, lookups, triggers,
+        &metadata, emitNpcTopicMetadata);
+    return metadata.str().empty() ? "" :
+        "-- generated possible NPC topics and campaign flags from legacy EVT/STR; load after the base handlers\n"
+        + metadata.str();
 }
 
 std::string generateLegacyEventAutonoteRefsLuaChunk(

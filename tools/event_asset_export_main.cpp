@@ -79,6 +79,7 @@ enum class MetadataExport
     None,
     ItemRewards,
     NpcLocations,
+    NpcTopicReferences,
     AutonoteReferences,
     SiteReferences
 };
@@ -199,7 +200,8 @@ bool parseArguments(
         }
 
         if (argument == "--item-rewards-only" || argument == "--npc-locations-only"
-            || argument == "--autonote-refs-only" || argument == "--site-refs-only")
+            || argument == "--autonote-refs-only" || argument == "--site-refs-only"
+            || argument == "--npc-topic-refs-only")
         {
             if (metadataOnly != MetadataExport::None)
             {
@@ -208,6 +210,7 @@ bool parseArguments(
             }
             metadataOnly = argument == "--item-rewards-only" ? MetadataExport::ItemRewards
                 : argument == "--npc-locations-only" ? MetadataExport::NpcLocations
+                : argument == "--npc-topic-refs-only" ? MetadataExport::NpcTopicReferences
                 : argument == "--autonote-refs-only" ? MetadataExport::AutonoteReferences
                 : MetadataExport::SiteReferences;
             continue;
@@ -2291,6 +2294,20 @@ bool exportLegacyProgram(
         }
     }
     if (metadataOnly == MetadataExport::NpcLocations) return true;
+    if (metadataOnly == MetadataExport::None || metadataOnly == MetadataExport::NpcTopicReferences)
+    {
+        const std::filesystem::path path = globalScope ? scriptsRoot / "Global_00_npc_topic_refs.lua"
+            : scriptsRoot / "maps" / (outputStem + "_00_npc_topic_refs.lua");
+        const std::string topics = OpenYAMM::Game::generateLegacyEventNpcTopicRefsLuaChunk(
+            evtProgram, strTable, lookups, scope, version);
+        if (topics.empty()) std::filesystem::remove(path);
+        else if (!writeTextFile(path, topics))
+        {
+            std::cerr << "Failed to write NPC topic references for " << legacyBaseName << '\n';
+            return false;
+        }
+    }
+    if (metadataOnly == MetadataExport::NpcTopicReferences) return true;
     if (metadataOnly == MetadataExport::None || metadataOnly == MetadataExport::AutonoteReferences)
     {
         const std::filesystem::path notePath = globalScope

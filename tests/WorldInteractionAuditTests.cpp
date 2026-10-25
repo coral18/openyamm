@@ -5,6 +5,8 @@
 #include "game/indoor/IndoorMapData.h"
 #include "game/outdoor/OutdoorMapData.h"
 #include "game/world/WorldDatabase.h"
+#include "game/world/WorldGuide.h"
+#include "game/party/Party.h"
 #include "tests/RegressionMapLoader.h"
 
 #include <algorithm>
@@ -14,6 +16,74 @@
 #include <fstream>
 #include <set>
 #include <string>
+
+TEST_CASE("canonical companion contacts link Fredrick dialogue and Cauri rescue without discovering either")
+{
+    using namespace OpenYAMM::Game;
+    REQUIRE_MESSAGE(OpenYAMM::Tests::regressionMapLoaderLoaded(),
+        OpenYAMM::Tests::regressionMapLoaderFailure());
+    const auto &fixture = OpenYAMM::Tests::regressionMapLoader();
+    const auto &data = fixture.gameDataLoader;
+    const MapStatsEntry *pMap = data.getMapStats().findByFileName("out07.odm");
+    REQUIRE(pMap);
+    auto map = MapAssetLoader().load(fixture.assetFileSystem, *pMap, data.getMonsterTable(),
+        data.getObjectTable(), MapLoadPurpose::HeadlessGameplay);
+    REQUIRE(map);
+    REQUIRE(map->outdoorMapData);
+    std::string error;
+    REQUIRE_MESSAGE(GameDataLoader::loadEventPrograms(fixture.assetFileSystem, *map, error), error);
+    REQUIRE(map->globalEventProgram);
+    REQUIRE(map->localEventProgram);
+    const auto &global = *map->globalEventProgram;
+    REQUIRE(global.qbitGrants().contains(25));
+    CHECK(global.qbitGrants().at(25) == std::vector<uint32_t>{430});
+    REQUIRE(global.npcTopicReferences().contains(36));
+    CHECK(global.npcTopicReferences().at(36)
+        == std::vector<ScriptedEventProgram::NpcTopicReference>{{43, 612}});
+    WorldDatabase world(data.getMapStats(), data.getHouseTable(), data.getNpcDialogTable(),
+        data.getMergedTeacherTopicTable(), "mm8");
+    world.indexNpcLocations(global);
+    world.indexMapLocations(*map->outdoorMapData, *map->localEventProgram);
+    world.indexMapInteractionReferences(*pMap, data.getItemTable(), data.getSpellTable());
+    WorldKnowledge knowledge;
+    Party party;
+    WorldGuideSource source;
+    source.worldId = "mm8";
+    source.pRoster = &data.getRosterTable();
+    source.pNpcs = &data.getNpcDialogTable();
+    source.pWorld = &world;
+    source.pWorldKnowledge = &knowledge;
+    source.pParty = &party;
+    source.pGlobalEvents = &global;
+    source.pLocalEvents = &*map->localEventProgram;
+    const auto entries = buildWorldGuide(source, WorldGuideSection::Companions, {}, true);
+    const auto find = [&](const std::string &id) -> const WorldGuideEntry &
+    {
+        const auto entry = std::find_if(entries.begin(), entries.end(), [&](const WorldGuideEntry &value)
+            { return value.id == id; });
+        REQUIRE(entry != entries.end());
+        return *entry;
+    };
+    const auto &fredrick = find("2");
+    CHECK(std::any_of(fredrick.links.begin(), fredrick.links.end(), [](const WorldGuideLink &link)
+        { return link.kind == WorldGuideLink::Kind::Location && link.target == "mm8:npc/28"; }));
+    const auto &cauri = find("30");
+    CHECK(cauri.details.find("Inn unlock not recorded yet") != std::string::npos);
+    CHECK(std::any_of(cauri.links.begin(), cauri.links.end(), [&](const WorldGuideLink &link)
+    {
+        if (link.kind != WorldGuideLink::Kind::Feature) return false;
+        const auto feature = std::find_if(world.features().begin(), world.features().end(),
+            [&](const WorldMapFeature &value) { return value.id == link.target; });
+        return feature != world.features().end() && feature->site.eventId == 132
+            && feature->interactionReference && feature->interactionReference->npcId == 42;
+    }));
+    CHECK(buildWorldGuide(source, WorldGuideSection::Companions, {}, false).empty());
+    CHECK(knowledge.variables.empty());
+    CHECK(knowledge.visitedMaps.empty());
+    CHECK_FALSE(party.hasQuestBit(430));
+    CHECK(party.memberCount() == 0);
+    CHECK(party.adventurersInnMembers().empty());
+}
 
 TEST_CASE("Atlas campaign interaction inventory reads canonical map programs and physical sites")
 {

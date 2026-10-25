@@ -99,23 +99,28 @@ def validate_reward_metadata(text, script):
 
 def validate_npc_metadata(text, script):
     lines = text.splitlines()
-    header = ('-- generated possible NPC locations from legacy EVT/STR; load after the base handlers'
-              if script.name.endswith('_00_npc_locations.lua') else
-              '-- NPC location metadata; load after gameplay overlays')
+    topics = script.name.endswith(('_00_npc_topic_refs.lua', '_zz_npc_topic_refs.lua'))
+    kind = 'topic' if topics else 'location'
+    suffix = '_00_npc_topic_refs.lua' if topics else '_00_npc_locations.lua'
+    header = ('-- generated possible NPC ' + kind + ('s and campaign flags' if topics else 's')
+              + ' from legacy EVT/STR; load after the base handlers' if script.name.endswith(suffix)
+              else '-- NPC ' + kind + ' metadata; load after gameplay overlays')
     pair = r'\{[1-9][0-9]*, [1-9][0-9]*\}'
-    declaration = re.compile(r'SetMapNpcLocations\([1-9][0-9]*, \{(?:' + pair
+    function = 'SetMapNpcTopicRefs' if topics else 'SetMapNpcLocations'
+    declaration = re.compile(function + r'\([1-9][0-9]*, \{(?:' + pair
                              + r'(?:, ' + pair + r')*)?\}\)')
+    grants = re.compile(r'SetMapQBitGrants\([1-9][0-9]*, \{(?:[1-9][0-9]*(?:, [1-9][0-9]*)*)?\}\)')
     if not lines or lines[0] != header:
-        raise ValueError('Invalid NPC location metadata overlay: ' + str(script))
+        raise ValueError('Invalid NPC ' + kind + ' metadata overlay: ' + str(script))
     for line in lines[1:]:
         line = line.strip()
         if not line or line.startswith('--'):
             continue
-        if not declaration.fullmatch(line):
-            raise ValueError('Invalid NPC location metadata overlay: ' + str(script))
+        if not declaration.fullmatch(line) and not (topics and grants.fullmatch(line)):
+            raise ValueError('Invalid NPC ' + kind + ' metadata overlay: ' + str(script))
         ids = [int(value) for value in re.findall(r'[0-9]+', line)]
         if ids[0] > 65535 or any(value > 4294967295 for value in ids[1:]):
-            raise ValueError('Invalid NPC location metadata overlay: ' + str(script))
+            raise ValueError('Invalid NPC ' + kind + ' metadata overlay: ' + str(script))
 
 
 def validate_autonote_metadata(text, script):
@@ -321,7 +326,8 @@ def export_cards(profile, output):
             # Keep gameplay callback/overlay dependencies, while reward catalog updates remain independent.
             validate_reward_metadata(text, script)
             continue
-        if script.name in (source.stem + '_00_npc_locations.lua', source.stem + '_zz_npc_locations.lua'):
+        if script.name in (source.stem + '_00_npc_locations.lua', source.stem + '_zz_npc_locations.lua',
+                           source.stem + '_00_npc_topic_refs.lua', source.stem + '_zz_npc_topic_refs.lua'):
             # Typed catalog declarations cannot affect geometry or shadow-caster state.
             validate_npc_metadata(text, script)
             continue

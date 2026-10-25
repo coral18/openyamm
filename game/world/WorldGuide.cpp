@@ -19,6 +19,8 @@
 #include "game/items/ItemRuntime.h"
 #include "game/gameplay/GuildSpellbookRules.h"
 #include "game/party/SpellSchool.h"
+#include "game/party/Party.h"
+#include "game/events/ScriptedEventProgram.h"
 
 #include <algorithm>
 #include <functional>
@@ -31,6 +33,98 @@ namespace OpenYAMM::Game
 {
 namespace
 {
+void appendCompanionContacts(WorldGuideEntry &entry, const WorldGuideSource &source, uint32_t rosterId, bool guide)
+{
+    if (source.pNpcs == nullptr || source.pWorld == nullptr || source.pWorldKnowledge == nullptr) return;
+    std::map<uint32_t, bool> contacts;
+    const RosterEntry *pDefinition = source.pRoster != nullptr ? source.pRoster->get(rosterId) : nullptr;
+    const auto include = [&](uint32_t npcId, uint32_t topic)
+    {
+        const auto offer = source.pNpcs->getRosterJoinOfferForTopic(topic);
+        if (source.pNpcs->getNpc(npcId) == nullptr) return;
+        if (offer && offer->rosterId == rosterId) contacts[npcId] = false;
+        else if (pDefinition != nullptr && pDefinition->unlockQuestBitId != 0 && source.pGlobalEvents != nullptr)
+        {
+            const auto grants = source.pGlobalEvents->qbitGrants().find(uint16_t(topic));
+            if (topic <= UINT16_MAX && grants != source.pGlobalEvents->qbitGrants().end()
+                && std::find(grants->second.begin(), grants->second.end(), pDefinition->unlockQuestBitId)
+                    != grants->second.end()) contacts.try_emplace(npcId, true);
+        }
+    };
+    for (const NpcEntry &npc : source.pNpcs->entries())
+    {
+        if (worldRosterOfferKnown(source.pWorldKnowledge->variables, npc.id, rosterId)) contacts[npc.id] = false;
+        if (guide)
+            for (uint32_t topic : npc.topicIds) include(npc.id, topic);
+    }
+    if (guide)
+    {
+        for (const WorldRecord &record : source.pWorld->records())
+            if (record.kind == WorldRecordKind::Npc && !record.possibleNpcLocation)
+                for (uint32_t topic : record.npcTopicIds) include(record.npc->id, topic);
+        for (const ScriptedEventProgram *pProgram : {source.pGlobalEvents, source.pLocalEvents})
+            if (pProgram != nullptr)
+                for (const auto &[event, references] : pProgram->npcTopicReferences())
+                    for (const ScriptedEventProgram::NpcTopicReference &reference : references)
+                        include(reference.npcId, reference.topicId);
+    }
+    std::set<std::string> linked;
+    std::string text;
+    for (const auto &[npcId, unlockContact] : contacts)
+    {
+        bool located = false;
+        const NpcEntry &npc = *source.pNpcs->getNpc(npcId);
+        for (const WorldRecord &record : source.pWorld->records())
+        {
+            if (record.kind != WorldRecordKind::Npc || record.npc->id != npcId
+                || !source.pWorld->visible(record, *source.pWorldKnowledge, guide)) continue;
+            const std::string label = std::string(unlockContact ? "Possible unlock contact: "
+                : record.possibleNpcLocation ? "Possible scripted contact: "
+                : record.lastObservedNpc ? "Last observed recruitment contact: " : "Configured recruitment contact: ")
+                + record.name() + " | " + record.house->name + " - " + record.map->name;
+            text += "\n" + label;
+            if (linked.insert(record.id).second)
+                entry.links.push_back({WorldGuideLink::Kind::Location, label, record.id});
+            located = true;
+        }
+        if (guide)
+            for (const WorldMapFeature &feature : source.pWorld->features())
+            {
+                if (!feature.interactionReference || feature.interactionReference->npcId != npcId
+                    || !source.pWorld->featureVisible(feature, *source.pWorldKnowledge, true)) continue;
+                const WorldRecord *pMap = source.pWorld->find(feature.mapId);
+                if (pMap == nullptr) continue;
+                const std::string label = std::string(unlockContact
+                    ? "Possible unlock encounter: " : "Possible encounter: ")
+                    + npc.name + " | " + pMap->name();
+                text += "\n" + label;
+                if (linked.insert(feature.id).second)
+                    entry.links.push_back({WorldGuideLink::Kind::Feature, label, feature.id});
+                located = true;
+            }
+        if (!located && guide && npc.houseId != 0)
+        {
+            const std::string houseId = source.worldId + ":house/" + std::to_string(npc.houseId);
+            if (const WorldRecord *pHouse = source.pWorld->find(houseId))
+            {
+                const std::string label = "Authored contact: " + npc.name + " | " + pHouse->name()
+                    + " - " + pHouse->map->name;
+                text += "\n" + label;
+                if (linked.insert(houseId).second)
+                    entry.links.push_back({WorldGuideLink::Kind::Location, label, houseId});
+            }
+        }
+        else if (!located && !guide)
+            text += "\nInvitation seen from " + npc.name + "; no mapped contact location is known in this world.";
+    }
+    entry.details += "\n\nRecruitment contacts in this world:";
+    entry.details += text.empty() ? (guide ? "\nNo mapped recruitment contact in this catalog."
+        : "\nNo recruitment contact recorded yet.") : text;
+    entry.details += guide
+        ? "\nContact links describe possible dialogue sources; quest and topic conditions still apply."
+        : "\nRecorded invitations and locations are history, not a current availability check.";
+}
+
 std::string itemDefinitionText(const ItemDefinition &item)
 {
     std::string text = item.name + "\n" + item.equipStat + " | " + item.skillGroup
@@ -681,16 +775,46 @@ std::vector<WorldGuideEntry> buildWorldGuide(const WorldGuideSource &source, Wor
     {
         for (const RosterEntry *pMember : source.pRoster->getEntriesSortedById())
         {
-            if (pMember->name.empty() || (!guide && !knowledge.roster.contains(pMember->id)))
-                continue;
+            const Character *pCurrent = nullptr;
+            bool inInn = false;
+            if (source.pParty != nullptr)
+            {
+                for (const Character &member : source.pParty->members())
+                    if (member.rosterId == pMember->id) pCurrent = &member;
+                if (pCurrent == nullptr)
+                    for (const AdventurersInnMember &member : source.pParty->adventurersInnMembers())
+                        if (member.character.rosterId == pMember->id)
+                        {
+                            pCurrent = &member.character;
+                            inInn = true;
+                            break;
+                        }
+            }
+            if (pMember->name.empty()
+                || (!guide && !knowledge.roster.contains(pMember->id) && pCurrent == nullptr)) continue;
             WorldGuideEntry entry{std::to_string(pMember->id), pMember->name};
-            entry.details = pMember->name + " | " + displayClassName(pMember->className)
+            if (pCurrent != nullptr)
+                entry.details = std::string(inInn ? "In the Adventurer's Inn roster." : "Travelling with the party.")
+                    + "\nCampaign character: " + pCurrent->name + " | " + displayClassName(pCurrent->className)
+                    + " | Level " + std::to_string(pCurrent->level) + "\n\n";
+            else entry.details = source.pParty != nullptr ? "Not in the active party or Adventurer's Inn roster.\n\n"
+                : "Load a campaign to see this companion's current recruitment state.\n\n";
+            entry.details += "Starting profile: " + pMember->name + " | " + displayClassName(pMember->className)
                 + "\nLevel: " + std::to_string(pMember->level) + "\n\n" + pMember->blurb
                 + "\n\nMight " + std::to_string(pMember->might) + " | Intellect "
                 + std::to_string(pMember->intellect) + " | Personality " + std::to_string(pMember->personality)
                 + "\nEndurance " + std::to_string(pMember->endurance) + " | Accuracy "
                 + std::to_string(pMember->accuracy) + "\nSpeed " + std::to_string(pMember->speed)
                 + " | Luck " + std::to_string(pMember->luck);
+            if (guide && pCurrent == nullptr && pMember->unlockQuestBitId != 0)
+            {
+                entry.details += "\n\nThe Adventurer's Inn can add this companion"
+                    " when their campaign unlock is recorded.";
+                if (source.pParty != nullptr)
+                    entry.details += source.pParty->hasQuestBit(pMember->unlockQuestBitId)
+                        ? "\nInn unlock recorded in this campaign." : "\nInn unlock not recorded yet.";
+            }
+            appendCompanionContacts(entry, source, pMember->id, guide);
             result.push_back(std::move(entry));
         }
     }

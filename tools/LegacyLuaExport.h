@@ -67,6 +67,10 @@ std::string generateLegacyEventNpcLocationsLuaChunk(
     LegacyLuaExportScope scope,
     LegacyEventVersion version = LegacyEventVersion::Mm8);
 
+std::string generateLegacyEventNpcTopicRefsLuaChunk(
+    const EvtProgram &evtProgram, const StrTable &strTable, const LegacyLuaExportLookups &lookups,
+    LegacyLuaExportScope scope, LegacyEventVersion version = LegacyEventVersion::Mm8);
+
 std::string generateLegacyEventAutonoteRefsLuaChunk(
     const EvtProgram &evtProgram,
     const StrTable &strTable,

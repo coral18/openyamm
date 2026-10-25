@@ -26,6 +26,14 @@ public:
         bool operator==(const NpcLocation &) const = default;
     };
 
+    // Authored possible topic assignments; they do not establish current dialogue availability.
+    struct NpcTopicReference
+    {
+        uint32_t npcId = 0;
+        uint32_t topicId = 0;
+        bool operator==(const NpcTopicReference &) const = default;
+    };
+
     struct ContextActionMetadata
     {
         std::string kind;
@@ -65,6 +73,8 @@ public:
     const std::unordered_map<uint16_t, std::vector<std::vector<std::string>>> &siteGroups() const;
     const std::unordered_map<uint16_t, std::vector<std::string>> &connectionTargets() const;
     const std::unordered_map<uint16_t, std::vector<NpcLocation>> &npcLocations() const;
+    const std::unordered_map<uint16_t, std::vector<NpcTopicReference>> &npcTopicReferences() const;
+    const std::unordered_map<uint16_t, std::vector<uint32_t>> &qbitGrants() const;
     const std::vector<TimerTrigger> &timerTriggers() const;
     bool hasEvent(uint16_t eventId) const;
     bool isLevitateSensitivePressurePlate(uint16_t eventId, uint32_t faceAttributes) const;
@@ -106,6 +116,8 @@ private:
     std::unordered_map<uint16_t, std::vector<std::vector<std::string>>> m_siteGroups;
     std::unordered_map<uint16_t, std::vector<std::string>> m_connectionTargets;
     std::unordered_map<uint16_t, std::vector<NpcLocation>> m_npcLocations;
+    std::unordered_map<uint16_t, std::vector<NpcTopicReference>> m_npcTopicReferences;
+    std::unordered_map<uint16_t, std::vector<uint32_t>> m_qbitGrants;
     uint32_t m_levitateTrapFaceMask = 0;
     std::vector<uint16_t> m_levitateTrapEvents;
     std::vector<TimerTrigger> m_timerTriggers;

@@ -49,11 +49,13 @@ TEST_CASE("typed metadata overlays precede all map and global callback replaceme
     writeTextFile(mapScripts / "metadata_fixture.lua", "RegisterEvent(10, '', function() end)");
     writeTextFile(mapScripts / "metadata_fixture_00_item_rewards.lua", "SetMapItemRewards(10, {42})");
     writeTextFile(mapScripts / "metadata_fixture_00_npc_locations.lua", "SetMapNpcLocations(10, {{42, 11}})");
+    writeTextFile(mapScripts / "metadata_fixture_00_npc_topic_refs.lua", "SetMapNpcTopicRefs(10, {{42, 601}})");
     writeTextFile(mapScripts / "metadata_fixture_00_autonote_refs.lua", "SetMapAutonoteRefs(10, {42})");
     writeTextFile(mapScripts / "metadata_fixture_00_site_refs.lua", "SetMapSiteReference(10, 'Base reference')");
     writeTextFile(globals / "Global.lua", "RegisterGlobalEvent(20, '', function() end)");
     writeTextFile(globals / "Global_00_item_rewards.lua", "SetGlobalItemRewards(20, {43})");
     writeTextFile(globals / "Global_00_npc_locations.lua", "SetGlobalNpcLocations(20, {{43, 12}})");
+    writeTextFile(globals / "Global_00_npc_topic_refs.lua", "SetGlobalNpcTopicRefs(20, {{43, 602}})");
     writeTextFile(globals / "Global_00_autonote_refs.lua", "SetGlobalAutonoteRefs(20, {43})");
     {
         OpenYAMM::Engine::AssetFileSystem fs;
@@ -67,12 +69,13 @@ TEST_CASE("typed metadata overlays precede all map and global callback replaceme
                 writeTextFile(mapScripts / ("metadata_fixture" + suffix),
                     "ReplaceMapEvent(10, '', function() end)\n"
                     + std::string(redeclared ? "SetMapItemRewards(10, {44})\nSetMapNpcLocations(10, {{44, 13}})\n"
+                        "SetMapNpcTopicRefs(10, {{44, 603}})\n"
                         "SetMapAutonoteRefs(10, {44})\nSetMapSiteReference(10, 'Overlay reference')" : ""));
                 writeTextFile(globals / ("Global" + suffix),
                     "ReplaceGlobalEvent(20, '', function() end)\n"
                     + std::string(redeclared
                         ? "SetGlobalItemRewards(20, {45})\nSetGlobalNpcLocations(20, {{45, 14}})\n"
-                          "SetGlobalAutonoteRefs(20, {45})" : ""));
+                          "SetGlobalNpcTopicRefs(20, {{45, 604}})\nSetGlobalAutonoteRefs(20, {45})" : ""));
                 fs.refreshLookupCache();
                 MapAssetInfo map;
                 map.map.fileName = "metadata_fixture.blv";
@@ -88,6 +91,10 @@ TEST_CASE("typed metadata overlays precede all map and global callback replaceme
                     CHECK(map.localEventProgram->itemRewards().at(10) == std::vector<uint32_t>{44});
                     CHECK(map.globalEventProgram->itemRewards().at(20) == std::vector<uint32_t>{45});
                     CHECK(map.localEventProgram->siteReferences().at(10) == "Overlay reference");
+                    CHECK(map.localEventProgram->npcTopicReferences().at(10)
+                        == std::vector<ScriptedEventProgram::NpcTopicReference>{{44, 603}});
+                    CHECK(map.globalEventProgram->npcTopicReferences().at(20)
+                        == std::vector<ScriptedEventProgram::NpcTopicReference>{{45, 604}});
                     CHECK(map.localEventProgram->autonoteReferences().at(10) == std::vector<uint32_t>{44});
                     CHECK(map.globalEventProgram->autonoteReferences().at(20) == std::vector<uint32_t>{45});
                     CHECK(map.localEventProgram->npcLocations().at(10)
@@ -100,6 +107,8 @@ TEST_CASE("typed metadata overlays precede all map and global callback replaceme
                     CHECK(map.localEventProgram->itemRewards().empty());
                     CHECK(map.globalEventProgram->itemRewards().empty());
                     CHECK(map.localEventProgram->siteReferences().empty());
+                    CHECK(map.localEventProgram->npcTopicReferences().empty());
+                    CHECK(map.globalEventProgram->npcTopicReferences().empty());
                     CHECK(map.localEventProgram->autonoteReferences().empty());
                     CHECK(map.globalEventProgram->autonoteReferences().empty());
                     CHECK(map.localEventProgram->npcLocations().empty());

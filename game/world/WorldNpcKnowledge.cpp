@@ -27,6 +27,27 @@ std::string worldNpcTeacherKey(uint32_t npcId, uint32_t topicId)
     return teacherPrefix(npcId) + std::to_string(topicId);
 }
 
+std::string worldNpcRosterOfferKey(uint32_t npcId, uint32_t rosterId)
+{
+    return "openyamm.discovery.npc/" + std::to_string(npcId) + "/roster/" + std::to_string(rosterId);
+}
+
+void recordWorldRosterOfferObservation(EventRuntimeState &state, uint32_t npcId, uint32_t rosterId)
+{
+    if (npcId == 0 || rosterId == 0) throw std::invalid_argument("Invalid observed roster invitation");
+    state.namedGlobalVars[worldNpcRosterOfferKey(npcId, rosterId)] = 1;
+    state.namedGlobalVars["openyamm.discovery.npc/" + std::to_string(npcId)] = 1;
+}
+
+bool worldRosterOfferKnown(const std::unordered_map<std::string, int32_t> &variables,
+    uint32_t npcId, uint32_t rosterId)
+{
+    const auto value = variables.find(worldNpcRosterOfferKey(npcId, rosterId));
+    if (value == variables.end() || value->second == 0) return false;
+    if (value->second != 1) throw std::invalid_argument("Invalid saved roster invitation discovery");
+    return true;
+}
+
 WorldNpcState worldCurrentNpcs(const NpcDialogTable &npcs, const EventRuntimeState &state)
 {
     WorldNpcState result;

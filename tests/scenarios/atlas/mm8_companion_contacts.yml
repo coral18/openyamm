@@ -1,0 +1,36 @@
+id: atlas.mm8_companion_contacts
+title: Recorded roster invitations survive recruitment and a full-party Inn transfer
+world: mm8
+mode: faithful
+# Direct dialogue fixture: unplaced roster proxy NPCs are not physical map encounters.
+steps:
+- new_game_flow:
+    start_map: out02.odm
+    party:
+      gold: 500
+      food: 10
+      members:
+      - {name: First Tester, class: Knight, level: 1, skills: [], equipment: {}}
+      - {name: Second Tester, class: Knight, level: 1, skills: [], equipment: {}}
+      - {name: Third Tester, class: Knight, level: 1, skills: [], equipment: {}}
+      - {name: Fourth Tester, class: Knight, level: 1, skills: [], equipment: {}}
+- speak_npc: {source_id: 267}
+- assert:
+    named_global_var_changed: {name: openyamm.discovery.npc/267/roster/6, value: 1}
+- select_topic: {kind: roster_join_offer, action_id: 606}
+- select_topic: {kind: roster_join_accept, action_id: 0}
+- press_action: {action: cancel_dialog}
+- speak_npc: {source_id: 263}
+- select_topic: {kind: roster_join_offer, action_id: 602}
+- select_topic: {kind: roster_join_accept, action_id: 0}
+- press_action: {action: cancel_dialog}
+- assert:
+    named_global_var_changed: {name: openyamm.discovery.npc/263/roster/2, value: 1}
+- save_game: before
+- load_game: before
+- assert:
+    named_global_var_changed: {name: openyamm.discovery.npc/267/roster/6, value: 1}
+- assert:
+    named_global_var_changed: {name: openyamm.discovery.npc/263/roster/2, value: 1}
+- assert:
+    runtime_event_variable: {id: 21, value: 500}

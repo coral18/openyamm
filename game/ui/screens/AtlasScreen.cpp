@@ -1382,7 +1382,7 @@ WorldGuideSource AtlasScreen::referenceSource() const
         &m_data.potionMixingTable(), &m_data.potionNoteTable(), &m_data.rosterTable(),
         &m_data.houseTable(), &m_data.mapStats(), m_presentation.worldId, &m_data.monsterTable(),
         &m_data.journalQuestTable(), &m_data.npcDialogTable(), &m_world, &m_knowledge,
-        &m_data.mergedCharacterSelectionTable()};
+        &m_data.mergedCharacterSelectionTable(), m_pParty, m_pGlobalEvents, m_pLocalEvents};
 }
 
 void AtlasScreen::rebuildReference()
@@ -1677,7 +1677,8 @@ void AtlasScreen::drawReference()
         }
     }
     const bool scanSources = m_guide && (m_referenceSection == WorldGuideSection::Items
-        || m_referenceSection == WorldGuideSection::Monsters || m_referenceSection == WorldGuideSection::Quests);
+        || m_referenceSection == WorldGuideSection::Monsters || m_referenceSection == WorldGuideSection::Quests
+        || m_referenceSection == WorldGuideSection::Companions);
     textInRect(canvasRect(285, 89, items ? 180 : classes || scanSources ? 410 : 535, 25),
         items ? m_presentation.name : m_presentation.name + " - active game data",
         "fondamento", 14);
@@ -1841,7 +1842,7 @@ void AtlasScreen::drawReference()
               "Past observations do not guarantee that loot remains.") : m_guide
         ? "Reference definitions follow the loaded game tables, including enabled mods."
         : "Discovery shows encountered items, known spell references, current classes, known recipes, "
-          "recruited companions, observed monsters and recorded quests.",
+          "party and Inn companions, observed monsters and recorded quests.",
         "menu_arrus", 11);
 }
 

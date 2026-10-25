@@ -1,0 +1,30 @@
+id: atlas.mm8_companion_contacts_verify
+title: Browsing companion sources preserves invitation history and undiscovered rescue locations
+world: mm8
+mode: faithful
+steps:
+- load_game: {name: native, path: saves/quicksave.oysav}
+- &invitation_rohani
+  assert:
+    named_global_var_changed: {name: openyamm.discovery.npc/267/roster/6, value: 1}
+- &invitation_fredrick
+  assert:
+    named_global_var_changed: {name: openyamm.discovery.npc/263/roster/2, value: 1}
+- &hidden_murmurwoods
+  assert:
+    named_global_var_changed: {name: openyamm.discovery.world.mm8.map.out07, value: 0}
+- &unseen_cauri
+  assert:
+    named_global_var_changed: {name: openyamm.discovery.npc/42, value: 0}
+- &campaign
+  assert:
+    map: out02.odm
+    qbit_clear: [430]
+    runtime_event_variable: {id: 21, value: 500}
+- save_game: companion-roundtrip
+- load_game: companion-roundtrip
+- *invitation_rohani
+- *invitation_fredrick
+- *hidden_murmurwoods
+- *unseen_cauri
+- *campaign

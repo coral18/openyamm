@@ -20,6 +20,8 @@ class PotionNoteTable;
 class MergedPotionSettingTable;
 class MergedReagentSettingTable;
 class RosterTable;
+class Party;
+class ScriptedEventProgram;
 class HouseTable;
 class MapStats;
 class MonsterTable;
@@ -54,6 +56,9 @@ struct WorldGuideSource
     const WorldDatabase *pWorld = nullptr;
     const WorldKnowledge *pWorldKnowledge = nullptr;
     const MergedCharacterSelectionTable *pCharacterSelection = nullptr;
+    const Party *pParty = nullptr;
+    const ScriptedEventProgram *pGlobalEvents = nullptr;
+    const ScriptedEventProgram *pLocalEvents = nullptr;
 };
 
 struct WorldGuideKnowledge

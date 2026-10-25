@@ -1115,6 +1115,38 @@ function support.setGlobalNpcLocations(eventId, locations)
     setNpcLocations("global", eventId, locations)
 end
 
+local function setQBitGrants(scopeName, eventId, qbits)
+    local handler = evt[scopeName][eventId]
+    assert(type(handler) == "function", "Campaign flag references require a registered event handler")
+    local meta = ensureMetaScope(scopeName)
+    meta.qbitGrants = meta.qbitGrants or {}
+    meta.qbitGrants[eventId] = {handler = handler, qbits = qbits}
+end
+
+function support.setMapQBitGrants(eventId, qbits)
+    setQBitGrants("map", eventId, qbits)
+end
+
+function support.setGlobalQBitGrants(eventId, qbits)
+    setQBitGrants("global", eventId, qbits)
+end
+
+local function setNpcTopicReferences(scopeName, eventId, topics)
+    local handler = evt[scopeName][eventId]
+    assert(type(handler) == "function", "NPC topic references require a registered event handler")
+    local meta = ensureMetaScope(scopeName)
+    meta.npcTopicReferences = meta.npcTopicReferences or {}
+    meta.npcTopicReferences[eventId] = {handler = handler, topics = topics}
+end
+
+function support.setMapNpcTopicRefs(eventId, topics)
+    setNpcTopicReferences("map", eventId, topics)
+end
+
+function support.setGlobalNpcTopicRefs(eventId, topics)
+    setNpcTopicReferences("global", eventId, topics)
+end
+
 function support.appendMapOnLoadEvent(eventId)
     local meta = ensureMetaScope("map")
     table.insert(meta.onLoad, eventId)
@@ -1698,6 +1730,10 @@ SetMapAutonoteRefs = support.setMapAutonoteRefs
 SetGlobalAutonoteRefs = support.setGlobalAutonoteRefs
 SetMapNpcLocations = support.setMapNpcLocations
 SetGlobalNpcLocations = support.setGlobalNpcLocations
+SetMapNpcTopicRefs = support.setMapNpcTopicRefs
+SetGlobalNpcTopicRefs = support.setGlobalNpcTopicRefs
+SetMapQBitGrants = support.setMapQBitGrants
+SetGlobalQBitGrants = support.setGlobalQBitGrants
 AppendMapOnLoadEvent = support.appendMapOnLoadEvent
 AppendMapOnLeaveEvent = support.appendMapOnLeaveEvent
 RegisterMapOnLoadEvent = support.registerMapOnLoadEvent
