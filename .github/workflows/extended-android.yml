@@ -32,7 +32,7 @@ jobs:
       OPENYAMM_ANDROID_BUILD_TYPE: ${{ github.event_name == 'push' && github.ref_name == 'extended/bootstrap-android' && 'debug' || inputs.build_type || 'release' }}
       CMAKE_C_COMPILER_LAUNCHER: ccache
       CMAKE_CXX_COMPILER_LAUNCHER: ccache
-      CCACHE_DIR: ${{ runner.temp }}/openyamm-ccache
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
       CCACHE_BASEDIR: ${{ github.workspace }}
       CCACHE_COMPILERCHECK: content
 
