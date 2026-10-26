@@ -55,6 +55,10 @@ community guide's complete content has been integrated yet.
 - Paused trainer details reuse the gameplay training evaluator for the selected character, including price,
   class/promotion limits and skill requirements. This inspection never trains a character or spends gold.
 - Zoom, drag, search input, native button focus and scroll controls. Entry in main menu and pause menu.
+- Guidebook pages for items/equipment, alchemy, spells, classes/races, quest relationships and companions use
+  the active shared registries and discovery history. They do not install a copied community-guide database.
+- Dungeon controls select known height bands, all heights or the party height, with matching site/arrow filtering
+  and optional note elevations. Height bands are not semantic floor names; complex overlapping plans still need audit.
 
 `game/world/WorldDatabase` indexes **references** to `MapStats`, `HouseTable`, `NpcDialogTable` and
 `MergedTeacherTopicTable`. It owns neither copies of those base records nor an alternative balancing/content database.
@@ -89,19 +93,25 @@ Unknown services are filtered before search; routes require both endpoint maps t
 
 ## Remaining guide coverage
 
-This slice is not the complete external guide port. Complete campaign chains, scripted monster sources, site effects/loot/open state,
-conditional teleport destinations, Barrows connection graphs, item/ingredient sources, guild availability and
-companion recruitment locations remain to be added through shared game/world data. The native guidebook below
-now covers reference pages and campaign trackers. Player notes are editable in the Atlas and existing Map Book.
-Dungeon plans currently project all elevations together; floor
-selection and floor-specific annotations are not yet shown in the Atlas. The index uses current or last-observed
+This is not yet the complete external guide equivalent. The current scopes and outstanding content cases are
+recorded in [ATLAS_COVERAGE.md](ATLAS_COVERAGE.md); optional extensions require a decision under
+[ATLAS_DECISIONS.md](ATLAS_DECISIONS.md). Existing campaign relationships, Barrows/Regna graphs, observed
+site/chest states, item/ingredient sources, guild observations and companion contacts have substantial native
+coverage. Scripted monster sources, remaining conditional/handwritten declarations and wider content checks
+are still incomplete. The guidebook also covers reference pages and campaign trackers. Player notes are editable
+in the Atlas and existing Map Book.
+Dungeon plans provide an all-height overview and filtered known height bands with explicit note elevations.
+The index uses current or last-observed
 resident locations/topics, but conditional/shared venues, generated/roaming NPCs and more information learned from
 books or rumours require additional shared integration. Dynamically moved entrances require runtime metadata.
 Sites cover explicit map-local event bindings and inherited decoration/global-event bindings through the shared
 runtime binding rules. Conditional effects and source semantics still have the gaps listed in ATLAS_COVERAGE.md.
-The Android implementation
-uses shared native code but this slice has not yet been
-built or physically tested on Android/controller hardware.
+The shared native code has an ARM64 Android Release build. Version 0.2.0 is installed and running on the test
+phone with both mods loaded. Atlas-specific physical acceptance remains separate from that startup proof;
+see [Android QA](ATLAS_ANDROID_QA.md). Controller acceptance is still open.
+
+The dated checkpoints below retain their historical validation scope. Use this overview and the coverage/QA
+documents for current status; an old checkpoint's list of missing functions is not a new completion requirement.
 
 ## Windows iteration
 
