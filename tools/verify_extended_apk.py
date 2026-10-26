@@ -79,8 +79,10 @@ def has_marker(archive, name, marker):
     return False
 
 
-def verify(apk_path, aapt, baseline_apk=None, baseline_ref="1.0"):
+def verify(apk_path, aapt, baseline_apk=None, baseline_ref="1.0", build_type=None):
     badging = subprocess.check_output([aapt, "dump", "badging", str(apk_path)], text=True)
+    if build_type == "release" and re.search(r"^application-debuggable\s*$", badging, re.MULTILINE):
+        raise ValueError("Release device tests require a non-debuggable APK")
     package = re.search(r"^package: name='([^']+)'", badging, re.MULTILINE)
     if package is None or package.group(1) != "org.openyamm.extended":
         raise ValueError("APK must use the separate org.openyamm.extended application ID")
@@ -90,6 +92,7 @@ def verify(apk_path, aapt, baseline_apk=None, baseline_ref="1.0"):
     if activity is None or activity.group(1) != "org.openyamm.android.OpenYammActivity":
         raise ValueError("APK launcher must resolve to the existing Java activity")
     report = {"application_id": package.group(1), "activity": activity.group(1),
+              "build_type": build_type,
               "apk_sha256": sha256(apk_path), "apk_bytes": apk_path.stat().st_size}
     with zipfile.ZipFile(apk_path) as apk:
         names = set(apk.namelist())
@@ -100,6 +103,7 @@ def verify(apk_path, aapt, baseline_apk=None, baseline_ref="1.0"):
                     "assets/engine/data_tables/class_multipliers.txt", "assets/engine/events/Global.lua",
                     "assets/worlds/mm7/maps/7out01.odm", "assets/settings.ini", "assets/mods/karol-test/mod.yaml",
                     "assets/mods/interactive-atlas/mod.yaml", "assets/engine/world/atlas/mm8.yml"}
+        required.update({"assets/engine/world/atlas/mm7.yml", "assets/worlds/mm8/maps/out01.odm"})
         if not required <= names:
             raise ValueError(f"Missing required APK entries: {sorted(required - names)}")
         profile = json.loads(apk.read("assets/engine/sprite_texture_profile.json"))
@@ -120,6 +124,11 @@ def verify(apk_path, aapt, baseline_apk=None, baseline_ref="1.0"):
             expected_mod = Path(__file__).resolve().parents[1] / path
             if apk.read("assets/" + path) != expected_mod.read_bytes():
                 raise ValueError(f"Packaged {directory} must match its declared source manifest")
+        for world in ("mm7", "mm8"):
+            path = f"engine/world/atlas/{world}.yml"
+            expected = Path(__file__).resolve().parents[1] / "assets_dev" / path
+            if apk.read("assets/" + path) != expected.read_bytes():
+                raise ValueError(f"Atlas {world} data must match the current source")
         report.update({"abis": abis, "shader_count": len(shaders),
                        "knight": {"base_health": 35, "base_health_per_level": 5},
                        "test_mod": {"id": "karol.test", "version": "0.1.0"}})
@@ -141,9 +150,10 @@ def main():
     parser.add_argument("--aapt", required=True)
     parser.add_argument("--baseline-apk", type=Path)
     parser.add_argument("--baseline-ref", default="1.0")
+    parser.add_argument("--build-type", choices=("release", "debug"))
     parser.add_argument("--report", type=Path, required=True)
     args = parser.parse_args()
-    report = verify(args.apk, args.aapt, args.baseline_apk, args.baseline_ref)
+    report = verify(args.apk, args.aapt, args.baseline_apk, args.baseline_ref, args.build_type)
     args.report.parent.mkdir(parents=True, exist_ok=True)
     args.report.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
     print(f"Verified Extended ARM64 APK: base Knight HP/level=5, karol.test packaged, {report['shader_count']} shaders")

@@ -72,36 +72,49 @@ class RuntimeComparisonTests(unittest.TestCase):
 
     def test_apk_gate_checks_base_knight_and_exact_mod_payload(self):
         mod = (Path(__file__).resolve().parents[1] / "mods/karol-test/mod.yaml").read_bytes()
+        root = Path(__file__).resolve().parents[1]
         payload = {
             "lib/arm64-v8a/libmain.so": b"OpenYAMM Extended bootstrap build",
             "lib/arm64-v8a/libSDL3.so": b"fixture",
             "assets/engine/events/Global.lua": b"fixture",
             "assets/worlds/mm7/maps/7out01.odm": b"fixture",
+            "assets/worlds/mm8/maps/out01.odm": b"fixture",
             "assets/settings.ini": b"fixture",
             "assets/engine/sprite_texture_profile.json": b'{"schema_version":2,"texture_profile":"android"}',
             "assets/runtime/shaders/essl/test.bin": b"fixture",
             "assets/mods/karol-test/mod.yaml": mod,
+            "assets/mods/interactive-atlas/mod.yaml": (root / "mods/interactive-atlas/mod.yaml").read_bytes(),
+            "assets/engine/world/atlas/mm7.yml": (root / "assets_dev/engine/world/atlas/mm7.yml").read_bytes(),
+            "assets/engine/world/atlas/mm8.yml": (root / "assets_dev/engine/world/atlas/mm8.yml").read_bytes(),
             "assets/engine/data_tables/class_multipliers.txt": b"Knight\t35\t5\t0\t0\tNone\n",
         }
         badging = ("package: name='org.openyamm.extended'\napplication-label:'OpenYAMM Extended'\n"
                    "launchable-activity: name='org.openyamm.android.OpenYammActivity'\n")
         with tempfile.TemporaryDirectory() as directory:
             apk = Path(directory) / "fixture.apk"
-            for mutation, message in ((None, None), ("mod", "declared source"), ("base", "Base Knight")):
+            for mutation, message in ((None, None), ("mod", "declared source"), ("base", "Base Knight"),
+                                      ("atlas", "Atlas.*source"), ("missing_world", "Missing required"),
+                                      ("debug", "non-debuggable")):
                 candidate = dict(payload)
                 if mutation == "mod":
                     candidate["assets/mods/karol-test/mod.yaml"] = mod.replace(b"value: 1", b"value: 9")
                 if mutation == "base":
                     candidate["assets/engine/data_tables/class_multipliers.txt"] = b"Knight\t35\t6\t0\t0\tNone\n"
+                if mutation == "atlas":
+                    candidate["assets/engine/world/atlas/mm8.yml"] = b"stale atlas"
+                if mutation == "missing_world":
+                    del candidate["assets/worlds/mm8/maps/out01.odm"]
                 with zipfile.ZipFile(apk, "w") as archive:
                     for name, contents in candidate.items():
                         archive.writestr(name, contents)
-                with patch.object(verifier.subprocess, "check_output", return_value=badging):
+                candidate_badging = badging + ("application-debuggable\n" if mutation == "debug" else "")
+                with patch.object(verifier.subprocess, "check_output", return_value=candidate_badging):
                     if message:
                         with self.assertRaisesRegex(ValueError, message):
-                            verifier.verify(apk, "fixture-aapt")
+                            verifier.verify(apk, "fixture-aapt", build_type="release")
                     else:
-                        self.assertEqual(verifier.verify(apk, "fixture-aapt")["test_mod"]["id"], "karol.test")
+                        result = verifier.verify(apk, "fixture-aapt", build_type="release")
+                        self.assertEqual(result["test_mod"]["id"], "karol.test")
 
 
 if __name__ == "__main__":

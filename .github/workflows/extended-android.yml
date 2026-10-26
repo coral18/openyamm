@@ -1,10 +1,17 @@
-name: Extended Android bootstrap
+name: Extended Android
 
 on:
   push:
     branches:
       - extended/bootstrap-android
+      - extended/android-atlas
   workflow_dispatch:
+    inputs:
+      build_type:
+        description: Android build variant
+        type: choice
+        options: [release, debug]
+        default: release
 
 permissions:
   contents: read
@@ -20,8 +27,14 @@ jobs:
     timeout-minutes: 240
     env:
       CMAKE_BUILD_PARALLEL_LEVEL: 4
-      OPENYAMM_ANDROID_VERSION_NAME: 0.1.1-bootstrap
-      OPENYAMM_ANDROID_VERSION_CODE: 102
+      OPENYAMM_ANDROID_VERSION_NAME: 0.2.0-atlas
+      OPENYAMM_ANDROID_VERSION_CODE: 103
+      OPENYAMM_ANDROID_BUILD_TYPE: ${{ github.event_name == 'push' && github.ref_name == 'extended/bootstrap-android' && 'debug' || inputs.build_type || 'release' }}
+      CMAKE_C_COMPILER_LAUNCHER: ccache
+      CMAKE_CXX_COMPILER_LAUNCHER: ccache
+      CCACHE_DIR: ${{ runner.temp }}/openyamm-ccache
+      CCACHE_BASEDIR: ${{ github.workspace }}
+      CCACHE_COMPILERCHECK: content
 
     steps:
       - name: Check out sources
@@ -41,13 +54,7 @@ jobs:
             /mods/
             /android/
             /packaging/licenses/
-            /tools/openyamm_shaderc_stubs.cpp
-            /tools/cook_sprite_atlases_main.cpp
-            /tools/SpriteAtlasEncode.cpp
-            /tools/SpriteAtlasEncode.h
-            /tools/cook_sprite_atlases.py
-            /tools/package_runtime_assets.py
-            /tools/verify_extended_apk.py
+            /tools/
             /tests/test_extended_apk.py
             /assets_cooked/android/sprites_new/
             /assets_dev/_legacy/sprites_original/
@@ -77,6 +84,14 @@ jobs:
       - name: Test APK content validation
         run: python3 tests/test_extended_apk.py
 
+      - name: Cache native compiler results
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: ${{ runner.os }}-extended-android-ccache-v1-${{ hashFiles('cmake/Dependencies.cmake', 'android/app/build.gradle') }}-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-extended-android-ccache-v1-${{ hashFiles('cmake/Dependencies.cmake', 'android/app/build.gradle') }}-
+
       - name: Cache official release baseline
         uses: actions/cache@v4
         with:
@@ -97,12 +112,13 @@ jobs:
       - name: Install host build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install --no-install-recommends -y ninja-build libgl1-mesa-dev libx11-dev libxext-dev
+          sudo apt-get install --no-install-recommends -y ccache ninja-build libgl1-mesa-dev libx11-dev libxext-dev
 
       - name: Configure host tools
         run: >-
           cmake -S . -B build -G Ninja
           -DCMAKE_BUILD_TYPE=Release
+          -DOPENYAMM_USE_VULKAN=OFF
           -DOPENYAMM_BUILD_DESKTOP_EXECUTABLE=OFF
           -DOPENYAMM_BUILD_TESTS=OFF
           -DOPENYAMM_BUILD_EDITOR=OFF
@@ -125,46 +141,168 @@ jobs:
       - name: Repack Android runtime assets
         run: android/repack_runtime_assets.sh
 
-      - name: Build debug APK
+      - name: Build APK
         run: |
+          variant="$OPENYAMM_ANDROID_BUILD_TYPE"
+          if [[ "$variant" != release && "$variant" != debug ]]; then
+            echo 'Unsupported Android variant' >&2
+            exit 1
+          fi
+          if [[ "$variant" == release ]]; then
+            # Optimized device-test build, signed with the cached CI test key. Never upload the key.
+            test_key="$HOME/.android/debug.keystore"
+            if [[ ! -f "$test_key" ]]; then
+              mkdir -p "$(dirname "$test_key")"
+              keytool -genkeypair -keystore "$test_key" -storepass android -keypass android \
+                -alias androiddebugkey -keyalg RSA -keysize 2048 -validity 10000 \
+                -dname 'CN=Android Debug,O=Android,C=US'
+            fi
+            export OPENYAMM_ANDROID_KEYSTORE="$test_key"
+            export OPENYAMM_ANDROID_KEYSTORE_PASSWORD=android
+            export OPENYAMM_ANDROID_KEY_ALIAS=androiddebugkey
+            export OPENYAMM_ANDROID_KEY_PASSWORD=android
+          fi
           chmod +x android/gradlew
-          android/gradlew :app:assembleDebug
+          android/gradlew ":app:assemble${variant^}"
 
       - name: Prepare artifact
+        id: apk
         run: |
-          source_apk="android/app/build/outputs/apk/debug/app-debug.apk"
+          variant="$OPENYAMM_ANDROID_BUILD_TYPE"
+          source_apk="android/app/build/outputs/apk/$variant/app-$variant.apk"
           test -s "$source_apk"
           mkdir -p dist
-          cp "$source_apk" dist/OpenYAMM-Extended-bootstrap-android-arm64.apk
-          sha256sum dist/OpenYAMM-Extended-bootstrap-android-arm64.apk > dist/OpenYAMM-Extended-bootstrap-android-arm64.apk.sha256
+          apk="dist/OpenYAMM-Extended-atlas-$variant-android-arm64.apk"
+          mv "$source_apk" "$apk"
+          sha256sum "$apk" > "$apk.sha256"
+          echo "path=$apk" >> "$GITHUB_OUTPUT"
+          ccache --show-stats > dist/compiler-cache.txt
           ls -lh dist/
 
       - name: Verify APK identity, signature and runtime assets
         run: |
-          apk="dist/OpenYAMM-Extended-bootstrap-android-arm64.apk"
-          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$apk"
+          apk="${{ steps.apk.outputs.path }}"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs "$apk"
           python3 tools/verify_extended_apk.py "$apk" \
             --aapt "$ANDROID_HOME/build-tools/35.0.0/aapt" \
+            --build-type "$OPENYAMM_ANDROID_BUILD_TYPE" \
             --baseline-apk build/extended-bootstrap/OpenYAMM-1.0-android-arm64.apk \
             --report dist/extended-apk-verification.json
 
-      - name: Upload APK
+      - name: Split APK for bounded downloads
+        id: parts
+        run: |
+          mkdir -p dist/parts
+          split --bytes=480M --numeric-suffixes=0 --suffix-length=2 \
+            "${{ steps.apk.outputs.path }}" dist/parts/apk.part.
+          count=$(find dist/parts -type f | wc -l)
+          if [[ "$count" -gt 9 ]]; then
+            echo 'APK exceeds the supported bounded-transfer size' >&2
+            exit 1
+          fi
+          for part in dist/parts/apk.part.*; do
+            echo "part${part##*.}=true" >> "$GITHUB_OUTPUT"
+          done
+          (cd dist/parts && sha256sum apk.part.*) > dist/parts.sha256
+
+      - name: Upload APK part 00
+        if: steps.parts.outputs.part00 == 'true'
         uses: actions/upload-artifact@v7
         with:
-          name: openyamm-extended-bootstrap-android
-          path: |
-            dist/OpenYAMM-Extended-bootstrap-android-arm64.apk
-            dist/OpenYAMM-Extended-bootstrap-android-arm64.apk.sha256
+          name: openyamm-extended-${{ env.OPENYAMM_ANDROID_BUILD_TYPE }}-part-00
+          path: dist/parts/apk.part.00
           if-no-files-found: error
-          retention-days: 7
+          retention-days: 3
+          compression-level: 0
+
+      - name: Upload APK part 01
+        if: steps.parts.outputs.part01 == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: openyamm-extended-${{ env.OPENYAMM_ANDROID_BUILD_TYPE }}-part-01
+          path: dist/parts/apk.part.01
+          if-no-files-found: error
+          retention-days: 3
+          compression-level: 0
+
+      - name: Upload APK part 02
+        if: steps.parts.outputs.part02 == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: openyamm-extended-${{ env.OPENYAMM_ANDROID_BUILD_TYPE }}-part-02
+          path: dist/parts/apk.part.02
+          if-no-files-found: error
+          retention-days: 3
+          compression-level: 0
+
+      - name: Upload APK part 03
+        if: steps.parts.outputs.part03 == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: openyamm-extended-${{ env.OPENYAMM_ANDROID_BUILD_TYPE }}-part-03
+          path: dist/parts/apk.part.03
+          if-no-files-found: error
+          retention-days: 3
+          compression-level: 0
+
+      - name: Upload APK part 04
+        if: steps.parts.outputs.part04 == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: openyamm-extended-${{ env.OPENYAMM_ANDROID_BUILD_TYPE }}-part-04
+          path: dist/parts/apk.part.04
+          if-no-files-found: error
+          retention-days: 3
+          compression-level: 0
+
+      - name: Upload APK part 05
+        if: steps.parts.outputs.part05 == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: openyamm-extended-${{ env.OPENYAMM_ANDROID_BUILD_TYPE }}-part-05
+          path: dist/parts/apk.part.05
+          if-no-files-found: error
+          retention-days: 3
+          compression-level: 0
+
+      - name: Upload APK part 06
+        if: steps.parts.outputs.part06 == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: openyamm-extended-${{ env.OPENYAMM_ANDROID_BUILD_TYPE }}-part-06
+          path: dist/parts/apk.part.06
+          if-no-files-found: error
+          retention-days: 3
+          compression-level: 0
+
+      - name: Upload APK part 07
+        if: steps.parts.outputs.part07 == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: openyamm-extended-${{ env.OPENYAMM_ANDROID_BUILD_TYPE }}-part-07
+          path: dist/parts/apk.part.07
+          if-no-files-found: error
+          retention-days: 3
+          compression-level: 0
+
+      - name: Upload APK part 08
+        if: steps.parts.outputs.part08 == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: openyamm-extended-${{ env.OPENYAMM_ANDROID_BUILD_TYPE }}-part-08
+          path: dist/parts/apk.part.08
+          if-no-files-found: error
+          retention-days: 3
           compression-level: 0
 
       - name: Upload verification report
         uses: actions/upload-artifact@v7
         with:
-          name: openyamm-extended-bootstrap-verification
+          name: openyamm-extended-android-verification
           path: |
             dist/extended-apk-verification.json
-            dist/OpenYAMM-Extended-bootstrap-android-arm64.apk.sha256
+            dist/*.apk.sha256
+            dist/parts.sha256
+            dist/compiler-cache.txt
           if-no-files-found: error
           retention-days: 7

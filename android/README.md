@@ -56,6 +56,17 @@ JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64 android/run_debug_emulator.sh
 
 ## Release APK
 
+The Extended CI workflow builds an optimized ARM64 device-test APK on the `extended/android-atlas` snapshot
+branch. Manual runs default to `release`; `debug` is an explicit diagnostic choice. It reuses Gradle and native
+compiler caches and transfers APKs in separately downloadable 480 MiB parts. Concatenate the parts in numeric
+order, then verify the APK checksum from the verification artifact before signing or installing it.
+The package gate checks both current Atlas layouts, their mod manifest, required MM7/MM8 maps and the absence
+of the debuggable flag for release runs. The public baseline is hash-verified and runtime changes must be declared.
+
+CI uses a cached test signing key, not the upstream author's key. Compare its certificate with the installed
+Extended APK before updating. A cache miss can produce a different test certificate; do not work around a
+signature mismatch by automatically uninstalling the app or deleting its saves. Keep test keys out of artifacts.
+
 Release signing can be configured through `android/signing.properties`, Gradle
 properties, or the `OPENYAMM_ANDROID_*` environment variables. For local builds,
 the release script can create `android/keystores/openyamm-release.jks`.
