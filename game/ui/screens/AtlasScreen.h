@@ -91,6 +91,7 @@ private:
     size_t m_sourceScanFailures = 0;
     bool m_sourceScanActive = false, m_sourcesComplete = false;
     std::unordered_set<std::string> m_indexedMaps, m_siteSelection;
+    size_t m_pendingMapIndexes = 0;
     std::string m_locationError;
     NoteWriter m_writeNote;
     WorldMapNoteEdit m_noteDraft;

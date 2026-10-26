@@ -39,8 +39,11 @@ The user subsequently reported testing the Atlas and a long delay when enabling 
 A read-only Windows diagnosis reproduced blocking frames of about 3.2 seconds in MM7 and 3.1 seconds in MM8:
 each toggle rebuilds the world index, and Guide synchronously loads all 13/14 outdoor maps, including scene
 and baked-lighting data. Re-entering Guide repeats this work. The relevant indexing and loader functions match
-the installed 0.2.0 source. These timings are from Windows, not measured phone timings. The user requested
-verification only; the optimization remains pending in `ATLAS_DECISIONS.md`. This report establishes that the
+the installed 0.2.0 source. These timings are from Windows, not measured phone timings. The initial request was
+verification only. The user subsequently approved a small optimization: source now indexes one map per frame,
+prioritizing the selected location; Windows entry frames are about 0.35–0.36 seconds. This targets 0.2.2 / 105
+and still requires a new Android build and device acceptance. Cross-mode caching remains deferred.
+This report establishes that the
 user reached the Atlas/Guide UI, not acceptance of the remaining discovery, gesture or persistence checks.
 
 ## Physical acceptance gates

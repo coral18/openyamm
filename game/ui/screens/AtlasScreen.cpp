@@ -532,6 +532,8 @@ void AtlasScreen::drawScreen(float)
         return;
     }
     m_suppressEscape = false;
+    if ((m_siteReading || m_referenceOpen) && !m_sourceScanActive)
+        indexKnownRegions();
     if (m_siteReading)
     {
         drawSiteJournal();
@@ -630,6 +632,7 @@ void AtlasScreen::drawScreen(float)
         return;
     }
     const std::string listHeading = !m_siteSelection.empty() ? "Clear selection"
+        : m_pendingMapIndexes > 0 ? "Reading maps: " + std::to_string(m_pendingMapIndexes)
         : m_filter == WorldRecordKind::Travel ? (m_guide ? "All recorded routes" : "Known routes")
         : m_map.empty() ? (m_guide ? "All recorded locations" : "Your party's discoveries")
         : (m_guide ? "Locations and residents here" : "Discovered here");
@@ -719,24 +722,32 @@ void AtlasScreen::indexKnownRegions()
         if ((record.kind == WorldRecordKind::Region
             || (record.kind == WorldRecordKind::Dungeon && !m_connectionView && record.id == m_map))
             && m_world.visible(record, m_knowledge, m_guide)
-            && m_indexedMaps.insert(record.id).second)
+            && !m_indexedMaps.contains(record.id))
             maps.push_back(record.map);
-    for (const MapStatsEntry *pMap : maps)
+    m_pendingMapIndexes = maps.size();
+    if (maps.empty()) return;
+    const auto selected = std::find_if(maps.begin(), maps.end(), [this](const MapStatsEntry *pMap)
     {
-        try
-        {
-            auto map = MapAssetLoader().load(assetFileSystem(), *pMap,
-                m_data.monsterTable(), m_data.objectTable(), MapLoadPurpose::HeadlessGameplay);
-            if (!map) throw std::runtime_error("Missing map data");
-            indexMapData(*map);
-        }
-        catch (const std::exception &error)
-        {
-            m_locationError = "Some map markers are unavailable in this content package.";
-            std::cerr << "World locations could not be indexed for " << pMap->fileName
-                      << ": " << error.what() << '\n';
-        }
+        return WorldDatabase::mapId(*pMap) == m_map;
+    });
+    const MapStatsEntry *pMap = selected != maps.end() ? *selected : maps.front();
+    // Keep the selected map first and bound synchronous indexing to one map per frame.
+    m_indexedMaps.insert(WorldDatabase::mapId(*pMap));
+    --m_pendingMapIndexes;
+    try
+    {
+        auto map = MapAssetLoader().load(assetFileSystem(), *pMap,
+            m_data.monsterTable(), m_data.objectTable(), MapLoadPurpose::HeadlessGameplay);
+        if (!map) throw std::runtime_error("Missing map data");
+        indexMapData(*map);
     }
+    catch (const std::exception &error)
+    {
+        m_locationError = "Some map markers are unavailable in this content package.";
+        std::cerr << "World locations could not be indexed for " << pMap->fileName
+                  << ": " << error.what() << '\n';
+    }
+    if (m_pendingMapIndexes == 0 && !m_classComparison) m_referenceDirty = true;
 }
 
 bool AtlasScreen::drawLocationMarkers(const WorldRecord &map, const Rect &image, const Rect &viewport,
@@ -1717,7 +1728,8 @@ void AtlasScreen::drawReference()
         || m_referenceSection == WorldGuideSection::Monsters || m_referenceSection == WorldGuideSection::Quests
         || m_referenceSection == WorldGuideSection::Companions);
     textInRect(canvasRect(285, 89, items ? 180 : classes || scanSources ? 410 : 535, 25),
-        items ? m_presentation.name : m_presentation.name + " - active game data",
+        m_pendingMapIndexes > 0 ? "Reading maps: " + std::to_string(m_pendingMapIndexes)
+            : items ? m_presentation.name : m_presentation.name + " - active game data",
         "fondamento", 14);
     if (scanSources && button("atlas-map-sources", canvasRect(711, 89, 110, 25),
         m_sourceScanActive ? "Scan " + std::to_string(m_sourceScanIndex) + "/"

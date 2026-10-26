@@ -1,0 +1,28 @@
+# Load an isolated MM8 save. Opens Guidebook while the map index is still loading.
+output_dir: captures
+exit: true
+steps:
+- expect: gameplay
+- pause: true
+- click:
+  - 800
+  - 821
+- wait: 1
+- click:
+  - 1152
+  - 57
+- click:
+  - 450
+  - 57
+- capture: guidebook-loading
+- wait: 6
+- capture: guidebook-ready
+- click:
+  - 450
+  - 57
+- capture: map-ready
+- click:
+  - 1152
+  - 57
+- wait: 1
+- capture: discovery-return

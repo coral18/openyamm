@@ -2781,3 +2781,26 @@ root. Reproduction tours are `tools/menu_tours/atlas_touch_map_mm7.yml` and `atl
 
 These tours replay recognized shared-input frames, not Android OS events. This later source fix is not included
 in the already-built `0.2.1-atlas` APK. Physical gesture checks and the wider MM7/MM8 coverage matrix remain open.
+
+### Incremental Guide region indexing, 2026-10-26
+
+After the user reported a long phone delay, a Windows diagnosis reproduced 3.2-second MM7 and 3.1-second MM8
+Guide entry frames. Each toggle discarded the index, and the same render callback synchronously loaded all
+13/14 outdoor maps, including scenes, baked lighting and event metadata. Repeat entry incurred the same delay.
+
+The user then authorized a small optimization. The existing indexer now processes one map per frame and gives
+the selected location priority. A remaining-map count identifies incomplete results. Work continues when the
+user opens the Guidebook or a site reading; Guidebook references refresh once the regional index finishes.
+The separate explicit full-source scan retains its existing behavior. Dungeon geometry remains on demand.
+This does not introduce threads or a second world database, and it does not retain the index across toggles.
+
+Windows Release builds pass. Equivalent MM7/MM8 tours measured entry frames around 0.35/0.36 seconds; the
+worst region-indexing frames were 0.36/0.38 seconds. All 13/14 outdoor maps were still indexed on each Guide
+entry. Additional native tours enter the Guidebook while loading, reach the completed index and return to
+Discovery. The Discovery map viewports are pixel-identical to their pre-Guide captures in both worlds.
+These are Windows measurements, not POCO performance claims. Private logs/captures are retained under
+`atlas-guide-verification-20261026`; reproducible Guidebook tours are `atlas_guide_incremental_mm7.yml` and
+`atlas_guide_incremental_mm8.yml` in `tools/menu_tours/`.
+
+This change and the pin-start touch-pan fix target Android `0.2.2-atlas` / `105`. The installed phone version
+remains `0.2.0-atlas` until an updated package is installed and verified. The full Atlas objective remains open.
