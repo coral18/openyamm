@@ -1,0 +1,78 @@
+id: atlas.mm8_journal_well_fixture
+title: Real authored well preserves selected-member effects, journal knowledge and
+  repeat-use behavior
+world: mm8
+mode: faithful
+steps:
+- new_game_flow:
+    start_map: out07.odm
+    party:
+      gold: 500
+      food: 10
+      members:
+      - name: Well Tester
+        class: Knight
+        level: 1
+        endurance: 60
+        skills: []
+        equipment: {}
+      - name: Other Tester
+        class: Knight
+        level: 1
+        endurance: 60
+        skills: []
+        equipment: {}
+- assert:
+    runtime_event_variable:
+      id: 115
+      value: 0
+      member_index: 0
+- assert:
+    named_map_var_changed:
+      name: openyamm.discovery.site-effects.v1/bmodel/30/surface/0/event/101/seen
+      value: 0
+- set_pose: &well_pose
+    x: -1320
+    y: 3500
+    z: 512
+    yaw: 1.570796327
+    pitch: -0.5
+- save_game: before
+- press_interact:
+    pose: *well_pose
+    expect:
+      kind: event_target
+      triggered_event: 101
+      can_activate: true
+- assert:
+    runtime_event_variable:
+      id: 115
+      value: 1
+      member_index: 0
+- assert:
+    runtime_event_variable:
+      id: 115
+      value: 0
+      member_index: 1
+- assert:
+    named_map_var_changed:
+      name: openyamm.discovery.site-effects.v1/bmodel/30/surface/0/event/101/stat/PoisonedRed/max-after
+      value: 1
+- assert:
+    runtime_event_variable:
+      id: 14680289
+      min: 1
+- save_game: known
+- load_game: known
+- press_interact:
+    pose: *well_pose
+    expect:
+      kind: event_target
+      triggered_event: 101
+      can_activate: true
+- assert:
+    runtime_event_variable:
+      id: 115
+      value: 1
+      member_index: 0
+- save_game: known

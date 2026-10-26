@@ -6784,6 +6784,42 @@ TEST_CASE("event runtime queues qbit portrait fx only for visible quest entries"
     CHECK(runtimeState.pendingSounds.empty());
 }
 
+TEST_CASE("event armor class bonus arithmetic updates selected character state and saturates signed endpoints")
+{
+    using namespace OpenYAMM::Game;
+    Party party;
+    PartySeed seed = Party::createDefaultSeed();
+    seed.members.push_back(seed.members.front());
+    seed.members.back().name = "Other character";
+    party.seed(seed);
+    REQUIRE(party.memberCount() == 2);
+    EventRuntimeState state;
+    const auto armor = EventRuntime::decodeVariable(uint32_t(EvtVariable::ArmorClassBonus));
+    EventRuntime::setVariableValue(state, armor, 10, &party, {0});
+    EventRuntime::addVariableValue(state, armor, 20, &party, {0});
+    CHECK(party.member(0)->armorClassModifier == 30);
+    CHECK(party.member(1)->armorClassModifier == 0);
+    CHECK(EventRuntime::getVariableValue(state, armor, &party, 0) == 30);
+    CHECK_FALSE(party.member(0)->eventVariables.contains(uint16_t(EvtVariable::ArmorClassBonus)));
+    EventRuntime::subtractVariableValue(state, armor, 50, &party, {0});
+    CHECK(party.member(0)->armorClassModifier == -20);
+    EventRuntime::setVariableValue(state, armor, INT32_MAX - 1, &party, {0});
+    EventRuntime::addVariableValue(state, armor, 20, &party, {0});
+    CHECK(party.member(0)->armorClassModifier == INT32_MAX);
+    EventRuntime::setVariableValue(state, armor, INT32_MIN + 1, &party, {0});
+    EventRuntime::subtractVariableValue(state, armor, 20, &party, {0});
+    CHECK(party.member(0)->armorClassModifier == INT32_MIN);
+    EventRuntime::setVariableValue(state, armor, 0, &party, {0, 1});
+    EventRuntime::addVariableValue(state, armor, 5, &party, {0, 1, 999});
+    CHECK(party.member(0)->armorClassModifier == 5);
+    CHECK(party.member(1)->armorClassModifier == 5);
+    EventRuntime::addVariableValue(state, armor, 20, nullptr, {0});
+    CHECK(state.variables.empty());
+    Party restored;
+    restored.restoreSnapshot(party.snapshot());
+    CHECK(restored.member(0)->armorClassModifier == 5);
+}
+
 TEST_CASE("event runtime queues one quest sound for stat and autonote portrait fx")
 {
     OpenYAMM::Game::Party party = {};

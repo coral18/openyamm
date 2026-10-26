@@ -1637,6 +1637,9 @@ int32_t readCharacterVariableValue(const Character &member, uint32_t rawId)
 {
     switch (static_cast<EvtVariable>(rawId & 0xFFFFu))
     {
+        case EvtVariable::ArmorClassBonus:
+            return member.armorClassModifier;
+
         case EvtVariable::MightBonus:
         case EvtVariable::ActualMight:
             return member.temporaryEventBonuses.might;
@@ -1774,6 +1777,10 @@ void writeCharacterVariableValue(Character &member, uint32_t rawId, int32_t valu
 
     switch (static_cast<EvtVariable>(rawId & 0xFFFFu))
     {
+        case EvtVariable::ArmorClassBonus:
+            member.armorClassModifier = value;
+            return;
+
         case EvtVariable::MightBonus:
         case EvtVariable::ActualMight:
             member.temporaryEventBonuses.might = clampedValue;
@@ -3833,7 +3840,8 @@ void EventRuntime::addVariableValue(
         return;
     }
 
-    if (variable.kind == VariableKind::BaseStat
+    if (variable.kind == VariableKind::ArmorClassBonus
+        || variable.kind == VariableKind::BaseStat
         || variable.kind == VariableKind::ActualStat
         || variable.kind == VariableKind::StatBonus
         || variable.kind == VariableKind::BaseResistance
@@ -3854,7 +3862,9 @@ void EventRuntime::addVariableValue(
             }
 
             const int32_t currentValue = readCharacterVariableValue(*pMember, variable.rawId);
-            writeCharacterVariableValue(*pMember, variable.rawId, currentValue + value);
+            const int32_t updated = int32_t(std::clamp(int64_t(currentValue) + value,
+                int64_t(INT32_MIN), int64_t(INT32_MAX)));
+            writeCharacterVariableValue(*pMember, variable.rawId, updated);
         }
 
         if (variable.kind == VariableKind::ActualStat
@@ -4312,7 +4322,8 @@ void EventRuntime::subtractVariableValue(
         return;
     }
 
-    if (variable.kind == VariableKind::BaseStat
+    if (variable.kind == VariableKind::ArmorClassBonus
+        || variable.kind == VariableKind::BaseStat
         || variable.kind == VariableKind::ActualStat
         || variable.kind == VariableKind::StatBonus
         || variable.kind == VariableKind::BaseResistance
@@ -4333,7 +4344,9 @@ void EventRuntime::subtractVariableValue(
             }
 
             const int32_t currentValue = readCharacterVariableValue(*pMember, variable.rawId);
-            writeCharacterVariableValue(*pMember, variable.rawId, currentValue - value);
+            const int32_t updated = int32_t(std::clamp(int64_t(currentValue) - value,
+                int64_t(INT32_MIN), int64_t(INT32_MAX)));
+            writeCharacterVariableValue(*pMember, variable.rawId, updated);
         }
 
         if (variable.kind == VariableKind::ActualStat

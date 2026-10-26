@@ -1,0 +1,43 @@
+id: atlas.mm7_journal_well_unseen_verify
+title: Atlas reading preserves real well state without awarding reference effects
+world: mm7
+mode: faithful
+steps:
+- load_game:
+    name: native
+    path: saves/quicksave.oysav
+- assert: &id001
+    runtime_event_variable:
+      id: 8
+      value: 0
+      member_index: 0
+- assert: &id002
+    runtime_event_variable:
+      id: 8
+      value: 0
+      member_index: 1
+- assert: &id003
+    runtime_event_variable:
+      id: 18677985
+      value: 0
+- assert: &id004
+    named_map_var_changed:
+      name: openyamm.discovery.site-effects.v1/bmodel/75/surface/43/event/202/seen
+      value: 0
+- assert: &id005
+    named_map_var_changed:
+      name: openyamm.discovery.site-effects.v1/bmodel/75/surface/43/event/202/stat/ArmorClassBonus/max-after
+      value: 0
+- assert: &id006
+    map: 7out13.odm
+    runtime_event_variable:
+      id: 21
+      value: 500
+- save_game: journal-well-roundtrip
+- load_game: journal-well-roundtrip
+- assert: *id001
+- assert: *id002
+- assert: *id003
+- assert: *id004
+- assert: *id005
+- assert: *id006

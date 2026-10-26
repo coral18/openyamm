@@ -488,6 +488,18 @@ are a separate read-only projection. Random outcomes list possibilities without 
 describe individual use eligibility. Unrepresented reachable behavior suppresses the effect reference rather than
 inventing a complete description. Disabling the Atlas UI does not disable Core observation collection.
 
+Journal checks are not automatically reward requirements. The exporter merges paths only when their ordered
+effects are identical and their predicates are redundant or complementary. A check that only learns the same
+annotation can therefore disappear; a genuine journal-gated reward keeps its named requirement. A private/blank
+note cannot become a player-facing condition. Post-write journal predicates must reduce away completely; other
+post-write predicates still reject the projection. Unreachable contradictory stable branches are excluded without
+executing callbacks. Personal-use bits must match their indexed value; they are not generic numerical counters.
+
+`ArmorClassBonus` Add/Set/Subtract uses the character's shared signed armor modifier. Arithmetic saturates at the
+signed 32-bit endpoints and saves use the existing field. Older builds could consume a well's personal-use bit
+while storing its Add/Subtract in generic event variable 8 instead. No automatic refund is inferred from that
+ambiguous old variable; repairing an affected old save requires an explicit, evidence-based migration.
+
 
 ### Typed special-interaction references
 

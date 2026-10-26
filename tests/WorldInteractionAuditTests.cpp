@@ -85,6 +85,69 @@ TEST_CASE("canonical companion contacts link Fredrick dialogue and Cauri rescue 
     CHECK(party.adventurersInnMembers().empty());
 }
 
+TEST_CASE("canonical journal well references bind all newly explained sites without leaking into Discovery")
+{
+    using namespace OpenYAMM::Game;
+    REQUIRE_MESSAGE(OpenYAMM::Tests::regressionMapLoaderLoaded(),
+        OpenYAMM::Tests::regressionMapLoaderFailure());
+    const auto &fixture = OpenYAMM::Tests::regressionMapLoader();
+    const auto &data = fixture.gameDataLoader;
+    struct Map
+    {
+        const char *pWorld;
+        const char *pFile;
+        std::vector<uint16_t> events;
+    };
+    const Map maps[] = {
+        {"mm7", "7out03.odm", {203, 204, 208, 209, 210}},
+        {"mm7", "7out04.odm", {204}}, {"mm7", "7out05.odm", {203, 204, 205, 207}},
+        {"mm7", "7out06.odm", {461}}, {"mm7", "7out13.odm", {202, 203, 204}},
+        {"mm7", "out10.odm", {203, 204, 206}}, {"mm7", "out11.odm", {321}},
+        {"mm7", "out14.odm", {204, 205}}, {"mm8", "out07.odm", {101}}};
+    size_t references = 0;
+    for (const Map &target : maps)
+    {
+        CAPTURE(std::string(target.pFile));
+        const MapStatsEntry *pDefinition = data.getMapStats().findByFileName(target.pFile);
+        REQUIRE(pDefinition);
+        auto map = MapAssetLoader().load(fixture.assetFileSystem, *pDefinition, data.getMonsterTable(),
+            data.getObjectTable(), MapLoadPurpose::HeadlessGameplay);
+        REQUIRE(map);
+        REQUIRE(map->outdoorMapData);
+        std::string error;
+        REQUIRE_MESSAGE(GameDataLoader::loadEventPrograms(fixture.assetFileSystem, *map, error), error);
+        REQUIRE(map->localEventProgram);
+        const ScriptedEventProgram &events = *map->localEventProgram;
+        WorldDatabase world(data.getMapStats(), data.getHouseTable(), data.getNpcDialogTable(),
+            data.getMergedTeacherTopicTable(), target.pWorld);
+        world.indexMapLocations(*map->outdoorMapData, events);
+        for (uint16_t event : target.events)
+        {
+            CAPTURE(event);
+            REQUIRE(events.siteReferences().contains(event));
+            const auto feature = std::find_if(world.features().begin(), world.features().end(),
+                [&](const WorldMapFeature &value) { return value.site.eventId == event; });
+            REQUIRE(feature != world.features().end());
+            CHECK(feature->kind == WorldMapFeatureKind::Water);
+            WorldKnowledge knowledge;
+            knowledge.visitedMaps.insert(target.pFile);
+            CHECK_FALSE(world.featureVisible(*feature, knowledge, false));
+            CHECK(world.siteReference(*feature, knowledge, false).empty());
+            const std::string text(world.siteReference(*feature, knowledge, true));
+            CHECK(text.find("Outcome 1") != std::string::npos);
+            CHECK(text.find("Outcome 2") == std::string::npos);
+            CHECK(text.find("Journal note") == std::string::npos);
+            knowledge.interactedSites[target.pFile].insert(worldSiteDiscoveryKey(event, feature->site.id));
+            CHECK(world.featureVisible(*feature, knowledge, false));
+            CHECK(world.siteReference(*feature, knowledge, false).empty());
+            CHECK(knowledge.variables.empty());
+            CHECK(knowledge.autonoteIds.empty());
+            ++references;
+        }
+    }
+    CHECK(references == 21);
+}
+
 TEST_CASE("Atlas campaign interaction inventory reads canonical map programs and physical sites")
 {
     using namespace OpenYAMM::Game;

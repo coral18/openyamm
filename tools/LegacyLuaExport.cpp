@@ -12819,11 +12819,14 @@ void emitAutonoteMetadata(std::ostringstream &stream, std::string_view scopeTabl
 }
 
 // A read-only projection of a complete supported callback. Never execute a handler to inspect its effects.
-std::optional<std::string> siteNumericLabel(const FormattedSelector &selector)
+std::optional<std::string> siteNumericLabel(const FormattedSelector &selector, bool forWrite = false)
 {
     const EventAttributeInfo *pAttribute = eventAttributeInfo(selector.expression);
     // Fullness predicates are handled separately; their calculated maxima are not ordinary numeric comparisons.
-    if (pAttribute == nullptr || !pAttribute->referenceNumeric || pAttribute->variable == EvtVariable::MaxHealth
+    if (pAttribute == nullptr
+        || (!pAttribute->referenceNumeric && !(forWrite && pAttribute->variable == EvtVariable::ArmorClassBonus))
+        || (forWrite && !pAttribute->writable)
+        || pAttribute->variable == EvtVariable::MaxHealth
         || pAttribute->variable == EvtVariable::MaxSpellPoints) return std::nullopt;
     return std::string(pAttribute->label);
 }
@@ -12858,23 +12861,34 @@ bool sitePersonalUseFlag(const LegacyLuaEvent &event, const FormattedSelector &s
         const FormattedSelector other = formatSelector(instruction.arguments[0], {});
         if (other.expression != selector.expression) continue;
         if (instruction.operation == LegacyLuaOperation::Add || instruction.operation == LegacyLuaOperation::Set)
+        {
+            if (!selectorValueMatches(other, instruction.arguments[1])) return false;
             assigned = true;
+        }
         else if (instruction.operation == LegacyLuaOperation::Subtract) return false;
     }
     return assigned;
 }
 
 std::optional<std::string> siteRequirement(const LegacyLuaEvent &event,
-    const LegacyLuaInstruction &instruction, bool success)
+    const LegacyLuaInstruction &instruction, bool success, const LegacyLuaExportLookups &lookups)
 {
     if (instruction.arguments.size() != 2) return std::nullopt;
     const FormattedSelector selector = formatSelector(instruction.arguments[0], {});
     const int32_t value = int32_t(instruction.arguments[1]);
+    if (selector.semantic == SelectorSemantic::Autonote
+        && selectorValueMatches(selector, instruction.arguments[1]))
+    {
+        const auto note = lookupText(lookups.autonoteTexts, selector.index);
+        // Private/blank journal flags can be eliminated as bookkeeping, but cannot be shown as a requirement.
+        if (!note || *note == "0") return std::string{};
+        return std::string(success ? "Journal note already learned: " : "Journal note not yet learned: ") + *note;
+    }
     if (selector.expression == "MaxHealth")
         return success ? "Health is full" : "Health is below maximum";
     if (selector.expression == "MaxSpellPoints")
         return success ? "Spell points are full" : "Spell points are below maximum";
-    if (sitePersonalUseFlag(event, selector))
+    if (sitePersonalUseFlag(event, selector) && selectorValueMatches(selector, instruction.arguments[1]))
         return success ? "Already used by this character" : "Not yet used by this character";
     if (const EventAttributeInfo *pAttribute = eventAttributeInfo(selector.expression);
         pAttribute != nullptr && pAttribute->kind == EventAttributeValueKind::Condition)
@@ -12896,7 +12910,8 @@ std::optional<std::string> siteRequirement(const LegacyLuaEvent &event,
     return std::nullopt;
 }
 
-std::optional<std::string> buildSiteReference(const LegacyLuaEvent &event, bool allowNoEffect = false)
+std::optional<std::string> buildSiteReference(const LegacyLuaEvent &event,
+    const LegacyLuaExportLookups &lookups, bool allowNoEffect = false)
 {
     std::vector<uint8_t> steps = collectNormalEventSteps(event);
     // Unknown-only steps are omitted by the callback formatter; do not silently claim a complete reference.
@@ -12904,9 +12919,18 @@ std::optional<std::string> buildSiteReference(const LegacyLuaEvent &event, bool 
         if (instruction.operation == LegacyLuaOperation::Unknown) steps.push_back(instruction.step);
     sortAndUnique(steps);
     if (steps.empty()) return std::nullopt;
+    struct Requirement
+    {
+        std::string key, text;
+        bool success = false;
+        bool unstable = false;
+        bool operator==(const Requirement &) const = default;
+    };
+    const auto less = [](const Requirement &a, const Requirement &b)
+        { return std::pair{a.key, a.success} < std::pair{b.key, b.success}; };
     struct Path
     {
-        std::vector<std::string> requirements;
+        std::vector<Requirement> requirements;
         std::vector<std::string> effects;
         std::vector<uint8_t> visited;
         bool mutated = false;
@@ -12953,7 +12977,7 @@ std::optional<std::string> buildSiteReference(const LegacyLuaEvent &event, bool 
                             ? "Removes: " : "Can apply: ") + std::string(pAttribute->label));
                         break;
                     }
-                    const auto label = siteNumericLabel(selector);
+                    const auto label = siteNumericLabel(selector, true);
                     if (!label || value < 0 || selector.expression.starts_with("Actual")) return false;
                     const bool subtraction = pAction->operation == LegacyLuaOperation::Subtract;
                     const std::string action = pAction->operation == LegacyLuaOperation::Set
@@ -12994,20 +13018,82 @@ std::optional<std::string> buildSiteReference(const LegacyLuaEvent &event, bool 
                 if (!walk(target, path)) return false;
             return true;
         }
-        if (terminal.operation != LegacyLuaOperation::Compare || !terminal.jumpTargetStep || path.mutated)
+        if (terminal.operation != LegacyLuaOperation::Compare || !terminal.jumpTargetStep
+            || terminal.arguments.size() != 2)
             return false;
-        const auto positive = siteRequirement(event, terminal, true);
-        const auto negative = siteRequirement(event, terminal, false);
+        const FormattedSelector selector = formatSelector(terminal.arguments[0], {});
+        const bool unstable = path.mutated;
+        if (unstable && selector.semantic != SelectorSemantic::Autonote) return false;
+        const auto positive = siteRequirement(event, terminal, true, lookups);
+        const auto negative = siteRequirement(event, terminal, false, lookups);
         if (!positive || !negative) return false;
-        Path matched = path;
-        matched.requirements.push_back(*positive);
-        path.requirements.push_back(*negative);
-        return walk(terminal.jumpTargetStep, std::move(matched))
-            && walk(nextStepAfter(steps, *step), std::move(path));
+        std::string key = selector.expression + "/" + std::to_string(terminal.arguments[1]);
+        // A post-write predicate is not a pre-interaction requirement. It must disappear during reduction.
+        if (unstable) key += "/after/" + std::to_string(*step);
+        const auto branch = [&](bool success, std::optional<uint8_t> next, const std::string &text)
+        {
+            Path fork = path;
+            const auto previous = std::find_if(fork.requirements.begin(), fork.requirements.end(),
+                [&](const Requirement &requirement) { return requirement.key == key; });
+            if (previous != fork.requirements.end())
+            {
+                if (previous->success != success) return true; // An impossible path, not an unsupported one.
+            }
+            else fork.requirements.push_back({key, text, success, unstable});
+            return walk(next, std::move(fork));
+        };
+        return branch(true, terminal.jumpTargetStep, *positive)
+            && branch(false, nextStepAfter(steps, *step), *negative);
     };
     if (!walk(steps.front(), {})) return std::nullopt;
     if (outcomes.empty()) return allowNoEffect
         ? std::optional<std::string>("No attribute or condition change is defined by this interaction.") : std::nullopt;
+    for (Path &path : outcomes) std::sort(path.requirements.begin(), path.requirements.end(), less);
+    // Equal effects can absorb redundant conditions or resolve complementary branches. In particular, learning
+    // a journal note must not turn one stat reward into two mutually exclusive-looking rewards.
+    bool reduced = true;
+    while (reduced)
+    {
+        reduced = false;
+        for (size_t i = 0; i < outcomes.size() && !reduced; ++i)
+            for (size_t j = i + 1; j < outcomes.size() && !reduced; ++j)
+            {
+                if (outcomes[i].effects != outcomes[j].effects) continue;
+                auto &a = outcomes[i].requirements;
+                const auto &b = outcomes[j].requirements;
+                if (std::includes(a.begin(), a.end(), b.begin(), b.end(), less))
+                {
+                    a = b;
+                    reduced = true;
+                }
+                else if (std::includes(b.begin(), b.end(), a.begin(), a.end(), less)) reduced = true;
+                else if (a.size() == b.size())
+                {
+                    std::optional<size_t> different;
+                    bool compatible = true;
+                    for (size_t index = 0; index < a.size(); ++index)
+                        if (a[index] != b[index])
+                        {
+                            if (different || a[index].key != b[index].key
+                                || a[index].success == b[index].success)
+                            {
+                                compatible = false;
+                                break;
+                            }
+                            different = index;
+                        }
+                    if (compatible && different)
+                    {
+                        a.erase(a.begin() + *different);
+                        reduced = true;
+                    }
+                }
+                if (reduced) outcomes.erase(outcomes.begin() + j);
+            }
+    }
+    for (const Path &path : outcomes)
+        for (const Requirement &requirement : path.requirements)
+            if (requirement.unstable || requirement.text.empty()) return std::nullopt;
     std::string text = "Effects apply to the selected character unless the effect concerns party resources.\n"
         "Health and spell point gains stop at their maximum; attribute increases use the game's normal limits.";
     if (randomOutcomes) text += "\nRandom outcomes are possibilities; their probabilities are not shown.";
@@ -13018,7 +13104,7 @@ std::optional<std::string> buildSiteReference(const LegacyLuaEvent &event, bool 
         if (!outcomes[i].requirements.empty())
         {
             text += "\nRequirements (all):";
-            for (const std::string &requirement : outcomes[i].requirements) text += "\n- " + requirement;
+            for (const Requirement &requirement : outcomes[i].requirements) text += "\n- " + requirement.text;
         }
     }
     return text.size() <= 16384 ? std::optional<std::string>(text) : std::nullopt;
@@ -13509,7 +13595,7 @@ std::string generateLegacyEventSiteRefsLuaChunk(
             || (action->kind != "well" && action->kind != "fountain" && action->kind != "shrine"
                 && action->kind != "drink"))) continue;
         const bool drink = scope == LegacyLuaExportScope::Map && action && action->kind == "drink";
-        const auto reference = buildSiteReference(direct, drink);
+        const auto reference = buildSiteReference(direct, lookups, drink);
         if (drink)
             metadata << "SetMapSiteReference(" << direct.eventId << ", "
                 << luaQuoted(reference.value_or("")) << ", \"drink\")\n";

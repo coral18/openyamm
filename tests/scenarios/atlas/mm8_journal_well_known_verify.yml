@@ -1,0 +1,43 @@
+id: atlas.mm8_journal_well_known_verify
+title: Atlas reading preserves real well state without awarding reference effects
+world: mm8
+mode: faithful
+steps:
+- load_game:
+    name: native
+    path: saves/quicksave.oysav
+- assert: &id001
+    runtime_event_variable:
+      id: 115
+      value: 1
+      member_index: 0
+- assert: &id002
+    runtime_event_variable:
+      id: 115
+      value: 0
+      member_index: 1
+- assert: &id003
+    runtime_event_variable:
+      id: 14680289
+      min: 1
+- assert: &id004
+    named_map_var_changed:
+      name: openyamm.discovery.site-effects.v1/bmodel/30/surface/0/event/101/seen
+      value: 1
+- assert: &id005
+    named_map_var_changed:
+      name: openyamm.discovery.site-effects.v1/bmodel/30/surface/0/event/101/stat/PoisonedRed/max-after
+      value: 1
+- assert: &id006
+    map: out07.odm
+    runtime_event_variable:
+      id: 21
+      value: 500
+- save_game: journal-well-roundtrip
+- load_game: journal-well-roundtrip
+- assert: *id001
+- assert: *id002
+- assert: *id003
+- assert: *id004
+- assert: *id005
+- assert: *id006

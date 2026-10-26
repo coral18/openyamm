@@ -143,3 +143,24 @@ Unidentified source ID zero does not become a guessed spell or prevent independe
 The six unbound well declarations above still require original-map/import provenance before any placement repair.
 The new spell controls use explicitly synthetic private callbacks at existing MM7/MM8 well surfaces; they do not
 change ordinary campaign well rewards or resolve those six missing bindings.
+
+
+## Journal bookkeeping and real well rewards, 2026-10-26
+
+The exporter now reduces equal-effect paths separated only by journal bookkeeping. It keeps genuine named
+journal requirements, rejects unnamed remaining requirements and rejects post-mutation predicates unless the
+journal predicate disappears completely. Repeated stable contradictions prune only unreachable paths. Existing
+visit/outcome/text bounds remain in force, and no callback runs during generation or browsing.
+
+This adds 21 complete references with actual physical bindings: MM7 7out03:203/204/208/209/210,
+7out04:204, 7out05:203/204/205/207, 7out06:461, 7out13:202/203/204, out10:203/204/206, out11:321,
+out14:204/205; MM8 out07:101. No previous reference ID is removed. The three unhinted Mount Nighon callbacks
+out10:203/204/206 now have explicit well/fountain categories in the existing non-generated context overlay;
+normal ODM surfaces already provide their locations. The Murmurwoods callback applies severe poison; it is not
+presented as a cure merely because its SetValue argument is zero.
+
+Testing the Tatalia well exposed an actual Core bug: Add/Subtract ArmorClassBonus used generic event variable 8
+instead of the character armor modifier. Shared arithmetic now updates that signed modifier with bounded
+intermediates. The existing save field is unchanged. Previously consumed personal-use bits are not refunded
+from ambiguous historical generic variables; affected old saves need an explicit migration with provenance.
+The six original missing well bindings remain open and receive no invented markers.

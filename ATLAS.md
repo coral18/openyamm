@@ -2387,3 +2387,46 @@ Reproduction uses `tests/fixtures/atlas/prepare_assets.py --fixture site-spells-
 Deferred effects after the synchronous activation, unidentified spell sources, broader item/quest/site semantics,
 the six unresolved original well bindings and the remaining Atlas coverage matrix are still open. This does not
 add Guide predictions for spell-casting callbacks or establish Android/controller acceptance.
+
+
+## Journal bookkeeping in well references and real armor bonuses (2026-10-26)
+
+The Guide now explains 21 more authored callbacks (20 MM7 and one MM8) whose rewards were previously suppressed
+by journal-note checks. The exporter resolves only identical-effect branches with complementary/redundant
+requirements. Annotation bookkeeping disappears; genuine named journal gates remain. Private/blank remaining
+gates and unrepresentable post-write requirements still reject the reference. Stable contradictory branches are
+pruned before their unreachable actions are inspected. No handler executes while generating or reading text.
+Existing generated declarations are retained; regeneration also normalizes requirement order in older references.
+
+Every new callback binds a real Water feature in the mounted maps. Mount Nighon's out10:203/204/206 had physical
+ODM surfaces and authored journal notes but generic context categories; the existing explicit context overlay now
+identifies the two wells and central fountain. The six previously audited missing base-site bindings remain open.
+Murmurwoods out07:101 correctly describes applying severe poison, not curing it.
+
+The Tatalia armor well exposed a shared Core error: Add/Subtract ArmorClassBonus wrote a generic event variable
+instead of the character's signed armor modifier. Read/write/arithmetic now use the actual modifier, with bounded
+64-bit intermediates. Existing save fields are unchanged. Old saves whose personal-use flag was already consumed
+are not automatically refunded from the ambiguous generic variable; any repair needs an explicit migration.
+
+Validation:
+
+- Windows Release built. The final focused selection passed 31 cases / 1560 assertions, including all 21 original
+  EVT/STR callbacks with learned/unlearned note states, selected/other-character separation and repeated use;
+  every mounted physical binding/category and Guide privacy; signed armor endpoints and snapshot restore;
+  existing conditional drinks, site/spell observations, journal references and Barrow/Zokarr routing guards.
+- Two faithful 15-step scenarios use ordinary authored targets and normal assets. Tatalia grants armor +20 only
+  to the selected member; Murmurwoods applies severe poison only to that member. Both preserve journal/actual
+  outcome records through reload and avoid additional effects on repeated interaction. Parties/resources are
+  explicit controlled fixtures; these are not full campaign playthroughs or tests of every reset schedule.
+- Four native AMD/OpenGL tours produced 14 current captures. Inspected known/unused reading pages show the real
+  effect in Guide and historical-only findings in Discovery. Each tour returns to gameplay and writes a fresh
+  private quicksave. Unused-site captures show no learned findings even after consulting Guide.
+- All four 15-step post-UI verifiers passed. They preserve selected/other-member values, learned/unlearned note,
+  actual observation flag/endpoint, map and gold 500 through another save/load; unused saves retain no reward
+  or effect receipt after browsing. The existing opt-in packaged-house audit was outside this focused run.
+
+Reusable inputs are `tests/scenarios/atlas/mm*_journal_well_fixture.yml`, the paired known/unseen verifiers and
+`tools/menu_tours/atlas_mm*_journal_well_*.yml`. Setup is documented in `tests/fixtures/atlas/README.md`.
+Private evidence is under `atlas-journal-wells-20261025` in the Windows development root. Original user campaigns
+and the official installation are untouched. This advances the coverage matrix; it does not complete all Atlas
+content, old-save repair, localization or Android/controller acceptance.

@@ -1392,6 +1392,179 @@ TEST_CASE("site reference export follows branches and rejects incomplete or stat
     CHECK(globalRefs.find("SetMapSiteReference(") == std::string::npos);
 }
 
+TEST_CASE("site references reduce journal bookkeeping without erasing genuine or unstable reward requirements")
+{
+    using namespace OpenYAMM::Game;
+    std::vector<uint8_t> bytes;
+    const auto append = [&](uint16_t id, uint8_t step, EvtOpcode opcode, std::vector<uint8_t> payload)
+    {
+        bytes.insert(bytes.end(), {uint8_t(4 + payload.size()), uint8_t(id), 0, step, uint8_t(opcode)});
+        bytes.insert(bytes.end(), payload.begin(), payload.end());
+    };
+    // Learning an annotation on one arm cannot change the identical reward on both arms.
+    append(1, 0, EvtOpcode::Compare, {0xe1, 0, 42, 0, 0, 0, 3});
+    append(1, 1, EvtOpcode::Add, {0xe1, 0, 42, 0, 0, 0});
+    append(1, 2, EvtOpcode::Jmp, {3});
+    append(1, 3, EvtOpcode::Add, {0x15, 0, 200, 0, 0, 0});
+    appendExitRecord(bytes, 1, 4);
+    // A note really gates a reward: retain it rather than unconditionally granting the reference.
+    append(2, 0, EvtOpcode::Compare, {0xe1, 0, 42, 0, 0, 0, 2});
+    appendExitRecord(bytes, 2, 1);
+    append(2, 2, EvtOpcode::Add, {0x15, 0, 200, 0, 0, 0});
+    appendExitRecord(bytes, 2, 3);
+    // A note written earlier is not a pre-interaction eligibility condition.
+    append(3, 0, EvtOpcode::Add, {0xe1, 0, 42, 0, 0, 0});
+    append(3, 1, EvtOpcode::Compare, {0xe1, 0, 42, 0, 0, 0, 3});
+    appendExitRecord(bytes, 3, 2);
+    append(3, 3, EvtOpcode::Add, {0x15, 0, 200, 0, 0, 0});
+    appendExitRecord(bytes, 3, 4);
+    // Post-reward annotation bookkeeping is safe only if the predicate disappears entirely.
+    append(4, 0, EvtOpcode::Add, {0x15, 0, 200, 0, 0, 0});
+    append(4, 1, EvtOpcode::Compare, {0xe1, 0, 42, 0, 0, 0, 3});
+    append(4, 2, EvtOpcode::Add, {0xe1, 0, 42, 0, 0, 0});
+    appendExitRecord(bytes, 4, 3);
+    // An unnamed/private note cannot be explained as a player-facing requirement.
+    append(5, 0, EvtOpcode::Compare, {0xe1, 0, 99, 0, 0, 0, 2});
+    appendExitRecord(bytes, 5, 1);
+    append(5, 2, EvtOpcode::Add, {0x15, 0, 200, 0, 0, 0});
+    appendExitRecord(bytes, 5, 3);
+    // The same private flag may still be removed when it has no effect on the reward.
+    append(6, 0, EvtOpcode::Compare, {0xe1, 0, 99, 0, 0, 0, 3});
+    append(6, 1, EvtOpcode::Add, {0xe1, 0, 99, 0, 0, 0});
+    append(6, 2, EvtOpcode::Jmp, {3});
+    append(6, 3, EvtOpcode::Add, {0x15, 0, 200, 0, 0, 0});
+    appendExitRecord(bytes, 6, 4);
+    // Repeated stable predicates prune contradictory paths before inspecting their unreachable effects.
+    append(7, 0, EvtOpcode::Compare, {0xe1, 0, 42, 0, 0, 0, 3});
+    appendExitRecord(bytes, 7, 1);
+    append(7, 3, EvtOpcode::Compare, {0xe1, 0, 42, 0, 0, 0, 6});
+    append(7, 4, EvtOpcode::CastSpell, std::vector<uint8_t>(27, 0));
+    appendExitRecord(bytes, 7, 5);
+    append(7, 6, EvtOpcode::Add, {0x15, 0, 200, 0, 0, 0});
+    appendExitRecord(bytes, 7, 7);
+    append(8, 0, EvtOpcode::Compare, {0xe1, 0, 42, 0, 0, 0, 3});
+    append(8, 1, EvtOpcode::Add, {0x15, 0, 100, 0, 0, 0});
+    appendExitRecord(bytes, 8, 2);
+    append(8, 3, EvtOpcode::Add, {0x15, 0, 200, 0, 0, 0});
+    appendExitRecord(bytes, 8, 4);
+    EvtProgram events;
+    REQUIRE(events.loadFromBytes(bytes));
+    LegacyLuaExportLookups lookups;
+    lookups.autonoteTexts[42] = "Shared journal note";
+    for (uint16_t id = 1; id <= 8; ++id) lookups.eventTitles[id] = "Drink from the well";
+    const std::string refs = generateLegacyEventSiteRefsLuaChunk(events, {}, lookups, LegacyLuaExportScope::Map);
+    const auto line = [&](uint16_t id)
+    {
+        const size_t start = refs.find("SetMapSiteReference(" + std::to_string(id) + ",");
+        return start == std::string::npos ? std::string{} : refs.substr(start, refs.find('\n', start) - start);
+    };
+    for (uint16_t id : {1, 4, 6})
+    {
+        CHECK(line(id).find("Party gold +200") != std::string::npos);
+        CHECK(line(id).find("Outcome 2") == std::string::npos);
+        CHECK(line(id).find("Journal note") == std::string::npos);
+    }
+    CHECK(line(2).find("Journal note already learned: Shared journal note") != std::string::npos);
+    CHECK(line(3).empty());
+    CHECK(line(5).empty());
+    CHECK(line(7).find("Party gold +200") != std::string::npos);
+    CHECK(line(8).find("Journal note not yet learned: Shared journal note") != std::string::npos);
+    CHECK(line(8).find("Journal note already learned: Shared journal note") != std::string::npos);
+    CHECK(line(8).find("Outcome 2") != std::string::npos);
+}
+
+TEST_CASE("canonical well references ignore note bookkeeping while preserving real rewards and personal use limits")
+{
+    using namespace OpenYAMM::Game;
+    struct Well
+    {
+        const char *pMap;
+        uint16_t event;
+        uint16_t note;
+        EvtVariable variable;
+        int gain;
+        const char *pText;
+        const char *pWorld = "mm7";
+    };
+    const Well wells[] = {
+        {"7out03", 203, 264, EvtVariable::BaseMight, 2, "Base Might +2"},
+        {"7out03", 204, 266, EvtVariable::BodyResistanceBonus, 20, "Body resistance bonus +20"},
+        {"7out03", 209, 263, EvtVariable::AccuracyBonus, 10, "Temporary Accuracy +10"},
+        {"7out03", 208, 267, EvtVariable::MightBonus, 50, "Temporary Might +50"},
+        {"7out03", 210, 268, EvtVariable::PersonalityBonus, 5, "Temporary Personality +5"},
+        {"7out04", 204, 269, EvtVariable::EarthResistanceBonus, 50, "Earth resistance bonus +50"},
+        {"7out05", 203, 270, EvtVariable::BaseIntellect, 2, "Base Intellect +2"},
+        {"7out05", 204, 272, EvtVariable::PersonalityBonus, 10, "Temporary Personality +10"},
+        {"7out05", 205, 273, EvtVariable::FireResistanceBonus, 10, "Fire resistance bonus +10"},
+        {"7out05", 207, 271, EvtVariable::FireResistance, 5, "Fire resistance +5"},
+        {"7out06", 461, 274, EvtVariable::PersonalityBonus, 25, "Temporary Personality +25"},
+        {"out10", 203, 278, EvtVariable::BasePersonality, 2, "Base Personality +2"},
+        {"out10", 204, 279, EvtVariable::FireResistanceBonus, 20, "Fire resistance bonus +20"},
+        {"out10", 206, 276, EvtVariable::IntellectBonus, 50, "Temporary Intellect +50"},
+        {"out11", 321, 282, EvtVariable::FireResistanceBonus, 25, "Fire resistance bonus +25"},
+        {"7out13", 202, 285, EvtVariable::ArmorClassBonus, 20, "Armor class bonus +20"},
+        {"7out13", 203, 284, EvtVariable::AirResistanceBonus, 20, "Air resistance bonus +20"},
+        {"7out13", 204, 283, EvtVariable::BaseSpeed, 2, "Base Speed +2"},
+        {"out14", 204, 287, EvtVariable::WaterResistanceBonus, 20, "Water resistance bonus +20"},
+        {"out14", 205, 286, EvtVariable::BaseEndurance, 2, "Base Endurance +2"},
+        {"out07", 101, 224, EvtVariable::PoisonedRed, 1, "Can apply: Severe poison", "mm8"}};
+    const std::filesystem::path root = OPENYAMM_SOURCE_DIR;
+    const auto support = readBinaryFixture(root / "assets_dev/engine/scripts/common/event_support.lua");
+    for (const Well &well : wells)
+    {
+        CAPTURE(well.pMap);
+        CAPTURE(well.event);
+        const bool mm7 = std::string(well.pWorld) == "mm7";
+        const LegacyEventVersion version = mm7 ? LegacyEventVersion::Mm7 : LegacyEventVersion::Mm8;
+        const auto base = root / "assets_dev/worlds" / well.pWorld / "_legacy/events" / well.pMap;
+        EvtProgram events;
+        StrTable strings;
+        REQUIRE(events.loadFromBytes(readBinaryFixture(base.string() + ".EVT")));
+        REQUIRE(strings.loadFromBytes(readBinaryFixture(base.string() + ".STR")));
+        LegacyLuaExportLookups lookups;
+        lookups.eventTitles[well.event] = "Drink from the Well";
+        const std::string refs = generateLegacyEventSiteRefsLuaChunk(events, strings, lookups,
+            LegacyLuaExportScope::Map, version);
+        const size_t start = refs.find("SetMapSiteReference(" + std::to_string(well.event) + ",");
+        REQUIRE(start != std::string::npos);
+        const std::string description = refs.substr(start, refs.find('\n', start) - start);
+        CHECK(description.find(well.pText) != std::string::npos);
+        if (mm7) CHECK(description.find("Not yet used by this character") != std::string::npos);
+        CHECK(description.find("Outcome 2") == std::string::npos);
+        CHECK(description.find("Journal note") == std::string::npos);
+        const std::string callbacks = generateLegacyEventLuaChunk(events, strings, lookups,
+            LegacyLuaExportScope::Map, version);
+        std::string error;
+        const auto program = ScriptedEventProgram::loadFromLuaText(
+            std::string(support.begin(), support.end()) + callbacks + refs,
+            "@canonical-note-well", ScriptedEventScope::Map, error);
+        REQUIRE_MESSAGE(program, error);
+        for (bool learned : {false, true})
+        {
+            CAPTURE(learned);
+            Party party;
+            PartySeed seed = Party::createDefaultSeed();
+            seed.members.push_back(seed.members.front());
+            seed.members.back().name = "Other character";
+            party.seed(seed);
+            REQUIRE(party.memberCount() == 2);
+            EventRuntimeState state;
+            const auto note = EventRuntime::decodeVariable(0xe1u | (uint32_t(well.note) << 16));
+            if (learned) EventRuntime::setVariableValue(state, note, 1, &party, {0});
+            const auto attribute = EventRuntime::decodeVariable(uint32_t(well.variable));
+            const int before = EventRuntime::getVariableValue(state, attribute, &party, 0);
+            const int other = EventRuntime::getVariableValue(state, attribute, &party, 1);
+            EventRuntime runtime;
+            REQUIRE(runtime.executeEventById(program, std::nullopt, well.event, state, &party));
+            CHECK(EventRuntime::getVariableValue(state, attribute, &party, 0) == before + well.gain);
+            CHECK(EventRuntime::getVariableValue(state, attribute, &party, 1) == other);
+            CHECK(EventRuntime::getVariableValue(state, note, &party, 0) != 0);
+            REQUIRE(runtime.executeEventById(program, std::nullopt, well.event, state, &party));
+            CHECK(EventRuntime::getVariableValue(state, attribute, &party, 0) == before + well.gain);
+        }
+    }
+}
+
 TEST_CASE("Harmondale unnoted gold well reference uses the real callback thresholds")
 {
     using namespace OpenYAMM::Game;

@@ -1,0 +1,78 @@
+id: atlas.mm7_journal_well_fixture
+title: Real authored well preserves selected-member effects, journal knowledge and
+  repeat-use behavior
+world: mm7
+mode: faithful
+steps:
+- new_game_flow:
+    start_map: 7out13.odm
+    party:
+      gold: 500
+      food: 10
+      members:
+      - name: Well Tester
+        class: Knight
+        level: 1
+        endurance: 60
+        skills: []
+        equipment: {}
+      - name: Other Tester
+        class: Knight
+        level: 1
+        endurance: 60
+        skills: []
+        equipment: {}
+- assert:
+    runtime_event_variable:
+      id: 8
+      value: 0
+      member_index: 0
+- assert:
+    named_map_var_changed:
+      name: openyamm.discovery.site-effects.v1/bmodel/75/surface/43/event/202/seen
+      value: 0
+- set_pose: &well_pose
+    x: 16320
+    y: 15909
+    z: 3080
+    yaw: 0
+    pitch: -1.3
+- save_game: before
+- press_interact:
+    pose: *well_pose
+    expect:
+      kind: event_target
+      triggered_event: 202
+      can_activate: true
+- assert:
+    runtime_event_variable:
+      id: 8
+      value: 20
+      member_index: 0
+- assert:
+    runtime_event_variable:
+      id: 8
+      value: 0
+      member_index: 1
+- assert:
+    named_map_var_changed:
+      name: openyamm.discovery.site-effects.v1/bmodel/75/surface/43/event/202/stat/ArmorClassBonus/max-after
+      value: 20
+- assert:
+    runtime_event_variable:
+      id: 18677985
+      min: 1
+- save_game: known
+- load_game: known
+- press_interact:
+    pose: *well_pose
+    expect:
+      kind: event_target
+      triggered_event: 202
+      can_activate: true
+- assert:
+    runtime_event_variable:
+      id: 8
+      value: 20
+      member_index: 0
+- save_game: known

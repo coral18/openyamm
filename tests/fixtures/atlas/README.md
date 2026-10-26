@@ -225,3 +225,24 @@ Stone Skin should find the observed site, whose reading page shows the two actua
 Run the matching `mm*_site_spell_effects_verify.yml` against the private quicksave after the UI closes.
 The same fixture scenario can be run with Atlas disabled (`profile.yaml` enabling only `karol.test`) to verify that
 Core observation is independent of UI activation. Never run archive writers on these hard-linked world packages.
+
+
+## Journal-bookkeeping well references and actual effects
+
+Use normal packages and separate isolated settings/mods/saves directories. No synthetic callback or asset-root
+replacement is required. Run `tests/scenarios/atlas/mm7_journal_well_fixture.yml` and its MM8 equivalent.
+These controlled two-Knight parties use the actual Tatalia armor well / Murmurwoods poison well, check selected
+versus other-member effects, actual site receipts and journal state, reload, and interact again without an
+additional reward. They do not test campaign acquisition of these sites or every well reset schedule.
+
+From each temporary `openyamm_scenario_saves/atlas_mm*_journal_well_fixture/` directory, copy `known.oysav` to
+one private working directory's `saves/before.oysav`; copy `before.oysav` to another directory's file of the same
+name. Run `tools/menu_tours/atlas_mm*_journal_well_known.yml` and `_unseen.yml` respectively at 1600x900.
+"Unseen" here means unused/no effect learned: the immediate area may be explored by the native game. Guide
+must show the real reward and personal-use requirement without presenting annotation bookkeeping as eligibility;
+Discovery must show only historical findings and learned notes. Inspect the actual captures in both modes.
+
+Run `tests/scenarios/atlas/mm*_journal_well_known_verify.yml` or `_unseen_verify.yml` in each corresponding
+working directory after the UI tour. They load the fresh private quicksave, check both characters, journal flag,
+observation flag, actual effect endpoint, map/gold and another save/load. Reading Guide must not apply armor/poison,
+learn the note or create an effect receipt. Preserve original campaigns; keep binary saves/captures outside Git.
