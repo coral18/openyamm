@@ -1,6 +1,7 @@
 #pragma once
 
 #include "game/ui/MenuScreenBase.h"
+#include "game/ui/MenuTouchScroll.h"
 #include "game/ui/UiLayoutManager.h"
 
 #include <functional>
@@ -46,6 +47,7 @@ class MenuDesignScreen : public MenuScreenBase
     bool keyPressed(SDL_Scancode key) const;
     bool focused(const std::string &id) const;
     void revealFocus(const Rect &viewport, float &scroll) const;
+    // Viewport coordinates are physical pixels; contentHeight, scroll and wheelStep use logical design units.
     void scrollViewport(const Rect &viewport, float contentHeight, float &scroll, float wheelStep = 33);
     UiLayoutManager m_designLayouts;
 
@@ -56,6 +58,7 @@ class MenuDesignScreen : public MenuScreenBase
     std::unordered_map<std::string, Rect> m_focusRects;
     std::optional<Rect> m_revealFocus;
     std::optional<float> m_scrollDragOffset;
+    MenuTouchScroll m_touchScroll;
     std::string m_focus;
     std::string m_pressed;
     bool m_keyboardFocus = false;

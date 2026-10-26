@@ -1221,11 +1221,12 @@ void AtlasScreen::drawList()
         {
             return !record->position || (record->kind != WorldRecordKind::Region && record->kind != WorldRecordKind::Dungeon);
         });
-    scrollViewport(viewport, records.size() * 38 * designScale(), m_scroll, 38);
+    scrollViewport(viewport, records.size() * 38, m_scroll, 38);
     setDesignClip(viewport);
     for (size_t i = 0; i < records.size(); ++i)
     {
-        const Rect row{viewport.x, viewport.y + i * 38 * designScale() - m_scroll, viewport.width - 12 * designScale(), 34 * designScale()};
+        const Rect row{viewport.x, viewport.y + (i * 38 - m_scroll) * designScale(),
+                       viewport.width - 12 * designScale(), 34 * designScale()};
         const auto &record = *records[i];
         if (button("atlas-record-" + record.id, row, "", "button", true, m_selected == record.id))
         {
@@ -1337,11 +1338,11 @@ void AtlasScreen::drawFeatureList()
     if (!m_siteSelection.empty())
         std::erase_if(features, [this](const WorldMapFeature *pFeature)
         { return !m_siteSelection.contains(pFeature->id); });
-    scrollViewport(viewport, features.size() * 38 * designScale(), m_scroll, 38);
+    scrollViewport(viewport, features.size() * 38, m_scroll, 38);
     setDesignClip(viewport);
     for (size_t i = 0; i < features.size(); ++i)
     {
-        const Rect row{viewport.x, viewport.y + i * 38 * designScale() - m_scroll,
+        const Rect row{viewport.x, viewport.y + (i * 38 - m_scroll) * designScale(),
                        viewport.width - 12 * designScale(), 34 * designScale()};
         if (row.y + row.height < viewport.y || row.y > viewport.y + viewport.height)
             continue;

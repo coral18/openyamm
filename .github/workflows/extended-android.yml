@@ -27,8 +27,6 @@ jobs:
     timeout-minutes: 240
     env:
       CMAKE_BUILD_PARALLEL_LEVEL: 4
-      OPENYAMM_ANDROID_VERSION_NAME: 0.2.0-atlas
-      OPENYAMM_ANDROID_VERSION_CODE: 103
       OPENYAMM_ANDROID_BUILD_TYPE: ${{ github.event_name == 'push' && github.ref_name == 'extended/bootstrap-android' && 'debug' || inputs.build_type || 'release' }}
       CMAKE_C_COMPILER_LAUNCHER: ccache
       CMAKE_CXX_COMPILER_LAUNCHER: ccache

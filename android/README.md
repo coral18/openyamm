@@ -60,6 +60,7 @@ The Extended CI workflow builds an optimized ARM64 device-test APK on the `exten
 branch. Manual runs default to `release`; `debug` is an explicit diagnostic choice. It reuses Gradle and native
 compiler caches and transfers APKs in separately downloadable 480 MiB parts. Concatenate the parts in numeric
 order, then verify the APK checksum from the verification artifact before signing or installing it.
+Local and CI builds take the default version from `android/gradle.properties`.
 The package gate checks both current Atlas layouts, their mod manifest, required MM7/MM8 maps and the absence
 of the debuggable flag for release runs. The public baseline is hash-verified and runtime changes must be declared.
 

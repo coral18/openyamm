@@ -2723,3 +2723,33 @@ Water entrance, Guide shows all four prisons, and Discovery again shows only Wat
 unlock/other-component flags, gold/food and another save/load roundtrip. Private captures, logs and retained
 saves are under `atlas-known-components-20261026` in the Windows development root. These targeted checks leave
 the broader content/floor audit and Android/controller acceptance open; they do not complete the Atlas objective.
+
+### Atlas list units and shared touch scrolling, 2026-10-26
+
+The region/record and Sites lists passed pixel-scaled content heights to a logical-unit scroll helper, then
+subtracted the logical offset as pixels. A wheel step therefore moved a fraction of a row at larger UI scales,
+and the bottom of a long list left a large empty area. Both lists now use logical heights and offsets, matching
+the shared reference/settings/save-list contract. One wheel step moves one row; the last row stays at the bottom.
+
+The shared menu viewport also accepts recognized touch drags on the list body. Capture remains with the starting
+pane when the finger leaves it, includes the final release displacement, and reverses immediately at a clamp.
+Scrollbar handling remains available. A recognized touch drag cancels pointer-button activation so releasing a
+short swipe over the same row cannot open a region or select a site. Tap, mouse and keyboard paths retain their
+existing input rules. The gesture state belongs to the screen and contains no world/save data.
+
+Six focused Windows cases / 100 assertions pass, including three pure gesture cases for scale, pane ownership,
+between-frame drags, clamping, new gestures and unrelated pointer input. Windows Release builds pass. A native
+before/after comparison reproduces and removes the empty-list overscroll; both MM7 and MM8 wheel tours pass.
+The recognized-touch tour confirms one-row scrolling and that a short drag does not open a region or select a
+site. Twenty fresh after-captures were generated; inspected reading/list outcomes match those checks.
+
+Reproduction tours are `tools/menu_tours/atlas_list_scroll_mm7.yml`, `atlas_list_scroll_mm8.yml` and
+`atlas_touch_lists_mm7.yml`. The latter uses MenuInputTour's `touch_drag_start`, `touch_drag_move` and
+`touch_drag_end` to replay shared UI frames after gesture recognition. It does not prove Android OS touch
+delivery. Private logs/captures are under `atlas-touch-scroll-20261026` in the Windows development root.
+One baseline harness attempt omitted its one-shot tour directive and timed out; it is excluded. The corrected
+harness supplies that directive on every launch and checks fresh capture timestamps.
+
+These fixes target Android `0.2.1-atlas` / `104`, with one default version in `android/gradle.properties`.
+The phone currently runs `0.2.0-atlas` / `103`; its first-launch proof is recorded in `ATLAS_ANDROID_QA.md`.
+Physical list-gesture checks on the updated APK and the wider Atlas acceptance matrix remain open.

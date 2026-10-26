@@ -71,7 +71,8 @@ void MenuInputTour::update(const std::string &path, GameplayInputFrame &input, I
             Step step;
             step.kind = kind;
             if (kind == "click" || kind == "pointer_down" || kind == "pointer_move" || kind == "pointer_up"
-                || kind == "right_down" || kind == "right_up" || kind == "look_rate")
+                || kind == "right_down" || kind == "right_up" || kind == "look_rate"
+                || kind == "touch_drag_start" || kind == "touch_drag_move" || kind == "touch_drag_end")
             {
                 step.x = value[0].as<float>();
                 step.y = value[1].as<float>();
@@ -102,6 +103,12 @@ void MenuInputTour::update(const std::string &path, GameplayInputFrame &input, I
     const float scale = std::min(input.screenWidth / 1600.0f, input.screenHeight / 900.0f);
     input.pointerX = (input.screenWidth - 1600 * scale) / 2 + m_x * scale;
     input.pointerY = (input.screenHeight - 900 * scale) / 2 + m_y * scale;
+    if (m_touchDragActive)
+    {
+        input.mobileTouchDragActive = true;
+        input.mobileTouchDragStartX = (input.screenWidth - 1600 * scale) / 2 + m_touchDragStartX * scale;
+        input.mobileTouchDragStartY = (input.screenHeight - 900 * scale) / 2 + m_touchDragStartY * scale;
+    }
     input.leftMouseButton = {m_release || m_pointerHeld, false, false};
     input.rightMouseButton = {m_rightPointerHeld, false, false};
     for (size_t key = 0; key < m_heldKeys.size(); ++key)
@@ -172,6 +179,31 @@ void MenuInputTour::update(const std::string &path, GameplayInputFrame &input, I
             m_release = step.kind == "click";
             m_nextTicks = SDL_GetTicks() + 90;
         }
+    }
+    else if (step.kind == "touch_drag_start" || step.kind == "touch_drag_move" || step.kind == "touch_drag_end")
+    {
+        // Replays the shared UI frames after Android has recognized a drag, without desktop input injection.
+        const bool start = step.kind == "touch_drag_start";
+        if (start == m_touchDragActive)
+            throw std::runtime_error("Menu tour touch drag has no matching start/end");
+        const bool wasHeld = m_pointerHeld;
+        m_x = step.x;
+        m_y = step.y;
+        if (start)
+        {
+            m_touchDragStartX = m_x;
+            m_touchDragStartY = m_y;
+        }
+        m_touchDragActive = step.kind != "touch_drag_end";
+        m_pointerHeld = m_touchDragActive;
+        input.pointerX = (input.screenWidth - 1600 * scale) / 2 + m_x * scale;
+        input.pointerY = (input.screenHeight - 900 * scale) / 2 + m_y * scale;
+        input.mobileTouchDragStartX = (input.screenWidth - 1600 * scale) / 2 + m_touchDragStartX * scale;
+        input.mobileTouchDragStartY = (input.screenHeight - 900 * scale) / 2 + m_touchDragStartY * scale;
+        input.mobileTouchDragStarted = start;
+        input.mobileTouchDragActive = m_touchDragActive;
+        input.mobileTouchDragReleased = !m_touchDragActive;
+        input.leftMouseButton = {m_pointerHeld, m_pointerHeld && !wasHeld, !m_pointerHeld};
     }
     else if (step.kind == "right_down" || step.kind == "right_up")
     {

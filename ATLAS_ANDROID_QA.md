@@ -27,21 +27,27 @@ After removing the old Extended, the official package path and all recorded offi
 
 The first streamed install was rejected by the phone with `INSTALL_FAILED_USER_RESTRICTED` / installation
 cancelled. The verified APK is now cached under `/data/local/tmp/` so retries do not repeat its USB transfer.
-Remote touch injection also returned `INJECT_EVENTS`; device permission or manual confirmation is pending.
+Remote touch injection also returned `INJECT_EVENTS`; Android OS gesture delivery has not been tested remotely.
+
+The user subsequently installed the same hash-verified APK through the phone UI from Downloads. Package Manager
+reports `0.2.0-atlas` / `103` without `DEBUGGABLE`. The existing running screen was preserved. An actual on-device
+capture shows live outdoor gameplay; the app log confirms the Extended marker, OpenGL ES 3.0, Atlas 0.2.0 and
+karol.test 0.1.0 loaded together. This first-launch check does not yet validate Atlas browsing or touch gestures.
+Later source changes for list scaling and touch scrolling target `0.2.1-atlas` / `104`; they are not in this APK.
 
 ## Physical acceptance gates
 
 | Check | Status |
 | --- | --- |
-| Install the verified Release and confirm its on-device version/flags | Pending |
-| First launch, Extended marker and active Android renderer | Pending |
+| Install the verified Release and confirm its on-device version/flags | Passed for 0.2.0 / 103 |
+| First launch, Extended marker and active Android renderer | Passed for 0.2.0; OpenGL ES 3.0, two mods, live gameplay |
 | MM7 region, discovery fog and live party arrow | Pending |
 | MM8 region, discovery fog and live party arrow | Pending |
 | Guide roundtrip preserves discovery-only visibility | Pending |
 | Touch navigation, search, filters, zoom and pan | Pending |
 | Notes and save/load persistence | Pending |
 | Atlas disabled through a mod profile; gameplay remains usable | Pending |
-| Official installation and save hashes after testing | Pending |
+| Official installation and save hashes after testing | Passed after installation/first launch; repeat after remaining tests |
 
 Private APKs, verification reports, backups and captures are retained outside Git under the dated Android QA
 directory. Controller acceptance and the wider Atlas content matrix remain separate unfinished work.

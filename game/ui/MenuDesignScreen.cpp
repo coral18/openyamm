@@ -116,8 +116,11 @@ void MenuDesignScreen::beginDesign(const std::string &screen)
         m_focusTargets.clear();
         m_pressed.clear();
         m_scrollDragOffset.reset();
+        m_touchScroll.reset();
     }
     m_designScreen = screen;
+    m_touchScroll.beginFrame(inputFrame());
+    if (modalOpen()) m_touchScroll.reset();
     setDesignClip(std::nullopt);
     if (leftMouseJustPressed() || rightMouseJustPressed())
     {
@@ -171,6 +174,17 @@ void MenuDesignScreen::scrollViewport(const Rect &viewport, float contentHeight,
 {
     const float unit = designScale();
     const float maxScroll = std::max(0.0f, contentHeight - viewport.height / unit);
+    const Rect track{viewport.x + viewport.width - 12 * unit, viewport.y, 12 * unit, viewport.height};
+    const GameplayInputFrame &input = inputFrame();
+    const bool startsInBody = input.mobileTouchDragStartX >= viewport.x
+        && input.mobileTouchDragStartX < track.x
+        && input.mobileTouchDragStartY >= viewport.y
+        && input.mobileTouchDragStartY < viewport.y + viewport.height;
+    if (!modalOpen() && m_touchScroll.update(input, startsInBody, unit, maxScroll, scroll))
+    {
+        m_pressed.clear();
+        m_scrollDragOffset.reset();
+    }
     revealFocus(viewport, scroll);
     if (!modalOpen() && pointerInside(viewport))
     {
@@ -188,7 +202,6 @@ void MenuDesignScreen::scrollViewport(const Rect &viewport, float contentHeight,
     const float thumbHeight =
         std::min(viewport.height, std::max(20 * unit, viewport.height * viewport.height / (contentHeight * unit)));
     const float travel = viewport.height - thumbHeight;
-    const Rect track{viewport.x + viewport.width - 12 * unit, viewport.y, 12 * unit, viewport.height};
     float thumbY = viewport.y + travel * scroll / maxScroll;
     if (!modalOpen() && leftMouseJustPressed() && pointerInside(track))
     {
@@ -422,14 +435,16 @@ bool MenuDesignScreen::button(const std::string &id, const Rect &rect, const std
         }
     }
     const bool hovered = available && pointerInside(rect);
-    if (hovered && leftMouseJustPressed())
+    const bool touchDragging = inputFrame().mobileTouchDragActive || inputFrame().mobileTouchDragReleased;
+    if (touchDragging) m_pressed.clear();
+    if (hovered && leftMouseJustPressed() && !touchDragging)
     {
         m_pressed = id;
         m_focus = id;
     }
     const bool pressed = hovered && leftMouseDown() && m_pressed == id;
     const bool activated = available && !(m_drawingConfirmation && m_confirmationNew) &&
-                           ((hovered && leftMouseJustReleased() && m_pressed == id) ||
+                           ((!touchDragging && hovered && leftMouseJustReleased() && m_pressed == id) ||
                             ((!m_textEditing || m_drawingConfirmation) && m_focus == id &&
                              (keyPressed(SDL_SCANCODE_RETURN) || keyPressed(SDL_SCANCODE_SPACE))));
     if (activated)

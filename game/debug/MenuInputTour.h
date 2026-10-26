@@ -37,6 +37,9 @@ class MenuInputTour
     bool m_exit = false;
     bool m_release = false;
     bool m_pointerHeld = false;
+    bool m_touchDragActive = false;
+    float m_touchDragStartX = 0;
+    float m_touchDragStartY = 0;
     bool m_rightPointerHeld = false;
     std::array<bool, SDL_SCANCODE_COUNT> m_heldKeys = {};
     std::array<bool, KeyboardActionCount> m_heldActions = {};

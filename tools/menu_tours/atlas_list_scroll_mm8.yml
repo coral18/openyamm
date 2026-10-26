@@ -1,0 +1,46 @@
+# Native mouse-wheel regression. Load an isolated MM8 save first.
+# Captures one-row scrolling and the last entries without overscroll.
+output_dir: captures
+exit: true
+steps:
+- expect: gameplay
+- pause: true
+- click:
+  - 800
+  - 821
+- click:
+  - 1152
+  - 57
+- click:
+  - 160
+  - 190
+- click:
+  - 768
+  - 126
+- capture: regions-top
+- pointer_move:
+  - 1250
+  - 400
+- wheel: -1
+- capture: regions-one-row
+- wheel: -1000
+- capture: regions-bottom
+- click:
+  - 275
+  - 126
+- text: Dagger Wound
+- key: Return
+- click:
+  - 1250
+  - 260
+- click:
+  - 1480
+  - 126
+- capture: sites-top
+- pointer_move:
+  - 1250
+  - 400
+- wheel: -1
+- capture: sites-one-row
+- wheel: -1000
+- capture: sites-bottom

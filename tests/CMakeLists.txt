@@ -26,6 +26,7 @@ add_executable(openyamm_unit_tests
     GameplayProjectileServiceTests.cpp
     FontAssetTests.cpp
     MenuSettingsTests.cpp
+    MenuTouchScrollTests.cpp
     ../game/ui/MenuSettingsModel.cpp
     ImageAssetLoaderTests.cpp
     SpriteAtlasTests.cpp
