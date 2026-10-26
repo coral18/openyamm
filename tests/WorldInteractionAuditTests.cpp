@@ -509,6 +509,15 @@ TEST_CASE("canonical elemental prison passages group their physical components a
             const auto known = world.queryFeatures(knowledge, false);
             REQUIRE(known.size() == 1);
             CHECK(known.front()->id == (*feature)->id);
+            const auto knownSites = world.featureSites(**feature, knowledge, false);
+            REQUIRE(knownSites.size() == 1);
+            CHECK(knownSites.front()->id == site.id);
+            const auto locations = world.queryLocations(knowledge, false, WorldDatabase::mapId(*entry));
+            REQUIRE(locations.size() == 1);
+            CHECK(locations.front().x == site.x);
+            CHECK(locations.front().y == site.y);
+            CHECK(locations.front().z == site.z);
+            CHECK(locations.front().id == (*feature)->id);
             CHECK(world.siteReference(**feature, knowledge, false).empty());
             CHECK(world.locationVisible(*std::find_if(world.locations().begin(), world.locations().end(),
                 [&](const WorldMapLocation &location) { return location.eventId == event; }), knowledge, false));

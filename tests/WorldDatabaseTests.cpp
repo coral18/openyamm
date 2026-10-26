@@ -1300,10 +1300,22 @@ TEST_CASE("map feature height filtering keeps legacy notes flat and uses explici
     note.kind = WorldMapFeatureKind::Note;
     CHECK(worldMapFeatureOnFloorLayer(note, -1));
     CHECK(worldMapFeatureOnFloorLayer(note, 2));
+    Fixture fixture;
+    WorldDatabase world = fixture.database();
+    note.mapId = WorldDatabase::mapId(*fixture.maps.findById(95));
+    WorldKnowledge knowledge;
+    knowledge.visitedMaps.insert("7d21.blv");
+    CHECK(world.featureSites(note, knowledge, false, -1).size() == 1);
+    CHECK(world.featureSites(note, knowledge, false, 2).size() == 1);
     note.site.z = 1000; // The exact saved note height, not a stale display position, owns its layer.
     note.noteElevation = -512;
     CHECK(worldMapFeatureOnFloorLayer(note, -1));
     CHECK_FALSE(worldMapFeatureOnFloorLayer(note, 2));
+    CHECK(world.featureSites(note, knowledge, false, 2).empty());
+    CHECK(world.featureSites(note, knowledge, false, -1).size() == 1);
+    knowledge.visitedMaps.clear();
+    CHECK(world.featureSites(note, knowledge, false, -1).empty());
+    CHECK(world.featureSites(note, knowledge, true, -1).size() == 1);
     note.kind = WorldMapFeatureKind::Chest;
     CHECK(worldMapFeatureOnFloorLayer(note, 2));
     CHECK_FALSE(worldMapFeatureOnFloorLayer(note, -1));
@@ -2144,6 +2156,16 @@ TEST_CASE("explicit passage components share one entry without sharing discovery
     REQUIRE(known.size() == 1);
     CHECK(known.front()->id == group.id);
     CHECK_FALSE(world.featureVisible(world.features().back(), knowledge, false));
+    const auto knownSites = world.featureSites(group, knowledge, false);
+    REQUIRE(knownSites.size() == 1);
+    CHECK(knownSites.front()->id == "surface/1");
+    CHECK(knownSites.front()->x == doctest::Approx(103.3333));
+    CHECK(world.featureSites(group, knowledge, false, worldFloorPlanLayer(0)).empty());
+    REQUIRE(world.featureSites(group, knowledge, false, worldFloorPlanLayer(1024)).size() == 1);
+    CHECK(world.featureSites(group, knowledge, true).size() == 2);
+    REQUIRE(world.featureSites(group, knowledge, true, worldFloorPlanLayer(0)).size() == 1);
+    CHECK(world.featureSites(group, knowledge, true, worldFloorPlanLayer(0)).front()->id == "surface/0");
+    CHECK(knowledge.interactedSites.at("7d21.blv").size() == 1);
     WorldSiteValueSnapshot values{{"Hero"}, {{"Gold", std::nullopt, 0}}};
     REQUIRE(recordWorldSiteObservation(state, "surface/1", 10, values, values, 1));
     REQUIRE(recordWorldSiteObservation(state, "surface/2", 10, values, values, 2));
@@ -2154,15 +2176,72 @@ TEST_CASE("explicit passage components share one entry without sharing discovery
     knowledge.interactedSites.clear();
     knowledge.floorPlans["7d21.blv"].faceAttributes = {0, faceAttributeBit(FaceAttribute::SeenByParty), 0};
     CHECK(world.featureVisible(group, knowledge, false));
+    REQUIRE(world.featureSites(group, knowledge, false).size() == 1);
+    CHECK(world.featureSites(group, knowledge, false).front()->id == "surface/1");
     CHECK_FALSE(world.featureVisible(world.features().back(), knowledge, false));
     knowledge.floorPlans["7d21.blv"].invisibleFaces.insert(1);
     CHECK_FALSE(world.featureVisible(group, knowledge, false));
+    CHECK(world.featureSites(group, knowledge, false).empty());
     world.indexMapLocations(map, geometry, *program);
     CHECK(world.features().size() == 2);
     geometry.faces[1].cogTriggered = 11;
     CHECK_THROWS_AS(world.indexMapLocations(map, geometry, *program), std::invalid_argument);
 }
 
+
+TEST_CASE("grouped entrance locations use known components and selected heights instead of the authored anchor")
+{
+    Fixture fixture;
+    WorldDatabase world = fixture.database();
+    std::string error;
+    const auto program = ScriptedEventProgram::loadFromLuaText(R"lua(
+        evt.map[10] = function() error('must not execute') end
+        evt.meta.map.contextActions = {[10] = {kind = 'enter_dungeon', source = 'opcode', targetMap = '7d21.blv'}}
+        evt.meta.map.siteGroups = {[10] = {handler = evt.map[10],
+            groups = {{'bmodel/0/surface/0', 'bmodel/0/surface/1'}}}}
+    )lua", "@entrance-projection", ScriptedEventScope::Map, error);
+    REQUIRE_MESSAGE(program, error);
+    OutdoorMapData map;
+    map.worldId = "mm7";
+    map.fileName = "7out02.odm";
+    map.bmodels.resize(1);
+    map.bmodels[0].vertices = {{-20000, 0, 0}, {-19900, 0, 0}, {-20000, 100, 0},
+        {20000, 0, 1024}, {20100, 0, 1024}, {20000, 100, 1024}};
+    map.bmodels[0].faces.resize(2);
+    for (size_t index = 0; index < 2; ++index)
+    {
+        map.bmodels[0].faces[index].cogTriggeredNumber = 10;
+        map.bmodels[0].faces[index].vertexIndices =
+            {uint16_t(index * 3), uint16_t(index * 3 + 1), uint16_t(index * 3 + 2)};
+    }
+    world.indexMapLocations(map, *program);
+    REQUIRE(world.locations().size() == 1);
+    const std::string mapId = WorldDatabase::mapId(*fixture.maps.findById(63));
+    WorldKnowledge knowledge;
+    knowledge.visitedMaps.insert(map.fileName);
+    CHECK(world.queryLocations(knowledge, false, mapId).empty());
+    knowledge.interactedSites[map.fileName].insert(worldSiteDiscoveryKey(10, "bmodel/0/surface/1"));
+    const auto known = world.queryLocations(knowledge, false, mapId);
+    REQUIRE(known.size() == 1);
+    CHECK(known.front().x == doctest::Approx(20033.3333));
+    CHECK(known.front().z == 1024);
+    CHECK(known.front().id == world.locations().front().id);
+    CHECK(world.queryLocations(knowledge, false, mapId, 0).empty());
+    CHECK(world.queryLocations(knowledge, false, mapId, 2).size() == 1);
+    const auto guide = world.queryLocations(knowledge, true, mapId, 0);
+    REQUIRE(guide.size() == 1);
+    CHECK(guide.front().x == doctest::Approx(-19966.6667));
+    CHECK(guide.front().z == 0);
+    const auto upperGuide = world.queryLocations(knowledge, true, mapId, 2);
+    REQUIRE(upperGuide.size() == 1);
+    CHECK(upperGuide.front().x == known.front().x);
+    CHECK(world.queryLocations(knowledge, false, "unrelated-map").empty());
+    CHECK(knowledge.interactedSites.at(map.fileName).size() == 1);
+    CHECK(knowledge.regionMaps.empty());
+    knowledge.interactedSites[map.fileName].insert(worldSiteDiscoveryKey(10, "bmodel/0/surface/0"));
+    CHECK(world.queryLocations(knowledge, false, mapId, 0).front().x == guide.front().x);
+    CHECK(world.queryLocations(knowledge, false, mapId, 2).front().x == known.front().x);
+}
 
 TEST_CASE("connection target queries expose authored alternatives only in Guide and preserve actual travel history")
 {

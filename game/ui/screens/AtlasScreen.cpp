@@ -751,11 +751,9 @@ bool AtlasScreen::drawLocationMarkers(const WorldRecord &map, const Rect &image,
     };
     std::vector<Pin> pins;
     const float spacing = 26 * designScale();
-    for (const WorldMapLocation &location : m_world.locations())
+    for (const WorldMapLocation &location : m_world.queryLocations(
+        m_knowledge, m_guide, map.id, pFloorPlan != nullptr ? m_floorLayer : std::nullopt))
     {
-        if (location.mapId != map.id || !m_world.locationVisible(location, m_knowledge, m_guide))
-            continue;
-        if (pFloorPlan != nullptr && !worldFloorPlanLayerMatches(m_floorLayer, location.z)) continue;
         auto records = m_world.recordsAtLocation(location, m_knowledge, m_guide,
             m_filter == WorldRecordKind::Travel);
         std::erase_if(records, [this](const WorldRecord *pRecord)
@@ -931,7 +929,10 @@ void AtlasScreen::drawMap()
                 if (feature.id == m_selectedFeature
                     && (feature.kind != WorldMapFeatureKind::Note || feature.noteElevation)
                     && m_world.featureVisible(feature, m_knowledge, m_guide))
-                    m_floorLayer = worldFloorPlanLayer(feature.site.z);
+                {
+                    const auto sites = m_world.featureSites(feature, m_knowledge, m_guide);
+                    if (!sites.empty()) m_floorLayer = worldFloorPlanLayer(sites.front()->z);
+                }
         }
         floorPlanKey = context + (m_floorLayer ? ":" + std::to_string(*m_floorLayer) : ":all");
         if (m_floorPlanKey != floorPlanKey)
@@ -951,7 +952,8 @@ void AtlasScreen::drawMap()
                 std::vector<std::pair<float, float>> positions;
                 for (const WorldMapFeature *pFeature : m_world.queryFeatures(
                     m_knowledge, m_guide, "", map->id, &m_data.spellTable(), &m_data.itemTable()))
-                    positions.emplace_back(pFeature->site.x, pFeature->site.y);
+                    for (const WorldInteractionSite *pSite : m_world.featureSites(*pFeature, m_knowledge, m_guide))
+                        positions.emplace_back(pSite->x, pSite->y);
                 if (m_knowledge.partyPosition
                     && m_knowledge.partyPosition->mapFileName == toLowerCopy(map->map->fileName))
                     positions.emplace_back(m_knowledge.partyPosition->x, m_knowledge.partyPosition->y);
@@ -962,7 +964,8 @@ void AtlasScreen::drawMap()
                 for (const WorldMapFeature *pFeature : m_world.queryFeatures(
                     m_knowledge, m_guide, "", map->id, &m_data.spellTable(), &m_data.itemTable()))
                     if (pFeature->kind != WorldMapFeatureKind::Note || pFeature->noteElevation)
-                        if (const auto layer = worldFloorPlanLayer(pFeature->site.z)) m_floorLayers.push_back(*layer);
+                        for (const WorldInteractionSite *pSite : m_world.featureSites(*pFeature, m_knowledge, m_guide))
+                            if (const auto layer = worldFloorPlanLayer(pSite->z)) m_floorLayers.push_back(*layer);
                 if (m_knowledge.partyPosition && m_knowledge.partyPosition->z
                     && m_knowledge.partyPosition->mapFileName == toLowerCopy(map->map->fileName))
                     if (const auto layer = worldFloorPlanLayer(*m_knowledge.partyPosition->z))
@@ -1202,14 +1205,12 @@ void AtlasScreen::drawList()
     if (m_floorLayer)
     {
         std::unordered_set<std::string> located, onLayer;
-        for (const WorldMapLocation &location : m_world.locations())
-            if (location.mapId == m_map && m_world.locationVisible(location, m_knowledge, m_guide))
-                for (const WorldRecord *pRecord : m_world.recordsAtLocation(location, m_knowledge, m_guide,
-                    m_filter == WorldRecordKind::Travel))
-                {
-                    located.insert(pRecord->id);
-                    if (worldFloorPlanLayerMatches(m_floorLayer, location.z)) onLayer.insert(pRecord->id);
-                }
+        for (const WorldMapLocation &location : m_world.queryLocations(m_knowledge, m_guide, m_map))
+            for (const WorldRecord *pRecord : m_world.recordsAtLocation(location, m_knowledge, m_guide,
+                m_filter == WorldRecordKind::Travel)) located.insert(pRecord->id);
+        for (const WorldMapLocation &location : m_world.queryLocations(m_knowledge, m_guide, m_map, m_floorLayer))
+            for (const WorldRecord *pRecord : m_world.recordsAtLocation(location, m_knowledge, m_guide,
+                m_filter == WorldRecordKind::Travel)) onLayer.insert(pRecord->id);
         std::erase_if(records, [&](const WorldRecord *pRecord)
         { return located.contains(pRecord->id) && !onLayer.contains(pRecord->id); });
     }
@@ -1265,11 +1266,14 @@ bool AtlasScreen::drawFeatureMarkers(const WorldRecord &map, const Rect &image, 
     for (const WorldMapFeature *pFeature : m_world.queryFeatures(
         m_knowledge, m_guide, m_search, map.id, &m_data.spellTable(), &m_data.itemTable()))
     {
-        if (pFloorPlan != nullptr && !worldMapFeatureOnFloorLayer(*pFeature, m_floorLayer)) continue;
-        const auto point = pFloorPlan != nullptr ? pFloorPlan->worldToUv(pFeature->site.x, pFeature->site.y)
+        const auto sites = m_world.featureSites(*pFeature, m_knowledge, m_guide,
+            pFloorPlan != nullptr ? m_floorLayer : std::nullopt);
+        if (sites.empty()) continue;
+        const WorldInteractionSite &site = *sites.front();
+        const auto point = pFloorPlan != nullptr ? pFloorPlan->worldToUv(site.x, site.y)
             : [&]()
             {
-                const auto uv = gameplayMinimapWorldToUv({}, pFeature->site.x, pFeature->site.y);
+                const auto uv = gameplayMinimapWorldToUv({}, site.x, site.y);
                 return std::pair{uv.x, uv.y};
             }();
         const float x = image.x + point.first * image.width, y = image.y + point.second * image.height;
@@ -1329,7 +1333,7 @@ void AtlasScreen::drawFeatureList()
     auto features = m_world.queryFeatures(
         m_knowledge, m_guide, m_search, m_map, &m_data.spellTable(), &m_data.itemTable());
     std::erase_if(features, [this](const WorldMapFeature *pFeature)
-    { return !worldMapFeatureOnFloorLayer(*pFeature, m_floorLayer); });
+    { return m_world.featureSites(*pFeature, m_knowledge, m_guide, m_floorLayer).empty(); });
     if (!m_siteSelection.empty())
         std::erase_if(features, [this](const WorldMapFeature *pFeature)
         { return !m_siteSelection.contains(pFeature->id); });

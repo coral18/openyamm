@@ -1,0 +1,80 @@
+id: atlas.mm8_prison_groups_known_component_verify
+title: Atlas Guide keeps the actual non-anchor prison discovery separate through save/load
+world: mm8
+mode: faithful
+steps:
+- load_game:
+    name: native
+    path: saves/quicksave.oysav
+- &id012
+  assert:
+    named_map_var_changed:
+      name: openyamm.discovery.site/bmodel/24/surface/4/event/504
+      value: 1
+- &id001
+  assert:
+    map: pbp.odm
+- &id002
+  assert:
+    runtime_event_variable:
+      id: 21
+      value: 500
+- &id003
+  assert:
+    runtime_event_variable:
+      id: 23
+      value: 10
+- &id004
+  assert:
+    named_map_var_changed:
+      name: AirPrisonOpen
+      value: 0
+- &id005
+  assert:
+    named_map_var_changed:
+      name: FirePrisonOpen
+      value: 0
+- &id006
+  assert:
+    named_map_var_changed:
+      name: WaterPrisonOpen
+      value: 0
+- &id007
+  assert:
+    named_map_var_changed:
+      name: EarthPrisonOpen
+      value: 0
+- &id008
+  assert:
+    named_map_var_changed:
+      name: openyamm.discovery.site/bmodel/29/surface/3/event/502
+      value: 0
+- &id009
+  assert:
+    named_map_var_changed:
+      name: openyamm.discovery.site/bmodel/26/surface/13/event/503
+      value: 0
+- &id010
+  assert:
+    named_map_var_changed:
+      name: openyamm.discovery.site/bmodel/23/surface/1/event/504
+      value: 0
+- &id011
+  assert:
+    named_map_var_changed:
+      name: openyamm.discovery.site/bmodel/32/surface/5/event/505
+      value: 0
+- save_game: native-roundtrip
+- load_game: native-roundtrip
+- *id001
+- *id002
+- *id003
+- *id004
+- *id005
+- *id006
+- *id007
+- *id008
+- *id009
+- *id010
+- *id011
+- *id012

@@ -2691,3 +2691,35 @@ No spell behavior, costs, skill caps or balance changed.
 Conditional guild access/learning eligibility, a general equipment-shop observation browser, broader content
 coverage and Android/controller acceptance remain separate work in the coverage matrix. This checkpoint does
 not complete the full MM7/MM8 Atlas objective.
+
+### Discovered multipart passage positions and heights, 2026-10-26
+
+Grouped passages previously became visible after any physical component was discovered, but their marker,
+map bounds and initial height still used the first authored component. The floor filter also accepted unknown
+components. This could place a known passage at an unseen entrance or expose an unrelated height.
+
+World Database now supplies individually visible components, using the existing interaction, exploration and
+face-visibility rules. The Atlas derives pin positions, framing positions, available heights and floor-filtered
+site lists from those components. Ordinary entrance pins use the same projection. Each group retains its
+existing stable ID and one list entry; on a selected height its pin uses a known component at that height.
+Guide may show authored components, while returning to Discovery rebuilds the selection from actual knowledge.
+Legacy notes without elevation remain visible at all heights; explicit note heights retain their meaning.
+No discovery flags, event handlers, gameplay tables or save format are changed by this fix.
+
+Regression checks cover an indoor passage with only its upper component discovered, an outdoor entrance whose
+known component is far from its authored anchor, and every individual component of the four actual MM8 elemental
+prison groups. The public current-package house audit is also run with a freshly verified data cache.
+The final focused Windows run passes 43 cases / 3,795 assertions, including that opt-in package audit.
+
+Native Windows Release AMD/OpenGL tours replay `atlas_height_layers.yml` on the Temple of the Moon (MM7) and
+Abandoned Temple (MM8), writing sixteen fresh captures. Inspected views retain the known-only geometry, party
+arrow and Guide/Discovery separation. The MM8 fixture has recorded positions without rendered exploration;
+its blank discovered plan is expected and does not prove general dungeon exploration coverage.
+
+A separate actual mesh interaction with Water prison bmodel 24/face 4/event 504 passes all 26 scenario steps.
+Load its `after-prison.oysav` as `saves/before.oysav`, then run `atlas_mm8_prison_groups.yml`: Discovery shows the
+Water entrance, Guide shows all four prisons, and Discovery again shows only Water. The 27-step
+`tests/scenarios/atlas/mm8_prison_groups_known_component_verify.yml` checks the resulting quicksave, untouched
+unlock/other-component flags, gold/food and another save/load roundtrip. Private captures, logs and retained
+saves are under `atlas-known-components-20261026` in the Windows development root. These targeted checks leave
+the broader content/floor audit and Android/controller acceptance open; they do not complete the Atlas objective.

@@ -37,7 +37,7 @@ tables, and do not bundle its HTML, JS, translated prose, generated illustration
 | Region browsing, search, zoom/pan | Implemented | Implemented | More extensive map/content audit |
 | Continent overview | Existing game illustration | Original regional schematic | Optional licensed/original illustrated Jadame artwork |
 | Discovery fog and current party arrow | Implemented | Implemented | Wider dungeon/device checks |
-| Dungeon plans from engine geometry | Known height bands, party-height selection, filtered pins and height-aware notes | Same shared projection and controls | Complex floor separation and wider floor/visibility audit |
+| Dungeon plans from engine geometry | Known height bands, party-height selection, component-aware discovered pins and height-aware notes | Same shared projection and controls | Complex floor separation and wider floor/visibility audit |
 | Buildings, resident NPCs, trainers | Current/observed residents, Guide-only declared possible residences, indoor service markers | Same shared index | Conditional service eligibility, shared-service placements and generated/roaming NPCs |
 | Trainer requirements and prices | Gameplay evaluator, observed offers and race-specific mastery comparisons | Same shared evaluator | Conditional eligibility audit and starting-skill/race-selection checks |
 | Walking and scheduled transport | Directed walking/coach/boat graph, departure pins, last-offered schedules/fare/duration, live local overrides and destination navigation | Same shared knowledge/navigation | Remote scripted timetable references, availability forecasting and arrival-point links |
