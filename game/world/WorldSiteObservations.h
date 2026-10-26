@@ -108,5 +108,6 @@ bool recordWorldSiteObservation(EventRuntimeState &state, const std::string &sit
     const WorldSiteValueSnapshot &before, const WorldSiteValueSnapshot &after, float gameMinutes);
 std::vector<WorldSiteObservation> worldSiteObservations(const EventRuntimeState &state);
 std::string describeWorldSiteObservation(const WorldSiteObservation &observation, const SpellTable *pSpells = nullptr,
-    const ItemTable *pItems = nullptr, const std::unordered_set<uint32_t> &identifiedItems = {});
+    const ItemTable *pItems = nullptr, const std::unordered_set<uint32_t> &identifiedItems = {},
+    bool describeUnchangedUse = true);
 } // namespace OpenYAMM::Game

@@ -276,3 +276,26 @@ after the UI closes. The native reward verifier checks one item in the pack plus
 than treating the pack-only event query as a cursor-inclusive count. They check range endpoints, known-site marker, quest flags where applicable,
 map/gold/food and another round trip. Reading must neither grant more items nor consume another scroll/statuette.
 Keep all settings/saves/captures private and outside Git; never write to the hard-linked large fixture archives.
+
+
+## Inherited callback deliveries after the immediate snapshot
+
+Prepare `--fixture inherited-deliveries` using a fresh private output directory. This QA-only engine-global
+supplement replaces MM7's beacon callback 551 and MM8's red-barrel callback 269. Each depletes its existing
+object first, then queues two unidentified item-1 deliveries. It tests modded shared callbacks and the existing
+confirmed receipt pipeline; it does not alter or certify ordinary beacon/barrel rewards.
+
+Run `tests/scenarios/atlas/mm*_inherited_delivery_fixture.yml` in separate isolated directories using this asset
+view. These are three-step preparation scenarios only: create a controlled party, set the known pose, save the
+unused object as `before.oysav`. Copy that save from each temporary `atlas_mm*_inherited_delivery_fixture/`
+scenario directory into private `saves/before.oysav`. Native `tools/menu_tours/atlas_mm*_inherited_delivery.yml`
+performs the actual interaction, then searches Longsword and opens the physical object. The MM7 tour selects
+the second result (beacon fire), since the existing item-source marker sorts first; MM8 selects Barrel first.
+
+Inspect fresh reading pages and Discovery-after-Guide. They must show Items received here with the unidentified
+Longsword name and recorded day, even though the immediate callback snapshot contains no net item delta.
+Run the matching `mm*_inherited_delivery_verify.yml` against the native quicksave. It preserves confirmed origin
+coordinates, exact slot/event receipt, immediate changed=0, depleted contents plus initialization marker, one item in pack plus one genuinely held, original
+Might/skill points, map/gold/food and another round trip. Those checks distinguish actual delivery from merely
+having queued a grant. The headless preparation does not prove opaque sprite picking or activation; native
+input/captures and post-UI state do. Keep private saves and the QA overlay out of normal runtime and Git assets.

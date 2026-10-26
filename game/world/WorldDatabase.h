@@ -191,6 +191,9 @@ public:
         const SpellTable *pSpells = nullptr, const ItemTable *pItems = nullptr) const;
     std::vector<const WorldSiteObservation *> siteObservations(const WorldMapFeature &feature,
         const WorldKnowledge &knowledge) const;
+    // Latest confirmed inherited-object receipt per item type; pending/authored rewards are not deliveries.
+    std::vector<const WorldItemSource *> siteItemDeliveries(const WorldMapFeature &feature,
+        const WorldKnowledge &knowledge) const;
     std::string_view siteReference(const WorldMapFeature &feature, const WorldKnowledge &knowledge, bool guide) const;
     std::vector<const JournalAutonoteEntry *> siteJournalEntries(const WorldMapFeature &feature,
         const JournalAutonoteTable &notes, const WorldKnowledge &knowledge, bool guide) const;

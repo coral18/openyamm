@@ -42,24 +42,6 @@ bool hasMovingMechanism(const EventRuntimeState &eventRuntimeState)
     return false;
 }
 
-bool hasPersistedDecorationState(const std::optional<MapDeltaData> &mapDeltaData)
-{
-    if (!mapDeltaData)
-    {
-        return false;
-    }
-
-    for (uint8_t value : mapDeltaData->eventVariables.decorVars)
-    {
-        if (value != 0)
-        {
-            return true;
-        }
-    }
-
-    return false;
-}
-
 void initializeIndoorPartyStart(IndoorPartyRuntime &partyRuntime, const IndoorMapData &indoorMapData);
 
 void seedIndoorInteractiveDecorationRuntimeStateIfNeeded(
@@ -68,18 +50,9 @@ void seedIndoorInteractiveDecorationRuntimeStateIfNeeded(
     const std::optional<MapDeltaData> &mapDeltaData,
     std::optional<EventRuntimeState> &eventRuntimeState)
 {
-    if (pDecorationBillboardSet == nullptr || !eventRuntimeState || hasPersistedDecorationState(mapDeltaData))
-    {
-        return;
-    }
-
-    for (uint8_t value : eventRuntimeState->decorVars)
-    {
-        if (value != 0)
-        {
-            return;
-        }
-    }
+    if (pDecorationBillboardSet == nullptr || !eventRuntimeState) return;
+    if (!beginInteractiveDecorationInitialization(*eventRuntimeState,
+        mapDeltaData ? &*mapDeltaData : nullptr)) return;
 
     uint8_t decorVarIndex = 0;
     constexpr uint8_t MaxDecorationVarCount = 125;
@@ -135,6 +108,7 @@ void seedIndoorInteractiveDecorationRuntimeStateIfNeeded(
 
         ++decorVarIndex;
     }
+    if (decorVarIndex != 0) markInteractiveDecorationStateInitialized(*eventRuntimeState);
 }
 
 bool hasIndoorPressurePlateSupportFace(const IndoorMoveState &state)

@@ -700,5 +700,32 @@ This is an actual outcome history, not a second item database or reward-origin o
 continues to own source declarations and confirmed-delivery provenance. Atlas names/search use the active ItemTable
 and the party's existing identification knowledge; even Guide does not turn an actual unidentified receipt into
 an identified one. Non-identifiable items use their normal names. No instance enchantments or properties are
-inferred from a count change. The same Core observer works with the Atlas UI disabled. Delivery outside its
-synchronous window, including queued grants after an inherited callback's observer ends, remains separate work.
+inferred from a count change. The same Core observer works with the Atlas UI disabled. Confirmed inherited-object deliveries after the callback snapshot are also available through the existing
+WorldItemSources receipts, as described below. Deferred net-quantity attribution remains separate work.
+
+
+### Confirmed inherited-object deliveries in site history
+
+`WorldDatabase::siteItemDeliveries` joins the selected physical inherited-decoration slot to confirmed
+WorldItemSources observations in that same map. It never reads pending grants or possible authored rewards.
+The result retains the latest available recorded origin of each item type. Callback variants of one object do
+not duplicate a type; another slot, local/shared NPC reward or another map cannot supply its receipt.
+Historical receipts still belong to the physical slot when the current callback variant changes or depletes.
+
+The native site reading page and its search include these deliveries, using current ItemTable names and party
+identification knowledge in both modes. Existing independent site-discovery gates still apply. Receipt records
+supply item type and recorded origin day, not quantities or a separate delivery timestamp; no unrecorded quantity or per-use delta is inferred.
+The separate immediate-effect snapshot and its saved lastChanged value remain intact. When confirmed deliveries
+are present, the reading page omits the snapshot-only no-additional-changes claim to avoid describing it as the
+result of the complete delivery flow. This is a derived view over existing saved receipts, with no new state,
+save version, item database, Lua execution or grant-queue owner.
+
+
+### Initialized decoration state versus empty contents
+
+Indoor/outdoor initialization shares the `openyamm.decorations.initialized.v1` map-state marker. It is written
+only after actual bindings are available and initialization completes. Once present, zero contents mean depleted,
+so opening/reloading a view must not seed them again. Nonzero existing runtime/authored state adopts the marker
+unchanged. An invalid reserved marker is an error, not permission to reinitialize the map. The marker uses existing
+named map persistence and is excluded from discovery-only refill transfers, so a fresh refill can initialize normally.
+Historical all-zero saves with no marker are ambiguous and receive no guessed restoration of past contents/rewards.

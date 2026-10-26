@@ -1170,33 +1170,10 @@ void OutdoorInteractionController::seedInteractiveDecorationRuntimeStateIfNeeded
         return;
     }
 
-    bool hasPersistedDecorationState = false;
+    if (!beginInteractiveDecorationInitialization(*pEventRuntimeState,
+        view.m_outdoorMapDeltaData ? &*view.m_outdoorMapDeltaData : nullptr)) return;
 
-    if (view.m_outdoorMapDeltaData.has_value())
-    {
-        for (uint8_t value : view.m_outdoorMapDeltaData->eventVariables.decorVars)
-        {
-            if (value != 0)
-            {
-                hasPersistedDecorationState = true;
-                break;
-            }
-        }
-    }
-
-    if (hasPersistedDecorationState)
-    {
-        return;
-    }
-
-    for (uint8_t value : pEventRuntimeState->decorVars)
-    {
-        if (value != 0)
-        {
-            return;
-        }
-    }
-
+    bool hasActiveBinding = false;
     for (const OutdoorGameView::InteractiveDecorationBinding &binding : view.m_interactiveDecorationBindings)
     {
         if (!binding.active || binding.entityIndex >= view.m_pOutdoorMapData->entities.size())
@@ -1204,6 +1181,7 @@ void OutdoorInteractionController::seedInteractiveDecorationRuntimeStateIfNeeded
             continue;
         }
 
+        hasActiveBinding = true;
         const OutdoorEntity &entity = view.m_pOutdoorMapData->entities[binding.entityIndex];
         uint8_t initialState = binding.initialState;
 
@@ -1227,6 +1205,7 @@ void OutdoorInteractionController::seedInteractiveDecorationRuntimeStateIfNeeded
 
         pEventRuntimeState->decorVars[binding.decorVarIndex] = initialState;
     }
+    if (hasActiveBinding) markInteractiveDecorationStateInitialized(*pEventRuntimeState);
 }
 
 const OutdoorGameView::InteractiveDecorationBinding *OutdoorInteractionController::findInteractiveDecorationBindingForEntity(

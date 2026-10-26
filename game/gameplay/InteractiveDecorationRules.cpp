@@ -1,11 +1,13 @@
 #include "game/gameplay/InteractiveDecorationRules.h"
 
 #include "game/StringUtils.h"
+#include "game/events/EventRuntime.h"
 
 #include <algorithm>
 #include <cctype>
 #include <initializer_list>
 #include <string_view>
+#include <stdexcept>
 #include <vector>
 
 namespace OpenYAMM::Game
@@ -19,6 +21,7 @@ constexpr uint16_t MMergeCrystalSapphireEventId = 65313;
 constexpr uint16_t MMergeCrystalMoonstoneEventId = 65314;
 constexpr uint16_t MMergeCrystalPurpleTopazEventId = 65315;
 constexpr uint16_t MMergeCrystalEmeraldEventId = 65316;
+constexpr char DecorationInitializationKey[] = "openyamm.decorations.initialized.v1";
 
 std::string normalizeDecorationKey(const std::string &value)
 {
@@ -458,6 +461,28 @@ uint8_t initialInteractiveDecorationState(InteractiveDecorationFamily family, ui
     }
 
     return 0;
+}
+
+bool beginInteractiveDecorationInitialization(EventRuntimeState &state, const MapDeltaData *pMapDeltaData)
+{
+    if (const auto marker = state.namedMapVars.find(DecorationInitializationKey); marker != state.namedMapVars.end())
+    {
+        if (marker->second != 1) throw std::invalid_argument("Invalid interactive-decoration initialization marker");
+        return false;
+    }
+    const auto hasValues = [](const auto &values)
+        { return std::any_of(values.begin(), values.end(), [](uint8_t value) { return value != 0; }); };
+    if (hasValues(state.decorVars) || (pMapDeltaData != nullptr && hasValues(pMapDeltaData->eventVariables.decorVars)))
+    {
+        markInteractiveDecorationStateInitialized(state);
+        return false;
+    }
+    return true;
+}
+
+void markInteractiveDecorationStateInitialized(EventRuntimeState &state)
+{
+    state.namedMapVars[DecorationInitializationKey] = 1;
 }
 
 bool interactiveDecorationIsCleared(uint8_t state, uint8_t eventCount, bool hideWhenCleared)

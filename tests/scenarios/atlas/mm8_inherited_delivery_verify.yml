@@ -1,0 +1,79 @@
+# Requires the inherited-deliveries private asset fixture; ordinary callbacks remain unchanged.
+id: atlas.mm8_inherited_delivery_verify
+title: Actual deferred object receipts survive native Atlas reading and save load
+world: mm8
+mode: faithful
+steps:
+- load_game:
+    name: native
+    path: saves/quicksave.oysav
+- assert: &id001
+    named_map_var_changed:
+      name: openyamm.discovery.item/decoration-reward/5/269/1/x
+      value: 15912
+- assert: &id002
+    named_map_var_changed:
+      name: openyamm.discovery.item/decoration-reward/5/269/1/y
+      value: 4448
+- assert: &id003
+    named_map_var_changed:
+      name: openyamm.discovery.item/decoration-reward/5/269/1/z
+      value: 541
+- assert: &id004
+    named_map_var_changed:
+      name: openyamm.discovery.site-effects.v1/inherited-decoration/5/event/269/seen
+      value: 1
+- assert: &id005
+    named_map_var_changed:
+      name: openyamm.discovery.site-effects.v1/inherited-decoration/5/event/269/changed
+      value: 0
+- assert: &id006
+    runtime_event_variable:
+      id: 32
+      member_index: 0
+      value: 15
+- assert: &id007
+    runtime_event_variable:
+      id: 65553
+      value: 1
+- assert: &id008
+    held_item:
+      active: true
+      item_id: 1
+- assert: &id009
+    map: out01.odm
+    runtime_event_variable:
+      id: 21
+      value: 500
+- assert: &id010
+    runtime_event_variable:
+      id: 23
+      value: 10
+- assert:
+    runtime_event_variable:
+      id: 203
+      value: 0
+- assert:
+    named_map_var_changed:
+      name: openyamm.decorations.initialized.v1
+      value: 1
+- save_game: inherited-delivery-roundtrip
+- load_game: inherited-delivery-roundtrip
+- assert: *id001
+- assert: *id002
+- assert: *id003
+- assert: *id004
+- assert: *id005
+- assert: *id006
+- assert: *id007
+- assert: *id008
+- assert: *id009
+- assert: *id010
+- assert:
+    runtime_event_variable:
+      id: 203
+      value: 0
+- assert:
+    named_map_var_changed:
+      name: openyamm.decorations.initialized.v1
+      value: 1

@@ -1,0 +1,26 @@
+# Requires the inherited-deliveries private asset fixture; ordinary callbacks remain unchanged.
+id: atlas.mm8_inherited_delivery_fixture
+title: Prepare an unused inherited-object fixture for actual native queued delivery
+world: mm8
+mode: faithful
+steps:
+- new_game_flow:
+    start_map: out01.odm
+    party:
+      gold: 500
+      food: 10
+      members:
+      - name: Atlas Tester
+        class: Knight
+        race_id: 0
+        level: 1
+        endurance: 60
+        skills: []
+        equipment: {}
+- set_pose:
+    x: 15732.0
+    y: 4448.0
+    z: 541.0
+    yaw: 0
+    pitch: -0.6
+- save_game: before

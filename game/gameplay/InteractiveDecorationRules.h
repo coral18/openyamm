@@ -9,6 +9,13 @@
 
 namespace OpenYAMM::Game
 {
+struct EventRuntimeState;
+struct MapDeltaData;
+
+// Nonzero legacy states adopt the initialization marker unchanged. An initialized all-zero state is depleted.
+bool beginInteractiveDecorationInitialization(EventRuntimeState &state, const MapDeltaData *pMapDeltaData);
+void markInteractiveDecorationStateInitialized(EventRuntimeState &state);
+
 // Outdoor bindings retain their existing container set and saved decor-var ordering.
 enum class InteractiveDecorationRuleSet { Shared, OutdoorBindings };
 

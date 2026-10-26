@@ -1,6 +1,7 @@
 #include "doctest/doctest.h"
 
 #include "game/events/EventAttributeInfo.h"
+#include "game/gameplay/InteractiveDecorationRules.h"
 #include "game/events/EventRuntime.h"
 #include "game/party/Party.h"
 #include "game/party/EventSpellBuffs.h"
@@ -8,6 +9,8 @@
 #include "game/world/WorldMapKnowledge.h"
 #include "game/world/WorldSiteObservations.h"
 #include "tests/PartySpellTestHarness.h"
+
+#include <stdexcept>
 
 using namespace OpenYAMM::Game;
 
@@ -515,4 +518,39 @@ TEST_CASE("site item observations reject malformed snapshots and corrupt records
         CHECK_FALSE(recordWorldSiteObservation(state, Site, 223, gold(0), gold(200), 2));
         CHECK(state.namedMapVars == saved);
     }
+}
+
+
+TEST_CASE("decoration initialization preserves depleted zero states and resets only with fresh map state")
+{
+    EventRuntimeState state;
+    MapDeltaData original;
+    REQUIRE(beginInteractiveDecorationInitialization(state, &original));
+    CHECK(state.namedMapVars.empty()); // No assets/bindings ready: initialization has not happened yet.
+    state.decorVars[0] = 1;
+    markInteractiveDecorationStateInitialized(state);
+    state.decorVars.fill(0);
+    EventRuntimeState restored = state;
+    CHECK_FALSE(beginInteractiveDecorationInitialization(restored, &original));
+    CHECK(restored.decorVars == state.decorVars);
+    CHECK(restored.namedMapVars == state.namedMapVars);
+    EventRuntimeState refilled;
+    restoreWorldMapKnowledgeAfterRefill(state, refilled);
+    CHECK(beginInteractiveDecorationInitialization(refilled, &original));
+    CHECK(refilled.namedMapVars.empty());
+    EventRuntimeState legacy;
+    legacy.decorVars[5] = 3;
+    CHECK_FALSE(beginInteractiveDecorationInitialization(legacy, &original));
+    CHECK(legacy.decorVars[5] == 3);
+    legacy.decorVars.fill(0);
+    CHECK_FALSE(beginInteractiveDecorationInitialization(legacy, nullptr));
+    EventRuntimeState authored;
+    original.eventVariables.decorVars[4] = 2;
+    CHECK_FALSE(beginInteractiveDecorationInitialization(authored, &original));
+    CHECK(original.eventVariables.decorVars[4] == 2);
+    CHECK(authored.decorVars[4] == 0);
+    authored.namedMapVars["openyamm.decorations.initialized.v1"] = 2;
+    const auto corrupt = authored.namedMapVars;
+    CHECK_THROWS_AS(beginInteractiveDecorationInitialization(authored, &original), std::invalid_argument);
+    CHECK(authored.namedMapVars == corrupt);
 }

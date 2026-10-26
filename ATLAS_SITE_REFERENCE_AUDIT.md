@@ -177,3 +177,14 @@ identification state. No cancelled, unchanged or mere pack/cursor transfer becom
 
 This does not make unsupported item/quest predicates exportable Guide effects. Deferred/inherited queued grants
 after the observation window, instance transformations and the six unresolved physical well bindings remain open.
+
+
+## Confirmed inherited-object receipts, 2026-10-26
+
+The site page/search now reads confirmed item receipts from the existing reward-origin owner, matching the
+same map and exact inherited slot. This makes queued deliveries visible after the immediate callback snapshot,
+including when the callback depletes its object first. Pending/authored rewards remain excluded. Actual item
+types use current names with identification gates; repeated types across callback variants show the last
+recorded day once. The existing receipt schema has no quantity, so quantities and net deltas are not inferred.
+The saved immediate snapshot remains unchanged. Broader deferred attribution and all six missing well bindings
+remain open. Private callback controls are documented in the fixture README and ATLAS.md.

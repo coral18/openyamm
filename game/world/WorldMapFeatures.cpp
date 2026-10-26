@@ -7,6 +7,7 @@
 #include "game/tables/JournalAutonoteTable.h"
 #include "game/tables/ItemTable.h"
 #include "game/tables/SpellTable.h"
+#include "game/items/ItemRuntime.h"
 #include "game/StringUtils.h"
 
 #include <algorithm>
@@ -289,14 +290,58 @@ std::vector<const WorldSiteObservation *> WorldDatabase::siteObservations(const 
     return result;
 }
 
+std::vector<const WorldItemSource *> WorldDatabase::siteItemDeliveries(const WorldMapFeature &feature,
+    const WorldKnowledge &knowledge) const
+{
+    std::vector<const WorldItemSource *> result;
+    const WorldRecord *pMap = find(feature.mapId);
+    if (pMap == nullptr || !featureVisible(feature, knowledge, false)) return result;
+    const auto sources = knowledge.itemObservations.find(toLowerCopy(pMap->map->fileName));
+    if (sources == knowledge.itemObservations.end()) return result;
+    for (const WorldItemSource &source : sources->second)
+    {
+        if (!source.observed || source.kind != WorldItemSourceKind::DecorationReward || !source.decorationSlot
+            || !worldMapFeatureContainsSite(feature, "inherited-decoration/" + std::to_string(*source.decorationSlot)))
+            continue;
+        result.push_back(&source);
+    }
+    std::sort(result.begin(), result.end(), [](const WorldItemSource *a, const WorldItemSource *b)
+    {
+        if (a->itemId != b->itemId) return a->itemId < b->itemId;
+        return a->gameMinutes > b->gameMinutes;
+    });
+    result.erase(std::unique(result.begin(), result.end(), [](const WorldItemSource *a, const WorldItemSource *b)
+        { return a->itemId == b->itemId; }), result.end());
+    return result;
+}
+
 std::string WorldDatabase::siteObservationText(const WorldMapFeature &feature, const WorldKnowledge &knowledge,
     const SpellTable *pSpells, const ItemTable *pItems) const
 {
     std::string result;
+    const auto deliveries = siteItemDeliveries(feature, knowledge);
     for (const WorldSiteObservation *pObservation : siteObservations(feature, knowledge))
     {
         if (!result.empty()) result += "\n\n";
-        result += describeWorldSiteObservation(*pObservation, pSpells, pItems, knowledge.identifiedItems);
+        // Confirmed delivery may follow the callback snapshot; do not claim that nothing changed overall.
+        result += describeWorldSiteObservation(*pObservation, pSpells, pItems, knowledge.identifiedItems,
+            deliveries.empty());
+    }
+    if (!deliveries.empty())
+    {
+        if (!result.empty()) result += "\n\n";
+        result += "Items received here:";
+        for (const WorldItemSource *pSource : deliveries)
+        {
+            const ItemDefinition *pItem = pItems != nullptr ? pItems->get(pSource->itemId) : nullptr;
+            InventoryItem item;
+            item.objectDescriptionId = pSource->itemId;
+            item.identified = pItem != nullptr && (knowledge.identifiedItems.contains(pSource->itemId)
+                || !ItemRuntime::requiresIdentification(*pItem));
+            const std::string name = pItem != nullptr ? ItemRuntime::displayName(item, *pItem) : "Unknown item";
+            result += "\n" + name + " | Recorded: day "
+                + std::to_string(pSource->gameMinutes / (24 * 60) + 1);
+        }
     }
     return result;
 }

@@ -2476,3 +2476,65 @@ captures and hashes are under `atlas-site-items-20261026` in the Windows develop
 Queued delivery after an inherited callback's observation has ended, deferred effects, instance transformations,
 remaining Guide effect/predicate families and the rest of `ATLAS_COVERAGE.md` remain open. The focused run did
 not execute the existing opt-in packaged-house audit or establish Android/controller acceptance.
+
+
+## Confirmed inherited-object deliveries on the site page (2026-10-26)
+
+Site reading/search now joins the existing confirmed WorldItemSources receipts to the exact inherited-decoration
+slot in the same map. This covers item delivery that completes after the shared callback's immediate snapshot.
+Pending grants and possible reward declarations never enter this view. A different slot, map or reward kind
+cannot supply its entries. Different callback variants that delivered the same item type are condensed to the
+latest available recorded origin; historical delivery remains attached to the object after depletion or variant changes.
+
+Names come from the current ItemTable and existing party identification knowledge in both Discovery and Guide.
+The new Items received here section shows item type and the existing recorded origin day. Existing receipts do not retain
+quantity, so no count, per-use delta or accumulated campaign total is inferred. Immediate net-change ranges
+remain separate. When deliveries are present the UI omits the snapshot-only unchanged-use claim, preserving
+the actual saved lastChanged flag rather than changing gameplay/history to make the label appear consistent.
+Independent site-discovery gates remain in force. No grant handler runs while searching, reading or scanning.
+
+Validation:
+
+- Windows Release built. Focused site/source/World Database tests passed 23 cases / 390 assertions: pending versus
+  confirmed receipts, exact slot/map/kind, observed-only filtering, current table identification, repeat-type
+  deduplication and last date, independent discovery gates, unchanged snapshot preservation, existing signed
+  net-item ranges and corrupt/pending decoration origins. The opt-in packaged-house audit was not run.
+- Two private three-step scenarios prepare unused objects/parties only. Native AMD/OpenGL input performs the actual
+  activation on MM7's Harmondale beacon and MM8's Dagger Wound barrel, then opens the physical object's reading
+  page and toggles modes. Ten fresh captures were produced; inspected details retain Longsword as unidentified.
+- The private QA-only global supplement deliberately depletes each object before queuing two unidentified
+  item-1 grants. These are controlled modded callbacks, not new rewards installed in ordinary campaigns. The
+  confirmed origin survives clearing the callback's active contents; one item is stored and one remains held.
+- Both 27-step faithful post-UI verifiers passed: exact origin coordinates/slot/event, depleted object state,
+  immediate changed=0, original Might/skill points, one item in the pack and one actually held, gold 500,
+  food 10 and map survive another save/load. Browsing adds no grants. Pending receipt ownership
+  and the immediate snapshot are unchanged; only the derived reading/search view is extended.
+- A separate unchanged-runtime MM8 control reused the ordinary inherited-decoration fixture/tour/verifier.
+  The actual barrel still grants exactly Base Might +2 once, records its learned journal description and
+  empty interaction, and preserves Might 17 and unrelated object discoveries through save/load. This normal
+  five-step preparation, native tour and 22-step verifier are independent of the private gift callback.
+
+The native preparation/input split is deliberate: the inherited sprite ray in the headless trial did not activate
+the beacon. Preparation is not activation evidence; real native input/captures plus the post-UI verifier are the
+acceptance path. Reproduction uses `prepare_assets.py --fixture inherited-deliveries`,
+`tests/scenarios/atlas/mm*_inherited_delivery_{fixture,verify}.yml` and matching `tools/menu_tours/` files.
+The fixture README explains the specific MM7 result selection. Private evidence is under
+`atlas-object-deliveries-20261026` in the Windows development root. Original campaigns remain untouched.
+
+Exact queued-delivery quantities, other deferred effect attribution, instance transformations and the remaining
+coverage matrix are still open. This derived view adds no save format, separate reward history or item database.
+
+
+### Depleted decoration initialization state
+
+The post-UI check exposed a separate Core bug: when every decoration variable became zero, both indoor/outdoor
+startup heuristics could interpret the depleted map as never initialized and seed rewards again. Initialization
+now writes `openyamm.decorations.initialized.v1` only after bindings are available and initialization completes.
+The shared policy preserves initialized all-zero states on later view creation and save/load. Existing nonzero
+runtime/authored states adopt the marker without changing values; invalid markers fail explicitly. The non-discovery
+marker is not retained by the refill knowledge transfer, allowing a fresh refill to seed its new population.
+
+Pure policy coverage checks delayed initialization, depleted reload, nonzero legacy/authored states, refill and
+corrupt markers. The native MM7 one-beacon fixture catches the former all-zero case; post-UI checks require zero
+contents and marker=1 through another load. No binary save format changes. Historical all-zero saves without an
+initialization marker remain ambiguous; this fix does not infer or refund past consumed/reseeded rewards.

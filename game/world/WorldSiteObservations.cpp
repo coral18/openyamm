@@ -436,11 +436,11 @@ std::vector<WorldSiteObservation> worldSiteObservations(const EventRuntimeState 
 }
 
 std::string describeWorldSiteObservation(const WorldSiteObservation &observation, const SpellTable *pSpells,
-    const ItemTable *pItems, const std::unordered_set<uint32_t> &identifiedItems)
+    const ItemTable *pItems, const std::unordered_set<uint32_t> &identifiedItems, bool describeUnchangedUse)
 {
     if (!observation.error.empty()) return observation.error;
     std::string text = "Recorded use: day " + std::to_string(observation.gameMinutes / (24 * 60) + 1) + ".";
-    if (!observation.lastChanged) text += " No additional changes recorded.";
+    if (!observation.lastChanged && describeUnchangedUse) text += " No additional changes recorded.";
     if (observation.objectRemoved == true) text += "\nObserved object removed after interaction.";
     const auto amount = [](int64_t value)
     {

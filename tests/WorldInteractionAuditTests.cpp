@@ -673,3 +673,94 @@ TEST_CASE("site item observations resolve active names and identification gates 
     CHECK(knowledge.autonoteIds.empty());
     CHECK(knowledge.visitedMaps.empty());
 }
+
+
+TEST_CASE("inherited site deliveries join only confirmed receipts at the exact object and preserve identification")
+{
+    using namespace OpenYAMM::Game;
+    REQUIRE_MESSAGE(OpenYAMM::Tests::regressionMapLoaderLoaded(),
+        OpenYAMM::Tests::regressionMapLoaderFailure());
+    const auto &fixture = OpenYAMM::Tests::regressionMapLoader();
+    const auto &data = fixture.gameDataLoader;
+    const MapStatsEntry *pMap = data.getMapStats().findByFileName("7out02.odm");
+    REQUIRE(pMap);
+    auto map = MapAssetLoader().load(fixture.assetFileSystem, *pMap, data.getMonsterTable(),
+        data.getObjectTable(), MapLoadPurpose::HeadlessGameplay);
+    REQUIRE(map);
+    std::string error;
+    REQUIRE_MESSAGE(GameDataLoader::loadEventPrograms(fixture.assetFileSystem, *map, error), error);
+    REQUIRE(map->globalEventProgram);
+    WorldDatabase world(data.getMapStats(), data.getHouseTable(), data.getNpcDialogTable(),
+        data.getMergedTeacherTopicTable(), "mm7");
+    WorldDecorationSite first, other;
+    first.site = {"inherited-decoration/0", 550, 100, 200, 300};
+    first.eventCount = 2; first.initialEventId = 551; first.name = "Beacon fire";
+    other = first; other.site.id = "inherited-decoration/1";
+    world.indexInheritedDecorations(*pMap, {first, other}, *map->globalEventProgram);
+    const auto features = world.queryFeatures({}, true);
+    REQUIRE(features.size() == 2);
+    const auto feature = std::find_if(features.begin(), features.end(), [](const WorldMapFeature *pFeature)
+        { return pFeature->site.id == "inherited-decoration/0"; });
+    REQUIRE(feature != features.end());
+    WorldKnowledge knowledge;
+    knowledge.interactedSites["7out02.odm"].insert(worldSiteDiscoveryKey(551, first.site.id));
+    EventRuntimeState state;
+    state.activeDecorationContext = EventRuntimeState::ActiveDecorationContext{
+        .decorVarIndex = 0, .baseEventId = 550, .currentEventId = 551, .eventCount = 2};
+    state.grantedItemIds = {1};
+    stageWorldItemReward(state, false, 0, 551, true, 1440);
+    state.activeDecorationContext.reset();
+    knowledge.itemObservations["7out02.odm"] = worldObservedItemSources(state);
+    CHECK(world.siteItemDeliveries(**feature, knowledge).empty());
+    confirmWorldItemReward(state, false, 0);
+    knowledge.itemObservations["7out02.odm"] = worldObservedItemSources(state);
+    const auto delivered = world.siteItemDeliveries(**feature, knowledge);
+    REQUIRE(delivered.size() == 1);
+    CHECK(delivered[0]->itemId == 1);
+    CHECK(delivered[0]->sourceIndex == 551);
+    WorldSiteValueSnapshot unchanged;
+    REQUIRE(recordWorldSiteObservation(state, first.site.id, 551, unchanged, unchanged, 1440));
+    knowledge.siteObservations[(*feature)->mapId] = worldSiteObservations(state);
+    CHECK_FALSE(world.siteObservations(**feature, knowledge)[0]->lastChanged);
+    CHECK(world.siteObservationText(**feature, knowledge).find("No additional changes") == std::string::npos);
+    CHECK_FALSE(world.siteObservations(**feature, knowledge)[0]->lastChanged);
+    const auto ownSources = knowledge.itemObservations;
+    knowledge.itemObservations.clear();
+    knowledge.itemObservations["out01.odm"] = ownSources.at("7out02.odm");
+    CHECK(world.siteItemDeliveries(**feature, knowledge).empty());
+    knowledge.itemObservations = ownSources;
+    knowledge.itemObservations["7out02.odm"][0].observed = false;
+    CHECK(world.siteItemDeliveries(**feature, knowledge).empty());
+    knowledge.itemObservations = ownSources;
+    REQUIRE(data.getItemTable().get(1));
+    const auto &item = *data.getItemTable().get(1);
+    const std::string received = world.siteObservationText(**feature, knowledge, nullptr, &data.getItemTable());
+    CHECK(received.find("Items received here:") != std::string::npos);
+    CHECK(received.find(item.unidentifiedName + " | Recorded: day 2") != std::string::npos);
+    CHECK(received.find(item.name) == std::string::npos);
+    CHECK(world.queryFeatures(knowledge, false, item.unidentifiedName, "", nullptr, &data.getItemTable()).size() == 1);
+    CHECK(world.queryFeatures(knowledge, false, item.name, "", nullptr, &data.getItemTable()).empty());
+    const auto neighbor = std::find_if(features.begin(), features.end(), [](const WorldMapFeature *pFeature)
+        { return pFeature->site.id == "inherited-decoration/1"; });
+    REQUIRE(neighbor != features.end());
+    knowledge.interactedSites["7out02.odm"].insert(worldSiteDiscoveryKey(551, other.site.id));
+    CHECK(world.siteItemDeliveries(**neighbor, knowledge).empty());
+    // A second real callback variant of this slot must not duplicate the same item in the view.
+    state.activeDecorationContext = EventRuntimeState::ActiveDecorationContext{
+        .decorVarIndex = 0, .baseEventId = 550, .currentEventId = 550, .eventCount = 2};
+    recordWorldItemReward(state, 1, 550, true, 2880);
+    recordWorldItemReward(state, 2, 550, true, 2880);
+    knowledge.itemObservations["7out02.odm"] = worldObservedItemSources(state);
+    REQUIRE(world.siteItemDeliveries(**feature, knowledge).size() == 2);
+    CHECK(world.siteItemDeliveries(**feature, knowledge)[0]->gameMinutes == 2880);
+    CHECK(world.siteObservationText(**feature, knowledge, nullptr, &data.getItemTable())
+        .find("Recorded: day 3") != std::string::npos);
+    knowledge.identifiedItems.insert(1);
+    CHECK(world.siteObservationText(**feature, knowledge, nullptr, &data.getItemTable()).find(item.name)
+        != std::string::npos);
+    knowledge.interactedSites.clear();
+    CHECK(world.siteItemDeliveries(**feature, knowledge).empty());
+    CHECK(world.siteObservationText(**feature, knowledge, nullptr, &data.getItemTable()).empty());
+    CHECK(knowledge.visitedMaps.empty());
+    CHECK(knowledge.autonoteIds.empty());
+}
