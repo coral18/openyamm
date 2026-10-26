@@ -1,0 +1,27 @@
+id: atlas.mm8_guild_shelf_core_off
+world: mm8
+mode: faithful
+steps:
+- load_game:
+    name: native
+    path: saves/quicksave.oysav
+- &id001
+  assert:
+    named_global_var_changed:
+      name: openyamm.discovery.guild-stock.v1/house/182/seen
+      value: 1
+- &id002
+  assert:
+    named_global_var_changed:
+      name: openyamm.discovery.guild-stock.v1/house/182/count
+      value: 12
+- &id003
+  assert:
+    runtime_event_variable:
+      id: 21
+      value: 5000
+- save_game: core-off-roundtrip
+- load_game: core-off-roundtrip
+- *id001
+- *id002
+- *id003

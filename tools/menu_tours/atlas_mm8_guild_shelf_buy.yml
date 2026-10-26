@@ -1,0 +1,22 @@
+# Deterministic observed-shelf save; buys the real first displayed book.
+output_dir: buy-captures
+exit: true
+steps:
+- expect: gameplay
+- action: trigger
+- wait: 0.3
+- click:
+  - 1235
+  - 414
+- wait: 0.3
+- capture: before-purchase
+- click:
+  - 295
+  - 330
+- wait: 0.3
+- capture: after-purchase
+- key: Escape
+- wait: 0.3
+- key: Escape
+- expect: gameplay
+- key: F9

@@ -93,6 +93,7 @@ updates = {
     "engine/data_tables/quest_locations.txt": repo / "assets_dev/engine/data_tables/quest_locations.txt",
     "engine/data_tables/english/quests.txt": repo / "assets_dev/engine/data_tables/english/quests.txt",
     "engine/data_tables/map_stats.txt": repo / "assets_dev/engine/data_tables/map_stats.txt",
+    "engine/data_tables/spells.txt": repo / "assets_dev/engine/data_tables/spells.txt",
     "engine/world/gates.yml": repo / "assets_dev/engine/world/gates.yml",
     "engine/world/atlas/mm7.yml": repo / "assets_dev/engine/world/atlas/mm7.yml",
     "engine/world/atlas/mm8.yml": repo / "assets_dev/engine/world/atlas/mm8.yml",

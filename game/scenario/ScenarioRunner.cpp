@@ -7030,6 +7030,23 @@ bool runSetupShortcut(
         return context.party.tryGrantItem(step.payload["item_id"].as<uint32_t>());
     }
 
+    if (kind == "house_stock_seed")
+    {
+        const YAML::Node value = step.payload["value"];
+        const uint64_t seed = value && value.IsScalar() ? value.as<uint64_t>() : 0;
+        Party::Snapshot snapshot = context.party.snapshot();
+        if (seed == 0 || seed > std::numeric_limits<uint32_t>::max() || !snapshot.houseStockStates.empty())
+        {
+            failures.push_back(stepLocation(step)
+                + ": house_stock_seed requires a positive uint32 seed before stock generation");
+            return false;
+        }
+        snapshot.houseStockSeed = uint32_t(seed);
+        context.party.restoreSnapshot(snapshot);
+        if (context.runtimeDriver) context.runtimeDriver->setPartyState(context.party);
+        return true;
+    }
+
     if (kind == "set_qbit")
     {
         if (!step.payload["id"] || !step.payload["id"].IsScalar())

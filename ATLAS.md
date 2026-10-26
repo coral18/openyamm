@@ -2630,3 +2630,64 @@ requirements. Both 25-step post-UI verifiers pass: the exact site interaction ke
 remain clear, both XP totals stay zero, gold/food remain 500/10, required items stay absent and global unlock
 214 stays unset across before/native saves and another round trip. Runtime metadata ZIP entries match source;
 `accepted.json` retains executable/overlay/capture/save hashes. Native tours inject only SDL-local input.
+
+
+## Observed guild shelves and permanent encountered-book knowledge (2026-10-26)
+
+Core now records identifiable spellbooks when the actual Buy Spellbooks shelf overlay is displayed. A building
+visit or generated shop state is not treated as an observation. The shared input path records the visible
+remaining stock after purchases/stealing, independently of the optional Atlas UI module. Names, spell identity,
+shops and geography continue to come from the current shared registries.
+
+The guide distinguishes Last seen (actual shelf plus recorded day) from Possible stock (authored random pool).
+Observations describe a past visit, not current availability. Last-seen book IDs are replaced on a new shelf
+observation; encountered-book knowledge persists after purchases or rotation. Viewing the shelf may unlock an
+item/spell reference without owning its book or learning the spell. Unidentified books with a real identification
+requirement are omitted. Another world's houses remain filtered, and a known guild observation cannot invent
+knowledge of its containing map. Older generated stock does not retroactively become an observed offer.
+
+`WorldGuildStockKnowledge` uses the existing named-global save mechanism under
+`openyamm.discovery.guild-stock.v1/`, with sorted unique book IDs, a bounded count, a timestamp and permanent
+known-book markers. Explicit zeroes retire old slots through session merges. Invalid types, counts, order or
+missing snapshot fields fail explicitly. No binary save format or second gameplay/item/house database is added.
+The Spell guide reads each candidate guild observation once per build rather than once per spell.
+
+Windows Release acceptance:
+
+- Four focused observation/pool cases passed 119 assertions: independent guilds, deduplication, repeated frames,
+  latest stock replacement/empty shelves, retained titles, corrupt data/time bounds, both worlds' actual-versus-
+  possible links, map-address privacy, and the repaired shared spell prose. The existing guild/book navigation
+  case separately passed 101 assertions. Tests use separate processes for independent asset-filesystem owners.
+- A broader preliminary guild/spellbook selector included the audio integration test and encountered its
+  process-global PhysFS ownership conflict. This is not reported as a green full-suite run. Focused results and
+  real native audio/shop runs are the acceptance evidence for this change.
+- Two explicit six-step fixtures position a Knight at real guild doors and set shop RNG seeds before any stock
+  exists. Seeds 5500129/5500182 make the stock assertions reproducible; they do not inject stock or knowledge.
+  Native input enters the guild and opens the real shelf. Each observed shelf contains twelve distinct book IDs.
+- Native Discovery shows Torch Light in Harmondale / Stone to Flesh on Dagger Wound as encountered books, with
+  Last seen links to the actual guilds. Guide adds separately labelled possible sources; returning to Discovery
+  preserves only its known information. Inspected native captures verify the actual reading pages and dates.
+- Both 170-step post-Atlas verifiers passed. All twelve IDs/history keys, absent book inventory, gold 5000,
+  food 10 and zero XP survive before/native loads, another save round trip, and explicit fixture map changes.
+  Independent read-only inspection of the retained saves confirms unchanged observation timestamps (541).
+- Real native purchases remove Fire Resistance item 1904 in MM7 (900 gold) / Feather Fall 1916 in MM8 (400 gold).
+  Both 41-step verifiers require eleven observed books, a zero retired slot, retained title knowledge, exactly
+  one purchased item, gold 4100/4600 and unchanged food/XP after another load. The initial unaffordable Inferno
+  attempt was correctly refused and is not counted as a successful purchase.
+- A separate MM8 run with only karol.test enabled records twelve books while the Atlas UI module is disabled.
+  Its nine-step verifier preserves observation/count/gold through another load. Preliminary door-only native
+  controls recorded no shelf observation merely from the root guild dialogue.
+- Native tests use AMD/OpenGL and SDL-local scripted input, isolated settings/saves and normal runtime assets.
+  Final scenario inputs, native tours and fixture limitations are documented in the fixture README. Private
+  evidence is under `atlas-guild-shelves-20261026/` in the Windows development root. No user campaign or official
+  installation data is a test-write target.
+
+The visual review also exposed six damaged quote pairs around point of no return in the authoritative shared
+spell table. Those exact byte sequences are replaced by ASCII quotes; all other bytes/line endings are retained.
+The Windows overlay now mounts spells.txt so runtime descriptions match source. The loaded seven affected/
+neighboring curative descriptions are tested, and the native Stone to Flesh reading page was inspected again.
+No spell behavior, costs, skill caps or balance changed.
+
+Conditional guild access/learning eligibility, a general equipment-shop observation browser, broader content
+coverage and Android/controller acceptance remain separate work in the coverage matrix. This checkpoint does
+not complete the full MM7/MM8 Atlas objective.

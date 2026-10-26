@@ -735,3 +735,25 @@ so opening/reloading a view must not seed them again. Nonzero existing runtime/a
 unchanged. An invalid reserved marker is an error, not permission to reinitialize the map. The marker uses existing
 named map persistence and is excluded from discovery-only refill transfers, so a fresh refill can initialize normally.
 Historical all-zero saves with no marker are ambiguous and receive no guessed restoration of past contents/rewards.
+
+
+### Observed guild books
+
+Core records identifiable spellbooks only while the actual guild shelf overlay is displayed. Generating stock,
+entering a building, opening Atlas or querying possible stock rules does not record a shelf. The shared overlay
+input path records remaining books after the frame's buy/steal action. Other stock modes are not included.
+`WorldGuildStockKnowledge` exposes a typed read-only snapshot and permanent observed-book knowledge.
+
+State uses existing named global variables under `openyamm.discovery.guild-stock.v1/`:
+`house/<merged-house-id>/seen`, `time`, `count` and sorted unique `slot/<index>` book IDs describe the latest
+observed identifiable shelf; `book/<merged-item-id>` retains known titles after stock rotation/purchase. Empty
+shelves have a positive seen marker and zero count. Old slots receive explicit zeroes for the ordinary session
+merge. Invalid markers/counts/order/missing fields fail instead of inventing a shelf. At most 64 stock slots
+are accepted. Old saves have no observation until a shelf is actually opened; existing generated stock is not
+retroactively treated as seen. No binary save version or separate gameplay/content database is added.
+
+Names, spell identity, guild position and possible restock pools still resolve through current shared registries.
+Atlas labels an observation Last seen with its recorded day, separately from Possible stock. Known book titles
+can enter the reading guide without setting party ownership, identification achievements or learned spells.
+The Core observation path remains active when the Atlas UI module is disabled. This does not evaluate guild
+membership or a character's ability to learn/cast a book's spell, and it is not a general equipment-shop history.

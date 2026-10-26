@@ -340,3 +340,35 @@ members' XP. Callback execution is independently tested against loaded normal sc
 1/2/5-member parties, a missing member despite duplicate suits elsewhere, a key on the last member, persistent
 unlock without a key, and no item consumption. Lincoln's successful callback offers a transition confirmation;
 that pending dialogue is not an already completed journey.
+
+
+## Actual guild shelf observations
+
+Use normal assets and separate private runtimes for MM7/MM8. Run
+`tests/scenarios/atlas/mm{7,8}_guild_shelf_fixture.yml`, copy the temporary `before.oysav` to private
+`saves/before.oysav`, then run `tools/menu_tours/atlas_mm{7,8}_guild_shelf_observe.yml` at 1600x900. The fixture
+positions a one-member Knight at an actual guild door and sets the stock RNG seed before any stock exists
+(MM7 5500129, MM8 5500182). The new `house_stock_seed` setup shortcut rejects an existing stock state; it is a
+controlled test fixture, not a player-facing reroll feature. Native input opens the real door and Buy Spellbooks,
+then closes the shelf/dialogue and writes `saves/quicksave.oysav`. No stock or knowledge is injected by Lua.
+
+Retain that save as `shelf-seen.oysav`. Copy it to another private runtime's `saves/before.oysav` and run
+`atlas_mm{7,8}_guild_shelf.yml`. The seeded shelf exposes Torch Light in Harmondale / Stone to Flesh on Dagger
+Wound. Inspect Discovery's encountered-book status, Last seen guild link/date and Guide's separately labelled
+possible pools. Run `mm{7,8}_guild_shelf_privacy.yml`: each 170-step verifier checks all twelve book IDs/history
+keys, absent book inventory, gold 5000, food 10 and zero XP across before/native saves, another round trip and
+explicit fixture map changes. It does not test the normal inter-region travel route. Expected books describe
+these base-package seeds, not arbitrary item/stock mods. Timestamp equality was also checked in retained save
+artifacts; the verifier does not assume a machine-dependent native frame duration.
+
+For real purchase controls, start separate private runtimes from `shelf-seen.oysav`, run the corresponding
+`atlas_mm{7,8}_guild_shelf_buy.yml`, then `mm{7,8}_guild_shelf_purchase.yml`. MM7 buys the affordable second
+book (Fire Resistance 1904, 900 gold); MM8 buys the first (Feather Fall 1916, 400 gold). The 41-step verifiers
+require eleven remaining observed books, an explicitly retired last slot, the purchased book still known,
+exactly one in inventory, gold 4100/4600 and unchanged food/XP through another load. The initial MM7 first-slot
+trial correctly refused an unaffordable Inferno; it is not reported as a successful purchase.
+
+A separate MM8 observation run with `mods/profile.yaml` enabling only `karol.test` verifies Core capture while
+the Atlas module is disabled. Use the same unused fixture and observe tour, then `mm8_guild_shelf_core_off.yml`.
+Its nine steps check observation/count/gold and another round trip. Preliminary door-only native controls
+also left the shelf's seen marker clear. User saves and official-installation data are never test-write targets.

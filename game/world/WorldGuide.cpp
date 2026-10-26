@@ -18,6 +18,7 @@
 #include "game/items/ItemInspectionText.h"
 #include "game/items/ItemRuntime.h"
 #include "game/gameplay/GuildSpellbookRules.h"
+#include "game/world/WorldGuildStockKnowledge.h"
 #include "game/party/SpellSchool.h"
 #include "game/party/Party.h"
 #include "game/events/ScriptedEventProgram.h"
@@ -655,6 +656,20 @@ std::vector<WorldGuideEntry> buildWorldGuide(const WorldGuideSource &source, Wor
                 if (item.itemId == 0 || item.name.empty()) continue;
                 if (const auto spell = spellbookSpellId(item)) books[*spell].push_back(&item);
             }
+        struct GuildSource
+        {
+            const WorldRecord *pRecord;
+            std::optional<WorldGuildStockObservation> observed;
+        };
+        std::vector<GuildSource> guildSources;
+        if (source.pWorld != nullptr)
+            for (const WorldRecord &record : source.pWorld->records())
+                if (record.kind == WorldRecordKind::House && record.map->worldId == source.worldId
+                    && (guide || (source.pWorldKnowledge != nullptr
+                        && source.pWorld->visible(record, *source.pWorldKnowledge, false))))
+                    guildSources.push_back({&record, source.pWorldKnowledge != nullptr
+                        ? worldGuildStockObservation(source.pWorldKnowledge->variables, record.house->id)
+                        : std::nullopt});
         for (const SpellEntry &spell : source.pSpells->entries())
         {
             const std::vector<const ItemDefinition *> &spellbooks = books[uint32_t(spell.id)];
@@ -678,23 +693,34 @@ std::vector<WorldGuideEntry> buildWorldGuide(const WorldGuideSource &source, Wor
                 if (worldItemPropertiesKnown(*pBook, knowledge, guide))
                     entry.links.push_back({WorldGuideLink::Kind::Item, "Spellbook: " + pBook->name,
                         std::to_string(pBook->itemId)});
-            size_t guilds = 0;
-            if (source.pWorld != nullptr)
-                for (const WorldRecord &record : source.pWorld->records())
+            size_t guilds = 0, observedGuilds = 0;
+            for (const GuildSource &guild : guildSources)
+            {
+                const WorldRecord &record = *guild.pRecord;
+                const bool seen = guild.observed && std::any_of(spellbooks.begin(), spellbooks.end(),
+                    [&](const ItemDefinition *pBook)
+                    { return std::binary_search(guild.observed->books.begin(), guild.observed->books.end(),
+                        pBook->itemId); });
+                if (seen)
                 {
-                    if (record.kind != WorldRecordKind::House || record.map->worldId != source.worldId
-                        || (!guide && (source.pWorldKnowledge == nullptr
-                            || !source.pWorld->visible(record, *source.pWorldKnowledge, false)))
-                        || std::none_of(spellbooks.begin(), spellbooks.end(), [&](const ItemDefinition *pBook)
-                            { return guildSpellbookStockWeight(*record.house, *pBook) > 0; }))
-                        continue;
                     entry.links.push_back({WorldGuideLink::Kind::Location,
-                        "Possible stock: " + record.name() + " - " + record.map->name, record.id});
-                    ++guilds;
+                        "Last seen: " + record.name() + " - " + record.map->name + " | Day "
+                            + std::to_string(guild.observed->gameMinutes / (24 * 60) + 1), record.id});
+                    ++observedGuilds;
+                    continue;
                 }
-            entry.details += guilds == 0
+                if (std::none_of(spellbooks.begin(), spellbooks.end(), [&](const ItemDefinition *pBook)
+                    { return guildSpellbookStockWeight(*record.house, *pBook) > 0; })) continue;
+                entry.links.push_back({WorldGuideLink::Kind::Location,
+                    "Possible stock: " + record.name() + " - " + record.map->name, record.id});
+                ++guilds;
+            }
+            if (observedGuilds != 0)
+                entry.details += "\n\nLast-seen links record books actually displayed on that guild's shelf. "
+                    "Books may have been bought or stock may have changed since that visit.";
+            entry.details += guilds == 0 && observedGuilds == 0
                 ? "\n\nNo matching guild stock sources " + std::string(guide ? "in this world." : "discovered yet.")
-                : "\n\nGuild links describe the random stock pool, not current shelves. "
+                : "\n\nPossible-stock links describe the random stock pool, not current shelves. "
                   "Stock rotates; guild access and spell-learning requirements still apply.";
             result.push_back(std::move(entry));
         }

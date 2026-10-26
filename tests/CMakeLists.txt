@@ -51,6 +51,7 @@ add_executable(openyamm_unit_tests
     WorldInteractionAuditTests.cpp
     WorldSiteObservationTests.cpp
     WorldGuideTests.cpp
+    WorldGuildStockKnowledgeTests.cpp
     MapDeltaDataTests.cpp
     MM7MechanicsRuntimeTests.cpp
     MercenaryRecruitmentRuntimeTests.cpp
@@ -242,6 +243,7 @@ add_executable(openyamm_unit_tests
     ../game/tables/MapStats.cpp
     ../game/world/WorldDatabase.cpp
     ../game/world/WorldNpcKnowledge.cpp
+    ../game/world/WorldGuildStockKnowledge.cpp
     ../game/world/WorldTransportKnowledge.cpp
     ../game/world/WorldAtlasPresentation.cpp
     ../game/world/WorldGuide.cpp

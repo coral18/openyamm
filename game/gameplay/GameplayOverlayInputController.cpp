@@ -5,6 +5,7 @@
 #include "game/gameplay/GameplaySaveLoadUiSupport.h"
 #include "game/gameplay/HouseInteraction.h"
 #include "game/gameplay/HouseServiceRuntime.h"
+#include "game/world/WorldGuildStockKnowledge.h"
 #include "game/gameplay/NpcFollowerRuntime.h"
 #include "game/gameplay/ReputationRuntime.h"
 #include "game/StringUtils.h"
@@ -3356,6 +3357,11 @@ void GameplayOverlayInputController::handleDialogueOverlayInput(
                         view.playSpeechReaction(activeMemberIndex, SpeechId::InventoryRoom, true);
                     }
                 });
+            if (*stockMode == HouseStockMode::GuildSpellbooks
+                && view.houseShopOverlay().houseId == pDialogueHouseEntry->id)
+                if (EventRuntimeState *pState = view.worldRuntime()->eventRuntimeState())
+                    recordWorldGuildStockObservation(*pState, pDialogueHouseEntry->id, stock,
+                        *view.itemTable(), view.worldRuntime()->gameMinutes());
         }
     }
 

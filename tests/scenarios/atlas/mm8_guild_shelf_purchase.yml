@@ -1,0 +1,127 @@
+id: atlas.mm8_guild_shelf_purchase
+title: Real native purchase updates the observed shelf without forgetting the known
+  book
+world: mm8
+mode: faithful
+steps:
+- load_game:
+    name: purchase
+    path: saves/quicksave.oysav
+- &id001
+  assert:
+    named_global_var_changed:
+      name: openyamm.discovery.guild-stock.v1/house/182/seen
+      value: 1
+- &id002
+  assert:
+    named_global_var_changed:
+      name: openyamm.discovery.guild-stock.v1/house/182/count
+      value: 11
+- &id003
+  assert:
+    named_global_var_changed:
+      name: openyamm.discovery.guild-stock.v1/house/182/slot/11
+      value: 0
+- &id004
+  assert:
+    named_global_var_changed:
+      name: openyamm.discovery.guild-stock.v1/book/1916
+      value: 1
+- &id005
+  assert:
+    map: out01.odm
+    runtime_event_variable:
+      id: 125566993
+      value: 1
+- &id006
+  assert:
+    runtime_event_variable:
+      id: 21
+      value: 4600
+- &id007
+  assert:
+    runtime_event_variable:
+      id: 23
+      value: 10
+- &id008
+  assert:
+    runtime_event_variable:
+      id: 13
+      member_index: 0
+      value: 0
+- &id009
+  assert:
+    named_global_var_changed:
+      name: openyamm.discovery.guild-stock.v1/house/182/slot/0
+      value: 439
+- &id010
+  assert:
+    named_global_var_changed:
+      name: openyamm.discovery.guild-stock.v1/house/182/slot/1
+      value: 442
+- &id011
+  assert:
+    named_global_var_changed:
+      name: openyamm.discovery.guild-stock.v1/house/182/slot/2
+      value: 1205
+- &id012
+  assert:
+    named_global_var_changed:
+      name: openyamm.discovery.guild-stock.v1/house/182/slot/3
+      value: 1236
+- &id013
+  assert:
+    named_global_var_changed:
+      name: openyamm.discovery.guild-stock.v1/house/182/slot/4
+      value: 1237
+- &id014
+  assert:
+    named_global_var_changed:
+      name: openyamm.discovery.guild-stock.v1/house/182/slot/5
+      value: 1242
+- &id015
+  assert:
+    named_global_var_changed:
+      name: openyamm.discovery.guild-stock.v1/house/182/slot/6
+      value: 1245
+- &id016
+  assert:
+    named_global_var_changed:
+      name: openyamm.discovery.guild-stock.v1/house/182/slot/7
+      value: 1903
+- &id017
+  assert:
+    named_global_var_changed:
+      name: openyamm.discovery.guild-stock.v1/house/182/slot/8
+      value: 1905
+- &id018
+  assert:
+    named_global_var_changed:
+      name: openyamm.discovery.guild-stock.v1/house/182/slot/9
+      value: 1910
+- &id019
+  assert:
+    named_global_var_changed:
+      name: openyamm.discovery.guild-stock.v1/house/182/slot/10
+      value: 1922
+- save_game: purchase-roundtrip
+- load_game: purchase-roundtrip
+- *id001
+- *id002
+- *id003
+- *id004
+- *id005
+- *id006
+- *id007
+- *id008
+- *id009
+- *id010
+- *id011
+- *id012
+- *id013
+- *id014
+- *id015
+- *id016
+- *id017
+- *id018
+- *id019

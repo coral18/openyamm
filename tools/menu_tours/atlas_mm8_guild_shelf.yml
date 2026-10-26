@@ -1,0 +1,50 @@
+# 1600x900; deterministic shelf-seen fixture save, normal packages.
+output_dir: atlas-captures
+exit: true
+steps:
+- expect: gameplay
+- pause: true
+- click:
+  - 800
+  - 821
+- click:
+  - 450
+  - 57
+- click:
+  - 325
+  - 126
+- click:
+  - 275
+  - 190
+- text: Stone to Flesh
+- key: Return
+- click:
+  - 200
+  - 265
+- capture: observed-book-unlearned-spell
+- pointer_move:
+  - 1035
+  - 527
+- wheel: -1000
+- capture: actual-last-seen-guild
+- click:
+  - 1152
+  - 57
+- pointer_move:
+  - 1035
+  - 527
+- wheel: -1000
+- capture: guide-separates-possible-from-observed
+- click:
+  - 1152
+  - 57
+- capture: discovery-retains-observed-only
+- click:
+  - 1450
+  - 57
+- expect: pause
+- click:
+  - 800
+  - 301
+- expect: gameplay
+- key: F9

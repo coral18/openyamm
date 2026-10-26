@@ -6,6 +6,7 @@
 #include "game/maps/MapAssetLoader.h"
 #include "game/ui/GameplayMinimapTransform.h"
 #include "game/events/EvtEnums.h"
+#include "game/world/WorldGuildStockKnowledge.h"
 
 #include <yaml-cpp/yaml.h>
 #include <algorithm>
@@ -141,6 +142,12 @@ AtlasScreen::AtlasScreen(const Engine::AssetFileSystem &assets, const GameDataRe
         }
         for (const ItemDefinition &item : m_data.itemTable().entries())
         {
+            if (item.itemId != 0 && worldGuildBookKnown(m_knowledge.variables, item.itemId))
+            {
+                m_referenceKnowledge.items.insert(item.itemId);
+                m_referenceKnowledge.identifiedItems.insert(item.itemId);
+                m_knowledge.identifiedItems.insert(item.itemId);
+            }
             if (m_pParty->hasEverOwnedItem(item.itemId) || m_pParty->hasItemAnywhere(item.itemId)
                 || m_pParty->hasIdentifiedItem(item.itemId))
                 m_referenceKnowledge.items.insert(item.itemId);

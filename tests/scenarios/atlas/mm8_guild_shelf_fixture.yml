@@ -1,0 +1,34 @@
+id: atlas.mm8_guild_shelf_fixture
+title: Unused real guild door without generated or observed shelves
+world: mm8
+mode: faithful
+steps:
+- new_game_flow:
+    start_map: out01.odm
+    party:
+      gold: 5000
+      food: 10
+      members:
+      - name: Shelf Tester
+        class: Knight
+        level: 1
+        experience: 0
+        race_id: 0
+        skills: []
+        equipment: {}
+- set_pose:
+    x: 4000
+    y: 11280
+    z: 960
+    yaw: 0
+    pitch: 0
+- setup_shortcut:
+    kind: house_stock_seed
+    value: 5500182
+- note: The explicit shop RNG seed is a controlled fixture, set before any stock exists;
+    native UI still generates the real shelf.
+- assert:
+    named_global_var_changed:
+      name: openyamm.discovery.guild-stock.v1/house/182/seen
+      value: 0
+- save_game: before

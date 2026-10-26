@@ -1,0 +1,22 @@
+# Deterministic observed shelf; the second book is affordable with the fixture gold.
+output_dir: buy-captures
+exit: true
+steps:
+- expect: gameplay
+- action: trigger
+- wait: 0.3
+- click:
+  - 1235
+  - 414
+- wait: 0.3
+- capture: before-purchase
+- click:
+  - 435
+  - 330
+- wait: 0.3
+- capture: after-purchase
+- key: Escape
+- wait: 0.3
+- key: Escape
+- expect: gameplay
+- key: F9

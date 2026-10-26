@@ -1,0 +1,348 @@
+id: atlas.mm7_guild_shelf_privacy
+title: Native observed guild shelf and known books survive Atlas browsing, reload
+  and map changes without purchase
+world: mm7
+mode: faithful
+steps:
+- load_game:
+    name: seen
+    path: saves/before.oysav
+- &id001
+  assert:
+    named_global_var_changed:
+      name: openyamm.discovery.guild-stock.v1/house/129/seen
+      value: 1
+- &id002
+  assert:
+    named_global_var_changed:
+      name: openyamm.discovery.guild-stock.v1/house/129/count
+      value: 12
+- &id003
+  assert:
+    map: 7out02.odm
+    runtime_event_variable:
+      id: 21
+      value: 5000
+- &id004
+  assert:
+    runtime_event_variable:
+      id: 23
+      value: 10
+- &id005
+  assert:
+    runtime_event_variable:
+      id: 13
+      member_index: 0
+      value: 0
+- &id006
+  assert:
+    named_global_var_changed:
+      name: openyamm.discovery.guild-stock.v1/house/129/slot/0
+      value: 400
+- &id007
+  assert:
+    named_global_var_changed:
+      name: openyamm.discovery.guild-stock.v1/book/400
+      value: 1
+- &id008
+  assert:
+    runtime_event_variable:
+      id: 26214417
+      value: 0
+- &id009
+  assert:
+    named_global_var_changed:
+      name: openyamm.discovery.guild-stock.v1/house/129/slot/1
+      value: 402
+- &id010
+  assert:
+    named_global_var_changed:
+      name: openyamm.discovery.guild-stock.v1/book/402
+      value: 1
+- &id011
+  assert:
+    runtime_event_variable:
+      id: 26345489
+      value: 0
+- &id012
+  assert:
+    named_global_var_changed:
+      name: openyamm.discovery.guild-stock.v1/house/129/slot/2
+      value: 408
+- &id013
+  assert:
+    named_global_var_changed:
+      name: openyamm.discovery.guild-stock.v1/book/408
+      value: 1
+- &id014
+  assert:
+    runtime_event_variable:
+      id: 26738705
+      value: 0
+- &id015
+  assert:
+    named_global_var_changed:
+      name: openyamm.discovery.guild-stock.v1/house/129/slot/3
+      value: 409
+- &id016
+  assert:
+    named_global_var_changed:
+      name: openyamm.discovery.guild-stock.v1/book/409
+      value: 1
+- &id017
+  assert:
+    runtime_event_variable:
+      id: 26804241
+      value: 0
+- &id018
+  assert:
+    named_global_var_changed:
+      name: openyamm.discovery.guild-stock.v1/house/129/slot/4
+      value: 410
+- &id019
+  assert:
+    named_global_var_changed:
+      name: openyamm.discovery.guild-stock.v1/book/410
+      value: 1
+- &id020
+  assert:
+    runtime_event_variable:
+      id: 26869777
+      value: 0
+- &id021
+  assert:
+    named_global_var_changed:
+      name: openyamm.discovery.guild-stock.v1/house/129/slot/5
+      value: 1204
+- &id022
+  assert:
+    named_global_var_changed:
+      name: openyamm.discovery.guild-stock.v1/book/1204
+      value: 1
+- &id023
+  assert:
+    runtime_event_variable:
+      id: 78905361
+      value: 0
+- &id024
+  assert:
+    named_global_var_changed:
+      name: openyamm.discovery.guild-stock.v1/house/129/slot/6
+      value: 1205
+- &id025
+  assert:
+    named_global_var_changed:
+      name: openyamm.discovery.guild-stock.v1/book/1205
+      value: 1
+- &id026
+  assert:
+    runtime_event_variable:
+      id: 78970897
+      value: 0
+- &id027
+  assert:
+    named_global_var_changed:
+      name: openyamm.discovery.guild-stock.v1/house/129/slot/7
+      value: 1207
+- &id028
+  assert:
+    named_global_var_changed:
+      name: openyamm.discovery.guild-stock.v1/book/1207
+      value: 1
+- &id029
+  assert:
+    runtime_event_variable:
+      id: 79101969
+      value: 0
+- &id030
+  assert:
+    named_global_var_changed:
+      name: openyamm.discovery.guild-stock.v1/house/129/slot/8
+      value: 1212
+- &id031
+  assert:
+    named_global_var_changed:
+      name: openyamm.discovery.guild-stock.v1/book/1212
+      value: 1
+- &id032
+  assert:
+    runtime_event_variable:
+      id: 79429649
+      value: 0
+- &id033
+  assert:
+    named_global_var_changed:
+      name: openyamm.discovery.guild-stock.v1/house/129/slot/9
+      value: 1904
+- &id034
+  assert:
+    named_global_var_changed:
+      name: openyamm.discovery.guild-stock.v1/book/1904
+      value: 1
+- &id035
+  assert:
+    runtime_event_variable:
+      id: 124780561
+      value: 0
+- &id036
+  assert:
+    named_global_var_changed:
+      name: openyamm.discovery.guild-stock.v1/house/129/slot/10
+      value: 1906
+- &id037
+  assert:
+    named_global_var_changed:
+      name: openyamm.discovery.guild-stock.v1/book/1906
+      value: 1
+- &id038
+  assert:
+    runtime_event_variable:
+      id: 124911633
+      value: 0
+- &id039
+  assert:
+    named_global_var_changed:
+      name: openyamm.discovery.guild-stock.v1/house/129/slot/11
+      value: 1911
+- &id040
+  assert:
+    named_global_var_changed:
+      name: openyamm.discovery.guild-stock.v1/book/1911
+      value: 1
+- &id041
+  assert:
+    runtime_event_variable:
+      id: 125239313
+      value: 0
+- load_game:
+    name: native
+    path: saves/quicksave.oysav
+- *id001
+- *id002
+- *id003
+- *id004
+- *id005
+- *id006
+- *id007
+- *id008
+- *id009
+- *id010
+- *id011
+- *id012
+- *id013
+- *id014
+- *id015
+- *id016
+- *id017
+- *id018
+- *id019
+- *id020
+- *id021
+- *id022
+- *id023
+- *id024
+- *id025
+- *id026
+- *id027
+- *id028
+- *id029
+- *id030
+- *id031
+- *id032
+- *id033
+- *id034
+- *id035
+- *id036
+- *id037
+- *id038
+- *id039
+- *id040
+- *id041
+- save_game: shelf-roundtrip
+- load_game: shelf-roundtrip
+- *id001
+- *id002
+- *id003
+- *id004
+- *id005
+- *id006
+- *id007
+- *id008
+- *id009
+- *id010
+- *id011
+- *id012
+- *id013
+- *id014
+- *id015
+- *id016
+- *id017
+- *id018
+- *id019
+- *id020
+- *id021
+- *id022
+- *id023
+- *id024
+- *id025
+- *id026
+- *id027
+- *id028
+- *id029
+- *id030
+- *id031
+- *id032
+- *id033
+- *id034
+- *id035
+- *id036
+- *id037
+- *id038
+- *id039
+- *id040
+- *id041
+- load_map:
+    map: 7out03.odm
+- load_map:
+    map: 7out02.odm
+- *id001
+- *id002
+- *id003
+- *id004
+- *id005
+- *id006
+- *id007
+- *id008
+- *id009
+- *id010
+- *id011
+- *id012
+- *id013
+- *id014
+- *id015
+- *id016
+- *id017
+- *id018
+- *id019
+- *id020
+- *id021
+- *id022
+- *id023
+- *id024
+- *id025
+- *id026
+- *id027
+- *id028
+- *id029
+- *id030
+- *id031
+- *id032
+- *id033
+- *id034
+- *id035
+- *id036
+- *id037
+- *id038
+- *id039
+- *id040
+- *id041
