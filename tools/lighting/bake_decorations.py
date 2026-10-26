@@ -184,9 +184,9 @@ def validate_interaction_reference_metadata(text, script):
         raise ValueError(failure)
     declaration = re.compile(r'SetMapInteractionReference\(([1-9][0-9]*), \{(.*)\}\)')
     field = re.compile(r'([a-zA-Z]+) = ("(?:[^"\\\r\n]|\\["\\nrt])*"|true|false|[1-9][0-9]*)')
-    numbers = {'itemId', 'spellId', 'npcId', 'spriteId', 'completionQBit'}
+    numbers = {'itemId', 'spellId', 'npcId', 'spriteId', 'completionQBit', 'openedQBit'}
     flags = {'consumesItem', 'addsFollower'}
-    strings = {'kind', 'openedMapFlag', 'targetMap', 'network'}
+    strings = {'kind', 'openedMapFlag', 'targetMap', 'network', 'itemScope'}
     for line in lines[1:]:
         line = line.strip()
         if not line or line.startswith('--'):
@@ -228,16 +228,19 @@ def validate_interaction_reference_metadata(text, script):
             raise ValueError(failure)
         if not values.get('itemId'):
             raise ValueError(failure)
-        if kind == 'enter_dungeon':
+        if kind in ('enter_dungeon', 'leave_dungeon'):
             target = values.get('targetMap', '')
             flag = values.get('openedMapFlag', '')
-            valid = bool(re.fullmatch(r'[A-Za-z0-9_-]+\.(blv|odm)', target)
-                         and re.fullmatch(r'[A-Za-z0-9_]+', flag))
+            valid = bool(re.fullmatch(r'[A-Za-z0-9_-]+\.(blv|odm)', target))
+            valid = valid and (not flag or bool(re.fullmatch(r'[A-Za-z0-9_]+', flag)))
+            valid = valid and values.get('itemScope', 'party') in ('party', 'each_member', 'selected')
+            valid = valid and not (flag and values.get('openedQBit'))
             valid = valid and not any(values.get(key) for key in
                                       ('spellId', 'npcId', 'spriteId', 'completionQBit', *flags))
         elif kind in ('rescue', 'stone_to_flesh'):
             valid = bool(values.get('npcId') and values.get('spriteId')
-                         and not values.get('targetMap') and not values.get('openedMapFlag'))
+                         and not values.get('targetMap') and not values.get('openedMapFlag')
+                         and not values.get('openedQBit') and not values.get('itemScope'))
             if kind == 'rescue':
                 valid = valid and bool(values.get('completionQBit')) and not values.get('spellId')
             else:

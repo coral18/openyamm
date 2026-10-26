@@ -189,6 +189,30 @@ class DecorationBakeTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'Invalid site interaction metadata overlay'):
                 self.export()
 
+    def test_passage_item_scopes_and_campaign_unlocks_are_literal_metadata(self):
+        baseline = self.export()
+        metadata = self.world / 'events/maps/test_zz_site_interactions.lua'
+        header = '-- Site interaction metadata; load after gameplay overlays\n'
+        for fields in (
+                'kind = "leave_dungeon", itemId = 1406, itemScope = "each_member", targetMap = "7out15.odm"',
+                'kind = "enter_dungeon", itemId = 619, openedQBit = 214, targetMap = "d34.blv"',
+                'kind = "enter_dungeon", itemId = 619, itemScope = "selected", targetMap = "d34.blv"'):
+            metadata.write_text(header + 'SetMapInteractionReference(1, {' + fields + '})\n')
+            result = self.export()
+            for key in ('cards', 'counts', 'dependencies'):
+                self.assertEqual(result[key], baseline[key])
+        for fields in (
+                'kind = "enter_dungeon", itemId = 619, openedQBit = 214, openedMapFlag = "Opened", '
+                'targetMap = "d34.blv"',
+                'kind = "leave_dungeon", itemId = 1406, itemScope = "all", targetMap = "7out15.odm"',
+                'kind = "enter_dungeon", itemId = 619, openedQBit = 0, targetMap = "d34.blv"',
+                'kind = "enter_dungeon", itemId = 619, openedQBit = true, targetMap = "d34.blv"',
+                'kind = "rescue", itemId = 1, npcId = 1, spriteId = 1, completionQBit = 1, itemScope = "party"',
+                'kind = "dimension_door", network = "test.gate", openedQBit = 1'):
+            metadata.write_text(header + 'SetMapInteractionReference(1, {' + fields + '})\n')
+            with self.assertRaisesRegex(ValueError, 'Invalid site interaction metadata overlay'):
+                self.export()
+
     def test_passage_groups_do_not_change_shadow_cards_or_dependencies(self):
         baseline = self.export()
         metadata = self.world / 'events/maps/test_zz_site_groups.lua'

@@ -1,0 +1,45 @@
+# 1600x900; unused passage fixture, normal packages.
+output_dir: captures
+exit: true
+steps:
+- expect: gameplay
+- key: F9
+- pause: true
+- click:
+  - 800
+  - 821
+- click:
+  - 1152
+  - 57
+- click:
+  - 1480
+  - 126
+- click:
+  - 275
+  - 126
+- text: Enter the Submarine
+- key: Return
+- click:
+  - 1250
+  - 260
+- capture: guide-passage
+- click:
+  - 1100
+  - 806
+- capture: item-scope-requirements
+- click:
+  - 1152
+  - 57
+- capture: discovery-hides-unlearned-passage
+- click:
+  - 450
+  - 57
+- click:
+  - 1450
+  - 57
+- expect: pause
+- click:
+  - 800
+  - 301
+- expect: gameplay
+- key: F9

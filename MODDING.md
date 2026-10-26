@@ -511,11 +511,17 @@ The current flat schema supports three families:
 
 - `rescue`: `itemId`, `npcId`, `spriteId`, `completionQBit`; optional `consumesItem` and `addsFollower`.
 - `stone_to_flesh`: `itemId`, `spellId`, `npcId`, `spriteId`; optional `consumesItem` applies to the item route.
-- `enter_dungeon`: `itemId`, `openedMapFlag`, `targetMap`; describes a reusable entrance opened with a key.
+- `enter_dungeon` / `leave_dungeon`: `itemId`, `targetMap`; optional `itemScope` is `party` (default),
+  `selected` or `each_member`. This describes possession, including equipment and inventory, not an equip-only test.
+  Optional `openedMapFlag` permits reuse while the source map's flag remains set; optional `openedQBit` permits
+  reuse while the global campaign bit remains set. The two unlock fields are mutually exclusive. With neither,
+  the item requirement applies each time. Passage items are not consumed by this schema.
 
 Every record needs `kind`. IDs refer to the active merged game registries; `spriteId` is the event key used by
 `evt.SetSprite`, not an artwork ID or renderer-list index. `completionQBit` is a declared rescue gate. The entrance
-flag belongs to its source map; the reference does not predict a remote map's current state. Unsupported fields,
+flag belongs to its source map; a campaign unlock is global. The reference does not evaluate either state or
+predict a remote map's current availability. Destination survival rules, transition confirmations and other
+effects remain separate from these interaction requirements. Unsupported fields,
 invalid types, unsafe map paths and incomplete family definitions fail loading. These are authored reference
 contracts, not a general interpreter for arbitrary Lua.
 

@@ -1897,7 +1897,10 @@ void AtlasScreen::drawSiteJournal()
     m_siteJournalHeight = height / designScale() + 20;
     setDesignClip(std::nullopt);
     textInRect(canvasRect(34, 407, 778, 43),
-        m_guide ? "Effects depend on the selected character, available resources and previous visits."
+        m_guide ? feature.kind == WorldMapFeatureKind::Connection
+            ? "Passage references describe possible interactions; current availability and destination conditions "
+              "may differ."
+            : "Effects depend on the selected character, available resources and previous visits."
             : "Recorded findings describe past visits; results can depend on the character and previous use.",
         "menu_arrus", 11);
 }

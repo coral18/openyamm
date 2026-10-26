@@ -134,7 +134,7 @@ void WorldDatabase::indexMapInteractionReferences(const MapStatsEntry &map,
         const ItemDefinition *pItem = items.get(reference.itemId);
         if (pItem == nullptr) throw std::invalid_argument("Unknown interaction item: " + feature.id);
         std::string text;
-        if (reference.kind == "enter_dungeon")
+        if (reference.kind == "enter_dungeon" || reference.kind == "leave_dungeon")
         {
             const auto destination = std::find_if(m_records.begin(), m_records.end(), [&](const WorldRecord &record)
             { return (record.kind == WorldRecordKind::Region || record.kind == WorldRecordKind::Dungeon)
@@ -142,9 +142,19 @@ void WorldDatabase::indexMapInteractionReferences(const MapStatsEntry &map,
                 && toLowerCopy(record.map->fileName) == reference.targetMap; });
             if (destination == m_records.end())
                 throw std::invalid_argument("Unknown interaction destination: " + feature.id);
-            text = "Destination: " + destination->name() + ".\nFirst opening requires carrying: " + pItem->name
-                + ".\nThe key is not consumed. Once opened, this entrance can be reused without the key"
-                  " while this location retains its open state.";
+            const bool reusable = !reference.openedMapFlag.empty() || reference.openedQBit != 0;
+            text = "Destination: " + destination->name() + ".\n";
+            if (reusable) text += "First opening: ";
+            if (reference.itemScope == "each_member") text += "Every party member must carry: ";
+            else if (reference.itemScope == "selected") text += "The selected character must carry: ";
+            else text += "A party member must carry: ";
+            text += pItem->name + ".\nThe item is not consumed.";
+            if (!reference.openedMapFlag.empty())
+                text += " Once opened, this entrance can be reused without the key"
+                    " while this location retains its open state.";
+            else if (reference.openedQBit != 0)
+                text += " Once unlocked, this passage can be reused without the item"
+                    " while its campaign record remains set.";
         }
         else
         {

@@ -1711,7 +1711,7 @@ TEST_CASE("typed interaction references bind active callbacks and validate seman
         CHECK(program->interactionReferences().empty());
     }
     CHECK_FALSE(load(definition));
-    for (const char *pFields : {"kind = 'enter_dungeon', itemId = 610, targetMap = 'd10.blv'",
+    for (const char *pFields : {"kind = 'enter_dungeon', targetMap = 'd10.blv'",
         "kind = 'enter_dungeon', itemId = true, openedMapFlag = 'Opened', targetMap = 'd10.blv'",
         "kind = 'enter_dungeon', itemId = 1.5, openedMapFlag = 'Opened', targetMap = 'd10.blv'",
         "kind = 'enter_dungeon', itemId = 610, openedMapFlag = 'Opened', targetMap = '../d10.blv'",
@@ -1719,6 +1719,30 @@ TEST_CASE("typed interaction references bind active callbacks and validate seman
         "kind = 'enter_dungeon', itemId = 610, openedMapFlag = 'Opened', targetMap = 'd10.blv', typo = 1",
         "kind = 'stone_to_flesh', itemId = 339, npcId = 42, spriteId = 20",
         "kind = 'rescue', itemId = 1431, npcId = 400, spriteId = 1, completionQBit = 0"})
+        CHECK_FALSE(load(handler + "SetMapInteractionReference(1, {" + pFields + "})"));
+    for (const char *pFields : {
+        "kind='leave_dungeon', itemId=1406, itemScope='each_member', targetMap='7out15.odm'",
+        "kind='enter_dungeon', itemId=619, itemScope='party', openedQBit=214, targetMap='d34.blv'",
+        "kind='enter_dungeon', itemId=1, itemScope='selected', targetMap='d10.blv'"})
+    {
+        program = load(handler + "SetMapInteractionReference(1, {" + pFields + "})");
+        REQUIRE(program);
+        REQUIRE(program->interactionReferences().contains(1));
+        program = load(handler + "SetMapInteractionReference(1, {" + pFields + "})\nevt.map[1]=function() end");
+        REQUIRE(program);
+        CHECK(program->interactionReferences().empty());
+    }
+    for (const char *pFields : {
+        "kind='leave_dungeon', itemId=1406, itemScope='all', targetMap='7out15.odm'",
+        "kind='leave_dungeon', itemId=1406, itemScope=false, targetMap='7out15.odm'",
+        "kind='leave_dungeon', itemId=1406, itemScope='', targetMap='7out15.odm'",
+        "kind='enter_dungeon', itemId=619, openedQBit=0, targetMap='d34.blv'",
+        "kind='enter_dungeon', itemId=619, openedQBit=-1, targetMap='d34.blv'",
+        "kind='enter_dungeon', itemId=619, openedQBit=1.5, targetMap='d34.blv'",
+        "kind='enter_dungeon', itemId=619, openedQBit=2147483648, targetMap='d34.blv'",
+        "kind='enter_dungeon', itemId=619, openedQBit=214, openedMapFlag='Opened', targetMap='d34.blv'",
+        "kind='rescue', itemId=1, npcId=1, spriteId=1, completionQBit=1, itemScope='party'",
+        "kind='dimension_door', network='test.gate', openedQBit=1"})
         CHECK_FALSE(load(handler + "SetMapInteractionReference(1, {" + pFields + "})"));
     program = load(handler + definition + "SetMapContextAction(1, {kind = 'well', source = 'script'})");
     REQUIRE(program);

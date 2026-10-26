@@ -7,6 +7,7 @@
 #include "game/world/WorldDatabase.h"
 #include "game/world/WorldGuide.h"
 #include "game/party/Party.h"
+#include "game/events/EventRuntime.h"
 #include "tests/RegressionMapLoader.h"
 
 #include <algorithm>
@@ -362,6 +363,101 @@ TEST_CASE("canonical interaction references describe active statue rescues and r
         }
     }
     CHECK(references == 17);
+}
+
+TEST_CASE("canonical Lincoln and submarine references match active party scope and persistent unlock callbacks")
+{
+    using namespace OpenYAMM::Game;
+    REQUIRE_MESSAGE(OpenYAMM::Tests::regressionMapLoaderLoaded(),
+        OpenYAMM::Tests::regressionMapLoaderFailure());
+    const auto &loader = OpenYAMM::Tests::regressionMapLoader();
+    const auto &data = loader.gameDataLoader;
+    for (const bool lincoln : {true, false})
+    {
+        const std::string worldId = lincoln ? "mm7" : "mm8";
+        const std::string file = lincoln ? "7d23.blv" : "d06.blv";
+        const uint16_t event = lincoln ? 501 : 451;
+        const uint32_t itemId = lincoln ? 1406 : 619;
+        CAPTURE(file);
+        const MapStatsEntry *pEntry = data.getMapStats().findByFileName(file);
+        REQUIRE(pEntry);
+        auto map = MapAssetLoader().load(loader.assetFileSystem, *pEntry, data.getMonsterTable(),
+            data.getObjectTable(), MapLoadPurpose::HeadlessGameplay);
+        REQUIRE(map);
+        REQUIRE(map->indoorMapData);
+        std::string error;
+        REQUIRE_MESSAGE(GameDataLoader::loadEventPrograms(loader.assetFileSystem, *map, error), error);
+        REQUIRE(map->localEventProgram);
+        const ScriptedEventProgram &events = *map->localEventProgram;
+        REQUIRE(events.interactionReferences().contains(event));
+        const SiteInteractionReference &reference = events.interactionReferences().at(event);
+        CHECK(reference.itemScope == (lincoln ? "each_member" : "")); // Empty retains the party-wide default.
+        CHECK(reference.openedQBit == (lincoln ? 0 : 214));
+        WorldDatabase world(data.getMapStats(), data.getHouseTable(), data.getNpcDialogTable(),
+            data.getMergedTeacherTopicTable(), worldId);
+        world.indexMapLocations(*pEntry, *map->indoorMapData, events);
+        world.indexMapInteractionReferences(*pEntry, data.getItemTable(), data.getSpellTable());
+        size_t sites = 0;
+        for (const WorldMapFeature &feature : world.features())
+        {
+            if (feature.site.eventId != event) continue;
+            ++sites;
+            CHECK(feature.kind == WorldMapFeatureKind::Connection);
+            CHECK(feature.targetMap == reference.targetMap);
+            WorldKnowledge knowledge;
+            knowledge.visitedMaps.insert(file);
+            CHECK_FALSE(world.featureVisible(feature, knowledge, false));
+            CHECK(world.featureVisible(feature, knowledge, true));
+            const std::string guide(world.siteReference(feature, knowledge, true));
+            CHECK(guide.find(data.getItemTable().get(itemId)->name) != std::string::npos);
+            CHECK(guide.find(lincoln ? "Every party member" : "A party member") != std::string::npos);
+            CHECK((guide.find("campaign record") != std::string::npos) == !lincoln);
+            CHECK(guide.find("while this location") == std::string::npos);
+            CHECK(guide.find("wearing") == std::string::npos); // The active script accepts inventory too.
+            knowledge.interactedSites[file].insert(worldSiteDiscoveryKey(event, feature.site.id));
+            CHECK(world.siteReference(feature, knowledge, false).empty());
+        }
+        CHECK(sites > 0);
+        EventRuntime runtime;
+        for (const size_t members : {1u, 2u, 5u})
+            for (const bool carries : {false, true})
+                for (const bool unlocked : {false, true})
+                {
+                    Party::Snapshot seed;
+                    seed.members.resize(members);
+                    Party party;
+                    party.restoreSnapshot(seed);
+                    InventoryItem item;
+                    item.objectDescriptionId = itemId;
+                    if (lincoln)
+                    {
+                        // One missing member must block travel even when another holds duplicate suits.
+                        for (size_t index = 0; index < members; ++index)
+                            if (carries || index + 1 < members)
+                                REQUIRE(party.member(index)->addInventoryItem(item));
+                        if (!carries && members > 1) REQUIRE(party.member(0)->addInventoryItem(item));
+                    }
+                    else if (carries) REQUIRE(party.member(members - 1)->addInventoryItem(item));
+                    party.setQuestBit(214, unlocked);
+                    const int originalCount = party.inventoryItemCount(itemId);
+                    EventRuntimeState state;
+                    state.mapFileName = file;
+                    REQUIRE(runtime.executeEventById(map->localEventProgram, map->globalEventProgram,
+                        event, state, &party));
+                    const EventRuntimeState::PendingMapMove *pMove = state.pendingMapMove
+                        ? &*state.pendingMapMove : state.pendingDialogueContext
+                            && state.pendingDialogueContext->transitionMapMove
+                            ? &*state.pendingDialogueContext->transitionMapMove : nullptr;
+                    CHECK((pMove != nullptr) == (carries || (!lincoln && unlocked)));
+                    if (pMove != nullptr)
+                    {
+                        REQUIRE(pMove->mapName);
+                        CHECK(*pMove->mapName == reference.targetMap);
+                    }
+                    CHECK(party.inventoryItemCount(itemId) == originalCount);
+                    CHECK(party.hasQuestBit(214) == (unlocked || (!lincoln && carries)));
+                }
+    }
 }
 
 TEST_CASE("canonical elemental prison passages group their physical components and preserve independent knowledge")

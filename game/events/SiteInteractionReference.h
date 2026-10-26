@@ -17,6 +17,9 @@ struct SiteInteractionReference
     uint32_t completionQBit = 0;
     bool consumesItem = false;
     bool addsFollower = false;
+    // Empty means the legacy party-wide item requirement.
+    std::string itemScope;
+    uint32_t openedQBit = 0;
     std::string openedMapFlag;
     std::string targetMap;
 };

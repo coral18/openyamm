@@ -317,3 +317,26 @@ should remain restricted afterward. Native input saves `saves/quicksave.oysav`; 
 `tests/scenarios/atlas/mm8_delivery_{101,142}_privacy.yml` in that working directory. Each verifier loads the
 before/native saves and another round trip, checking XP, gold, delivery flags and all six contact-history keys.
 The English quest-table correction must be mounted for Pole's journal entry; no QA Lua override is needed.
+
+
+## Passage item scope and campaign unlocks
+
+Use normal runtime packages and isolated settings/mods/saves. The three-step
+`tests/scenarios/atlas/mm7_passage_scope_fixture.yml` and `mm8_passage_scope_fixture.yml` create two-member
+parties without Wetsuits / Pirate Leader's Key, in the Lincoln / Pirate Outpost. Copy each temporary
+`before.oysav` into its private `saves/before.oysav`. These scenarios prepare unused sites; they do not activate
+an exit or prove an ocean journey.
+
+Run the corresponding `tools/menu_tours/atlas_mm{7,8}_passage_scope.yml` at 1600x900. Inspect the reading page:
+Lincoln requires possession on every member, while the submarine permits any party member's key or the retained
+campaign unlock. The Lincoln callback checks carried/equipped items, not solely equipped suits. Shoals' separate
+survival rules still require equipped suits. The reference describes this passage's item checks, not safe arrival.
+
+Each tour returns to Discovery and saves `saves/quicksave.oysav`. The matching
+`tests/scenarios/atlas/mm{7,8}_passage_scope_privacy.yml` loads before/native saves and another round trip,
+checking the exact uninteracted site, destination discovery, absent items, unset unlock, map, gold, food and both
+members' XP. Callback execution is independently tested against loaded normal scripts in
+`canonical Lincoln and submarine references match active party scope and persistent unlock callbacks`:
+1/2/5-member parties, a missing member despite duplicate suits elsewhere, a key on the last member, persistent
+unlock without a key, and no item consumption. Lincoln's successful callback offers a transition confirmation;
+that pending dialogue is not an already completed journey.

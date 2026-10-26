@@ -1,0 +1,73 @@
+id: atlas.mm8_passage_scope_privacy
+title: Reading item scope and permanent unlock requirements leaves inventory and campaign
+  unchanged
+world: mm8
+mode: faithful
+steps:
+- load_game:
+    name: before
+    path: saves/before.oysav
+- assert:
+    named_map_var_changed:
+      name: openyamm.discovery.site/surface/1625/event/451
+      value: 0
+- &id001
+  assert:
+    map: d06.blv
+    qbit_clear:
+    - 214
+    runtime_event_variable:
+      id: 40566801
+      value: 0
+- &id002
+  assert:
+    named_global_var_changed:
+      name: openyamm.discovery.world.mm8.map.d34
+      value: 0
+- &id003
+  assert:
+    runtime_event_variable:
+      id: 21
+      value: 500
+- &id004
+  assert:
+    runtime_event_variable:
+      id: 23
+      value: 10
+- &id005
+  assert:
+    runtime_event_variable:
+      id: 13
+      member_index: 0
+      value: 0
+- &id006
+  assert:
+    runtime_event_variable:
+      id: 13
+      member_index: 1
+      value: 0
+- load_game:
+    name: native
+    path: saves/quicksave.oysav
+- assert:
+    named_map_var_changed:
+      name: openyamm.discovery.site/surface/1625/event/451
+      value: 0
+- *id001
+- *id002
+- *id003
+- *id004
+- *id005
+- *id006
+- save_game: scope-roundtrip
+- load_game: scope-roundtrip
+- assert:
+    named_map_var_changed:
+      name: openyamm.discovery.site/surface/1625/event/451
+      value: 0
+- *id001
+- *id002
+- *id003
+- *id004
+- *id005
+- *id006

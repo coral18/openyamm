@@ -2576,3 +2576,57 @@ Reproduction inputs and fixture limitations are in `tests/fixtures/atlas/README.
 `ATLAS_QUEST_AUDIT.md`. No save schema, duplicated NPC/house database, reward rebalance or new checklist UI
 is introduced. This closes these two delivery-contact gaps; broader quest stages, site/reference families,
 complex floors, localization and Android/controller acceptance remain open in `ATLAS_COVERAGE.md`.
+
+
+## Passage item scope and campaign-persistent unlock references (2026-10-26)
+
+The active Lincoln exit (MM7 `7d23:501`) and submarine entrance (MM8 `d06:451`) now have callback-owned
+native references. Their previously unclassified physical surfaces become Atlas passages. Names and destinations
+resolve through the current item/map tables. These declarations follow the active Merge supplements rather
+than restoring stale explanations for replaced base callbacks.
+
+The shared typed passage schema supports party-wide, selected-member and every-member possession checks,
+plus a global `openedQBit` alternative to the existing source-map `openedMapFlag`. Unlock scopes are mutually
+exclusive; no unlock field means the item must be present on every use. Existing keyed entrances retain their
+source-map semantics. The same schema describes dungeon entrances and exits, with strict C++ loading and the
+lighting producer's literal metadata validation. Replacement/removal still invalidates the declaration by
+callback identity. No gameplay callback, reward, geometry or save schema is changed.
+
+Lincoln's active callback checks every current member, not a fixed four/five-character roster. It checks
+possession, including inventory/equipment. A successful call opens the normal transition confirmation rather
+than immediately setting `pendingMapMove`; the test verifies that actual pending transition. This is not a
+claim that unequipped suits permit safe exploration of Shoals: its independent survival rules require equipped
+suits, and the passage reference does not interpret the destination's timers/hooks. The Guide connection
+reading footer now distinguishes possible passage interactions from current availability/destination conditions.
+
+The submarine accepts a key held by any party member, or retained campaign bit 214 after an earlier unlock.
+The reference therefore does not claim that a source-map reset closes it or that the key is consumed. Raw
+quest-bit numbers and local variable names are not displayed as player-facing requirements.
+
+Validation:
+
+- Windows Release built. Ten focused cases passed 2079 assertions, including schema types/invalid mixed fields,
+  callback invalidation, canonical physical bindings/Guide-only disclosure, all active MM6/MM7/MM8 connection
+  targets, existing keyed entrances/prison groups/Barrow rules and execution of the two actual supplements.
+- Actual callback checks cover one-, two- and five-member parties. One missing suit blocks the Lincoln exit even
+  with duplicate suits on another member; a key on the last member opens the submarine, and its campaign unlock
+  permits reuse without any key. Inventory totals are unchanged. These unit checks verify queued/confirmed
+  transition intent, not complete sea travel or destination survival.
+- Twenty-three lighting producer tests passed; all nine current literal interaction-reference overlays validate.
+  Neither new metadata file changes geometry cards or lighting dependency identities.
+- Public three-step unused-site fixtures and native input tours are under `tests/scenarios/atlas/` and
+  `tools/menu_tours/atlas_mm{7,8}_passage_scope.yml`. Post-UI save/load checks, captures and remaining limitations
+  are described in the fixture README. Private evidence is retained under `atlas-passage-scopes-20261026/`
+  in the Windows development root. Original campaigns are not test-write targets.
+
+Broader handwritten passages, eligibility predicates, destination-specific rules and the full coverage matrix
+remain open. This extends the shared content contract rather than adding an Atlas-only gameplay database.
+
+
+Both final native AMD/OpenGL tours passed; six fresh captures were inspected. Guide shows the actual two
+physical passage markers and their item/unlock references. Returning to Discovery removes the unlearned
+reference; Lincoln's already visible exit may retain an empty findings page rather than fabricate learned
+requirements. Both 25-step post-UI verifiers pass: the exact site interaction key and destination discovery
+remain clear, both XP totals stay zero, gold/food remain 500/10, required items stay absent and global unlock
+214 stays unset across before/native saves and another round trip. Runtime metadata ZIP entries match source;
+`accepted.json` retains executable/overlay/capture/save hashes. Native tours inject only SDL-local input.

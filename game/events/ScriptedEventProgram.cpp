@@ -667,7 +667,8 @@ bool readInteractionReferences(lua_State *pLuaState, int metadataIndex, Scripted
                 const std::string_view key(pKey, size);
                 uint32_t *pNumber = key == "itemId" ? &reference.itemId : key == "spellId" ? &reference.spellId
                     : key == "npcId" ? &reference.npcId : key == "spriteId" ? &reference.spriteId
-                    : key == "completionQBit" ? &reference.completionQBit : nullptr;
+                    : key == "completionQBit" ? &reference.completionQBit
+                    : key == "openedQBit" ? &reference.openedQBit : nullptr;
                 if (pNumber != nullptr)
                 {
                     if (!lua_isinteger(pLuaState, -1) || lua_tointeger(pLuaState, -1) <= 0
@@ -680,14 +681,16 @@ bool readInteractionReferences(lua_State *pLuaState, int metadataIndex, Scripted
                     (key == "consumesItem" ? reference.consumesItem : reference.addsFollower)
                         = lua_toboolean(pLuaState, -1);
                 }
-                else if (key == "kind" || key == "openedMapFlag" || key == "targetMap" || key == "network")
+                else if (key == "kind" || key == "openedMapFlag" || key == "targetMap" || key == "network"
+                    || key == "itemScope")
                 {
                     if (lua_type(pLuaState, -1) != LUA_TSTRING) return fail();
                     const char *pValue = lua_tolstring(pLuaState, -1, &size);
                     if (size == 0 || size > 128 || std::string_view(pValue, size).find('\0') != std::string_view::npos)
                         return fail();
                     std::string &value = key == "kind" ? reference.kind : key == "network" ? reference.network
-                        : key == "openedMapFlag" ? reference.openedMapFlag : reference.targetMap;
+                        : key == "openedMapFlag" ? reference.openedMapFlag
+                        : key == "itemScope" ? reference.itemScope : reference.targetMap;
                     value.assign(pValue, size);
                 }
                 else return fail();
@@ -712,6 +715,12 @@ bool readInteractionReferences(lua_State *pLuaState, int metadataIndex, Scripted
                 }
             }
             if (reference.kind != "dimension_door" && !reference.network.empty()) valid = false;
+            const bool passage = reference.kind == "enter_dungeon" || reference.kind == "leave_dungeon";
+            if (!passage && (!reference.itemScope.empty() || reference.openedQBit != 0)) valid = false;
+            if (passage)
+                valid = valid && (reference.itemScope.empty() || reference.itemScope == "party"
+                    || reference.itemScope == "each_member" || reference.itemScope == "selected")
+                    && (reference.openedQBit == 0 || reference.openedMapFlag.empty());
             if (reference.kind == "dimension_door")
                 valid = valid && !reference.network.empty() && reference.network.front() != '.'
                     && reference.network.back() != '.'
@@ -721,9 +730,9 @@ bool readInteractionReferences(lua_State *pLuaState, int metadataIndex, Scripted
                     && reference.spriteId == 0 && reference.completionQBit == 0
                     && !reference.consumesItem && !reference.addsFollower
                     && reference.targetMap.empty() && reference.openedMapFlag.empty();
-            else if (reference.kind == "enter_dungeon")
+            else if (passage)
                 valid = valid && reference.itemId > 0 && !reference.targetMap.empty()
-                    && !reference.openedMapFlag.empty() && reference.npcId == 0 && reference.spriteId == 0
+                    && reference.npcId == 0 && reference.spriteId == 0
                     && reference.spellId == 0 && reference.completionQBit == 0
                     && !reference.consumesItem && !reference.addsFollower;
             else if (reference.kind == "rescue" || reference.kind == "stone_to_flesh")

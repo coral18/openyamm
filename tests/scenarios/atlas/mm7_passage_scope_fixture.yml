@@ -1,0 +1,32 @@
+id: atlas.mm7_passage_scope_fixture
+title: Isolated unused passage with two members and no required item
+world: mm7
+mode: faithful
+steps:
+- new_game_flow:
+    start_map: 7d23.blv
+    party:
+      gold: 500
+      food: 10
+      members:
+      - name: Scope Tester 0
+        class: Knight
+        level: 1
+        race_id: 0
+        experience: 0
+        skills: []
+        equipment: {}
+      - name: Scope Tester 1
+        class: Knight
+        level: 1
+        race_id: 0
+        experience: 0
+        skills: []
+        equipment: {}
+- assert:
+    qbit_clear:
+    - 214
+    runtime_event_variable:
+      id: 92143633
+      value: 0
+- save_game: before
