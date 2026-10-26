@@ -2538,3 +2538,41 @@ Pure policy coverage checks delayed initialization, depleted reload, nonzero leg
 corrupt markers. The native MM7 one-beacon fixture catches the former all-zero case; post-UI checks require zero
 contents and marker=1 through another load. No binary save format changes. Historical all-zero saves without an
 initialization marker remain ambiguous; this fix does not infer or refund past consumed/reseeded rewards.
+
+
+## MM8 individual delivery contacts (2026-10-26)
+
+The shared quest registry now contains 145 quests / 595 relationships. Aislen's Cure Disease request and
+Pole's Fire Resistance request each reference the requested item and six actual recipient NPCs. Their
+individual handoff flags gate Disclosure; the generic shared quest-history mechanism remembers learned
+contacts after turn-in and save/load. Guide browsing neither executes deliveries nor records the other five
+contacts. Residences remain references to the World Database; a learned name does not invent a known address.
+
+The English journal's Rust return name is corrected from Hobert to Pole in the authoritative quest table.
+Hobert is still one of the recipients. The incremental Windows overlay mounts the English table alongside
+quest relationships, so the running game's journal and Atlas share the correction. Original TXT encoding,
+line endings and every other row/column are preserved. Generated event files are unchanged.
+
+Acceptance on Windows Release:
+
+- Eleven focused quest/condition/campaign tests passed 810 assertions, including the full shared-content
+  relationship validator, independent recipient order, undisclosed contacts and historical retention.
+- Two faithful actual-dialogue scenarios passed 100 and 98 steps: acceptance, six separate handoffs, repeated
+  conversation, refusal without supplies, real return/reward and persistent contact keys after reload.
+  Explicit NPC-ID access bypasses travel; the extra three supplies are controlled fixtures. The authored
+  cursor item is explicitly placed into inventory with the real placement helper, not inferred absent.
+- Two native AMD/OpenGL tours produced eight fresh inspected captures. Partial Discovery displays only Zevah
+  Poised / Celia Stone respectively; Guide displays all six actual recipients, and Discovery remains restricted
+  after toggling back. The Rust title, quest prose and return contact all use Pole. Native SDL tour input does
+  not inject operating-system mouse input or terminal control sequences.
+- Both post-UI verifiers passed 28 steps each, loading before/native saves and another round trip. XP remains
+  250 / 1000, gold 500, exactly the first delivery is complete, the five remaining delivery/completion flags
+  stay clear, and exactly one recipient-history key remains learned.
+- Runtime ZIP entries for both edited tables were compared byte-for-byte with source. Private settings,
+  scenarios, logs, screenshots and artifact hashes are retained under `atlas-quest-deliveries-20261026/`
+  in the Windows development root. User campaigns and official-installation data were not test-write targets.
+
+Reproduction inputs and fixture limitations are in `tests/fixtures/atlas/README.md` and
+`ATLAS_QUEST_AUDIT.md`. No save schema, duplicated NPC/house database, reward rebalance or new checklist UI
+is introduced. This closes these two delivery-contact gaps; broader quest stages, site/reference families,
+complex floors, localization and Android/controller acceptance remain open in `ATLAS_COVERAGE.md`.

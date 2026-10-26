@@ -140,7 +140,7 @@ Q Bit	Quest Note Text	Notes	Owner
 139	Kill all Dire Wolves in Ravenshore. Return to Maddigan in Ravenshore.	 	James
 140		Killed all Dire Wolves in Ravenshore	James
 141		Dire Wolf Questbit for Riki	Riki
-142	Deliver Fire Resistance Potions to the six southernmost houses of Rust.  Return to Hobert in Rust.		James
+142	Deliver Fire Resistance Potions to the six southernmost houses of Rust.  Return to Pole in Rust.		James
 143		Delivered potion to house 1	James
 144		Delivered potion to house 2	James
 145		Delivered potion to house 3	James

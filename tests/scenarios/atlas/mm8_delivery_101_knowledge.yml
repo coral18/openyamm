@@ -1,0 +1,403 @@
+id: atlas.mm8_delivery_101_knowledge
+title: Actual delivery dialogue, refusal, repeat, reward and persistent individual
+  quest contacts
+world: mm8
+mode: faithful
+steps:
+- new_game_flow:
+    start_map: out01.odm
+    party:
+      gold: 500
+      food: 10
+      members:
+      - name: Atlas Tester
+        class: Knight
+        race_id: 0
+        level: 1
+        experience: 0
+        skills: []
+        equipment: {}
+- note: Contacts are reached by explicit NPC ID; this tests authored dialogue, delivery
+    and knowledge, not physical travel. The extra three supplies below are controlled
+    inventory fixtures.
+- speak_npc:
+    source_id: 65
+- select_topic:
+    kind: npc_topic
+    action_id: 174
+- speak_npc:
+    source_id: 65
+- select_topic:
+    kind: npc_topic
+    action_id: 175
+- press_action:
+    action: cancel_dialog
+- assert:
+    held_item:
+      active: true
+      item_id: 373
+    runtime_event_variable:
+      id: 24444945
+      value: 2
+- note: The authored third supply is held on the cursor. The following held_item active:false
+    step uses the harness real inventory-placement operation; it is an explicit stow
+    action, not evidence of an already-empty cursor.
+- assert:
+    held_item:
+      active: false
+      item_id: 373
+- assert:
+    runtime_event_variable:
+      id: 24444945
+      value: 3
+- assert:
+    qbit_set:
+    - 101
+    qbit_clear:
+    - 102
+    - 103
+    - 104
+    - 105
+    - 106
+    - 107
+    - 108
+- assert:
+    runtime_event_variable:
+      id: 13
+      member_index: 0
+      value: 0
+- assert:
+    named_global_var_changed:
+      name: openyamm.discovery.quest/101/location/objective/npc/163
+      value: 0
+- assert:
+    named_global_var_changed:
+      name: openyamm.discovery.quest/101/location/objective/npc/187
+      value: 0
+- assert:
+    named_global_var_changed:
+      name: openyamm.discovery.quest/101/location/objective/npc/139
+      value: 0
+- assert:
+    named_global_var_changed:
+      name: openyamm.discovery.quest/101/location/objective/npc/209
+      value: 0
+- assert:
+    named_global_var_changed:
+      name: openyamm.discovery.quest/101/location/objective/npc/80
+      value: 0
+- assert:
+    named_global_var_changed:
+      name: openyamm.discovery.quest/101/location/objective/npc/81
+      value: 0
+- save_game: accepted
+- load_game: accepted
+- speak_npc:
+    source_id: 163
+- select_topic:
+    kind: npc_topic
+    action_id: 290
+- press_action:
+    action: cancel_dialog
+- assert:
+    qbit_set:
+    - 101
+    - 102
+    qbit_clear:
+    - 103
+    - 104
+    - 105
+    - 106
+    - 107
+    - 108
+- assert:
+    runtime_event_variable:
+      id: 13
+      member_index: 0
+      value: 250
+- assert:
+    named_global_var_changed:
+      name: openyamm.discovery.quest/101/location/objective/npc/163
+      value: 1
+- assert:
+    runtime_event_variable:
+      id: 24444945
+      value: 2
+- save_game: partial
+- speak_npc:
+    source_id: 163
+- select_topic:
+    kind: npc_topic
+    action_id: 290
+- press_action:
+    action: cancel_dialog
+- assert:
+    runtime_event_variable:
+      id: 13
+      member_index: 0
+      value: 250
+- assert:
+    named_global_var_changed:
+      name: openyamm.discovery.quest/101/location/objective/npc/187
+      value: 0
+- speak_npc:
+    source_id: 187
+- select_topic:
+    kind: npc_topic
+    action_id: 291
+- press_action:
+    action: cancel_dialog
+- assert:
+    qbit_set:
+    - 101
+    - 102
+    - 103
+    qbit_clear:
+    - 104
+    - 105
+    - 106
+    - 107
+    - 108
+- assert:
+    runtime_event_variable:
+      id: 13
+      member_index: 0
+      value: 500
+- assert:
+    named_global_var_changed:
+      name: openyamm.discovery.quest/101/location/objective/npc/187
+      value: 1
+- speak_npc:
+    source_id: 139
+- select_topic:
+    kind: npc_topic
+    action_id: 292
+- press_action:
+    action: cancel_dialog
+- assert:
+    qbit_set:
+    - 101
+    - 102
+    - 103
+    - 104
+    qbit_clear:
+    - 105
+    - 106
+    - 107
+    - 108
+- assert:
+    runtime_event_variable:
+      id: 13
+      member_index: 0
+      value: 750
+- assert:
+    named_global_var_changed:
+      name: openyamm.discovery.quest/101/location/objective/npc/139
+      value: 1
+- speak_npc:
+    source_id: 209
+- select_topic:
+    kind: npc_topic
+    action_id: 293
+- press_action:
+    action: cancel_dialog
+- assert:
+    qbit_clear:
+    - 105
+    - 108
+- assert:
+    runtime_event_variable:
+      id: 13
+      member_index: 0
+      value: 750
+- assert:
+    named_global_var_changed:
+      name: openyamm.discovery.quest/101/location/objective/npc/209
+      value: 0
+- setup_shortcut:
+    kind: grant_item
+    item_id: 373
+- setup_shortcut:
+    kind: grant_item
+    item_id: 373
+- setup_shortcut:
+    kind: grant_item
+    item_id: 373
+- save_game: extra-supplies-fixture
+- load_game: extra-supplies-fixture
+- speak_npc:
+    source_id: 209
+- select_topic:
+    kind: npc_topic
+    action_id: 293
+- press_action:
+    action: cancel_dialog
+- assert:
+    qbit_set:
+    - 101
+    - 102
+    - 103
+    - 104
+    - 105
+- assert:
+    runtime_event_variable:
+      id: 13
+      member_index: 0
+      value: 1000
+- assert:
+    named_global_var_changed:
+      name: openyamm.discovery.quest/101/location/objective/npc/209
+      value: 1
+- speak_npc:
+    source_id: 80
+- select_topic:
+    kind: npc_topic
+    action_id: 294
+- press_action:
+    action: cancel_dialog
+- assert:
+    qbit_set:
+    - 101
+    - 102
+    - 103
+    - 104
+    - 105
+    - 106
+- assert:
+    runtime_event_variable:
+      id: 13
+      member_index: 0
+      value: 1250
+- assert:
+    named_global_var_changed:
+      name: openyamm.discovery.quest/101/location/objective/npc/80
+      value: 1
+- speak_npc:
+    source_id: 81
+- select_topic:
+    kind: npc_topic
+    action_id: 295
+- press_action:
+    action: cancel_dialog
+- assert:
+    qbit_set:
+    - 101
+    - 102
+    - 103
+    - 104
+    - 105
+    - 106
+    - 107
+- assert:
+    runtime_event_variable:
+      id: 13
+      member_index: 0
+      value: 3000
+- assert:
+    named_global_var_changed:
+      name: openyamm.discovery.quest/101/location/objective/npc/81
+      value: 1
+- assert:
+    qbit_set:
+    - 108
+- assert:
+    runtime_event_variable:
+      id: 24444945
+      value: 0
+- save_game: delivered
+- speak_npc:
+    source_id: 65
+- select_topic:
+    kind: npc_topic
+    action_id: 176
+- press_action:
+    action: cancel_dialog
+- assert:
+    qbit_clear:
+    - 101
+    qbit_set:
+    - 102
+    - 103
+    - 104
+    - 105
+    - 106
+    - 107
+    - 108
+    runtime_event_variable:
+      id: 21
+      value: 2000
+- assert:
+    runtime_event_variable:
+      id: 13
+      member_index: 0
+      value: 3000
+- assert:
+    named_global_var_changed:
+      name: openyamm.discovery.quest/101/location/objective/npc/163
+      value: 1
+- assert:
+    named_global_var_changed:
+      name: openyamm.discovery.quest/101/location/objective/npc/187
+      value: 1
+- assert:
+    named_global_var_changed:
+      name: openyamm.discovery.quest/101/location/objective/npc/139
+      value: 1
+- assert:
+    named_global_var_changed:
+      name: openyamm.discovery.quest/101/location/objective/npc/209
+      value: 1
+- assert:
+    named_global_var_changed:
+      name: openyamm.discovery.quest/101/location/objective/npc/80
+      value: 1
+- assert:
+    named_global_var_changed:
+      name: openyamm.discovery.quest/101/location/objective/npc/81
+      value: 1
+- assert:
+    named_global_var_changed:
+      name: openyamm.discovery.quest/101
+      value: 1
+- save_game: completed
+- load_game: completed
+- assert:
+    qbit_clear:
+    - 101
+    qbit_set:
+    - 102
+    - 103
+    - 104
+    - 105
+    - 106
+    - 107
+    - 108
+- assert:
+    runtime_event_variable:
+      id: 13
+      member_index: 0
+      value: 3000
+- assert:
+    named_global_var_changed:
+      name: openyamm.discovery.quest/101/location/objective/npc/163
+      value: 1
+- assert:
+    named_global_var_changed:
+      name: openyamm.discovery.quest/101/location/objective/npc/187
+      value: 1
+- assert:
+    named_global_var_changed:
+      name: openyamm.discovery.quest/101/location/objective/npc/139
+      value: 1
+- assert:
+    named_global_var_changed:
+      name: openyamm.discovery.quest/101/location/objective/npc/209
+      value: 1
+- assert:
+    named_global_var_changed:
+      name: openyamm.discovery.quest/101/location/objective/npc/80
+      value: 1
+- assert:
+    named_global_var_changed:
+      name: openyamm.discovery.quest/101/location/objective/npc/81
+      value: 1

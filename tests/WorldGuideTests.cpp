@@ -1055,6 +1055,95 @@ TEST_CASE("MM8 campaign relationships distinguish accepted clues from later disc
     CHECK(knowledge.questBits.empty());
 }
 
+TEST_CASE("MM8 delivery quests reveal individual recipients only after actual handoffs")
+{
+    JournalQuestTable quests;
+    REQUIRE(quests.loadFromRows(guideTableRows("english/quests.txt")));
+    REQUIRE(quests.loadLocationRows(guideTableRows("quest_locations.txt")));
+    NpcDialogTable npcs;
+    REQUIRE(npcs.loadNpcRows(guideTableRows("npc.txt")));
+    WorldGuideSource source;
+    source.pQuests = &quests;
+    source.pNpcs = &npcs;
+    source.worldId = "mm8";
+    struct DeliveryQuest
+    {
+        uint32_t id;
+        uint32_t firstDeliveryBit;
+        std::vector<uint32_t> recipients;
+    };
+    for (const DeliveryQuest &delivery : std::vector<DeliveryQuest>{
+        {101, 102, {163, 187, 139, 209, 80, 81}}, {142, 143, {119, 132, 135, 149, 82, 198}}})
+    {
+        CAPTURE(delivery.id);
+        const auto quest = std::find_if(quests.entries().begin(), quests.entries().end(),
+            [&](const JournalQuestEntry &entry) { return entry.qbitId == delivery.id; });
+        REQUIRE(quest != quests.entries().end());
+        if (delivery.id == 142)
+        {
+            CHECK(quest->text.find("Return to Pole in Rust.") != std::string::npos);
+            CHECK(quest->text.find("Hobert") == std::string::npos);
+        }
+        WorldGuideKnowledge knowledge;
+        knowledge.activeQuests.insert(delivery.id);
+        knowledge.questBits.insert(delivery.id);
+        const auto hasBit = [&](uint32_t id) { return knowledge.questBits.contains(id); };
+        const auto accepted = buildWorldGuide(source, WorldGuideSection::Quests, knowledge, false);
+        REQUIRE(accepted.size() == 1);
+        const auto all = buildWorldGuide(source, WorldGuideSection::Quests, knowledge, true);
+        const auto guide = std::find_if(all.begin(), all.end(),
+            [&](const WorldGuideEntry &entry) { return entry.id == std::to_string(delivery.id); });
+        REQUIRE(guide != all.end());
+        const JournalQuestKnowledgeChange acceptance =
+            quests.knowledgeAroundChange(delivery.id, false, true, hasBit);
+        CHECK(std::none_of(acceptance.locations.begin(), acceptance.locations.end(),
+            [](const std::string &key) { return key.find("/location/objective/npc/") != std::string::npos; }));
+        for (size_t i = 0; i < delivery.recipients.size(); ++i)
+        {
+            const NpcEntry *pNpc = npcs.getNpc(delivery.recipients[i]);
+            REQUIRE(pNpc != nullptr);
+            CHECK(accepted.front().details.find("Objective: " + pNpc->name) == std::string::npos);
+            CHECK(guide->details.find("Objective: " + pNpc->name + " (conditional clue)") != std::string::npos);
+        }
+        CHECK(knowledge.questLocations.empty()); // Guide browsing grants no discoveries.
+        // Reverse order checks that the delivery flags describe independent contacts, not a linear quest stage.
+        for (size_t remaining = delivery.recipients.size(); remaining > 0; --remaining)
+        {
+            const size_t i = remaining - 1;
+            const uint32_t bit = delivery.firstDeliveryBit + uint32_t(i);
+            knowledge.questBits.insert(bit);
+            const JournalQuestKnowledgeChange change = quests.knowledgeAroundChange(bit, false, true, hasBit);
+            REQUIRE(change.locations.size() == 1);
+            CHECK(change.locations.front() == "openyamm.discovery.quest/" + std::to_string(delivery.id)
+                + "/location/objective/npc/" + std::to_string(delivery.recipients[i]));
+            knowledge.questLocations.insert(change.locations.front());
+            const auto partial = buildWorldGuide(source, WorldGuideSection::Quests, knowledge, false);
+            REQUIRE(partial.size() == 1);
+            for (size_t j = 0; j < delivery.recipients.size(); ++j)
+            {
+                const std::string label = "Objective: " + npcs.getNpc(delivery.recipients[j])->name;
+                CHECK((partial.front().details.find(label) != std::string::npos) == (j >= i));
+            }
+        }
+        knowledge.quests.insert(delivery.id);
+        knowledge.activeQuests.clear();
+        knowledge.questBits.clear();
+        const auto history = buildWorldGuide(source, WorldGuideSection::Quests, knowledge, false);
+        REQUIRE(history.size() == 1);
+        for (uint32_t npc : delivery.recipients)
+            CHECK(history.front().details.find("Objective: " + npcs.getNpc(npc)->name + " (recorded earlier)")
+                != std::string::npos);
+        // Old completion flags without recorded clue history cannot retroactively disclose recipients.
+        knowledge.questLocations.clear();
+        for (size_t i = 0; i < delivery.recipients.size(); ++i)
+            knowledge.questBits.insert(delivery.firstDeliveryBit + uint32_t(i));
+        const auto oldHistory = buildWorldGuide(source, WorldGuideSection::Quests, knowledge, false);
+        REQUIRE(oldHistory.size() == 1);
+        for (uint32_t npc : delivery.recipients)
+            CHECK(oldHistory.front().details.find("Objective: " + npcs.getNpc(npc)->name) == std::string::npos);
+    }
+}
+
 TEST_CASE("MM7 campaign relationships preserve the disclosed castle branch after a quest leaves the journal")
 {
     JournalQuestTable quests;

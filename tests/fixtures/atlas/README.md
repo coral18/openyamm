@@ -299,3 +299,21 @@ coordinates, exact slot/event receipt, immediate changed=0, depleted contents pl
 Might/skill points, map/gold/food and another round trip. Those checks distinguish actual delivery from merely
 having queued a grant. The headless preparation does not prove opaque sprite picking or activation; native
 input/captures and post-UI state do. Keep private saves and the QA overlay out of normal runtime and Git assets.
+
+
+## Individual MM8 delivery contacts
+
+Use unchanged normal packages and two private working directories with the Atlas enabled. Run
+`tests/scenarios/atlas/mm8_delivery_101_knowledge.yml` (Aislen) and
+`tests/scenarios/atlas/mm8_delivery_142_knowledge.yml` (Pole). These faithful scenarios reach NPCs by ID,
+execute all actual dialogue/delivery/reward callbacks, and supply the missing three items explicitly. They
+are not physical travel, ingredient gathering or alchemy tests. The authored third item is held on the cursor;
+the documented `held_item active:false` helper explicitly places it into inventory before deliveries.
+
+Copy each scenario's `partial.oysav` from its platform-temporary scenario-save directory into its own
+`saves/before.oysav`. Use the matching `tools/menu_tours/atlas_mm8_delivery_{101,142}.yml` at 1600x900.
+Inspect the actual captures: Discovery should name just the delivered recipient, Guide all six, and Discovery
+should remain restricted afterward. Native input saves `saves/quicksave.oysav`; run the matching
+`tests/scenarios/atlas/mm8_delivery_{101,142}_privacy.yml` in that working directory. Each verifier loads the
+before/native saves and another round trip, checking XP, gold, delivery flags and all six contact-history keys.
+The English quest-table correction must be mounted for Pole's journal entry; no QA Lua override is needed.

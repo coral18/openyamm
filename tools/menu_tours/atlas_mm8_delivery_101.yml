@@ -1,0 +1,55 @@
+# 1600x900; normal assets, partial save from the matching delivery knowledge scenario.
+output_dir: captures
+exit: true
+steps:
+- expect: gameplay
+- key: F9
+- pause: true
+- click:
+  - 800
+  - 821
+- click:
+  - 450
+  - 57
+- click:
+  - 1450
+  - 126
+- click:
+  - 275
+  - 190
+- text: six huts
+- key: Return
+- click:
+  - 200
+  - 265
+- capture: partial-discovery
+- pointer_move:
+  - 1035
+  - 527
+- wheel: -1000
+- capture: partial-contacts
+- click:
+  - 1152
+  - 57
+- pointer_move:
+  - 1035
+  - 527
+- wheel: -1000
+- capture: guide-all-recipients
+- click:
+  - 1152
+  - 57
+- pointer_move:
+  - 1035
+  - 527
+- wheel: -1000
+- capture: discovery-after-guide
+- click:
+  - 1450
+  - 57
+- expect: pause
+- click:
+  - 800
+  - 301
+- expect: gameplay
+- key: F9

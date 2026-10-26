@@ -1,0 +1,81 @@
+id: atlas.mm8_delivery_142_privacy
+title: Native Guide browsing preserves partial deliveries and undisclosed recipients
+world: mm8
+mode: faithful
+steps:
+- load_game:
+    name: before
+    path: saves/before.oysav
+- &id001
+  assert:
+    qbit_set:
+    - 142
+    - 143
+    qbit_clear:
+    - 144
+    - 145
+    - 146
+    - 147
+    - 148
+    - 149
+    map: out04.odm
+    runtime_event_variable:
+      id: 13
+      member_index: 0
+      value: 1000
+- &id002
+  assert:
+    runtime_event_variable:
+      id: 21
+      value: 500
+- &id003
+  assert:
+    named_global_var_changed:
+      name: openyamm.discovery.quest/142/location/objective/npc/119
+      value: 1
+- &id004
+  assert:
+    named_global_var_changed:
+      name: openyamm.discovery.quest/142/location/objective/npc/132
+      value: 0
+- &id005
+  assert:
+    named_global_var_changed:
+      name: openyamm.discovery.quest/142/location/objective/npc/135
+      value: 0
+- &id006
+  assert:
+    named_global_var_changed:
+      name: openyamm.discovery.quest/142/location/objective/npc/149
+      value: 0
+- &id007
+  assert:
+    named_global_var_changed:
+      name: openyamm.discovery.quest/142/location/objective/npc/82
+      value: 0
+- &id008
+  assert:
+    named_global_var_changed:
+      name: openyamm.discovery.quest/142/location/objective/npc/198
+      value: 0
+- load_game:
+    name: native
+    path: saves/quicksave.oysav
+- *id001
+- *id002
+- *id003
+- *id004
+- *id005
+- *id006
+- *id007
+- *id008
+- save_game: ui-roundtrip
+- load_game: ui-roundtrip
+- *id001
+- *id002
+- *id003
+- *id004
+- *id005
+- *id006
+- *id007
+- *id008

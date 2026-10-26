@@ -163,6 +163,13 @@ QBit	World	Role	Kind	Target	Visibility	RequiredQBits	ForbiddenQBits
 91	mm8	return	npc	19	journal
 101	mm8	giver	npc	65	journal
 101	mm8	objective	map	world.mm8.map.out01	journal
+101	mm8	objective	item	373	journal
+101	mm8	objective	npc	163	journal	102	
+101	mm8	objective	npc	187	journal	103	
+101	mm8	objective	npc	139	journal	104	
+101	mm8	objective	npc	209	journal	105	
+101	mm8	objective	npc	80	journal	106	
+101	mm8	objective	npc	81	journal	107	
 101	mm8	return	npc	65	journal
 109	mm8	giver	npc	66	journal
 109	mm8	objective	item	616	journal
@@ -216,6 +223,13 @@ QBit	World	Role	Kind	Target	Visibility	RequiredQBits	ForbiddenQBits
 139	mm8	return	npc	71	journal
 142	mm8	giver	npc	84	journal
 142	mm8	objective	map	world.mm8.map.out04	journal
+142	mm8	objective	item	256	journal
+142	mm8	objective	npc	119	journal	143	
+142	mm8	objective	npc	132	journal	144	
+142	mm8	objective	npc	135	journal	145	
+142	mm8	objective	npc	149	journal	146	
+142	mm8	objective	npc	82	journal	147	
+142	mm8	objective	npc	198	journal	148	
 142	mm8	return	npc	84	journal
 150	mm8	giver	npc	87	journal
 150	mm8	objective	item	636	journal

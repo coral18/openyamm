@@ -1,7 +1,7 @@
 # Atlas quest relationships: content audit
 
 The shared `engine/data_tables/quest_locations.txt` currently describes 145 quests:
-76 MM7 and 69 MM8 entries, with 581 relationships. This is partial campaign coverage.
+76 MM7 and 69 MM8 entries, with 595 relationships. This is partial campaign coverage.
 All names and descriptions resolve through the loaded game registries; the relationship file contains IDs,
 roles and disclosure metadata, not a second copy of quest prose. Mods and other consumers use the same table.
 
@@ -26,7 +26,7 @@ An item name is readable in the request; its full reference link still requires 
 | 68 | 35–37 | Volog, Ravage Roaming clue; exact Ancient Troll Home requires discovery QBit 69 |
 | 85 | 20 and initial journal | Find Dadeross on Dagger Wound; no invented giver |
 | 91 | 110, 152–153 | Council Fellmoon and Xanthor; Xanthor's current residence comes from NPC state |
-| 101 | 174–176 | Aislen and outer-island deliveries; six individual huts are not yet linked |
+| 101 | 174–176 | Aislen and outer-island deliveries; recipient contacts added in the 2026-10-26 follow-up |
 | 109 | 177–178, 190 | Languid, Anointed Herb Potion and the disclosed Ravenshore smugglers clue |
 | 111 | 182–183 | Hiss, Idol of the Snake and the journal's Abandoned Temple objective |
 | 117 | 188–189, 298 | Arion's report, Regna and recipient Stanley; Stanley completes the delivery |
@@ -36,7 +36,7 @@ An item name is readable in the request; its full reference link still requires 
 | 135 | 19 | Pascella, Prophecies of the Snake and the disclosed Abandoned Temple |
 | 137 | 14–17 | Rohtnax, Isthric and the outer Dagger Wound islands |
 | 139 | 184–186 | Maddigan, Ravenshore and the Dire Wolf Den |
-| 142 | 207–209, 575 | Pole and Rust deliveries; see the stale-journal discrepancy below |
+| 142 | 207–209, 571–576 | Pole and Rust deliveries; corrected in the 2026-10-26 follow-up |
 | 150 | 213–214 | Calindril and Dragonbane Flower; no guessed flower source |
 | 152 | 216–217 | Balion and Dragonbane Flower; no guessed flower source |
 | 154 | 219 | Avalon and Garrote Gorge wilderness; completion checks wilderness population |
@@ -48,9 +48,9 @@ An item name is readable in the request; its full reference link still requires 
 | 173 | 580, 597 | Tonk Blueswan; existing Progress reference supplies tavern tracking |
 | 176–178 | 656 | Asael Fromago and the three distinct cheeses; no guessed item sources |
 
-The Rust journal mentions Hobert, but the actual quest-giving and reward handlers are attached to Pole (NPC 84).
-Hobert's handler 575 is one of the six potion deliveries. Relationships follow the actual interactions; the
-original journal text is not silently rewritten. Exact delivery houses and stage-sensitive links remain work.
+The initial Rust audit found that the journal named Hobert while the actual giver and reward handlers belong
+to Pole (NPC 84). Hobert's handler 575 is one of the six deliveries. The 2026-10-26 follow-up below corrects
+the authoritative English journal row and adds recipient contacts; the Atlas owns no duplicate quest prose.
 
 ## MM8 campaign expansion, 2026-10-21
 
@@ -265,3 +265,38 @@ last-observed state with callback-owned declarations of possible NPC destination
 navigate those alternatives; Discovery does not infer them from a quest contact's name. The quest inventory
 stays at 145 entries / 581 relationships, with no duplicated residence table in the Atlas or quest data.
 `ATLAS.md` records the source/export audit, native navigation checks and remaining eligibility limitations.
+
+
+### Individual delivery contacts, 2026-10-26
+
+QBits 101 (Aislen) and 142 (Pole) now reference the six actual recipient NPCs and the requested item.
+This adds fourteen relationships, bringing the registry to 145 quests / 595 relationships. Names, items and
+residences resolve through the existing shared registries. There is no copied list of house coordinates.
+
+The request identifies a group of huts/houses, not all six residents by name. Each individual contact is a
+journal-disclosed conditional clue gated by its real delivery flag: 102–107 for Aislen, 143–148 for Pole.
+Discovery exposes that clue after the actual handoff; Guide can show it beforehand without recording it.
+A failed delivery or a repeated conversation reveals no additional recipient. Historical contact knowledge
+survives quest completion and save/load. This is contact history, not a new pending/done checklist.
+Unrecorded old completion flags do not synthesize historical recipient discoveries for an inactive quest.
+
+The authoritative English journal row 142 now returns the party to Pole, matching global handlers 207/208
+and NPC 84. Hobert (NPC 82, handler 575) remains one of the recipients. Only that English text changes;
+generated Lua comments and other language tables are not rewritten. The Windows development overlay now
+includes the English quest table so runtime text matches the reviewed source.
+
+Two faithful scenarios use actual authored NPC-topic callbacks for acceptance, all six deliveries, refusal
+without supplies, repetition without an extra reward, final turn-in and save/load. Explicit NPC IDs bypass
+physical travel. Each request gives three items; the held third item is explicitly placed into inventory
+through the harness's real placement helper. The missing three supplies are controlled fixtures, not a test
+of gathering or alchemy. Aislen yields 3000 XP and 1500 gold; Rust yields 7500 XP and 1500 gold when handler
+576 is last. Other Rust completion orders have differing authored XP; this change does not rebalance them.
+Both scenarios start at zero XP / 500 gold and finish at 2000 gold. Exact inventory counts guard against
+extra consumption/rewards; all six learned-contact keys survive reload.
+
+The eleven focused Windows unit cases pass 810 assertions, including independent reverse delivery order,
+undelivered-recipient privacy, Guide browsing, historical retention and validation of the full shared registry.
+The two real-dialogue scenarios pass 100 and 98 steps. Public inputs are
+`tests/scenarios/atlas/mm8_delivery_{101,142}_knowledge.yml`, corresponding native `tools/menu_tours/` inputs
+and the paired `_privacy.yml` post-UI verifiers. Native acceptance and remaining limitations are recorded in
+`ATLAS.md`. Full quest-stage coverage and the parent coverage matrix remain open.
