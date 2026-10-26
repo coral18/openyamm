@@ -3,6 +3,26 @@
 Active objective: complete native interactive atlases for MM7 and MM8, using shared game/world data.
 The MM8 world-map slice is a checkpoint, not completion of this objective.
 
+Scope control (2026-10-26): this matrix inventories implemented behavior and possible gaps; it does not
+authorize every suggested extension. Finish the agreed map/discovery/navigation functions and their fixes first.
+New ideas not originally agreed require the user's decision in [ATLAS_DECISIONS.md](ATLAS_DECISIONS.md).
+Pending ideas are not additional completion gates. In particular, party spell-learning assessments, availability
+forecasting, extra marker styles and replacement Jadame artwork are deferred pending approval.
+
+Current acceptance priorities:
+
+1. Correct MM7/MM8 map identity, region/dungeon navigation, search and filters.
+2. Discovery-only terrain and pins by default; Guide remains an explicit opt-in and must not teach discoveries.
+3. Party position/direction, small markers and usable dungeon floor selection.
+4. Notes, observations and mod enable/disable behavior that preserve existing saves and gameplay state.
+5. Shared UI checks on Android and controller, including a real-device check before claiming device acceptance.
+
+The 2026-10-26 Windows Release unit recheck passed 14 focused cases / 996 assertions for fog, party projection,
+discovery filtering, MM7/MM8 identity, dungeon reveal/layers and note ownership/projection. The separate current
+Castle Harmondale fountain check passed 1 case / 47 assertions against the mounted runtime, including all six
+water-face bindings. That previously repaired payload issue is not an outstanding defect. These focused checks
+do not certify all map content or replace device QA. ADB reported no connected device at this checkpoint.
+
 Reference feature inventories:
 
 - [MM7 community guide](https://www.reddit.com/r/MightAndMagic/comments/1ww8pq0/i_made_an_interactive_world_map_guide_for_might/)
