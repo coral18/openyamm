@@ -23,6 +23,10 @@ Castle Harmondale fountain check passed 1 case / 47 assertions against the mount
 water-face bindings. That previously repaired payload issue is not an outstanding defect. These focused checks
 do not certify all map content or replace device QA. ADB reported no connected device at this checkpoint.
 
+The later ARM64 Android Release package gates passed for source `e7abdcd`; installation and physical device
+acceptance are tracked separately in [ATLAS_ANDROID_QA.md](ATLAS_ANDROID_QA.md). A successful CI build alone
+does not close those device checks.
+
 Reference feature inventories:
 
 - [MM7 community guide](https://www.reddit.com/r/MightAndMagic/comments/1ww8pq0/i_made_an_interactive_world_map_guide_for_might/)
