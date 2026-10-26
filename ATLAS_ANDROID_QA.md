@@ -35,6 +35,14 @@ capture shows live outdoor gameplay; the app log confirms the Extended marker, O
 karol.test 0.1.0 loaded together. This first-launch check does not yet validate Atlas browsing or touch gestures.
 Later source changes for list scaling and touch scrolling target `0.2.1-atlas` / `104`; they are not in this APK.
 
+The user subsequently reported testing the Atlas and a long delay when enabling Guide Mode on this phone.
+A read-only Windows diagnosis reproduced blocking frames of about 3.2 seconds in MM7 and 3.1 seconds in MM8:
+each toggle rebuilds the world index, and Guide synchronously loads all 13/14 outdoor maps, including scene
+and baked-lighting data. Re-entering Guide repeats this work. The relevant indexing and loader functions match
+the installed 0.2.0 source. These timings are from Windows, not measured phone timings. The user requested
+verification only; the optimization remains pending in `ATLAS_DECISIONS.md`. This report establishes that the
+user reached the Atlas/Guide UI, not acceptance of the remaining discovery, gesture or persistence checks.
+
 ## Physical acceptance gates
 
 | Check | Status |

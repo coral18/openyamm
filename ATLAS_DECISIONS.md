@@ -10,6 +10,7 @@ istotne elementy uzgodnionego atlasu MM7/MM8 i usuwamy błędy. Nowe funkcje wym
 | Prognozowanie przyszłej dostępności transportu i sklepów | Oczekuje na decyzję | Oddzielne od już działających tras, rozkładów i zapamiętanych ofert. |
 | Dodatkowe style własnych markerów i rozbudowany edytor notatek | Oczekuje na decyzję | Podstawowe markery oraz dodawanie, edycja i usuwanie notatek już działają. |
 | Nowa ilustracja kontynentu Jadame | Oczekuje na decyzję | Działa natywny schemat regionów; nowa grafika nie blokuje poprawności atlasu. |
+| Porcjowanie i zachowywanie indeksu Guide Mode | Zweryfikowano; implementacja oczekuje na decyzję | Użytkownik poprosił wyłącznie o weryfikację. Test Windows: wejście do Guide blokuje klatkę na ok. 3,2 s w MM7 (13 map zewnętrznych) i 3,1 s w MM8 (14 map); ponowne wejście powtarza pracę. Nie wdrożono optymalizacji. |
 
 Ta lista nie jest listą warunków ukończenia obecnego etapu. Nie dopisujemy nowych pomysłów do kryteriów
 odbioru bez zgody użytkownika. Dotychczas wdrożone rozszerzenia pozostają; nie cofamy ich bez osobnej prośby.
