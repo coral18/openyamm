@@ -246,3 +246,33 @@ Run `tests/scenarios/atlas/mm*_journal_well_known_verify.yml` or `_unseen_verify
 working directory after the UI tour. They load the fresh private quicksave, check both characters, journal flag,
 observation flag, actual effect endpoint, map/gold and another save/load. Reading Guide must not apply armor/poison,
 learn the note or create an effect receipt. Preserve original campaigns; keep binary saves/captures outside Git.
+
+
+## Actual item costs and queued rewards at sites
+
+Use normal packages for `tests/scenarios/atlas/mm7_site_item_effects_fixture.yml` and its MM8 counterpart.
+They explicitly seed test parties, the accepted statuette quest/item or a Stone to Flesh scroll, then use the
+actual Tatalia altar / Murmurwoods statue. Setup shortcuts precede the save/reload and follow camera setup;
+a later runtime pose sync would discard unsynchronized harness fixture changes. These are isolated interaction
+tests, not proof of obtaining the quest/item through the campaign. They check exact costs, real quest flags and
+four saved item-range fields through reload. For a Core-only control run MM8 in another directory with only
+`karol.test` enabled; keep its saves separate from Atlas-required ones.
+
+Prepare `--fixture site-items-mm7` with the same private-assets helper for the queued-reward control. It replaces
+only Harmondale well 223 with a QA-only callback that queues two unidentified item-1 deliveries through SetHeldItem.
+Normal game rewards are unchanged. Run `mm7_site_item_gains_fixture.yml` against that private asset root; the
+headless control checks receipt +2 after actual delivery and save/load. Do not install the overlay in normal assets.
+
+Copy each scenario's temporary `known.oysav` to private `saves/before.oysav` for the two cost tours. For the native
+reward tour copy the reward scenario's unused `before.oysav` instead: that tour performs the real queued delivery
+through ordinary native input, including the cursor handoff, before opening Atlas. Run the matching
+`tools/menu_tours/atlas_mm*_site_item_effects.yml` or `atlas_mm7_site_item_gains.yml` at 1600x900. Inspect reading
+pages and Discovery-after-Guide, not just screenshot existence. Search uses Eagle Statuette, Scroll and Longsword:
+the latter two are deliberately the unidentified names. Guide's authored statue requirement may name the spell,
+but its actual historical receipt stays unidentified until the party identifies that item type.
+
+Run the matching `tests/scenarios/atlas/mm*_site_item_effects_verify.yml` or `mm7_site_item_gains_verify.yml`
+after the UI closes. The native reward verifier checks one item in the pack plus one actual held item, rather
+than treating the pack-only event query as a cursor-inclusive count. They check range endpoints, known-site marker, quest flags where applicable,
+map/gold/food and another round trip. Reading must neither grant more items nor consume another scroll/statuette.
+Keep all settings/saves/captures private and outside Git; never write to the hard-linked large fixture archives.

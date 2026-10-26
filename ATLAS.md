@@ -2430,3 +2430,49 @@ Reusable inputs are `tests/scenarios/atlas/mm*_journal_well_fixture.yml`, the pa
 Private evidence is under `atlas-journal-wells-20261025` in the Windows development root. Original user campaigns
 and the official installation are untouched. This advances the coverage matrix; it does not complete all Atlas
 content, old-save repair, localization or Android/controller acceptance.
+
+
+## Actual item gains and costs at interaction sites (2026-10-26)
+
+The shared site observer now captures net quantities of carried items before/after a successful interaction.
+It uses the Party's active packs, equipment and full cursor-stack quantity. Moving an item between those locations
+or identifying it does not create a receipt. Reordering the same members is supported; a changed roster cannot
+attribute new/departing companions' packs to an object's rewards. History stores observed nonzero min/max deltas,
+not promises of future rewards, totals earned across all visits or a transaction log of changes that cancelled.
+
+Item IDs refer to the existing active ItemTable. WorldItemSources retains reward origin/provenance ownership;
+no item names, definitions, enchantments or separate loot database are copied into site state. Atlas findings and
+search use party identification knowledge, including while reading actual history in Guide. Thus an unknown
+Stone to Flesh scroll remains Scroll in its receipt; the separate Guide requirement can still name its authored
+spell. Discovering an object alone does not create an item receipt.
+
+The existing site-effects namespace stores exact signed 64-bit net ranges as four signed 32-bit named fields
+per item. It survives refill and ordinary saves without changing the binary format. Older absent item fields
+remain valid, no-change visits preserve prior findings, and malformed/incomplete new fields reject writes
+atomically instead of overwriting history. The Core collector remains independent of the optional Atlas module.
+
+Validation:
+
+- Windows Release built. The focused site/World Database/mounted-category selection passed 18 cases / 558
+  assertions, including real shared activation, pack/cursor/equipment transfer neutrality, unidentified/active
+  table names and search, recruitment filtering, signed 64-bit endpoints, refill and malformed-record rejection.
+- Two faithful normal-assets scenarios use the actual Tatalia altar (22 steps) and Murmurwoods rescue statue
+  (21 steps). Controlled quest/item setup precedes actual interaction: statuette/scroll counts drop by one,
+  corresponding quest flags change, receipts persist after reload. MM8 also passed with Atlas disabled.
+- A separate private QA-only well callback queues two unidentified item-1 deliveries. Its 16-step faithful
+  scenario confirms receipt +2, one item in the pack and one actually held after reload. Ordinary Harmondale rewards remain unchanged.
+- Three native AMD/OpenGL tours produced 13 captures. Inspected reading pages show Eagle Statuette -1,
+  Scroll -1 and Longsword +2; actual unidentified names are retained after Guide browsing. The native reward
+  tour performs the delivery itself before browsing, exercising one item in the pack and one on the cursor.
+- Three 21-step post-UI verifiers passed. The reward verifier checks both the pack count and actual held-item
+  identity before/after another save/load. Others preserve item costs and quest state; all retain exact receipt
+  endpoints, gold 500, food 10 and the original map. No original campaigns or official installation were used.
+
+Reusable inputs are `tests/scenarios/atlas/mm*_site_item_effects_{fixture,verify}.yml`,
+`mm7_site_item_gains_{fixture,verify}.yml` and matching `tools/menu_tours/atlas_mm*_site_item_*.yml`.
+The fixture README distinguishes normal assets from `prepare_assets.py --fixture site-items-mm7`; private logs,
+captures and hashes are under `atlas-site-items-20261026` in the Windows development root.
+
+Queued delivery after an inherited callback's observation has ended, deferred effects, instance transformations,
+remaining Guide effect/predicate families and the rest of `ATLAS_COVERAGE.md` remain open. The focused run did
+not execute the existing opt-in packaged-house audit or establish Android/controller acceptance.

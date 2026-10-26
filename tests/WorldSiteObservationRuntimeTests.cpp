@@ -52,6 +52,7 @@ TEST_CASE("shared site activation observes actual results and ignores failed hid
             ++calls;
             if (!succeeds) return false;
             heroes.addGold(200);
+            heroes.grantItem(42, 2);
             if (switchMap) state.mapFileName = "out01.odm";
             return true;
         }
@@ -103,6 +104,9 @@ TEST_CASE("shared site activation observes actual results and ignores failed hid
             CHECK(observations[0].siteId == (world.indoor ? "surface/38" : Site));
             REQUIRE(observations[0].effects.size() == 1);
             CHECK(observations[0].effects[0].minDelta() == 200);
+            REQUIRE(observations[0].items.size() == 1);
+            CHECK(observations[0].items[0].itemId == 42);
+            CHECK(observations[0].items[0].minDelta == 2);
         }
         else
             CHECK(observations.empty());

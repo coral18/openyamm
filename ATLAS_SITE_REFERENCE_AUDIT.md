@@ -47,7 +47,7 @@ This audit does not certify all inherited-decoration Atlas content.
 Discovery now retains actually observed synchronous numeric/condition outcomes through the shared Core site
 interaction hook, including at sites without journal notes. This separate history does not expose unexecuted
 branches or turn a generated reference into party knowledge. Synchronous identified spell-buff changes are now recorded by the shared site observer; deferred effects,
-unidentified spell sources and item outcomes remain open.
+unidentified spell sources, queued item delivery outside the observation window and item transformations remain open.
 
 The current projection supports acyclic numeric character/resource/resistance comparisons, HP/SP fullness, simple
 local and per-character use gates, condition presence/application/removal, bounded random jumps, and nonnegative
@@ -164,3 +164,16 @@ instead of the character armor modifier. Shared arithmetic now updates that sign
 intermediates. The existing save field is unchanged. Previously consumed personal-use bits are not refunded
 from ambiguous historical generic variables; affected old saves need an explicit migration with provenance.
 The six original missing well bindings remain open and receive no invented markers.
+
+
+## Actual item outcome follow-up, 2026-10-26
+
+The existing Core observer now retains synchronous net changes in carried item quantities, including equipment
+and the cursor stack, through the same saved site namespace. This is separate from Guide predictions and the
+existing reward-origin index. Actual Tatalia altar and Murmurwoods statue checks record the statuette/scroll cost;
+a private modded-well control checks successful queued delivery of two unidentified swords. That private reward
+is not installed into normal campaign assets. Native search/read pages use the active item table and party
+identification state. No cancelled, unchanged or mere pack/cursor transfer becomes a reward.
+
+This does not make unsupported item/quest predicates exportable Guide effects. Deferred/inherited queued grants
+after the observation window, instance transformations and the six unresolved physical well bindings remain open.

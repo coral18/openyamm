@@ -407,3 +407,112 @@ TEST_CASE("object observations distinguish canonical entities that reuse one ren
     released.targetIndex = 1371;
     CHECK_FALSE(pressed.isSameTarget(released));
 }
+
+
+TEST_CASE("site item snapshots include equipment and cursor stacks without inventing transfers "
+    "or identification rewards")
+{
+    Party party;
+    PartySeed seed = Party::createDefaultSeed();
+    seed.members[0].inventory.clear();
+    seed.members[0].equipment = {};
+    party.seed(seed);
+    InventoryItem stack;
+    stack.objectDescriptionId = 42;
+    stack.quantity = 3;
+    stack.identified = false;
+    party.setHeldItemForQueries(stack);
+    EventRuntimeState state;
+    const auto before = captureWorldSiteValues(state, party);
+    REQUIRE(before.items.at(42) == 3);
+    party.member(0)->inventory.push_back(stack);
+    party.clearHeldItemForQueries();
+    auto after = captureWorldSiteValues(state, party);
+    CHECK(after.items == before.items);
+    REQUIRE(recordWorldSiteObservation(state, Site, 223, before, after, 1));
+    CHECK(worldSiteObservations(state)[0].items.empty());
+    const auto packed = after;
+    party.member(0)->inventory[0].identified = true;
+    party.member(0)->equipment.mainHand = 42;
+    --party.member(0)->inventory[0].quantity;
+    after = captureWorldSiteValues(state, party);
+    CHECK(after.items == packed.items);
+    REQUIRE(recordWorldSiteObservation(state, Site, 223, packed, after, 2));
+    CHECK(worldSiteObservations(state)[0].items.empty());
+    party.member(0)->inventory[0].quantity = UINT32_MAX;
+    CHECK(party.carriedItemQuantities().at(42) == uint64_t(UINT32_MAX) + 1);
+    party.setHeldItemForQueries(stack);
+    CHECK(party.carriedItemQuantities().at(42) == uint64_t(UINT32_MAX) + 4);
+    party.seed(seed);
+    CHECK(party.carriedItemQuantities().empty());
+}
+
+TEST_CASE("site item observations preserve signed 64 bit net ranges across no change visits and refill")
+{
+    EventRuntimeState state;
+    auto before = gold(0), after = gold(0);
+    after.items[42] = UINT32_MAX;
+    REQUIRE(recordWorldSiteObservation(state, Site, 223, before, after, 1));
+    auto observed = worldSiteObservations(state);
+    REQUIRE(observed.size() == 1);
+    REQUIRE(observed[0].items.size() == 1);
+    CHECK(observed[0].items[0].minDelta == int64_t(UINT32_MAX));
+    CHECK(observed[0].lastChanged);
+    CHECK(describeWorldSiteObservation(observed[0]).find("Unknown item +4294967295") != std::string::npos);
+    REQUIRE(recordWorldSiteObservation(state, Site, 223, after, before, 2));
+    observed = worldSiteObservations(state);
+    CHECK(observed[0].items[0].minDelta == -int64_t(UINT32_MAX));
+    CHECK(observed[0].items[0].maxDelta == int64_t(UINT32_MAX));
+    REQUIRE(recordWorldSiteObservation(state, Site, 223, before, before, 3));
+    observed = worldSiteObservations(state);
+    CHECK_FALSE(observed[0].lastChanged);
+    CHECK(observed[0].items[0].minDelta == -int64_t(UINT32_MAX));
+    EventRuntimeState refilled;
+    restoreWorldMapKnowledgeAfterRefill(state, refilled);
+    REQUIRE(worldSiteObservations(refilled)[0].items.size() == 1);
+    CHECK(worldSiteObservations(refilled)[0].items[0].maxDelta == int64_t(UINT32_MAX));
+    CHECK(refilled.variables.empty());
+    CHECK(refilled.namedGlobalVars.empty());
+    EventRuntimeState wide;
+    auto empty = gold(0), full = gold(0);
+    full.items[42] = uint64_t(INT64_MAX);
+    REQUIRE(recordWorldSiteObservation(wide, Site, 223, empty, full, 1));
+    CHECK(worldSiteObservations(wide)[0].items[0].maxDelta == INT64_MAX);
+    REQUIRE(recordWorldSiteObservation(wide, Site, 223, full, empty, 2));
+    CHECK(worldSiteObservations(wide)[0].items[0].minDelta == -INT64_MAX);
+    EventRuntimeState reordered;
+    before.members = {"One", "Two"};
+    after.members = {"Two", "One"};
+    after.items[42] = 2;
+    REQUIRE(recordWorldSiteObservation(reordered, Site, 223, before, after, 1));
+    CHECK(worldSiteObservations(reordered)[0].items[0].minDelta == 2);
+    EventRuntimeState recruitment;
+    after.members.push_back("New companion");
+    after.values[0].value = 200;
+    REQUIRE(recordWorldSiteObservation(recruitment, Site, 223, before, after, 1));
+    CHECK(worldSiteObservations(recruitment)[0].items.empty());
+    CHECK(worldSiteObservations(recruitment)[0].effects[0].minDelta() == 200);
+}
+
+TEST_CASE("site item observations reject malformed snapshots and corrupt records atomically")
+{
+    for (const auto &[id, quantity] : {std::pair{0u, uint64_t(1)}, {42u, uint64_t(0)},
+        {42u, uint64_t(INT64_MAX) + 1}})
+    {
+        EventRuntimeState state;
+        auto after = gold(200);
+        after.items[id] = quantity;
+        CHECK_FALSE(recordWorldSiteObservation(state, Site, 223, gold(0), after, 1));
+        CHECK(state.namedMapVars.empty());
+    }
+    for (const char *pKey : {"0/min-lo", "042/min-lo", "42/extra", "42", "42/min-lo"})
+    {
+        EventRuntimeState state;
+        REQUIRE(recordWorldSiteObservation(state, Site, 223, gold(0), gold(0), 1));
+        state.namedMapVars[Root + "item/" + pKey] = 1;
+        CHECK_FALSE(worldSiteObservations(state)[0].error.empty());
+        const auto saved = state.namedMapVars;
+        CHECK_FALSE(recordWorldSiteObservation(state, Site, 223, gold(0), gold(200), 2));
+        CHECK(state.namedMapVars == saved);
+    }
+}

@@ -624,3 +624,52 @@ TEST_CASE("canonical Barrow control references have physical exits and levers ac
     CHECK(references == 27);
     CHECK(levers == 27);
 }
+
+
+TEST_CASE("site item observations resolve active names and identification gates in native feature search")
+{
+    using namespace OpenYAMM::Game;
+    REQUIRE_MESSAGE(OpenYAMM::Tests::regressionMapLoaderLoaded(),
+        OpenYAMM::Tests::regressionMapLoaderFailure());
+    const auto &fixture = OpenYAMM::Tests::regressionMapLoader();
+    const auto &data = fixture.gameDataLoader;
+    const MapStatsEntry *pMap = data.getMapStats().findByFileName("out07.odm");
+    REQUIRE(pMap);
+    auto map = MapAssetLoader().load(fixture.assetFileSystem, *pMap, data.getMonsterTable(),
+        data.getObjectTable(), MapLoadPurpose::HeadlessGameplay);
+    REQUIRE(map);
+    REQUIRE(map->outdoorMapData);
+    std::string error;
+    REQUIRE_MESSAGE(GameDataLoader::loadEventPrograms(fixture.assetFileSystem, *map, error), error);
+    REQUIRE(map->localEventProgram);
+    WorldDatabase world(data.getMapStats(), data.getHouseTable(), data.getNpcDialogTable(),
+        data.getMergedTeacherTopicTable(), "mm8");
+    world.indexMapLocations(*map->outdoorMapData, *map->localEventProgram);
+    const auto feature = std::find_if(world.features().begin(), world.features().end(),
+        [](const WorldMapFeature &value) { return value.site.eventId == 132; });
+    REQUIRE(feature != world.features().end());
+    std::vector<std::string> row(17);
+    row[0] = "42"; row[2] = "Custom secret blade"; row[9] = "5"; row[10] = "Unidentified blade";
+    ItemTable items;
+    REQUIRE(items.load(fixture.assetFileSystem, {row}, {}));
+    WorldSiteValueSnapshot before, after;
+    before.members = after.members = {"Hero"};
+    before.items[42] = 1;
+    EventRuntimeState state;
+    REQUIRE(recordWorldSiteObservation(state, feature->site.id, 132, before, after, 10));
+    WorldKnowledge knowledge;
+    knowledge.siteObservations[feature->mapId] = worldSiteObservations(state);
+    CHECK(world.queryFeatures(knowledge, false, "Unidentified blade", "", nullptr, &items).empty());
+    knowledge.interactedSites["out07.odm"].insert(worldSiteDiscoveryKey(132, feature->site.id));
+    CHECK(world.queryFeatures(knowledge, false, "Unidentified blade", "", nullptr, &items).size() == 1);
+    CHECK(world.queryFeatures(knowledge, false, "Custom secret blade", "", nullptr, &items).empty());
+    CHECK(world.queryFeatures(knowledge, true, "Custom secret blade", "", nullptr, &items).empty());
+    CHECK(world.siteObservationText(*feature, knowledge, nullptr, &items).find("Unidentified blade -1")
+        != std::string::npos);
+    knowledge.identifiedItems.insert(42);
+    CHECK(world.queryFeatures(knowledge, false, "Custom secret blade", "", nullptr, &items).size() == 1);
+    CHECK(world.siteObservationText(*feature, knowledge, nullptr, &items).find("Custom secret blade -1")
+        != std::string::npos);
+    CHECK(knowledge.autonoteIds.empty());
+    CHECK(knowledge.visitedMaps.empty());
+}

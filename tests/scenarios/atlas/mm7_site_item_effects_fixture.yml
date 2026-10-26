@@ -1,0 +1,78 @@
+id: atlas.mm7_site_item_effects_fixture
+title: Real authored item cost is observed at its physical interaction site
+world: mm7
+mode: faithful
+steps:
+- new_game_flow:
+    start_map: 7out13.odm
+    party:
+      gold: 500
+      food: 10
+      members:
+      - name: Well Tester
+        class: Knight
+        level: 1
+        endurance: 60
+        skills: []
+        equipment: {}
+      - name: Other Tester
+        class: Knight
+        level: 1
+        endurance: 60
+        skills: []
+        equipment: {}
+- set_pose: &id001
+    x: -12716
+    y: -22050
+    z: 448
+    yaw: 4.71238898
+    pitch: -0.5
+- setup_shortcut:
+    kind: set_qbit
+    id: 712
+- setup_shortcut:
+    kind: grant_item
+    item_id: 1420
+- save_game: before
+- load_game: before
+- assert:
+    runtime_event_variable:
+      id: 93061137
+      value: 1
+- press_interact:
+    pose: *id001
+    expect:
+      kind: event_target
+      triggered_event: 452
+      can_activate: true
+- assert: &id002
+    runtime_event_variable:
+      id: 93061137
+      value: 0
+- assert: &id003
+    qbit_set:
+    - 714
+- assert: &id004
+    named_map_var_changed:
+      name: openyamm.discovery.site-effects.v1/bmodel/69/surface/47/event/452/item/1420/min-lo
+      value: -1
+- assert: &id005
+    named_map_var_changed:
+      name: openyamm.discovery.site-effects.v1/bmodel/69/surface/47/event/452/item/1420/min-hi
+      value: -1
+- assert: &id006
+    named_map_var_changed:
+      name: openyamm.discovery.site-effects.v1/bmodel/69/surface/47/event/452/item/1420/max-lo
+      value: -1
+- assert: &id007
+    named_map_var_changed:
+      name: openyamm.discovery.site-effects.v1/bmodel/69/surface/47/event/452/item/1420/max-hi
+      value: -1
+- save_game: known
+- load_game: known
+- assert: *id002
+- assert: *id003
+- assert: *id004
+- assert: *id005
+- assert: *id006
+- assert: *id007

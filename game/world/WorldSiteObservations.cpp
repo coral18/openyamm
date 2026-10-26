@@ -6,8 +6,11 @@
 #include "game/world/WorldMapFeatures.h"
 #include "game/party/Party.h"
 #include "game/tables/SpellTable.h"
+#include "game/tables/ItemTable.h"
+#include "game/items/ItemRuntime.h"
 
 #include <algorithm>
+#include <bit>
 #include <charconv>
 #include <cmath>
 #include <set>
@@ -81,6 +84,36 @@ bool recordBuffChanges(WorldSiteObservation &observation,
             || pPrevious->mastery != buff.mastery
             || std::abs(double(buff.remainingSeconds) - (pPrevious->remainingSeconds - elapsed)) > 0.01)
             record(buff, WorldSiteSpellObservation::Updated);
+    }
+    return true;
+}
+
+bool recordItemChanges(WorldSiteObservation &observation,
+    const WorldSiteValueSnapshot &before, const WorldSiteValueSnapshot &after, bool &changed)
+{
+    for (const WorldSiteValueSnapshot *pSnapshot : {&before, &after})
+        for (const auto &[id, quantity] : pSnapshot->items)
+            if (id == 0 || quantity == 0 || quantity > uint64_t(INT64_MAX)) return false;
+    // Joining/leaving members bring their own packs; that is not evidence of an object's reward or cost.
+    auto previousMembers = before.members, nextMembers = after.members;
+    std::sort(previousMembers.begin(), previousMembers.end());
+    std::sort(nextMembers.begin(), nextMembers.end());
+    if (previousMembers != nextMembers) return true;
+    std::map<uint32_t, int64_t> deltas;
+    for (const auto &[id, quantity] : before.items) deltas[id] = -int64_t(quantity);
+    for (const auto &[id, quantity] : after.items) deltas[id] += int64_t(quantity);
+    for (const auto &[id, delta] : deltas)
+    {
+        if (delta == 0) continue;
+        const auto existing = std::find_if(observation.items.begin(), observation.items.end(),
+            [&](const WorldSiteItemObservation &item) { return item.itemId == id; });
+        if (existing == observation.items.end()) observation.items.push_back({id, delta, delta});
+        else
+        {
+            existing->minDelta = std::min(existing->minDelta, delta);
+            existing->maxDelta = std::max(existing->maxDelta, delta);
+        }
+        changed = true;
     }
     return true;
 }
@@ -173,6 +206,37 @@ WorldSiteObservation readObservation(const EventRuntimeState &state, const std::
     }
     std::sort(result.spells.begin(), result.spells.end(), [](const auto &a, const auto &b)
         { return std::pair{a.party, a.spellId} < std::pair{b.party, b.spellId}; });
+    const std::string items = key + "item/";
+    std::set<uint32_t> itemIds;
+    for (const auto &[name, value] : state.namedMapVars)
+    {
+        if (!name.starts_with(items)) continue;
+        const std::string_view entry(name.data() + items.size(), name.size() - items.size());
+        const size_t separator = entry.find('/');
+        const std::string_view number = entry.substr(0, separator);
+        const std::string_view fieldName = separator != std::string_view::npos ? entry.substr(separator + 1) : "";
+        uint32_t id = 0;
+        const auto parsed = std::from_chars(number.data(), number.data() + number.size(), id);
+        if (parsed.ec != std::errc() || parsed.ptr != number.data() + number.size() || id == 0
+            || number != std::to_string(id) || (fieldName != "min-lo" && fieldName != "min-hi"
+                && fieldName != "max-lo" && fieldName != "max-hi"))
+            result.error = "Invalid recorded item outcome for this site.";
+        else itemIds.insert(id);
+    }
+    for (uint32_t id : itemIds)
+    {
+        const std::string item = "item/" + std::to_string(id) + "/";
+        const auto read = [&](const std::string &endpoint) -> std::optional<int64_t>
+        {
+            const auto low = field(item + endpoint + "-lo"), high = field(item + endpoint + "-hi");
+            if (!low || !high) return std::nullopt;
+            return std::bit_cast<int64_t>((uint64_t(uint32_t(*high)) << 32) | uint32_t(*low));
+        };
+        const auto min = read("min"), max = read("max");
+        if (!min || !max || *min == 0 || *max == 0 || *min == INT64_MIN || *min > *max)
+            result.error = "Invalid recorded item outcome range for this site.";
+        else result.items.push_back({id, *min, *max});
+    }
     return result;
 }
 }
@@ -181,6 +245,7 @@ WorldSiteValueSnapshot captureWorldSiteValues(const EventRuntimeState &state, co
 {
     WorldSiteValueSnapshot result;
     result.gameMinutes = gameMinutes;
+    result.items = party.carriedItemQuantities();
     for (const Character &member : party.members())
         result.members.push_back(member.name + "/" + std::to_string(member.rosterId) + "/"
             + std::to_string(member.characterDataId) + "/" + std::to_string(member.portraitPictureId));
@@ -315,6 +380,7 @@ bool recordWorldSiteObservation(EventRuntimeState &state, const std::string &sit
         }
     }
     if (!recordBuffChanges(observation, before, after, changed)) return false;
+    if (!recordItemChanges(observation, before, after, changed)) return false;
     state.namedMapVars[key + "seen"] = 1;
     state.namedMapVars[key + "time"] = int32_t(time);
     state.namedMapVars[key + "changed"] = changed ? 1 : 0;
@@ -330,6 +396,14 @@ bool recordWorldSiteObservation(EventRuntimeState &state, const std::string &sit
     for (const WorldSiteSpellObservation &spell : observation.spells)
         state.namedMapVars[key + "spell/" + (spell.party ? "party/" : "character/")
             + std::to_string(spell.spellId) + "/actions"] = spell.actions;
+    for (const WorldSiteItemObservation &item : observation.items)
+        for (const auto &[endpoint, delta] : {std::pair{"min", item.minDelta}, {"max", item.maxDelta}})
+        {
+            const std::string itemKey = key + "item/" + std::to_string(item.itemId) + "/" + endpoint;
+            const uint64_t bits = uint64_t(delta);
+            state.namedMapVars[itemKey + "-lo"] = std::bit_cast<int32_t>(uint32_t(bits));
+            state.namedMapVars[itemKey + "-hi"] = std::bit_cast<int32_t>(uint32_t(bits >> 32));
+        }
     return true;
 }
 
@@ -361,7 +435,8 @@ std::vector<WorldSiteObservation> worldSiteObservations(const EventRuntimeState 
     return result;
 }
 
-std::string describeWorldSiteObservation(const WorldSiteObservation &observation, const SpellTable *pSpells)
+std::string describeWorldSiteObservation(const WorldSiteObservation &observation, const SpellTable *pSpells,
+    const ItemTable *pItems, const std::unordered_set<uint32_t> &identifiedItems)
 {
     if (!observation.error.empty()) return observation.error;
     std::string text = "Recorded use: day " + std::to_string(observation.gameMinutes / (24 * 60) + 1) + ".";
@@ -416,6 +491,18 @@ std::string describeWorldSiteObservation(const WorldSiteObservation &observation
                 {WorldSiteSpellObservation::Removed, "Removed effect from: "}})
                 if (spell.actions & action) text += "\n" + std::string(label) + name;
         }
+    }
+    if (!observation.items.empty()) text += "\nNet changes in carried items observed:";
+    for (const WorldSiteItemObservation &item : observation.items)
+    {
+        const ItemDefinition *pItem = pItems != nullptr ? pItems->get(item.itemId) : nullptr;
+        const bool known = pItem != nullptr
+            && (identifiedItems.contains(item.itemId) || !ItemRuntime::requiresIdentification(*pItem));
+        const std::string name = pItem == nullptr ? "Unknown item" : known ? pItem->name
+            : pItem->unidentifiedName.empty() ? "Unidentified item" : pItem->unidentifiedName;
+        text += "\n" + name + " " + amount(item.minDelta);
+        if (item.minDelta != item.maxDelta)
+            text += " to " + amount(item.maxDelta) + " (observed range)";
     }
     return text;
 }

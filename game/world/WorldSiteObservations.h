@@ -3,7 +3,9 @@
 #include <cstdint>
 #include <cstddef>
 #include <optional>
+#include <map>
 #include <string>
+#include <unordered_set>
 #include <vector>
 
 namespace OpenYAMM::Game
@@ -12,6 +14,7 @@ class IGameplayWorldRuntime;
 struct GameplayWorldHit;
 class Party;
 class SpellTable;
+class ItemTable;
 struct EventRuntimeState;
 
 struct WorldSiteValue
@@ -37,6 +40,13 @@ struct WorldSiteValueSnapshot
     std::vector<WorldSiteValue> values;
     std::vector<Buff> buffs;
     float gameMinutes = 0;
+    std::map<uint32_t, uint64_t> items;
+};
+
+struct WorldSiteItemObservation
+{
+    uint32_t itemId = 0;
+    int64_t minDelta = 0, maxDelta = 0;
 };
 
 struct WorldSiteSpellObservation
@@ -72,6 +82,7 @@ struct WorldSiteObservation
     std::string error;
     std::optional<bool> objectRemoved;
     std::vector<WorldSiteSpellObservation> spells;
+    std::vector<WorldSiteItemObservation> items;
 };
 
 // One actual event-target activation, shared by ordinary input and world-targeted spells.
@@ -96,5 +107,6 @@ WorldSiteValueSnapshot captureWorldSiteValues(const EventRuntimeState &state, co
 bool recordWorldSiteObservation(EventRuntimeState &state, const std::string &siteId, uint16_t eventId,
     const WorldSiteValueSnapshot &before, const WorldSiteValueSnapshot &after, float gameMinutes);
 std::vector<WorldSiteObservation> worldSiteObservations(const EventRuntimeState &state);
-std::string describeWorldSiteObservation(const WorldSiteObservation &observation, const SpellTable *pSpells = nullptr);
+std::string describeWorldSiteObservation(const WorldSiteObservation &observation, const SpellTable *pSpells = nullptr,
+    const ItemTable *pItems = nullptr, const std::unordered_set<uint32_t> &identifiedItems = {});
 } // namespace OpenYAMM::Game

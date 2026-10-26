@@ -11,6 +11,7 @@
 #include <array>
 #include <bitset>
 #include <cstdint>
+#include <map>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -463,6 +464,8 @@ public:
     bool hasIdentifiedItem(uint32_t objectDescriptionId) const;
     void setHeldItemForQueries(const InventoryItem &item);
     uint32_t heldItemIdForQueries() const;
+    // Active members' packs/equipment and the cursor stack; excludes members staying at the Inn.
+    std::map<uint32_t, uint64_t> carriedItemQuantities() const;
     void clearHeldItemForQueries();
     bool hasItemAnywhere(uint32_t objectDescriptionId) const;
     bool grantItemToMember(size_t memberIndex, uint32_t objectDescriptionId, uint32_t quantity = 1);
@@ -695,6 +698,7 @@ private:
     std::vector<HiredNpcFollower> m_hiredNpcFollowers;
     PartyBuffState m_cartographerWizardEye = {};
     uint32_t m_heldItemIdForQueries = 0;
+    uint32_t m_heldItemQuantityForQueries = 0;
     std::vector<PendingAudioRequest> m_pendingAudioRequests;
 };
 }

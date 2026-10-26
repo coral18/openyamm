@@ -943,7 +943,7 @@ void AtlasScreen::drawMap()
                 const auto knowledge = m_knowledge.floorPlans.find(toLowerCopy(map->map->fileName));
                 std::vector<std::pair<float, float>> positions;
                 for (const WorldMapFeature *pFeature : m_world.queryFeatures(
-                    m_knowledge, m_guide, "", map->id, &m_data.spellTable()))
+                    m_knowledge, m_guide, "", map->id, &m_data.spellTable(), &m_data.itemTable()))
                     positions.emplace_back(pFeature->site.x, pFeature->site.y);
                 if (m_knowledge.partyPosition
                     && m_knowledge.partyPosition->mapFileName == toLowerCopy(map->map->fileName))
@@ -953,7 +953,7 @@ void AtlasScreen::drawMap()
                     m_guide, positions, m_floorLayer);
                 m_floorLayers = m_floorPlan.layers;
                 for (const WorldMapFeature *pFeature : m_world.queryFeatures(
-                    m_knowledge, m_guide, "", map->id, &m_data.spellTable()))
+                    m_knowledge, m_guide, "", map->id, &m_data.spellTable(), &m_data.itemTable()))
                     if (pFeature->kind != WorldMapFeatureKind::Note || pFeature->noteElevation)
                         if (const auto layer = worldFloorPlanLayer(pFeature->site.z)) m_floorLayers.push_back(*layer);
                 if (m_knowledge.partyPosition && m_knowledge.partyPosition->z
@@ -1256,7 +1256,7 @@ bool AtlasScreen::drawFeatureMarkers(const WorldRecord &map, const Rect &image, 
     };
     std::vector<Pin> pins;
     for (const WorldMapFeature *pFeature : m_world.queryFeatures(
-        m_knowledge, m_guide, m_search, map.id, &m_data.spellTable()))
+        m_knowledge, m_guide, m_search, map.id, &m_data.spellTable(), &m_data.itemTable()))
     {
         if (pFloorPlan != nullptr && !worldMapFeatureOnFloorLayer(*pFeature, m_floorLayer)) continue;
         const auto point = pFloorPlan != nullptr ? pFloorPlan->worldToUv(pFeature->site.x, pFeature->site.y)
@@ -1319,7 +1319,8 @@ bool AtlasScreen::drawFeatureMarkers(const WorldRecord &map, const Rect &image, 
 void AtlasScreen::drawFeatureList()
 {
     const Rect viewport = canvasRect(588, 121, 235, 270);
-    auto features = m_world.queryFeatures(m_knowledge, m_guide, m_search, m_map, &m_data.spellTable());
+    auto features = m_world.queryFeatures(
+        m_knowledge, m_guide, m_search, m_map, &m_data.spellTable(), &m_data.itemTable());
     std::erase_if(features, [this](const WorldMapFeature *pFeature)
     { return !worldMapFeatureOnFloorLayer(*pFeature, m_floorLayer); });
     if (!m_siteSelection.empty())
@@ -1868,7 +1869,8 @@ void AtlasScreen::drawSiteJournal()
     if (!offers.empty()) content += (content.empty() ? "" : "\n\n") + offers;
     try
     {
-        const std::string observed = m_world.siteObservationText(feature, m_knowledge, &m_data.spellTable());
+        const std::string observed = m_world.siteObservationText(
+            feature, m_knowledge, &m_data.spellTable(), &m_data.itemTable());
         if (!observed.empty())
         {
             if (!content.empty()) content += "\n\n";
@@ -1906,7 +1908,8 @@ void AtlasScreen::drawDetails()
     outline(details, 0xff597284u);
     if (m_featureView)
     {
-        const auto features = m_world.queryFeatures(m_knowledge, m_guide, m_search, m_map, &m_data.spellTable());
+        const auto features = m_world.queryFeatures(
+            m_knowledge, m_guide, m_search, m_map, &m_data.spellTable(), &m_data.itemTable());
         const auto selected = std::find_if(features.begin(), features.end(), [this](const WorldMapFeature *pFeature)
         { return pFeature->id == m_selectedFeature
             && (m_siteSelection.empty() || m_siteSelection.contains(pFeature->id)); });

@@ -1,0 +1,56 @@
+id: atlas.mm8_site_item_effects_verify
+title: Actual item history persists without extra grants or costs from Atlas browsing
+world: mm8
+mode: faithful
+steps:
+- load_game:
+    name: native
+    path: saves/quicksave.oysav
+- assert: &id001
+    runtime_event_variable:
+      id: 22216721
+      value: 0
+- assert: &id002
+    qbit_set:
+    - 40
+    - 430
+- assert: &id003
+    named_map_var_changed:
+      name: openyamm.discovery.site-effects.v1/decoration/1418/event/132/item/339/min-lo
+      value: -1
+- assert: &id004
+    named_map_var_changed:
+      name: openyamm.discovery.site-effects.v1/decoration/1418/event/132/item/339/min-hi
+      value: -1
+- assert: &id005
+    named_map_var_changed:
+      name: openyamm.discovery.site-effects.v1/decoration/1418/event/132/item/339/max-lo
+      value: -1
+- assert: &id006
+    named_map_var_changed:
+      name: openyamm.discovery.site-effects.v1/decoration/1418/event/132/item/339/max-hi
+      value: -1
+- assert: &id007
+    named_map_var_changed:
+      name: openyamm.discovery.site-effects.v1/decoration/1418/event/132/seen
+      value: 1
+- assert: &id008
+    map: out07.odm
+    runtime_event_variable:
+      id: 21
+      value: 500
+- assert: &id009
+    runtime_event_variable:
+      id: 23
+      value: 10
+- save_game: site-items-roundtrip
+- load_game: site-items-roundtrip
+- assert: *id001
+- assert: *id002
+- assert: *id003
+- assert: *id004
+- assert: *id005
+- assert: *id006
+- assert: *id007
+- assert: *id008
+- assert: *id009

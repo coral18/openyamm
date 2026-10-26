@@ -2530,6 +2530,7 @@ void Party::restoreSnapshot(const Snapshot &snapshot)
 
     m_lastStatus.clear();
     m_heldItemIdForQueries = 0;
+    m_heldItemQuantityForQueries = 0;
     m_pendingAudioRequests.clear();
     recordEverOwnedItemsFromCurrentState();
     rebuildMagicalBonusesFromBuffs();
@@ -2690,6 +2691,7 @@ void Party::seed(const PartySeed &seed)
     m_lastFallDamageDistance = 0.0f;
     m_lastStatus.clear();
     m_heldItemIdForQueries = 0;
+    m_heldItemQuantityForQueries = 0;
     m_pendingAudioRequests.clear();
     recordEverOwnedItemsFromCurrentState();
     rebuildMagicalBonusesFromBuffs();
@@ -4438,6 +4440,7 @@ bool Party::hasIdentifiedItem(uint32_t objectDescriptionId) const
 void Party::setHeldItemForQueries(const InventoryItem &item)
 {
     m_heldItemIdForQueries = item.objectDescriptionId;
+    m_heldItemQuantityForQueries = item.objectDescriptionId != 0 ? item.quantity : 0;
     recordEverOwnedItemIfRelevant(item);
 }
 
@@ -4446,9 +4449,27 @@ uint32_t Party::heldItemIdForQueries() const
     return m_heldItemIdForQueries;
 }
 
+std::map<uint32_t, uint64_t> Party::carriedItemQuantities() const
+{
+    std::map<uint32_t, uint64_t> result;
+    const auto append = [&](uint32_t id, uint32_t quantity)
+    {
+        if (id != 0 && quantity != 0) result[id] += quantity;
+    };
+    for (const Character &member : m_members)
+    {
+        for (const InventoryItem &item : member.inventory) append(item.objectDescriptionId, item.quantity);
+        for (uint8_t slot = uint8_t(EquipmentSlot::OffHand); slot <= uint8_t(EquipmentSlot::Ring6); ++slot)
+            append(::OpenYAMM::Game::equippedItemId(member.equipment, EquipmentSlot(slot)), 1);
+    }
+    append(m_heldItemIdForQueries, m_heldItemQuantityForQueries);
+    return result;
+}
+
 void Party::clearHeldItemForQueries()
 {
     m_heldItemIdForQueries = 0;
+    m_heldItemQuantityForQueries = 0;
 }
 
 bool Party::hasItemAnywhere(uint32_t objectDescriptionId) const

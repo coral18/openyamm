@@ -33,6 +33,9 @@ def prepare(assets, output, fixture_name="hidden-expert-bow"):
         name = ("7out02" if world == "mm7" else "out01") + "_zz_spell_observation_fixture.lua"
         target = f"worlds/{world}/events/maps/{name}"
         fixture = Path(__file__).with_name(name).read_bytes()
+    elif fixture_name == "site-items-mm7":
+        target = "worlds/mm7/events/maps/7out02_zz_item_observation_fixture.lua"
+        fixture = Path(__file__).with_name("7out02_zz_item_observation_fixture.lua").read_bytes()
     else:
         target = "engine/events/Global_zz_hide_bow.lua"
         fixture = Path(__file__).with_name("Global_zz_hide_bow.lua").read_bytes()
@@ -57,7 +60,7 @@ if __name__ == "__main__":
     parser.add_argument("--assets", required=True, type=Path)
     parser.add_argument("--output", required=True, type=Path, help="A new directory on the input filesystem")
     parser.add_argument("--fixture", choices=["hidden-expert-bow", "legacy-pure-accuracy", "remote-companion-contact",
-                                              "site-spells-mm7", "site-spells-mm8"],
+                                              "site-spells-mm7", "site-spells-mm8", "site-items-mm7"],
                         default="hidden-expert-bow")
     args = parser.parse_args()
     prepare(args.assets.resolve(), args.output.resolve(), args.fixture)

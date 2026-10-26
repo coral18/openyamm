@@ -1,0 +1,60 @@
+# Requires the site-items-mm7 private asset fixture; normal well rewards remain unchanged.
+id: atlas.mm7_site_item_gains_fixture
+title: Controlled queued item delivery is observed only after successful transfer
+world: mm7
+mode: faithful
+steps:
+- new_game_flow:
+    start_map: 7out02.odm
+    party:
+      gold: 500
+      food: 10
+      members:
+      - name: Spell Site Tester
+        class: Knight
+        level: 1
+        skills: []
+        equipment: {}
+- set_pose: &id001
+    x: -6650
+    y: 10193
+    z: 0
+    yaw: 0
+    pitch: -1.3
+- save_game: before
+- press_interact:
+    pose: *id001
+    expect:
+      kind: event_target
+      triggered_event: 223
+      can_activate: true
+- assert: &id002
+    named_map_var_changed:
+      name: openyamm.discovery.site-effects.v1/bmodel/38/surface/10/event/223/item/1/min-lo
+      value: 2
+- assert: &id003
+    named_map_var_changed:
+      name: openyamm.discovery.site-effects.v1/bmodel/38/surface/10/event/223/item/1/min-hi
+      value: 0
+- assert: &id004
+    named_map_var_changed:
+      name: openyamm.discovery.site-effects.v1/bmodel/38/surface/10/event/223/item/1/max-lo
+      value: 2
+- assert: &id005
+    named_map_var_changed:
+      name: openyamm.discovery.site-effects.v1/bmodel/38/surface/10/event/223/item/1/max-hi
+      value: 0
+- save_game: known
+- load_game: known
+- assert: *id002
+- assert: *id003
+- assert: *id004
+- assert: *id005
+- assert:
+    runtime_event_variable:
+      id: 65553
+      value: 1
+- assert:
+    held_item:
+      active: true
+      item_id: 1

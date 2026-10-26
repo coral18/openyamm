@@ -1,0 +1,77 @@
+id: atlas.mm8_site_item_effects_fixture
+title: Real authored item cost is observed at its physical interaction site
+world: mm8
+mode: faithful
+steps:
+- new_game_flow:
+    start_map: out07.odm
+    party:
+      gold: 500
+      food: 10
+      members:
+      - name: Interaction Tester
+        class: Sorcerer
+        level: 1
+        race_id: 0
+        skills:
+        - name: Earth
+          level: 8
+          mastery: 2
+        equipment: {}
+        spells:
+        - 40
+- set_pose: &id001
+    x: 15488
+    y: 15072
+    z: 989
+    yaw: 0
+    pitch: -0.12
+- setup_shortcut:
+    kind: grant_item
+    item_id: 339
+- save_game: before
+- load_game: before
+- assert:
+    runtime_event_variable:
+      id: 22216721
+      value: 1
+- press_interact:
+    pose: *id001
+    expect:
+      kind: event_target
+      target_kind: 2
+      target_index: 1418
+      can_activate: true
+      activated: true
+- assert: &id002
+    runtime_event_variable:
+      id: 22216721
+      value: 0
+- assert: &id003
+    qbit_set:
+    - 40
+    - 430
+- assert: &id004
+    named_map_var_changed:
+      name: openyamm.discovery.site-effects.v1/decoration/1418/event/132/item/339/min-lo
+      value: -1
+- assert: &id005
+    named_map_var_changed:
+      name: openyamm.discovery.site-effects.v1/decoration/1418/event/132/item/339/min-hi
+      value: -1
+- assert: &id006
+    named_map_var_changed:
+      name: openyamm.discovery.site-effects.v1/decoration/1418/event/132/item/339/max-lo
+      value: -1
+- assert: &id007
+    named_map_var_changed:
+      name: openyamm.discovery.site-effects.v1/decoration/1418/event/132/item/339/max-hi
+      value: -1
+- save_game: known
+- load_game: known
+- assert: *id002
+- assert: *id003
+- assert: *id004
+- assert: *id005
+- assert: *id006
+- assert: *id007

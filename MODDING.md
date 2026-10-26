@@ -680,3 +680,25 @@ The Atlas displays/searches current shared spell names and preserves discovery g
 book as learned, predict future duration/power or record queued effects that arrive after the synchronous action.
 Malformed snapshot/new saved fields are rejected without overwriting the old observation. Missing spell fields
 in older records mean no spell history, and the existing save/refill ownership remains unchanged.
+
+
+### Actual carried-item changes at sites
+
+Successful shared site observations compare active-party item quantities before/after activation, using the
+Party-owned inventory/equipment/cursor query. The cursor query retains stack quantity and resets with the
+existing held-item ID on seed/restore/clear. Moving items between packs, equipment and cursor or identifying an
+existing item does not create a reward. A changed roster does not establish item attribution: joining/leaving
+members bring their own packs. Reordering the same members is supported. Only net changes within the observation
+window are described; equal-ID grants and costs that cancel are not guessed as separate transactions.
+
+Actual ranges are keyed by shared item ID under `openyamm.discovery.site-effects.v1/<site>/event/<event>/item/`.
+Each ID has signed 64-bit min/max net deltas stored losslessly as `min-lo`, `min-hi`, `max-lo`, `max-hi` signed
+32-bit fields. No binary save version changes. Old absent fields still load; malformed/incomplete new records
+reject further writes atomically. No-change visits retain previous ranges; map refill preserves the namespace.
+
+This is an actual outcome history, not a second item database or reward-origin owner. Existing WorldItemSources
+continues to own source declarations and confirmed-delivery provenance. Atlas names/search use the active ItemTable
+and the party's existing identification knowledge; even Guide does not turn an actual unidentified receipt into
+an identified one. Non-identifiable items use their normal names. No instance enchantments or properties are
+inferred from a count change. The same Core observer works with the Atlas UI disabled. Delivery outside its
+synchronous window, including queued grants after an inherited callback's observer ends, remains separate work.
