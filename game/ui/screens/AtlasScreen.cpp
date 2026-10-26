@@ -1099,7 +1099,12 @@ void AtlasScreen::drawMap()
     }
     if (map != nullptr)
         drawPartyArrow(*map, image, floorPlan);
-    const bool overLayerControls = dungeon && pointerInside(canvasRect(34, 357, 356, 27));
+    const float zoomX = schematic ? 34 : 490;
+    const Rect zoomControls = canvasRect(zoomX, 357, 67, 27);
+    const Rect layerControls = canvasRect(34, 357, 356, 27);
+    const bool overLayerControls = dungeon && pointerInside(layerControls);
+    const GameplayInputFrame &input = inputFrame();
+    const bool touchDragging = input.mobileTouchDragActive || input.mobileTouchDragReleased;
     if (m_placingNote && map != nullptr && leftMouseJustPressed()
         && pointerInside(viewport) && pointerInside(image)
         && !pointerInside(canvasRect(490, 357, 67, 27)) && !overLayerControls)
@@ -1117,13 +1122,26 @@ void AtlasScreen::drawMap()
         m_noteError.clear(); m_placingNote = false; m_noteEditorOpen = true; m_dragging = false;
         setTextEditing(true);
     }
-    else if (!m_noteEditorOpen && leftMouseJustPressed() && pointerInside(viewport)
-        && !markerHovered && !overLayerControls)
+    else if (touchDragging && input.mobileTouchDragStarted)
+    {
+        const auto startsInside = [&input](const Rect &rect)
+        {
+            return input.mobileTouchDragStartX >= rect.x && input.mobileTouchDragStartX < rect.x + rect.width
+                && input.mobileTouchDragStartY >= rect.y && input.mobileTouchDragStartY < rect.y + rect.height;
+        };
+        // A recognized drag pans even when the finger originally pressed a pin. Buttons cancel that tap.
+        m_dragging = !m_noteEditorOpen && !m_placingNote && startsInside(viewport)
+            && !startsInside(zoomControls) && !(dungeon && startsInside(layerControls));
+        m_dragX = input.mobileTouchDragStartX;
+        m_dragY = input.mobileTouchDragStartY;
+    }
+    else if (!touchDragging && !m_noteEditorOpen && leftMouseJustPressed() && pointerInside(viewport)
+        && !markerHovered && !overLayerControls && !pointerInside(zoomControls))
     {
         m_dragging = true;
         m_dragX = mouseX(); m_dragY = mouseY();
     }
-    if (m_dragging && leftMouseDown())
+    if (m_dragging && (leftMouseDown() || input.mobileTouchDragReleased))
     {
         m_panX += mouseX() - m_dragX; m_panY += mouseY() - m_dragY;
         m_dragX = mouseX(); m_dragY = mouseY();
@@ -1131,7 +1149,6 @@ void AtlasScreen::drawMap()
     if (!leftMouseDown())
         m_dragging = false;
     setDesignClip(std::nullopt);
-    const float zoomX = schematic ? 34 : 490;
     if (button("atlas-zoom-out", canvasRect(zoomX, 357, 30, 27), "-")) m_zoom = std::max(1.0f, m_zoom - 0.25f);
     if (button("atlas-zoom-in", canvasRect(zoomX + 37, 357, 30, 27), "+")) m_zoom = std::min(3.0f, m_zoom + 0.25f);
     if (dungeon) drawFloorLayers(*map);

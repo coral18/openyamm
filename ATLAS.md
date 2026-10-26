@@ -2763,3 +2763,21 @@ harness supplies that directive on every launch and checks fresh capture timesta
 These fixes target Android `0.2.1-atlas` / `104`, with one default version in `android/gradle.properties`.
 The phone currently runs `0.2.0-atlas` / `103`; its first-launch proof is recorded in `ATLAS_ANDROID_QA.md`.
 Physical list-gesture checks on the updated APK and the wider Atlas acceptance matrix remain open.
+
+### Map drags starting on pins, 2026-10-26
+
+A native Windows reproduction confirmed that a recognized touch drag starting on a site pin did not pan the
+map, although dragging bare terrain worked. Map panning now captures the recognized gesture's original position,
+including starts on pins, and consumes its final release position. The existing shared button handling cancels
+the corresponding pin tap. Gestures beginning in the list, zoom buttons or dungeon height controls cannot capture
+the map. Ordinary mouse pin clicks retain their existing behavior.
+
+Windows Release builds pass. The MM7 Barrow Downs and MM8 Dagger Wound tours each produce five fresh captures.
+They exercise a two-axis 130-pixel drag (including 30 pixels delivered only on release), a reverse drag and
+gestures starting outside the map or on zoom controls. The terrain follows the expected offsets; the last two
+gestures leave the map viewport pixel-identical. The initial MM7 baseline separately reproduces the stationary
+pin-start drag. Captures and logs are retained privately under `atlas-map-pan-20261026` in the Windows development
+root. Reproduction tours are `tools/menu_tours/atlas_touch_map_mm7.yml` and `atlas_touch_map_mm8.yml`.
+
+These tours replay recognized shared-input frames, not Android OS events. This later source fix is not included
+in the already-built `0.2.1-atlas` APK. Physical gesture checks and the wider MM7/MM8 coverage matrix remain open.

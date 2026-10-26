@@ -1,0 +1,98 @@
+# Load an isolated MM8 save. Recognized touch frames, not Android OS injection.
+# The final release adds 30 px; gestures beginning in a list/control must not pan the map.
+output_dir: captures
+exit: true
+steps:
+- expect: gameplay
+- pause: true
+- click:
+  - 800
+  - 821
+- click:
+  - 1152
+  - 57
+- click:
+  - 160
+  - 190
+- click:
+  - 768
+  - 126
+- click:
+  - 275
+  - 126
+- text: Dagger Wound
+- key: Return
+- click:
+  - 1250
+  - 260
+- click:
+  - 1480
+  - 126
+- &id001
+  click:
+  - 1016
+  - 695
+- *id001
+- *id001
+- *id001
+- *id001
+- *id001
+- *id001
+- *id001
+- pointer_move:
+  - 1070
+  - 750
+- capture: zoomed-sites
+- pointer_down: &id002
+  - 536
+  - 342
+- touch_drag_start: *id002
+- touch_drag_move:
+  - 636
+  - 442
+- touch_drag_end:
+  - 666
+  - 472
+- pointer_move:
+  - 1070
+  - 750
+- capture: after-marker-drag
+- touch_drag_start:
+  - 950
+  - 500
+- touch_drag_move:
+  - 850
+  - 400
+- touch_drag_end:
+  - 850
+  - 400
+- pointer_move:
+  - 1070
+  - 750
+- capture: after-map-drag
+- touch_drag_start:
+  - 1250
+  - 400
+- touch_drag_move:
+  - 1000
+  - 350
+- touch_drag_end:
+  - 950
+  - 300
+- pointer_move:
+  - 1070
+  - 750
+- capture: list-drag-does-not-pan
+- touch_drag_start:
+  - 1016
+  - 695
+- touch_drag_move:
+  - 916
+  - 595
+- touch_drag_end:
+  - 886
+  - 565
+- pointer_move:
+  - 1070
+  - 750
+- capture: zoom-drag-does-not-pan
