@@ -86,6 +86,26 @@ acceptance remains pending; Windows native captures already cover the route, ret
 Private package, signature, runtime comparison, installation and startup receipts are under
 `atlas-android-023-20261027`. Persistent SDK/build/runtime caches stay under `android-local`, outside Git.
 
+## Prepared local Release, 2026-10-27: 0.2.4
+
+- Gameplay/data source: `c994819c5eb48c9c4ec8834cfc4ac2de7ef3b3bf`; Android version bumped to
+  `0.2.4-atlas` / `107`. This packages the scripted monster source/projection checkpoint in `ATLAS.md`.
+- The persistent local build succeeded. Gradle took 879.0 seconds (14 minutes 39 seconds including process
+  startup); the Windows host build reported no native work. Changed runtime ZIPs caused full asset staging and
+  APK repackaging. This changed-source build is not comparable to the earlier no-change timings.
+- ARM64, non-debuggable package checks passed, including 47 shaders and source-matching Atlas/mod manifests.
+  All 51,586 runtime entries were compared with the verified 0.2.2 seed: three declared changes, 15 declared
+  additions, no deletions and no unexpected changes/additions. All 18 changed/added source files match exactly,
+  including 14 generated monster catalogs and the late Tularean declaration. No MM6 data updates were included.
+- Signature verification passed with the same persistent Extended certificate as 0.2.3, including v1/v2.
+  ZIP alignment and every native library's ELF LOAD alignment are compatible with 16 KiB pages.
+- Archived APK: `OpenYAMM-Extended-atlas-0.2.4-arm64.apk`, 3,469,781,018 bytes;
+  SHA256 `2d6d63b82c3da090c63b8390e3047353830418100c9fd4a7d67caa2e4a07044c`.
+
+Private APK, build log, source/runtime comparison, signature/alignment reports and the verifier are retained under
+`atlas-android-024-20261027`. ADB listed no devices after verification, so this APK has not been installed or
+accepted on POCO. The last verified installed version remains 0.2.3 / 106. No phone data was written in this run.
+
 ## Physical acceptance gates (current)
 
 | Check | Status |

@@ -69,6 +69,11 @@ tables, and do not bundle its HTML, JS, translated prose, generated illustration
 | Optional Atlas mod | Profile-controlled native UI module | Same shared module | Launcher toggles and wider device checks |
 | Localization parity | Current engine language | Current engine language | Integrate engine localization; no copied guide translation bundle |
 
+The 2026-10-27 replacement-model sight audit found no `models/actors.yml` in the active MM7/MM8 runtime
+packages. Actor model replacements are currently experimental, behind the default-off `debug.actor_models`
+setting; normal sprite observations remain the active path. The model observation limitation is retained in the
+matrix as a conditional gap and recorded for a later decision in `ATLAS_DECISIONS.md`; no model hook was added.
+
 Completion requires the missing native functions, data validation against the active game packages, meaningful
 unit/runtime checks and visual checks. A placeholder page or a list of unrelated journal text is not a completed
 quest guide. Reference data must describe the active merged/modded game, rather than silently assert vanilla rules.

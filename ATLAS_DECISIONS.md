@@ -10,6 +10,7 @@ istotne elementy uzgodnionego atlasu MM7/MM8 i usuwamy błędy. Nowe funkcje wym
 | Prognozowanie przyszłej dostępności transportu i sklepów | Oczekuje na decyzję | Oddzielne od już działających tras, rozkładów i zapamiętanych ofert. |
 | Dodatkowe style własnych markerów i rozbudowany edytor notatek | Oczekuje na decyzję | Podstawowe markery oraz dodawanie, edycja i usuwanie notatek już działają. |
 | Nowa ilustracja kontynentu Jadame | Oczekuje na decyzję | Działa natywny schemat regionów; nowa grafika nie blokuje poprawności atlasu. |
+| Automatyczne obserwacje przy eksperymentalnej podmianie potworów na modele 3D | Oczekuje na decyzję | Audyt 2026-10-27: aktywne paczki MM7/MM8 nie zawierają manifestów `models/actors.yml`, a podmiany wymagają opcji debug `actor_models`, domyślnie wyłączonej. Zapis obserwacji sprite'ów działa; obsługi modeli nie wdrożono. |
 | Porcjowanie i zachowywanie indeksu Guide Mode | Małe porcjowanie zaakceptowane; cache odłożony | Po diagnozie użytkownik zezwolił na prostą optymalizację. Wdrożono jedną mapę na klatkę z pierwszeństwem aktualnej lokacji; Windows: wejście ok. 0,35–0,36 s zamiast 3,1–3,2 s. Zachowywanie indeksu między trybami nie zostało wdrożone. |
 
 Ta lista nie jest listą warunków ukończenia obecnego etapu. Nie dopisujemy nowych pomysłów do kryteriów

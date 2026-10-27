@@ -2905,3 +2905,14 @@ Public tours are `tools/menu_tours/atlas_scripted_spawns*.yml`; private logs, ha
 `atlas-scripted-spawns-20261027` in the Windows development root. This feature has not yet been packaged into
 the POCO 0.2.3 APK. Remaining content, relative-position sources, Android/controller and other completion gates
 remain in `ATLAS_COVERAGE.md`; this checkpoint does not complete the full Atlas goal or add an MM6 Atlas.
+
+### Android 0.2.4 package checkpoint, 2026-10-27
+
+The local ARM64 Release now packages the preceding scripted-source and projection changes as 0.2.4 / 107.
+Package checks verify 51,586 runtime entries, exact bytes for all 18 source data updates, no unexpected seed
+changes/additions, the persistent Extended signing certificate, and 16 KiB ZIP/ELF alignment. The changed-source
+Gradle invocation took 879.0 seconds; full asset staging/repackaging remains expensive despite persistent tools
+and native objects. No downloads or new CI clone were needed. `ATLAS_ANDROID_QA.md` records hashes and evidence.
+
+ADB listed no phone after verification. This is a prepared update, not device acceptance or full Atlas completion;
+POCO remains on the last verified 0.2.3 until an actual update. No MM6 Atlas work was performed.
