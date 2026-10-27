@@ -123,3 +123,9 @@ accepted on POCO. The last verified installed version remains 0.2.3 / 106. No ph
 
 Private APKs, verification reports, backups and captures are retained outside Git under the dated Android QA
 directory. Controller acceptance and the wider Atlas content matrix remain separate unfinished work.
+
+The 2026-10-27 controller source audit found no native SDL gamepad initialization or event routing in the active
+engine/game input path. This is an implementation gap, not just a missing physical test; current Tab/Enter menu
+focus must not be reported as controller support. The later Atlas search submission fix is verified through
+Windows native input tours and is not included in the archived/prepared 0.2.4 APK. No later Android package or
+device acceptance is claimed for that source change.

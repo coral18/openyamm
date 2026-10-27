@@ -262,11 +262,27 @@ void AtlasScreen::handleSdlEvent(const SDL_Event &event)
             setTextEditing(false);
             m_suppressEscape = true;
         }
-        else if (event.key.scancode == SDL_SCANCODE_RETURN && !m_noteEditorOpen)
-        {
-            m_searchEditing = false;
-            setTextEditing(false);
-        }
+    }
+}
+
+void AtlasScreen::drawSearchField(const std::string &id, const Rect &rect)
+{
+    const bool submit = m_searchEditing && keyPressed(SDL_SCANCODE_RETURN);
+    if (m_searchEditing && (keyPressed(SDL_SCANCODE_TAB) || (leftMouseJustPressed() && !pointerInside(rect))))
+    {
+        m_searchEditing = false;
+        setTextEditing(false);
+    }
+    if (button(id, rect, "", "text_field"))
+    {
+        m_searchEditing = true;
+        setTextEditing(true);
+    }
+    // Commit after activation; the same Enter must not focus the field again.
+    if (submit)
+    {
+        m_searchEditing = false;
+        setTextEditing(false);
     }
 }
 
@@ -546,16 +562,7 @@ void AtlasScreen::drawScreen(float)
         return;
     }
     const Rect search = canvasRect(25, 53, 274, 28);
-    if (m_searchEditing && (keyPressed(SDL_SCANCODE_TAB) || (leftMouseJustPressed() && !pointerInside(search))))
-    {
-        m_searchEditing = false;
-        setTextEditing(false);
-    }
-    if (button("atlas-search", search, "", "text_field"))
-    {
-        m_searchEditing = true;
-        setTextEditing(true);
-    }
+    drawSearchField("atlas-search", search);
     textInRect(canvasRect(35, 57, 253, 20), m_search.empty() ? (m_connectionView ? "Search these connections..."
         : m_guide ? "Search the world..." : "Search discovered places...") : m_search + (m_searchEditing ? "_" : ""),
         "menu_lucida", 11);
@@ -1678,16 +1685,7 @@ void AtlasScreen::drawReference()
         return;
     }
     const Rect search = canvasRect(25, 89, 245, 25);
-    if (m_searchEditing && (keyPressed(SDL_SCANCODE_TAB) || (leftMouseJustPressed() && !pointerInside(search))))
-    {
-        m_searchEditing = false;
-        setTextEditing(false);
-    }
-    if (button("atlas-ref-search", search, "", "text_field"))
-    {
-        m_searchEditing = true;
-        setTextEditing(true);
-    }
+    drawSearchField("atlas-ref-search", search);
     textInRect(canvasRect(32, 91, 229, 20), m_search.empty()
         ? (m_classComparison ? "Filter skills..." : "Search this section...") : m_search,
                "menu_lucida", 11);

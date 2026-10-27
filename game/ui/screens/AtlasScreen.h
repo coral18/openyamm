@@ -58,6 +58,7 @@ private:
     void indexQuestLocations();
     void rebuildWorld();
     void drawNoteEditor();
+    void drawSearchField(const std::string &id, const Rect &rect);
     void drawNoteElevation();
     void saveNote(bool remove);
     void closeNoteEditor();

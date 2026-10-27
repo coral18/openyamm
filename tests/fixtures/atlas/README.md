@@ -1,5 +1,19 @@
 # Atlas fixtures
 
+## Search submission and Map Book return
+
+Run `tools/menu_tours/atlas_search_submit.yml` with an isolated Harmondale (MM7) or Dagger Wound (MM8) save as
+`saves/before.oysav`, with no open dialogue or held item. Use a new campaign with MM7 QBit 760 / MM8 QBit 403
+clear for the accompanying state verifiers. The tour enters through Map Book, submits both map and Guidebook
+queries, checks that the real SDL text-input session closes, re-enters through keyboard focus, cancels editing
+and returns to Map Book/gameplay before quicksaving. It captures five states; inspect the field and Map Book
+captures. `no_text_input` is an SDL session check, not an assumption that an Enter press committed the field.
+
+Run `mm7_search_privacy.yml` or `mm8_search_privacy.yml` afterward from the same isolated directory. Each checks
+the expected region and campaign flag before/after the UI and another save/load. These ten-step verifiers check
+those fields, not the entire campaign or discovery snapshot. The 2026-10-27 native MM7 run failed the session
+check before the fix; both worlds pass afterward. This verifies keyboard navigation, not native gamepad input.
+
 ## Packaged dungeon projection and discovery audit
 
 The opt-in test `packaged MM7 MM8 dungeon layers preserve discovery projection and privacy` reads every MM7/MM8

@@ -1,0 +1,17 @@
+id: atlas.mm8_search_privacy
+title: Atlas search preserves the checked campaign flag through save and load
+world: mm8
+mode: faithful
+steps:
+- load_game: {name: before, path: saves/before.oysav}
+- &map
+  assert: {map: out01.odm}
+- &flag
+  assert: {qbit_clear: [403]}
+- load_game: {name: quicksave, path: saves/quicksave.oysav}
+- *map
+- *flag
+- save_game: search-verified
+- load_game: search-verified
+- *map
+- *flag

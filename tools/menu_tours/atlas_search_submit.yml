@@ -1,0 +1,40 @@
+# Isolated MM7 Harmondale or MM8 Dagger Wound save, no active dialogue or held item.
+# Enter commits an already edited query; another Enter may focus it again. Escape then leaves the Atlas.
+output_dir: captures
+exit: true
+steps:
+- expect: gameplay
+- action: map_book
+- click: [1250, 770]
+- expect: pause
+- click: [275, 126]
+- expect: text_input
+- text: Temple
+- key: Return
+- capture: map-search-enter
+- expect: no_text_input
+- capture: map-search-submitted
+- key: Return
+- expect: text_input
+- key: Return
+- expect: no_text_input
+- click: [450, 57]
+- click: [275, 191]
+- expect: text_input
+- text: Goblin
+- key: Return
+- expect: no_text_input
+- capture: reference-search-submitted
+- key: Return
+- expect: text_input
+- key: Escape
+- expect: pause
+- expect: no_text_input
+- capture: reference-search-cancelled
+- key: Escape
+- expect: gameplay
+- capture: returned-map-book
+- key: Escape
+- expect: gameplay
+- key: F9
+- wait: 1

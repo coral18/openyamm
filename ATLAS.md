@@ -2931,3 +2931,22 @@ runtime code change. It does not establish physical input, full campaign explora
 overlapping rooms in one height band. Those limits remain in `ATLAS_COVERAGE.md`. The package test and its opt-in
 invocation are documented in `tests/fixtures/atlas/README.md`; MM6 is excluded. No new APK is needed for test/docs
 changes: the previously verified 0.2.4 package remains the prepared device update.
+
+### Search submission keyboard fix, 2026-10-27
+
+Enter previously cleared text-editing state in the SDL event handler, then the same frame activated the focused
+search button and opened the field again. Both the map and Guidebook searches now commit after field activation
+through one shared field-input path. Enter still opens a focused inactive field; Escape still cancels editing
+before leaving the Atlas. No discovery state, asset data or save format changes.
+
+An isolated native MM7 tour reproduced the fault: after Enter, `expect: no_text_input` failed against the actual
+SDL window session. After the fix, MM7 and MM8 each pass the 35-step `atlas_search_submit.yml` tour with five fresh
+captures. Inspected captures show a committed map query, Guidebook query and return to the ordinary Map Book.
+Two faithful ten-step post-UI verifiers preserve the checked map and campaign flag through another save/load;
+they do not certify the whole save or every discovery. The public fixtures and session expectations are
+documented in `tests/fixtures/atlas/README.md` and `tools/RUN_GAME.md`. Private captures/logs are under
+`atlas-search-submit-20261027` in the Windows development root.
+
+The controller source audit confirms native SDL gamepad input still needs implementation; these are keyboard
+checks. The shared UI fix is not yet in the prepared Android 0.2.4 package. Device/controller checks, stacked-floor
+semantics and the remaining coverage matrix remain open; this checkpoint does not complete the Atlas goal.

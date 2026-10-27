@@ -252,6 +252,7 @@ void MenuInputTour::update(const std::string &path, GameplayInputFrame &input, I
         const bool matched = (step.text == "gameplay" && pScreen == nullptr) ||
                              (step.text == "pause" && pScreen != nullptr && pScreen->mode() == AppMode::PauseMenu) ||
                              (step.text == "text_input" && pWindow != nullptr && SDL_TextInputActive(pWindow)) ||
+                             (step.text == "no_text_input" && pWindow != nullptr && !SDL_TextInputActive(pWindow)) ||
                              (step.text == "menu_cursor" && pWindow != nullptr &&
                               !SDL_GetWindowRelativeMouseMode(pWindow) && SDL_CursorVisible());
         if (!matched)

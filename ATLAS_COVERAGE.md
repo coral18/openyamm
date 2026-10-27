@@ -17,6 +17,11 @@ Current acceptance priorities:
 4. Notes, observations and mod enable/disable behavior that preserve existing saves and gameplay state.
 5. Shared UI checks on Android and controller, including a real-device check before claiming device acceptance.
 
+Controller audit (2026-10-27): the current engine initializes SDL video/events and the game input path handles
+keyboard/mouse/touch, but it does not initialize or route native SDL gamepad input. Existing menu Tab/Enter
+focus is keyboard support. Controller work therefore includes implementation as well as real-device checks;
+passing keyboard tours must not be presented as controller acceptance.
+
 The 2026-10-26 Windows Release unit recheck passed 14 focused cases / 996 assertions for fog, party projection,
 discovery filtering, MM7/MM8 identity, dungeon reveal/layers and note ownership/projection. The separate current
 Castle Harmondale fountain check passed 1 case / 47 assertions against the mounted runtime, including all six

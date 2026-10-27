@@ -71,7 +71,8 @@ name, `text: My party`, `wheel: -3`, `wait: 1.5` in seconds, and `capture: name`
 centred menu canvas. Text requires an active SDL text-input session and travels through the SDL event queue to the
 currently active field. `pointer_down`, `pointer_move` and `pointer_up` accept the same coordinate pair for dragging;
 `key_down` and `key_up` hold and release a key across frames. `expect: gameplay`, `expect: pause`,
-`expect: text_input` and `expect: menu_cursor` fail the run when their screen/input condition is not met.
+`expect: text_input`, `expect: no_text_input` and `expect: menu_cursor` fail the run when their screen/input
+condition is not met. The text-input expectations check the game window's actual SDL text-input session.
 The cursor check verifies visibility and disabled relative mode on the game window, independently of desktop focus.
 For gameplay checks, `action: quest` (or another keyboard binding INI key) presses the native gameplay action.
 `right_down: [x, y]` and `right_up: [x, y]` hold/release RMB for inspectors and modern cursor interaction.
