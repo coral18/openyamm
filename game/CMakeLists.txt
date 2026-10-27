@@ -11,6 +11,8 @@ add_library(openyamm_game STATIC
     render/WaterRenderer.cpp
     app/ScreenManager.cpp
     app/GameInputSystem.cpp
+    app/GamepadUiInput.cpp
+    ui/ControllerPointerOverlay.cpp
     app/ProfilingControl.cpp
     arcomage/ArcomageAi.cpp
     arcomage/ArcomageLoader.cpp

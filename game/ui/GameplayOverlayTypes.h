@@ -689,6 +689,7 @@ struct GameplayOverlayInteractionState
     bool interactiveAtlasAvailable = false;
     bool interactiveAtlasRequested = false;
     GameplayJournalPointerTarget journalPressedTarget = {};
+    GameplayJournalPointerTargetType journalFocusTarget = GameplayJournalPointerTargetType::None;
     bool journalMapKeyZoomLatch = false;
     bool quickReferenceToggleLatch = false;
     bool quickReferenceClickLatch = false;

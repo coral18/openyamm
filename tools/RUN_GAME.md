@@ -74,6 +74,13 @@ currently active field. `pointer_down`, `pointer_move` and `pointer_up` accept t
 `expect: text_input`, `expect: no_text_input` and `expect: menu_cursor` fail the run when their screen/input
 condition is not met. The text-input expectations check the game window's actual SDL text-input session.
 The cursor check verifies visibility and disabled relative mode on the game window, independently of desktop focus.
+Controller tours may use `gamepad_begin: true`, then `gamepad_button: a`, `gamepad_button_down: a`,
+`gamepad_button_up: a` and `gamepad_axis: {axis: leftx, value: 0.6}`. Button/axis names are SDL mapping names;
+axis values must be in `[-1, 1]`. `gamepad_pointer: [x, y]` calibrates only that virtual device's internal cursor
+in the same 1600x900 canvas, for precise UI targets before stick motion. No system pointer/key events are sent.
+The tour owns a process-local SDL virtual gamepad. Only its validated virtual device may bypass background
+window gating; physical controllers retain foreground/neutral-input protection. Regular UI input and rendering
+handle its clicks, keyboard navigation and axes. Text remains the ordinary SDL text-input path.
 For gameplay checks, `action: quest` (or another keyboard binding INI key) presses the native gameplay action.
 `right_down: [x, y]` and `right_up: [x, y]` hold/release RMB for inspectors and modern cursor interaction.
 These operations use the same input frame as the real controls; they do not invoke UI renderer callbacks.

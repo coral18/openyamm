@@ -4,6 +4,7 @@
 
 #include <filesystem>
 #include <functional>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -16,6 +17,9 @@ class ScreenshotCaptureService;
 class MenuInputTour
 {
   public:
+    ~MenuInputTour();
+    SDL_JoystickID virtualGamepadId() const;
+    std::optional<std::array<float, 2>> takeGamepadPointer();
     void update(const std::string &path, GameplayInputFrame &input, IScreen *pScreen,
                 ScreenshotCaptureService &captures, const std::function<void()> &requestPause = {});
 
@@ -48,5 +52,11 @@ class MenuInputTour
     float m_y = 0;
     float m_lookRateX = 0;
     float m_lookRateY = 0;
+    SDL_Joystick *m_pVirtualJoystick = nullptr;
+    SDL_JoystickID m_virtualGamepadId = 0;
+    SDL_GamepadButton m_releaseGamepadButton = SDL_GAMEPAD_BUTTON_INVALID;
+    std::optional<std::array<float, 2>> m_gamepadPointer;
+    std::optional<std::string> m_previousBackgroundGamepadHint;
+    bool m_changedBackgroundGamepadHint = false;
 };
 } // namespace OpenYAMM::Game

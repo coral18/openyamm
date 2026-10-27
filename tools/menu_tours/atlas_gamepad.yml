@@ -1,0 +1,45 @@
+# Isolated Harmondale/MM7 or Dagger Wound/MM8 save. All controller events come from this process's SDL virtual pad.
+# Pointer calibration targets test controls; subsequent stick movement and button events use normal game input.
+output_dir: captures
+exit: true
+steps:
+- expect: gameplay
+- gamepad_begin: true
+- wait: 0.5
+- gamepad_button: y
+- capture: gamepad-map-book
+- gamepad_button: dpdown
+- gamepad_button: dpdown
+- gamepad_button: dpdown
+- gamepad_button: dpdown
+- gamepad_button: dpdown
+- capture: gamepad-map-book-focused
+- gamepad_button: a
+- expect: pause
+- capture: gamepad-atlas-entry
+- gamepad_pointer: [650, 450]
+- capture: pointer-start
+- gamepad_axis: {axis: leftx, value: 0.6}
+- wait: 0.1
+- gamepad_axis: {axis: leftx, value: 0}
+- capture: pointer-moved
+- gamepad_button: dpdown
+- gamepad_button: dpdown
+- gamepad_button: dpdown
+- gamepad_button: a
+- capture: gamepad-guidebook
+- gamepad_pointer: [275, 191]
+- gamepad_button: a
+- expect: text_input
+- text: Goblin
+- gamepad_button: b
+- expect: no_text_input
+- expect: pause
+- capture: gamepad-search-cancelled
+- gamepad_button: b
+- expect: gameplay
+- capture: gamepad-returned-map-book
+- gamepad_button: b
+- expect: gameplay
+- key: F9
+- wait: 1

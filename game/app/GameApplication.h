@@ -27,6 +27,7 @@
 #include "game/maps/SaveGame.h"
 #include "game/scene/IMapSceneRuntime.h"
 #include "game/ui/screens/LoadingOverlayScreen.h"
+#include "game/ui/ControllerPointerOverlay.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -242,6 +243,8 @@ private:
     void beginLoadingOverlay(
         LoadingOverlayScreen::Presentation presentation = LoadingOverlayScreen::Presentation::Fullscreen);
     void drawLoadingOverlay();
+    void drawControllerPointer();
+    const void *gamepadUiContext() const;
     uint32_t renderLoadingOverlayProgress(int progressPercent);
     void prepareGameplayRendering();
     void pumpLoadingOverlayAnimation();
@@ -312,6 +315,8 @@ private:
     uint32_t m_mainMenuRenderedFrameCount = 0;
     uint8_t m_deferredMainMenuChildWarmupStage = 0;
     std::unique_ptr<LoadingOverlayScreen> m_pLoadingOverlayScreen;
+    std::unique_ptr<ControllerPointerOverlay> m_pControllerPointer;
+    bool m_controllerPointerHidden = false;
     std::string m_loadingOverlayBackgroundTextureName;
     LoadingOverlayScreen::Presentation m_loadingOverlayPresentation = LoadingOverlayScreen::Presentation::Fullscreen;
     bool m_loadingOverlayActive = false;

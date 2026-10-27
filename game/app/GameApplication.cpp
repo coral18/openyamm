@@ -2770,6 +2770,7 @@ GameApplication::GameApplication(const Engine::ApplicationConfig &config)
           {
               renderFrame(width, height, mouseWheelDelta, deltaSeconds);
               drawLoadingOverlay();
+              drawControllerPointer();
               updateScreenshotCaptureFrame();
           },
           std::bind(&GameApplication::shutdownApplication, this),
@@ -5703,6 +5704,8 @@ bool GameApplication::processPendingDebugMapJump()
 
 void GameApplication::handleSdlEvent(const SDL_Event &event)
 {
+    m_gameInputSystem.setGamepadUiContext(gamepadUiContext());
+    const std::optional<SDL_Event> gamepadKey = m_gameInputSystem.handleGamepadEvent(event);
     if (m_debugConsoleRendererInitialized)
     {
         ImGui_ImplSDL3_ProcessEvent(&event);
@@ -5780,8 +5783,44 @@ void GameApplication::handleSdlEvent(const SDL_Event &event)
 
     if (pActiveScreen != nullptr)
     {
-        pActiveScreen->handleSdlEvent(event);
+        if (gamepadKey)
+        {
+            const SDL_JoystickID fixture = m_menuInputTour.virtualGamepadId();
+            if (SDL_GetKeyboardFocus() != nullptr
+                || (fixture != 0 && event.gbutton.which == fixture && SDL_IsJoystickVirtual(fixture)))
+                pActiveScreen->handleSdlEvent(*gamepadKey);
+        }
+        else pActiveScreen->handleSdlEvent(event);
     }
+}
+
+const void *GameApplication::gamepadUiContext() const
+{
+    if (m_loadingOverlayActive) return nullptr;
+    if (const IScreen *pScreen = m_screenManager.activeScreen())
+        return dynamic_cast<const MenuScreenBase *>(pScreen);
+    const GameplayUiController::JournalScreenState &journal =
+        m_gameSession.gameplayScreenRuntime().journalScreenStateReadOnly();
+    return journal.active ? &journal : nullptr;
+}
+
+void GameApplication::drawControllerPointer()
+{
+    const bool visible = m_gameInputSystem.frame().gamepadPointerActive && gamepadUiContext() != nullptr
+        && !m_debugConsole.wantsGameplayInputBlocked();
+    if (visible && m_pAssetFileSystem != nullptr)
+    {
+        if (!m_pControllerPointer)
+            m_pControllerPointer = std::make_unique<ControllerPointerOverlay>(*m_pAssetFileSystem);
+        m_pControllerPointer->renderFrame(m_lastFrameWidth, m_lastFrameHeight, m_gameInputSystem.frame(), 0);
+        SDL_HideCursor();
+    }
+    else if (m_controllerPointerHidden)
+    {
+        SDL_Window *pWindow = SDL_GetKeyboardFocus();
+        if (pWindow == nullptr || !SDL_GetWindowRelativeMouseMode(pWindow)) SDL_ShowCursor();
+    }
+    m_controllerPointerHidden = visible;
 }
 
 bool GameApplication::pendingInputPromptActive() const
@@ -6295,6 +6334,7 @@ void GameApplication::applyStartupDebugSettingsToActiveRuntime()
 
 void GameApplication::shutdownApplication()
 {
+    m_gameInputSystem.shutdownGamepad();
     setGameplayProfilingEnabled(false);
     m_screenManager.setActiveScreen(nullptr);
     m_pLoadingOverlayScreen.reset();
@@ -8132,6 +8172,7 @@ void GameApplication::restoreSavedOutdoorWorldStateForSelectedMap()
 
 void GameApplication::shutdownRenderer()
 {
+    m_pControllerPointer.reset();
     m_cinematicGrading.shutdown();
     m_gameAudioSystem.stopAllPlayback();
     MenuScreenBase::shutdownSharedResources();
@@ -9616,6 +9657,10 @@ void GameApplication::renderFrame(int width, int height, float mouseWheelDelta, 
         touchControls = m_gameSession.gameplayScreenRuntime().mobileTouchControls(width, height);
     }
 #endif
+    m_gameInputSystem.setGamepadUiContext(gamepadUiContext());
+    if (const SDL_JoystickID fixture = m_menuInputTour.virtualGamepadId(); fixture != 0)
+        if (!m_gameInputSystem.selectVirtualGamepad(fixture))
+            throw std::runtime_error("Invalid virtual gamepad fixture");
     m_gameInputSystem.updateFromEngineInput(
         width,
         height,
@@ -9626,7 +9671,9 @@ void GameApplication::renderFrame(int width, int height, float mouseWheelDelta, 
         mobileJumpGestureEnabled,
         mobileFlightControlsEnabled,
         mobileInspectControlEnabled,
-        touchControls);
+        touchControls,
+        deltaSeconds,
+        m_menuInputTour.virtualGamepadId());
     m_menuInputTour.update(m_settings.menuInputTourPath, m_gameInputSystem.frame(), m_screenManager.activeScreen(),
                            m_screenshotCaptureService, [this]()
                            {
@@ -9634,6 +9681,14 @@ void GameApplication::renderFrame(int width, int height, float mouseWheelDelta, 
                                    throw std::runtime_error("Cannot pause before gameplay is loaded");
                                openMenuScreen(true);
                            });
+    if (const SDL_JoystickID fixture = m_menuInputTour.virtualGamepadId(); fixture != 0)
+    {
+        if (!m_gameInputSystem.selectVirtualGamepad(fixture))
+            throw std::runtime_error("Invalid virtual gamepad fixture");
+        if (const auto point = m_menuInputTour.takeGamepadPointer())
+            if (!m_gameInputSystem.positionVirtualGamepad(fixture, (*point)[0], (*point)[1]))
+                throw std::runtime_error("Invalid virtual gamepad pointer");
+    }
     m_gameSession.bindCurrentGameplayInputFrame(&m_gameInputSystem.frame());
     recordFrameDiagnostics(m_framePerformanceDiagnostics.inputNanoseconds, inputBeginTickCount);
 

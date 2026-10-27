@@ -583,12 +583,12 @@ bool MenuScreenBase::leftMouseDown() const
 
 bool MenuScreenBase::leftMouseJustPressed() const
 {
-    return m_leftMouseDown && !m_leftMouseDownPrevious;
+    return !inputFrame().pointerCancelled && m_leftMouseDown && !m_leftMouseDownPrevious;
 }
 
 bool MenuScreenBase::leftMouseJustReleased() const
 {
-    return !m_leftMouseDown && m_leftMouseDownPrevious;
+    return !inputFrame().pointerCancelled && !m_leftMouseDown && m_leftMouseDownPrevious;
 }
 
 bool MenuScreenBase::rightMouseDown() const

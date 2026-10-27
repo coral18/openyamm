@@ -2950,3 +2950,31 @@ documented in `tests/fixtures/atlas/README.md` and `tools/RUN_GAME.md`. Private 
 The controller source audit confirms native SDL gamepad input still needs implementation; these are keyboard
 checks. The shared UI fix is not yet in the prepared Android 0.2.4 package. Device/controller checks, stacked-floor
 semantics and the remaining coverage matrix remain open; this checkpoint does not complete the Atlas goal.
+
+### Native controller UI and Map Book sidebar, 2026-10-27
+
+Shared SDL gamepad input now opens the existing Map Book action with North/Y. In menus, the D-pad or shoulders
+move focus, South/A selects and East/B backs out; the left stick moves an internal cursor and the right stick
+scrolls its target. Device changes, focus loss and UI transitions cancel held interactions and require neutral
+controls before continuing. Input stays inside this application; no operating-system pointer or keyboard
+injection is used. Existing mouse, keyboard and touch paths remain available. This is UI navigation, not a
+complete movement/combat controller profile.
+
+The user tested a physical controller in MM7 and confirmed Map Book opening and Atlas controls. Their requested
+follow-up adds visible D-pad focus to the ordinary Map Book sidebar before entering Atlas. South activates its
+existing action; Tab/Shift+Tab and Return/Space use the same path. An Atlas-disabled profile omits that focus
+target, while mouse/touch takeover clears focus. The requested sidebar behavior is in the current native build;
+its separate physical follow-up is pending.
+
+The focused Release suite passes 13 cases / 198 assertions, covering SDL virtual devices, focus navigation,
+short taps, neutral barriers, pointer bounds, mouse takeover, unplug cancellation and existing keyboard/touch
+regressions. Five native MM7/MM8 tours pass 166 UI steps with 29 fresh captures: controller entry/Guidebook/back,
+keyboard search submission and an Atlas-disabled sidebar. Selected captures show the actual highlighted Atlas
+or Close button and the returned UI. Five post-UI verifiers pass 50 steps through another save/load, checking
+the specified map/campaign flag rather than certifying every saved field. No save format or Atlas data changes.
+
+The public controller tour is `tools/menu_tours/atlas_gamepad.yml`; reproduction notes are in
+`tests/fixtures/atlas/README.md` and `tools/RUN_GAME.md`. Private fixtures, logs and captures are retained under
+`atlas-controller-20261027` in the Windows development root. Controller and search fixes target Android
+0.2.5 / 108; a source version bump is not an APK build or device acceptance. Remaining Android checks and the
+agreed coverage matrix stay open. No MM6 Atlas work was performed.

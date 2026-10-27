@@ -5,6 +5,7 @@
 #include "game/ui/RestHourglassAnimation.h"
 #include "engine/SpriteAtlas.h"
 #include "game/ui/GameplayUiSkin.h"
+#include "game/ui/GameplayJournalNavigation.h"
 
 #include "engine/ImageAssetLoader.h"
 
@@ -4054,6 +4055,13 @@ void GameplayPartyOverlayRenderer::renderJournalOverlay(GameplayScreenRuntime &c
                 selected |= id == std::string("JournalNotes") + categories[i] + "Button"
                     && size_t(journalScreen.notesCategory) == i;
             }
+            if (context.interactionState().journalFocusTarget != GameplayJournalPointerTargetType::None)
+                for (const auto &[layoutId, type] : GameplayJournalMainTargets)
+                    if (id == layoutId)
+                    {
+                        selected = context.interactionState().journalFocusTarget == type;
+                        break;
+                    }
             GameplayUiSkin::renderButton(context, id, width, height, selected);
         };
 

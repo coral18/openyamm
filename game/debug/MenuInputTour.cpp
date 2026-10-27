@@ -5,6 +5,7 @@
 
 #include <yaml-cpp/yaml.h>
 #include <algorithm>
+#include <cmath>
 #include <iostream>
 #include <stdexcept>
 
@@ -23,9 +24,43 @@ SDL_Window *tourWindow()
 }
 } // namespace
 
+MenuInputTour::~MenuInputTour()
+{
+    if (SDL_WasInit(SDL_INIT_GAMEPAD) != 0)
+    {
+        if (m_pVirtualJoystick != nullptr) SDL_CloseJoystick(m_pVirtualJoystick);
+        if (m_virtualGamepadId != 0) SDL_DetachVirtualJoystick(m_virtualGamepadId);
+    }
+    if (m_changedBackgroundGamepadHint)
+    {
+        if (m_previousBackgroundGamepadHint)
+            SDL_SetHint(SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS, m_previousBackgroundGamepadHint->c_str());
+        else SDL_ResetHint(SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS);
+    }
+}
+
+SDL_JoystickID MenuInputTour::virtualGamepadId() const
+{
+    return m_virtualGamepadId;
+}
+
+std::optional<std::array<float, 2>> MenuInputTour::takeGamepadPointer()
+{
+    const auto result = m_gamepadPointer;
+    m_gamepadPointer.reset();
+    return result;
+}
+
 void MenuInputTour::update(const std::string &path, GameplayInputFrame &input, IScreen *pScreen,
                            ScreenshotCaptureService &captures, const std::function<void()> &requestPause)
 {
+    if (m_releaseGamepadButton != SDL_GAMEPAD_BUTTON_INVALID)
+    {
+        if (!SDL_SetJoystickVirtualButton(m_pVirtualJoystick, int(m_releaseGamepadButton), false))
+            throw std::runtime_error(SDL_GetError());
+        SDL_UpdateJoysticks();
+        m_releaseGamepadButton = SDL_GAMEPAD_BUTTON_INVALID;
+    }
     if (path.empty() ||
         (m_loaded && m_index == m_steps.size() && !m_release && !m_exit && m_releaseKey == SDL_SCANCODE_UNKNOWN))
     {
@@ -70,7 +105,19 @@ void MenuInputTour::update(const std::string &path, GameplayInputFrame &input, I
             const YAML::Node value = node.begin()->second;
             Step step;
             step.kind = kind;
-            if (kind == "click" || kind == "pointer_down" || kind == "pointer_move" || kind == "pointer_up"
+            if (kind == "gamepad_begin")
+            {
+                if (!value.as<bool>()) throw std::runtime_error("gamepad_begin must be true");
+            }
+            else if (kind == "gamepad_axis")
+            {
+                step.text = value["axis"].as<std::string>();
+                step.x = value["value"].as<float>();
+                if (!std::isfinite(step.x) || step.x < -1 || step.x > 1)
+                    throw std::runtime_error("gamepad_axis value must be in [-1, 1]");
+            }
+            else if (kind == "click" || kind == "pointer_down" || kind == "pointer_move" || kind == "pointer_up"
+                || kind == "gamepad_pointer"
                 || kind == "right_down" || kind == "right_up" || kind == "look_rate"
                 || kind == "touch_drag_start" || kind == "touch_drag_move" || kind == "touch_drag_end")
             {
@@ -87,7 +134,8 @@ void MenuInputTour::update(const std::string &path, GameplayInputFrame &input, I
                     throw std::runtime_error("Menu tour pause must be true");
             }
             else if (kind == "key" || kind == "key_down" || kind == "key_up" || kind == "text" || kind == "capture" ||
-                     kind == "expect" || kind == "action" || kind == "action_down" || kind == "action_up")
+                     kind == "expect" || kind == "action" || kind == "action_down" || kind == "action_up"
+                     || kind == "gamepad_button" || kind == "gamepad_button_down" || kind == "gamepad_button_up")
             {
                 step.text = value.as<std::string>();
             }
@@ -101,16 +149,22 @@ void MenuInputTour::update(const std::string &path, GameplayInputFrame &input, I
         m_nextTicks = SDL_GetTicks() + 2000;
     }
     const float scale = std::min(input.screenWidth / 1600.0f, input.screenHeight / 900.0f);
-    input.pointerX = (input.screenWidth - 1600 * scale) / 2 + m_x * scale;
-    input.pointerY = (input.screenHeight - 900 * scale) / 2 + m_y * scale;
+    if (m_virtualGamepadId == 0)
+    {
+        input.pointerX = (input.screenWidth - 1600 * scale) / 2 + m_x * scale;
+        input.pointerY = (input.screenHeight - 900 * scale) / 2 + m_y * scale;
+    }
     if (m_touchDragActive)
     {
         input.mobileTouchDragActive = true;
         input.mobileTouchDragStartX = (input.screenWidth - 1600 * scale) / 2 + m_touchDragStartX * scale;
         input.mobileTouchDragStartY = (input.screenHeight - 900 * scale) / 2 + m_touchDragStartY * scale;
     }
-    input.leftMouseButton = {m_release || m_pointerHeld, false, false};
-    input.rightMouseButton = {m_rightPointerHeld, false, false};
+    if (m_virtualGamepadId == 0)
+    {
+        input.leftMouseButton = {m_release || m_pointerHeld, false, false};
+        input.rightMouseButton = {m_rightPointerHeld, false, false};
+    }
     for (size_t key = 0; key < m_heldKeys.size(); ++key)
     {
         input.keyboardHeld[key] = input.keyboardHeld[key] || m_heldKeys[key];
@@ -149,7 +203,53 @@ void MenuInputTour::update(const std::string &path, GameplayInputFrame &input, I
     const Step &step = m_steps[m_index++];
     std::cout << "Menu tour: " << m_index << ' ' << step.kind << ' ' << step.text << std::endl;
     m_nextTicks = SDL_GetTicks() + 350;
-    if (step.kind == "pause")
+    if (step.kind == "gamepad_begin")
+    {
+        if (m_virtualGamepadId != 0) throw std::runtime_error("Gamepad fixture already exists");
+        if (const char *pHint = SDL_GetHint(SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS))
+            m_previousBackgroundGamepadHint = pHint;
+        SDL_SetHint(SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS, "1");
+        m_changedBackgroundGamepadHint = true;
+        SDL_VirtualJoystickDesc description = {};
+        SDL_INIT_INTERFACE(&description);
+        description.type = SDL_JOYSTICK_TYPE_GAMEPAD;
+        description.naxes = SDL_GAMEPAD_AXIS_COUNT;
+        description.nbuttons = SDL_GAMEPAD_BUTTON_COUNT;
+        description.axis_mask = (1u << SDL_GAMEPAD_AXIS_COUNT) - 1;
+        description.button_mask = (1u << SDL_GAMEPAD_BUTTON_COUNT) - 1;
+        description.name = "OpenYAMM native menu tour";
+        m_virtualGamepadId = SDL_AttachVirtualJoystick(&description);
+        if (m_virtualGamepadId == 0) throw std::runtime_error(SDL_GetError());
+        m_pVirtualJoystick = SDL_OpenJoystick(m_virtualGamepadId);
+        if (m_pVirtualJoystick == nullptr) throw std::runtime_error(SDL_GetError());
+    }
+    else if (step.kind.starts_with("gamepad_"))
+    {
+        if (m_pVirtualJoystick == nullptr) throw std::runtime_error("gamepad_begin is required first");
+        if (step.kind == "gamepad_pointer")
+        {
+            m_gamepadPointer = {{((input.screenWidth - 1600 * scale) / 2 + step.x * scale)
+                    / std::max(1, input.screenWidth - 1),
+                ((input.screenHeight - 900 * scale) / 2 + step.y * scale) / std::max(1, input.screenHeight - 1)}};
+        }
+        else if (step.kind == "gamepad_axis")
+        {
+            const SDL_GamepadAxis axis = SDL_GetGamepadAxisFromString(step.text.c_str());
+            if (axis == SDL_GAMEPAD_AXIS_INVALID
+                || !SDL_SetJoystickVirtualAxis(m_pVirtualJoystick, int(axis), int16_t(step.x * 32767)))
+                throw std::runtime_error("Invalid gamepad axis: " + step.text);
+        }
+        else
+        {
+            const SDL_GamepadButton button = SDL_GetGamepadButtonFromString(step.text.c_str());
+            if (button == SDL_GAMEPAD_BUTTON_INVALID || !SDL_SetJoystickVirtualButton(m_pVirtualJoystick,
+                int(button), step.kind != "gamepad_button_up"))
+                throw std::runtime_error("Invalid gamepad button: " + step.text);
+            if (step.kind == "gamepad_button") m_releaseGamepadButton = button;
+        }
+        SDL_UpdateJoysticks();
+    }
+    else if (step.kind == "pause")
     {
         if (pScreen != nullptr || !requestPause)
             throw std::runtime_error("Menu tour pause requires active gameplay");

@@ -247,6 +247,45 @@ void GameInputSystem::handleSdlEvent(const SDL_Event &event)
 #endif
 }
 
+std::optional<SDL_Event> GameInputSystem::handleGamepadEvent(const SDL_Event &event)
+{
+    if ((event.type == SDL_EVENT_MOUSE_MOTION && event.motion.which != SDL_TOUCH_MOUSEID
+            && (event.motion.xrel != 0 || event.motion.yrel != 0)) || event.type == SDL_EVENT_FINGER_DOWN)
+        m_pendingGamepadPressCounts.fill(0);
+    const SDL_JoystickID previousDevice = m_gamepadUi.deviceId();
+    const std::optional<SDL_Event> translated = m_gamepadUi.handleEvent(event);
+    if (previousDevice != m_gamepadUi.deviceId()) m_pendingGamepadPressCounts.fill(0);
+    if (translated && translated->type == SDL_EVENT_KEY_DOWN)
+    {
+        uint16_t &count = m_pendingGamepadPressCounts[translated->key.scancode];
+        if (count < std::numeric_limits<uint16_t>::max()) ++count;
+    }
+    return translated;
+}
+
+void GameInputSystem::setGamepadUiContext(const void *pContext)
+{
+    if (m_gamepadUi.setContext(pContext)) m_pendingGamepadPressCounts.fill(0);
+}
+
+void GameInputSystem::shutdownGamepad()
+{
+    m_gamepadUi.shutdown();
+}
+
+bool GameInputSystem::selectVirtualGamepad(SDL_JoystickID id)
+{
+    const SDL_JoystickID previousDevice = m_gamepadUi.deviceId();
+    const bool selected = m_gamepadUi.selectVirtualDevice(id);
+    if (previousDevice != m_gamepadUi.deviceId()) m_pendingGamepadPressCounts.fill(0);
+    return selected;
+}
+
+bool GameInputSystem::positionVirtualGamepad(SDL_JoystickID id, float u, float v)
+{
+    return m_gamepadUi.positionVirtualPointer(id, u, v);
+}
+
 bool GameInputSystem::consumeMobileDebugConsoleToggleRequested()
 {
     const bool requested = m_mobileDebugConsoleToggleRequested;
@@ -264,7 +303,9 @@ void GameInputSystem::updateFromEngineInput(
     bool mobileJumpGestureEnabled,
     bool mobileFlightControlsEnabled,
     bool mobileInspectControlEnabled,
-    std::span<const GameplayTouchControl> touchControls)
+    std::span<const GameplayTouchControl> touchControls,
+    float deltaSeconds,
+    SDL_JoystickID virtualTestGamepad)
 {
     m_frame = {};
     m_frame.turboMovementEnabled = settings.turboMovementEnabled;
@@ -358,6 +399,15 @@ void GameInputSystem::updateFromEngineInput(
         middleMouseButtonHeld,
         m_suppressMiddleMouseButtonUntilReleased);
 
+    const bool virtualFixture = virtualTestGamepad != 0 && virtualTestGamepad == m_gamepadUi.deviceId()
+        && SDL_IsJoystickVirtual(virtualTestGamepad);
+    const bool gamepadBlocked = blockGameplayInput || (SDL_GetKeyboardFocus() == nullptr && !virtualFixture);
+    m_gamepadUi.update(m_frame, deltaSeconds, gamepadBlocked, leftMouseButtonHeld);
+    if (!gamepadBlocked && m_gamepadUi.inputEnabled())
+        for (size_t i = 0; i < m_pendingGamepadPressCounts.size(); ++i)
+            m_frame.keyboardPressCounts[i] = uint16_t(std::min(uint32_t(UINT16_MAX),
+                uint32_t(m_frame.keyboardPressCounts[i]) + m_pendingGamepadPressCounts[i]));
+    m_pendingGamepadPressCounts.fill(0);
     std::array<bool, KeyboardActionCount> actionHeld = {};
 
     for (const KeyboardBindingDefinition &definition : keyboardBindingDefinitions())
@@ -382,6 +432,8 @@ void GameInputSystem::updateFromEngineInput(
 
         actionHeld[keyboardActionIndex(definition.action)] = held;
     }
+    actionHeld[keyboardActionIndex(KeyboardAction::MapBook)] =
+        actionHeld[keyboardActionIndex(KeyboardAction::MapBook)] || m_gamepadUi.mapBookHeld();
 
 #if defined(__ANDROID__)
     const bool useMobileGameplayTouchControls = mobileGameplayTouchControlsEnabled && !blockGameplayInput;

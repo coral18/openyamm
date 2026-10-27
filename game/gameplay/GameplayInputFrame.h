@@ -24,6 +24,8 @@ struct GameplayInputFrame
     float mouseWheelDelta = 0.0f;
     float pointerX = 0.0f;
     float pointerY = 0.0f;
+    bool gamepadPointerActive = false;
+    bool pointerCancelled = false;
     float relativeMouseX = 0.0f;
     float relativeMouseY = 0.0f;
     std::string textInput;

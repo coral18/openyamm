@@ -17,10 +17,15 @@ Current acceptance priorities:
 4. Notes, observations and mod enable/disable behavior that preserve existing saves and gameplay state.
 5. Shared UI checks on Android and controller, including a real-device check before claiming device acceptance.
 
-Controller audit (2026-10-27): the current engine initializes SDL video/events and the game input path handles
-keyboard/mouse/touch, but it does not initialize or route native SDL gamepad input. Existing menu Tab/Enter
-focus is keyboard support. Controller work therefore includes implementation as well as real-device checks;
-passing keyboard tours must not be presented as controller acceptance.
+Controller implementation (2026-10-27): the initial audit found no native gamepad input. The shared input path
+now initializes SDL gamepads and owns menu focus, accept/back, an internal pointer and wheel scrolling. North
+opens the existing Map Book action outside UI; the optional Atlas is entered through its normal sidebar button.
+Six controller/navigation cases and seven keyboard/touch regressions pass 198 assertions. Five native UI tours
+pass 166 steps with 29 fresh captures across MM7/MM8, keyboard submission and the Atlas-disabled profile;
+post-UI save verifiers pass another 50 steps. The user confirms physical-pad Map Book opening and Atlas controls
+in MM7. Their requested D-pad focus in the ordinary Map Book sidebar is implemented, with South selecting the
+highlighted item and the disabled Atlas omitted; its physical follow-up remains pending. Full gameplay controller
+profiles and Android acceptance remain outside these completed UI checks.
 
 The 2026-10-26 Windows Release unit recheck passed 14 focused cases / 996 assertions for fog, party projection,
 discovery filtering, MM7/MM8 identity, dungeon reveal/layers and note ownership/projection. The separate current

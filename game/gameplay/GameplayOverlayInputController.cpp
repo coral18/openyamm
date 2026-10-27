@@ -13,6 +13,7 @@
 #include "game/gameplay/GameplayScreenRuntime.h"
 #include "game/ui/KeyboardScreenLayout.h"
 #include "game/ui/GameplayJournalMapUi.h"
+#include "game/ui/GameplayJournalNavigation.h"
 
 #include <SDL3/SDL.h>
 
@@ -2313,12 +2314,21 @@ bool GameplayOverlayInputController::handleJournalOverlayInput(
 
     if (!journalScreen.active)
     {
+        view.interactionState().journalFocusTarget = GameplayJournalPointerTargetType::None;
         view.interactionState().journalClickLatch = false;
         view.interactionState().journalPressedTarget = {};
         view.interactionState().journalMapKeyZoomLatch = false;
         journalScreen.hoveredMapNoteId = 0;
         journalScreen.mapCursorWorldValid = false;
         return false;
+    }
+
+    if (input.pointerCancelled)
+    {
+        view.interactionState().journalClickLatch = false;
+        view.interactionState().journalPressedTarget = {};
+        journalScreen.mapDragActive = false;
+        return true;
     }
 
     const auto adjustPage =
@@ -2475,14 +2485,6 @@ bool GameplayOverlayInputController::handleJournalOverlayInput(
             pJournalMinimapState
         ](float pointerX, float pointerY) -> GameplayJournalPointerTarget
         {
-            static const std::pair<const char *, GameplayJournalPointerTargetType> CommonTargets[] = {
-                {"JournalMainViewMap", GameplayJournalPointerTargetType::MainMapView},
-                {"JournalMainViewQuests", GameplayJournalPointerTargetType::MainQuestsView},
-                {"JournalMainViewStory", GameplayJournalPointerTargetType::MainStoryView},
-                {"JournalMainViewNotes", GameplayJournalPointerTargetType::MainNotesView},
-                {"JournalAtlasButton", GameplayJournalPointerTargetType::InteractiveAtlas},
-                {"JournalCloseButton", GameplayJournalPointerTargetType::CloseButton},
-            };
             static const std::pair<const char *, GameplayJournalPointerTargetType> MapTargets[] = {
                 {"JournalMapZoomInButton", GameplayJournalPointerTargetType::MapZoomInButton},
                 {"JournalMapZoomOutButton", GameplayJournalPointerTargetType::MapZoomOutButton},
@@ -2500,7 +2502,7 @@ bool GameplayOverlayInputController::handleJournalOverlayInput(
                 {"JournalNotesTrainerButton", GameplayJournalPointerTargetType::NotesTrainerButton},
             };
 
-            for (const auto &[layoutId, targetType] : CommonTargets)
+            for (const auto &[layoutId, targetType] : GameplayJournalMainTargets)
             {
                 if (targetType == GameplayJournalPointerTargetType::InteractiveAtlas
                     && !view.interactionState().interactiveAtlasAvailable)
@@ -2765,6 +2767,27 @@ bool GameplayOverlayInputController::handleJournalOverlayInput(
             }
         };
 
+    if (input.gamepadPointerActive || input.leftMouseButton.pressed
+        || input.relativeMouseX != 0 || input.relativeMouseY != 0)
+        view.interactionState().journalFocusTarget = GameplayJournalPointerTargetType::None;
+    if (input.scancodePressCount(SDL_SCANCODE_TAB) != 0)
+    {
+        std::vector<GameplayJournalPointerTargetType> available;
+        for (const auto &[layoutId, type] : GameplayJournalMainTargets)
+            if (view.findHudLayoutElement(layoutId) != nullptr
+                && (type != GameplayJournalPointerTargetType::InteractiveAtlas
+                    || view.interactionState().interactiveAtlasAvailable)) available.push_back(type);
+        view.interactionState().journalFocusTarget = nextJournalMenuFocus(
+            view.interactionState().journalFocusTarget, available,
+            input.isScancodeHeld(SDL_SCANCODE_LSHIFT) || input.isScancodeHeld(SDL_SCANCODE_RSHIFT));
+    }
+    if (view.interactionState().journalFocusTarget != GameplayJournalPointerTargetType::None
+        && (input.scancodePressCount(SDL_SCANCODE_RETURN) != 0 || input.scancodePressCount(SDL_SCANCODE_SPACE) != 0))
+    {
+        activateJournalTarget({view.interactionState().journalFocusTarget});
+        return true;
+    }
+
     const auto isImmediateJournalMapTarget =
         [](const GameplayJournalPointerTarget &target) -> bool
         {
@@ -2779,6 +2802,7 @@ bool GameplayOverlayInputController::handleJournalOverlayInput(
             case GameplayJournalPointerTargetType::MainQuestsView:
             case GameplayJournalPointerTargetType::MainStoryView:
             case GameplayJournalPointerTargetType::MainNotesView:
+            case GameplayJournalPointerTargetType::InteractiveAtlas:
             case GameplayJournalPointerTargetType::PrevPageButton:
             case GameplayJournalPointerTargetType::NextPageButton:
             case GameplayJournalPointerTargetType::NotesPotionButton:

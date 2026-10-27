@@ -436,7 +436,7 @@ bool MenuDesignScreen::button(const std::string &id, const Rect &rect, const std
     }
     const bool hovered = available && pointerInside(rect);
     const bool touchDragging = inputFrame().mobileTouchDragActive || inputFrame().mobileTouchDragReleased;
-    if (touchDragging) m_pressed.clear();
+    if (touchDragging || inputFrame().pointerCancelled) m_pressed.clear();
     if (hovered && leftMouseJustPressed() && !touchDragging)
     {
         m_pressed = id;

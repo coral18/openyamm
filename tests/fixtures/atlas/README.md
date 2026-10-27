@@ -1,5 +1,26 @@
 # Atlas fixtures
 
+## Controller UI route
+
+`tools/menu_tours/atlas_gamepad.yml` runs on an isolated Harmondale or Dagger Wound before-save with the Atlas
+module enabled. It creates a process-local SDL virtual controller, opens Map Book with North/Y, focuses the
+ordinary Atlas sidebar button with five D-pad Down presses and selects it with South/A. It moves the cursor through an SDL
+axis, uses D-pad focus and South to open Guidebook, and cancels a text field and leaves the Atlas with East/B.
+The pointer targets are calibrated for reproducibility; button/axis input travels through the shared input
+system. The eight captures include the original Map Book, highlighted Atlas, moved pointer, Guidebook and return. Inspect them;
+input-step completion alone does not prove the intended target was reached.
+
+The `mm7_search_privacy.yml` / `mm8_search_privacy.yml` post-UI verifiers also apply here, with the same isolated
+before/quicksave paths and cleared campaign flags. They check those fields, not every saved record. Keyboard
+search tours should still pass with the new input path. Unit cases use real SDL virtual devices to cover short
+taps, pending-key isolation, resizing, neutral barriers, mouse takeover and unplug cancellation. Virtual-device
+results are not physical controller acceptance and do not validate a complete gameplay control profile.
+
+For the Atlas-disabled control, enable only `karol.test` in a separate private `mods/profile.yaml`, open Map Book
+with North, press Down five times and South. Close must be highlighted instead of the absent Atlas, and South
+must return to gameplay. Inspect the highlighted menu and returned gameplay captures. The same shared focus
+path supports Tab/Shift+Tab and Return/Space; mouse or touch input clears the sidebar focus.
+
 ## Search submission and Map Book return
 
 Run `tools/menu_tours/atlas_search_submit.yml` with an isolated Harmondale (MM7) or Dagger Wound (MM8) save as
