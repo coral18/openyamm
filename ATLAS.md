@@ -2996,3 +2996,16 @@ and limitations are recorded in `ATLAS_ANDROID_QA.md`; artifacts remain outside 
 ADB sees no device, so the package is prepared but has not been installed on POCO. The last verified installed
 version is 0.2.3 / 106. Physical sidebar feedback, remaining phone checks and the agreed map/content audit remain
 open; a successful APK build does not complete the Atlas objective.
+
+### POCO 0.2.5 in-place update, 2026-10-27
+
+After the user reconnected USB, the verified 0.2.5 / 108 APK was cached on the phone, hash-checked and installed
+in place. The transfer took 97.61 seconds and Package Manager installation 15.38 seconds. Installed version,
+non-debuggable flags and the installed base APK hash match the accepted package. The official package path,
+three official save hashes and two Extended save hashes match fresh pre-update snapshots. No uninstall,
+data reset or restore occurred.
+
+Extended starts with its build marker, OpenGL ES 3.0 and both Atlas/karol.test modules in the new process log.
+The actual phone install/startup gate now covers 0.2.5; touch/visual behavior, Guide privacy and the remaining
+MM7/MM8 device checks require separate acceptance. A focused user test is pending. Device receipts are retained
+with the APK outside Git under `atlas-android-025-20261027`; details are in `ATLAS_ANDROID_QA.md`.

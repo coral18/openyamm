@@ -33,6 +33,11 @@ regions (13 per world), with corresponding ODM assets present. This is availabil
 visual calibration audit. ADB lists no device, so POCO installation/acceptance remains pending; see
 `ATLAS_ANDROID_QA.md` for artifact hashes and the remaining physical gates.
 
+The subsequent USB update installs and starts that verified 0.2.5 / 108 package on POCO. Installed APK hash,
+non-debuggable flags, OpenGL ES startup and both modules are confirmed. Fresh before/after records preserve the
+official package path and all three official/two Extended saves. The Map Book/arrow/Guide phone follow-up is
+pending; installation/startup alone does not close the remaining touch, MM8 or discovery acceptance gates.
+
 The 2026-10-26 Windows Release unit recheck passed 14 focused cases / 996 assertions for fog, party projection,
 discovery filtering, MM7/MM8 identity, dungeon reveal/layers and note ownership/projection. The separate current
 Castle Harmondale fountain check passed 1 case / 47 assertions against the mounted runtime, including all six

@@ -133,12 +133,30 @@ prepared package, not an installed/accepted update. The last verified POCO insta
 No phone data was written. The user confirmed physical-pad Map Book opening and Atlas controls on Windows MM7;
 the requested sidebar D-pad follow-up and remaining Android acceptance gates are still separate.
 
+## Installed local Release, 2026-10-27: 0.2.5
+
+The user reconnected POCO over USB after package acceptance. Fresh snapshots record the official application
+path and all three official/two Extended campaign saves. The verified APK was uploaded once to a separate
+`/data/local/tmp/openyamm-extended-atlas-025.apk` cache in 97.61 seconds, hash-checked on the phone, and installed
+with `pm install -r` in 15.38 seconds. No uninstall, data reset or restore was needed.
+
+Package Manager confirms `0.2.5-atlas` / `108` without `DEBUGGABLE`; hashing the installed base APK gives the same
+SHA256 as the accepted local artifact. The official package path and all five save hashes match the fresh
+pre-update records. Extended was then launched successfully. Its new process logs the Extended marker,
+OpenGL ES 3.0, Atlas 0.2.0 and karol.test 0.1.0, with both modules loaded. These are actual installation/startup
+checks; the Atlas module version is separate from the Android application version.
+
+Device transfer/install logs, fresh before/after snapshots, installed APK hash and startup receipts are retained
+under `atlas-android-025-20261027`. The user has been asked to check the Map Book route, smaller party arrow and
+Guide-to-Discovery privacy in this installed version. Touch/visual acceptance is pending; startup logs do not
+prove those interactions or MM8 gameplay. The cached APK permits install retries without another USB transfer.
+
 ## Physical acceptance gates (current)
 
 | Check | Status |
 | --- | --- |
-| Install the verified Release and confirm its on-device version/flags | Passed for 0.2.3 / 106 via in-place USB update |
-| First launch, Extended marker and active Android renderer | Passed for 0.2.3; OpenGL ES 3.0 and two mods; earlier 0.2.0 capture showed live gameplay |
+| Install the verified Release and confirm its on-device version/flags | Passed for 0.2.5 / 108 via in-place USB update |
+| First launch, Extended marker and active Android renderer | Passed for 0.2.5; OpenGL ES 3.0 and two mods; earlier 0.2.0 capture showed live gameplay |
 | MM7 region, discovery fog and live party arrow | User confirms fog and arrow direction on 0.2.0; wider position/device checks remain open |
 | MM8 region, discovery fog and live party arrow | Pending |
 | Guide Mode entry responsiveness | User confirms noticeably faster incremental loading on POCO 0.2.2 |
@@ -146,7 +164,7 @@ the requested sidebar D-pad follow-up and remaining Android acceptance gates are
 | Touch navigation, search, filters, zoom and pan | Pending |
 | Notes and save/load persistence | Pending |
 | Atlas disabled through a mod profile; gameplay remains usable | Pending |
-| Official installation and save hashes after testing | Passed after 0.2.3 update; repeat after remaining tests |
+| Official installation and save hashes after testing | Passed after 0.2.5 update, including Extended saves; repeat after remaining tests |
 
 Private APKs, verification reports, backups and captures are retained outside Git under the dated Android QA
 directory. Controller acceptance and the wider Atlas content matrix remain separate unfinished work.
