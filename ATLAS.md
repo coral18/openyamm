@@ -2916,3 +2916,18 @@ and native objects. No downloads or new CI clone were needed. `ATLAS_ANDROID_QA.
 
 ADB listed no phone after verification. This is a prepared update, not device acceptance or full Atlas completion;
 POCO remains on the last verified 0.2.3 until an actual update. No MM6 Atlas work was performed.
+
+### Packaged dungeon layer/discovery audit, 2026-10-27
+
+The opt-in unit audit reads every active MM7/MM8 BLV through the regression package filesystem rather than an
+exported map sample. All 110 dungeons load: 63 MM7 and 47 MM8, with no authored blank floor plans. Synthetic
+unknown knowledge hides geometry; reading Guide leaves it unknown. Partial outline knowledge produces 277 MM7
+and 216 MM8 height slices. Each keeps the same center/scale and available-band set; combining the slices exactly
+reconstructs the all-heights raster without changing reveal bits or face attributes.
+
+The focused Windows Release suite passes seven cases / 4,334 assertions, including existing negative-height,
+note-height, hidden-face and remembered-position cases. This broadens geometry/projection coverage without a
+runtime code change. It does not establish physical input, full campaign exploration, or semantic separation of
+overlapping rooms in one height band. Those limits remain in `ATLAS_COVERAGE.md`. The package test and its opt-in
+invocation are documented in `tests/fixtures/atlas/README.md`; MM6 is excluded. No new APK is needed for test/docs
+changes: the previously verified 0.2.4 package remains the prepared device update.

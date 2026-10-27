@@ -1,5 +1,19 @@
 # Atlas fixtures
 
+## Packaged dungeon projection and discovery audit
+
+The opt-in test `packaged MM7 MM8 dungeon layers preserve discovery projection and privacy` reads every MM7/MM8
+BLV listed by the active merged MapStats through the normal package filesystem. Set
+`OPENYAMM_REGRESSION_ASSETS_ROOT` to the complete runtime assets and select that test in the unit binary, or use
+`tools/extended_windows_dev.sh test '--test-case=packaged MM7 MM8 dungeon layers*'` with the same environment.
+Without the environment variable, the test explicitly reports that the package audit was not run.
+
+The unknown/partial knowledge states are deliberately synthetic; no user save is read or written. Guide browsing
+must not modify knowledge, unknown geometry must stay absent, and partial-discovery height slices must retain
+one projection and recompose the exact all-heights raster. The current Windows audit covers 63 MM7 and 47 MM8
+dungeons with 277/216 partial-discovery slices and no authored blank plans. This does not prove campaign
+exploration, physical Android/controller input, or semantic separation of rooms sharing one 512-unit band.
+
 ## Scripted monster reference privacy
 
 `tools/menu_tours/atlas_scripted_spawns.yml` enters through Map Book on a private Harmondale or Dagger Wound save,

@@ -37,6 +37,13 @@ Simon flag. This checks those records and samples, not the entire save, every du
 Reproduction instructions are in `tests/fixtures/atlas/README.md`. POCO has verified Release 0.2.3 / 106;
 new Map Book/arrow physical acceptance and remaining Android/controller gates remain separate.
 
+The subsequent packaged-dungeon audit passes for all 110 MM7/MM8 BLVs in the active merged MapStats: 63 MM7
+and 47 MM8, with 277/216 partial-discovery height slices and no authored blank plans. The focused Windows suite
+passes seven cases / 4,334 assertions. It verifies hidden geometry, Guide knowledge immutability, stable
+projection between bands and exact recomposition of their raster. Its knowledge states are synthetic; semantic
+stacked-floor separation, campaign exploration and device input remain separate checks. Reproduction is in
+`tests/fixtures/atlas/README.md`.
+
 Reference feature inventories:
 
 - [MM7 community guide](https://www.reddit.com/r/MightAndMagic/comments/1ww8pq0/i_made_an_interactive_world_map_guide_for_might/)

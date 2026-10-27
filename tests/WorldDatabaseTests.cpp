@@ -23,7 +23,10 @@
 #include "game/gameplay/MapEncounterDefinition.h"
 #include "game/tables/MonsterTable.h"
 #include "game/maps/MapDeltaData.h"
+#include "game/maps/MapAssetLoader.h"
+#include "tests/RegressionMapLoader.h"
 
+#include <algorithm>
 #include <fstream>
 #include <iterator>
 #include <limits>
@@ -1350,6 +1353,90 @@ TEST_CASE("dungeon height selection keeps a stable known projection and hides un
     CHECK(buildWorldFloorPlan(map, knowledge, true).layers == std::vector<int32_t>{0, 2, 8});
     knowledge.invisibleFaces.insert(1);
     CHECK(buildWorldFloorPlan(map, knowledge, false).layers.empty());
+}
+
+TEST_CASE("packaged MM7 MM8 dungeon layers preserve discovery projection and privacy")
+{
+    if (std::getenv("OPENYAMM_REGRESSION_ASSETS_ROOT") == nullptr)
+    {
+        MESSAGE("Dungeon package audit requires OPENYAMM_REGRESSION_ASSETS_ROOT.");
+        return;
+    }
+    REQUIRE_MESSAGE(OpenYAMM::Tests::regressionMapLoaderLoaded(),
+        OpenYAMM::Tests::regressionMapLoaderFailure());
+    const auto &loader = OpenYAMM::Tests::regressionMapLoader();
+    std::map<std::string, size_t> maps, layers, blankPlans;
+    for (const MapStatsEntry &map : loader.gameDataLoader.getMapStats().getEntries())
+    {
+        if ((map.worldId != "mm7" && map.worldId != "mm8")
+            || std::filesystem::path(map.fileName).extension() != ".blv") continue;
+        INFO(map.canonicalId, " ", map.name);
+        const auto path = MapAssetLoader::findAssetPath(loader.assetFileSystem, map.worldId, map.fileName);
+        REQUIRE(path.has_value());
+        const auto bytes = loader.assetFileSystem.readBinaryFile(*path);
+        REQUIRE(bytes.has_value());
+        const auto geometry = IndoorMapDataLoader().loadFromBytes(*bytes);
+        REQUIRE(geometry.has_value());
+        ++maps[map.worldId];
+
+        // Deliberately unknown/partial QA states over real geometry, not a claim of campaign traversal.
+        WorldFloorPlanKnowledge partial;
+        for (const IndoorFace &face : geometry->faces)
+            partial.faceAttributes.push_back(face.attributes & ~faceAttributeBit(FaceAttribute::SeenByParty));
+        const WorldFloorPlanKnowledge original = partial;
+        const auto unseen = buildWorldFloorPlan(*geometry, partial, false);
+        CHECK(unseen.pixelsBgra.empty());
+        CHECK(unseen.layers.empty());
+        const auto guide = buildWorldFloorPlan(*geometry, partial, true);
+        const auto stillUnseen = buildWorldFloorPlan(*geometry, partial, false);
+        CHECK(stillUnseen.pixelsBgra == unseen.pixelsBgra);
+        CHECK(stillUnseen.layers == unseen.layers);
+        CHECK(partial.faceAttributes == original.faceAttributes);
+        CHECK(partial.visibleOutlines.empty());
+        if (guide.outlineCount == 0)
+        {
+            ++blankPlans[map.worldId];
+            continue;
+        }
+
+        partial.visibleOutlines.resize((geometry->outlines.size() + 7) / 8);
+        for (size_t i = 0; i < geometry->outlines.size(); i += 3)
+            partial.visibleOutlines[i / 8] |= uint8_t(1u << (7u - i % 8));
+        const auto before = partial.visibleOutlines;
+        const auto all = buildWorldFloorPlan(*geometry, partial, false);
+        CHECK(all.outlineCount <= guide.outlineCount);
+        if (all.pixelsBgra.empty()) continue;
+        // An unoccupied band provides the same blank canvas without baking drawing colours into this test.
+        const auto blank = buildWorldFloorPlan(*geometry, partial, false, {}, INT32_MAX);
+        CHECK(blank.outlineCount == 0);
+        REQUIRE(blank.pixelsBgra.size() == all.pixelsBgra.size());
+        std::vector<uint8_t> combined = blank.pixelsBgra;
+        size_t outlineCount = 0;
+        for (int32_t layer : all.layers)
+        {
+            const auto slice = buildWorldFloorPlan(*geometry, partial, false, {}, layer);
+            CHECK(slice.centerX == all.centerX);
+            CHECK(slice.centerY == all.centerY);
+            CHECK(slice.pixelsPerWorldUnit == all.pixelsPerWorldUnit);
+            CHECK(slice.layers == all.layers);
+            REQUIRE(slice.pixelsBgra.size() == all.pixelsBgra.size());
+            outlineCount += slice.outlineCount;
+            ++layers[map.worldId];
+            for (size_t i = 0; i < combined.size(); i += 4)
+                if (!std::equal(slice.pixelsBgra.begin() + i, slice.pixelsBgra.begin() + i + 4,
+                    blank.pixelsBgra.begin() + i))
+                    std::copy_n(slice.pixelsBgra.begin() + i, 4, combined.begin() + i);
+        }
+        CHECK(outlineCount == all.outlineCount);
+        CHECK(combined == all.pixelsBgra);
+        CHECK(partial.visibleOutlines == before);
+        CHECK(partial.faceAttributes == original.faceAttributes);
+    }
+    REQUIRE(maps["mm7"] >= 50);
+    REQUIRE(maps["mm8"] >= 20);
+    MESSAGE("Dungeon package audit: MM7 maps=", maps["mm7"], ", MM8 maps=", maps["mm8"],
+        ", partial-knowledge slices=", layers["mm7"], "/", layers["mm8"],
+        ", authored blank plans=", blankPlans["mm7"], "/", blankPlans["mm8"]);
 }
 
 TEST_CASE("world dungeon plans frame remembered positions without revealing hidden geometry")
