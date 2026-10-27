@@ -4422,6 +4422,30 @@ TEST_CASE("mm7 tularean forest mmmerge artifact and clanker overlays apply")
         CHECK_EQ(sceneContext.summonMonstersCalls[0].count, 3u);
         CHECK_EQ(sceneContext.summonMonstersCalls[3].typeIndexInMapStats, 3u);
         CHECK_EQ(sceneContext.summonMonstersCalls[3].count, 3u);
+        const auto &fixture = requireRegressionMapLoader();
+        const auto *pMap = fixture.gameDataLoader.getMapStats().findByFileName("7out04.odm");
+        REQUIRE(pMap);
+        OpenYAMM::Game::MapAssetInfo fullMap;
+        fullMap.map = *pMap;
+        REQUIRE_MESSAGE(OpenYAMM::Game::GameDataLoader::loadEventPrograms(
+            fixture.assetFileSystem, fullMap, error), error);
+        REQUIRE(fullMap.localEventProgram);
+        REQUIRE(fullMap.localEventProgram->monsterSpawns().contains(401));
+        const auto &references = fullMap.localEventProgram->monsterSpawns().at(401);
+        REQUIRE(references.size() == sceneContext.summonMonstersCalls.size());
+        for (size_t index = 0; index < references.size(); ++index)
+        {
+            const auto &reference = references[index];
+            const auto &call = sceneContext.summonMonstersCalls[index];
+            CHECK(reference.encounterSlot == call.typeIndexInMapStats);
+            CHECK(reference.level == call.level);
+            CHECK(reference.count == call.count);
+            CHECK(reference.x == call.x);
+            CHECK(reference.y == call.y);
+            CHECK(reference.z == call.z);
+            CHECK(reference.group == call.group);
+            CHECK(reference.uniqueNameId == call.uniqueNameId);
+        }
     }
 
     {

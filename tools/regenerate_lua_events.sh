@@ -7,8 +7,9 @@ repo_root="$(cd "${script_dir}/.." && pwd)"
 export_args=()
 if [[ $# -gt 0 ]]; then
     if [[ $# -ne 1 || ( "$1" != --item-rewards-only && "$1" != --npc-locations-only \
-            && "$1" != --autonote-refs-only && "$1" != --site-refs-only && "$1" != --npc-topic-refs-only ) ]]; then
-        echo 'Usage: regenerate_lua_events.sh [--item-rewards-only|--npc-locations-only|--autonote-refs-only|--site-refs-only|--npc-topic-refs-only]' >&2
+            && "$1" != --autonote-refs-only && "$1" != --site-refs-only && "$1" != --npc-topic-refs-only \
+            && "$1" != --monster-spawns-only ) ]]; then
+        echo 'Usage: regenerate_lua_events.sh [--item-rewards-only|--npc-locations-only|--autonote-refs-only|--site-refs-only|--npc-topic-refs-only|--monster-spawns-only]' >&2
         exit 2
     fi
     export_args=("$1")

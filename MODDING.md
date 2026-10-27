@@ -757,3 +757,42 @@ Atlas labels an observation Last seen with its recorded day, separately from Pos
 can enter the reading guide without setting party ownership, identification achievements or learned spells.
 The Core observation path remains active when the Atlas UI module is disabled. This does not evaluate guild
 membership or a character's ability to learn/cast a book's spell, and it is not a general equipment-shop history.
+
+## Possible scripted monster sources
+
+Local map callbacks can expose possible `evt.SummonMonsters` calls without executing them:
+
+```lua
+local spawns = {{1, 2, 3, 1000, 2000, 0, 12, 0}}
+RegisterEvent(123, "Ambush", function()
+    for _, spawn in ipairs(spawns) do
+        evt.SummonMonsters(table.unpack(spawn))
+    end
+end)
+SetMapMonsterSpawns(123, spawns)
+```
+
+Each dense row contains the same eight integers as the gameplay call: encounter slot, tier level, count,
+X/Y/Z center, actor group and unique-name ID. Slots are 1–3; the active map's encounter picture and shared
+monster table determine the species. Tier levels follow the same Core clamp as indoor/outdoor gameplay
+(0/1 → A, 2 → B, 3 or above → C). Count is positive and at most `INT32_MAX`; coordinates are signed 32-bit,
+and tier/group/name values are unsigned 32-bit. Unknown species are not replaced with another monster.
+Name lookup uses the current shared unique-name registry and the ordinary stats-name fallback.
+
+The declaration belongs to the registered callback. Removal/replacement discards its old references; a
+replacement may redeclare its own list or clear it with `{}`. Malformed active declarations fail loading.
+The declaration is map-local: a global callback's coordinates are not automatically attributed to every map.
+
+World Database derives Guide-only source pins and Bestiary links. Counts describe a possible call, not current
+population, probability, branch eligibility or a guaranteed encounter. Discovery continues to use actual actor
+observations and never acquires these sources merely by visiting terrain or browsing Guide. No saved state or
+binary save version is added.
+
+Regenerate legacy declarations with `tools/regenerate_lua_events.sh --monster-spawns-only`. The exporter visits
+reachable instructions in each callback, including separate supported timer/on-load continuations, and writes
+`*_00_monster_spawns.lua` before gameplay replacement overlays. These generated files must not be edited by hand.
+Late `*_zz_monster_spawns.lua` metadata can use a plain dotted shared data-table reference. The Tularean
+artifact battle uses `MM7.TulareanArtifactBattleSpawns` as the single owner of both gameplay calls and Atlas
+references. The lighting producer accepts validated literal rows or these plain table references, rejecting
+executable expressions/statements; runtime loading still validates every row. Gameplay scripts and baked-lighting
+dependency validation remain intact. The current Atlas installs MM7/MM8 catalogs only.

@@ -2865,3 +2865,43 @@ Public tours and verification scenarios are documented in `tests/fixtures/atlas/
 accepted capture hashes, exact source hashes and save fixtures are in `atlas-core-acceptance-20261027` under the
 Windows development root. No gameplay C++ or runtime assets changed in this checkpoint, so the installed POCO
 0.2.3 package remains current. Wider floor/content coverage and physical Android/controller gates remain open.
+
+### Possible scripted monster sources, 2026-10-27
+
+World Database now indexes local scripted monster possibilities from callback-owned metadata. Four MM7 and ten
+MM8 generated catalogs come from reachable legacy `SummonMonsters` instructions, including supported separate
+timer/on-load continuations. Invalid slots and empty calls have no gameplay spawn and are not exported. Replaced
+or removed callbacks lose their old declarations. The active catalog resolves species and names through current
+merged map/monster tables, using the same tier clamp and unique-name lookup as gameplay.
+
+The actual Tularean artifact battle replaces its legacy callback and has different counts. Its six spawn rows
+now have one owner in `MM7.TulareanArtifactBattleSpawns`, used by both the unchanged gameplay sequence and a late
+metadata declaration. The executed callback regression compares all eight arguments of all six actual calls with
+the loaded references, including the current three-soldier group rather than the legacy thirty. Quest gates,
+use flags, facet changes and messages are retained. Party-relative Deyja/Malwick ambushes do not receive invented
+fixed coordinates; that part of the source audit remains open.
+
+Guide pins and Bestiary links describe possible groups, not live populations, guaranteed encounters or branch
+eligibility. Discovery uses actual actor observations; explored terrain or a known species does not disclose
+these other sources. No discovery keys, binary save format or new saved state are introduced. The API and
+regeneration command are documented in `MODDING.md`.
+
+Visual review found that the shared minimap projection clamped an authored MM8 center outside the chart onto its
+north edge. Atlas projection now requests unclamped coordinates and omits markers outside the image, retaining
+the original source coordinates/list record. Ordinary minimap callers keep their previous clamped behavior.
+No gameplay spawn coordinate is rewritten. Literal/late metadata validation keeps these catalogs independent
+of shadow-caster dependencies while rejecting executable expressions; baked-lighting validation remains enabled.
+
+Validation: Windows Release builds; 18 focused native cases / 1,759 assertions, covering the active MM7/MM8 map
+program catalog, replacement ownership, schema failures, visibility, Bestiary links, projection and real Tularean
+execution; 25 lighting producer tests. The active mounted catalog has 17 MM7 and 49 MM8 spawn descriptions.
+Four AMD/OpenGL tours execute 90 input steps and retain 15 fresh captures on Harmondale, Dagger Wound, Abandoned
+Temple and the shared Tularean battle view. Inspected frames show the sources in Guide and their absence in
+Discovery. The pre/post-Guide Discovery map and list viewports are pixel-identical in all three roundtrip tours.
+Two faithful post-UI verifiers pass 34 steps, preserving the checked campaign/use flags, MM8 chest discovery and
+stored item through another save/load. This verifies those fields, not every field of every save.
+
+Public tours are `tools/menu_tours/atlas_scripted_spawns*.yml`; private logs, hashes and fixtures are under
+`atlas-scripted-spawns-20261027` in the Windows development root. This feature has not yet been packaged into
+the POCO 0.2.3 APK. Remaining content, relative-position sources, Android/controller and other completion gates
+remain in `ATLAS_COVERAGE.md`; this checkpoint does not complete the full Atlas goal or add an MM6 Atlas.

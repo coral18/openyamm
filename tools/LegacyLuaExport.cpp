@@ -12719,6 +12719,36 @@ void emitItemRewardMetadata(std::ostringstream &stream, std::string_view scopeTa
     stream << "})\n";
 }
 
+void emitMonsterSpawnMetadata(std::ostringstream &stream, std::string_view scopeTableName,
+    const LegacyLuaExportLookups &, const LegacyLuaEvent &event, uint16_t handlerId,
+    std::optional<uint8_t> entryStep = std::nullopt)
+{
+    if (scopeTableName != LuaScopeMap) return;
+    const std::vector<uint8_t> steps = collectNormalEventSteps(event);
+    if (steps.empty()) return;
+    std::vector<const LegacyLuaInstruction *> spawns;
+    for (uint8_t step : collectReachableSteps(event, steps, entryStep.value_or(steps.front())))
+        for (const LegacyLuaInstruction *pInstruction : collectMeaningfulInstructionsForStep(event, step))
+        {
+            const auto &args = pInstruction->arguments;
+            if (pInstruction->operation == LegacyLuaOperation::SummonMonsters && args.size() >= 8
+                && args[0] >= 1 && args[0] <= 3 && args[2] > 0 && args[2] <= INT32_MAX)
+                spawns.push_back(pInstruction);
+        }
+    if (spawns.empty()) return;
+    stream << "SetMapMonsterSpawns(" << handlerId << ", {";
+    for (size_t i = 0; i < spawns.size(); ++i)
+    {
+        const auto &args = spawns[i]->arguments;
+        stream << (i == 0 ? "" : ", ") << "{";
+        for (size_t argument = 0; argument < 8; ++argument)
+            stream << (argument == 0 ? "" : ", ")
+                   << (argument >= 3 && argument <= 5 ? int64_t(int32_t(args[argument])) : int64_t(args[argument]));
+        stream << "}";
+    }
+    stream << "})\n";
+}
+
 void emitNpcLocationMetadata(std::ostringstream &stream, std::string_view scopeTableName,
     const LegacyLuaExportLookups &, const LegacyLuaEvent &event, uint16_t handlerId,
     std::optional<uint8_t> entryStep = std::nullopt)
@@ -13201,6 +13231,25 @@ std::string generateLegacyEventItemRewardsLuaChunk(
     emitSyntheticTriggerEventFunctions(handlers, scopeTableName, events, lookups, triggers,
         &metadata, emitItemRewardMetadata);
     return metadata.str();
+}
+
+std::string generateLegacyEventMonsterSpawnsLuaChunk(
+    const EvtProgram &evtProgram, const StrTable &strTable, const LegacyLuaExportLookups &lookups,
+    LegacyLuaExportScope scope, LegacyEventVersion version)
+{
+    if (scope != LegacyLuaExportScope::Map) return {};
+    const std::vector<LegacyLuaEvent> events = decodeEvents(evtProgram, strTable, lookups, version);
+    const std::vector<SyntheticTriggerEvent> triggers = collectSyntheticTriggerEvents(evtProgram);
+    std::ostringstream metadata;
+    for (size_t index = 0; index < events.size(); ++index)
+        emitMonsterSpawnMetadata(metadata, LuaScopeMap, lookups,
+            directEventWithoutSyntheticTriggerContinuations(events[index], evtProgram.getEvents()[index]),
+            events[index].eventId);
+    std::ostringstream handlers;
+    emitSyntheticTriggerEventFunctions(handlers, LuaScopeMap, events, lookups, triggers,
+        &metadata, emitMonsterSpawnMetadata);
+    return metadata.str().empty() ? "" :
+        "-- generated possible monster spawns from legacy EVT/STR; load after the base handlers\n" + metadata.str();
 }
 
 std::string generateLegacyEventNpcLocationsLuaChunk(

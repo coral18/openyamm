@@ -1,0 +1,28 @@
+# Isolated MM7 save, no dialogue/held item. Browse the actual shared-script battle sources.
+output_dir: captures
+exit: true
+steps:
+- expect: gameplay
+- action: map_book
+- click: [1250, 770]
+- expect: pause
+- click: [1152, 57]
+- wait: 5
+- click: [160, 190]
+- click: [768, 126]
+- click: [275, 126]
+- text: Tularean
+- key: Return
+- click: [1250, 260]
+- click: [1480, 126]
+- click: [275, 126]
+- text: scripted spawn
+- key: Return
+- capture: shared-battle-sources
+- click: [1250, 260]
+- capture: shared-battle-detail
+- click: [1152, 57]
+- capture: discovery-after-shared-battle
+- click: [1440, 57]
+- key: Escape
+- expect: gameplay

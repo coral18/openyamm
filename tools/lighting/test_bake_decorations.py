@@ -47,6 +47,35 @@ class DecorationBakeTests(unittest.TestCase):
                 bake_decorations, 'parse_odm_file', return_value=dict(payload=dict(entities=self.entities))):
             return bake_decorations.export_cards(self.profile, self.output)
 
+    def test_monster_spawn_metadata_is_literal_validated_and_not_a_caster_dependency(self):
+        metadata = self.world / 'events/maps/test_00_monster_spawns.lua'
+        header = '-- generated possible monster spawns from legacy EVT/STR; load after the base handlers\n'
+        metadata.write_text(header + 'SetMapMonsterSpawns(10, {{1, 0, 5, -10, 20, -512, 0, 3}})\n')
+        result = self.export()
+        self.assertFalse(any('monster_spawns' in path for path in result['dependencies']))
+        for line in ('SetMapMonsterSpawns(10, {{0, 1, 1, 0, 0, 0, 0, 0}})',
+                     'SetMapMonsterSpawns(65536, {})',
+                     'SetMapMonsterSpawns(10, {{1, 1, 0, 0, 0, 0, 0, 0}})',
+                     'SetMapMonsterSpawns(10, {{1, 1, 1, -2147483649, 0, 0, 0, 0}})',
+                     'SetMapMonsterSpawns(10, {computed})',
+                     'SetMapMonsterSpawns(10, {}); evt.SetSprite(1, 0)'):
+            with self.subTest(line=line):
+                metadata.write_text(header + line + '\n')
+                with self.assertRaises(ValueError):
+                    self.export()
+
+    def test_late_monster_metadata_accepts_shared_data_references_without_executable_expressions(self):
+        metadata = self.world / 'events/maps/test_zz_monster_spawns.lua'
+        header = '-- Monster spawn metadata; load after gameplay overlays\n'
+        metadata.write_text(header + 'SetMapMonsterSpawns(401, MM7.TulareanArtifactBattleSpawns)\n')
+        self.assertFalse(any('monster_spawns' in path for path in self.export()['dependencies']))
+        for value in ('MM7.GetSpawns()', 'MM7.Spawns[1]', 'MM7.Spawns); evt.SetSprite(7, 0',
+                      'MM7.Spawns + 1'):
+            with self.subTest(value=value):
+                metadata.write_text(header + 'SetMapMonsterSpawns(401, ' + value + ')\n')
+                with self.assertRaises(ValueError):
+                    self.export()
+
     def test_legacy_bytes_in_comments_and_strings_do_not_hide_sprite_calls(self):
         self.script.write_bytes(
             b'-- NPCs \xb913\n'

@@ -1711,12 +1711,6 @@ GameplayProjectileService::ProjectileDefinition buildIndoorGameplayProjectileDef
     return result;
 }
 
-char tierLetterForSummonLevel(uint32_t level)
-{
-    const uint32_t clampedLevel = std::clamp(level, 1u, 3u);
-    return static_cast<char>('A' + (clampedLevel - 1u));
-}
-
 uint32_t defaultActorAttributes(bool hostileToParty)
 {
     return indoorGeneratedActorAttributes(hostileToParty);
@@ -17149,7 +17143,7 @@ const MonsterTable::MonsterStatsEntry *IndoorWorldRuntime::resolveEncounterStats
     }
 
     pictureName += " ";
-    pictureName.push_back(tierLetterForSummonLevel(level));
+    pictureName.push_back(summonMonsterTier(level));
     return m_pMonsterTable->findStatsByPictureName(pictureName);
 }
 

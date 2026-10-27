@@ -1,0 +1,29 @@
+# Load item-source.oysav from tests/scenarios/atlas/mm8_item_sources.yml as saves/before.oysav.
+# Dismiss Simon and store the held chest item before opening Map Book.
+output_dir: captures
+exit: true
+steps:
+- expect: gameplay
+- key: Escape
+- click: [800, 806]
+- action: map_book
+- click: [1250, 770]
+- expect: pause
+- click: [1480, 126]
+- click: [275, 126]
+- text: scripted spawn
+- key: Return
+- capture: discovery-scripted-hidden
+- click: [1152, 57]
+- wait: 5
+- click: [499, 695]
+- capture: guide-scripted-spawns
+- click: [1250, 260]
+- capture: guide-scripted-detail
+- click: [1152, 57]
+- capture: discovery-after-guide
+- click: [1440, 57]
+- key: Escape
+- expect: gameplay
+- key: F9
+- wait: 1

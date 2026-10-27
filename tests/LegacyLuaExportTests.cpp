@@ -114,6 +114,8 @@ OpenYAMM::Game::ScriptedEventProgram exportPressureTrapProgram(
             LegacyLuaExportScope::Map, version)
         + generateLegacyEventNpcLocationsLuaChunk(legacyProgram, StrTable{}, lookups,
             LegacyLuaExportScope::Map, version)
+        + generateLegacyEventMonsterSpawnsLuaChunk(legacyProgram, StrTable{}, lookups,
+            LegacyLuaExportScope::Map, version)
         + generateLegacyEventAutonoteRefsLuaChunk(legacyProgram, StrTable{}, lookups,
             LegacyLuaExportScope::Map, version);
     const std::vector<uint8_t> supportBytes = readBinaryFixture(
@@ -2313,4 +2315,101 @@ TEST_CASE("NPC topic reference export follows reachable branches and omits clear
     CHECK(refs.find("SetGlobalNpcTopicRefs(11") == std::string::npos);
     CHECK(refs.find("SetGlobalQBitGrants(12, {430})") != std::string::npos);
     CHECK(refs.find("SetGlobalQBitGrants(13") == std::string::npos);
+}
+
+TEST_CASE("scripted monster spawn metadata keeps reachable branches and trigger ownership")
+{
+    using namespace OpenYAMM::Game;
+    std::vector<uint8_t> bytes;
+    const auto append = [&](uint16_t event, uint8_t step, EvtOpcode opcode, std::vector<uint8_t> payload)
+    {
+        bytes.insert(bytes.end(), {uint8_t(4 + payload.size()), uint8_t(event), uint8_t(event >> 8),
+            step, uint8_t(opcode)});
+        bytes.insert(bytes.end(), payload.begin(), payload.end());
+    };
+    const auto summon = [&](uint16_t event, uint8_t step, uint8_t slot, uint8_t count)
+    {
+        std::vector<uint8_t> args = {slot, 2, count};
+        for (uint32_t value : {uint32_t(-110), 220u, uint32_t(-512), 9u, 7u})
+            for (int byte = 0; byte < 4; ++byte) args.push_back(uint8_t(value >> (byte * 8)));
+        append(event, step, EvtOpcode::SummonMonsters, args);
+    };
+    summon(1, 0, 1, 4);
+    appendExitRecord(bytes, 1, 1);
+    summon(1, 2, 1, 99); // Unreachable.
+    append(2, 0, EvtOpcode::Compare, {0x10, 0, 1, 0, 0, 0, 3});
+    summon(2, 1, 1, 2);
+    appendExitRecord(bytes, 2, 2);
+    summon(2, 3, 2, 3);
+    appendExitRecord(bytes, 2, 4);
+    appendExitRecord(bytes, 3, 0);
+    append(3, 5, EvtOpcode::OnMapReload, {});
+    summon(3, 6, 3, 1);
+    appendExitRecord(bytes, 3, 7);
+    summon(4, 0, 0, 3); // Runtime rejects invalid slots and empty calls.
+    summon(4, 1, 1, 0);
+    appendExitRecord(bytes, 4, 2);
+    for (LegacyEventVersion version : {LegacyEventVersion::Mm6, LegacyEventVersion::Mm7, LegacyEventVersion::Mm8})
+    {
+        const ScriptedEventProgram program = exportPressureTrapProgram(bytes, version);
+        REQUIRE(program.monsterSpawns().at(1).size() == 1);
+        const auto &spawn = program.monsterSpawns().at(1).front();
+        CHECK(spawn.encounterSlot == 1);
+        CHECK(spawn.level == 2);
+        CHECK(spawn.count == 4);
+        CHECK(spawn.x == -110);
+        CHECK(spawn.y == 220);
+        CHECK(spawn.z == -512);
+        CHECK(spawn.group == 9);
+        CHECK(spawn.uniqueNameId == 7);
+        CHECK(program.monsterSpawns().at(2).size() == 2);
+        CHECK_FALSE(program.monsterSpawns().contains(3));
+        CHECK_FALSE(program.monsterSpawns().contains(4));
+        REQUIRE(program.onLoadEventIds().size() == 1);
+        CHECK(program.monsterSpawns().at(program.onLoadEventIds().front()).front().encounterSlot == 3);
+    }
+}
+
+TEST_CASE("scripted monster spawn declarations reject invalid arrays and follow replacement callbacks")
+{
+    using namespace OpenYAMM::Game;
+    const auto supportBytes = readBinaryFixture(std::filesystem::path(OPENYAMM_SOURCE_DIR)
+        / "assets_dev/engine/scripts/common/event_support.lua");
+    const std::string support(supportBytes.begin(), supportBytes.end());
+    const auto load = [&](const std::string &code)
+    {
+        std::string error;
+        return ScriptedEventProgram::loadFromLuaText(support + "\n" + code, "spawn-test",
+            ScriptedEventScope::Map, error);
+    };
+    const std::string base = "RegisterEvent(10, '', function() end)\n"
+        "SetMapMonsterSpawns(10, {{1, 0, 4, -10, 20, -512, 0, 0}, {3, 99, 1, 0, 0, 0, 9, 7}})\n";
+    auto program = load(base);
+    REQUIRE(program);
+    CHECK(program->monsterSpawns().at(10).size() == 2);
+    program = load(base + "evt.map[10] = function() end");
+    REQUIRE(program);
+    CHECK(program->monsterSpawns().empty());
+    program = load(base + "RemoveMapEvent(10)");
+    REQUIRE(program);
+    CHECK(program->monsterSpawns().empty());
+    program = load(base + "ReplaceMapEvent(10, '', function() end)\n"
+        "SetMapMonsterSpawns(10, {{2, 1, 3, 10, 20, 30, 0, 0}})");
+    REQUIRE(program);
+    CHECK(program->monsterSpawns().at(10).front().encounterSlot == 2);
+    program = load(base + "SetMapMonsterSpawns(10, {})");
+    REQUIRE(program);
+    CHECK(program->monsterSpawns().empty());
+    CHECK_FALSE(load("SetMapMonsterSpawns(10, {})"));
+    CHECK_FALSE(load(base + "evt.map = nil"));
+    for (const std::string &array : {"nil", "'bad'", "{[2]={1,1,1,0,0,0,0,0}}",
+        "{{0,1,1,0,0,0,0,0}}", "{{4,1,1,0,0,0,0,0}}", "{{1,-1,1,0,0,0,0,0}}",
+        "{{1,1,0,0,0,0,0,0}}", "{{1,1,2147483648,0,0,0,0,0}}", "{{1,1,1,2147483648,0,0,0,0}}",
+        "{{1,1,1,0,0,-2147483649,0,0}}", "{{1,1,1,0,0,0,4294967296,0}}",
+        "{{1,1,1,0,0,0,0,-1}}", "{{1,1,1,0,0,0,0}}", "{{1,1,1,0,0,0,0,0,extra=2}}",
+        "{{1,1,1,0,0,0,0,'2'}}", "{{1,1,1.5,0,0,0,0,0}}"})
+    {
+        CAPTURE(array);
+        CHECK_FALSE(load("RegisterEvent(10, '', function() end)\nSetMapMonsterSpawns(10, " + array + ")"));
+    }
 }

@@ -94,25 +94,6 @@ int rollImmolationDamage(uint32_t skillLevel, uint32_t seed)
     return damage;
 }
 
-std::string resolveSpawnedMapActorName(
-    const MonsterTable &monsterTable,
-    const MonsterTable::MonsterStatsEntry &stats,
-    uint32_t uniqueNameId)
-{
-    if (uniqueNameId != 0)
-    {
-        const std::optional<std::string> uniqueName =
-            monsterTable.getUniqueName(static_cast<int32_t>(uniqueNameId));
-
-        if (uniqueName && !uniqueName->empty())
-        {
-            return *uniqueName;
-        }
-    }
-
-    return stats.name;
-}
-
 int32_t cookedOutdoorNavigationSourceId(
     const OutdoorMapData &outdoorMapData,
     size_t bModelIndex,
@@ -4396,12 +4377,6 @@ bool updateTurnBasedActorWaitingPresentation(
     actor.idleDecisionSeconds = standSeconds;
     actor.animationTimeTicks = 0.0f;
     return false;
-}
-
-char tierLetterForSummonLevel(uint32_t level)
-{
-    const uint32_t clampedLevel = std::clamp(level, 1u, 3u);
-    return static_cast<char>('A' + (clampedLevel - 1u));
 }
 
 OutdoorWorldRuntime::SpawnPointState buildSpawnPointState(
@@ -17844,7 +17819,7 @@ bool OutdoorWorldRuntime::summonMonsters(
 
     return spawnEncounterFromResolvedData(
         static_cast<int>(typeIndexInMapStats),
-        tierLetterForSummonLevel(level),
+        summonMonsterTier(level),
         count,
         static_cast<float>(x),
         static_cast<float>(y),

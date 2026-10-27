@@ -61,4 +61,6 @@ std::vector<WorldMapFeature> buildWorldPlacedMonsterFeatures(const MapStatsEntry
     const MapDeltaData &authoredActors, const MonsterTable &monsters);
 std::vector<WorldMapFeature> buildWorldObservedMonsterFeatures(const std::string &mapId,
     const std::vector<WorldMonsterObservation> &observations, const MonsterTable &monsters);
+std::vector<WorldMapFeature> buildWorldScriptedMonsterFeatures(const MapStatsEntry &map,
+    const ScriptedEventProgram &events, const MonsterTable &monsters);
 }

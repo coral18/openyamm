@@ -1,5 +1,23 @@
 # Atlas fixtures
 
+## Scripted monster reference privacy
+
+`tools/menu_tours/atlas_scripted_spawns.yml` enters through Map Book on a private Harmondale or Dagger Wound save,
+searches Sites for scripted sources in Discovery, opens Guide, reads a source, returns to Discovery and quicksaves.
+Inspect all four captures: the sources are Guide possibilities; the before/after Discovery map and list must
+remain unchanged. `atlas_scripted_spawns_tularean.yml` separately browses the current six shared-script battle
+groups, including the corrected active-game soldier count. Neither tour activates a source callback.
+
+For the Abandoned Temple tour, use the `item-source.oysav` prepared by `mm8_item_sources.yml` as private
+`saves/before.oysav`, then run `atlas_scripted_spawns_mm8_dungeon.yml`. It dismisses Simon's dialogue and stores
+the actual held chest item before entering the ordinary Map Book. Guide selects All heights to include the
+authored sources; Discovery must still hide unobserved groups and unexplored outlines.
+
+Run `mm7_scripted_spawn_privacy.yml` against the Harmondale before/final quicksave, or
+`mm8_scripted_spawn_privacy.yml` against the prepared dungeon before/final quicksave. They verify the source
+quest/use flags and another roundtrip; MM8 also retains the original chest record and stored item. These check
+the specified fields and do not certify the whole save or Android/controller input.
+
 ## Map Book entry, note heights and deletion regression
 
 Prepare fresh isolated saves with `tests/scenarios/atlas/mm7_creature_item_source.yml` and

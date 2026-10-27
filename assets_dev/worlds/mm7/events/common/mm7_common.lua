@@ -619,15 +619,21 @@ function MM7.OpenEvenmornDimensionDoorIfNear()
     end
 end
 
+MM7.TulareanArtifactBattleSpawns = {
+    {2, 2, 3, -15752, 21272, 3273, 51, 0},
+    {2, 2, 5, -14000, 18576, 4250, 51, 0},
+    {2, 2, 10, -16016, 19280, 3284, 51, 0},
+    {3, 2, 3, -15752, 21272, 3273, 50, 0},
+    {3, 2, 9, -14000, 18576, 4250, 50, 0},
+    {3, 2, 10, -16016, 19280, 3284, 50, 0}
+}
+
 function MM7.SummonTulareanArtifactBattle()
     evt.SetFacetBit(1, FacetBits.Untouchable, 0)
     evt.SetFacetBit(1, FacetBits.Invisible, 0)
-    evt.SummonMonsters(2, 2, 3, -15752, 21272, 3273, 51, 0)
-    evt.SummonMonsters(2, 2, 5, -14000, 18576, 4250, 51, 0)
-    evt.SummonMonsters(2, 2, 10, -16016, 19280, 3284, 51, 0)
-    evt.SummonMonsters(3, 2, 3, -15752, 21272, 3273, 50, 0)
-    evt.SummonMonsters(3, 2, 9, -14000, 18576, 4250, 50, 0)
-    evt.SummonMonsters(3, 2, 10, -16016, 19280, 3284, 50, 0)
+    for _, spawn in ipairs(MM7.TulareanArtifactBattleSpawns) do
+        evt.SummonMonsters(table.unpack(spawn))
+    end
 end
 
 function MM7.UpdateTulareanArtifactBattle()

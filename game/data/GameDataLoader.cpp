@@ -339,6 +339,7 @@ std::vector<std::string> buildLuaScriptOverlayPathCandidates(
         {
             // Base declarations must precede every replacement, including .fixup and numeric prefixes.
             if (toLowerCopy(entryName) == toLowerCopy(baseName) + "_00_item_rewards.lua"
+                || toLowerCopy(entryName) == toLowerCopy(baseName) + "_00_monster_spawns.lua"
                 || toLowerCopy(entryName) == toLowerCopy(baseName) + "_00_npc_locations.lua"
                 || toLowerCopy(entryName) == toLowerCopy(baseName) + "_00_npc_topic_refs.lua"
                 || toLowerCopy(entryName) == toLowerCopy(baseName) + "_00_autonote_refs.lua"

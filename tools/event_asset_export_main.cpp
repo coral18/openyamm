@@ -78,6 +78,7 @@ enum class MetadataExport
 {
     None,
     ItemRewards,
+    MonsterSpawns,
     NpcLocations,
     NpcTopicReferences,
     AutonoteReferences,
@@ -201,7 +202,7 @@ bool parseArguments(
 
         if (argument == "--item-rewards-only" || argument == "--npc-locations-only"
             || argument == "--autonote-refs-only" || argument == "--site-refs-only"
-            || argument == "--npc-topic-refs-only")
+            || argument == "--npc-topic-refs-only" || argument == "--monster-spawns-only")
         {
             if (metadataOnly != MetadataExport::None)
             {
@@ -209,6 +210,7 @@ bool parseArguments(
                 return false;
             }
             metadataOnly = argument == "--item-rewards-only" ? MetadataExport::ItemRewards
+                : argument == "--monster-spawns-only" ? MetadataExport::MonsterSpawns
                 : argument == "--npc-locations-only" ? MetadataExport::NpcLocations
                 : argument == "--npc-topic-refs-only" ? MetadataExport::NpcTopicReferences
                 : argument == "--autonote-refs-only" ? MetadataExport::AutonoteReferences
@@ -2270,6 +2272,20 @@ bool exportLegacyProgram(
         ? scriptsRoot / "Global_00_item_rewards.lua"
         : scriptsRoot / "maps" / (outputStem + "_00_item_rewards.lua");
     const LegacyLuaExportScope scope = globalScope ? LegacyLuaExportScope::Global : LegacyLuaExportScope::Map;
+    if (metadataOnly == MetadataExport::None || metadataOnly == MetadataExport::MonsterSpawns)
+    {
+        const std::filesystem::path path = globalScope ? scriptsRoot / "Global_00_monster_spawns.lua"
+            : scriptsRoot / "maps" / (outputStem + "_00_monster_spawns.lua");
+        const std::string spawns = OpenYAMM::Game::generateLegacyEventMonsterSpawnsLuaChunk(
+            evtProgram, strTable, lookups, scope, version);
+        if (spawns.empty()) std::filesystem::remove(path);
+        else if (!writeTextFile(path, spawns))
+        {
+            std::cerr << "Failed to write monster spawn metadata for " << legacyBaseName << '\n';
+            return false;
+        }
+    }
+    if (metadataOnly == MetadataExport::MonsterSpawns) return true;
     if ((metadataOnly == MetadataExport::None || metadataOnly == MetadataExport::ItemRewards)
         && !writeTextFile(rewardPath,
             OpenYAMM::Game::generateLegacyEventItemRewardsLuaChunk(evtProgram, strTable, lookups, scope, version)))

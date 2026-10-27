@@ -23,6 +23,7 @@ struct WorldMonsterFeature
     bool dead = false;
     int32_t gameMinutes = 0;
     bool placed = false;
+    bool scripted = false;
 };
 
 // A derived view of event metadata at an actual map site, not a second authored content registry.

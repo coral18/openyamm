@@ -2,6 +2,7 @@
 #include "game/gameplay/MapEncounterDefinition.h"
 #include "game/gameplay/GameplayRuntimeInterfaces.h"
 #include "game/events/EventRuntime.h"
+#include "game/events/ScriptedEventProgram.h"
 #include "game/outdoor/OutdoorMapData.h"
 #include "game/indoor/IndoorMapData.h"
 #include "game/maps/MapIdentity.h"
@@ -242,6 +243,36 @@ std::vector<WorldMapFeature> buildWorldPlacedMonsterFeatures(const MapStatsEntry
         feature.monster->placed = true;
         result.push_back(std::move(feature));
     }
+    return result;
+}
+
+std::vector<WorldMapFeature> buildWorldScriptedMonsterFeatures(const MapStatsEntry &map,
+    const ScriptedEventProgram &events, const MonsterTable &monsters)
+{
+    std::vector<WorldMapFeature> result;
+    if (events.scope() != ScriptedEventScope::Map) return result;
+    const std::string mapId = map.canonicalId.empty()
+        ? buildCanonicalMapId(map.worldId, map.fileName) : map.canonicalId;
+    for (const auto &[eventId, spawns] : events.monsterSpawns())
+        for (size_t index = 0; index < spawns.size(); ++index)
+        {
+            const ScriptedEventProgram::MonsterSpawn &spawn = spawns[index];
+            const MapEncounterInfo *pEncounter = mapEncounterInfo(map, int(spawn.encounterSlot));
+            if (pEncounter == nullptr) continue;
+            const auto *pStats = monsters.findStatsByPictureName(
+                encounterPictureBase(*pEncounter) + " " + summonMonsterTier(spawn.level));
+            if (pStats == nullptr || pStats->id <= 0 || pStats->id > INT16_MAX) continue;
+            WorldMapFeature feature;
+            feature.mapId = mapId;
+            feature.kind = WorldMapFeatureKind::Monster;
+            feature.site = {"script/" + std::to_string(eventId) + "/spawn/" + std::to_string(index),
+                eventId, float(spawn.x), float(spawn.y), float(spawn.z)};
+            feature.id = mapId + "/" + feature.site.id;
+            feature.title = resolveSpawnedMapActorName(monsters, *pStats, spawn.uniqueNameId) + " - scripted spawn";
+            feature.monster = WorldMonsterFeature{{int16_t(pStats->id)}, int(spawn.count), int(spawn.count)};
+            feature.monster->scripted = true;
+            result.push_back(std::move(feature));
+        }
     return result;
 }
 

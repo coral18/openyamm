@@ -3,6 +3,11 @@
 
 namespace OpenYAMM::Game
 {
+char summonMonsterTier(uint32_t level)
+{
+    return char('A' + std::clamp(level, 1u, 3u) - 1u);
+}
+
 EncounterSpawnDescriptor resolveEncounterSpawnDescriptor(uint16_t index)
 {
     if (index >= 1 && index <= 3)

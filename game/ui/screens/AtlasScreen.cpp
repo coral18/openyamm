@@ -189,6 +189,7 @@ AtlasScreen::AtlasScreen(const Engine::AssetFileSystem &assets, const GameDataRe
     }
     if (pCurrentMap != nullptr && pCurrentMap->localEventProgram)
     {
+        m_world.indexMapMonsterSpawns(pCurrentMap->map, *pCurrentMap->localEventProgram, m_data.monsterTable());
         m_world.indexMapNpcTopics(pCurrentMap->map, *pCurrentMap->localEventProgram);
         m_world.indexMapInteractionReferences(pCurrentMap->map, m_data.itemTable(), m_data.spellTable());
         m_world.indexMapGateReferences(pCurrentMap->map, m_data.worldGateCatalog(), m_pParty);
@@ -697,6 +698,7 @@ void AtlasScreen::indexMapData(MapAssetInfo &map)
     else
         throw std::runtime_error("Missing map geometry");
     m_world.indexMapInteractionReferences(map.map, m_data.itemTable(), m_data.spellTable());
+    m_world.indexMapMonsterSpawns(map.map, *map.localEventProgram, m_data.monsterTable());
     m_world.indexMapGateReferences(map.map, m_data.worldGateCatalog(), m_pParty);
     if (map.localEventProgram) m_world.indexNpcLocations(*map.localEventProgram);
     if (map.globalEventProgram)
@@ -777,9 +779,10 @@ bool AtlasScreen::drawLocationMarkers(const WorldRecord &map, const Rect &image,
         const auto point = pFloorPlan != nullptr ? pFloorPlan->worldToUv(location.x, location.y)
             : [&]()
             {
-                const auto uv = gameplayMinimapWorldToUv({}, location.x, location.y);
+                const auto uv = gameplayMinimapWorldToUv({}, location.x, location.y, false);
                 return std::pair{uv.x, uv.y};
             }();
+        if (point.first < 0 || point.first > 1 || point.second < 0 || point.second > 1) continue;
         const float x = image.x + point.first * image.width, y = image.y + point.second * image.height;
         if (x < viewport.x || x > viewport.x + viewport.width || y < viewport.y || y > viewport.y + viewport.height)
             continue;
@@ -1208,7 +1211,7 @@ void AtlasScreen::drawPartyArrow(const WorldRecord &map, const Rect &image, cons
         uv = floorPlan->worldToUv(party.x, party.y);
     else
     {
-        const auto point = gameplayMinimapWorldToUv(GameplayMinimapState{}, party.x, party.y);
+        const auto point = gameplayMinimapWorldToUv(GameplayMinimapState{}, party.x, party.y, false);
         uv = {point.x, point.y};
     }
     if (uv.first < 0 || uv.first > 1 || uv.second < 0 || uv.second > 1)
@@ -1302,9 +1305,10 @@ bool AtlasScreen::drawFeatureMarkers(const WorldRecord &map, const Rect &image, 
         const auto point = pFloorPlan != nullptr ? pFloorPlan->worldToUv(site.x, site.y)
             : [&]()
             {
-                const auto uv = gameplayMinimapWorldToUv({}, site.x, site.y);
+                const auto uv = gameplayMinimapWorldToUv({}, site.x, site.y, false);
                 return std::pair{uv.x, uv.y};
             }();
+        if (point.first < 0 || point.first > 1 || point.second < 0 || point.second > 1) continue;
         const float x = image.x + point.first * image.width, y = image.y + point.second * image.height;
         if (x < viewport.x || x > viewport.x + viewport.width || y < viewport.y || y > viewport.y + viewport.height)
             continue;
@@ -2116,6 +2120,9 @@ void AtlasScreen::drawDetails()
                         + " | Day " + std::to_string(monster.gameMinutes / (24 * 60) + 1);
                 else if (monster.placed)
                     text += "\nAuthored placement. Scripts and the current world state can change its presence.";
+                else if (monster.scripted)
+                    text += "\nScripted group size per call: " + std::to_string(monster.minCount)
+                        + ". Conditions may apply; not a live population count.";
                 else
                     text += "\nAuthored group: " + std::to_string(monster.minCount) + " - "
                         + std::to_string(monster.maxCount) + " creatures. Not a live population count.";

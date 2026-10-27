@@ -34,6 +34,14 @@ public:
         bool operator==(const NpcTopicReference &) const = default;
     };
 
+    // Possible local SummonMonsters calls, not a live population or branch-eligibility prediction.
+    struct MonsterSpawn
+    {
+        uint32_t encounterSlot = 0, level = 0, count = 0;
+        int32_t x = 0, y = 0, z = 0;
+        uint32_t group = 0, uniqueNameId = 0;
+    };
+
     struct ContextActionMetadata
     {
         std::string kind;
@@ -75,6 +83,7 @@ public:
     const std::unordered_map<uint16_t, std::vector<NpcLocation>> &npcLocations() const;
     const std::unordered_map<uint16_t, std::vector<NpcTopicReference>> &npcTopicReferences() const;
     const std::unordered_map<uint16_t, std::vector<uint32_t>> &qbitGrants() const;
+    const std::unordered_map<uint16_t, std::vector<MonsterSpawn>> &monsterSpawns() const;
     const std::vector<TimerTrigger> &timerTriggers() const;
     bool hasEvent(uint16_t eventId) const;
     bool isLevitateSensitivePressurePlate(uint16_t eventId, uint32_t faceAttributes) const;
@@ -118,6 +127,7 @@ private:
     std::unordered_map<uint16_t, std::vector<NpcLocation>> m_npcLocations;
     std::unordered_map<uint16_t, std::vector<NpcTopicReference>> m_npcTopicReferences;
     std::unordered_map<uint16_t, std::vector<uint32_t>> m_qbitGrants;
+    std::unordered_map<uint16_t, std::vector<MonsterSpawn>> m_monsterSpawns;
     uint32_t m_levitateTrapFaceMask = 0;
     std::vector<uint16_t> m_levitateTrapEvents;
     std::vector<TimerTrigger> m_timerTriggers;

@@ -210,6 +210,17 @@ void WorldDatabase::indexObservedMonsters(const WorldKnowledge &knowledge, const
     }
 }
 
+void WorldDatabase::indexMapMonsterSpawns(const MapStatsEntry &map, const ScriptedEventProgram &events,
+    const MonsterTable &monsters)
+{
+    const std::string id = mapId(map);
+    if (find(id) == nullptr) return;
+    std::erase_if(m_features, [&id](const WorldMapFeature &feature)
+    { return feature.mapId == id && feature.monster && feature.monster->scripted; });
+    auto features = buildWorldScriptedMonsterFeatures(map, events, monsters);
+    m_features.insert(m_features.end(), features.begin(), features.end());
+}
+
 void WorldDatabase::indexMapNotes(const WorldKnowledge &knowledge)
 {
     std::erase_if(m_features, [](const WorldMapFeature &feature)

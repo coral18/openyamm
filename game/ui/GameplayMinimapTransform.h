@@ -55,7 +55,8 @@ inline bool applyMapPresentationToMinimapState(
 inline GameplayMinimapPoint gameplayMinimapWorldToUv(
     const GameplayMinimapState &state,
     float worldX,
-    float worldY)
+    float worldY,
+    bool clampToBounds = true)
 {
     const float worldWidth = std::max(state.worldMaxX - state.worldMinX, 0.000001f);
     const float worldHeight = std::max(state.worldMaxY - state.worldMinY, 0.000001f);
@@ -72,7 +73,8 @@ inline GameplayMinimapPoint gameplayMinimapWorldToUv(
         v = 1.0f - v;
     }
 
-    return {std::clamp(u, 0.0f, 1.0f), std::clamp(v, 0.0f, 1.0f)};
+    return clampToBounds ? GameplayMinimapPoint{std::clamp(u, 0.0f, 1.0f), std::clamp(v, 0.0f, 1.0f)}
+        : GameplayMinimapPoint{u, v};
 }
 
 inline GameplayMinimapPoint gameplayMinimapUvToWorld(

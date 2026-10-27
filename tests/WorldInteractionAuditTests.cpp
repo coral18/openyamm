@@ -15,8 +15,59 @@
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <map>
 #include <set>
 #include <string>
+
+TEST_CASE("active scripted monster spawn catalog resolves current MM7 and MM8 encounters without discoveries")
+{
+    using namespace OpenYAMM::Game;
+    REQUIRE_MESSAGE(OpenYAMM::Tests::regressionMapLoaderLoaded(),
+        OpenYAMM::Tests::regressionMapLoaderFailure());
+    const auto &fixture = OpenYAMM::Tests::regressionMapLoader();
+    const auto &data = fixture.gameDataLoader;
+    std::map<std::string, size_t> counts;
+    for (const MapStatsEntry &entry : data.getMapStats().getEntries())
+    {
+        if (entry.worldId != "mm7" && entry.worldId != "mm8") continue;
+        CAPTURE(entry.fileName);
+        MapAssetInfo map;
+        map.map = entry;
+        std::string error;
+        REQUIRE_MESSAGE(GameDataLoader::loadEventPrograms(fixture.assetFileSystem, map, error), error);
+        REQUIRE(map.localEventProgram);
+        const ScriptedEventProgram &events = *map.localEventProgram;
+        WorldDatabase world(data.getMapStats(), data.getHouseTable(), data.getNpcDialogTable(),
+            data.getMergedTeacherTopicTable(), entry.worldId);
+        world.indexMapMonsterSpawns(entry, events, data.getMonsterTable());
+        size_t declarations = 0;
+        for (const auto &[eventId, spawns] : events.monsterSpawns())
+        {
+            CHECK(events.hasEvent(eventId));
+            declarations += spawns.size();
+        }
+        WorldKnowledge knowledge;
+        knowledge.visitedMaps.insert(entry.fileName);
+        CHECK(world.queryFeatures(knowledge, true).size() == declarations);
+        CHECK(world.queryFeatures(knowledge, false).empty());
+        CHECK(knowledge.variables.empty());
+        CHECK(knowledge.monsterObservations.empty());
+        for (const WorldMapFeature &feature : world.features())
+        {
+            REQUIRE(feature.monster);
+            CHECK(feature.monster->scripted);
+            CHECK_FALSE(feature.monster->observed);
+            REQUIRE(feature.monster->definitions.size() == 1);
+            CHECK(data.getMonsterTable().findStatsById(feature.monster->definitions.front()) != nullptr);
+            CHECK(feature.site.eventId > 0);
+            CHECK(feature.mapId == WorldDatabase::mapId(entry));
+        }
+        counts[entry.worldId] += declarations;
+    }
+    CHECK(counts["mm7"] > 0);
+    CHECK(counts["mm8"] > 0);
+    MESSAGE("Active spawn references: MM7=", counts["mm7"], ", MM8=", counts["mm8"]);
+}
 
 TEST_CASE("canonical companion contacts link Fredrick dialogue and Cauri rescue without discovering either")
 {

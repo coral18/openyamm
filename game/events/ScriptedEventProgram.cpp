@@ -3,6 +3,7 @@
 #include "engine/scripting/LuaStateOwner.h"
 
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <charconv>
 #include <set>
@@ -537,6 +538,83 @@ std::vector<ScriptedEventProgram::TimerTrigger> readTimerTriggers(
 
 namespace
 {
+bool readMonsterSpawns(lua_State *pLuaState, int metadataIndex, ScriptedEventScope scope,
+    std::unordered_map<uint16_t, std::vector<ScriptedEventProgram::MonsterSpawn>> &result, std::string &error)
+{
+    const int stackTop = lua_gettop(pLuaState);
+    const auto fail = [&]()
+    {
+        error = "Invalid monsterSpawns metadata: expected callback-owned arrays of SummonMonsters arguments";
+        lua_settop(pLuaState, stackTop);
+        return false;
+    };
+    lua_getfield(pLuaState, metadataIndex, "monsterSpawns");
+    if (lua_isnil(pLuaState, -1))
+    {
+        lua_pop(pLuaState, 1);
+        return true;
+    }
+    if (scope != ScriptedEventScope::Map || !lua_istable(pLuaState, -1)) return fail();
+    lua_pushnil(pLuaState);
+    while (lua_next(pLuaState, -2) != 0)
+    {
+        if (!lua_isinteger(pLuaState, -2) || lua_tointeger(pLuaState, -2) <= 0
+            || lua_tointeger(pLuaState, -2) > UINT16_MAX || !lua_istable(pLuaState, -1)) return fail();
+        const uint16_t eventId = uint16_t(lua_tointeger(pLuaState, -2));
+        lua_getfield(pLuaState, -1, "handler");
+        if (!lua_isfunction(pLuaState, -1)) return fail();
+        lua_getglobal(pLuaState, "evt");
+        lua_getfield(pLuaState, -1, "map");
+        if (!lua_istable(pLuaState, -1)) return fail();
+        lua_rawgeti(pLuaState, -1, eventId);
+        const bool ownsHandler = lua_rawequal(pLuaState, -1, -4);
+        lua_pop(pLuaState, 4);
+        if (!ownsHandler)
+        {
+            lua_pop(pLuaState, 1);
+            continue;
+        }
+        lua_getfield(pLuaState, -1, "spawns");
+        if (!lua_istable(pLuaState, -1)) return fail();
+        const size_t count = lua_rawlen(pLuaState, -1);
+        std::vector<ScriptedEventProgram::MonsterSpawn> spawns(count);
+        size_t entries = 0;
+        lua_pushnil(pLuaState);
+        while (lua_next(pLuaState, -2) != 0)
+        {
+            if (!lua_isinteger(pLuaState, -2) || lua_tointeger(pLuaState, -2) <= 0
+                || uint64_t(lua_tointeger(pLuaState, -2)) > count || !lua_istable(pLuaState, -1)
+                || lua_rawlen(pLuaState, -1) != 8) return fail();
+            const size_t index = size_t(lua_tointeger(pLuaState, -2)) - 1;
+            std::array<lua_Integer, 8> args{};
+            size_t fields = 0;
+            lua_pushnil(pLuaState);
+            while (lua_next(pLuaState, -2) != 0)
+            {
+                if (!lua_isinteger(pLuaState, -2) || lua_tointeger(pLuaState, -2) < 1
+                    || lua_tointeger(pLuaState, -2) > 8 || !lua_isinteger(pLuaState, -1)) return fail();
+                args[size_t(lua_tointeger(pLuaState, -2)) - 1] = lua_tointeger(pLuaState, -1);
+                ++fields;
+                lua_pop(pLuaState, 1);
+            }
+            if (fields != 8 || args[0] < 1 || args[0] > 3 || args[1] < 0 || args[1] > UINT32_MAX
+                || args[2] <= 0 || args[2] > INT32_MAX || args[6] < 0 || args[6] > UINT32_MAX
+                || args[7] < 0 || args[7] > UINT32_MAX) return fail();
+            for (size_t coordinate = 3; coordinate <= 5; ++coordinate)
+                if (args[coordinate] < INT32_MIN || args[coordinate] > INT32_MAX) return fail();
+            spawns[index] = {uint32_t(args[0]), uint32_t(args[1]), uint32_t(args[2]),
+                int32_t(args[3]), int32_t(args[4]), int32_t(args[5]), uint32_t(args[6]), uint32_t(args[7])};
+            ++entries;
+            lua_pop(pLuaState, 1);
+        }
+        if (entries != count) return fail();
+        if (!spawns.empty()) result.emplace(eventId, std::move(spawns));
+        lua_pop(pLuaState, 2);
+    }
+    lua_settop(pLuaState, stackTop);
+    return true;
+}
+
 bool readSiteReferences(lua_State *pLuaState, int metadataIndex, ScriptedEventScope scope,
     std::unordered_map<uint16_t, std::string> &result,
     std::unordered_map<uint16_t, std::string> &kinds, std::string &error)
@@ -1106,6 +1184,8 @@ bool ScriptedEventProgram::populateMetadataFromLua(
     if (!readSiteGroups(pLuaState, lua_absindex(pLuaState, -1), scope, program.m_siteGroups, error)) return false;
     if (!readConnectionTargets(pLuaState, lua_absindex(pLuaState, -1), scope,
         program.m_connectionTargets, error)) return false;
+    if (!readMonsterSpawns(pLuaState, lua_absindex(pLuaState, -1), scope,
+        program.m_monsterSpawns, error)) return false;
     program.m_textureNames = readStringArrayFromField(pLuaState, -1, "textureNames");
     program.m_spriteNames = readStringArrayFromField(pLuaState, -1, "spriteNames");
     program.m_castSpellIds = readIntegerArrayFromField<uint32_t>(pLuaState, -1, "castSpellIds");
@@ -1131,6 +1211,12 @@ bool ScriptedEventProgram::populateMetadataFromLua(
 const std::unordered_map<uint16_t, std::vector<uint32_t>> &ScriptedEventProgram::itemRewards() const
 {
     return m_itemRewards;
+}
+
+const std::unordered_map<uint16_t, std::vector<ScriptedEventProgram::MonsterSpawn>> &
+ScriptedEventProgram::monsterSpawns() const
+{
+    return m_monsterSpawns;
 }
 
 const std::unordered_map<uint16_t, std::vector<std::string>> &ScriptedEventProgram::connectionTargets() const

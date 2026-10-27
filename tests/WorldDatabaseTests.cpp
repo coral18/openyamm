@@ -2275,3 +2275,97 @@ TEST_CASE("connection target queries expose authored alternatives only in Guide 
     CHECK(knowledge.regionMaps.empty());
     CHECK(knowledge.variables.empty());
 }
+
+TEST_CASE("scripted monster spawn pins use active encounter rules without disclosing unseen populations")
+{
+    Fixture f;
+    auto database = f.database();
+    MonsterTable monsters = atlasMonsters();
+    REQUIRE(monsters.loadUniqueNamesFromRows({{"1", "Gruk the Red"}}));
+    MapStatsEntry map = *f.maps.findById(63);
+    map.encounter1.pictureName = "Test Goblin";
+    map.encounter1.difficulty = 0;
+    map.encounter1.minCount = map.encounter1.maxCount = 0; // Direct script counts are independent.
+    const std::vector<uint8_t> bytes = [&]()
+    {
+        std::ifstream input(std::string(OPENYAMM_SOURCE_DIR) + "/assets_dev/engine/scripts/common/event_support.lua");
+        return std::vector<uint8_t>(std::istreambuf_iterator<char>(input), {});
+    }();
+    const std::string support(bytes.begin(), bytes.end());
+    const std::string base = "RegisterEvent(10, '', function() error('must not execute') end)\n"
+        "SetMapMonsterSpawns(10, {{1,0,6,100,-200,-512,0,0}, {1,99,1,300,400,512,0,1},"
+        "{2,1,9,0,0,0,0,0}})\n";
+    std::string error;
+    const auto program = ScriptedEventProgram::loadFromLuaText(support + base, "spawn-pins",
+        ScriptedEventScope::Map, error);
+    REQUIRE_MESSAGE(program, error);
+    CHECK(summonMonsterTier(0) == 'A');
+    CHECK(summonMonsterTier(1) == 'A');
+    CHECK(summonMonsterTier(2) == 'B');
+    CHECK(summonMonsterTier(UINT32_MAX) == 'C');
+    const auto features = buildWorldScriptedMonsterFeatures(map, *program, monsters);
+    REQUIRE(features.size() == 2);
+    CHECK(features[0].monster->definitions == std::vector<int16_t>{11});
+    CHECK(features[1].monster->definitions == std::vector<int16_t>{13});
+    CHECK(features[0].monster->minCount == 6);
+    CHECK(features[1].title == "Gruk the Red - scripted spawn");
+    CHECK(features[0].site.x == 100);
+    CHECK(features[0].site.y == -200);
+    CHECK(features[0].site.z == -512);
+    CHECK(features[0].site.eventId == 10);
+    CHECK(features[0].id == WorldDatabase::mapId(map) + "/script/10/spawn/0");
+    WorldKnowledge knowledge;
+    knowledge.visitedMaps.insert(map.fileName);
+    knowledge.regionMaps[map.fileName].fullyRevealedCells.assign(88 * 88 / 8, 255);
+    database.indexMapMonsterSpawns(map, *program, monsters);
+    CHECK(database.queryFeatures(knowledge, true).size() == 2);
+    CHECK(database.queryFeatures(knowledge, false).empty());
+    WorldGuideSource guideSource;
+    guideSource.pMonsters = &monsters;
+    guideSource.pWorld = &database;
+    guideSource.pWorldKnowledge = &knowledge;
+    const auto guide = buildWorldGuide(guideSource, WorldGuideSection::Monsters, {}, true);
+    const auto goblin = std::find_if(guide.begin(), guide.end(), [](const WorldGuideEntry &entry)
+        { return entry.id == "11"; });
+    REQUIRE(goblin != guide.end());
+    CHECK(std::any_of(goblin->links.begin(), goblin->links.end(), [&](const WorldGuideLink &link)
+        { return link.kind == WorldGuideLink::Kind::Feature && link.target == features[0].id; }));
+    WorldGuideKnowledge knownSpecies;
+    knownSpecies.monsters.insert(11);
+    const auto knownReference = buildWorldGuide(guideSource, WorldGuideSection::Monsters, knownSpecies, false);
+    REQUIRE(knownReference.size() == 1);
+    CHECK(std::none_of(knownReference.front().links.begin(), knownReference.front().links.end(),
+        [](const WorldGuideLink &link) { return link.kind == WorldGuideLink::Kind::Feature; }));
+    database.indexMapMonsterSpawns(map, *program, monsters);
+    CHECK(database.queryFeatures(knowledge, true).size() == 2);
+    database.indexMapMonsters(map, OutdoorMapData{}, monsters, {{42, 11, 1, 2, 3, false, 540}});
+    database.indexMapMonsterSpawns(map, *program, monsters);
+    REQUIRE(database.queryFeatures(knowledge, false).size() == 1);
+    CHECK(database.queryFeatures(knowledge, false).front()->site.x == 1);
+    CHECK(database.queryFeatures(knowledge, true).size() == 3);
+    CHECK(knowledge.variables.empty());
+    CHECK(knowledge.monsterObservations.empty());
+    const auto replaced = ScriptedEventProgram::loadFromLuaText(
+        support + base + "ReplaceMapEvent(10, '', function() end)", "spawn-replaced", ScriptedEventScope::Map, error);
+    REQUIRE(replaced);
+    database.indexMapMonsterSpawns(map, *replaced, monsters);
+    CHECK(database.queryFeatures(knowledge, true).size() == 1); // Actual observation survives.
+    CHECK(database.queryFeatures(knowledge, false).size() == 1);
+}
+
+TEST_CASE("atlas outdoor projection rejects off-map script centers without moving them onto a border")
+{
+    const GameplayMinimapState bounds;
+    const auto clipped = gameplayMinimapWorldToUv(bounds, -896, 55504);
+    CHECK(clipped.y == 0); // Existing minimap callers retain their clamped behavior.
+    const auto actual = gameplayMinimapWorldToUv(bounds, -896, 55504, false);
+    CHECK(actual.x > 0);
+    CHECK(actual.x < 1);
+    CHECK(actual.y < 0); // Authored MM8 out01 call is outside the atlas image, not at its north edge.
+    const auto border = gameplayMinimapWorldToUv(bounds, bounds.worldMaxX, 0, false);
+    CHECK(border.x == 1);
+    CHECK(border.y == doctest::Approx(0.5f));
+    const auto center = gameplayMinimapWorldToUv(bounds, 0, 0, false);
+    CHECK(center.x == doctest::Approx(0.5f));
+    CHECK(center.y == doctest::Approx(0.5f));
+}

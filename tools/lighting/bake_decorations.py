@@ -97,6 +97,39 @@ def validate_reward_metadata(text, script):
                 raise ValueError('Invalid reward metadata overlay: ' + str(script))
 
 
+def validate_monster_spawn_metadata(text, script):
+    lines = text.splitlines()
+    header = ('-- generated possible monster spawns from legacy EVT/STR; load after the base handlers'
+              if script.name.endswith('_00_monster_spawns.lua') else
+              '-- Monster spawn metadata; load after gameplay overlays')
+    row = r'\{[0-9]+, [0-9]+, [0-9]+, -?[0-9]+, -?[0-9]+, -?[0-9]+, [0-9]+, [0-9]+\}'
+    declaration = re.compile(r'SetMapMonsterSpawns\(([1-9][0-9]*), \{(' + row
+                             + r'(?:, ' + row + r')*)?\}\)')
+    shared_table = re.compile(r'SetMapMonsterSpawns\(([1-9][0-9]*), '
+                              r'[A-Za-z_][A-Za-z_0-9]*(?:\.[A-Za-z_][A-Za-z_0-9]*)+\)')
+    if not lines or lines[0] != header:
+        raise ValueError('Invalid monster spawn metadata overlay: ' + str(script))
+    for line in lines[1:]:
+        line = line.strip()
+        if not line or line.startswith('--'):
+            continue
+        reference = shared_table.fullmatch(line) if script.name.endswith('_zz_monster_spawns.lua') else None
+        if reference:
+            if int(reference.group(1)) > 65535:
+                raise ValueError('Invalid monster spawn metadata overlay: ' + str(script))
+            continue
+        match = declaration.fullmatch(line)
+        if not match or int(match.group(1)) > 65535:
+            raise ValueError('Invalid monster spawn metadata overlay: ' + str(script))
+        for record in re.findall(row, match.group(2) or ''):
+            args = [int(value) for value in re.findall(r'-?[0-9]+', record)]
+            if (not 1 <= args[0] <= 3 or not 0 <= args[1] <= 4294967295
+                    or not 1 <= args[2] <= 2147483647
+                    or any(not -2147483648 <= value <= 2147483647 for value in args[3:6])
+                    or any(not 0 <= value <= 4294967295 for value in args[6:])):
+                raise ValueError('Invalid monster spawn metadata overlay: ' + str(script))
+
+
 def validate_npc_metadata(text, script):
     lines = text.splitlines()
     topics = script.name.endswith(('_00_npc_topic_refs.lua', '_zz_npc_topic_refs.lua'))
@@ -324,6 +357,9 @@ def export_cards(profile, output):
         # Lua strings/comments retain legacy STR bytes and need not be UTF-8. Latin-1
         # maps bytes losslessly for this ASCII syntax scanner; it does not transcode assets.
         text = script.read_bytes().decode('latin-1')
+        if script.name in (source.stem + '_00_monster_spawns.lua', source.stem + '_zz_monster_spawns.lua'):
+            validate_monster_spawn_metadata(text, script)
+            continue
         if script.name in (source.stem + '_00_item_rewards.lua', source.stem + '_zz_item_rewards.lua'):
             # Reserved literal declarations cannot change any shadow caster.
             # Keep gameplay callback/overlay dependencies, while reward catalog updates remain independent.

@@ -1,0 +1,24 @@
+id: atlas.mm7_scripted_spawn_privacy
+title: Guide spawn references preserve actual campaign use flags and source discoveries
+world: mm7
+mode: faithful
+steps:
+- load_game:
+    name: before
+    path: saves/before.oysav
+- &id001
+  assert:
+    map: 7out02.odm
+- &id002
+  assert:
+    qbit_clear:
+    - 760
+- load_game:
+    name: quicksave
+    path: saves/quicksave.oysav
+- *id001
+- *id002
+- save_game: scripted-reference-verified
+- load_game: scripted-reference-verified
+- *id001
+- *id002

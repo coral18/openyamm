@@ -155,6 +155,8 @@ public:
                           const std::vector<WorldMonsterObservation> &observations = {},
                           const MapDeltaData *pAuthoredActors = nullptr);
     void indexObservedMonsters(const WorldKnowledge &knowledge, const MonsterTable &monsters);
+    void indexMapMonsterSpawns(const MapStatsEntry &map, const ScriptedEventProgram &events,
+        const MonsterTable &monsters);
     void indexMapNotes(const WorldKnowledge &knowledge);
     void indexMapArrivals(const WorldKnowledge &knowledge);
     std::vector<const WorldMapFeature *> connectionArrivals(const WorldMapFeature &source,

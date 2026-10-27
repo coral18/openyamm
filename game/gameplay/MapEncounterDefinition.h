@@ -15,4 +15,5 @@ EncounterSpawnDescriptor resolveEncounterSpawnDescriptor(uint16_t index);
 const MapEncounterInfo *mapEncounterInfo(const MapStatsEntry &map, int slot);
 std::string encounterPictureBase(const MapEncounterInfo &encounter);
 const std::array<int, 3> &encounterTierWeights(int difficulty);
+char summonMonsterTier(uint32_t level);
 }
