@@ -1216,7 +1216,7 @@ void AtlasScreen::drawPartyArrow(const WorldRecord &map, const Rect &image, cons
     const std::string arrow = "MAPDIR" + std::to_string(gameplayMinimapArrowIndex(party.yawRadians) + 1);
     if (const auto size = textureSize(arrow))
     {
-        const float width = 20 * designScale(), height = width * size->height / std::max(1.0f, size->width);
+        const float width = 14 * designScale(), height = width * size->height / std::max(1.0f, size->width);
         drawTexture(arrow, {image.x + uv.first * image.width - width / 2,
                             image.y + uv.second * image.height - height / 2, width, height});
     }

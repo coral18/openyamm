@@ -1,0 +1,30 @@
+# Isolated 1600x900 desktop run in Classic pointer mode; Android uses the same journal controls.
+output_dir: captures
+exit: true
+steps:
+- expect: gameplay
+- capture: gameplay-before
+- click:
+  - 1480
+  - 120
+- capture: journal-entry
+- click:
+  - 1250
+  - 770
+- wait: 1
+- capture: atlas-discovery
+- click:
+  - 1152
+  - 57
+- wait: 5
+- capture: atlas-guide
+- click:
+  - 1442
+  - 57
+- capture: journal-return
+- key: Escape
+- expect: gameplay
+- pause: true
+- capture: pause-without-atlas
+- key: Escape
+- expect: gameplay

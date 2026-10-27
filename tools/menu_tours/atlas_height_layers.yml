@@ -4,8 +4,8 @@ output_dir: output/atlas-height-layers
 exit: true
 steps:
   - expect: gameplay
-  - pause: true
-  - click: [800, 821]
+  - action: map_book
+  - click: [1250, 770]
   - click: [1480, 126]
   - capture: known-all
   - click: [637, 695]

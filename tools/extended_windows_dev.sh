@@ -97,6 +97,7 @@ updates = {
     "engine/world/gates.yml": repo / "assets_dev/engine/world/gates.yml",
     "engine/world/atlas/mm7.yml": repo / "assets_dev/engine/world/atlas/mm7.yml",
     "engine/world/atlas/mm8.yml": repo / "assets_dev/engine/world/atlas/mm8.yml",
+    "engine/ui/gameplay/journal.yml": repo / "assets_dev/engine/ui/gameplay/journal.yml",
     "worlds/mm7/events/maps/7out02_zz_extended.lua": repo / "assets_dev/worlds/mm7/events/maps/7out02_zz_extended.lua",
     # Required upstream geometry bindings, absent from the bootstrap release payload.
     "worlds/mm7/maps/7d29_dimension_travel.scene.yml":

@@ -41,24 +41,43 @@ each toggle rebuilds the world index, and Guide synchronously loads all 13/14 ou
 and baked-lighting data. Re-entering Guide repeats this work. The relevant indexing and loader functions match
 the installed 0.2.0 source. These timings are from Windows, not measured phone timings. The initial request was
 verification only. The user subsequently approved a small optimization: source now indexes one map per frame,
-prioritizing the selected location; Windows entry frames are about 0.35–0.36 seconds. This targets 0.2.2 / 105
-and still requires a new Android build and device acceptance. Cross-mode caching remains deferred.
+prioritizing the selected location; Windows entry frames are about 0.35–0.36 seconds. This is packaged in 0.2.2 / 105;
+physical Guide timing/gesture acceptance remains separate. Cross-mode caching remains deferred.
 This report establishes that the
 user reached the Atlas/Guide UI, not acceptance of the remaining discovery, gesture or persistence checks.
+
+## Release update, 2026-10-27
+
+- Source: `30bd623a51db5520aa1b727e9c9f0e649dc4d10c`.
+- [Successful 0.2.2 ARM64 Release CI](https://github.com/coral18/openyamm/actions/runs/40398801195).
+- Local `OpenYAMM-Extended-atlas-0.2.2-arm64.apk`: 3,469,721,141 bytes;
+  SHA256 `b34808c96c4f08d0582115da98fb671fef21cffea46caa3793896a747401d36d`.
+- All seven artifact/part payloads, full CI APK, local signature, 16 KiB alignment and package contents passed checks.
+  It uses the same persistent private certificate as the installed 0.2.0.
+- After the user enabled USB installation, `pm install -r` succeeded. Package Manager confirms
+  `0.2.2-atlas` / `105` without `DEBUGGABLE`. No uninstall, data reset or restore was performed.
+- Launch logs confirm OpenGL ES 3.0 and both Atlas/karol.test modules. The official package path and all official
+  save hashes match the fresh pre-update records. This proves update/startup, not all Atlas device gates.
+
+The user separately confirmed MM7 Discovery fog hides unexplored terrain and the party arrow points in the
+correct direction on 0.2.0. They requested a smaller arrow and Map Book sidebar access instead of the main/pause
+menu. Those later source changes target 0.2.3 / 106, not this installed 0.2.2 package.
+After the 0.2.2 update, the user confirmed Guide Mode is noticeably faster with visible incremental loading.
 
 ## Physical acceptance gates
 
 | Check | Status |
 | --- | --- |
-| Install the verified Release and confirm its on-device version/flags | Passed for 0.2.0 / 103 |
-| First launch, Extended marker and active Android renderer | Passed for 0.2.0; OpenGL ES 3.0, two mods, live gameplay |
-| MM7 region, discovery fog and live party arrow | Pending |
+| Install the verified Release and confirm its on-device version/flags | Passed for 0.2.2 / 105 via in-place USB update |
+| First launch, Extended marker and active Android renderer | Passed for 0.2.2; OpenGL ES 3.0 and two mods; earlier 0.2.0 capture showed live gameplay |
+| MM7 region, discovery fog and live party arrow | User confirms fog and arrow direction on 0.2.0; wider position/device checks remain open |
 | MM8 region, discovery fog and live party arrow | Pending |
+| Guide Mode entry responsiveness | User confirms noticeably faster incremental loading on POCO 0.2.2 |
 | Guide roundtrip preserves discovery-only visibility | Pending |
 | Touch navigation, search, filters, zoom and pan | Pending |
 | Notes and save/load persistence | Pending |
 | Atlas disabled through a mod profile; gameplay remains usable | Pending |
-| Official installation and save hashes after testing | Passed after installation/first launch; repeat after remaining tests |
+| Official installation and save hashes after testing | Passed after 0.2.2 update/startup; repeat after remaining tests |
 
 Private APKs, verification reports, backups and captures are retained outside Git under the dated Android QA
 directory. Controller acceptance and the wider Atlas content matrix remain separate unfinished work.

@@ -5,8 +5,8 @@ exit: true
 steps:
 - expect: gameplay
 - key: F9
-- pause: true
-- click: [800, 821]
+- action: map_book
+- click: [1250, 770]
 - click: [450, 57]
 - click: [1450, 126]
 - click: [275, 190]
@@ -25,7 +25,6 @@ steps:
 - capture: tapestry-guide
 - click: [1152, 57]
 - click: [1450, 57]
-- expect: pause
-- click: [800, 301]
+- key: Escape
 - expect: gameplay
 - key: F9

@@ -4,10 +4,8 @@ exit: true
 steps:
 - expect: gameplay
 - key: F9
-- pause: true
-- click:
-  - 800
-  - 821
+- action: map_book
+- click: [1250, 770]
 - click:
   - 1123
   - 126
@@ -67,9 +65,6 @@ steps:
 - click:
   - 1450
   - 57
-- expect: pause
-- click:
-  - 800
-  - 301
+- key: Escape
 - expect: gameplay
 - key: F9

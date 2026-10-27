@@ -8779,10 +8779,6 @@ void GameApplication::openMenuScreen(bool paused)
     actions.quit = [this]() { requestApplicationQuit(); };
     actions.resume = [this]() { resumeMenuGameplay(); };
     actions.mainMenu = [this]() { openMainMenuScreen(); };
-    actions.atlas = [this, paused]() { return openAtlasScreen(paused); };
-    actions.atlasAvailable = [this]()
-    { return m_commonGameDataLoaded && modUiModuleEnabled(m_gameDataLoader.getLoadedMods(),
-                                                         "openyamm.interactive-atlas"); };
     actions.continueGame = [this](const std::filesystem::path &path)
     { return ensureCommonGameDataLoaded() && loadSessionFromPath(path); };
     actions.applySettings = [this](const GameSettings &settings, bool persist, std::string &error)
@@ -8931,7 +8927,18 @@ bool GameApplication::openAtlasScreen(bool paused)
     try
     {
         auto screen = std::make_unique<AtlasScreen>(*m_pAssetFileSystem, m_gameDataRepository, std::move(knowledge),
-            [this, paused]() { openMenuScreen(paused); }, paused, &m_gameAudioSystem,
+            [this, paused]()
+            {
+                if (paused)
+                {
+                    resumeMenuGameplay();
+                    m_gameSession.gameplayScreenRuntime().interactionState().closeOverlayLatch = true;
+                }
+                else
+                {
+                    openMainMenuScreen();
+                }
+            }, paused, &m_gameAudioSystem,
             paused && m_gameDataLoader.getSelectedMap() ? &*m_gameDataLoader.getSelectedMap() : nullptr,
             paused && m_pMapSceneRuntime != nullptr ? &m_pMapSceneRuntime->party() : nullptr,
             paused ? AtlasScreen::NoteWriter{[this](WorldMapNoteEdit &edit, std::string &error)
@@ -9795,6 +9802,8 @@ void GameApplication::renderFrame(int width, int height, float mouseWheelDelta, 
     const std::optional<MapAssetInfo> &selectedMap = m_gameDataLoader.getSelectedMap();
     const bool *pKeyboardState = m_gameInputSystem.frame().keyboardState();
     bool skipGameplayUpdateAfterInputPrompt = false;
+    m_gameSession.gameplayScreenRuntime().interactionState().interactiveAtlasAvailable =
+        modUiModuleEnabled(m_gameDataLoader.getLoadedMods(), "openyamm.interactive-atlas");
 
     if (m_skipGameplayUpdateUntilPromptSubmitKeysReleased)
     {
@@ -9906,6 +9915,14 @@ void GameApplication::renderFrame(int width, int height, float mouseWheelDelta, 
         if (m_gameSession.consumeRelativeMouseMotionResetRequest())
         {
             m_gameInputSystem.resetRelativeMouseMotion();
+        }
+
+        GameplayScreenRuntime &screenRuntime = m_gameSession.gameplayScreenRuntime();
+        if (screenRuntime.interactionState().interactiveAtlasRequested)
+        {
+            screenRuntime.interactionState().interactiveAtlasRequested = false;
+            if (!openAtlasScreen(true))
+                screenRuntime.setStatusBarEvent("Could not open the Interactive Atlas.");
         }
 
         if (m_gameSession.gameplayScreenRuntime().menuScreenState().active)

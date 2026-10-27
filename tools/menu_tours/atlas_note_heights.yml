@@ -5,10 +5,8 @@ output_dir: output/atlas-note-heights
 exit: true
 steps:
 - expect: gameplay
-- pause: true
-- click:
-  - 800
-  - 821
+- action: map_book
+- click: [1250, 770]
 - click:
   - 1480
   - 126
@@ -67,10 +65,8 @@ steps:
 - key: F10
 - wait: 1
 - expect: gameplay
-- pause: true
-- click:
-  - 800
-  - 821
+- action: map_book
+- click: [1250, 770]
 - click:
   - 1480
   - 126
@@ -128,10 +124,8 @@ steps:
 - key: F10
 - wait: 1
 - expect: gameplay
-- pause: true
-- click:
-  - 800
-  - 821
+- action: map_book
+- click: [1250, 770]
 - click:
   - 1480
   - 126
@@ -170,10 +164,8 @@ steps:
 - key: F10
 - wait: 1
 - expect: gameplay
-- pause: true
-- click:
-  - 800
-  - 821
+- action: map_book
+- click: [1250, 770]
 - click:
   - 1480
   - 126

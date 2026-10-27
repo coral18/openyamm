@@ -4122,6 +4122,8 @@ void GameplayPartyOverlayRenderer::renderJournalOverlay(GameplayScreenRuntime &c
     renderInteractiveTextureLayout("JournalMainViewQuests");
     renderInteractiveTextureLayout("JournalMainViewStory");
     renderInteractiveTextureLayout("JournalMainViewNotes");
+    if (context.interactionState().interactiveAtlasAvailable)
+        renderInteractiveTextureLayout("JournalAtlasButton");
 
     switch (journalScreen.view)
     {

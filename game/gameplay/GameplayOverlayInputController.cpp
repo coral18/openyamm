@@ -2480,6 +2480,7 @@ bool GameplayOverlayInputController::handleJournalOverlayInput(
                 {"JournalMainViewQuests", GameplayJournalPointerTargetType::MainQuestsView},
                 {"JournalMainViewStory", GameplayJournalPointerTargetType::MainStoryView},
                 {"JournalMainViewNotes", GameplayJournalPointerTargetType::MainNotesView},
+                {"JournalAtlasButton", GameplayJournalPointerTargetType::InteractiveAtlas},
                 {"JournalCloseButton", GameplayJournalPointerTargetType::CloseButton},
             };
             static const std::pair<const char *, GameplayJournalPointerTargetType> MapTargets[] = {
@@ -2501,6 +2502,9 @@ bool GameplayOverlayInputController::handleJournalOverlayInput(
 
             for (const auto &[layoutId, targetType] : CommonTargets)
             {
+                if (targetType == GameplayJournalPointerTargetType::InteractiveAtlas
+                    && !view.interactionState().interactiveAtlasAvailable)
+                    continue;
                 const GameplayJournalPointerTarget target =
                     resolveJournalTarget(layoutId, targetType, pointerX, pointerY);
 
@@ -2649,6 +2653,11 @@ bool GameplayOverlayInputController::handleJournalOverlayInput(
         {
             switch (target.type)
             {
+            case GameplayJournalPointerTargetType::InteractiveAtlas:
+                if (view.interactionState().interactiveAtlasAvailable)
+                    view.interactionState().interactiveAtlasRequested = true;
+                break;
+
             case GameplayJournalPointerTargetType::MainMapView:
                 journalScreen.view = GameplayUiController::JournalView::Map;
                 break;

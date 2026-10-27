@@ -48,13 +48,14 @@ community guide's complete content has been integrated yet.
   form numbered groups; clicking a group narrows the list, and its heading clears that selection. Filters and
   search apply to both the list and markers. Single dungeon markers open the existing floor-plan view.
   Region badges use 12 logical pixels and continent badges 10; their unchanged 24/28-pixel hit areas retain
-  comfortable pointer/touch selection. Marker glyphs use the small reading font; party-arrow size is unchanged.
+  comfortable pointer/touch selection. Marker glyphs use the small reading font; the party arrow uses 14 logical pixels.
 - Buildings require a real visit and trainers require meeting their resident. Dungeon entrances require the
   exact entrance cell to be fully explored, not merely dimly revealed. Learning an entrance never grants its
   interior map or reveals other entrances. Guide Mode shows authored markers without changing discoveries.
 - Paused trainer details reuse the gameplay training evaluator for the selected character, including price,
   class/promotion limits and skill requirements. This inspection never trains a character or spends gold.
-- Zoom, drag, search input, native button focus and scroll controls. Entry in main menu and pause menu.
+- Zoom, drag, search input, native button focus and scroll controls. Click the gameplay minimap to open the Map Book,
+  then use its sidebar's Atlas button. Closing the Atlas returns to that Map Book view.
 - Guidebook pages for items/equipment, alchemy, spells, classes/races, quest relationships and companions use
   the active shared registries and discovery history. They do not install a copied community-guide database.
 - Dungeon controls select known height bands, all heights or the party height, with matching site/arrow filtering
@@ -2804,3 +2805,29 @@ These are Windows measurements, not POCO performance claims. Private logs/captur
 
 This change and the pin-start touch-pan fix target Android `0.2.2-atlas` / `105`. The installed phone version
 remains `0.2.0-atlas` until an updated package is installed and verified. The full Atlas objective remains open.
+
+### Map Book entry and smaller party arrow, 2026-10-27
+
+The user confirmed Discovery fog and arrow direction on POCO, then requested a smaller arrow and an Atlas
+button in the sidebar reached by clicking the minimap. The shared Map Book now offers that button only when
+the Atlas module is enabled. The main/pause menu entry is removed. Closing the Atlas resumes the existing Map
+Book, preserving its view and zoom; holding Escape does not also close that returning Map Book. Atlas party
+arrows are 14 logical pixels wide instead of 20 in both regional and dungeon views. Other map arrows retain their size.
+
+Windows Release builds pass. Native MM7/MM8 tours click the actual minimap, enter the Atlas and return to the
+same Map Book. The Map Book viewports remain pixel-identical, including a separate non-default-zoom check.
+A disabled-module tour confirms the button is absent and its hidden hit area is inert. An updated existing
+Guidebook tour passes through the new route. Twenty-five fresh captures were retained; inspected captures show
+the sidebar, smaller arrow, returning map and unchanged pause menu. The initial attempt used a stale journal
+layout in the local runtime overlay; it was rejected during visual review, the Windows packaging wrapper was
+updated, and both world tours were rerun against source-matching YAML.
+
+All 95 existing Atlas tour documents were structurally checked: only 90 entry and 64 return sequences were
+updated for the new route. This is not a claim that all 95 tours were executed again. Reproduction tours for the
+new pointer route are `tools/menu_tours/atlas_journal_entry_mm7.yml` and `atlas_journal_entry_mm8.yml`.
+Private logs, capture hashes and the build receipt are under `atlas-journal-entry-20261027` in the Windows
+development root. These source changes target `0.2.3-atlas` / `106`; POCO currently has `0.2.2-atlas` / `105`.
+
+The 0.2.2 update succeeded through USB without uninstalling or resetting data. The user confirmed Guide Mode is
+noticeably faster on POCO. Current device evidence and remaining physical gates are in `ATLAS_ANDROID_QA.md`;
+the wider complete-MM7/MM8 Atlas objective remains open.

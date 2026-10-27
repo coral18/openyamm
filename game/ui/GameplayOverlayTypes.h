@@ -403,6 +403,7 @@ enum class GameplayJournalPointerTargetType
     MapZoomInButton,
     MapZoomOutButton,
     MapNote,
+    InteractiveAtlas,
     CloseButton
 };
 
@@ -685,6 +686,8 @@ struct GameplayOverlayInteractionState
     std::optional<size_t> lastSaveGameClickedSlotIndex = std::nullopt;
     bool journalToggleLatch = false;
     bool journalClickLatch = false;
+    bool interactiveAtlasAvailable = false;
+    bool interactiveAtlasRequested = false;
     GameplayJournalPointerTarget journalPressedTarget = {};
     bool journalMapKeyZoomLatch = false;
     bool quickReferenceToggleLatch = false;

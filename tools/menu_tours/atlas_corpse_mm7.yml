@@ -7,10 +7,8 @@ steps:
 - capture: visible-untouched-corpse
 - key: F9
 - wait: 1
-- pause: true
-- click:
-  - 800
-  - 821
+- action: map_book
+- click: [1250, 770]
 - click:
   - 450
   - 57
