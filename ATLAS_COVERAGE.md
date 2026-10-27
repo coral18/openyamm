@@ -27,6 +27,16 @@ The later ARM64 Android Release package gates passed for source `e7abdcd`; insta
 acceptance are tracked separately in [ATLAS_ANDROID_QA.md](ATLAS_ANDROID_QA.md). A successful CI build alone
 does not close those device checks.
 
+The 2026-10-27 Map Book follow-up passed four current Windows native UI tours: note height/edit/delete and
+save/load in Temple of the Moon (MM7) and Abandoned Temple (MM8), plus shared touch-list gestures in each world.
+There are 276 UI steps and 47 fresh captures; selected states were visually inspected. Matching map/detail
+viewports prove dragging from a pressed row does not accidentally open a region or select a site. Fresh authored
+item/chest preparation and post-UI verifiers passed another 67 scenario steps, preserving the checked source
+discoveries, clearing deleted-note ownership/elevation, and retaining MM8's stored chest item and unrecruited
+Simon flag. This checks those records and samples, not the entire save, every dungeon floor or physical gestures.
+Reproduction instructions are in `tests/fixtures/atlas/README.md`. POCO has verified Release 0.2.3 / 106;
+new Map Book/arrow physical acceptance and remaining Android/controller gates remain separate.
+
 Reference feature inventories:
 
 - [MM7 community guide](https://www.reddit.com/r/MightAndMagic/comments/1ww8pq0/i_made_an_interactive_world_map_guide_for_might/)

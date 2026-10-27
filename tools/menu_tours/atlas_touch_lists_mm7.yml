@@ -6,6 +6,7 @@ steps:
 - expect: gameplay
 - action: map_book
 - click: [1250, 770]
+- expect: pause
 - click:
   - 1152
   - 57

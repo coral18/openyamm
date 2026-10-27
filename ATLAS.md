@@ -2838,3 +2838,30 @@ save hashes match the fresh pre-update records. Startup confirms OpenGL ES 3.0 a
 acceptance of the new Map Book button and smaller arrow remains open. Local source, SDK, native and runtime
 caches are retained outside Git; a no-change Android rebuild took 9.4 seconds. See `android/README.md` for the
 reusable local build command and `ATLAS_ANDROID_QA.md` for measured build/install and remaining device gates.
+
+### Map Book note persistence and shared touch-list acceptance, 2026-10-27
+
+Four Windows native AMD/OpenGL tours now cover the new Map Book entry with note editing and list gestures in
+both worlds. Notes are created, renamed, filtered by height, reloaded, reassigned to All/Party height, deleted
+and reloaded again. The dungeon samples are Temple of the Moon and Abandoned Temple. The MM8 preparation uses
+its actual chest source save: the tour closes Simon's authored dialogue and places the held item through the
+party portrait before opening the Map Book, then closes the dialogue after reload. It does not recruit Simon.
+Atlas entry assertions reject attempts that are still on gameplay/dialogue screens.
+
+The accepted runs contain 276 input steps and 47 fresh captures. Inspected states show the expected note text,
+hidden notes on a different height, retained editing/elevation and deletion after reload. In both list tours,
+the map viewport stays pixel-identical after dragging an initially pressed region row; the detail viewport
+stays identical after dragging an initially pressed site row. End-of-list captures retain the final rows.
+These are recognized shared touch frames, not Android OS gesture injection or gamepad input.
+
+Fresh faithful authored interactions prepare both note fixtures. Two post-UI verifiers then check the original
+save, final quicksave and another save/load: deleted user-note ownership/elevation is cleared and the original
+item/chest discovery remains. MM8 additionally retains item 630 in inventory and leaves Simon's roster QBit 403
+clear. The preparation and verification runs pass 67 scenario steps in total. They certify these fields, not
+every byte of the save or every campaign interaction. Earlier MM8 attempts using a pose-only fixture and an
+unhandled dialogue/held item were rejected, then replaced with the documented fresh interaction fixture.
+
+Public tours and verification scenarios are documented in `tests/fixtures/atlas/README.md`; private logs,
+accepted capture hashes, exact source hashes and save fixtures are in `atlas-core-acceptance-20261027` under the
+Windows development root. No gameplay C++ or runtime assets changed in this checkpoint, so the installed POCO
+0.2.3 package remains current. Wider floor/content coverage and physical Android/controller gates remain open.

@@ -1,0 +1,81 @@
+# Shared UI gesture regression, using recognized touch-drag frames rather than Android OS input.
+# Load an isolated MM8 save first. Coordinates use the 1600x900 tour canvas.
+output_dir: captures
+exit: true
+steps:
+- expect: gameplay
+- action: map_book
+- click: [1250, 770]
+- expect: pause
+- click:
+  - 1152
+  - 57
+- click:
+  - 160
+  - 190
+- click:
+  - 768
+  - 126
+- capture: regions-top
+- pointer_down:
+  - 1250
+  - 260
+- touch_drag_start:
+  - 1250
+  - 260
+- touch_drag_move:
+  - 1250
+  - 282
+- touch_drag_end:
+  - 1250
+  - 282
+- capture: drag-does-not-open-region
+- touch_drag_start:
+  - 1250
+  - 400
+- touch_drag_move:
+  - 1250
+  - 328.75
+- touch_drag_end:
+  - 1250
+  - 328.75
+- capture: regions-drag-one-row
+- wheel: -1000
+- capture: regions-drag-bottom
+- click:
+  - 275
+  - 126
+- text: Dagger Wound
+- key: Return
+- click:
+  - 1250
+  - 260
+- click:
+  - 1480
+  - 126
+- capture: sites-top
+- pointer_down:
+  - 1250
+  - 260
+- touch_drag_start:
+  - 1250
+  - 260
+- touch_drag_move:
+  - 1250
+  - 282
+- touch_drag_end:
+  - 1250
+  - 282
+- capture: drag-does-not-select-site
+- touch_drag_start:
+  - 1250
+  - 400
+- touch_drag_move:
+  - 1250
+  - 328.75
+- touch_drag_end:
+  - 1250
+  - 328.75
+- capture: sites-drag-one-row
+- wheel: -1000
+- capture: sites-drag-bottom

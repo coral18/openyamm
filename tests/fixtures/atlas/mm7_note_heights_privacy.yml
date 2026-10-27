@@ -1,0 +1,47 @@
+id: atlas.mm7_note_heights_privacy
+title: User-note deletion clears ownership and height without changing existing source
+  discoveries
+world: mm7
+mode: faithful
+steps:
+- load_game:
+    name: before
+    path: saves/before.oysav
+- &id001
+  assert:
+    map: 7d06.blv
+- &id002
+  assert:
+    map_note:
+      id: 4294967295
+      active: false
+- &id003
+  assert:
+    named_map_var_changed:
+      name: openyamm.map-notes.user/4294967295
+      value: 0
+- &id004
+  assert:
+    named_map_var_changed:
+      name: openyamm.map-notes.user/4294967295/z
+      value: 0
+- &id005
+  assert:
+    named_map_var_changed:
+      name: openyamm.discovery.item/carried/3/845/x
+      value: -5586
+- load_game:
+    name: quicksave
+    path: saves/quicksave.oysav
+- *id001
+- *id002
+- *id003
+- *id004
+- *id005
+- save_game: notes-verified
+- load_game: notes-verified
+- *id001
+- *id002
+- *id003
+- *id004
+- *id005

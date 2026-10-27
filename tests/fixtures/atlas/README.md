@@ -1,4 +1,36 @@
-# Conditional trainer-note fixture
+# Atlas fixtures
+
+## Map Book entry, note heights and deletion regression
+
+Prepare fresh isolated saves with `tests/scenarios/atlas/mm7_creature_item_source.yml` and
+`tests/scenarios/atlas/mm8_item_sources.yml`, using the mounted current runtime. Their authored item/chest
+interactions establish the source-discovery records checked by the post-UI verifiers. Do not substitute the
+older floor-plan pose-only fixtures: those do not contain these item/chest records.
+
+The scenario runner writes saves below its process temporary directory, under
+`openyamm_scenario_saves/atlas_mm7_creature_item_source/` and `atlas_mm8_item_sources/`. Copy
+`taken-creature-item.oysav` (MM7) or `item-source.oysav` (MM8) into the corresponding private UI run as
+`saves/before.oysav`. Keep the two runs and their writable save directories separate.
+
+Run `tools/menu_tours/atlas_note_heights.yml` for MM7 or `atlas_note_heights_mm8.yml` for MM8. Both enter
+through Map Book, require the Atlas pause screen, create and rename a note on one height, switch heights,
+save/reload, reassign All/Party height, delete and save/reload again. The MM8 source fixture retains Simon's
+pending dialogue and the chest item on the cursor. Its tour dismisses the dialogue, stores the held item through
+the single party portrait, and dismisses the authored dialogue after each reload. It does not recruit Simon or
+alter his quest bit. An open dialogue or held item blocks the ordinary Map Book action.
+Inspect the fresh captures for the actual text, height filtering and deletion. A completed input script alone
+does not prove its clicks reached the intended screen.
+
+Then run `tests/fixtures/atlas/mm7_note_heights_privacy.yml` or `mm8_note_heights_privacy.yml` against those private
+directories. They check the initial save, final `saves/quicksave.oysav` and another roundtrip: the deleted user
+note is inactive, its ownership/elevation entries are cleared, and the original authored source discovery remains.
+These fixtures check those records, not every field of the save or physical Android/controller behavior.
+
+The paired `atlas_touch_lists_mm7.yml` / `atlas_touch_lists_mm8.yml` tours cover recognized shared touch-drag
+frames, including dragging from an initially pressed row, one-row movement and bottom scrolling. Use an isolated
+outdoor save with no open dialogue for these tours. They do not deliver Android OS gestures or test a gamepad.
+
+## Conditional trainer-note fixture
 
 `Global_zz_hide_bow.lua` is QA-only. It hides the real Expert Bow topic (315) through the ordinary
 `CanShowTopic` API. It must never be installed into the normal runtime or replace generated Lua.

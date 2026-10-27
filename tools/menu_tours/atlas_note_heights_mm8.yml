@@ -1,0 +1,197 @@
+# Use the item-source.oysav made by tests/scenarios/atlas/mm8_item_sources.yml.
+# Dismiss Simon's dialogue and store the held chest item through the single member's portrait.
+# Dismiss the authored dialogue after each reload; do not recruit Simon or alter his quest bit.
+output_dir: captures
+exit: true
+steps:
+- expect: gameplay
+- key: Escape
+- click:
+  - 800
+  - 806
+- capture: stored-source-item
+- action: map_book
+- click:
+  - 1250
+  - 770
+- expect: pause
+- click:
+  - 1480
+  - 126
+- click:
+  - 1152
+  - 57
+- click:
+  - 406
+  - 695
+- click:
+  - 1420
+  - 190
+- click:
+  - 800
+  - 500
+- text: Atlas height note
+- capture: editor-layer
+- click:
+  - 295
+  - 647
+- click:
+  - 275
+  - 125
+- text: Atlas height note
+- key: Return
+- capture: created
+- click:
+  - 1152
+  - 57
+- click:
+  - 637
+  - 695
+- capture: other-height-hidden
+- click:
+  - 499
+  - 695
+- click:
+  - 1250
+  - 260
+- click:
+  - 1390
+  - 807
+- text: ' edited'
+- capture: editor-keeps-layer
+- click:
+  - 295
+  - 647
+- capture: edited
+- click:
+  - 1440
+  - 57
+- key: Escape
+- expect: gameplay
+- key: F9
+- wait: 1
+- key: F10
+- wait: 1
+- key: Escape
+- expect: gameplay
+- action: map_book
+- click:
+  - 1250
+  - 770
+- expect: pause
+- click:
+  - 1480
+  - 126
+- click:
+  - 275
+  - 125
+- text: Atlas height note
+- key: Return
+- click:
+  - 637
+  - 695
+- capture: reloaded-other-height-hidden
+- click:
+  - 499
+  - 695
+- capture: reloaded-visible
+- click:
+  - 1250
+  - 260
+- click:
+  - 1390
+  - 807
+- capture: reloaded-editor
+- click:
+  - 1134
+  - 258
+- capture: editor-all-heights
+- click:
+  - 295
+  - 647
+- click:
+  - 637
+  - 695
+- capture: all-heights-on-party
+- click:
+  - 1250
+  - 260
+- click:
+  - 1390
+  - 807
+- click:
+  - 1324
+  - 258
+- capture: editor-party-height
+- click:
+  - 295
+  - 647
+- click:
+  - 1440
+  - 57
+- key: Escape
+- expect: gameplay
+- key: F9
+- wait: 1
+- key: F10
+- wait: 1
+- key: Escape
+- expect: gameplay
+- action: map_book
+- click:
+  - 1250
+  - 770
+- expect: pause
+- click:
+  - 1480
+  - 126
+- click:
+  - 275
+  - 125
+- text: Atlas height note
+- key: Return
+- click:
+  - 637
+  - 695
+- capture: reassigned-after-reload
+- click:
+  - 1250
+  - 260
+- click:
+  - 1390
+  - 807
+- capture: reassigned-editor
+- click:
+  - 1298
+  - 647
+- click:
+  - 275
+  - 125
+- text: Atlas height note
+- key: Return
+- capture: deleted
+- click:
+  - 1440
+  - 57
+- key: Escape
+- expect: gameplay
+- key: F9
+- wait: 1
+- key: F10
+- wait: 1
+- key: Escape
+- expect: gameplay
+- action: map_book
+- click:
+  - 1250
+  - 770
+- expect: pause
+- click:
+  - 1480
+  - 126
+- click:
+  - 275
+  - 125
+- text: Atlas height note
+- key: Return
+- capture: deleted-after-reload
