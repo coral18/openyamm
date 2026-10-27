@@ -2978,3 +2978,21 @@ The public controller tour is `tools/menu_tours/atlas_gamepad.yml`; reproduction
 `atlas-controller-20261027` in the Windows development root. Controller and search fixes target Android
 0.2.5 / 108; a source version bump is not an APK build or device acceptance. Remaining Android checks and the
 agreed coverage matrix stay open. No MM6 Atlas work was performed.
+
+### Android 0.2.5 package and regional artwork checkpoint, 2026-10-27
+
+Source `2f8371462fffd4552a9e5340e6c5a5530b80bd4d` now has a verified local ARM64 Release, 0.2.5 / 108,
+including controller UI, ordinary Map Book sidebar focus and the search submission fix. Gradle passed in
+527.8 seconds using persistent tools/native objects and up-to-date staged runtime assets; no downloads or
+asset refresh were needed. The build ran separately from the open desktop test without rewriting its executable
+or runtime packages. The physical session subsequently closed normally.
+
+Package gates confirm 51,586 runtime entries, all 18 declared source-data updates byte-for-byte, the persistent
+Extended certificate, non-debuggable flags and 16 KiB ZIP/ELF alignment. A separate read-only runtime audit
+successfully decodes artwork for all 26 outdoor Atlas regions (13 per world) and verifies their ODM presence.
+It checks availability, not full region calibration or device rendering. APK hashes, reproduction/evidence paths
+and limitations are recorded in `ATLAS_ANDROID_QA.md`; artifacts remain outside Git.
+
+ADB sees no device, so the package is prepared but has not been installed on POCO. The last verified installed
+version is 0.2.3 / 106. Physical sidebar feedback, remaining phone checks and the agreed map/content audit remain
+open; a successful APK build does not complete the Atlas objective.

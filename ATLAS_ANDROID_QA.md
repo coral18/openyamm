@@ -106,6 +106,33 @@ Private APK, build log, source/runtime comparison, signature/alignment reports a
 `atlas-android-024-20261027`. ADB listed no devices after verification, so this APK has not been installed or
 accepted on POCO. The last verified installed version remains 0.2.3 / 106. No phone data was written in this run.
 
+## Prepared local Release, 2026-10-27: 0.2.5
+
+- Gameplay/input source: `2f8371462fffd4552a9e5340e6c5a5530b80bd4d`, version `0.2.5-atlas` / `108`.
+  This includes committed search submission, native controller UI and ordinary Map Book sidebar focus.
+- The ARM64 Release build passed in 527.8 seconds. All 689 checked build-source files matched the existing
+  Windows mirror before invoking the separate Android build. The 18 cached runtime updates matched source;
+  asset staging/compression remained up-to-date. Tools, dependencies and runtime payloads were reused locally.
+  The separate Android build did not rebuild the desktop executable or mutate desktop runtime ZIPs while the
+  user's isolated physical-controller session was open. That desktop session later exited normally.
+- Package checks pass for the separate application ID, non-debuggable Release, texture profile, 47 shaders and
+  source-matching Atlas/module files. All 51,586 runtime entries were compared with the verified 0.2.2 seed:
+  three declared changes, 15 additions, no deletions or unexpected changes/additions. All 18 updated source-data
+  files match exactly. No MM6 Atlas data updates were included.
+- The persistent Extended signing certificate and signature schemes v1/v2 pass. ZIP alignment and all three
+  native libraries' ELF LOAD segments satisfy 16 KiB alignment.
+- Archived APK: `OpenYAMM-Extended-atlas-0.2.5-arm64.apk`, 3,469,800,570 bytes;
+  SHA256 `8331da69f26f3b6f8f704588e9617d4d78ab8958bcc8f73674c1b14804f204dd`.
+- A read-only cached-runtime audit decoded the artwork for all 13 MM7 and 13 MM8 outdoor Atlas regions and
+  confirmed their ODM files. It follows declared world icon tiers. This checks asset availability/decoding,
+  not geographic calibration or device rendering.
+
+Private APK, source-mirror hashes, package/source comparison, signing/alignment reports, build log and regional
+art receipt are retained under `atlas-android-025-20261027`. ADB lists no devices after the build, so this is a
+prepared package, not an installed/accepted update. The last verified POCO installation remains 0.2.3 / 106.
+No phone data was written. The user confirmed physical-pad Map Book opening and Atlas controls on Windows MM7;
+the requested sidebar D-pad follow-up and remaining Android acceptance gates are still separate.
+
 ## Physical acceptance gates (current)
 
 | Check | Status |
@@ -126,6 +153,6 @@ directory. Controller acceptance and the wider Atlas content matrix remain separ
 
 The initial 2026-10-27 controller source audit found no native SDL gamepad initialization or event routing.
 Subsequent source implements shared controller UI input and passes SDL virtual-device tests/native tours;
-physical controller acceptance remains separate. The controller and search-submission changes target Android
-0.2.5 / 108 and are not included in archived/prepared 0.2.4. Package/device acceptance is recorded only after its
-actual build, verification and installation.
+the user also confirmed Map Book opening and Atlas controls on a physical pad in Windows MM7. The controller
+and search-submission changes are packaged and verified in 0.2.5 / 108; they are absent from archived 0.2.4.
+The sidebar D-pad follow-up and Android device acceptance remain pending.

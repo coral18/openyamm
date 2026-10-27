@@ -27,6 +27,12 @@ in MM7. Their requested D-pad focus in the ordinary Map Book sidebar is implemen
 highlighted item and the disabled Atlas omitted; its physical follow-up remains pending. Full gameplay controller
 profiles and Android acceptance remain outside these completed UI checks.
 
+The 2026-10-27 local ARM64 Release 0.2.5 / 108 packages those shared input/search fixes and passes package,
+source-data, stable-signing and 16 KiB alignment checks. Cached-runtime artwork decodes for all 26 outdoor
+regions (13 per world), with corresponding ODM assets present. This is availability coverage, not a complete
+visual calibration audit. ADB lists no device, so POCO installation/acceptance remains pending; see
+`ATLAS_ANDROID_QA.md` for artifact hashes and the remaining physical gates.
+
 The 2026-10-26 Windows Release unit recheck passed 14 focused cases / 996 assertions for fog, party projection,
 discovery filtering, MM7/MM8 identity, dungeon reveal/layers and note ownership/projection. The separate current
 Castle Harmondale fountain check passed 1 case / 47 assertions against the mounted runtime, including all six
