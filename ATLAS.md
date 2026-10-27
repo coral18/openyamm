@@ -3009,3 +3009,35 @@ Extended starts with its build marker, OpenGL ES 3.0 and both Atlas/karol.test m
 The actual phone install/startup gate now covers 0.2.5; touch/visual behavior, Guide privacy and the remaining
 MM7/MM8 device checks require separate acceptance. A focused user test is pending. Device receipts are retained
 with the APK outside Git under `atlas-android-025-20261027`; details are in `ATLAS_ANDROID_QA.md`.
+
+### Stacked-height diagnostics and single keyboard-tap delivery, 2026-10-27
+
+A read-only audit of all 110 active MM7/MM8 BLVs finds 17 candidate maps with large upward, nonhidden/collidable
+horizontal surfaces overlapping in XY at least 128 units apart inside one existing 512-unit band. Candidates
+can include furniture or platforms; this is not proof of 17 distinct traversable-floor defects. Two concrete
+outline witnesses are Castle Gloaming (`d03.blv`, MM7), floor faces 393/622 at Z 0/-240 with 4/9 adjoining
+outlines, and Plane of Earth (`eleme.blv`, MM8), faces 1579/3084 at Z -384/-768 with 9/7 adjoining outlines.
+The outlines retain those elevations and both witnesses share a band. Fixed bands are therefore insufficient
+to distinguish these authored heights. No new floor partitioning or gameplay data changes were made here;
+the precision limitation remains open rather than being certified by the earlier raster-recomposition audit.
+
+Two five-step private scenarios prepare geometry-derived diagnostic saves at the paired positions. Four native
+AMD/OpenGL tours record their Discovery/Guide party-height/Discovery views (68 steps, 12 fresh captures).
+Inspected frames show the current band 0 / -1 selection; Castle Gloaming's paired Guide captures are identical.
+All four before/after Discovery map and site-list viewports are pixel-identical in RGB. These isolated poses
+are setup shortcuts, not campaign traversal or physical device input; they do not verify semantic floor routing.
+
+The first native attempt exposed a separate test-tool bug: `MenuInputTour` injected a gameplay key's press count
+immediately and queued its SDL event, delivering two presses to the journal. Gameplay now counts that tap only
+through the queued event; active menu screens retain their direct frame count, and held keys/quick saves remain
+available. The previous run failed Atlas entry after five Tab taps; the corrected native route reaches it once.
+
+The new `atlas_map_book_keyboard.yml` tests first focus, forward/reverse focus, accept, return and quicksave in
+both worlds. Together with the existing search-submission tours, four regression runs pass 118 steps and 20 fresh
+captures. Four post-UI verifiers pass 40 steps, preserving their checked map/flag through another save/load.
+The Windows incremental build took seven seconds. This helper fix does not change physical keyboard/gamepad
+input or require replacing POCO's verified 0.2.5 for normal play. It is not yet in an Android package.
+
+Private geometry inputs, audit/witness JSON, fixtures, logs, captures and comparisons are under
+`atlas-floor-overlap-20261027` in the Windows development root. No user campaigns or official phone data are
+test-write targets. The broader floor precision and remaining device/content acceptance remain open.

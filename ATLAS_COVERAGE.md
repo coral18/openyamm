@@ -65,6 +65,13 @@ projection between bands and exact recomposition of their raster. Its knowledge 
 stacked-floor separation, campaign exploration and device input remain separate checks. Reproduction is in
 `tests/fixtures/atlas/README.md`.
 
+The follow-up authored-surface audit finds 17 candidate maps whose overlapping surfaces can share one 512-unit
+band. Concrete outline witnesses occur at Z 0/-240 in Castle Gloaming and -384/-768 in Plane of Earth. Four
+native diagnostic poses confirm the current band selections and preserve identical Discovery map/list viewports
+after Guide. The candidates are not all proven traversable floors. This identifies a precision limitation;
+it does not close stacked-floor separation. The associated tour-helper keyboard-count fix passes 118 keyboard
+UI steps / 20 captures and 40 post-UI state checks. Details and evidence paths are in `ATLAS.md`.
+
 Reference feature inventories:
 
 - [MM7 community guide](https://www.reddit.com/r/MightAndMagic/comments/1ww8pq0/i_made_an_interactive_world_map_guide_for_might/)

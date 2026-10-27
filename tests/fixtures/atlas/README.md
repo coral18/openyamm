@@ -1,5 +1,17 @@
 # Atlas fixtures
 
+## Ordinary Map Book keyboard focus
+
+Run `tools/menu_tours/atlas_map_book_keyboard.yml` with an isolated Harmondale/MM7 or Dagger Wound/MM8 save as
+`saves/before.oysav`, with the Atlas module enabled. A single Tab first highlights Map, four more highlight
+Atlas, Shift+Tab goes back to Notes, and another Tab/Return enters Atlas. Inspect the five captures for the
+actual focused buttons, Atlas entry and returned Map Book. The tour then closes the book and quicksaves.
+
+Use `mm7_search_privacy.yml` / `mm8_search_privacy.yml` after the tour, with the same cleared flags and paths as
+the search fixture below. Each verifier checks the specified region/flag through another save/load. This route
+also guards the tour helper itself: gameplay key taps must be counted once through their queued SDL event,
+while an active menu screen receives its frame count directly. Injecting both counts advances the sidebar twice.
+
 ## Controller UI route
 
 `tools/menu_tours/atlas_gamepad.yml` runs on an isolated Harmondale or Dagger Wound before-save with the Atlas

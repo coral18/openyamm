@@ -385,7 +385,8 @@ void MenuInputTour::update(const std::string &path, GameplayInputFrame &input, I
             }
             const bool down = step.kind != "key_up";
             input.keyboardHeld[code] = down;
-            input.keyboardPressCounts[code] = down ? 1 : 0;
+            // Gameplay receives the queued SDL event next frame; counting it here would deliver the tap twice.
+            input.keyboardPressCounts[code] = down && pScreen != nullptr ? 1 : 0;
             m_heldKeys[code] = step.kind == "key_down";
             if (step.kind == "key")
             {

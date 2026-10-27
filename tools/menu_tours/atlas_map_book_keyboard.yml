@@ -1,0 +1,28 @@
+# Isolated MM7/MM8 save with Atlas enabled; verifies each Tab tap reaches exactly one sidebar item.
+output_dir: captures
+exit: true
+steps:
+- expect: gameplay
+- action: map_book
+- key: Tab
+- capture: first-sidebar-focus
+- key: Tab
+- key: Tab
+- key: Tab
+- key: Tab
+- capture: atlas-sidebar-focus
+- key_down: Left Shift
+- key: Tab
+- key_up: Left Shift
+- capture: reverse-sidebar-focus
+- key: Tab
+- key: Return
+- expect: pause
+- capture: keyboard-atlas-entry
+- key: Escape
+- expect: gameplay
+- capture: returned-map-book
+- key: Escape
+- expect: gameplay
+- key: F9
+- wait: 1
