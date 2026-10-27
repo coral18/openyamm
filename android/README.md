@@ -106,6 +106,52 @@ For manual public builds, bump `openyamm.android.versionName` and `openyamm.andr
 `android/gradle.properties`. Tagged CI builds derive both values from an `X.Y` release tag. See
 `android/WEB_HOSTING_CHECKLIST.md` for the hosted APK checklist.
 
+## Persistent local Windows build from WSL
+
+`tools/extended_android_local.sh` reuses the Windows development mirror and an already prepared local Android
+directory. It does not clone the repository or download the runtime APK on every run. Close the desktop game first;
+the wrapper refuses to build while OpenYAMM is running. It builds the ordinary Windows target before Android,
+using `tools/extended_windows_dev.sh`; neither build enables Vulkan.
+
+```sh
+OPENYAMM_ANDROID_DEV_ROOT=/mnt/f/OpenYAMM-Extended/android-local tools/extended_android_local.sh
+```
+
+The external directory contains `build-config.json`, SDK/NDK/CMake, Gradle/project/compiler caches, native build
+outputs and the verified seed APK. All configuration paths in this file are Windows paths. Example fields:
+
+```json
+{
+  "python": "C:/path/to/python.exe",
+  "source": "C:/path/to/openyamm-extended-dev/source",
+  "nativeHost": "C:/path/to/openyamm-extended-dev/build",
+  "sdk": "F:/OpenYAMM-Extended/android-local/sdk",
+  "java": "C:/path/to/jdk-17",
+  "msys": "C:/path/to/openyamm-extended-dev/tools/msys64/ucrt64/bin",
+  "signingConfig": "C:/private/signing.json",
+  "seedApk": "F:/private/verified-previous-release.apk",
+  "seedSha256": "<verified full APK SHA256>",
+  "seedRef": "<matching source commit>"
+}
+```
+
+Use the SDK/NDK/CMake versions declared by this Android project. The host build must contain SDL3 sources and
+`openyamm_shaderc.exe`; MSYS2 must provide both UCRT64 `ccache.exe` and `usr/bin/bash.exe`/`make.exe`.
+The private signing JSON has `storeFile`, `keyAlias` and `password`; place its `release.jks` beside it. The helpers
+pass credentials through the child environment. Keep the key, configuration, payload and build outputs outside Git.
+
+On first use, the seed APK is hash-verified and split into persistent Android runtime ZIPs. Later runs apply only
+source-authorized text changes relative to `seedRef`, restore removed overrides and retain unchanged packages.
+Binary asset changes require an explicit seed/runtime refresh; they fail rather than silently using stale assets.
+Mods and Android settings are packaged directly from the current source mirror by the existing Gradle task.
+
+The optional Gradle properties `openyamm.android.hostShaderc` and `openyamm.android.buildRoot` select the existing
+Windows shader compiler and external app/native build directories. Defaults preserve the ordinary upstream paths.
+The APK is written to `<work-dir>/build/app/outputs/apk/release/app-release.apk`; logs remain in the work directory.
+This command builds an ARM64 Release and does not install it. Verify package contents, signing and alignment before
+an in-place device update. A local no-change rebuild on 2026-10-27 took 9.4 seconds after the initial 32-minute build;
+this is a cache reuse measurement, not a timing for future source or asset changes.
+
 ## Package CI Signing
 
 Android shaders target OpenGL ES 3.0, matching the manifest's minimum renderer requirement.

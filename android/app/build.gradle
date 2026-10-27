@@ -8,6 +8,12 @@ if (sdl3SourceDirPath == null || sdl3SourceDirPath.toString().trim().isEmpty()) 
 }
 
 def sdl3SourceDir = file(sdl3SourceDirPath)
+def hostShaderc = project.findProperty("openyamm.android.hostShaderc") ?: "${rootDir}/../build/openyamm_shaderc"
+def localBuildRoot = project.findProperty("openyamm.android.buildRoot")
+def nativeBuildRoot = localBuildRoot != null ? file("${localBuildRoot}/cxx") : file("${projectDir}/.cxx")
+if (localBuildRoot != null) {
+    buildDir = file("${localBuildRoot}/app")
+}
 if (!sdl3SourceDir.isDirectory()) {
     throw new GradleException(
         "SDL3 source directory not found: ${sdl3SourceDir}. " +
@@ -98,7 +104,7 @@ android {
                     "-DOPENYAMM_DEV_ASSETS_DIR=assets",
                     "-DOPENYAMM_WINDOW_WIDTH=1280",
                     "-DOPENYAMM_WINDOW_HEIGHT=720",
-                    "-DOPENYAMM_HOST_SHADERC=${rootDir}/../build/openyamm_shaderc"
+                    "-DOPENYAMM_HOST_SHADERC=${hostShaderc}"
                 )
             }
         }
@@ -129,6 +135,7 @@ android {
     externalNativeBuild {
         cmake {
             path "../../CMakeLists.txt"
+            buildStagingDirectory nativeBuildRoot
         }
     }
 
@@ -277,16 +284,16 @@ def registerOpenYammApkAssetsTask = { taskName, nativeBuildTaskName, shaderBuild
 registerOpenYammApkAssetsTask(
     "syncOpenYammDebugApkAssets",
     "externalNativeBuildDebug",
-    [file("${projectDir}/.cxx/Debug")],
+    [new File(nativeBuildRoot, "Debug")],
     file("${buildDir}/generated/openyammApkAssets/debug")
 )
 registerOpenYammApkAssetsTask(
     "syncOpenYammReleaseApkAssets",
     "externalNativeBuildRelease",
     [
-        file("${projectDir}/.cxx/Release"),
-        file("${projectDir}/.cxx/RelWithDebInfo"),
-        file("${projectDir}/.cxx/MinSizeRel")
+        new File(nativeBuildRoot, "Release"),
+        new File(nativeBuildRoot, "RelWithDebInfo"),
+        new File(nativeBuildRoot, "MinSizeRel")
     ],
     file("${buildDir}/generated/openyammApkAssets/release")
 )

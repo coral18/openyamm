@@ -64,12 +64,34 @@ correct direction on 0.2.0. They requested a smaller arrow and Map Book sidebar 
 menu. Those later source changes target 0.2.3 / 106, not this installed 0.2.2 package.
 After the 0.2.2 update, the user confirmed Guide Mode is noticeably faster with visible incremental loading.
 
-## Physical acceptance gates
+## Local Release update, 2026-10-27
+
+- Gameplay/UI source: `1656184a5d3933cfd5d497fbcbf26d261a75a5d9`, plus the optional external Gradle build paths.
+- Local Windows-hosted ARM64 Release `0.2.3-atlas` / `106` built successfully. The first complete build took
+  1,935.1 seconds; a no-change repeat took 9.4 seconds. The reusable WSL wrapper also passed, with Windows reporting
+  no native work and the subsequent Android invocation taking 1.8 seconds. These are no-change timings.
+- Package checks passed: separate application ID, non-debuggable, Android texture profile, 47 shaders, mod manifests,
+  source-matching Atlas layouts and source-matching Map Book YAML. All 51,571 runtime entries match the verified
+  0.2.2 seed except the declared Map Book layout change; no runtime entries are missing or unexpectedly added.
+- Signature schemes v1/v2 and the persistent Extended certificate were verified, as was 16 KiB ZIP alignment.
+  APK: 3,469,756,735 bytes; SHA256 `d126bff8715ad187d23e6dd9a233389d92de570b95e06cac0794e11383dc8fa3`.
+- ADB `--fastdeploy` declined its API compatibility check despite `ro.build.version.sdk` reporting 36, then fell
+  back to a streamed update. The update succeeded in 107.67 seconds. Delta-transfer acceleration is unproven.
+- Package Manager confirms `0.2.3-atlas` / `106` without `DEBUGGABLE`. The installed APK hash matches the verified
+  local APK. The official package path, three official campaign save hashes and two Extended campaign save hashes
+  match the fresh pre-update records. No uninstall, reset or restore was performed. Extended was started afterward.
+
+This installs the 14-pixel party arrow and Map Book sidebar entry described in `ATLAS.md`. Their POCO visual/touch
+acceptance remains pending; Windows native captures already cover the route, return zoom and disabled-module case.
+Private package, signature, runtime comparison, installation and startup receipts are under
+`atlas-android-023-20261027`. Persistent SDK/build/runtime caches stay under `android-local`, outside Git.
+
+## Physical acceptance gates (current)
 
 | Check | Status |
 | --- | --- |
-| Install the verified Release and confirm its on-device version/flags | Passed for 0.2.2 / 105 via in-place USB update |
-| First launch, Extended marker and active Android renderer | Passed for 0.2.2; OpenGL ES 3.0 and two mods; earlier 0.2.0 capture showed live gameplay |
+| Install the verified Release and confirm its on-device version/flags | Passed for 0.2.3 / 106 via in-place USB update |
+| First launch, Extended marker and active Android renderer | Passed for 0.2.3; OpenGL ES 3.0 and two mods; earlier 0.2.0 capture showed live gameplay |
 | MM7 region, discovery fog and live party arrow | User confirms fog and arrow direction on 0.2.0; wider position/device checks remain open |
 | MM8 region, discovery fog and live party arrow | Pending |
 | Guide Mode entry responsiveness | User confirms noticeably faster incremental loading on POCO 0.2.2 |
@@ -77,7 +99,7 @@ After the 0.2.2 update, the user confirmed Guide Mode is noticeably faster with 
 | Touch navigation, search, filters, zoom and pan | Pending |
 | Notes and save/load persistence | Pending |
 | Atlas disabled through a mod profile; gameplay remains usable | Pending |
-| Official installation and save hashes after testing | Passed after 0.2.2 update/startup; repeat after remaining tests |
+| Official installation and save hashes after testing | Passed after 0.2.3 update; repeat after remaining tests |
 
 Private APKs, verification reports, backups and captures are retained outside Git under the dated Android QA
 directory. Controller acceptance and the wider Atlas content matrix remain separate unfinished work.

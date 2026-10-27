@@ -2826,8 +2826,15 @@ All 95 existing Atlas tour documents were structurally checked: only 90 entry an
 updated for the new route. This is not a claim that all 95 tours were executed again. Reproduction tours for the
 new pointer route are `tools/menu_tours/atlas_journal_entry_mm7.yml` and `atlas_journal_entry_mm8.yml`.
 Private logs, capture hashes and the build receipt are under `atlas-journal-entry-20261027` in the Windows
-development root. These source changes target `0.2.3-atlas` / `106`; POCO currently has `0.2.2-atlas` / `105`.
+development root. These source changes target `0.2.3-atlas` / `106`.
 
 The 0.2.2 update succeeded through USB without uninstalling or resetting data. The user confirmed Guide Mode is
 noticeably faster on POCO. Current device evidence and remaining physical gates are in `ATLAS_ANDROID_QA.md`;
 the wider complete-MM7/MM8 Atlas objective remains open.
+
+The subsequent local 0.2.3 ARM64 Release was verified and installed on POCO through an in-place update. Its
+installed APK hash matches the checked local file, and the official installation and both applications' campaign
+save hashes match the fresh pre-update records. Startup confirms OpenGL ES 3.0 and both modules. Physical
+acceptance of the new Map Book button and smaller arrow remains open. Local source, SDK, native and runtime
+caches are retained outside Git; a no-change Android rebuild took 9.4 seconds. See `android/README.md` for the
+reusable local build command and `ATLAS_ANDROID_QA.md` for measured build/install and remaining device gates.
