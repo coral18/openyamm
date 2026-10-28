@@ -1337,7 +1337,7 @@ TEST_CASE("dungeon height selection keeps a stable known projection and hides un
     const auto lower = buildWorldFloorPlan(map, knowledge, false, {}, 0);
     const auto upper = buildWorldFloorPlan(map, knowledge, false, {}, 2);
     const auto hidden = buildWorldFloorPlan(map, knowledge, false, {}, 8);
-    CHECK(all.layers == std::vector<int32_t>{0, 2});
+    CHECK(all.layers == std::vector<WorldFloorPlanLayer>{0, 2});
     CHECK(lower.layers == all.layers);
     CHECK(upper.layers == all.layers);
     CHECK(all.outlineCount == 2);
@@ -1350,9 +1350,156 @@ TEST_CASE("dungeon height selection keeps a stable known projection and hides un
     CHECK(lower.centerX == 50);
     CHECK(lower.centerY == 50);
     CHECK(knowledge.visibleOutlines == std::vector<uint8_t>{0xc0});
-    CHECK(buildWorldFloorPlan(map, knowledge, true).layers == std::vector<int32_t>{0, 2, 8});
+    CHECK(buildWorldFloorPlan(map, knowledge, true).layers == std::vector<WorldFloorPlanLayer>{0, 2, 8});
     knowledge.invisibleFaces.insert(1);
     CHECK(buildWorldFloorPlan(map, knowledge, false).layers.empty());
+}
+
+TEST_CASE("overlapping known dungeon floors refine only their own height band without leaking hidden floors")
+{
+    IndoorMapData map;
+    map.vertices = {{0, 0, -240}, {100, 0, -240}, {100, 100, -240}, {0, 100, -240},
+        {25, 0, 0}, {125, 0, 0}, {125, 100, 0}, {25, 100, 0}};
+    map.faces.resize(2);
+    for (uint16_t i = 0; i < 2; ++i)
+    {
+        IndoorFace &face = map.faces[i];
+        face.planeNormal = {{0, 0, 65536}};
+        face.vertexIndices = {uint16_t(i * 4), uint16_t(i * 4 + 1), uint16_t(i * 4 + 2), uint16_t(i * 4 + 3)};
+        for (uint16_t edge = 0; edge < 4; ++edge)
+            map.outlines.push_back({uint16_t(i * 4 + edge), uint16_t(i * 4 + (edge + 1) % 4),
+                i, i, int16_t(i ? 0 : -240)});
+    }
+    WorldFloorPlanKnowledge knowledge;
+    knowledge.visibleOutlines = {0xf0};
+    const auto lowerOnly = buildWorldFloorPlan(map, knowledge, false);
+    CHECK(lowerOnly.refinedBands.empty());
+    CHECK(lowerOnly.layers == std::vector<WorldFloorPlanLayer>{0});
+    const auto guide = buildWorldFloorPlan(map, knowledge, true);
+    CHECK(guide.refinedBands.contains(0));
+    CHECK(guide.layers == std::vector<WorldFloorPlanLayer>{{0, 1}, {0, 3}});
+    CHECK(buildWorldFloorPlan(map, knowledge, false).pixelsBgra == lowerOnly.pixelsBgra);
+    CHECK(buildWorldFloorPlan(map, knowledge, false).refinedBands.empty());
+    CHECK(knowledge.visibleOutlines == std::vector<uint8_t>{0xf0});
+    CHECK(knowledge.faceAttributes.empty());
+
+    knowledge.visibleOutlines = {0xff};
+    const auto all = buildWorldFloorPlan(map, knowledge, false);
+    const auto lowerLayer = all.layerAtHeight(-240), upperLayer = all.layerAtHeight(0);
+    REQUIRE(lowerLayer.has_value());
+    REQUIRE(upperLayer.has_value());
+    CHECK(lowerLayer != upperLayer);
+    CHECK(worldFloorPlanLayerMatches(lowerLayer, -240));
+    CHECK_FALSE(worldFloorPlanLayerMatches(lowerLayer, 0));
+    const auto lower = buildWorldFloorPlan(map, knowledge, false, {}, lowerLayer);
+    const auto upper = buildWorldFloorPlan(map, knowledge, false, {}, upperLayer);
+    CHECK(lower.outlineCount == 4);
+    CHECK(upper.outlineCount == 4);
+    CHECK(lower.pixelsBgra != upper.pixelsBgra);
+    CHECK(lower.worldToUv(50, 50) == upper.worldToUv(50, 50));
+    for (WorldFloorPlanLayer layer : all.layers)
+    {
+        const auto elevation = worldFloorPlanLayerElevation(layer);
+        REQUIRE(elevation.has_value());
+        CHECK(all.layerAtHeight(float(*elevation)) == layer);
+    }
+    CHECK(all.layerAtHeight(1024) == WorldFloorPlanLayer{2});
+    CHECK(worldFloorPlanLayerElevation(WorldFloorPlanLayer{0, 1}) == -192);
+    CHECK(worldFloorPlanLayerElevation(WorldFloorPlanLayer{0, 3}) == 64);
+    CHECK(worldFloorPlanLayerForHeight(-768, true) == WorldFloorPlanLayer{-1, 1});
+    CHECK(worldFloorPlanLayerForHeight(-384, true) == WorldFloorPlanLayer{-1, 4});
+    CHECK_FALSE(worldFloorPlanLayerForHeight(std::numeric_limits<float>::infinity(), true));
+    CHECK_FALSE(worldFloorPlanLayerElevation(WorldFloorPlanLayer{0, 5}));
+    CHECK_THROWS_AS(buildWorldFloorPlan(map, knowledge, false, {}, WorldFloorPlanLayer{0, 5}), std::invalid_argument);
+    map.faces[1].attributes = faceAttributeBit(FaceAttribute::Untouchable);
+    CHECK(buildWorldFloorPlan(map, knowledge, false).refinedBands.empty());
+    knowledge.faceAttributes = {0, 0}; // A live script can restore a previously untouchable floor.
+    CHECK(buildWorldFloorPlan(map, knowledge, false).refinedBands.contains(0));
+    knowledge.invisibleFaces.insert(1);
+    CHECK(buildWorldFloorPlan(map, knowledge, false).refinedBands.empty());
+    map.faces[1].attributes = faceAttributeBit(FaceAttribute::Invisible);
+    CHECK(buildWorldFloorPlan(map, knowledge, true).refinedBands.empty());
+}
+
+TEST_CASE("dungeon height refinement detects crossing floors and ignores separate rooms and touching edges")
+{
+    IndoorMapData map;
+    map.vertices = {{0, 0, -240}, {1000, 0, -240}, {1000, 80, -240}, {0, 80, -240},
+        {750, -1500, 0}, {830, -1500, 0}, {830, 500, 0}, {750, 500, 0}};
+    map.faces.resize(2);
+    for (uint16_t i = 0; i < 2; ++i)
+    {
+        map.faces[i].planeNormal = {{0, 0, 65536}};
+        map.faces[i].vertexIndices = {uint16_t(i * 4), uint16_t(i * 4 + 1),
+            uint16_t(i * 4 + 2), uint16_t(i * 4 + 3)};
+        map.outlines.push_back({uint16_t(i * 4), uint16_t(i * 4 + 1), i, i, int16_t(i ? 0 : -240)});
+    }
+    CHECK(buildWorldFloorPlan(map, {}, true).refinedBands.contains(0));
+    for (size_t i = 4; i < 8; ++i) map.vertices[i].x += 250;
+    CHECK(buildWorldFloorPlan(map, {}, true).refinedBands.empty()); // Only a shared edge at x=1000.
+    for (size_t i = 4; i < 8; ++i) map.vertices[i].x += 1000;
+    CHECK(buildWorldFloorPlan(map, {}, true).refinedBands.empty());
+}
+
+TEST_CASE("indoor door pins use the base of their physical surface and refined filters preserve known components")
+{
+    IndoorMapData geometry;
+    geometry.vertices = {{0, 0, -240}, {100, 0, -240}, {100, 0, 16}, {0, 0, 16}};
+    geometry.faces.resize(1);
+    geometry.faces[0].vertexIndices = {0, 1, 2, 3};
+    geometry.faces[0].cogTriggered = 10;
+    const auto sites = worldInteractionSites(geometry);
+    REQUIRE(sites.size() == 1);
+    CHECK(sites[0].x == 50);
+    CHECK(sites[0].y == 0);
+    CHECK(sites[0].z == -240);
+    const WorldFloorPlanLayer lower{0, 1}, upper{0, 3};
+    CHECK(worldFloorPlanLayerMatches(lower, sites[0].z));
+    CHECK_FALSE(worldFloorPlanLayerMatches(upper, sites[0].z));
+    OutdoorMapData outside;
+    outside.bmodels.resize(1);
+    outside.bmodels[0].vertices = {{0, 0, -240}, {100, 0, -240}, {100, 0, 16}, {0, 0, 16}};
+    outside.bmodels[0].faces.resize(1);
+    outside.bmodels[0].faces[0].vertexIndices = {0, 1, 2, 3};
+    outside.bmodels[0].faces[0].cogTriggeredNumber = 10;
+    const auto outdoorSites = worldInteractionSites(outside);
+    REQUIRE(outdoorSites.size() == 1);
+    CHECK(outdoorSites[0].z == -112); // Outdoor marker coordinates retain their existing center projection.
+
+    Fixture fixture;
+    std::vector<std::string> room(24);
+    room[0] = "11"; room[2] = "House"; room[3] = "95"; room[5] = "Council room";
+    REQUIRE(fixture.houses.loadFromRows({room}));
+    WorldDatabase world = fixture.database();
+    std::string error;
+    const auto program = ScriptedEventProgram::loadFromLuaText(R"lua(
+        evt.map[10] = function() end
+        evt.meta.map.contextActions = {
+            [10] = { kind = "enter_house", source = "opcode", houseId = 11 }
+        }
+    )lua", "@refined-indoor-service", ScriptedEventScope::Map, error);
+    REQUIRE_MESSAGE(program.has_value(), error);
+    const MapStatsEntry &map = *fixture.maps.findById(95);
+    world.indexMapLocations(map, geometry, *program);
+    const auto services = world.queryLocations({}, true, WorldDatabase::mapId(map), lower);
+    REQUIRE(services.size() == 1);
+    CHECK(services.front().z == -240);
+    CHECK(world.queryLocations({}, true, WorldDatabase::mapId(map), upper).empty());
+    CHECK(world.recordsAtLocation(services.front(), {}, true).size() == 3);
+    WorldMapFeature feature;
+    feature.kind = WorldMapFeatureKind::Connection;
+    feature.mapId = WorldDatabase::mapId(*fixture.maps.findById(95));
+    feature.components = sites;
+    feature.components.push_back({"surface/1", 10, 50, 0, 0});
+    CHECK(world.featureSites(feature, {}, true, lower).size() == 1);
+    CHECK(world.featureSites(feature, {}, true, upper).size() == 1);
+    CHECK(world.featureSites(feature, {}, true, 0).size() == 2); // Explicit coarse queries remain supported.
+    WorldKnowledge known;
+    known.visitedMaps.insert("7d21.blv");
+    known.interactedSites["7d21.blv"].insert(worldSiteDiscoveryKey(10, sites[0].id));
+    CHECK(world.featureSites(feature, known, false, lower).size() == 1);
+    CHECK(world.featureSites(feature, known, false, upper).empty());
+    CHECK(world.featureSites(feature, known, false).size() == 1);
 }
 
 TEST_CASE("packaged MM7 MM8 dungeon layers preserve discovery projection and privacy")
@@ -1365,7 +1512,7 @@ TEST_CASE("packaged MM7 MM8 dungeon layers preserve discovery projection and pri
     REQUIRE_MESSAGE(OpenYAMM::Tests::regressionMapLoaderLoaded(),
         OpenYAMM::Tests::regressionMapLoaderFailure());
     const auto &loader = OpenYAMM::Tests::regressionMapLoader();
-    std::map<std::string, size_t> maps, layers, blankPlans;
+    std::map<std::string, size_t> maps, layers, blankPlans, refinedMaps, refinedBands;
     for (const MapStatsEntry &map : loader.gameDataLoader.getMapStats().getEntries())
     {
         if ((map.worldId != "mm7" && map.worldId != "mm8")
@@ -1388,6 +1535,22 @@ TEST_CASE("packaged MM7 MM8 dungeon layers preserve discovery projection and pri
         CHECK(unseen.pixelsBgra.empty());
         CHECK(unseen.layers.empty());
         const auto guide = buildWorldFloorPlan(*geometry, partial, true);
+        if (!guide.refinedBands.empty()) ++refinedMaps[map.worldId];
+        refinedBands[map.worldId] += guide.refinedBands.size();
+        if ((map.worldId == "mm7" && map.fileName == "d03.blv")
+            || (map.worldId == "mm8" && map.fileName == "eleme.blv"))
+        {
+            const float lowerZ = map.worldId == "mm7" ? -240.0f : -768.0f;
+            const float upperZ = map.worldId == "mm7" ? 0.0f : -384.0f;
+            const auto lowerLayer = guide.layerAtHeight(lowerZ), upperLayer = guide.layerAtHeight(upperZ);
+            REQUIRE(lowerLayer.has_value());
+            REQUIRE(upperLayer.has_value());
+            CHECK(lowerLayer != upperLayer);
+            CHECK(lowerLayer->subdivision != 0);
+            CHECK(upperLayer->subdivision != 0);
+            CHECK(buildWorldFloorPlan(*geometry, partial, true, {}, lowerLayer).outlineCount > 0);
+            CHECK(buildWorldFloorPlan(*geometry, partial, true, {}, upperLayer).outlineCount > 0);
+        }
         const auto stillUnseen = buildWorldFloorPlan(*geometry, partial, false);
         CHECK(stillUnseen.pixelsBgra == unseen.pixelsBgra);
         CHECK(stillUnseen.layers == unseen.layers);
@@ -1412,7 +1575,7 @@ TEST_CASE("packaged MM7 MM8 dungeon layers preserve discovery projection and pri
         REQUIRE(blank.pixelsBgra.size() == all.pixelsBgra.size());
         std::vector<uint8_t> combined = blank.pixelsBgra;
         size_t outlineCount = 0;
-        for (int32_t layer : all.layers)
+        for (WorldFloorPlanLayer layer : all.layers)
         {
             const auto slice = buildWorldFloorPlan(*geometry, partial, false, {}, layer);
             CHECK(slice.centerX == all.centerX);
@@ -1436,7 +1599,9 @@ TEST_CASE("packaged MM7 MM8 dungeon layers preserve discovery projection and pri
     REQUIRE(maps["mm8"] >= 20);
     MESSAGE("Dungeon package audit: MM7 maps=", maps["mm7"], ", MM8 maps=", maps["mm8"],
         ", partial-knowledge slices=", layers["mm7"], "/", layers["mm8"],
-        ", authored blank plans=", blankPlans["mm7"], "/", blankPlans["mm8"]);
+        ", authored blank plans=", blankPlans["mm7"], "/", blankPlans["mm8"],
+        ", Guide refined maps=", refinedMaps["mm7"], "/", refinedMaps["mm8"],
+        ", refined bands=", refinedBands["mm7"], "/", refinedBands["mm8"]);
 }
 
 TEST_CASE("world dungeon plans frame remembered positions without revealing hidden geometry")

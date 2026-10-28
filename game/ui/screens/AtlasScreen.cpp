@@ -308,7 +308,7 @@ void AtlasScreen::saveNote(bool remove)
     m_world.indexObservedMonsters(m_knowledge, m_data.monsterTable());
     m_world.indexObservedItemSources(m_knowledge, m_data.itemTable());
     if (!remove && m_noteDraft.elevation)
-        selectFloorLayer(worldFloorPlanLayer(float(*m_noteDraft.elevation)));
+        selectFloorLayer(m_floorPlan.layerAtHeight(float(*m_noteDraft.elevation)));
     m_selectedFeature = remove ? "" : m_map + "/note/" + std::to_string(m_noteDraft.id);
     m_floorPlanKey.clear();
     m_featureView = true;
@@ -345,8 +345,9 @@ void AtlasScreen::drawNoteEditor()
 
 void AtlasScreen::drawNoteElevation()
 {
-    const auto current = m_noteDraft.elevation ? worldFloorPlanLayer(float(*m_noteDraft.elevation)) : std::nullopt;
-    textInRect(canvasRect(400, 125, 100, 25), current ? "Layer " + std::to_string(*current) : "All heights",
+    const auto current = m_noteDraft.elevation
+        ? m_floorPlan.layerAtHeight(float(*m_noteDraft.elevation)) : std::nullopt;
+    textInRect(canvasRect(400, 125, 100, 25), current ? "Layer " + current->name() : "All heights",
         "menu_lucida", 11, 0xffc6dfeau, true);
     const auto lower = current ? std::lower_bound(m_floorLayers.begin(), m_floorLayers.end(), *current)
         : m_floorLayers.end();
@@ -952,10 +953,10 @@ void AtlasScreen::drawMap()
                     && m_world.featureVisible(feature, m_knowledge, m_guide))
                 {
                     const auto sites = m_world.featureSites(feature, m_knowledge, m_guide);
-                    if (!sites.empty()) m_floorLayer = worldFloorPlanLayer(sites.front()->z);
+                    if (!sites.empty()) m_floorLayer = worldFloorPlanLayerForHeight(sites.front()->z, true);
                 }
         }
-        floorPlanKey = context + (m_floorLayer ? ":" + std::to_string(*m_floorLayer) : ":all");
+        floorPlanKey = context + (m_floorLayer ? ":" + m_floorLayer->name() : ":all");
         if (m_floorPlanKey != floorPlanKey)
         {
             m_floorPlanKey = floorPlanKey;
@@ -981,15 +982,17 @@ void AtlasScreen::drawMap()
                 m_floorPlan = buildWorldFloorPlan(*geometry,
                     knowledge == m_knowledge.floorPlans.end() ? WorldFloorPlanKnowledge{} : knowledge->second,
                     m_guide, positions, m_floorLayer);
+                m_floorLayer = m_floorPlan.selectedLayer;
+                m_floorPlanKey = context + (m_floorLayer ? ":" + m_floorLayer->name() : ":all");
                 m_floorLayers = m_floorPlan.layers;
                 for (const WorldMapFeature *pFeature : m_world.queryFeatures(
                     m_knowledge, m_guide, "", map->id, &m_data.spellTable(), &m_data.itemTable()))
                     if (pFeature->kind != WorldMapFeatureKind::Note || pFeature->noteElevation)
                         for (const WorldInteractionSite *pSite : m_world.featureSites(*pFeature, m_knowledge, m_guide))
-                            if (const auto layer = worldFloorPlanLayer(pSite->z)) m_floorLayers.push_back(*layer);
+                            if (const auto layer = m_floorPlan.layerAtHeight(pSite->z)) m_floorLayers.push_back(*layer);
                 if (m_knowledge.partyPosition && m_knowledge.partyPosition->z
                     && m_knowledge.partyPosition->mapFileName == toLowerCopy(map->map->fileName))
-                    if (const auto layer = worldFloorPlanLayer(*m_knowledge.partyPosition->z))
+                    if (const auto layer = m_floorPlan.layerAtHeight(*m_knowledge.partyPosition->z))
                         m_floorLayers.push_back(*layer);
                 std::sort(m_floorLayers.begin(), m_floorLayers.end());
                 m_floorLayers.erase(std::unique(m_floorLayers.begin(), m_floorLayers.end()), m_floorLayers.end());
@@ -1175,7 +1178,7 @@ void AtlasScreen::drawMap()
     if (dungeon) drawFloorLayers(*map);
 }
 
-void AtlasScreen::selectFloorLayer(std::optional<int32_t> layer)
+void AtlasScreen::selectFloorLayer(std::optional<WorldFloorPlanLayer> layer)
 {
     if (m_floorLayer == layer) return;
     m_floorLayer = layer;
@@ -1193,13 +1196,13 @@ void AtlasScreen::drawFloorLayers(const WorldRecord &map)
     if (button("atlas-layer-lower", canvasRect(34, 357, 43, 27), "Lower", "button",
         lower != m_floorLayers.begin())) selectFloorLayer(*std::prev(lower));
     textInRect(canvasRect(81, 357, 110, 27),
-        m_floorLayer ? "Layer " + std::to_string(*m_floorLayer) : "All heights", "menu_lucida", 11, 0xffc6dfeau, true);
+        m_floorLayer ? "Layer " + m_floorLayer->name() : "All heights", "menu_lucida", 11, 0xffc6dfeau, true);
     if (button("atlas-layer-higher", canvasRect(195, 357, 43, 27), "Higher", "button",
         higher != m_floorLayers.end())) selectFloorLayer(*higher);
-    std::optional<int32_t> partyLayer;
+    std::optional<WorldFloorPlanLayer> partyLayer;
     if (m_knowledge.partyPosition && m_knowledge.partyPosition->z
         && m_knowledge.partyPosition->mapFileName == toLowerCopy(map.map->fileName))
-        partyLayer = worldFloorPlanLayer(*m_knowledge.partyPosition->z);
+        partyLayer = m_floorPlan.layerAtHeight(*m_knowledge.partyPosition->z);
     if (button("atlas-layer-all", canvasRect(242, 357, 48, 27), "All", "button", m_floorLayer.has_value()))
         selectFloorLayer(std::nullopt);
     if (button("atlas-layer-party", canvasRect(294, 357, 92, 27), "Party height", "button", partyLayer.has_value()))
@@ -1397,8 +1400,12 @@ void AtlasScreen::drawFeatureList()
         const WorldRecord *pMap = m_world.find(feature.mapId);
         std::string subtitle = worldMapFeatureKindName(feature.kind);
         if (feature.kind == WorldMapFeatureKind::Note && pMap->kind == WorldRecordKind::Dungeon)
-            subtitle += feature.noteElevation
-                ? " | Layer " + std::to_string(*worldFloorPlanLayer(float(*feature.noteElevation))) : " | All heights";
+        {
+            const auto layer = feature.noteElevation ? (feature.mapId == m_map
+                ? m_floorPlan.layerAtHeight(float(*feature.noteElevation))
+                : worldFloorPlanLayerForHeight(float(*feature.noteElevation))) : std::nullopt;
+            subtitle += layer ? " | Layer " + layer->name() : " | All heights";
+        }
         textInRect({row.x + 7 * designScale(), row.y + 19 * designScale(),
                     row.width - 14 * designScale(), 12 * designScale()},
                    subtitle + " - " + pMap->name(),
@@ -1407,7 +1414,8 @@ void AtlasScreen::drawFeatureList()
     revealFocus(viewport, m_scroll);
     setDesignClip(std::nullopt);
     if (features.empty())
-        textInRect(viewport, m_guide ? "No matching sites in the indexed maps. Select a dungeon to index its sites."
+        textInRect(viewport, m_floorLayer ? "No matching sites at this height."
+            : m_guide ? "No matching sites found."
             : "No discovered sites here. Explore the region or interact with objects in the dungeon.",
             "menu_arrus", 13, 0xffc6dfeau, true);
 }

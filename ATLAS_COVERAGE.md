@@ -72,6 +72,14 @@ after Guide. The candidates are not all proven traversable floors. This identifi
 it does not close stacked-floor separation. The associated tour-helper keyboard-count fix passes 118 keyboard
 UI steps / 20 captures and 40 post-UI state checks. Details and evidence paths are in `ATLAS.md`.
 
+The 2026-10-28 fix refines a band into four 128-unit slices where already-known horizontal support faces overlap.
+It separates both confirmed witnesses, keeps indoor surface pins at their base and preserves unchanged outdoor
+centroids. A focused package recheck passes all 110 BLVs and 807 partial-knowledge slices; Guide refines 131 bands
+across 80 maps, including platforms. Ten native tours pass 450 steps / 71 captures and six post-UI verifiers pass
+93 steps. Refined-note ownership/elevation survives save/load, and the four diagnostic Discovery map/list views
+are unchanged after Guide. This improves height filtering; semantic storeys, slopes and moving geometry are not
+certified by it. The change is not yet packaged for Android. Details are in `ATLAS.md`.
+
 Reference feature inventories:
 
 - [MM7 community guide](https://www.reddit.com/r/MightAndMagic/comments/1ww8pq0/i_made_an_interactive_world_map_guide_for_might/)
@@ -86,7 +94,7 @@ tables, and do not bundle its HTML, JS, translated prose, generated illustration
 | Region browsing, search, zoom/pan | Implemented | Implemented | More extensive map/content audit |
 | Continent overview | Existing game illustration | Original regional schematic | Optional licensed/original illustrated Jadame artwork |
 | Discovery fog and current party arrow | Implemented | Implemented | Wider dungeon/device checks |
-| Dungeon plans from engine geometry | Known height bands, party-height selection, component-aware discovered pins and height-aware notes | Same shared projection and controls | Complex floor separation and wider floor/visibility audit |
+| Dungeon plans from engine geometry | Adaptive known height slices, party-height selection, component-aware discovered pins and height-aware notes | Same shared projection and controls | Sloped/mechanism-driven geometry and wider floor/visibility/device audit |
 | Buildings, resident NPCs, trainers | Current/observed residents, Guide-only declared possible residences, indoor service markers | Same shared index | Conditional service eligibility, shared-service placements and generated/roaming NPCs |
 | Trainer requirements and prices | Gameplay evaluator, observed offers and race-specific mastery comparisons | Same shared evaluator | Conditional eligibility audit and starting-skill/race-selection checks |
 | Walking and scheduled transport | Directed walking/coach/boat graph, departure pins, last-offered schedules/fare/duration, live local overrides and destination navigation | Same shared knowledge/navigation | Remote scripted timetable references, availability forecasting and arrival-point links |

@@ -1,5 +1,26 @@
 # Atlas fixtures
 
+## Refined-height notes
+
+With normal runtime packages and separate private settings/mods/saves, run
+`tests/scenarios/atlas/mm7_refined_note_fixture.yml` or `mm8_refined_note_fixture.yml`. These set diagnostic
+poses in Castle Gloaming / Plane of Earth; they are not traversal or combat tests. Use isolated QA settings with
+`debug.immortal=true` to keep incidental combat from ending the UI test. Copy the temporary scenario's
+`before.oysav` from `openyamm_scenario_saves/atlas_mm7_refined_note_fixture/` or its MM8 equivalent to private
+`saves/before.oysav`.
+
+Run `tools/menu_tours/atlas_refined_note.yml` at 1600x900 with Atlas enabled. Inspect its six captures: the editor
+must show `0.1` / `-1.1`, the created note must disappear on the adjacent slice, and the same text/elevation must
+return after reload. The tour leaves its one private note active for verification. Run
+`mm7_refined_note_privacy.yml` / `mm8_refined_note_privacy.yml` from this directory. Each 15-step verifier checks
+map/gold/food, note activity, ownership and explicit world Z (-192/-704) through another save/load. These
+representative slice-centre values describe the supplied fixture geometry, not arbitrary modded maps.
+
+The packaged dungeon audit below also checks the two authored overlapping-height witnesses. Refinement uses
+known horizontal support geometry; it does not invent semantic storey names or establish every sloped passage.
+Old notes without elevation remain flat; explicit notes retain their stored world Z and are mapped through the
+current read-only slice catalog. No layer index is serialized into a save.
+
 ## Ordinary Map Book keyboard focus
 
 Run `tools/menu_tours/atlas_map_book_keyboard.yml` with an isolated Harmondale/MM7 or Dagger Wound/MM8 save as
@@ -59,7 +80,10 @@ The unknown/partial knowledge states are deliberately synthetic; no user save is
 must not modify knowledge, unknown geometry must stay absent, and partial-discovery height slices must retain
 one projection and recompose the exact all-heights raster. The current Windows audit covers 63 MM7 and 47 MM8
 dungeons with 277/216 partial-discovery slices and no authored blank plans. This does not prove campaign
-exploration, physical Android/controller input, or semantic separation of rooms sharing one 512-unit band.
+exploration, physical Android/controller input, or semantic separation of every sloped/mechanism-driven layout.
+The current catalog can subdivide a coarse band when its known horizontal support faces overlap; unknown faces
+must not contribute those subdivisions. The package test checks the Castle Gloaming and Plane of Earth
+witnesses and the exact recomposition of the adaptive slices as well as the original coarse ranges.
 
 ## Scripted monster reference privacy
 

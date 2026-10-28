@@ -1,6 +1,7 @@
 #pragma once
 
 #include "game/world/WorldInteractionSites.h"
+#include "game/world/WorldFloorPlan.h"
 #include "game/world/WorldMapKnowledge.h"
 #include "game/events/SiteInteractionReference.h"
 #include <optional>
@@ -59,7 +60,7 @@ std::vector<WorldMapFeature> buildWorldMapFeatures(const std::string &mapId,
     const std::vector<WorldInteractionSite> &sites, const ScriptedEventProgram &events);
 std::optional<WorldMapFeatureKind> worldMapFeatureKind(std::string_view action);
 const char *worldMapFeatureKindName(WorldMapFeatureKind kind);
-bool worldMapFeatureOnFloorLayer(const WorldMapFeature &feature, std::optional<int32_t> layer);
+bool worldMapFeatureOnFloorLayer(const WorldMapFeature &feature, std::optional<WorldFloorPlanLayer> layer);
 bool worldMapFeatureContainsSite(const WorldMapFeature &feature, const std::string &siteId);
 std::string worldSiteDiscoveryKey(uint16_t eventId, const std::string &siteId);
 void recordWorldSiteDiscovery(EventRuntimeState &state, uint16_t eventId, const std::string &siteId);

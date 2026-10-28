@@ -1,13 +1,95 @@
 #include "game/world/WorldFloorPlan.h"
 #include "game/indoor/IndoorMapData.h"
+#include "game/indoor/IndoorGeometryUtils.h"
 #include "game/FaceEnums.h"
 
 #include <algorithm>
 #include <cmath>
 #include <limits>
+#include <map>
+#include <stdexcept>
 
 namespace OpenYAMM::Game
 {
+namespace
+{
+uint32_t planFaceAttributes(const IndoorMapData &map, const WorldFloorPlanKnowledge &knowledge, bool guide,
+    size_t face)
+{
+    return !guide && face < knowledge.faceAttributes.size() ? knowledge.faceAttributes[face]
+        : map.faces[face].attributes;
+}
+
+bool floorProjectionsOverlap(const IndoorFaceGeometryData &a, const IndoorFaceGeometryData &b)
+{
+    // Separating axes reject touching room edges as well as disjoint convex face projections.
+    const auto separatedOnEdge = [&](const bx::Vec3 &first, const bx::Vec3 &second)
+    {
+        const double x = double(first.y) - second.y, y = double(second.x) - first.x;
+        if (x == 0 && y == 0) return false;
+        const auto interval = [&](const IndoorFaceGeometryData &face)
+        {
+            double lower = std::numeric_limits<double>::max(), upper = -lower;
+            for (const bx::Vec3 &vertex : face.vertices)
+            {
+                const double value = vertex.x * x + vertex.y * y;
+                lower = std::min(lower, value);
+                upper = std::max(upper, value);
+            }
+            return std::pair{lower, upper};
+        };
+        const auto [aMin, aMax] = interval(a);
+        const auto [bMin, bMax] = interval(b);
+        return aMax <= bMin || bMax <= aMin;
+    };
+    for (const IndoorFaceGeometryData *pFace : {&a, &b})
+        for (size_t i = 0; i < pFace->vertices.size(); ++i)
+            if (separatedOnEdge(pFace->vertices[i], pFace->vertices[(i + 1) % pFace->vertices.size()])) return false;
+    return true;
+}
+
+void refineKnownFloorBands(const IndoorMapData &map, const WorldFloorPlanKnowledge &knowledge, bool guide,
+    const std::unordered_set<uint32_t> &knownFaces, std::unordered_set<int32_t> &refined)
+{
+    if (knownFaces.empty()) return;
+    IndoorFaceGeometryCache cache(map.faces.size());
+    std::map<int32_t, std::vector<const IndoorFaceGeometryData *>> bands;
+    for (uint32_t face : knownFaces)
+    {
+        const uint32_t attributes = planFaceAttributes(map, knowledge, guide, face);
+        if (hasFaceAttribute(attributes, FaceAttribute::IsPortal)
+            || hasFaceAttribute(attributes, FaceAttribute::Untouchable)) continue;
+        const IndoorFaceGeometryData *pGeometry = cache.geometryForFace(map, map.vertices, face);
+        if (pGeometry == nullptr || pGeometry->kind != IndoorFaceKind::Floor
+            || pGeometry->minZ != pGeometry->maxZ || pGeometry->vertices.empty()) continue;
+        bands[*worldFloorPlanLayer(pGeometry->minZ)].push_back(pGeometry);
+    }
+    for (auto &[band, floors] : bands)
+    {
+        std::sort(floors.begin(), floors.end(),
+            [](const IndoorFaceGeometryData *pLeft, const IndoorFaceGeometryData *pRight)
+            { return pLeft->minX < pRight->minX; });
+        for (size_t i = 0; i < floors.size() && !refined.contains(band); ++i)
+            for (size_t j = i + 1; j < floors.size(); ++j)
+            {
+                const IndoorFaceGeometryData &a = *floors[i], &b = *floors[j];
+                if (b.minX >= a.maxX) break;
+                if (a.minY >= b.maxY || b.minY >= a.maxY || std::abs(a.minZ - b.minZ) < 128) continue;
+                if (floorProjectionsOverlap(a, b))
+                {
+                    refined.insert(band);
+                    break;
+                }
+            }
+    }
+}
+}
+
+std::string WorldFloorPlanLayer::name() const
+{
+    return std::to_string(index) + (subdivision ? "." + std::to_string(subdivision) : "");
+}
+
 std::optional<int32_t> worldFloorPlanLayer(float z)
 {
     if (!std::isfinite(z)) return std::nullopt;
@@ -16,29 +98,47 @@ std::optional<int32_t> worldFloorPlanLayer(float z)
     return int32_t(layer);
 }
 
-bool worldFloorPlanLayerMatches(std::optional<int32_t> layer, float z)
+std::optional<WorldFloorPlanLayer> worldFloorPlanLayerForHeight(float z, bool subdivide)
 {
-    return !layer || worldFloorPlanLayer(z) == layer;
+    const std::optional<int32_t> band = worldFloorPlanLayer(z);
+    if (!band) return std::nullopt;
+    const double lower = double(*band) * 512 - 256;
+    return WorldFloorPlanLayer{*band, subdivide ? uint8_t(1 + std::floor((double(z) - lower) / 128)) : uint8_t(0)};
 }
 
-std::optional<int32_t> worldFloorPlanLayerElevation(int32_t layer)
+bool worldFloorPlanLayerMatches(std::optional<WorldFloorPlanLayer> layer, float z)
 {
-    const int32_t height = int32_t(std::clamp(int64_t(layer) * 512, int64_t(INT32_MIN), int64_t(INT32_MAX)));
-    return worldFloorPlanLayer(float(height)) == layer ? std::optional<int32_t>(height) : std::nullopt;
+    return !layer || worldFloorPlanLayerForHeight(z, layer->subdivision != 0) == layer;
+}
+
+std::optional<int32_t> worldFloorPlanLayerElevation(WorldFloorPlanLayer layer)
+{
+    if (layer.subdivision > 4) return std::nullopt;
+    const int64_t center = int64_t(layer.index) * 512
+        + (layer.subdivision ? int64_t(layer.subdivision - 1) * 128 - 192 : 0);
+    const int32_t height = int32_t(std::clamp(center, int64_t(INT32_MIN), int64_t(INT32_MAX)));
+    return worldFloorPlanLayerMatches(layer, float(height)) ? std::optional<int32_t>(height) : std::nullopt;
+}
+
+std::optional<WorldFloorPlanLayer> WorldFloorPlanRaster::layerAtHeight(float z) const
+{
+    const std::optional<int32_t> band = worldFloorPlanLayer(z);
+    return band ? worldFloorPlanLayerForHeight(z, refinedBands.contains(*band)) : std::nullopt;
 }
 
 WorldFloorPlanRaster buildWorldFloorPlan(const IndoorMapData &map,
     const WorldFloorPlanKnowledge &knowledge, bool guide,
-    const std::vector<std::pair<float, float>> &knownPositions, std::optional<int32_t> layer)
+    const std::vector<std::pair<float, float>> &knownPositions, std::optional<WorldFloorPlanLayer> layer)
 {
+    if (layer && layer->subdivision > 4) throw std::invalid_argument("Invalid dungeon height subdivision");
     WorldFloorPlanRaster raster;
     std::vector<const IndoorOutline *> lines;
+    std::unordered_set<uint32_t> knownFaces;
     double minX = std::numeric_limits<double>::max(), minY = minX;
     double maxX = std::numeric_limits<double>::lowest(), maxY = maxX;
     const auto attributes = [&](size_t face)
     {
-        return !guide && face < knowledge.faceAttributes.size()
-            ? knowledge.faceAttributes[face] : map.faces[face].attributes;
+        return planFaceAttributes(map, knowledge, guide, face);
     };
     for (size_t i = 0; i < map.outlines.size(); ++i)
     {
@@ -57,15 +157,20 @@ WorldFloorPlanRaster buildWorldFloorPlan(const IndoorMapData &map,
             || hasFaceAttribute(a, FaceAttribute::SeenByParty) || hasFaceAttribute(b, FaceAttribute::SeenByParty);
         if (!guide && !revealed)
             continue;
-        const int32_t lineLayer = *worldFloorPlanLayer(line.z);
-        raster.layers.push_back(lineLayer);
-        if (!layer || lineLayer == *layer) lines.push_back(&line);
+        lines.push_back(&line);
+        knownFaces.insert(line.face1Id);
+        knownFaces.insert(line.face2Id);
         for (auto id : {line.vertex1Id, line.vertex2Id})
         {
             minX = std::min(minX, double(map.vertices[id].x)); maxX = std::max(maxX, double(map.vertices[id].x));
             minY = std::min(minY, double(map.vertices[id].y)); maxY = std::max(maxY, double(map.vertices[id].y));
         }
     }
+    refineKnownFloorBands(map, knowledge, guide, knownFaces, raster.refinedBands);
+    if (layer && !raster.refinedBands.contains(layer->index)) layer->subdivision = 0;
+    raster.selectedLayer = layer;
+    for (const IndoorOutline *pLine : lines) raster.layers.push_back(*raster.layerAtHeight(pLine->z));
+    std::erase_if(lines, [&](const IndoorOutline *pLine) { return !worldFloorPlanLayerMatches(layer, pLine->z); });
     raster.outlineCount = lines.size();
     std::sort(raster.layers.begin(), raster.layers.end());
     raster.layers.erase(std::unique(raster.layers.begin(), raster.layers.end()), raster.layers.end());

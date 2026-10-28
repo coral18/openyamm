@@ -15,7 +15,7 @@ namespace
 {
 template<typename Vertex>
 void positionFromVertices(WorldInteractionSite &site, const std::vector<uint16_t> &ids,
-                          const std::vector<Vertex> &vertices)
+                          const std::vector<Vertex> &vertices, bool baseElevation)
 {
     std::vector<std::tuple<int, int, int>> positions;
     for (uint16_t id : ids)
@@ -28,6 +28,8 @@ void positionFromVertices(WorldInteractionSite &site, const std::vector<uint16_t
         x += vx; y += vy; z += vz;
     }
     site.x = float(x / positions.size()); site.y = float(y / positions.size()); site.z = float(z / positions.size());
+    if (baseElevation)
+        for (const auto &[vx, vy, vz] : positions) site.z = std::min(site.z, float(vz));
 }
 
 template<typename Entity>
@@ -97,7 +99,8 @@ std::vector<WorldDecorationSite> inheritedDecorations(const std::vector<Entity> 
 
 template<typename Vertex, typename Face, typename EventId>
 void appendSurfaceSites(std::vector<WorldInteractionSite> &sites, const std::vector<Vertex> &vertices,
-                        const std::vector<Face> &faces, EventId eventIdForFace, const std::string &prefix)
+                        const std::vector<Face> &faces, EventId eventIdForFace, const std::string &prefix,
+                        bool baseElevation = false)
 {
     // Connected faces sharing an event are one object. Reusing an event elsewhere stays a separate site.
     std::map<uint16_t, std::vector<uint32_t>> facesByEvent;
@@ -142,7 +145,7 @@ void appendSurfaceSites(std::vector<WorldInteractionSite> &sites, const std::vec
             }
             if (!vertexIds.empty())
             {
-                positionFromVertices(site, vertexIds, vertices);
+                positionFromVertices(site, vertexIds, vertices, baseElevation);
                 sites.push_back(std::move(site));
             }
         }
@@ -167,8 +170,9 @@ std::vector<WorldInteractionSite> worldInteractionSites(const OutdoorMapData &ma
 std::vector<WorldInteractionSite> worldInteractionSites(const IndoorMapData &map)
 {
     std::vector<WorldInteractionSite> sites;
+    // Door and wall-object pins belong at their base rather than midway up a vertical surface.
     appendSurfaceSites(sites, map.vertices, map.faces,
-        [](const IndoorFace &face) { return face.cogTriggered; }, "");
+        [](const IndoorFace &face) { return face.cogTriggered; }, "", true);
     appendDecorations(sites, map.entities);
     return sites;
 }

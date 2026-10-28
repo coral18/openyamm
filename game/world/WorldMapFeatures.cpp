@@ -16,7 +16,7 @@
 
 namespace OpenYAMM::Game
 {
-bool worldMapFeatureOnFloorLayer(const WorldMapFeature &feature, std::optional<int32_t> layer)
+bool worldMapFeatureOnFloorLayer(const WorldMapFeature &feature, std::optional<WorldFloorPlanLayer> layer)
 {
     if (feature.kind == WorldMapFeatureKind::Note)
         return !feature.noteElevation || worldFloorPlanLayerMatches(layer, float(*feature.noteElevation));

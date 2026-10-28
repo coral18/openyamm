@@ -1,0 +1,24 @@
+id: atlas.mm7_refined_note_privacy
+title: A refined-height note keeps its explicit elevation and ownership across save/load
+world: mm7
+mode: faithful
+steps:
+- load_game: {name: before, path: saves/before.oysav}
+- &map
+  assert: {map: d03.blv, gold: 5000, food: 10}
+- assert: {map_note: {id: 4294967295, active: false}}
+- assert: {named_map_var_changed: {name: openyamm.map-notes.user/4294967295, value: 0}}
+- load_game: {name: quicksave, path: saves/quicksave.oysav}
+- *map
+- &note
+  assert: {map_note: {id: 4294967295, active: true}}
+- &owner
+  assert: {named_map_var_changed: {name: openyamm.map-notes.user/4294967295, value: 1}}
+- &height
+  assert: {named_map_var_changed: {name: openyamm.map-notes.user/4294967295/z, value: -192}}
+- save_game: refined-note-verified
+- load_game: refined-note-verified
+- *map
+- *note
+- *owner
+- *height

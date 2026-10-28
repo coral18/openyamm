@@ -43,7 +43,7 @@ private:
     void drawFeatureList();
     void drawPartyArrow(const WorldRecord &map, const Rect &image, const WorldFloorPlanRaster *floorPlan);
     void drawFloorLayers(const WorldRecord &map);
-    void selectFloorLayer(std::optional<int32_t> layer);
+    void selectFloorLayer(std::optional<WorldFloorPlanLayer> layer);
     void drawList();
     void drawDetails();
     void drawSiteJournal();
@@ -123,8 +123,8 @@ private:
     float m_panX = 0, m_panY = 0;
     std::string m_floorPlanKey;
     std::string m_floorLayerContext;
-    std::optional<int32_t> m_floorLayer;
-    std::vector<int32_t> m_floorLayers;
+    std::optional<WorldFloorPlanLayer> m_floorLayer;
+    std::vector<WorldFloorPlanLayer> m_floorLayers;
     WorldFloorPlanRaster m_floorPlan;
     bgfx::TextureHandle m_floorPlanTexture = BGFX_INVALID_HANDLE;
     std::string m_fogMap;

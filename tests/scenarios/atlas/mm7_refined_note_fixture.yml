@@ -1,0 +1,14 @@
+id: atlas.mm7_refined_note_fixture
+title: Isolated Castle Gloaming note fixture at the lower overlapping surface
+world: mm7
+mode: faithful
+steps:
+- new_game_flow:
+    start_map: d03.blv
+    party:
+      gold: 5000
+      food: 10
+      members:
+      - {name: Note Tester, class: Knight, level: 20, race_id: 0, skills: [], equipment: {}}
+- set_pose: {x: -942, y: -336, z: -240, yaw: 0, pitch: -0.3}
+- save_game: before

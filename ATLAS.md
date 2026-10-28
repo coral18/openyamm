@@ -59,7 +59,8 @@ community guide's complete content has been integrated yet.
 - Guidebook pages for items/equipment, alchemy, spells, classes/races, quest relationships and companions use
   the active shared registries and discovery history. They do not install a copied community-guide database.
 - Dungeon controls select known height bands, all heights or the party height, with matching site/arrow filtering
-  and optional note elevations. Height bands are not semantic floor names; complex overlapping plans still need audit.
+  and optional note elevations. Known overlapping horizontal surfaces refine their own band into smaller slices.
+  These remain height filters; complex slopes and mechanism-driven geometry still need wider audit.
 
 `game/world/WorldDatabase` indexes **references** to `MapStats`, `HouseTable`, `NpcDialogTable` and
 `MergedTeacherTopicTable`. It owns neither copies of those base records nor an alternative balancing/content database.
@@ -3041,3 +3042,43 @@ input or require replacing POCO's verified 0.2.5 for normal play. It is not yet 
 Private geometry inputs, audit/witness JSON, fixtures, logs, captures and comparisons are under
 `atlas-floor-overlap-20261027` in the Windows development root. No user campaigns or official phone data are
 test-write targets. The broader floor precision and remaining device/content acceptance remain open.
+
+### Adaptive dungeon height slices, 2026-10-28
+
+The confirmed same-band witnesses now separate in the native Atlas. A 512-unit band is divided into four
+128-unit slices when known, collidable horizontal floor faces overlap in XY at heights at least 128 units apart.
+The test uses the runtime's indoor face geometry and convex separating axes, including crossing shapes whose
+centres do not overlap. Touching edges and separate rooms do not trigger refinement. Discovery considers only
+faces belonging to its already-visible outlines and honours live portal/untouchable flags; Guide uses authored
+geometry. The layer catalog is local view state and cannot teach exploration. Bounds stay anchored to all known
+outlines/positions so selecting a slice does not change projection.
+
+`WorldFloorPlanLayer` identifies a coarse index and optional subdivision. Explicit coarse Core queries remain
+valid; the screen uses the raster's resolved height mapping consistently for sites, service records, party arrow
+and notes. Available refined ranges are labelled with suffixes such as `0.1`. Indoor surface pins use their
+lower edge, so a tall door's centre does not move its venue to a higher slice. Outdoor centroid positions retain
+their existing interpretation. This changes derived Atlas positions, not gameplay picking/collision or event IDs.
+Notes continue to store their explicit world Z in the existing namespace; no save schema or module requirement
+changes. Notes without elevation still appear at every height. The empty-list message now describes the selected
+height without asking the user to reselect an already-open dungeon.
+
+The broad Windows suite passed 45 cases / 7,508 assertions; its optional base-house-location audit was not
+configured and is not claimed here. Four final focused cases pass 5,872 assertions, including negative heights,
+hidden-floor privacy, live attribute changes, crossing/touching projections, indoor venue/trainer placement and
+unchanged outdoor centroids. The packaged audit loads all 63 MM7 and 47 MM8 BLVs. Its partial-knowledge slices
+recompose the full known raster exactly (460/347 slices), with no blank authored plans. Full Guide geometry
+refines 76/55 bands across 50/30 maps; these include platforms and are not counts of named semantic storeys.
+
+Ten native AMD/OpenGL tours pass 450 UI steps with 71 fresh captures, covering the two paired-height witnesses,
+ordinary note editing/deletion and controller entry in both worlds, plus dedicated refined-note persistence.
+Inspected images show Castle Gloaming's `0.1`/`0.3` and Plane of Earth's `-1.1`/`-1.4` views. All four witness
+Discovery map/list viewports remain pixel-identical in RGB after Guide. Six post-UI verifiers pass 93 steps;
+two fresh pose fixtures add six setup steps. The fine-note tests preserve active ownership and world Z -192/-704
+through another save/load, alongside the checked map/gold/food. Those fields do not certify complete save equality.
+Final builds also include copy/formatting cleanup; the fine-note tours exercise the final build.
+
+Reproduction is in `tests/fixtures/atlas/README.md`, with public `atlas_refined_note.yml`, matching MM7/MM8 pose
+fixtures and post-UI verifiers. Private source/log/capture receipts are under `atlas-height-refinement-20261028`
+in the Windows development root. Pose shortcuts and isolated immortal QA settings are not campaign traversal or
+physical device input. The adaptive code is not in the verified Android 0.2.5 package yet. Remaining phone,
+sloped/mechanism-driven map and content gates stay open; no MM6 Atlas work was performed.

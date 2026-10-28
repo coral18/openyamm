@@ -174,3 +174,7 @@ Subsequent source implements shared controller UI input and passes SDL virtual-d
 the user also confirmed Map Book opening and Atlas controls on a physical pad in Windows MM7. The controller
 and search-submission changes are packaged and verified in 0.2.5 / 108; they are absent from archived 0.2.4.
 The sidebar D-pad follow-up and Android device acceptance remain pending.
+
+The 2026-10-28 adaptive dungeon-height refinement and indoor surface-base anchors are validated in Windows
+source builds. They are absent from the verified/installed 0.2.5 APK and need a subsequent Release package and
+device checks. Existing Android acceptance above describes its stated application version, not unbuilt source.

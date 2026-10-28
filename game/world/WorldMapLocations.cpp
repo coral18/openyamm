@@ -307,7 +307,7 @@ bool WorldDatabase::featureSiteVisible(const WorldMapFeature &feature, const Wor
 }
 
 std::vector<const WorldInteractionSite *> WorldDatabase::featureSites(const WorldMapFeature &feature,
-    const WorldKnowledge &knowledge, bool guide, std::optional<int32_t> layer) const
+    const WorldKnowledge &knowledge, bool guide, std::optional<WorldFloorPlanLayer> layer) const
 {
     std::vector<const WorldInteractionSite *> sites;
     if (feature.kind == WorldMapFeatureKind::Note && !worldMapFeatureOnFloorLayer(feature, layer))
@@ -386,7 +386,7 @@ bool WorldDatabase::locationVisible(const WorldMapLocation &location, const Worl
 }
 
 std::vector<WorldMapLocation> WorldDatabase::queryLocations(const WorldKnowledge &knowledge, bool guide,
-    const std::string &withinMap, std::optional<int32_t> layer) const
+    const std::string &withinMap, std::optional<WorldFloorPlanLayer> layer) const
 {
     std::vector<WorldMapLocation> locations;
     for (const WorldMapLocation &location : m_locations)

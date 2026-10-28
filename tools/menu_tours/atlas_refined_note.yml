@@ -1,0 +1,53 @@
+# Use the matching MM7 Castle Gloaming / MM8 Plane of Earth refined-note fixture as saves/before.oysav.
+output_dir: captures
+exit: true
+steps:
+- expect: gameplay
+- action: map_book
+- click: [1250, 770]
+- expect: pause
+- click: [1480, 126]
+- click: [1152, 57]
+- wait: 4
+- click: [637, 695]
+- click: [1420, 190]
+- click: [800, 500]
+- text: Refined height note
+- capture: fine-editor
+- click: [295, 647]
+- click: [275, 125]
+- text: Refined height note
+- key: Return
+- capture: fine-created
+- click: [406, 695]
+- capture: fine-other-height-hidden
+- click: [104, 695]
+- capture: fine-returned
+- click: [1440, 57]
+- key: Escape
+- expect: gameplay
+- key: F9
+- wait: 1
+- key: F10
+- wait: 1
+- expect: gameplay
+- action: map_book
+- click: [1250, 770]
+- expect: pause
+- click: [1480, 126]
+- click: [1152, 57]
+- wait: 4
+- click: [637, 695]
+- click: [275, 125]
+- text: Refined height note
+- key: Return
+- capture: fine-reloaded
+- click: [1250, 260]
+- click: [1390, 807]
+- capture: fine-editor-reloaded
+- key: Escape
+- click: [1440, 57]
+- key: Escape
+- expect: gameplay
+- key: F9
+- wait: 1

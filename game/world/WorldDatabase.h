@@ -204,14 +204,14 @@ public:
     bool featureVisible(const WorldMapFeature &feature, const WorldKnowledge &knowledge, bool guide) const;
     // Discovery filters each physical component before projecting pins, bounds or available heights.
     std::vector<const WorldInteractionSite *> featureSites(const WorldMapFeature &feature,
-        const WorldKnowledge &knowledge, bool guide, std::optional<int32_t> layer = {}) const;
+        const WorldKnowledge &knowledge, bool guide, std::optional<WorldFloorPlanLayer> layer = {}) const;
     std::vector<const WorldMapFeature *> queryFeatures(const WorldKnowledge &knowledge, bool guide,
         const std::string &search = {}, const std::string &withinMap = {}, const SpellTable *pSpells = nullptr,
         const ItemTable *pItems = nullptr) const;
     bool locationVisible(const WorldMapLocation &location, const WorldKnowledge &knowledge, bool guide) const;
     // One stable location per entrance; its position comes from a visible component on the selected layer.
     std::vector<WorldMapLocation> queryLocations(const WorldKnowledge &knowledge, bool guide,
-        const std::string &withinMap, std::optional<int32_t> layer = {}) const;
+        const std::string &withinMap, std::optional<WorldFloorPlanLayer> layer = {}) const;
     std::vector<const WorldRecord *> recordsAtLocation(const WorldMapLocation &location,
         const WorldKnowledge &knowledge, bool guide, bool includeTravel = false) const;
 
