@@ -3196,3 +3196,9 @@ Reproduce with `mm7_dungeon_parent_fixture.yml`, `atlas_dungeon_parent.yml` and
 checks. Private source/log/capture/save receipts are under `atlas-dungeon-parents-20261028` in the Windows
 development root. The ordinary game executable is unchanged; the runtime presentation data is updated.
 These parent metadata changes are newer than the archived Android 0.2.7 APK and need a later package.
+
+The subsequent verified ARM64 Release 0.2.8 / 111 includes this presentation data, matching source byte-for-byte.
+It was installed in place over USB on POCO and launched with OpenGL ES 3.0 and both modules loaded. Installed
+APK hashing, package flags and fresh before/after checks preserve the official installation and all five campaign
+saves. Physical Atlas acceptance remains separate; the user has been asked to test MM8 touch, fog/arrow and
+the Guide-to-Discovery roundtrip. Exact package, transfer and startup evidence is in `ATLAS_ANDROID_QA.md`.

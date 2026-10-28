@@ -155,8 +155,8 @@ prove those interactions or MM8 gameplay. The cached APK permits install retries
 
 | Check | Status |
 | --- | --- |
-| Install the verified Release and confirm its on-device version/flags | Passed for 0.2.5 / 108 via in-place USB update |
-| First launch, Extended marker and active Android renderer | Passed for 0.2.5; OpenGL ES 3.0 and two mods; earlier 0.2.0 capture showed live gameplay |
+| Install the verified Release and confirm its on-device version/flags | Passed for 0.2.8 / 111 via in-place USB update |
+| First launch, Extended marker and active Android renderer | Passed for 0.2.8; OpenGL ES 3.0 and two mods; earlier 0.2.0 capture showed live gameplay |
 | MM7 region, discovery fog and live party arrow | User confirms fog and arrow direction on 0.2.0; wider position/device checks remain open |
 | MM8 region, discovery fog and live party arrow | Pending |
 | Guide Mode entry responsiveness | User confirms noticeably faster incremental loading on POCO 0.2.2 |
@@ -164,7 +164,7 @@ prove those interactions or MM8 gameplay. The cached APK permits install retries
 | Touch navigation, search, filters, zoom and pan | Pending |
 | Notes and save/load persistence | Pending |
 | Atlas disabled through a mod profile; gameplay remains usable | Pending |
-| Official installation and save hashes after testing | Passed after 0.2.5 update, including Extended saves; repeat after remaining tests |
+| Official installation and save hashes after testing | Passed after 0.2.8 update, including Extended saves; repeat after remaining tests |
 
 Private APKs, verification reports, backups and captures are retained outside Git under the dated Android QA
 directory. Controller acceptance and the wider Atlas content matrix remain separate unfinished work.
@@ -231,3 +231,41 @@ Android acceptance of the newer height/shared-house fixes is still pending.
 The later Windows-validated MM7 dungeon-parent metadata update is newer than this 0.2.7 archive. It adds 25
 primary navigation parents in `engine/world/atlas/mm7.yml`; it needs a later runtime-data package before
 claiming Android coverage. The archived verified APK and its receipt are retained unchanged.
+
+## Prepared local Release, 2026-10-28: 0.2.8
+
+- Gameplay/data source: `fff9f5e980ee93425dc31fe0cfa9e6e49ab19a79`, application version
+  `0.2.8-atlas` / `111`. This includes all 25 MM7 primary dungeon parents as well as the height,
+  shared-house/Inn and controller fixes in the earlier packages.
+- The persistent ARM64 Release build passed in 973.4 seconds. The single changed runtime file required
+  asset staging/compression; native libraries stayed up-to-date and their packaged CRCs/sizes match 0.2.7.
+  Existing sources, tools and runtime caches were reused without downloading the payload again.
+- Package checks pass: separate application ID, non-debuggable Release, Android texture profile, 47 shaders,
+  persistent signing certificate with v1/v2 signatures, and 16 KiB ZIP/ELF alignment.
+- All 51,586 runtime entries were compared with the verified 0.2.2 seed: four declared changes, fifteen
+  additions, no deletions or unexpected changes/additions. All nineteen updated source assets match exactly,
+  including the MM7 presentation file and its 25 explicit primary parents. No MM6 Atlas updates are included.
+- Archived APK: `OpenYAMM-Extended-atlas-0.2.8-arm64.apk`, 3,469,823,648 bytes;
+  SHA256 `769f183a1909d0eb77a306e69a5896bd33eace45200eca766d37f10d5162419f`.
+
+Private package, source, signature, alignment, hierarchy and build receipts are retained under
+`atlas-android-028-20261028`. Its package acceptance receipt is separate from device installation and
+physical touch/visual acceptance. Android mounts the installed APK directly for runtime world/Atlas data;
+the small extracted shader/settings path does not own these metadata files.
+
+## Installed local Release, 2026-10-28: 0.2.8
+
+POCO reconnected over USB. Extended was not running before transfer or immediately before installation.
+Fresh snapshots recorded both package paths and all three official/two Extended save hashes. Uploading the
+verified APK to its own device cache took 99.83 seconds; its on-device SHA256 matched before `pm install -r`
+completed in 15.34 seconds. No uninstall, reset or data restoration was performed.
+
+Package Manager confirms `0.2.8-atlas` / `111`, non-debuggable. The installed base APK SHA256 matches the
+accepted artifact. The official package path and all five save hashes are unchanged. Extended then launched;
+its PID-filtered startup log confirms the Extended marker, direct mounting of the installed APK, OpenGL ES 3.0,
+Atlas 0.2.0 and karol.test 0.1.0 loaded together, without a fatal exception/signal in that startup log.
+
+Installation, startup and save-preservation receipts are retained under `atlas-android-028-20261028`.
+Physical Atlas touch/visual acceptance remains pending, including MM8 fog/party arrow and a Guide-to-Discovery
+roundtrip. The user has been asked to check those interactions on the installed package. Earlier confirmations
+of MM7 fog/direction and faster Guide loading still describe their original tested versions.

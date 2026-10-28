@@ -155,6 +155,13 @@ cases pass 132 UI steps / 24 captures, 40 post-UI steps and four fixture steps. 
 their source map/XY, add no indoor snapshots and keep the browsed dungeon unvisited. These data changes are
 newer than the prepared Android 0.2.7 APK. Details and deliberate non-geographic parent exceptions are in `ATLAS.md`.
 
+The subsequent Android Release 0.2.8 / 111 packages these 25 MM7 parents and all preceding height/shared-house
+fixes. Package/source-data, stable-signing and 16 KiB alignment checks pass. The in-place USB update on POCO
+succeeds; installed APK hash, non-debuggable flags, OpenGL ES startup and both modules are verified. Fresh
+before/after snapshots preserve the official package path and all three official/two Extended save hashes.
+MM8 touch/fog/arrow and Guide-to-Discovery privacy acceptance on this package is pending the user's test;
+installation/startup checks do not close those physical gates. See `ATLAS_ANDROID_QA.md` for exact evidence.
+
 Completion requires the missing native functions, data validation against the active game packages, meaningful
 unit/runtime checks and visual checks. A placeholder page or a list of unrelated journal text is not a completed
 quest guide. Reference data must describe the active merged/modded game, rather than silently assert vanilla rules.
