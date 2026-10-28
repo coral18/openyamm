@@ -1,0 +1,11 @@
+# 1600x900; load the projection tour's quicksave to check persisted discovery rendering.
+output_dir: reload-captures
+exit: true
+steps:
+- expect: gameplay
+- action: map_book
+- click: [1250, 770]
+- capture: discovery-reloaded
+- key: Escape
+- key: Escape
+- expect: gameplay

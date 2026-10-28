@@ -1,5 +1,30 @@
 # Atlas fixtures
 
+## Outdoor region rendering and persisted fog
+
+Use `tests/scenarios/atlas/region_projection_fixture.yml` as a separate private fixture per world/map.
+Take the `.odm` entries from `assets_dev/engine/world/atlas/mm7.yml` and `mm8.yml`: thirteen per world.
+Change the scenario ID, world, start map and map assertion for each copy. Keep isolated settings/mods/saves
+and immortal QA settings. For Shoals, equip armor item 1406: the campaign correctly kills an unsuited party.
+For Barrow Downs, insert `set_pose: {x: -2384, y: 3064, z: 2091, yaw: 0, pitch: -0.15}` before saving.
+That is the authored Stone City exit; the generic centre spawn overlaps geometry and causes a collision shift.
+These direct map starts/poses are diagnostic fixtures, not campaign traversal.
+
+Copy each temporary `before.oysav` into private `saves/before.oysav`. Run
+`tools/menu_tours/atlas_region_projection.yml` at 1600x900. It captures the Map Book, initial Discovery,
+Guide and returned Discovery, then writes `saves/quicksave.oysav`. Run the four-step post-UI check by loading
+each save and asserting the expected map, gold 5000 and food 10. Start a new native process from that quicksave
+with `tools/menu_tours/atlas_region_reload.yml`. Compare RGB crops `(47,228)-(1066,732)` for the map and
+`(1103,228)-(1520,732)` for the list against initial Discovery, both after Guide and after the fresh reload.
+Inspect the regional artwork/title and party arrow in the captures; crop equality does not validate every pin.
+
+Build target `openyamm_levelgen_inspect_save` and run it on both saves. Its diagnostic YAML now includes global
+discovery variables, current outdoor exploration masks and cached outdoor-map knowledge. The headless fixture
+has no rendered exploration; ordinary native activation reveals the party's local area and records visible
+creatures. Do not call that normal change a Guide leak or claim before/after full-save equality. The 2026-10-28
+run records only the active global map visit, no additional cached map keys, and local 149/315 full/partial cells.
+The fresh-process capture comparison checks that persisted fog reconstructs the pre-Guide Discovery view.
+
 ## Shared service entrances
 
 Run `tests/scenarios/atlas/mm8_shared_house_fixture.yml` with normal packages and separate private settings,

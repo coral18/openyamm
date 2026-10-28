@@ -3126,3 +3126,36 @@ Private receipts, source patch, logs and captures are under `atlas-shared-houses
 development root. The fixture uses an isolated party and an explicit door pose; it is not campaign traversal
 or a physical controller/phone acceptance test. These source changes are newer than the verified Android 0.2.6
 APK. Remaining device/content gates and the six unbound well declarations remain open.
+
+### All declared outdoor region views and persisted fog, 2026-10-28
+
+Native Windows checks now cover every outdoor entry declared by the two Atlas presentations: thirteen MM7 and
+thirteen MM8 regions. The campaign areas include Shoals and the MM8 elemental planes. The MM8 Tutorial entry
+and indoor overview anchors are outside this outdoor inventory. The mounted MM7/MM8 packages contain no
+`ui/maps/catalog.yml` presentation overrides, including case-insensitive filenames; their minimap and Atlas use
+the same default world extent and UV orientation. Future custom presentation support remains a decision item.
+
+Each isolated direct-map fixture captures Map Book, Discovery, Guide and returned Discovery, closes the UI and
+quicksaves. A separate native boot loads that quicksave and captures Discovery again. All 26 map and list RGB
+crops are identical to their pre-Guide view in both comparisons. Both thirteen-map artwork/contact sheets were
+inspected for titles, artwork and party arrows, with individual Map Book/Guide samples also inspected. These
+are rendered current-pose checks, not a complete per-pin geographic or campaign-traversal certification.
+
+The run passes 572 native UI steps with 130 fresh captures, 104 post-UI map/gold/food assertions/load steps and
+79 fixture steps. Shoals uses its required wetsuit rather than bypassing its lethal campaign rule. Barrow Downs
+uses the authored Stone City exit after its generic centre spawn was found to slide against geometry; the old
+fixture/logs are retained separately. All accepted fixture XY positions remain stable through the UI/save cycle.
+The ordinary game executable is unchanged from the shared-house checkpoint; only diagnostic tools/tours change.
+
+The existing save-inspection tool now emits discovery variables and outdoor exploration for the active and
+cached snapshots. Reading all 52 before/after saves finds no additional cached map keys and only the active
+map's global visit flag. Native activation legitimately changes the initially unrendered headless fixture:
+local terrain becomes 149 fully/315 partially revealed cells and visible-creature observations are recorded.
+Those fields are reported explicitly; before/after masks and full saves are not claimed equal. The separate
+fresh-process pixel comparison verifies the persisted Discovery result against the view captured before Guide.
+
+Public fixture/tours and reproduction instructions are in `tests/fixtures/atlas/README.md`. Private settings,
+saves, logs, 130 captures, contact sheets, inspection YAML and comparison receipts are under
+`atlas-region-rendering-20261028` in the Windows development root. These checks use AMD/OpenGL and engine-native
+captures. They do not establish Android/physical-controller acceptance, moving/sloped dungeon coverage or the
+remaining content matrix. No MM6 Atlas implementation or official phone-data writes were performed.

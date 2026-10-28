@@ -1,6 +1,9 @@
 #include "game/maps/SaveGame.h"
 
 #include <iostream>
+#include <string>
+#include <unordered_map>
+#include <utility>
 
 #include <yaml-cpp/yaml.h>
 
@@ -8,6 +11,30 @@ using namespace OpenYAMM::Game;
 
 namespace
 {
+YAML::Node discoveriesNode(const std::unordered_map<std::string, int32_t> &variables)
+{
+    YAML::Node result(YAML::NodeType::Map);
+    for (const auto &[name, value] : variables)
+        if (name.starts_with("openyamm.discovery.")) result[name] = value;
+    return result;
+}
+
+YAML::Node explorationNode(const OutdoorWorldRuntime::Snapshot &world)
+{
+    YAML::Node result;
+    for (const auto &[name, pCells] : {
+        std::pair{"fully_revealed_cells", &world.fullyRevealedCells},
+        std::pair{"partially_revealed_cells", &world.partiallyRevealedCells}})
+    {
+        YAML::Node values(YAML::NodeType::Sequence);
+        for (uint8_t cell : *pCells) values.push_back(uint32_t(cell));
+        result[name] = values;
+    }
+    result["discoveries"] = world.eventRuntimeState
+        ? discoveriesNode(world.eventRuntimeState->namedMapVars) : YAML::Node(YAML::NodeType::Map);
+    return result;
+}
+
 YAML::Node itemsNode(const std::vector<InventoryItem> &items)
 {
     YAML::Node result(YAML::NodeType::Sequence);
@@ -115,6 +142,10 @@ int main(int argc, char **argv)
     result["game_minutes"] = save->savedGameMinutes;
     result["gold"] = save->party.gold;
     result["food"] = save->party.food;
+    result["discoveries"] = discoveriesNode(save->namedGlobalVars);
+    result["outdoor_states"] = YAML::Node(YAML::NodeType::Map);
+    for (const auto &[name, world] : save->outdoorWorldStates)
+        result["outdoor_states"][name] = explorationNode(world);
     result["house_stock_seed"] = save->party.houseStockSeed;
     result["held_item_active"] = save->heldInventoryItemActive;
     result["held_item_id"] = save->heldInventoryItem.objectDescriptionId;
@@ -138,6 +169,7 @@ int main(int argc, char **argv)
     if (save->hasOutdoorRuntimeState)
     {
         result["outdoor"] = worldNode(save->outdoorWorld);
+        result["outdoor"]["exploration"] = explorationNode(save->outdoorWorld);
         result["outdoor"]["projectile_count"] = save->outdoorWorld.projectiles.size();
         result["outdoor"]["actor_count"] = save->outdoorWorld.mapActors.size();
         result["outdoor"]["timer_count"] = save->outdoorWorld.timers.size();

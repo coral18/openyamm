@@ -1,0 +1,19 @@
+# 1600x900; isolated current-region save with Atlas enabled.
+output_dir: captures
+exit: true
+steps:
+- expect: gameplay
+- action: map_book
+- capture: map-book
+- click: [1250, 770]
+- capture: discovery-before
+- click: [1152, 57]
+- wait: 2
+- capture: guide-region
+- click: [1152, 57]
+- capture: discovery-after
+- key: Escape
+- key: Escape
+- expect: gameplay
+- key: F9
+- wait: 0.5

@@ -132,6 +132,15 @@ post-UI verifiers pass 41 steps and two fresh real-door fixture runs add 18 step
 Discovery map/list crops remain identical after Guide. This validates the shared-house fix and sampled UI/save
 paths, not every conditional placement or physical Android input. It is newer than the prepared 0.2.6 APK.
 
+The subsequent native regional check covers all 26 declared outdoor maps, thirteen per world. Map/list RGB
+crops remain identical after Guide and after loading the resulting quicksave in a fresh native process.
+The run passes 572 UI steps / 130 fresh captures, 104 post-UI state steps and 79 fixture steps. Contact sheets
+show all regional artwork/titles/arrows. Reading 52 saves verifies that no extra cached map keys or remote
+global map visits appear; ordinary initial rendering reveals only the local terrain (149/315 full/partial cells).
+This strengthens regional rendering/persistence coverage without certifying every pin or campaign state.
+Shoals requires the real wetsuit; Barrow Downs uses the authored Stone City exit to avoid a colliding centre
+spawn. Reproduction and the precise limits are recorded in `ATLAS.md` and the fixture README.
+
 Completion requires the missing native functions, data validation against the active game packages, meaningful
 unit/runtime checks and visual checks. A placeholder page or a list of unrelated journal text is not a completed
 quest guide. Reference data must describe the active merged/modded game, rather than silently assert vanilla rules.
