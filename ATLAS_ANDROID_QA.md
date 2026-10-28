@@ -178,3 +178,24 @@ The sidebar D-pad follow-up and Android device acceptance remain pending.
 The 2026-10-28 adaptive dungeon-height refinement and indoor surface-base anchors are validated in Windows
 source builds. They are absent from the verified/installed 0.2.5 APK and need a subsequent Release package and
 device checks. Existing Android acceptance above describes its stated application version, not unbuilt source.
+
+## Prepared local Release, 2026-10-28: 0.2.6
+
+- Gameplay/height source: `9cb74df70923297f5ff1ecf6c3f9b55d6d545e0a`, with application version
+  `0.2.6-atlas` / `109`. This packages adaptive known dungeon-height slices, indoor surface-base anchors and
+  the scripted keyboard-tour fix. Existing saves keep the same schema and module requirements.
+- The persistent local ARM64 Release build passed in 536.8 seconds. The Windows host reported no native work;
+  Android runtime staging and asset compression remained up-to-date. Sources, tools and payloads were reused.
+- Package checks pass for the separate application ID, non-debuggable Release, Android texture profile,
+  47 shaders and source-matching Atlas/module files. All 51,586 runtime entries match the verified seed except
+  the same three declared changes and 15 additions; there are no deletions or unexpected changes/additions.
+  All 18 source-data updates match exactly. This update changes native code, not the runtime data set.
+- The persistent Extended certificate and v1/v2 signatures pass, along with 16 KiB ZIP alignment and ELF LOAD
+  alignment for all three native libraries.
+- Archived APK: `OpenYAMM-Extended-atlas-0.2.6-arm64.apk`, 3,469,817,479 bytes;
+  SHA256 `e094dfd7f2b77a19c54719e9ef6664dd2f37f57b258cb95fe5a5cb98b485809d`.
+
+Private APK, build/source receipts and package/signature/alignment reports are retained under
+`atlas-android-026-20261028`. ADB lists no device at package acceptance despite the user's reported USB
+connection. No transfer, installation or phone-data write was attempted. The last verified installed version
+is 0.2.5 / 108; adaptive-height acceptance on POCO remains pending.

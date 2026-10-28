@@ -3082,3 +3082,8 @@ fixtures and post-UI verifiers. Private source/log/capture receipts are under `a
 in the Windows development root. Pose shortcuts and isolated immortal QA settings are not campaign traversal or
 physical device input. The adaptive code is not in the verified Android 0.2.5 package yet. Remaining phone,
 sloped/mechanism-driven map and content gates stay open; no MM6 Atlas work was performed.
+
+The subsequent persistent local Android build packages this code as Release `0.2.6-atlas` / `109` in 536.8
+seconds. Package/source-data, stable-signing and native/ZIP alignment checks pass; the 18 runtime data updates
+are unchanged from 0.2.5. ADB lists no device, so this is a prepared APK rather than a POCO installation or
+physical-height acceptance. Artifact hashes and evidence are in `ATLAS_ANDROID_QA.md`.

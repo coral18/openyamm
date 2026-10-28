@@ -78,7 +78,9 @@ centroids. A focused package recheck passes all 110 BLVs and 807 partial-knowled
 across 80 maps, including platforms. Ten native tours pass 450 steps / 71 captures and six post-UI verifiers pass
 93 steps. Refined-note ownership/elevation survives save/load, and the four diagnostic Discovery map/list views
 are unchanged after Guide. This improves height filtering; semantic storeys, slopes and moving geometry are not
-certified by it. The change is not yet packaged for Android. Details are in `ATLAS.md`.
+certified by it. The subsequent local Android Release 0.2.6 / 109 packages this fix and passes package,
+source-data, persistent-signing and 16 KiB alignment checks. ADB lists no device, so installation and physical
+acceptance of that package remain pending. Details are in `ATLAS.md` and `ATLAS_ANDROID_QA.md`.
 
 Reference feature inventories:
 
