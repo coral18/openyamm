@@ -3159,3 +3159,8 @@ saves, logs, 130 captures, contact sheets, inspection YAML and comparison receip
 `atlas-region-rendering-20261028` in the Windows development root. These checks use AMD/OpenGL and engine-native
 captures. They do not establish Android/physical-controller acceptance, moving/sloped dungeon coverage or the
 remaining content matrix. No MM6 Atlas implementation or official phone-data writes were performed.
+
+The subsequent local Android Release `0.2.7-atlas` / `110` packages the shared-house/Inn fixes together with
+the adaptive height code. Package/source-data, persistent-signing and 16 KiB alignment checks pass; the
+18 runtime data updates are unchanged from 0.2.6. No phone is detected by ADB/Windows PnP, so this is a prepared
+APK, not an installed or physically accepted release. See `ATLAS_ANDROID_QA.md` for the archive and hash.

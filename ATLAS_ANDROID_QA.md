@@ -203,3 +203,27 @@ is 0.2.5 / 108; adaptive-height acceptance on POCO remains pending.
 The subsequent Windows-validated shared-house entrance, unused Guide-building-row and Inn-overlay discovery
 fixes are newer source changes. They are not in this archived 0.2.6 APK. The verified package is retained
 unchanged; a subsequent Release must package these fixes before claiming Android acceptance of them.
+
+## Prepared local Release, 2026-10-28: 0.2.7
+
+- Source snapshot: `d6cd33d17c7ccd0eef0b9dcde5966da106404961`, with application version
+  `0.2.7-atlas` / `110`. This packages the shared-house physical entrances, local service selection/search,
+  unused Guide-building-row filtering and real Inn-overlay discovery from `82d00f4`. Adaptive height slices
+  from 0.2.6 are retained. The source checkpoint also records the completed Windows outdoor-region checks.
+- The cached local ARM64 Release build passed in 536.1 seconds. The Windows host reported no native work;
+  Android runtime staging and asset compression remained up-to-date. The eight changed build-source files
+  checked against the previous Android code base match the Windows mirror exactly.
+- Package checks pass: separate application ID, non-debuggable Release, Android texture profile, 47 shaders
+  and source-matching Atlas/module files. All 51,586 runtime entries match the verified seed except the same
+  three declared changes and 15 additions, with no deletions or unexpected changes/additions. All 18 updated
+  source-data files match exactly; the runtime data set is unchanged from 0.2.6.
+- The persistent Extended certificate and v1/v2 signatures pass, as do 16 KiB ZIP alignment and ELF LOAD
+  alignment for all three native libraries.
+- Archived APK: `OpenYAMM-Extended-atlas-0.2.7-arm64.apk`, 3,469,823,443 bytes;
+  SHA256 `fdbc3815b2d67fca4c42b887db6edb69e08ac78f9af65af92878c0f161bb2056`.
+
+Private APK, build/source receipts, stable-signing/alignment reports and the package verifier are retained under
+`atlas-android-027-20261028`. ADB lists no device at acceptance, and a Windows PnP check finds no matching phone.
+No transfer, installation, uninstall or phone-data write was attempted. The last verified installed version
+remains 0.2.5 / 108. This package is ready for an in-place update when USB connectivity is restored; physical
+Android acceptance of the newer height/shared-house fixes is still pending.

@@ -141,6 +141,11 @@ This strengthens regional rendering/persistence coverage without certifying ever
 Shoals requires the real wetsuit; Barrow Downs uses the authored Stone City exit to avoid a colliding centre
 spawn. Reproduction and the precise limits are recorded in `ATLAS.md` and the fixture README.
 
+Local Android Release 0.2.7 / 110 now packages the shared-house/Inn fixes, retaining adaptive height slices.
+Its package/source-data, stable-signing and 16 KiB alignment gates pass. ADB and a targeted Windows PnP check
+find no phone, so installation and physical device acceptance remain open; the last verified installed version
+is 0.2.5 / 108. Artifact hashes and exact package evidence are in `ATLAS_ANDROID_QA.md`.
+
 Completion requires the missing native functions, data validation against the active game packages, meaningful
 unit/runtime checks and visual checks. A placeholder page or a list of unrelated journal text is not a completed
 quest guide. Reference data must describe the active merged/modded game, rather than silently assert vanilla rules.
