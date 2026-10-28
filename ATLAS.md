@@ -3164,3 +3164,35 @@ The subsequent local Android Release `0.2.7-atlas` / `110` packages the shared-h
 the adaptive height code. Package/source-data, persistent-signing and 16 KiB alignment checks pass; the
 18 runtime data updates are unchanged from 0.2.6. No phone is detected by ADB/Windows PnP, so this is a prepared
 APK, not an installed or physically accepted release. See `ATLAS_ANDROID_QA.md` for the archive and hash.
+
+### Dungeon navigation parents, 2026-10-28
+
+The active entrance audit found eleven MM7 dungeons with an outdoor entrance but no primary parent in the
+World Database. The existing presentation metadata now supplies 25 missing primary navigation parents:
+Markham's Manor, the Dragon's Lair, Tunnels to Eeofol, the Haunted Mansion, all fifteen Barrows, Zokarr's Tomb,
+Wromthrax's Cave, Setag's Tower, the Hidden Tomb, the Dragon Caves and the Bandit Caves. Additional internal
+Barrows and the Hidden Tomb are backed by the authored connection/return graph. The primary parent describes
+navigation; all actual entrances and conditional branches remain in the connection graph. This uses the
+existing schema/data path. `MapStats.areaId` also controls respawn, which is why navigation metadata belongs here.
+
+The new regression loads full active geometry, scenes and event overlays for all 27 MM7/MM8 outdoor entries,
+including the MM8 Tutorial entry. It validates 78 dungeons with one outdoor entrance region and one with more
+than one, plus all 70 explicit parents across both presentations against the authored connection graph.
+MM7 dungeons with a fixed primary navigation region now have parents. Celeste and the Pit retain their anchors; Arena,
+the portable Strange Temple, Nighon Tunnels and the Small House retain their deliberate unparented status.
+The latter maps support non-geographic or multiple-root travel, including the Temple's actual saved-return
+override. No single parent is inferred from a random/conditional branch.
+
+The focused hierarchy check passes 1,554 assertions; the broader World Database/Guide/interaction suite passes
+127 cases / 46,013 assertions. Four native AMD/OpenGL cases pass 132 UI steps with 24 fresh captures, 40
+post-UI state steps and one four-step fresh fixture. They cover region-list entry and dungeon-plan selection
+for Zokarr's Tomb, Markham's Manor and the Hidden Tomb, plus an MM8 Abandoned Temple control. Their filtered
+Discovery lists match after a fresh quicksave reload. Eight inspected saves keep the source map/party XY,
+leave the browsed dungeon undiscovered and add no indoor snapshots or cached outdoor-map keys. The existing
+save inspector now exposes cached indoor-map names for this check. It does not claim complete save equality.
+
+Reproduce with `mm7_dungeon_parent_fixture.yml`, `atlas_dungeon_parent.yml` and
+`atlas_dungeon_parent_reload.yml`; the fixture README describes the other map/title variants and post-UI
+checks. Private source/log/capture/save receipts are under `atlas-dungeon-parents-20261028` in the Windows
+development root. The ordinary game executable is unchanged; the runtime presentation data is updated.
+These parent metadata changes are newer than the archived Android 0.2.7 APK and need a later package.

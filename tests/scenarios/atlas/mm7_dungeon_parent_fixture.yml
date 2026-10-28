@@ -1,0 +1,15 @@
+id: atlas.mm7_dungeon_parent_fixture
+title: Isolated Barrow Downs party beside the authored Stone City exit
+world: mm7
+mode: faithful
+steps:
+- new_game_flow:
+    start_map: out11.odm
+    party:
+      gold: 5000
+      food: 10
+      members:
+      - {name: Atlas Tester, class: Knight, level: 20, race_id: 0, skills: [], equipment: {}}
+- set_pose: {x: -2384, y: 3064, z: 2091, yaw: 0, pitch: -0.15}
+- assert: {map: out11.odm}
+- save_game: before

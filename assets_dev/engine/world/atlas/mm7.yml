@@ -20,3 +20,30 @@ maps:
   - {file: 7out13.odm, area: 13, position: [0.28, 0.60]}
   - {file: out14.odm, area: 14, position: [0.54, 0.16]}
   - {file: 7out15.odm, area: 15, position: [0.36, 0.16]}
+# Primary navigation parents from active outdoor entrances and authored return routes.
+# Dungeon connection graphs retain all other entrances and conditional branches.
+  - {file: 7d13.blv, parent: out11.odm}
+  - {file: 7d18.blv, parent: 7out13.odm}
+  - {file: 7d28.blv, parent: 7out01.odm}
+  - {file: 7d36.blv, parent: out12.odm}
+  - {file: 7d37.blv, parent: out11.odm}
+  - {file: mdk01.blv, parent: out11.odm}
+  - {file: mdk02.blv, parent: out11.odm}
+  - {file: mdk03.blv, parent: out11.odm}
+  - {file: mdk04.blv, parent: out11.odm}
+  - {file: mdk05.blv, parent: out11.odm}
+  - {file: mdt01.blv, parent: out11.odm}
+  - {file: mdt02.blv, parent: out11.odm}
+  - {file: mdt03.blv, parent: out11.odm}
+  - {file: mdt04.blv, parent: out11.odm}
+  - {file: mdt05.blv, parent: out11.odm}
+  - {file: mdr01.blv, parent: out11.odm}
+  - {file: mdr02.blv, parent: out11.odm}
+  - {file: mdr03.blv, parent: out11.odm}
+  - {file: mdr04.blv, parent: out11.odm}
+  - {file: mdr05.blv, parent: out11.odm}
+  - {file: mdt09.blv, parent: 7out13.odm}
+  - {file: mdt10.blv, parent: 7out05.odm}
+  - {file: mdt11.blv, parent: 7out03.odm}
+  - {file: mdt12.blv, parent: out12.odm}
+  - {file: mdt14.blv, parent: 7out03.odm}

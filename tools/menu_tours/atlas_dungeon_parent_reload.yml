@@ -1,0 +1,15 @@
+# 1600x900; the parent tour's quicksave must still treat Zokarr's Tomb as unvisited.
+output_dir: reload-captures
+exit: true
+steps:
+- expect: gameplay
+- action: map_book
+- click: [1250, 770]
+- click: [885, 126]
+- click: [275, 126]
+- text: Zokarr's Tomb
+- key: Return
+- capture: child-still-unknown-after-reload
+- key: Escape
+- key: Escape
+- expect: gameplay

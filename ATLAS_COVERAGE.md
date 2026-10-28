@@ -146,6 +146,15 @@ Its package/source-data, stable-signing and 16 KiB alignment gates pass. ADB and
 find no phone, so installation and physical device acceptance remain open; the last verified installed version
 is 0.2.5 / 108. Artifact hashes and exact package evidence are in `ATLAS_ANDROID_QA.md`.
 
+The subsequent hierarchy audit repairs 25 missing MM7 primary dungeon parents using the existing presentation
+schema, including the full Barrows/Zokarr cluster and the Hidden Tomb. Active geometry/scene/overlay checks
+cover 27 outdoor maps, 78 single-outdoor-region dungeon entries and one multi-region entry. All 70 explicit
+MM7/MM8 parents have an authored connection path. The focused check passes 1,554 assertions; the broader
+World Database/Guide/interaction suite passes 127 cases / 46,013 assertions. Four native navigation/privacy
+cases pass 132 UI steps / 24 captures, 40 post-UI steps and four fixture steps. Eight inspected saves retain
+their source map/XY, add no indoor snapshots and keep the browsed dungeon unvisited. These data changes are
+newer than the prepared Android 0.2.7 APK. Details and deliberate non-geographic parent exceptions are in `ATLAS.md`.
+
 Completion requires the missing native functions, data validation against the active game packages, meaningful
 unit/runtime checks and visual checks. A placeholder page or a list of unrelated journal text is not a completed
 quest guide. Reference data must describe the active merged/modded game, rather than silently assert vanilla rules.

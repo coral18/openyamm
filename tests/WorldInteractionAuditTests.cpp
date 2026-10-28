@@ -5,6 +5,7 @@
 #include "game/indoor/IndoorMapData.h"
 #include "game/outdoor/OutdoorMapData.h"
 #include "game/world/WorldDatabase.h"
+#include "game/world/WorldAtlasPresentation.h"
 #include "game/world/WorldGuide.h"
 #include "game/party/Party.h"
 #include "game/events/EventRuntime.h"
@@ -18,6 +19,112 @@
 #include <map>
 #include <set>
 #include <string>
+
+TEST_CASE("Atlas dungeon parents agree with active physical outdoor entrances")
+{
+    using namespace OpenYAMM::Game;
+    REQUIRE_MESSAGE(OpenYAMM::Tests::regressionMapLoaderLoaded(),
+        OpenYAMM::Tests::regressionMapLoaderFailure());
+    const auto &fixture = OpenYAMM::Tests::regressionMapLoader();
+    const auto &data = fixture.gameDataLoader;
+    size_t auditedMaps = 0, singleParents = 0, multipleParents = 0, checkedExplicitParents = 0;
+    for (const std::string &worldId : {"mm7", "mm8"})
+    {
+        const WorldAtlasPresentation presentation = loadWorldAtlasPresentation(fixture.assetFileSystem, worldId);
+        WorldDatabase world(data.getMapStats(), data.getHouseTable(), data.getNpcDialogTable(),
+            data.getMergedTeacherTopicTable(), worldId, presentation.maps);
+        std::map<std::string, std::set<std::string>> entrances;
+        for (const MapStatsEntry &entry : data.getMapStats().getEntries())
+        {
+            if (entry.worldId != worldId || !entry.fileName.ends_with(".odm")) continue;
+            CAPTURE(entry.fileName);
+            auto map = MapAssetLoader().load(fixture.assetFileSystem, entry, data.getMonsterTable(),
+                data.getObjectTable(), MapLoadPurpose::HeadlessGameplay);
+            REQUIRE(map);
+            REQUIRE(map->outdoorMapData);
+            std::string error;
+            REQUIRE_MESSAGE(GameDataLoader::loadEventPrograms(fixture.assetFileSystem, *map, error), error);
+            REQUIRE(map->localEventProgram);
+            world.indexMapLocations(*map->outdoorMapData, *map->localEventProgram);
+            ++auditedMaps;
+            for (const WorldMapLocation &location : world.queryLocations({}, true, WorldDatabase::mapId(entry)))
+            {
+                const WorldRecord *pTarget = world.find(location.recordId);
+                REQUIRE(pTarget != nullptr);
+                // Celeste, the Pit and the Plane of Earth have their own explicit overview anchors.
+                if (pTarget->kind == WorldRecordKind::Dungeon && !pTarget->position)
+                    entrances[pTarget->id].insert(location.mapId);
+            }
+        }
+        for (const auto &[id, sources] : entrances)
+        {
+            const WorldRecord *pTarget = world.find(id);
+            REQUIRE(pTarget != nullptr);
+            CAPTURE(pTarget->map->fileName);
+            CAPTURE(pTarget->parentId);
+            if (sources.size() == 1)
+            {
+                ++singleParents;
+                CAPTURE(*sources.begin());
+                CHECK(pTarget->parentId == *sources.begin());
+            }
+            else
+            {
+                ++multipleParents;
+                if (!pTarget->parentId.empty()) CHECK(sources.contains(pTarget->parentId));
+            }
+        }
+        for (const MapStatsEntry &entry : data.getMapStats().getEntries())
+        {
+            if (entry.worldId != worldId) continue;
+            MapAssetInfo metadata;
+            metadata.map = entry;
+            std::string error;
+            REQUIRE_MESSAGE(GameDataLoader::loadEventPrograms(fixture.assetFileSystem, metadata, error), error);
+            REQUIRE(metadata.localEventProgram);
+            world.indexMapConnections(entry, *metadata.localEventProgram);
+        }
+        WorldKnowledge unknown;
+        for (const WorldMapPresentation &entry : presentation.maps)
+        {
+            if (entry.parentFileName.empty()) continue;
+            CAPTURE(entry.fileName);
+            const MapStatsEntry *pEntry = data.getMapStats().findByFileName(entry.fileName);
+            REQUIRE(pEntry != nullptr);
+            const WorldRecord *pChild = world.find(WorldDatabase::mapId(*pEntry));
+            REQUIRE(pChild != nullptr);
+            const auto graph = buildWorldConnectionGraph(world, unknown, pChild->id, true);
+            CHECK(std::any_of(graph.nodes.begin(), graph.nodes.end(), [&](const MapStatsEntry *pNode)
+                { return WorldDatabase::mapId(*pNode) == pChild->parentId; }));
+            CHECK_FALSE(world.visible(*pChild, unknown, false));
+            ++checkedExplicitParents;
+        }
+        if (worldId == "mm7")
+        {
+            for (const WorldRecord &record : world.records())
+            {
+                if (record.kind != WorldRecordKind::Dungeon || record.position) continue;
+                const std::string &file = record.map->fileName;
+                CAPTURE(file);
+                // Arena/portable Temple travel is not geographic; the tunnel/house bridge distinct roots.
+                if (file == "7d05.blv" || file == "7nwc.blv" || file == "7d35.blv" || file == "mdt15.blv")
+                    CHECK(record.parentId.empty());
+                else CHECK_FALSE(record.parentId.empty());
+            }
+            WorldKnowledge regionKnown;
+            regionKnown.visitedMaps.insert("out11.odm");
+            const std::string parent = WorldDatabase::mapId(*data.getMapStats().findByFileName("out11.odm"));
+            CHECK(world.query(regionKnown, false, "", WorldRecordKind::Dungeon, parent).empty());
+            CHECK(world.query(regionKnown, true, "Barrow", WorldRecordKind::Dungeon, parent).size() == 15);
+            CHECK(regionKnown.floorPlans.empty());
+            CHECK(regionKnown.variables.empty());
+        }
+    }
+    CHECK(auditedMaps == 27);
+    CHECK(singleParents > 40);
+    MESSAGE("Active outdoor entrance hierarchy: maps=", auditedMaps, ", one outdoor entry region=", singleParents,
+        ", multiple outdoor entry regions=", multipleParents, ", explicit parents=", checkedExplicitParents);
+}
 
 TEST_CASE("active scripted monster spawn catalog resolves current MM7 and MM8 encounters without discoveries")
 {

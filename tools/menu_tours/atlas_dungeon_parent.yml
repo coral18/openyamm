@@ -1,0 +1,26 @@
+# 1600x900; a known Barrow Downs fixture with Zokarr's Tomb unvisited.
+output_dir: captures
+exit: true
+steps:
+- expect: gameplay
+- action: map_book
+- click: [1250, 770]
+- click: [885, 126]
+- click: [275, 126]
+- text: Zokarr's Tomb
+- key: Return
+- capture: undiscovered-child
+- click: [1152, 57]
+- wait: 2
+- capture: guide-child-in-parent
+- click: [1250, 260]
+- wait: 0.3
+- capture: guide-dungeon-plan
+- click: [1152, 57]
+- capture: discovery-child-still-unknown
+- key: Escape
+- capture: returned-source-map-book
+- key: Escape
+- expect: gameplay
+- key: F9
+- wait: 0.5

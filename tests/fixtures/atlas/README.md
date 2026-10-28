@@ -1,5 +1,25 @@
 # Atlas fixtures
 
+## Dungeon parent navigation
+
+Run `tests/scenarios/atlas/mm7_dungeon_parent_fixture.yml` with normal packages and isolated settings/mods/saves.
+Copy its temporary `before.oysav` to private `saves/before.oysav`, then run
+`tools/menu_tours/atlas_dungeon_parent.yml` at 1600x900. Before Guide, the filtered unvisited Zokarr's Tomb
+list should be empty. Guide should list it under Barrow Downs and selecting the row should open its dungeon
+plan. Turning Guide off must leave it unvisited; closing the UI returns to the source map's Map Book.
+
+The tour writes `saves/quicksave.oysav`. Load it in a fresh process with
+`tools/menu_tours/atlas_dungeon_parent_reload.yml`; the filtered child list should match the initial empty
+Discovery list. A post-UI headless check should load before/quicksave, assert map `out11.odm`, gold 5000,
+food 10 and `openyamm.discovery.world.mm7.map.7d13 = 0`, then save/load once more and repeat those assertions.
+Inspect both saves with `openyamm_levelgen_inspect_save`: cached indoor names and outdoor keys must not grow
+from merely browsing the dungeon. The source XY stays at the authored Stone City exit.
+
+Other 2026-10-28 cases reuse the verified isolated region fixtures: Tatalia → `Lord Markham's Manor`
+(`7d18.blv`), Erathia → `The Hidden Tomb` (`mdt11.blv`), and MM8 Dagger Wound → `Abandoned Temple`
+(`d05.blv`). Replace the tour search text and the post-UI source/target keys in each private copy.
+These are direct-map/current-pose checks, not traversal, every entrance's visibility or Android acceptance.
+
 ## Outdoor region rendering and persisted fog
 
 Use `tests/scenarios/atlas/region_projection_fixture.yml` as a separate private fixture per world/map.

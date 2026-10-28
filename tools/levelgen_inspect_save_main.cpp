@@ -146,6 +146,9 @@ int main(int argc, char **argv)
     result["outdoor_states"] = YAML::Node(YAML::NodeType::Map);
     for (const auto &[name, world] : save->outdoorWorldStates)
         result["outdoor_states"][name] = explorationNode(world);
+    result["indoor_state_maps"] = YAML::Node(YAML::NodeType::Sequence);
+    for (const auto &[name, scene] : save->indoorSceneStates)
+        result["indoor_state_maps"].push_back(name);
     result["house_stock_seed"] = save->party.houseStockSeed;
     result["held_item_active"] = save->heldInventoryItemActive;
     result["held_item_id"] = save->heldInventoryItem.objectDescriptionId;

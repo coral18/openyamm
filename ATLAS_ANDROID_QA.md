@@ -227,3 +227,7 @@ Private APK, build/source receipts, stable-signing/alignment reports and the pac
 No transfer, installation, uninstall or phone-data write was attempted. The last verified installed version
 remains 0.2.5 / 108. This package is ready for an in-place update when USB connectivity is restored; physical
 Android acceptance of the newer height/shared-house fixes is still pending.
+
+The later Windows-validated MM7 dungeon-parent metadata update is newer than this 0.2.7 archive. It adds 25
+primary navigation parents in `engine/world/atlas/mm7.yml`; it needs a later runtime-data package before
+claiming Android coverage. The archived verified APK and its receipt are retained unchanged.
