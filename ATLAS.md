@@ -3202,3 +3202,28 @@ It was installed in place over USB on POCO and launched with OpenGL ES 3.0 and b
 APK hashing, package flags and fresh before/after checks preserve the official installation and all five campaign
 saves. Physical Atlas acceptance remains separate; the user has been asked to test MM8 touch, fog/arrow and
 the Guide-to-Discovery roundtrip. Exact package, transfer and startup evidence is in `ATLAS_ANDROID_QA.md`.
+
+### Requested item references, 2026-10-28
+
+The journal relationship audit found seven explicitly requested item objectives missing from the shared
+registry. The existing data table now links MM8's portal crystal quest to Power Stone 617 and Sandro's
+request to Nightshade Brazier 604. MM7's two Perfect Bow quests both request 1344, the Archmage request uses
+the MM7 Divine Intervention book 1289, Tarin requests Lantern of Light 1450 and Davrik requests Signet Ring
+1408. The registry now has 145 quests / 602 relationships. No reward, promotion or event behavior changes.
+
+IDs follow active gameplay: global event 21 grants stone 617, rather than identically named 618; the active
+MM7 `Global_mm7_mmmerge.lua` promotion overlays 816/820 consume bow 1344 and award 1345, while 845 consumes
+book 1289. The original quest requests and item table identify the other objectives. This uses the existing
+disclosed-objective path, without adding coordinates or marking unseen item properties as identified.
+
+The targeted shared-data test passes 114 assertions, checking all seven requests, same-name variant exclusion,
+Guide isolation, accepted/history labels and identification-gated item links. The broader World Guide suite
+passes 47 cases / 1,847 assertions. Two faithful headless scenarios pass 22 steps: actual MM7 Lantern/Signet
+requests and MM8 portal-crystal acceptance, with the new objective discovery keys preserved after save/load.
+The MM8 fixture first requires the real Portals of Stone topic before the request becomes available; its
+initial fixture failure is retained. These dialogue checks address NPCs by ID and do not prove physical travel.
+
+Reproduction scenarios are `mm7_requested_item_knowledge.yml` and `mm8_requested_item_knowledge.yml` under
+`tests/scenarios/atlas/`. Private logs and source receipts are under `atlas-quest-items-20261028` in the Windows
+development root. This source/runtime update is newer than the installed Android 0.2.8 APK; that archived APK
+remains unchanged. The user separately confirmed MM8 fog and arrow on POCO 0.2.8, as recorded in Android QA.

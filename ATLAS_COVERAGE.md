@@ -162,6 +162,15 @@ before/after snapshots preserve the official package path and all three official
 MM8 touch/fog/arrow and Guide-to-Discovery privacy acceptance on this package is pending the user's test;
 installation/startup checks do not close those physical gates. See `ATLAS_ANDROID_QA.md` for exact evidence.
 
+The user subsequently confirms MM8 discovery fog and the party arrow on installed POCO 0.2.8. Guide roundtrip,
+wider touch input, dungeon heights and broader physical coverage remain separate checks.
+
+The following shared-data audit adds seven missing requested-item relationships, bringing the registry to
+145 quests / 602 relationships. Same-name stone/bow/book variants follow the actual grant/consumption paths;
+accepted clues do not identify unseen items. The shared Guide suite passes 47 cases / 1,847 assertions, and
+actual MM7/MM8 request/save/load scenarios pass 22 steps. This data update is newer than Android 0.2.8;
+the detailed provenance and reproduction paths are in `ATLAS.md`.
+
 Completion requires the missing native functions, data validation against the active game packages, meaningful
 unit/runtime checks and visual checks. A placeholder page or a list of unrelated journal text is not a completed
 quest guide. Reference data must describe the active merged/modded game, rather than silently assert vanilla rules.

@@ -1,0 +1,29 @@
+id: atlas.mm8_requested_item_knowledge
+title: Actual portal crystal request retains its specific Power Stone clue after reload
+world: mm8
+mode: faithful
+steps:
+- new_game_flow:
+    start_map: out01.odm
+- speak_npc:
+    source_id: 1
+- select_topic:
+    kind: npc_topic
+    action_id: 8
+- select_topic:
+    kind: npc_topic
+    action_id: 21
+- press_action:
+    action: cancel_dialog
+- assert:
+    qbit_set: [7]
+    named_global_var_changed:
+      name: openyamm.discovery.quest/7/location/objective/item/617
+      value: 1
+- save_game: requested-items
+- load_game: requested-items
+- assert:
+    qbit_set: [7]
+    named_global_var_changed:
+      name: openyamm.discovery.quest/7/location/objective/item/617
+      value: 1

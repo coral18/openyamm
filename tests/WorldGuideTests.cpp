@@ -931,6 +931,70 @@ TEST_CASE("world guide quest relationships resolve against the current shared co
     }
 }
 
+TEST_CASE("quest item objectives use requested merged variants without identifying unseen items")
+{
+    JournalQuestTable quests;
+    REQUIRE(quests.loadFromRows(guideTableRows("english/quests.txt")));
+    REQUIRE(quests.loadLocationRows(guideTableRows("quest_locations.txt")));
+    OpenYAMM::Engine::AssetFileSystem assets;
+    ItemTable items;
+    REQUIRE(items.load(assets, guideTableRows("items.txt"), {}));
+    WorldGuideSource source;
+    source.pQuests = &quests;
+    source.pItems = &items;
+    struct Request
+    {
+        const char *pWorld;
+        uint32_t quest;
+        uint32_t item;
+        uint32_t otherVariant;
+    };
+    // Event 21 grants stone 617, not the identically named 618. MM7 active promotion overlays
+    // consume bow 1344 (reward 1345) and MM7 book 1289, not the MM8 book 487 or scroll 1189.
+    for (const Request &request : std::vector<Request>{
+        {"mm8", 7, 617, 618}, {"mm8", 28, 604, 0}, {"mm7", 542, 1344, 1345},
+        {"mm7", 544, 1344, 1345}, {"mm7", 559, 1289, 487},
+        {"mm7", 667, 1450, 0}, {"mm7", 669, 1408, 0}})
+    {
+        CAPTURE(request.quest);
+        CAPTURE(request.item);
+        source.worldId = request.pWorld;
+        const ItemDefinition *pItem = items.get(request.item);
+        REQUIRE(pItem != nullptr);
+        const auto hasItemLink = [&](const WorldGuideEntry &entry, uint32_t id)
+        {
+            return std::any_of(entry.links.begin(), entry.links.end(), [&](const WorldGuideLink &link)
+                { return link.kind == WorldGuideLink::Kind::Item && link.target == std::to_string(id); });
+        };
+        WorldGuideKnowledge knowledge;
+        CHECK(buildWorldGuide(source, WorldGuideSection::Quests, knowledge, false).empty());
+        const auto guide = buildWorldGuide(source, WorldGuideSection::Quests, knowledge, true);
+        const auto reference = std::find_if(guide.begin(), guide.end(), [&](const WorldGuideEntry &entry)
+            { return entry.id == std::to_string(request.quest); });
+        REQUIRE(reference != guide.end());
+        CHECK(hasItemLink(*reference, request.item));
+        CHECK_FALSE(hasItemLink(*reference, request.otherVariant));
+        CHECK(knowledge.items.empty());
+        CHECK(knowledge.identifiedItems.empty());
+        knowledge.activeQuests.insert(request.quest);
+        const auto accepted = buildWorldGuide(source, WorldGuideSection::Quests, knowledge, false);
+        REQUIRE(accepted.size() == 1);
+        CHECK(accepted.front().details.find("Objective: " + pItem->name) != std::string::npos);
+        CHECK_FALSE(hasItemLink(accepted.front(), request.item));
+        knowledge.items.insert(request.item);
+        knowledge.identifiedItems.insert(request.item);
+        const auto known = buildWorldGuide(source, WorldGuideSection::Quests, knowledge, false);
+        REQUIRE(known.size() == 1);
+        CHECK(hasItemLink(known.front(), request.item));
+        CHECK_FALSE(hasItemLink(known.front(), request.otherVariant));
+        knowledge.activeQuests.clear();
+        knowledge.quests.insert(request.quest);
+        const auto history = buildWorldGuide(source, WorldGuideSection::Quests, knowledge, false);
+        REQUIRE(history.size() == 1);
+        CHECK(hasItemLink(history.front(), request.item));
+    }
+}
+
 TEST_CASE("world guide campaign clues do not turn undisclosed quest destinations into discoveries")
 {
     JournalQuestTable quests;

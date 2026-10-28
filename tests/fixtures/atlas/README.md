@@ -1,5 +1,16 @@
 # Atlas fixtures
 
+## Requested quest items
+
+Run `tests/scenarios/atlas/mm7_requested_item_knowledge.yml` and
+`tests/scenarios/atlas/mm8_requested_item_knowledge.yml` with normal packages and isolated settings/mods/saves.
+The scenarios accept the actual Lantern/Signet and portal-crystal requests through NPC dialogue, then check
+the typed item clue keys before and after save/load. MM8 first selects Portals of Stone to expose the request.
+NPCs are addressed by ID; these checks do not simulate physical travel or item recovery.
+
+The shared-data test `quest item objectives use requested merged variants without identifying unseen items`
+also checks seven requested items, Guide/Discovery separation, identification-gated links and same-name variants.
+
 ## Dungeon parent navigation
 
 Run `tests/scenarios/atlas/mm7_dungeon_parent_fixture.yml` with normal packages and isolated settings/mods/saves.

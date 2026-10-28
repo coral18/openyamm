@@ -1,0 +1,41 @@
+id: atlas.mm7_requested_item_knowledge
+title: Actual Lantern and Signet requests retain the requested item clues after reload
+world: mm7
+mode: faithful
+steps:
+- new_game_flow:
+    start_map: 7out02.odm
+- speak_npc:
+    source_id: 432
+- select_topic:
+    kind: npc_topic
+    action_id: 929
+- press_action:
+    action: cancel_dialog
+- speak_npc:
+    source_id: 434
+- select_topic:
+    kind: npc_topic
+    action_id: 933
+- press_action:
+    action: cancel_dialog
+- assert:
+    qbit_set: [667, 669]
+    named_global_var_changed:
+      name: openyamm.discovery.quest/667/location/objective/item/1450
+      value: 1
+- assert:
+    named_global_var_changed:
+      name: openyamm.discovery.quest/669/location/objective/item/1408
+      value: 1
+- save_game: requested-items
+- load_game: requested-items
+- assert:
+    qbit_set: [667, 669]
+    named_global_var_changed:
+      name: openyamm.discovery.quest/667/location/objective/item/1450
+      value: 1
+- assert:
+    named_global_var_changed:
+      name: openyamm.discovery.quest/669/location/objective/item/1408
+      value: 1

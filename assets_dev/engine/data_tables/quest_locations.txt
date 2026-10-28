@@ -7,6 +7,7 @@ QBit	World	Role	Kind	Target	Visibility	RequiredQBits	ForbiddenQBits
 3	mm8	objective	map	world.mm8.map.out02	journal
 3	mm8	return	npc	3	journal
 7	mm8	giver	npc	1	journal
+7	mm8	objective	item	617	journal
 7	mm8	return	npc	28	journal
 9	mm8	giver	npc	3	journal
 9	mm8	objective	npc	4	journal
@@ -51,6 +52,7 @@ QBit	World	Role	Kind	Target	Visibility	RequiredQBits	ForbiddenQBits
 26	mm8	objective	map	world.mm8.map.out06	journal
 26	mm8	return	npc	33	journal
 28	mm8	giver	npc	9	journal
+28	mm8	objective	item	604	journal
 28	mm8	objective	map	world.mm8.map.d22	journal
 28	mm8	return	npc	9	journal
 30	mm8	objective	map	world.mm8.map.d24	journal
@@ -341,6 +343,7 @@ QBit	World	Role	Kind	Target	Visibility	RequiredQBits	ForbiddenQBits
 541	mm7	objective	map	world.mm7.map.mdt11	journal	569	-
 541	mm7	return	npc	378	journal
 542	mm7	giver	npc	379	journal
+542	mm7	objective	item	1344	journal
 542	mm7	objective	map	world.mm7.map.7d09	journal
 542	mm7	objective	map	world.mm7.map.out14	journal
 542	mm7	return	house	1104	journal
@@ -350,6 +353,7 @@ QBit	World	Role	Kind	Target	Visibility	RequiredQBits	ForbiddenQBits
 543	mm7	return	house	1020	journal
 543	mm7	return	npc	380	journal
 544	mm7	giver	npc	380	journal
+544	mm7	objective	item	1344	journal
 544	mm7	objective	map	world.mm7.map.7d09	journal
 544	mm7	return	house	1020	journal
 544	mm7	return	npc	380	journal
@@ -395,6 +399,7 @@ QBit	World	Role	Kind	Target	Visibility	RequiredQBits	ForbiddenQBits
 557	mm7	return	house	1157	journal
 557	mm7	return	npc	387	journal
 559	mm7	giver	npc	387	journal
+559	mm7	objective	item	1289	journal
 559	mm7	objective	map	world.mm7.map.7d10	journal
 559	mm7	return	house	1157	journal
 559	mm7	return	npc	387	journal
@@ -530,6 +535,7 @@ QBit	World	Role	Kind	Target	Visibility	RequiredQBits	ForbiddenQBits
 665	mm7	objective	npc	416	guide
 665	mm7	objective	npc	417	guide
 667	mm7	giver	npc	432	journal
+667	mm7	objective	item	1450	journal
 667	mm7	objective	map	world.mm7.map.out11	journal
 667	mm7	return	house	311	journal
 667	mm7	return	npc	432	journal
@@ -539,6 +545,7 @@ QBit	World	Role	Kind	Target	Visibility	RequiredQBits	ForbiddenQBits
 668	mm7	objective	map	world.mm7.map.d02	journal
 668	mm7	objective	map	world.mm7.map.out10	journal
 669	mm7	giver	npc	434	journal
+669	mm7	objective	item	1408	journal
 669	mm7	objective	map	world.mm7.map.mdt14	journal
 669	mm7	return	npc	434	journal
 670	mm7	giver	npc	435	journal

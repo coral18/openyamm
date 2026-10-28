@@ -158,7 +158,7 @@ prove those interactions or MM8 gameplay. The cached APK permits install retries
 | Install the verified Release and confirm its on-device version/flags | Passed for 0.2.8 / 111 via in-place USB update |
 | First launch, Extended marker and active Android renderer | Passed for 0.2.8; OpenGL ES 3.0 and two mods; earlier 0.2.0 capture showed live gameplay |
 | MM7 region, discovery fog and live party arrow | User confirms fog and arrow direction on 0.2.0; wider position/device checks remain open |
-| MM8 region, discovery fog and live party arrow | Pending |
+| MM8 region, discovery fog and live party arrow | User confirms fog and party arrow work on POCO 0.2.8; broader region/dungeon checks remain open |
 | Guide Mode entry responsiveness | User confirms noticeably faster incremental loading on POCO 0.2.2 |
 | Guide roundtrip preserves discovery-only visibility | Pending |
 | Touch navigation, search, filters, zoom and pan | Pending |
@@ -269,3 +269,7 @@ Installation, startup and save-preservation receipts are retained under `atlas-a
 Physical Atlas touch/visual acceptance remains pending, including MM8 fog/party arrow and a Guide-to-Discovery
 roundtrip. The user has been asked to check those interactions on the installed package. Earlier confirmations
 of MM7 fog/direction and faster Guide loading still describe their original tested versions.
+
+The user subsequently confirms that MM8 fog and the party arrow look correct on POCO in this 0.2.8
+installation. This closes that sampled physical check; it does not confirm the Guide roundtrip, all touch
+controls, all regions or dungeon-height behavior.
