@@ -396,12 +396,12 @@ QBit	World	Role	Kind	Target	Visibility	RequiredQBits	ForbiddenQBits
 556	mm7	objective	map	world.mm7.map.t03	journal
 556	mm7	return	npc	386	journal
 557	mm7	giver	npc	387	journal
-557	mm7	return	house	1157	journal
+557	mm7	return	map	world.mm7.map.7d14	journal
 557	mm7	return	npc	387	journal
 559	mm7	giver	npc	387	journal
 559	mm7	objective	item	1289	journal
 559	mm7	objective	map	world.mm7.map.7d10	journal
-559	mm7	return	house	1157	journal
+559	mm7	return	map	world.mm7.map.7d14	journal
 559	mm7	return	npc	387	journal
 560	mm7	giver	npc	388	journal
 560	mm7	objective	item	1417	journal

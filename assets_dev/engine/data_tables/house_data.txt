@@ -220,7 +220,7 @@
 218	7	Throne	106	343	Throne Room	Placeholder			0	0	0	1.5				170		6	18	0	0	0	0
 219	8	Throne	77	345	Throne Room	Placeholder			0	0	0	1.5				172		18	6	0	0	0	0
 220	9	Throne	104	344	Throne Room	Placeholder			0	0	0	1.5				171		6	18	0	0	0	0
-221	10	Throne	62	354	Throne Room	Placeholder			0	0	0	1.5				Kastore		18	6	0	0	0	0
+221	10	Throne	77	354	Throne Room	Placeholder			0	0	0	1.5				Kastore		18	6	0	0	0	0
 222	11	Throne	0	389	Throne Room				0	0	0	0	1							0	0		
 223	12	Throne	0	390	Throne Room				0	0	0	0	1							0	0		
 224	13	Throne	0	387	Throne Room				0	0	0	0	1							0	0		

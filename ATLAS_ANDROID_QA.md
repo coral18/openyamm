@@ -273,3 +273,7 @@ of MM7 fog/direction and faster Guide loading still describe their original test
 The user subsequently confirms that MM8 fog and the party arrow look correct on POCO in this 0.2.8
 installation. This closes that sampled physical check; it does not confirm the Guide roundtrip, all touch
 controls, all regions or dungeon-height behavior.
+
+Later Windows-validated shared-data changes add seven requested-item relationships, correct Thomas Grey's
+return maps and Kastore's house address, and restore Stone City's throne-room context metadata. They are newer
+than this installed 0.2.8 APK and require the next package before any Android acceptance can cover them.

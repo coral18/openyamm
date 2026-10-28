@@ -112,7 +112,7 @@ tables, and do not bundle its HTML, JS, translated prose, generated illustration
 | Arcomage/Arena tracking | Existing campaign counters and linked taverns | Existing campaign counters and linked taverns | Visual checklist polish and wider save-state audit |
 | Custom markers and notes | Native place/edit/delete, optional dungeon height, All/Party assignment and shared Map Book state | Same shared notes and canonical snapshot ownership | Marker styles, richer editing and Android/controller checks |
 | Optional Atlas mod | Profile-controlled native UI module | Same shared module | Launcher toggles and wider device checks |
-| Localization parity | Current engine language | Current engine language | Integrate engine localization; no copied guide translation bundle |
+| Localization parity | Active engine English data and original native UI text | Same shared English registries/UI | Engine-wide language selection/translation infrastructure requires a separate decision; no copied guide translation bundle |
 
 The 2026-10-27 replacement-model sight audit found no `models/actors.yml` in the active MM7/MM8 runtime
 packages. Actor model replacements are currently experimental, behind the default-off `debug.actor_models`
@@ -170,6 +170,14 @@ The following shared-data audit adds seven missing requested-item relationships,
 accepted clues do not identify unseen items. The shared Guide suite passes 47 cases / 1,847 assertions, and
 actual MM7/MM8 request/save/load scenarios pass 22 steps. This data update is newer than Android 0.2.8;
 the detailed provenance and reproduction paths are in `ATLAS.md`.
+
+The full active quest-link audit subsequently indexes all 137 MM7/MM8 maps and their overlays, then resolves
+579 emitted clickable links across all 145 quests. It repairs two Thomas Grey return targets, restores the
+Stone City throne-room metadata removed by its script replacement, and corrects Kastore's stale Emerald Island
+address to Castle Gloaming in the shared house table. The actual throne-room gate still rejects locked access
+and enters house 216 only after its existing condition is met. The final shared suite passes 129 cases /
+49,618 assertions. Conditional campaign stages and secondary house branches remain outside this resolution
+check; these fixes are newer than Android 0.2.8. `ATLAS.md` records the scope and retained failure evidence.
 
 Completion requires the missing native functions, data validation against the active game packages, meaningful
 unit/runtime checks and visual checks. A placeholder page or a list of unrelated journal text is not a completed

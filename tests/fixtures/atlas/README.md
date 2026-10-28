@@ -1,5 +1,14 @@
 # Atlas fixtures
 
+## Full active quest-link audit
+
+Run the unit case `Atlas quest links resolve against fully indexed active MM7 and MM8 worlds` with
+`OPENYAMM_REGRESSION_ASSETS_ROOT` pointing to the prepared runtime packages. It loads all 137 maps and their
+active overlays, builds both complete quest Guides, and resolves every emitted item/location link. With
+`OPENYAMM_ATLAS_INTERACTION_AUDIT` set to an existing output directory it writes `quest-links.tsv`.
+The audit includes Stone City's restored throne-room context and its actual locked/unlocked callback,
+Thomas Grey's map return and Kastore's corrected possible residence. It does not certify all quest stages.
+
 ## Requested quest items
 
 Run `tests/scenarios/atlas/mm7_requested_item_knowledge.yml` and

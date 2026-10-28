@@ -3227,3 +3227,36 @@ Reproduction scenarios are `mm7_requested_item_knowledge.yml` and `mm8_requested
 `tests/scenarios/atlas/`. Private logs and source receipts are under `atlas-quest-items-20261028` in the Windows
 development root. This source/runtime update is newer than the installed Android 0.2.8 APK; that archived APK
 remains unchanged. The user separately confirmed MM8 fog and arrow on POCO 0.2.8, as recorded in Android QA.
+
+### Full quest-link destination audit, 2026-10-28
+
+The active-package audit now loads geometry and all event overlays for 137 MM7/MM8 maps before projecting
+the complete 145-quest Guide. It inventories every emitted clickable item/location link, checks that its
+target resolves and is usable in Guide, and verifies that browsing does not write quest/location discoveries.
+This found three links to house entries which the fully indexed Atlas could not show.
+
+Two are Thomas Grey's returns (557/559): School of Sorcery event 416 opens NPC 387 directly, rather than
+entering house 1157. Their shared quest rows now name the actual School map, retaining their NPC contacts.
+The third is Stone City's real throne room. Its MMMerge replacement of event 416 clears the original context
+metadata. A small explicit `7d24_zz_site_context.lua` overlay restores house 216 as that door's target; the
+quest still links to the real throne room. Generated scripts and the quest gate are unchanged. Runtime checks
+execute the fully mounted event with and without QBit 647, confirming the locked message versus house 216
+dialogue and preservation of the gate bit. Unknown Discovery still hides the restored location.
+
+The link inventory also exposed Kastore's possible throne-room contact labelled as Emerald Island. Shared
+house 221 had stale map ID 62; Castle Gloaming's actual event 5 enters that house after the council changes.
+Its authoritative table address is now Castle Gloaming (map 77). No NPC movement, quest state or save ID changes.
+The alternate house 219/221 branches still share a physical door; secondary-branch pin coverage remains part
+of the existing conditional-location audit, rather than being claimed complete by this address correction.
+
+The inventory records 579 clickable links (313 MM7 / 266 MM8), separately from the registry's 602 relationships.
+Resolution checks do not certify every campaign stage, conditional clue, contact placement or physical journey.
+Private original-failure, intermediate and final reports are under `atlas-quest-link-audit-20261028` in the
+Windows development root. These source/runtime fixes are newer than installed Android 0.2.8.
+
+The final shared World Database/Guide/interaction suite passes 129 cases / 49,618 assertions. It includes the
+full active quest-link inventory and the throne-room permission checks with the final table/overlay data.
+
+The localization investigation found no existing shared language selector to integrate: the loader explicitly
+uses `engine/data_tables/english/`, and current native menu text lives in code/YAML. A new engine-wide language
+system is recorded in `ATLAS_DECISIONS.md`, not introduced as an Atlas-only subsystem or an extra completion gate.

@@ -20,6 +20,140 @@
 #include <set>
 #include <string>
 
+TEST_CASE("Atlas quest links resolve against fully indexed active MM7 and MM8 worlds")
+{
+    using namespace OpenYAMM::Game;
+    REQUIRE_MESSAGE(OpenYAMM::Tests::regressionMapLoaderLoaded(),
+        OpenYAMM::Tests::regressionMapLoaderFailure());
+    const auto &fixture = OpenYAMM::Tests::regressionMapLoader();
+    const auto &data = fixture.gameDataLoader;
+    std::ofstream inventory;
+    if (const char *pDirectory = std::getenv("OPENYAMM_ATLAS_INTERACTION_AUDIT"))
+    {
+        inventory.open(std::filesystem::path(pDirectory) / "quest-links.tsv");
+        REQUIRE(inventory.is_open());
+        inventory << "world\tquest\tkind\ttarget\tlabel\n";
+    }
+    size_t maps = 0, quests = 0, links = 0;
+    for (const std::string &worldId : {"mm7", "mm8"})
+    {
+        const WorldAtlasPresentation presentation = loadWorldAtlasPresentation(fixture.assetFileSystem, worldId);
+        WorldDatabase world(data.getMapStats(), data.getHouseTable(), data.getNpcDialogTable(),
+            data.getMergedTeacherTopicTable(), worldId, presentation.maps);
+        for (const MapStatsEntry &entry : data.getMapStats().getEntries())
+        {
+            if (entry.worldId != worldId) continue;
+            CAPTURE(entry.fileName);
+            auto map = MapAssetLoader().load(fixture.assetFileSystem, entry, data.getMonsterTable(),
+                data.getObjectTable(), MapLoadPurpose::HeadlessGameplay);
+            REQUIRE(map);
+            std::string error;
+            REQUIRE_MESSAGE(GameDataLoader::loadEventPrograms(fixture.assetFileSystem, *map, error), error);
+            REQUIRE(map->localEventProgram);
+            REQUIRE(map->globalEventProgram);
+            const ScriptedEventProgram &events = *map->localEventProgram;
+            world.indexMapConnections(entry, events);
+            world.indexMapNpcTopics(entry, events);
+            world.indexNpcLocations(*map->globalEventProgram);
+            world.indexNpcLocations(events);
+            if (map->outdoorMapData) world.indexMapLocations(*map->outdoorMapData, events);
+            else
+            {
+                REQUIRE(map->indoorMapData);
+                world.indexMapLocations(entry, *map->indoorMapData, events);
+            }
+            if (worldId == "mm7" && entry.fileName == "7d24.blv")
+            {
+                const auto action = events.getContextActionMetadata(416);
+                REQUIRE(action);
+                CHECK(action->kind == "enter_house");
+                CHECK(action->houseId == 216);
+                const auto sites = world.queryLocations({}, true, WorldDatabase::mapId(entry));
+                CHECK(std::any_of(sites.begin(), sites.end(), [](const WorldMapLocation &location)
+                    { return location.recordId == "mm7:house/216"; }));
+                const WorldRecord *pThrone = world.find("mm7:house/216");
+                REQUIRE(pThrone != nullptr);
+                CHECK_FALSE(world.visible(*pThrone, {}, false));
+                for (bool unlocked : {false, true})
+                {
+                    Party party;
+                    party.setQuestBit(647, unlocked);
+                    EventRuntimeState state;
+                    REQUIRE(EventRuntime().executeEventById(map->localEventProgram, map->globalEventProgram,
+                        416, state, &party));
+                    CHECK(state.pendingDialogueContext.has_value() == unlocked);
+                    if (unlocked) CHECK(state.pendingDialogueContext->sourceId == 216);
+                    else
+                    {
+                        REQUIRE_FALSE(state.statusMessages.empty());
+                        CHECK(state.statusMessages.back() == "The Door is Locked");
+                    }
+                    CHECK(party.hasQuestBit(647) == unlocked);
+                }
+            }
+            ++maps;
+        }
+        WorldKnowledge locations;
+        WorldGuideKnowledge knowledge;
+        WorldGuideSource source;
+        source.worldId = worldId;
+        source.pQuests = &data.getJournalQuestTable();
+        source.pMaps = &data.getMapStats();
+        source.pNpcs = &data.getNpcDialogTable();
+        source.pHouses = &data.getHouseTable();
+        source.pItems = &data.getItemTable();
+        source.pWorld = &world;
+        source.pWorldKnowledge = &locations;
+        CHECK(buildWorldGuide(source, WorldGuideSection::Quests, knowledge, false).empty());
+        const auto entries = buildWorldGuide(source, WorldGuideSection::Quests, knowledge, true);
+        CHECK(entries.size() == (worldId == "mm7" ? 76 : 69));
+        if (worldId == "mm7")
+        {
+            const HouseEntry *pCouncil = data.getHouseTable().get(221);
+            REQUIRE(pCouncil != nullptr);
+            const MapStatsEntry *pCastle = data.getMapStats().findById(pCouncil->mapId);
+            REQUIRE(pCastle != nullptr);
+            CHECK(pCastle->fileName == "d03.blv");
+            const WorldRecord *pCouncilContact = world.find("mm7:npc/423/possible-house/221");
+            REQUIRE(pCouncilContact != nullptr);
+            CHECK(world.recordMap(*pCouncilContact, locations, true) == pCastle);
+        }
+        for (const WorldGuideEntry &entry : entries)
+        {
+            CAPTURE(entry.id);
+            CHECK_FALSE(entry.links.empty());
+            for (const WorldGuideLink &link : entry.links)
+            {
+                CAPTURE(link.label);
+                CAPTURE(link.target);
+                REQUIRE_FALSE(link.target.empty());
+                if (link.kind == WorldGuideLink::Kind::Item)
+                    CHECK(data.getItemTable().get(uint32_t(std::stoul(link.target))) != nullptr);
+                else
+                {
+                    CHECK(link.kind == WorldGuideLink::Kind::Location);
+                    const WorldRecord *pTarget = world.find(link.target);
+                    REQUIRE(pTarget != nullptr);
+                    CHECK(world.visible(*pTarget, locations, true));
+                    CHECK(world.recordMap(*pTarget, locations, true) != nullptr);
+                }
+                if (inventory.is_open()) inventory << worldId << '\t' << entry.id << '\t'
+                    << (link.kind == WorldGuideLink::Kind::Item ? "item" : "location") << '\t'
+                    << link.target << '\t' << link.label << '\n';
+                ++links;
+            }
+            ++quests;
+        }
+        CHECK(knowledge.quests.empty());
+        CHECK(knowledge.questLocations.empty());
+        CHECK(locations.variables.empty());
+        CHECK(locations.visitedMaps.empty());
+    }
+    CHECK(maps == 137);
+    CHECK(quests == 145);
+    CHECK(links > quests);
+}
+
 TEST_CASE("Atlas dungeon parents agree with active physical outdoor entrances")
 {
     using namespace OpenYAMM::Game;
