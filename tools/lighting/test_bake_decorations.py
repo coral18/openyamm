@@ -175,6 +175,32 @@ class DecorationBakeTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'Invalid site context metadata overlay'):
                 self.export()
 
+    def test_house_context_alternatives_are_literal_metadata_without_shadow_changes(self):
+        baseline = self.export()
+        metadata = self.world / 'events/maps/test_zz_site_context.lua'
+        header = '-- Site context metadata; load after gameplay overlays\n'
+        metadata.write_text(header
+                            + 'SetMapContextAction(1, {kind = "fountain", source = "script"})\n'
+                            + 'SetMapContextAction(2, {kind = "enter_house", source = "script", houseId = 219, '
+                            + 'houseIds = {219, 221}})\n'
+                            + 'SetMapContextAction(65535, {kind = "enter_house", source = "script", '
+                            + 'houseId = 4294967295})\n')
+        result = self.export()
+        for key in ('cards', 'counts', 'dependencies'):
+            self.assertEqual(result[key], baseline[key])
+        for fields in ('houseId = 0', 'houseId = -1', 'houseId = 4294967296',
+                       'houseId = 1, houseIds = {}', 'houseId = 1, houseIds = {0}',
+                       'houseId = 1, houseIds = {4294967296}', 'houseId = 1, hidden = true',
+                       'houseId = tonumber("1")'):
+            metadata.write_text(header + 'SetMapContextAction(1, {kind = "enter_house", source = "script", '
+                                + fields + '})\n')
+            with self.assertRaisesRegex(ValueError, 'Invalid site context metadata overlay'):
+                self.export()
+        metadata.write_text(header + 'SetMapContextAction(1, {kind = "enter_house", source = "script", '
+                            + 'houseId = 1}); evt.SetSprite(7, 0)\n')
+        with self.assertRaisesRegex(ValueError, 'Invalid site context metadata overlay'):
+            self.export()
+
     def test_typed_interaction_references_preserve_shadow_cards_and_dependencies(self):
         baseline = self.export()
         metadata = self.world / 'events/maps/test_zz_site_interactions.lua'

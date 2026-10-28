@@ -106,3 +106,10 @@ Possible-NPC-location catalogs follow the same rule. Generated `<map>_00_npc_loc
 `SetMapNpcLocations(eventId, {{npcId, houseId}, ...})` declarations. The exporter checks the grammar and integer
 ranges before excluding them from shadow-card dependencies. It rejects executable Lua in these reserved formats;
 ordinary gameplay files retain their full hashes. NPC catalogs do not move NPCs or change shadow casters.
+
+Site-context catalogs (`<map>_zz_site_context.lua`) use the required
+`-- Site context metadata; load after gameplay overlays` header and literal `SetMapContextAction` calls.
+Supported forms are `kind = "well"` or `"fountain"` with `source = "script"`, and `kind = "enter_house"`
+with `source = "script"`, a positive uint32 `houseId` and optional nonempty literal `houseIds` array.
+Event IDs are 1..65535. Extra fields, computed values or executable code reject validation. These declarations
+cannot alter shadow casters; only validated catalogs are excluded from decoration dependencies.

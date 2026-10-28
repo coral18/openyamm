@@ -29,42 +29,50 @@ void WorldDatabase::indexMapSites(const WorldRecord &source, const std::vector<W
 {
     const WorldRecord *pSource = &source;
     std::erase_if(m_locations, [pSource](const WorldMapLocation &location) { return location.mapId == pSource->id; });
-    const auto target = [&](uint16_t eventId) -> const WorldRecord *
+    const auto targets = [&](uint16_t eventId)
     {
+        std::vector<const WorldRecord *> result;
         const auto metadata = events.getContextActionMetadata(eventId);
         if (!metadata || metadata->hidden || (metadata->source != "opcode" && metadata->source != "script"))
-            return nullptr;
+            return result;
         for (const WorldRecord &record : m_records)
         {
-            if (metadata->kind == "enter_house" && metadata->houseId
-                && record.kind == WorldRecordKind::House && record.house->id == *metadata->houseId
+            if (metadata->kind == "enter_house" && record.kind == WorldRecordKind::House
+                && (metadata->houseId == record.house->id
+                    || std::find(metadata->houseIds.begin(), metadata->houseIds.end(), record.house->id)
+                        != metadata->houseIds.end())
                 && record.map->worldId == pSource->map->worldId)
-                return &record;
+                result.push_back(&record);
             if (pSource->kind == WorldRecordKind::Region
                 && metadata->kind == "enter_dungeon" && metadata->targetMap
                 && record.kind == WorldRecordKind::Dungeon
                 && toLowerCopy(record.map->fileName) == toLowerCopy(*metadata->targetMap))
-                return &record;
+                result.push_back(&record);
         }
-        return nullptr;
+        return result;
     };
     const auto add = [&](const WorldInteractionSite &site)
     {
         const uint16_t eventId = site.eventId;
         const double x = site.x, y = site.y, z = site.z;
-        const WorldRecord *pTarget = target(eventId);
-        if (pTarget == nullptr || !std::isfinite(x) || !std::isfinite(y) || !std::isfinite(z))
+        if (!std::isfinite(x) || !std::isfinite(y) || !std::isfinite(z))
             return;
         if (pSource->kind == WorldRecordKind::Region
             && (x < -32768 || x > 32768 || y < -32768 || y > 32768))
             return;
-        WorldMapLocation location{pSource->id + "/site/" + site.id + "/event/" + std::to_string(eventId),
-            pSource->id, pTarget->id, eventId, float(x), float(y), float(z)};
-        location.discoveryKeys.push_back(worldSiteDiscoveryKey(eventId, site.id));
-        for (uint32_t face : site.faceIds)
-            location.discoveryKeys.push_back(worldSiteDiscoveryKey(eventId,
-                site.surfacePrefix + "surface/" + std::to_string(face)));
-        m_locations.push_back(std::move(location));
+        const auto destinations = targets(eventId);
+        for (const WorldRecord *pTarget : destinations)
+        {
+            std::string id = pSource->id + "/site/" + site.id + "/event/" + std::to_string(eventId);
+            if (destinations.size() > 1) id += "/target/" + pTarget->id;
+            WorldMapLocation location{id, pSource->id, pTarget->id, eventId, float(x), float(y), float(z)};
+            location.sharedEntrance = destinations.size() > 1;
+            location.discoveryKeys.push_back(worldSiteDiscoveryKey(eventId, site.id));
+            for (uint32_t face : site.faceIds)
+                location.discoveryKeys.push_back(worldSiteDiscoveryKey(eventId,
+                    site.surfacePrefix + "surface/" + std::to_string(face)));
+            m_locations.push_back(std::move(location));
+        }
     };
     std::erase_if(m_features, [pSource](const WorldMapFeature &feature)
     { return feature.mapId == pSource->id && feature.kind != WorldMapFeatureKind::Monster

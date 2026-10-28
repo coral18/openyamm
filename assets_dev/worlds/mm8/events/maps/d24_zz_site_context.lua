@@ -1,0 +1,20 @@
+-- Site context metadata; load after gameplay overlays
+-- Index the usable venues rather than their generic flooded-room dialogues.
+-- Availability stays in the callbacks; Discovery requires actual venue visits.
+SetMapContextAction(205, {kind = "enter_house", source = "script", houseId = 625})
+SetMapContextAction(213, {kind = "enter_house", source = "script", houseId = 629})
+SetMapContextAction(215, {kind = "enter_house", source = "script", houseId = 630})
+SetMapContextAction(223, {kind = "enter_house", source = "script", houseId = 634})
+SetMapContextAction(225, {kind = "enter_house", source = "script", houseId = 635})
+SetMapContextAction(452, {kind = "enter_house", source = "script", houseId = 638})
+SetMapContextAction(454, {kind = "enter_house", source = "script", houseId = 639})
+SetMapContextAction(456, {kind = "enter_house", source = "script", houseId = 640})
+SetMapContextAction(458, {kind = "enter_house", source = "script", houseId = 641})
+SetMapContextAction(464, {kind = "enter_house", source = "script", houseId = 6})
+SetMapContextAction(466, {kind = "enter_house", source = "script", houseId = 41})
+SetMapContextAction(468, {kind = "enter_house", source = "script", houseId = 81})
+SetMapContextAction(470, {kind = "enter_house", source = "script", houseId = 115})
+SetMapContextAction(472, {kind = "enter_house", source = "script", houseId = 308})
+SetMapContextAction(474, {kind = "enter_house", source = "script", houseId = 1569})
+SetMapContextAction(476, {kind = "enter_house", source = "script", houseId = 285})
+SetMapContextAction(478, {kind = "enter_house", source = "script", houseId = 188})

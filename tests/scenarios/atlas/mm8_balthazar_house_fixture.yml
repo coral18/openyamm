@@ -1,0 +1,26 @@
+id: atlas.house_alternatives.mm8_venues
+world: mm8
+title: Isolated conditional entrance visual fixture
+mode: faithful
+steps:
+- new_game_flow:
+    start_map: d24.blv
+    party:
+      gold: 5000
+      food: 10
+      members:
+      - name: Atlas Tester
+        class: Knight
+        race_id: 0
+        level: 20
+        skills: []
+        equipment: {}
+- set_pose:
+    x: 832
+    y: 849
+    z: 44
+    yaw: 0
+    pitch: -0.15
+- assert:
+    map: d24.blv
+- save_game: before

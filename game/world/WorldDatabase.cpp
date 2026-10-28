@@ -337,6 +337,26 @@ const WorldRecord *WorldDatabase::find(const std::string &id) const
     return it == m_byId.end() ? nullptr : &m_records[it->second];
 }
 
+std::string WorldDatabase::recordDisplayName(const WorldRecord &record, const WorldKnowledge &knowledge,
+    bool guide) const
+{
+    const std::string name = record.name();
+    if (record.kind != WorldRecordKind::House) return name;
+    const bool shared = std::any_of(m_locations.begin(), m_locations.end(), [&](const WorldMapLocation &location)
+        { return location.sharedEntrance && location.recordId == record.id; });
+    if (!shared) return name;
+    std::vector<std::string> residents;
+    for (const WorldRecord &candidate : m_records)
+        if (candidate.kind == WorldRecordKind::Npc && candidate.house == record.house
+            && visible(candidate, knowledge, guide))
+            residents.push_back(candidate.npcName.value_or(candidate.npc->name));
+    std::sort(residents.begin(), residents.end());
+    residents.erase(std::unique(residents.begin(), residents.end()), residents.end());
+    std::string result = name;
+    for (size_t i = 0; i < residents.size(); ++i) result += (i == 0 ? " - " : ", ") + residents[i];
+    return result;
+}
+
 const MapStatsEntry *WorldDatabase::recordMap(const WorldRecord &record, const WorldKnowledge &knowledge,
     bool guide, const std::string &preferredMap) const
 {
@@ -366,7 +386,7 @@ std::string WorldDatabase::recordSearchText(const WorldRecord &record, const Wor
     if (pMap == nullptr) return {};
     WorldRecord located = record;
     located.map = pMap;
-    std::string text = located.searchText();
+    std::string text = located.searchText() + " " + recordDisplayName(record, knowledge, guide);
     if (record.house != nullptr && preferredMap.empty())
         for (const WorldMapLocation &location : m_locations)
         {

@@ -140,6 +140,25 @@ destinations in `*_zz_npc_locations.lua` after gameplay overlays. Regenerate usi
 The lighting exporter validates these reserved catalog formats before excluding them from shadow dependencies;
 arbitrary Lua or malformed declarations in those files are errors. Gameplay-script dependency hashes stay intact.
 
+Shared physical entrances can declare multiple authored house destinations:
+
+```lua
+SetMapContextAction(5, {kind = "enter_house", source = "script", houseId = 219, houseIds = {219, 221}})
+```
+
+`houseId` remains the primary context target; optional `houseIds` lists merged-registry alternatives.
+The World Database creates distinct entrance/destination pairs with the same physical discovery keys.
+Map pins cluster them at their actual shared door. Guide may show all declared alternatives; Discovery
+requires the actual house visit and does not infer another destination from a shared door interaction.
+Shared-house list names can include visible residents, preserving the NPC knowledge gate.
+Declarations describe possibilities and never choose the live quest branch or open its door.
+
+Literal declarations belong in `<map>_zz_site_context.lua` with the header
+`-- Site context metadata; load after gameplay overlays`. The lighting producer accepts only the documented
+literal house/well/fountain grammar and integer ranges, then excludes these catalogs from shadow dependencies.
+Executable Lua and extra fields in this reserved format reject validation. Use the separate NPC-location
+catalog for `SetMapNpcLocations`; do not mix it into the site-context file or edit generated callbacks.
+
 The shared `engine/data_tables/quest_locations.txt` associates existing journal entries with canonical maps and
 merged NPC, house or item IDs. Core owns the reader and knowledge API; content defines the relationships.
 This is not a general typed quest-patching interface yet. See [the content audit](ATLAS_QUEST_AUDIT.md).

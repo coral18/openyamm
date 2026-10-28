@@ -1,5 +1,22 @@
 # Atlas fixtures
 
+## Conditional house entrances
+
+Run `mm7_council_house_fixture.yml` or `mm8_balthazar_house_fixture.yml` from `tests/scenarios/atlas/` with
+normal runtime packages and isolated settings/mods/saves. Copy the scenario's exported `before.oysav` to
+private `saves/before.oysav`, then use `tools/menu_tours/atlas_conditional_house_guide.yml` at 1600x900.
+For Balthazar, replace its `Kastore` search text with `The Shaman`. For the Arbiter case, start in
+`7out02.odm`, omit the indoor pose and All-heights click, and search `Arbiter`.
+
+Set `debug.menu_input_tour_path` immediately before the native run: preparing a fixture can save settings and
+remove this one-shot directive. The tour uses the engine's input/screenshot path, then leaves a private
+quicksave. Compare the Discovery map/list crops before and after Guide and inspect the Guide venue/variant labels.
+Check the resulting save's house-discovery keys: browsing must not count as a visit to any of these venues.
+
+Unit cases `shared door house alternatives retain distinct destinations and visit-gated discoveries` and
+`active conditional house entrances preserve council branches and flooded venue discovery` cover typed
+alternatives, known resident captions, both councils, all three Arbiters and seventeen Balthazar venues.
+
 ## Full active quest-link audit
 
 Run the unit case `Atlas quest links resolve against fully indexed active MM7 and MM8 worlds` with

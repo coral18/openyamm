@@ -154,6 +154,91 @@ TEST_CASE("Atlas quest links resolve against fully indexed active MM7 and MM8 wo
     CHECK(links > quests);
 }
 
+TEST_CASE("active conditional house entrances preserve council branches and flooded venue discovery")
+{
+    using namespace OpenYAMM::Game;
+    REQUIRE_MESSAGE(OpenYAMM::Tests::regressionMapLoaderLoaded(),
+        OpenYAMM::Tests::regressionMapLoaderFailure());
+    const auto &fixture = OpenYAMM::Tests::regressionMapLoader();
+    const auto &data = fixture.gameDataLoader;
+    struct Entrance
+    {
+        const char *pWorld;
+        const char *pMap;
+        uint16_t event;
+        uint32_t bit;
+        std::vector<uint32_t> houses;
+    };
+    std::vector<Entrance> entrances = {
+        {"mm7", "d03.blv", 5, 710, {219, 221}},
+        {"mm7", "7out02.odm", 37, 611, {1165, 1164, 1166}}};
+    const std::pair<uint16_t, uint32_t> venues[] = {
+        {205, 625}, {213, 629}, {215, 630}, {223, 634}, {225, 635}, {452, 638}, {454, 639},
+        {456, 640}, {458, 641}, {464, 6}, {466, 41}, {468, 81}, {470, 115}, {472, 308},
+        {474, 1569}, {476, 285}, {478, 188}};
+    for (const auto &[event, house] : venues)
+        entrances.push_back({"mm8", "d24.blv", event, 23, {event < 464 ? 626u : 627u, house}});
+    std::map<std::string, std::optional<MapAssetInfo>> loadedMaps;
+    for (const Entrance &entrance : entrances)
+    {
+        CAPTURE(std::string(entrance.pMap));
+        CAPTURE(entrance.event);
+        const MapStatsEntry *pEntry = data.getMapStats().findByFileName(entrance.pMap);
+        REQUIRE(pEntry != nullptr);
+        const auto [cached, inserted] = loadedMaps.try_emplace(entrance.pMap);
+        auto &map = cached->second;
+        if (inserted) map = MapAssetLoader().load(fixture.assetFileSystem, *pEntry, data.getMonsterTable(),
+            data.getObjectTable(), MapLoadPurpose::HeadlessGameplay);
+        REQUIRE(map);
+        std::string error;
+        if (inserted)
+            REQUIRE_MESSAGE(GameDataLoader::loadEventPrograms(fixture.assetFileSystem, *map, error), error);
+        REQUIRE(map->localEventProgram);
+        WorldDatabase world(data.getMapStats(), data.getHouseTable(), data.getNpcDialogTable(),
+            data.getMergedTeacherTopicTable(), entrance.pWorld);
+        if (map->outdoorMapData) world.indexMapLocations(*map->outdoorMapData, *map->localEventProgram);
+        else world.indexMapLocations(*pEntry, *map->indoorMapData, *map->localEventProgram);
+        const std::string mapId = WorldDatabase::mapId(*pEntry);
+        WorldKnowledge known;
+        known.visitedMaps.insert(entrance.pMap);
+        const uint32_t venue = entrance.houses.back();
+        const std::string venueId = std::string(entrance.pWorld) + ":house/" + std::to_string(venue);
+        const auto guide = world.queryLocations(known, true, mapId);
+        REQUIRE(std::any_of(guide.begin(), guide.end(), [&](const WorldMapLocation &location)
+            { return location.eventId == entrance.event && location.recordId == venueId; }));
+        const auto seen = [&](const std::string &id)
+        {
+            const auto locations = world.queryLocations(known, false, mapId);
+            return std::any_of(locations.begin(), locations.end(), [&](const WorldMapLocation &location)
+                { return location.eventId == entrance.event && location.recordId == id; });
+        };
+        CHECK_FALSE(seen(venueId));
+        for (size_t branch = 0; branch < entrance.houses.size(); ++branch)
+        {
+            Party party;
+            const bool gate = entrance.event == 37 ? branch == 1 : branch != 0;
+            party.setQuestBit(entrance.bit, gate);
+            if (entrance.bit == 710 || (entrance.event == 37 && branch == 2)) party.setQuestBit(612, true);
+            EventRuntimeState state;
+            REQUIRE(EventRuntime().executeEventById(map->localEventProgram, map->globalEventProgram,
+                entrance.event, state, &party));
+            REQUIRE(state.pendingDialogueContext);
+            CHECK(state.pendingDialogueContext->sourceId == entrance.houses[branch]);
+            CHECK(party.hasQuestBit(entrance.bit) == gate);
+        }
+        known.variables[WorldDatabase::houseDiscoveryKey(entrance.houses.front())] = 1;
+        CHECK_FALSE(seen(venueId)); // A prior council/flood dialogue does not discover its replacement venue.
+        known.variables[WorldDatabase::houseDiscoveryKey(venue)] = 1;
+        CHECK(seen(venueId));
+        if (entrance.event == 37)
+        {
+            CHECK(std::any_of(guide.begin(), guide.end(), [](const WorldMapLocation &location)
+                { return location.eventId == 37 && location.recordId == "mm7:house/1164"; }));
+            CHECK_FALSE(seen("mm7:house/1164"));
+        }
+    }
+}
+
 TEST_CASE("Atlas dungeon parents agree with active physical outdoor entrances")
 {
     using namespace OpenYAMM::Game;

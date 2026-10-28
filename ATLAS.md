@@ -3260,3 +3260,45 @@ full active quest-link inventory and the throne-room permission checks with the 
 The localization investigation found no existing shared language selector to integrate: the loader explicitly
 uses `engine/data_tables/english/`, and current native menu text lives in code/YAML. A new engine-wide language
 system is recorded in `ATLAS_DECISIONS.md`, not introduced as an Atlas-only subsystem or an extra completion gate.
+
+### Conditional house destinations, 2026-10-28
+
+An entrance could previously expose only the first `EnterHouse` target in its metadata. This omitted the
+replacement council in Castle Gloaming, the successor Arbiters in Harmondale, and usable venues behind
+Balthazar's generic flooded-room dialogues. The shared metadata reader now accepts optional `houseIds`
+alongside the existing primary `houseId`. The index retains distinct entrance/destination identities with
+shared physical discovery keys; the existing map-pin clustering keeps alternatives on their real doorway.
+Discovery still requires each actual venue visit, rather than inferring it from the other branch.
+
+Explicit late metadata declares both council rooms, all three Arbiters and seventeen named/service venues in
+Balthazar Lair. Flooded-room dialogue placeholders are not declared as the usable shops. The existing callbacks
+continue choosing the live branch; the index never executes them to forecast availability. Castle Gloaming's
+local declaration also supplies its two possible council contacts, so Kastore can be found on that selected
+map without first browsing the Pit's relocation callback. House variant captions use only visible resident
+names, avoiding three indistinguishable Arbiter rows without disclosing unknown residents in Discovery.
+
+These are explicit overlays; generated callbacks remain unchanged. Literal context and NPC declarations use
+their reserved catalog files and headers. The lighting validator now accepts strictly bounded literal house
+alternatives and fountains alongside wells, rejecting executable Lua, computed values, extra fields and invalid
+IDs. Catalog changes preserve tested shadow cards/counts/dependencies; ordinary gameplay dependencies remain
+hashed. No bake, renderer rewrite, gameplay eligibility change or save-schema migration is introduced.
+
+The shared World Database/Guide/interaction suite passes 131 cases / 49,946 assertions. Focused cases cover
+independent house discovery, duplicate-ID normalization, resident-name/search privacy and 39 actual callback
+branches: two council phases, three Arbiters and seventeen flooded/usable venue pairs. The lighting producer
+suite passes 26 tests, and all six actual context/NPC catalogs checked in this change validate.
+
+Final native AMD/OpenGL checks pass three tours / 62 UI steps / nine fresh captures, eleven setup steps and
+nineteen post-UI save checks. They show Kastore's local possible contact and council-room pin, three named
+Arbiter variants at one clustered doorway, and The Shaman's usable Balthazar venue. Discovery map/list RGB
+crops match before and after Guide in all three cases. The resulting saves retain the checked map/gold/food
+and leave all targeted venue-discovery flags unset. These are sampled privacy checks, not complete save
+equality, physical travel, Android input or certification of every conditional venue.
+
+Reproduce with the conditional-house fixtures and tour listed in the fixture README. The first harness run
+lost its one-shot UI directive during fixture preparation; the runner now restores it immediately before UI.
+Early captures also exposed indistinguishable Arbiter rows and the missing local Kastore reference; final
+captions/declarations and fresh captures resolve those findings. The archived failures and final source,
+unit, lighting, GPU, capture and save receipts are under `atlas-house-alternatives-20261028` in the Windows
+development root. No global mouse/keyboard injection was used. These fixes require a later Android package
+than installed 0.2.8, including the updated shared metadata reader.

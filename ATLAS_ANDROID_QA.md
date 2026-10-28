@@ -277,3 +277,7 @@ controls, all regions or dungeon-height behavior.
 Later Windows-validated shared-data changes add seven requested-item relationships, correct Thomas Grey's
 return maps and Kastore's house address, and restore Stone City's throne-room context metadata. They are newer
 than this installed 0.2.8 APK and require the next package before any Android acceptance can cover them.
+
+The subsequent conditional-house metadata reader, council/Arbiter alternatives, visible-resident captions and
+Balthazar venue declarations are also newer than this APK. Their Windows unit, native UI and save/privacy
+checks are recorded in `ATLAS.md`; Android needs the matching compiled reader and content in a later package.

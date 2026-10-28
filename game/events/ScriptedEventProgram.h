@@ -47,6 +47,8 @@ public:
         std::string kind;
         std::string source;
         std::optional<uint32_t> houseId;
+        // Authored alternatives for a shared entrance; not a prediction of the active branch.
+        std::vector<uint32_t> houseIds;
         std::optional<std::string> targetMap;
         std::optional<std::string> targetName;
         std::vector<std::string> targetMaps;

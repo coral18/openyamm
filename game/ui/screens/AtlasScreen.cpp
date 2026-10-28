@@ -1282,7 +1282,7 @@ void AtlasScreen::drawList()
         if (m_selected == record.id)
             outline(row, 0xff8dc5e1u);
         textInRect({row.x + 7 * designScale(), row.y + 2 * designScale(), row.width - 14 * designScale(), 18 * designScale()},
-            record.name(), "menu_arrus", 12);
+            m_world.recordDisplayName(record, m_knowledge, m_guide), "menu_arrus", 12);
         const std::string subtitle = record.kind == WorldRecordKind::Travel
             ? "From " + pRecordMap->name + " - " + (record.walkingRoute != nullptr ? ""
                 : record.transport->quote ? "quoted " : "base ") + atlasTravelDays(record.walkingRoute

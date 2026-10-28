@@ -43,6 +43,7 @@ struct WorldMapLocation
     float x = 0, y = 0;
     float z = 0;
     std::vector<std::string> discoveryKeys;
+    bool sharedEntrance = false;
 };
 
 // A possible assignment from a loaded map program, not a physical NPC placement or a discovery.
@@ -143,6 +144,7 @@ public:
         const std::string &search = {}, std::optional<WorldRecordKind> kind = {},
         const std::string &withinMap = {}, bool includeTravel = true) const;
     bool visible(const WorldRecord &record, const WorldKnowledge &knowledge, bool guide) const;
+    std::string recordDisplayName(const WorldRecord &record, const WorldKnowledge &knowledge, bool guide) const;
     const MapStatsEntry *recordMap(const WorldRecord &record, const WorldKnowledge &knowledge, bool guide,
         const std::string &preferredMap = {}) const;
     std::string recordSearchText(const WorldRecord &record, const WorldKnowledge &knowledge, bool guide,
@@ -214,7 +216,7 @@ public:
         const std::string &search = {}, const std::string &withinMap = {}, const SpellTable *pSpells = nullptr,
         const ItemTable *pItems = nullptr) const;
     bool locationVisible(const WorldMapLocation &location, const WorldKnowledge &knowledge, bool guide) const;
-    // One stable location per entrance; its position comes from a visible component on the selected layer.
+    // Stable entrance/destination pairs; alternatives share physical discovery keys and map-pin clustering.
     std::vector<WorldMapLocation> queryLocations(const WorldKnowledge &knowledge, bool guide,
         const std::string &withinMap, std::optional<WorldFloorPlanLayer> layer = {}) const;
     std::vector<const WorldRecord *> recordsAtLocation(const WorldMapLocation &location,

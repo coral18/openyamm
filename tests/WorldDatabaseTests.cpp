@@ -2160,6 +2160,70 @@ TEST_CASE("world database indoor services locate resident NPCs and trainers on t
     CHECK(world.locations().size() == 1);
 }
 
+TEST_CASE("shared door house alternatives retain distinct destinations and visit-gated discoveries")
+{
+    Fixture fixture;
+    std::vector<std::string> first(24), second(24), npc(16);
+    first[0] = "11"; first[2] = "House"; first[3] = "95"; first[5] = "Old Council";
+    second = first; second[0] = "12"; second[5] = "New Council";
+    REQUIRE(fixture.houses.loadFromRows({first, second}));
+    npc[0] = "43"; npc[1] = "New Councillor"; npc[6] = "12";
+    REQUIRE(fixture.npcs.loadNpcRows({npc}));
+    WorldDatabase world = fixture.database();
+    IndoorMapData geometry;
+    geometry.entities.resize(1);
+    geometry.entities[0].x = 10; geometry.entities[0].y = 20; geometry.entities[0].z = -512;
+    geometry.entities[0].eventIdSecondary = 10;
+    std::string error;
+    const auto program = ScriptedEventProgram::loadFromLuaText(R"lua(
+        evt.map[10] = function() error('indexing must not execute the door') end
+        evt.meta.map.contextActions = {
+            [10] = {kind = 'enter_house', source = 'script', houseId = 11, houseIds = {12, 11, 12}}
+        }
+    )lua", "@shared-council-door", ScriptedEventScope::Map, error);
+    REQUIRE_MESSAGE(program.has_value(), error);
+    REQUIRE(program->getContextActionMetadata(10));
+    CHECK(program->getContextActionMetadata(10)->houseIds == std::vector<uint32_t>{11, 12});
+    const MapStatsEntry &map = *fixture.maps.findById(95);
+    world.indexMapLocations(map, geometry, *program);
+    REQUIRE(world.locations().size() == 2);
+    const auto &a = world.locations()[0];
+    const auto &b = world.locations()[1];
+    CHECK(a.id != b.id);
+    CHECK(a.eventId == b.eventId);
+    CHECK(a.x == b.x);
+    CHECK(a.y == b.y);
+    CHECK(a.z == b.z);
+    CHECK(a.discoveryKeys == b.discoveryKeys);
+    CHECK(a.recordId != b.recordId);
+    CHECK(a.sharedEntrance);
+    CHECK(b.sharedEntrance);
+    WorldKnowledge known;
+    CHECK(world.queryLocations(known, false, WorldDatabase::mapId(map)).empty());
+    CHECK(world.queryLocations(known, true, WorldDatabase::mapId(map)).size() == 2);
+    CHECK(known.variables.empty());
+    known.visitedMaps.insert("7d21.blv");
+    known.variables[WorldDatabase::houseDiscoveryKey(12)] = 1;
+    const auto visited = world.queryLocations(known, false, WorldDatabase::mapId(map));
+    REQUIRE(visited.size() == 1);
+    CHECK(visited.front().recordId == "mm7:house/12");
+    CHECK_FALSE(world.visible(*world.find("mm7:house/11"), known, false));
+    const auto records = world.recordsAtLocation(visited.front(), known, false);
+    REQUIRE(records.size() == 1);
+    CHECK(records.front()->id == "mm7:house/12"); // A building visit does not reveal an unobserved resident.
+    CHECK(world.recordDisplayName(*records.front(), known, false) == "New Council");
+    CHECK(world.recordDisplayName(*records.front(), known, true) == "New Council - New Councillor");
+    CHECK(world.query(known, false, "New Councillor", WorldRecordKind::House).empty());
+    known.variables[WorldDatabase::npcDiscoveryKey(43)] = 1;
+    known.variables[worldNpcHouseKey(43)] = 12;
+    CHECK(world.recordDisplayName(*records.front(), known, false) == "New Council - New Councillor");
+    CHECK(world.query(known, false, "New Councillor", WorldRecordKind::House).size() == 1);
+    known.variables[WorldDatabase::houseDiscoveryKey(11)] = 1;
+    CHECK(world.queryLocations(known, false, WorldDatabase::mapId(map)).size() == 2);
+    world.indexMapLocations(map, geometry, *program);
+    CHECK(world.locations().size() == 2);
+}
+
 TEST_CASE("world database shared discovery queries reject secret current NPC locations and teaching offers")
 {
     Fixture fixture;

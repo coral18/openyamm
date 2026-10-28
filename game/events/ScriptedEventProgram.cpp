@@ -344,6 +344,7 @@ std::optional<ScriptedEventProgram::ContextActionMetadata> readContextActionMeta
     metadata.kind = readOptionalStringField(pLuaState, absoluteTableIndex, "kind").value_or("");
     metadata.source = readOptionalStringField(pLuaState, absoluteTableIndex, "source").value_or("");
     metadata.houseId = readOptionalUnsignedField(pLuaState, absoluteTableIndex, "houseId");
+    metadata.houseIds = readIntegerArrayFromField<uint32_t>(pLuaState, absoluteTableIndex, "houseIds");
     metadata.targetMap = readOptionalStringField(pLuaState, absoluteTableIndex, "targetMap");
     metadata.targetName = readOptionalStringField(pLuaState, absoluteTableIndex, "targetName");
     metadata.chestIds = readIntegerArrayFromField<uint32_t>(pLuaState, absoluteTableIndex, "chestIds");

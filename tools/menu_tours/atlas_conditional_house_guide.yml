@@ -1,0 +1,41 @@
+# 1600x900; use the matching isolated council fixture. For Balthazar, replace Kastore with The Shaman.
+output_dir: captures
+exit: true
+steps:
+- expect: gameplay
+- action: map_book
+- click:
+  - 1250
+  - 770
+- click:
+  - 275
+  - 126
+- text: Kastore
+- key: Return
+- pointer_move:
+  - 800
+  - 860
+- capture: discovery-before
+- click:
+  - 1152
+  - 57
+- wait: 3
+- click:
+  - 519
+  - 720
+- pointer_move:
+  - 800
+  - 860
+- capture: guide-venues
+- click:
+  - 1152
+  - 57
+- pointer_move:
+  - 800
+  - 860
+- capture: discovery-after
+- key: Escape
+- key: Escape
+- expect: gameplay
+- key: F9
+- wait: 0.4

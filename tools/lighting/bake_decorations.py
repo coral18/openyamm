@@ -174,15 +174,20 @@ def validate_autonote_metadata(text, script):
 
 def validate_site_context_metadata(text, script):
     lines = text.splitlines()
-    declaration = re.compile(r'SetMapContextAction\(([1-9][0-9]*), \{kind = "well", source = "script"\}\)')
+    declaration = re.compile(r'SetMapContextAction\(([1-9][0-9]*), '
+                             r'\{kind = "(?:well|fountain)", source = "script"\}\)')
+    house = re.compile(r'SetMapContextAction\(([1-9][0-9]*), '
+                       r'\{kind = "enter_house", source = "script", houseId = ([1-9][0-9]*)'
+                       r'(?:, houseIds = \{([1-9][0-9]*(?:, [1-9][0-9]*)*)\})?\}\)')
     if not lines or lines[0] != '-- Site context metadata; load after gameplay overlays':
         raise ValueError('Invalid site context metadata overlay: ' + str(script))
     for line in lines[1:]:
         line = line.strip()
         if not line or line.startswith('--'):
             continue
-        match = declaration.fullmatch(line)
-        if match is None or int(match[1]) > 65535:
+        match = declaration.fullmatch(line) or house.fullmatch(line)
+        values = [int(value) for value in re.findall(r'[0-9]+', line)]
+        if match is None or values[0] > 65535 or any(value > 4294967295 for value in values[1:]):
             raise ValueError('Invalid site context metadata overlay: ' + str(script))
 
 

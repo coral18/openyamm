@@ -179,6 +179,16 @@ and enters house 216 only after its existing condition is met. The final shared 
 49,618 assertions. Conditional campaign stages and secondary house branches remain outside this resolution
 check; these fixes are newer than Android 0.2.8. `ATLAS.md` records the scope and retained failure evidence.
 
+Shared entrances now accept authored house alternatives, covering Castle Gloaming's councils and all three
+Harmondale Arbiters. Seventeen Balthazar named/service venues now point to usable destinations instead of the
+generic flood dialogues. Actual visits gate Discovery independently; visible resident names distinguish shared
+house variants and participate in search. Local council-contact declarations make Kastore available in the
+selected dungeon's Guide index. The final shared suite passes 131 cases / 49,946 assertions; literal-catalog
+lighting checks pass 26 tests. Three AMD/OpenGL tours pass 62 UI steps / nine captures, eleven setup and nineteen
+post-UI steps. Discovery map/list crops match after Guide and checked venue flags remain unset. Other conditional
+locations, physical Android/controller checks and the broader content matrix remain open. These source fixes
+are newer than Android 0.2.8; details and reproduction are in `ATLAS.md` and the fixture README.
+
 Completion requires the missing native functions, data validation against the active game packages, meaningful
 unit/runtime checks and visual checks. A placeholder page or a list of unrelated journal text is not a completed
 quest guide. Reference data must describe the active merged/modded game, rather than silently assert vanilla rules.
