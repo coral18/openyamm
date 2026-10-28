@@ -42,6 +42,7 @@ struct WorldMapLocation
     uint16_t eventId = 0;
     float x = 0, y = 0;
     float z = 0;
+    std::vector<std::string> discoveryKeys;
 };
 
 // A possible assignment from a loaded map program, not a physical NPC placement or a discovery.
@@ -142,6 +143,10 @@ public:
         const std::string &search = {}, std::optional<WorldRecordKind> kind = {},
         const std::string &withinMap = {}, bool includeTravel = true) const;
     bool visible(const WorldRecord &record, const WorldKnowledge &knowledge, bool guide) const;
+    const MapStatsEntry *recordMap(const WorldRecord &record, const WorldKnowledge &knowledge, bool guide,
+        const std::string &preferredMap = {}) const;
+    std::string recordSearchText(const WorldRecord &record, const WorldKnowledge &knowledge, bool guide,
+        const std::string &preferredMap = {}) const;
     bool walkingRouteUnlocked(const WorldRecord &record, const WorldKnowledge &knowledge) const;
     std::vector<WorldTravelLink> travelLinks(const WorldKnowledge &knowledge, bool guide,
         const std::string &search = {}) const;
@@ -222,6 +227,7 @@ public:
     static const char *kindName(WorldRecordKind kind);
 
 private:
+    bool houseLocationKnown(const WorldMapLocation &location, const WorldKnowledge &knowledge) const;
     bool featureSiteVisible(const WorldMapFeature &feature, const WorldInteractionSite &site,
         const WorldKnowledge &knowledge, bool guide) const;
     void appendPossibleNpcLocation(uint32_t npcId, uint32_t houseId);
@@ -235,6 +241,7 @@ private:
     std::vector<std::string> m_transportIssues;
     std::unordered_map<std::string, size_t> m_byId;
     std::vector<WorldMapLocation> m_locations;
+    std::unordered_set<std::string> m_indexedLocationMaps;
     std::vector<WorldMapFeature> m_features;
     std::vector<WorldConnection> m_connections;
     std::vector<WorldItemSource> m_itemSources;

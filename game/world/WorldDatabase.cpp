@@ -337,11 +337,58 @@ const WorldRecord *WorldDatabase::find(const std::string &id) const
     return it == m_byId.end() ? nullptr : &m_records[it->second];
 }
 
+const MapStatsEntry *WorldDatabase::recordMap(const WorldRecord &record, const WorldKnowledge &knowledge,
+    bool guide, const std::string &preferredMap) const
+{
+    if (record.house == nullptr) return record.map;
+    if (!guide && !knowledge.knows(record)) return nullptr;
+    const WorldRecord *pPrimary = find(mapId(*record.map));
+    const bool primaryKnown = pPrimary != nullptr && (guide || knowledge.knows(*pPrimary));
+    if (primaryKnown && (preferredMap.empty() || preferredMap == pPrimary->id)) return record.map;
+    const MapStatsEntry *pFirst = nullptr;
+    for (const WorldMapLocation &location : m_locations)
+    {
+        const WorldRecord *pTarget = find(location.recordId);
+        if (pTarget == nullptr || pTarget->house != record.house
+            || (!guide && !houseLocationKnown(location, knowledge))) continue;
+        const WorldRecord *pSource = find(location.mapId);
+        if (pSource == nullptr) continue;
+        if (preferredMap == location.mapId) return pSource->map;
+        if (pFirst == nullptr) pFirst = pSource->map;
+    }
+    return primaryKnown ? record.map : pFirst;
+}
+
+std::string WorldDatabase::recordSearchText(const WorldRecord &record, const WorldKnowledge &knowledge,
+    bool guide, const std::string &preferredMap) const
+{
+    const MapStatsEntry *pMap = recordMap(record, knowledge, guide, preferredMap);
+    if (pMap == nullptr) return {};
+    WorldRecord located = record;
+    located.map = pMap;
+    std::string text = located.searchText();
+    if (record.house != nullptr && preferredMap.empty())
+        for (const WorldMapLocation &location : m_locations)
+        {
+            const WorldRecord *pTarget = find(location.recordId);
+            if (pTarget == nullptr || pTarget->house != record.house
+                || (!guide && !houseLocationKnown(location, knowledge))) continue;
+            if (const WorldRecord *pSource = find(location.mapId)) text += " " + pSource->name();
+        }
+    return text;
+}
+
 bool WorldDatabase::visible(const WorldRecord &record, const WorldKnowledge &knowledge, bool guide) const
 {
     if (record.possibleNpcLocation) return guide;
     if (guide)
+    {
+        // Once the actual map bindings are indexed, an unused table row is not a physical building.
+        if (record.kind == WorldRecordKind::House && m_indexedLocationMaps.contains(mapId(*record.map)))
+            return std::any_of(m_locations.begin(), m_locations.end(),
+                [&](const WorldMapLocation &location) { return location.recordId == record.id; });
         return true;
+    }
     if (!walkingRouteUnlocked(record, knowledge))
         return false;
     bool known = knowledge.knows(record);
@@ -362,9 +409,7 @@ bool WorldDatabase::visible(const WorldRecord &record, const WorldKnowledge &kno
     // require knowledge of the containing map so search cannot disclose an undiscovered location.
     if (record.house != nullptr)
     {
-        const auto *map = find(mapId(*record.map));
-        if (map == nullptr || !knowledge.knows(*map))
-            return false;
+        if (recordMap(record, knowledge, false) == nullptr) return false;
     }
     if (record.destination != nullptr)
     {
@@ -422,15 +467,27 @@ std::vector<const WorldRecord *> WorldDatabase::query(const WorldKnowledge &know
         if ((!includeTravel && record.kind == WorldRecordKind::Travel)
             || !visible(record, knowledge, guide) || (kind && record.kind != *kind))
             continue;
+        if (!guide && record.house != nullptr && !withinMap.empty() && mapId(*record.map) == withinMap)
+        {
+            const WorldRecord *pSource = find(withinMap);
+            if (pSource == nullptr || !knowledge.knows(*pSource)) continue;
+        }
         if (!withinMap.empty() && mapId(*record.map) != withinMap && record.parentId != withinMap)
         {
             const bool locatedHere = std::any_of(m_locations.begin(), m_locations.end(),
                 [&](const WorldMapLocation &location)
-                { return location.recordId == record.id && location.mapId == withinMap; });
+                {
+                    const WorldRecord *pTarget = find(location.recordId);
+                    return pTarget != nullptr && location.mapId == withinMap
+                        && (location.recordId == record.id
+                            || (record.house != nullptr && pTarget->house == record.house))
+                        && (guide || pTarget->house == nullptr || houseLocationKnown(location, knowledge));
+                });
             if (!locatedHere)
                 continue;
         }
-        if (!needle.empty() && toLowerCopy(record.searchText()).find(needle) == std::string::npos)
+        if (!needle.empty()
+            && toLowerCopy(recordSearchText(record, knowledge, guide, withinMap)).find(needle) == std::string::npos)
             continue;
         result.push_back(&record);
     }

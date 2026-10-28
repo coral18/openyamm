@@ -377,7 +377,9 @@ void AtlasScreen::select(const WorldRecord &record)
     m_selected = record.id;
     if (record.kind == WorldRecordKind::Travel && m_map.empty())
         return;
-    const std::string destination = WorldDatabase::mapId(*record.map);
+    const MapStatsEntry *pDestination = m_world.recordMap(record, m_knowledge, m_guide, m_map);
+    if (pDestination == nullptr) return;
+    const std::string destination = WorldDatabase::mapId(*pDestination);
     if (m_map != destination)
     {
         m_map = destination;
@@ -781,7 +783,8 @@ bool AtlasScreen::drawLocationMarkers(const WorldRecord &map, const Rect &image,
         { return (m_filter && pRecord->kind != *m_filter)
             || (m_trainerMastery != 0 && pRecord->teacher != nullptr && pRecord->teacher->mastery != m_trainerMastery)
             || (!m_search.empty()
-                && toLowerCopy(pRecord->searchText()).find(toLowerCopy(m_search)) == std::string::npos); });
+                && toLowerCopy(m_world.recordSearchText(*pRecord, m_knowledge, m_guide, m_map))
+                    .find(toLowerCopy(m_search)) == std::string::npos); });
         if (records.empty())
             continue;
         const auto point = pFloorPlan != nullptr ? pFloorPlan->worldToUv(location.x, location.y)
@@ -1269,6 +1272,8 @@ void AtlasScreen::drawList()
         const Rect row{viewport.x, viewport.y + (i * 38 - m_scroll) * designScale(),
                        viewport.width - 12 * designScale(), 34 * designScale()};
         const auto &record = *records[i];
+        const MapStatsEntry *pRecordMap = m_world.recordMap(record, m_knowledge, m_guide, m_map);
+        if (pRecordMap == nullptr) continue;
         if (button("atlas-record-" + record.id, row, "", "button", true, m_selected == record.id))
         {
             select(record);
@@ -1279,11 +1284,12 @@ void AtlasScreen::drawList()
         textInRect({row.x + 7 * designScale(), row.y + 2 * designScale(), row.width - 14 * designScale(), 18 * designScale()},
             record.name(), "menu_arrus", 12);
         const std::string subtitle = record.kind == WorldRecordKind::Travel
-            ? "From " + record.map->name + " - " + (record.walkingRoute != nullptr ? ""
+            ? "From " + pRecordMap->name + " - " + (record.walkingRoute != nullptr ? ""
                 : record.transport->quote ? "quoted " : "base ") + atlasTravelDays(record.walkingRoute
                     ? record.walkingRoute->travelDays : record.transport->quote
                         ? record.transport->quote->travelDays : int64_t(record.transport->route.travelDays))
-            : std::string(WorldDatabase::kindName(record.kind)) + (record.house != nullptr ? " - " + record.map->name : "");
+            : std::string(WorldDatabase::kindName(record.kind))
+                + (record.house != nullptr ? " - " + pRecordMap->name : "");
         textInRect({row.x + 7 * designScale(), row.y + 19 * designScale(), row.width - 14 * designScale(), 12 * designScale()},
             subtitle, "menu_lucida", 9, 0xffa9bbb7u);
     }
@@ -2216,7 +2222,8 @@ void AtlasScreen::drawDetails()
             text += " | Authored possibility; quest conditions may apply. Current presence is not implied.";
         if (record->house != nullptr)
         {
-            text += " | " + record->map->name + " | " + record->house->type;
+            const MapStatsEntry *pRecordMap = m_world.recordMap(*record, m_knowledge, m_guide, m_map);
+            if (pRecordMap != nullptr) text += " | " + pRecordMap->name + " | " + record->house->type;
             if (record->kind == WorldRecordKind::House)
                 text += " | Hours " + std::to_string(record->house->openHour) + ":00 - " + std::to_string(record->house->closeHour) + ":00";
         }

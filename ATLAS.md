@@ -3087,3 +3087,42 @@ The subsequent persistent local Android build packages this code as Release `0.2
 seconds. Package/source-data, stable-signing and native/ZIP alignment checks pass; the 18 runtime data updates
 are unchanged from 0.2.5. ADB lists no device, so this is a prepared APK rather than a POCO installation or
 physical-height acceptance. Artifact hashes and evidence are in `ATLAS_ANDROID_QA.md`.
+
+### Shared service entrances and actual Inn discoveries, 2026-10-28
+
+The base-house audit now compares World Database projections with actual callback/geometry bindings on all 137
+available MM7/MM8 maps. It finds 673 physical house IDs and one service used in two maps: Adventurer's Inn 1607,
+at Dagger Wound and Ravenshore. The old map equality check dropped the Dagger Wound entrance. Its new regression
+first failed with one indexed location instead of two; both now refer to the same canonical house record/table.
+The audit checks each usable house's projected map set, while retaining the existing primary-address checks and
+excluding transition/movie cards from usable buildings. This is base-package coverage; conditional scene/Lua
+overrides still need their broader audit.
+
+Derived locations retain the existing interaction receipt keys, including other faces of a connected door.
+Discovery requires knowledge of the source map and a real receipt for an additional address. Legacy global
+house discoveries keep their primary table address; missing secondary observations are not reconstructed.
+Service/NPC/trainer search and native map selection resolve the known/preferred physical address, so selecting
+the Dagger Wound Inn stays on Dagger Wound and cannot expose the name of an unknown primary region. No records
+or gameplay tables are duplicated, and there is no save-schema change.
+
+Native inspection also found an unused legacy Inn row beside the newly recovered physical service. Once a map's
+bindings are indexed, Guide's building list omits rows with no physical binding. Other reference registries keep
+their existing rows. The physical Inn appears once in the list; separate physical door/sign components keep their
+normal marker grouping. A real door-interaction fixture then exposed that the special Inn roster-overlay path
+returned before the ordinary house-discovery write. Successful Inn handling, including an empty roster, now
+records that same house-discovery key before returning.
+
+The Windows World Database/Guide suite passes 112 cases / 13,051 assertions, with the optional base-house cache
+actually configured. Four native AMD/OpenGL tours pass 118 UI steps and 24 fresh captures: fresh and actually
+visited Dagger Wound Inn, plus MM7/MM8 controller UI regressions using process-local SDL virtual gamepads.
+Two real-door fixtures pass 18 setup steps. Four post-UI verifiers pass 41 steps; the visited fixture retains
+house 1607 and its exact surface receipt through another save/load, while the unvisited one stays undiscovered.
+The checked map/gold/food also remain unchanged. Both Inn Discovery map/list crops are pixel-identical in RGB
+before and after Guide, and the inspected selected Guide view retains the Dagger Wound label and artwork.
+
+Use `mm8_shared_house_fixture.yml`, `atlas_shared_house.yml` and the matching privacy/visit verifiers in
+`tests/fixtures/atlas/`; the fixture creates separate before/visited saves through the actual press-interact path.
+Private receipts, source patch, logs and captures are under `atlas-shared-houses-20261028` in the Windows
+development root. The fixture uses an isolated party and an explicit door pose; it is not campaign traversal
+or a physical controller/phone acceptance test. These source changes are newer than the verified Android 0.2.6
+APK. Remaining device/content gates and the six unbound well declarations remain open.

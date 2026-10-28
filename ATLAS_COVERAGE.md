@@ -97,7 +97,7 @@ tables, and do not bundle its HTML, JS, translated prose, generated illustration
 | Continent overview | Existing game illustration | Original regional schematic | Optional licensed/original illustrated Jadame artwork |
 | Discovery fog and current party arrow | Implemented | Implemented | Wider dungeon/device checks |
 | Dungeon plans from engine geometry | Adaptive known height slices, party-height selection, component-aware discovered pins and height-aware notes | Same shared projection and controls | Sloped/mechanism-driven geometry and wider floor/visibility/device audit |
-| Buildings, resident NPCs, trainers | Current/observed residents, Guide-only declared possible residences, indoor service markers | Same shared index | Conditional service eligibility, shared-service placements and generated/roaming NPCs |
+| Buildings, resident NPCs, trainers | Current/observed residents, Guide-only declared possible residences, indoor service markers and multiple physical entrances per canonical service | Same shared index; actual Adventurer's Inn discovery and Dagger Wound/Ravenshore entrances | Conditional service eligibility, wider scripted placement audit and generated/roaming NPCs |
 | Trainer requirements and prices | Gameplay evaluator, observed offers and race-specific mastery comparisons | Same shared evaluator | Conditional eligibility audit and starting-skill/race-selection checks |
 | Walking and scheduled transport | Directed walking/coach/boat graph, departure pins, last-offered schedules/fare/duration, live local overrides and destination navigation | Same shared knowledge/navigation | Remote scripted timetable references, availability forecasting and arrival-point links |
 | Quest giver/objective/return chains | Shared registry, 76 quests, conditional clues and possible contact-location links | Shared registry, 69 quests, repaired Accuracy state, stage-sensitive Aislen/Pole delivery contacts and possible contact-location links | Remaining conditional stages and wider campaign audit; unused legacy MM8 rows 5/172 are not invented playable chains |
@@ -118,6 +118,19 @@ The 2026-10-27 replacement-model sight audit found no `models/actors.yml` in the
 packages. Actor model replacements are currently experimental, behind the default-off `debug.actor_models`
 setting; normal sprite observations remain the active path. The model observation limitation is retained in the
 matrix as a conditional gap and recorded for a later decision in `ATLAS_DECISIONS.md`; no model hook was added.
+
+The 2026-10-28 house audit now checks projected Atlas locations against physical base callbacks on 137 packaged
+maps, covering 673 house IDs and excluding transition cards from usable-venue checks. Its one shared service,
+Adventurer's Inn 1607, retains both Dagger Wound and Ravenshore entrances. The shared index no longer drops an
+entrance because its map differs from the table's primary address. Additional addresses require their own saved
+interaction in Discovery; native selection, labels and search use the known local address. Guide omits unused
+building rows after their map's actual bindings are indexed. The Inn's special roster overlay now records a real
+house visit through the ordinary discovery key.
+
+The Windows suite passes 112 cases / 13,051 assertions. Four native tours pass 118 UI steps / 24 captures;
+post-UI verifiers pass 41 steps and two fresh real-door fixture runs add 18 steps. Both visited and unvisited
+Discovery map/list crops remain identical after Guide. This validates the shared-house fix and sampled UI/save
+paths, not every conditional placement or physical Android input. It is newer than the prepared 0.2.6 APK.
 
 Completion requires the missing native functions, data validation against the active game packages, meaningful
 unit/runtime checks and visual checks. A placeholder page or a list of unrelated journal text is not a completed

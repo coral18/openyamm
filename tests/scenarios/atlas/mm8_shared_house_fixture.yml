@@ -1,0 +1,25 @@
+id: atlas.mm8_shared_house_fixture
+title: Fresh Dagger Wound save for shared-house Atlas navigation
+world: mm8
+mode: faithful
+steps:
+- new_game_flow:
+    start_map: out01.odm
+    party:
+      gold: 5000
+      food: 10
+      members:
+      - {name: Atlas Tester, class: Knight, level: 20, race_id: 0, skills: [], equipment: {}}
+- save_game: before
+- press_interact:
+    pose: {x: 13568, y: 9280, z: 960, yaw: 0, pitch: 0}
+    expect: {kind: event_target, triggered_event: 199, can_activate: true}
+- &house
+  assert: {named_global_var_changed: {name: openyamm.discovery.house/1607, value: 1}}
+- &site
+  assert:
+    named_map_var_changed: {name: openyamm.discovery.site/bmodel/64/surface/6/event/199, value: 1}
+- save_game: visited
+- load_game: visited
+- *house
+- *site

@@ -38,7 +38,7 @@ void WorldDatabase::indexMapSites(const WorldRecord &source, const std::vector<W
         {
             if (metadata->kind == "enter_house" && metadata->houseId
                 && record.kind == WorldRecordKind::House && record.house->id == *metadata->houseId
-                && record.map == pSource->map)
+                && record.map->worldId == pSource->map->worldId)
                 return &record;
             if (pSource->kind == WorldRecordKind::Region
                 && metadata->kind == "enter_dungeon" && metadata->targetMap
@@ -48,16 +48,23 @@ void WorldDatabase::indexMapSites(const WorldRecord &source, const std::vector<W
         }
         return nullptr;
     };
-    const auto add = [&](const std::string &site, uint16_t eventId, double x, double y, double z)
+    const auto add = [&](const WorldInteractionSite &site)
     {
+        const uint16_t eventId = site.eventId;
+        const double x = site.x, y = site.y, z = site.z;
         const WorldRecord *pTarget = target(eventId);
         if (pTarget == nullptr || !std::isfinite(x) || !std::isfinite(y) || !std::isfinite(z))
             return;
         if (pSource->kind == WorldRecordKind::Region
             && (x < -32768 || x > 32768 || y < -32768 || y > 32768))
             return;
-        m_locations.push_back({pSource->id + "/site/" + site + "/event/" + std::to_string(eventId),
-                               pSource->id, pTarget->id, eventId, float(x), float(y), float(z)});
+        WorldMapLocation location{pSource->id + "/site/" + site.id + "/event/" + std::to_string(eventId),
+            pSource->id, pTarget->id, eventId, float(x), float(y), float(z)};
+        location.discoveryKeys.push_back(worldSiteDiscoveryKey(eventId, site.id));
+        for (uint32_t face : site.faceIds)
+            location.discoveryKeys.push_back(worldSiteDiscoveryKey(eventId,
+                site.surfacePrefix + "surface/" + std::to_string(face)));
+        m_locations.push_back(std::move(location));
     };
     std::erase_if(m_features, [pSource](const WorldMapFeature &feature)
     { return feature.mapId == pSource->id && feature.kind != WorldMapFeatureKind::Monster
@@ -80,8 +87,9 @@ void WorldDatabase::indexMapSites(const WorldRecord &source, const std::vector<W
                 && feature.site.id != site.id && worldMapFeatureContainsSite(feature, site.id);
         });
         if (groupedComponent) continue;
-        add(site.id, site.eventId, site.x, site.y, site.z);
+        add(site);
     }
+    m_indexedLocationMaps.insert(source.id);
 }
 
 const std::vector<WorldMapLocation> &WorldDatabase::locations() const { return m_locations; }
@@ -363,6 +371,19 @@ std::vector<const WorldMapFeature *> WorldDatabase::queryFeatures(const WorldKno
     return result;
 }
 
+bool WorldDatabase::houseLocationKnown(const WorldMapLocation &location, const WorldKnowledge &knowledge) const
+{
+    const WorldRecord *pSource = find(location.mapId);
+    const WorldRecord *pTarget = find(location.recordId);
+    if (pSource == nullptr || pTarget == nullptr || !knowledge.knows(*pSource)) return false;
+    // Retain the table address for legacy house discoveries. An additional entrance needs its own observation.
+    if (location.mapId == mapId(*pTarget->map)) return true;
+    const auto found = knowledge.interactedSites.find(toLowerCopy(pSource->map->fileName));
+    return found != knowledge.interactedSites.end()
+        && std::any_of(location.discoveryKeys.begin(), location.discoveryKeys.end(),
+            [&](const std::string &key) { return found->second.contains(key); });
+}
+
 bool WorldDatabase::locationVisible(const WorldMapLocation &location, const WorldKnowledge &knowledge, bool guide) const
 {
     const WorldRecord *pSource = find(location.mapId);
@@ -417,6 +438,7 @@ std::vector<const WorldRecord *> WorldDatabase::recordsAtLocation(const WorldMap
     const WorldRecord *pTarget = find(location.recordId);
     if (pTarget == nullptr)
         return result;
+    if (!guide && pTarget->house != nullptr && !houseLocationKnown(location, knowledge)) return result;
     for (const WorldRecord &record : m_records)
         if ((record.kind != WorldRecordKind::Travel || includeTravel)
             && (&record == pTarget || (pTarget->house != nullptr && record.house == pTarget->house))

@@ -1,0 +1,17 @@
+id: atlas.mm8_shared_house_privacy
+title: Browsing both shared-house addresses in Guide awards no house discovery
+world: mm8
+mode: faithful
+steps:
+- load_game: {name: before, path: saves/before.oysav}
+- &map
+  assert: {map: out01.odm, gold: 5000, food: 10}
+- &unknown
+  assert: {named_global_var_changed: {name: openyamm.discovery.house/1607, value: 0}}
+- load_game: {name: quicksave, path: saves/quicksave.oysav}
+- *map
+- *unknown
+- save_game: shared-house-verified
+- load_game: shared-house-verified
+- *map
+- *unknown

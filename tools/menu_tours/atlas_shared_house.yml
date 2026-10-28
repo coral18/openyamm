@@ -1,0 +1,23 @@
+# 1600x900; fresh out01 save. Selecting the shared Inn must retain Dagger Wound, not jump to Ravenshore.
+output_dir: captures
+exit: true
+steps:
+- expect: gameplay
+- action: map_book
+- click: [1250, 770]
+- click: [275, 126]
+- text: The Adventurer's Inn
+- key: Return
+- capture: discovery-before
+- click: [1152, 57]
+- wait: 4
+- capture: guide-local-inn
+- click: [1250, 260]
+- capture: guide-selected-local-inn
+- click: [1152, 57]
+- capture: discovery-after-guide
+- key: Escape
+- key: Escape
+- expect: gameplay
+- key: F9
+- wait: 1

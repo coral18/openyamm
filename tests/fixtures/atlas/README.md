@@ -1,5 +1,23 @@
 # Atlas fixtures
 
+## Shared service entrances
+
+Run `tests/scenarios/atlas/mm8_shared_house_fixture.yml` with normal packages and separate private settings,
+mods and saves. It produces `before.oysav` and `visited.oysav` under the temporary scenario save directory
+`openyamm_scenario_saves/atlas_mm8_shared_house_fixture/`. The latter uses an actual press-interact on Dagger
+Wound's Inn door (event 199, model 64, face 6), then verifies house 1607 and the map-local receipt after load.
+Its explicit pose and isolated party are fixture shortcuts, not campaign traversal. Keep immortal QA settings
+enabled to avoid unrelated combat during UI checks.
+
+Copy both files to the private `saves/` directory. Run `tools/menu_tours/atlas_shared_house.yml` at 1600x900,
+first loading `before.oysav` and then `visited.oysav` in separate directories. Guide should show one physical
+Inn row on Dagger Wound; selecting it retains that map and label. Discovery shows it only in the visited case.
+Compare the map/list captures before and after Guide in each run. The tour writes `saves/quicksave.oysav`.
+Run `mm8_shared_house_privacy.yml` for the unvisited case and `mm8_shared_house_visit.yml` for the visited case
+through `--headless-run-scenario` from their respective directories. These check the selected map/gold/food,
+house knowledge and, for the real visit, its exact surface receipt through another save/load. They do not
+establish full-save equality, all scripted placements or physical Android/controller acceptance.
+
 ## Refined-height notes
 
 With normal runtime packages and separate private settings/mods/saves, run

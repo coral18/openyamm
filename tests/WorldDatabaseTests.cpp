@@ -1777,6 +1777,95 @@ TEST_CASE("world database locates real doors without revealing unvisited service
     CHECK(database.query(knowledge, false, "Sword").empty());
 }
 
+TEST_CASE("world database shared houses retain separate physical discoveries and local navigation")
+{
+    Fixture f;
+    REQUIRE(f.maps.loadFromRows({mapRow(63, "Harmondale", "7out02.odm", "mm7"),
+        mapRow(64, "Erathia", "7out03.odm", "mm7"),
+        mapRow(1, "Dagger Wound", "out01.odm", "mm8")}));
+    std::vector<std::string> shop(24), unused(24);
+    shop[0] = "11"; shop[2] = "Weapon Shop"; shop[3] = "63"; shop[5] = "Blade's End";
+    unused[0] = "12"; unused[2] = "House"; unused[3] = "64"; unused[5] = "Unused table address";
+    REQUIRE(f.houses.loadFromRows({shop, unused}));
+    WorldDatabase database = f.database();
+    WorldKnowledge known;
+    const WorldRecord *pUnused = database.find("mm7:house/12");
+    REQUIRE(pUnused != nullptr);
+    CHECK(database.visible(*pUnused, known, true)); // Binding data has not been loaded yet.
+    std::string error;
+    const auto program = ScriptedEventProgram::loadFromLuaText(R"lua(
+        evt.map[3] = function() end
+        evt.meta.map.contextActions = {
+            [3] = { kind = "enter_house", source = "opcode", houseId = 11 }
+        }
+    )lua", "@shared-house", ScriptedEventScope::Map, error);
+    REQUIRE_MESSAGE(program.has_value(), error);
+    OutdoorMapData map;
+    map.worldId = "mm7";
+    map.entities.resize(1);
+    map.entities[0].eventIdSecondary = 3;
+    for (const std::string &file : {"7out02.odm", "7out03.odm"})
+    {
+        map.fileName = file;
+        database.indexMapLocations(map, *program);
+    }
+    REQUIRE(database.locations().size() == 2);
+    const std::string first = WorldDatabase::mapId(*f.maps.findById(63));
+    const std::string second = WorldDatabase::mapId(*f.maps.findById(64));
+    const WorldRecord *pHouse = database.find(database.locations()[0].recordId);
+    REQUIRE(pHouse != nullptr);
+    CHECK(database.locations()[1].recordId == pHouse->id);
+    CHECK_FALSE(database.visible(*pUnused, known, true));
+    CHECK(database.queryLocations(known, true, second).size() == 1);
+    CHECK(database.query(known, true, "Blade", WorldRecordKind::House, second).size() == 1);
+    CHECK(database.queryLocations(known, false, second).empty());
+    known.visitedMaps.insert("7out03.odm");
+    known.variables[WorldDatabase::houseDiscoveryKey(11)] = 1;
+    CHECK(database.queryLocations(known, false, second).empty());
+    known.interactedSites["7out03.odm"].insert(worldSiteDiscoveryKey(3, "decoration/0"));
+    CHECK(database.queryLocations(known, false, second).size() == 1);
+    CHECK(database.query(known, false, "Blade", WorldRecordKind::House, second).size() == 1);
+    CHECK(database.query(known, false, "Harmondale", WorldRecordKind::House).empty());
+    CHECK(database.query(known, false, "Erathia", WorldRecordKind::House).size() == 1);
+    CHECK(database.queryLocations(known, false, first).empty());
+    CHECK(database.query(known, false, "Blade", WorldRecordKind::House, first).empty());
+    CHECK(database.recordMap(*pHouse, known, false, second)->id == 64);
+    CHECK(database.recordMap(*pHouse, known, true, second)->id == 64);
+    CHECK(database.recordMap(*pHouse, known, true, first)->id == 63);
+    known.variables[WorldDatabase::npcDiscoveryKey(42)] = 1;
+    known.variables[worldNpcHouseKey(42)] = 11;
+    known.variables[worldNpcTeacherKey(42, 305)] = 1;
+    CHECK(database.recordsAtLocation(database.locations()[1], known, false).size() == 3);
+    known.interactedSites.clear();
+    CHECK(database.query(known, false, "Blade", WorldRecordKind::House, second).empty());
+    CHECK(known.visitedMaps.size() == 1);
+    known.visitedMaps.insert("7out02.odm");
+    CHECK(database.queryLocations(known, false, first).size() == 1);
+    CHECK(database.queryLocations(known, false, second).empty());
+    known.interactedSites["7out03.odm"].insert(worldSiteDiscoveryKey(4, "decoration/0"));
+    known.interactedSites["7out03.odm"].insert(worldSiteDiscoveryKey(3, "decoration/1"));
+    CHECK(database.queryLocations(known, false, second).empty());
+    map.fileName = "7out03.odm";
+    map.entities.clear();
+    map.bmodels.resize(1);
+    map.bmodels[0].vertices = {{0, 0, 0}, {10, 0, 0}, {10, 0, 20}, {0, 0, 20}};
+    OutdoorBModelFace face;
+    face.cogTriggeredNumber = 3;
+    face.vertexIndices = {0, 1, 2};
+    map.bmodels[0].faces.push_back(face);
+    face.vertexIndices = {0, 2, 3};
+    map.bmodels[0].faces.push_back(face);
+    database.indexMapLocations(map, *program);
+    CHECK(database.queryLocations(known, false, second).empty());
+    known.interactedSites["7out03.odm"].insert(worldSiteDiscoveryKey(3, "bmodel/0/surface/1"));
+    CHECK(database.queryLocations(known, false, second).size() == 1);
+    CHECK(database.recordMap(*pHouse, known, false, second)->id == 64);
+    map.worldId = "mm8";
+    map.fileName = "out01.odm";
+    database.indexMapLocations(map, *program);
+    CHECK(database.locations().size() == 2);
+}
+
 TEST_CASE("world database entrance discovery requires full exploration of the correct cell")
 {
     WorldRegionMapKnowledge knowledge;
@@ -1951,9 +2040,14 @@ TEST_CASE("world database packaged houses agree with base event metadata and phy
             transitionCards.insert(uint32_t(std::stoul(row[0])));
     }
     std::map<uint32_t, std::set<int>> locations;
+    std::map<uint32_t, std::set<int>> projectedLocations;
     size_t auditedMaps = 0;
+    const NpcDialogTable npcs;
+    const MergedTeacherTopicTable teachers;
+    const WorldKnowledge unknown;
     for (const std::string &world : {"mm7", "mm8"})
     {
+        WorldDatabase database(maps, houses, npcs, teachers, world);
         for (const MapStatsEntry &map : maps.getEntries())
         {
             if (map.worldId != world) continue;
@@ -1971,15 +2065,26 @@ TEST_CASE("world database packaged houses agree with base event metadata and phy
             std::vector<WorldInteractionSite> sites;
             if (std::filesystem::path(map.fileName).extension() == ".odm")
             {
-                const auto geometry = OutdoorMapDataLoader().loadFromBytes(bytes);
+                auto geometry = OutdoorMapDataLoader().loadFromBytes(bytes);
                 REQUIRE_MESSAGE(geometry.has_value(), map.fileName);
                 sites = worldInteractionSites(*geometry);
+                geometry->fileName = map.fileName;
+                geometry->worldId = world;
+                database.indexMapLocations(*geometry, *program);
             }
             else
             {
                 const auto geometry = IndoorMapDataLoader().loadFromBytes(bytes);
                 REQUIRE_MESSAGE(geometry.has_value(), map.fileName);
                 sites = worldInteractionSites(*geometry);
+                database.indexMapLocations(map, *geometry, *program);
+            }
+            for (const WorldMapLocation &location : database.queryLocations(
+                unknown, true, WorldDatabase::mapId(map)))
+            {
+                const WorldRecord *pRecord = database.find(location.recordId);
+                REQUIRE(pRecord != nullptr);
+                if (pRecord->house != nullptr) projectedLocations[pRecord->house->id].insert(map.id);
             }
             for (const WorldInteractionSite &site : sites)
             {
@@ -1998,16 +2103,18 @@ TEST_CASE("world database packaged houses agree with base event metadata and phy
         if (transitionCards.contains(id)) continue;
         const HouseEntry *pHouse = houses.get(id);
         REQUIRE_MESSAGE(pHouse != nullptr, id);
+        INFO("House ", id, " ", pHouse->name);
+        CHECK(projectedLocations[id] == actual);
         if (actual.size() != 1)
         {
             ++ambiguous;
-            continue; // Shared services need multiple location records, not an arbitrary single-map repair.
+            MESSAGE("Shared house ", id, " ", pHouse->name, " has ", actual.size(), " physical map locations.");
+            continue; // One canonical house record can have several independently discovered entrances.
         }
-        INFO("House ", id, " ", pHouse->name);
         CHECK(pHouse->mapId == uint32_t(*actual.begin()));
     }
     MESSAGE("Audited ", auditedMaps, " maps, ", locations.size(), " physical house IDs; ",
-        ambiguous, " shared service requires multiple locations.");
+        ambiguous, " shared service retains multiple physical locations.");
 }
 
 TEST_CASE("world database indoor services locate resident NPCs and trainers on the floor plan")

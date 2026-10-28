@@ -3936,6 +3936,7 @@ GameplayDialogController::PresentPendingDialogResult GameplayDialogController::p
     {
         if (tryOpenAdventurersInnOverlay(context, originalContext.sourceId))
         {
+            context.eventRuntimeState.namedGlobalVars[WorldDatabase::houseDiscoveryKey(originalContext.sourceId)] = 1;
             return result;
         }
 

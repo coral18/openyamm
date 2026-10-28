@@ -199,3 +199,7 @@ Private APK, build/source receipts and package/signature/alignment reports are r
 `atlas-android-026-20261028`. ADB lists no device at package acceptance despite the user's reported USB
 connection. No transfer, installation or phone-data write was attempted. The last verified installed version
 is 0.2.5 / 108; adaptive-height acceptance on POCO remains pending.
+
+The subsequent Windows-validated shared-house entrance, unused Guide-building-row and Inn-overlay discovery
+fixes are newer source changes. They are not in this archived 0.2.6 APK. The verified package is retained
+unchanged; a subsequent Release must package these fixes before claiming Android acceptance of them.
