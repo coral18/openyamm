@@ -635,3 +635,13 @@ cached runtime assets. It loads all 137 maps with current scenes and overlays, r
 EnterHouse target to a Guide pin with the exact site key, and checks independent Discovery at additional
 addresses. This uses the normal asset loader; the older `OPENYAMM_ATLAS_AUDIT_ROOT` base cache is not its source.
 It does not infer missing callback metadata or simulate every conditional branch.
+
+
+## Unbound local well references
+
+Run `well references without active physical bindings*` with the current `OPENYAMM_REGRESSION_ASSETS_ROOT`.
+It loads MM7 `out12.odm` and MM8 `out04.odm`, `out06.odm`, `out08.odm` through current scenes/overlays and
+checks raw scripted bindings including hidden model surfaces. A declared callback without a physical binding
+must not acquire an Atlas-only located feature. Inherited slots are enumerated with their active table and
+initial state, independently of the local callback namespace. This does not prove intended original placement;
+see `ATLAS_SITE_REFERENCE_AUDIT.md` for runtime-mutability findings and remaining provenance limits.

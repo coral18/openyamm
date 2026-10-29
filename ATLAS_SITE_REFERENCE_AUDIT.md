@@ -188,3 +188,24 @@ types use current names with identification gates; repeated types across callbac
 recorded day once. The existing receipt schema has no quantity, so quantities and net deltas are not inferred.
 The saved immediate snapshot remains unchanged. Broader deferred attribution and all six missing well bindings
 remain open. Private callback controls are documented in the fixture README and ATLAS.md.
+
+
+## Active binding and runtime-mutability check, 2026-10-29
+
+The active asset loader rechecks the four affected maps with their current scenes and event overlays.
+All six local callback references are present, but their event IDs occur in neither raw scripted decoration
+bindings nor raw model-surface trigger IDs, including hidden surfaces. The Atlas emits no located feature
+for them. The focused case `well references without active physical bindings*` passes 40 assertions and
+also enumerates 46 inherited decoration slots using the active decoration table and initial map state.
+
+The supported runtime mutators do not supply the missing local binding: `luaSetSprite` stores only visibility
+and texture overrides; `luaSetFacetBit` changes facet masks. `EventRuntimeState::SpriteOverride` has no event-ID
+field. Inherited decoration dispatch selects a global event from its declared family/range, rather than
+assigning a missing local well callback; the family registry contains no well family. This narrows the known
+active-engine explanation to map/import content, not a visibility-only Atlas extractor or a normal late event
+reassignment. It does not certify future mods or establish the intended original coordinates.
+
+Original map/import provenance is still required before changing geography. The readable GrayFace callbacks
+establish effects, not placement. No Atlas-only pin, invented coordinate, generated event edit or gameplay
+asset change is introduced. The test permits a future authoritative map repair to supply an actual binding.
+Private evidence is retained in `atlas-well-bindings-20261029` under the Windows development root.

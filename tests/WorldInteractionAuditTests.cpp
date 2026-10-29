@@ -248,6 +248,71 @@ TEST_CASE("active MM7 and MM8 physical house bindings resolve without disclosing
         " services, ", additional, " additional-address bindings.");
 }
 
+TEST_CASE("well references without active physical bindings never invent Atlas coordinates")
+{
+    using namespace OpenYAMM::Game;
+    REQUIRE_MESSAGE(OpenYAMM::Tests::regressionMapLoaderLoaded(),
+        OpenYAMM::Tests::regressionMapLoaderFailure());
+    const auto &fixture = OpenYAMM::Tests::regressionMapLoader();
+    const auto &data = fixture.gameDataLoader;
+    const auto decorations = MapAssetLoader::loadDecorationTable(fixture.assetFileSystem);
+    REQUIRE(decorations);
+    size_t unbound = 0, inheritedSites = 0;
+    struct ReferenceMap
+    {
+        const char *pWorld;
+        const char *pFile;
+        std::vector<uint16_t> events;
+    };
+    for (const ReferenceMap &reference : std::vector<ReferenceMap>{
+        {"mm7", "out12.odm", {202}}, {"mm8", "out04.odm", {101, 102}},
+        {"mm8", "out06.odm", {102}}, {"mm8", "out08.odm", {101, 102}}})
+    {
+        CAPTURE(reference.pWorld);
+        CAPTURE(reference.pFile);
+        const auto &maps = data.getMapStats().getEntries();
+        const auto entry = std::find_if(maps.begin(), maps.end(), [&](const MapStatsEntry &map)
+            { return map.worldId == reference.pWorld && map.fileName == reference.pFile; });
+        REQUIRE(entry != maps.end());
+        auto map = MapAssetLoader().load(fixture.assetFileSystem, *entry, data.getMonsterTable(),
+            data.getObjectTable(), MapLoadPurpose::HeadlessGameplay);
+        REQUIRE(map);
+        REQUIRE(map->outdoorMapData);
+        std::string error;
+        REQUIRE_MESSAGE(GameDataLoader::loadEventPrograms(fixture.assetFileSystem, *map, error), error);
+        REQUIRE(map->localEventProgram);
+        const OutdoorMapData &geometry = *map->outdoorMapData;
+        const auto sites = worldInteractionSites(geometry);
+        const auto inherited = worldInheritedDecorationSites(geometry, *decorations,
+            map->outdoorMapDeltaData ? &*map->outdoorMapDeltaData : nullptr);
+        inheritedSites += inherited.size();
+        WorldDatabase world(data.getMapStats(), data.getHouseTable(), data.getNpcDialogTable(),
+            data.getMergedTeacherTopicTable(), reference.pWorld);
+        world.indexMapLocations(geometry, *map->localEventProgram);
+        world.indexMapInteractionReferences(*entry, data.getItemTable(), data.getSpellTable());
+        for (uint16_t event : reference.events)
+        {
+            CAPTURE(event);
+            REQUIRE(map->localEventProgram->siteReferences().contains(event));
+            // Raw bindings include hidden surfaces, unlike the visible-site extractor.
+            bool bound = false;
+            for (const OutdoorBModel &model : geometry.bmodels)
+                for (const OutdoorBModelFace &face : model.faces)
+                    bound |= face.cogTriggeredNumber == event;
+            for (const OutdoorEntity &entity : geometry.entities)
+                bound |= entity.scriptEventId() == event;
+            if (bound) continue; // A future authoritative map repair may legitimately bind the callback.
+            CHECK(std::none_of(sites.begin(), sites.end(),
+                [event](const WorldInteractionSite &site) { return site.eventId == event; }));
+            CHECK(std::none_of(world.features().begin(), world.features().end(),
+                [event](const WorldMapFeature &feature) { return feature.site.eventId == event; }));
+            ++unbound;
+        }
+    }
+    MESSAGE("Active well reference audit: ", unbound, " unbound local callbacks, ", inheritedSites,
+        " inherited decoration slots checked separately; no Atlas-only placement.");
+}
+
 TEST_CASE("active conditional house entrances preserve council branches and flooded venue discovery")
 {
     using namespace OpenYAMM::Game;

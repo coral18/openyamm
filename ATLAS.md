@@ -3352,3 +3352,14 @@ It does not detect an undeclared EnterHouse call or certify conditional eligibil
 checks above cover specific hand-written replacements. Reproduce with test case `active MM7 and MM8 physical
 house*` and `OPENYAMM_REGRESSION_ASSETS_ROOT` pointing at the current cached runtime. No game source or assets
 changed during this audit; native acceptance remains that of the preceding shared-venue checkpoint.
+
+
+### Remaining well declarations: active binding check, 2026-10-29
+
+The focused active-loader audit of the four affected maps passes 40 assertions. Six known local references
+still lack raw scripted decoration/model-surface bindings, including hidden surfaces, and receive no invented
+Atlas feature. The same load enumerates 46 inherited slots. Supported sprite/facet mutators cannot assign
+these missing local event IDs; inherited family dispatch uses separate global callbacks. This narrows the
+current content gap without fabricating a map repair. Original-map/import provenance remains open; detailed
+findings and reproduction are in `ATLAS_SITE_REFERENCE_AUDIT.md`. No runtime source/assets or Android state
+changed in this audit.
