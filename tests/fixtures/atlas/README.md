@@ -1,5 +1,24 @@
 # Atlas fixtures
 
+## Tatalia's shared cross-world Inn
+
+Run `tests/scenarios/atlas/mm7_tatalia_shared_inn.yml` from an isolated runtime with the Atlas enabled and
+normal MM7/MM8 packages. Use `--world mm8 --headless-run-scenario <fixture>`: the fixture first visits the actual
+MM8 Inn, then explicitly loads Tatalia, retaining the global service discovery. It saves `unvisited.oysav`
+and `visited.oysav` under the scenario temporary directory `atlas_mm7_tatalia_shared_inn`; the latter actually
+interacts with event 82 and checks the local site discovery through save/load. This map load is test setup,
+not a cross-world travel assertion.
+
+Copy each save into a separate private runtime as `saves/before.oysav`. At 1600x900 set the startup save and
+`debug.menu_input_tour_path` to `tools/menu_tours/atlas_mm7_tatalia_shared_inn.yml`, then start `--world mm7`.
+Restore the one-shot tour directive after any headless preparation. The tour checks normal Map Book entry,
+searches Adventurer, captures Discovery/Guide/Discovery, exits and writes a quicksave. The unvisited state
+must omit the Inn; the visited state must show Building - Tatalia. Compare map/list RGB crops before/after
+Guide and fresh-load the quicksave: global `openyamm.discovery.house/1607` remains 1, while local
+`openyamm.discovery.site/bmodel/37/surface/40/event/82` remains 0/1 respectively. Both retain Tatalia, gold
+5000 and food 10. Unit cases `physical shared venues*` and `Tatalia shared Inn*` additionally cover projected
+residents/trainers and authoritative runtime geometry. Never point fixture saves at a user campaign.
+
 ## Conditional house entrances
 
 Run `mm7_council_house_fixture.yml` or `mm8_balthazar_house_fixture.yml` from `tests/scenarios/atlas/` with

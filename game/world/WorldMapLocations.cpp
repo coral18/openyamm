@@ -27,7 +27,38 @@ void WorldDatabase::indexMapLocations(const OutdoorMapData &map, const ScriptedE
 void WorldDatabase::indexMapSites(const WorldRecord &source, const std::vector<WorldInteractionSite> &sites,
     const ScriptedEventProgram &events)
 {
-    const WorldRecord *pSource = &source;
+    // Registering a shared venue can append residents and reallocate the record vector.
+    const WorldRecord sourceRecord = source;
+    const WorldRecord *pSource = &sourceRecord;
+    std::unordered_set<uint32_t> checkedHouses;
+    const auto projectHouse = [&](uint32_t id)
+    {
+        if (!checkedHouses.insert(id).second) return;
+        if (std::any_of(m_records.begin(), m_records.end(), [id](const WorldRecord &record)
+            { return record.kind == WorldRecordKind::House && record.house->id == id; })) return;
+        const HouseEntry *pHouse = m_pHouses->get(id);
+        if (pHouse == nullptr || toLowerCopy(pHouse->type) == "dungeon ent") return;
+        // A physical EnterHouse binding is authoritative even when the global service has another address.
+        const size_t first = m_records.size();
+        appendHouseRecords(*pHouse, *pSource->map);
+        for (size_t i = first; i < m_records.size(); ++i)
+            if (!m_byId.emplace(m_records[i].id, i).second)
+                throw std::invalid_argument("Duplicate world record: " + m_records[i].id);
+        if (!m_npcsState.observedOnly)
+        {
+            for (uint32_t npc : m_pNpcs->getNpcIdsForHouse(id)) appendPossibleNpcLocation(npc, id);
+            for (const auto &[npc, house] : m_declaredNpcLocations)
+                if (house == id) appendPossibleNpcLocation(npc, house);
+        }
+    };
+    for (const WorldInteractionSite &site : sites)
+    {
+        const auto metadata = events.getContextActionMetadata(site.eventId);
+        if (!metadata || metadata->kind != "enter_house" || metadata->hidden
+            || (metadata->source != "script" && metadata->source != "opcode")) continue;
+        if (metadata->houseId) projectHouse(*metadata->houseId);
+        for (uint32_t id : metadata->houseIds) projectHouse(id);
+    }
     std::erase_if(m_locations, [pSource](const WorldMapLocation &location) { return location.mapId == pSource->id; });
     const auto targets = [&](uint16_t eventId)
     {
@@ -97,7 +128,7 @@ void WorldDatabase::indexMapSites(const WorldRecord &source, const std::vector<W
         if (groupedComponent) continue;
         add(site);
     }
-    m_indexedLocationMaps.insert(source.id);
+    m_indexedLocationMaps.insert(pSource->id);
 }
 
 const std::vector<WorldMapLocation> &WorldDatabase::locations() const { return m_locations; }
@@ -385,7 +416,9 @@ bool WorldDatabase::houseLocationKnown(const WorldMapLocation &location, const W
     const WorldRecord *pTarget = find(location.recordId);
     if (pSource == nullptr || pTarget == nullptr || !knowledge.knows(*pSource)) return false;
     // Retain the table address for legacy house discoveries. An additional entrance needs its own observation.
-    if (location.mapId == mapId(*pTarget->map)) return true;
+    const MapStatsEntry *pDeclared = pTarget->house != nullptr
+        ? m_pMaps->findById(pTarget->house->mapId) : nullptr;
+    if (pDeclared != nullptr && location.mapId == mapId(*pDeclared)) return true;
     const auto found = knowledge.interactedSites.find(toLowerCopy(pSource->map->fileName));
     return found != knowledge.interactedSites.end()
         && std::any_of(location.discoveryKeys.begin(), location.discoveryKeys.end(),

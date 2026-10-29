@@ -1,0 +1,38 @@
+# 1600x900; use an isolated unvisited/visited Tatalia save from mm7_tatalia_shared_inn.yml.
+output_dir: captures
+exit: true
+steps:
+- expect: gameplay
+- action: map_book
+- click:
+  - 1250
+  - 770
+- click:
+  - 275
+  - 126
+- text: Adventurer
+- key: Return
+- pointer_move:
+  - 800
+  - 860
+- capture: discovery-before
+- click:
+  - 1152
+  - 57
+- wait: 3
+- pointer_move:
+  - 800
+  - 860
+- capture: guide-venues
+- click:
+  - 1152
+  - 57
+- pointer_move:
+  - 800
+  - 860
+- capture: discovery-after
+- key: Escape
+- key: Escape
+- expect: gameplay
+- key: F9
+- wait: 0.4

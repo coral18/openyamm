@@ -2224,6 +2224,85 @@ TEST_CASE("shared door house alternatives retain distinct destinations and visit
     CHECK(world.locations().size() == 2);
 }
 
+TEST_CASE("physical shared venues project local residents without learning foreign entrances")
+{
+    Fixture fixture;
+    REQUIRE(fixture.maps.loadFromRows({mapRow(63, "Harmondale", "7out02.odm", "mm7"),
+        mapRow(1, "Dagger Wound", "out01.odm", "mm8"), mapRow(2, "Ravenshore", "out02.odm", "mm8")}));
+    std::vector<std::string> current(16), possible(16);
+    current[0] = "42"; current[1] = "Current resident"; current[6] = "11"; current[10] = "305";
+    possible[0] = "43"; possible[1] = "Possible resident"; possible[6] = "0";
+    REQUIRE(fixture.npcs.loadNpcRows({current, possible}));
+    WorldNpcState state;
+    state.names[42] = "Snapshot name";
+    WorldDatabase world(fixture.maps, fixture.houses, fixture.npcs, fixture.teachers, "mm8", {}, state);
+    state.names[42] = "Later name";
+    CHECK(world.find("mm8:house/11") == nullptr);
+    std::string error;
+    const auto program = ScriptedEventProgram::loadFromLuaText(R"lua(
+        evt.map[10] = function() error('index only') end
+        evt.meta.map.contextActions = {[10] = {kind = 'enter_house', source = 'script', houseId = 11}}
+        evt.meta.map.npcLocations = {[10] = {handler = evt.map[10], locations = {{43, 11}}}}
+    )lua", "@shared-world-venue", ScriptedEventScope::Map, error);
+    REQUIRE_MESSAGE(program.has_value(), error);
+    world.indexNpcLocations(*program); // The physical house is not projected yet.
+    OutdoorMapData geometry;
+    geometry.worldId = "mm8";
+    geometry.fileName = "out01.odm";
+    geometry.entities.resize(1);
+    geometry.entities[0].eventIdSecondary = 10;
+    geometry.entities[0].x = 100; geometry.entities[0].y = 200;
+    world.indexMapLocations(geometry, *program);
+    const WorldRecord *pHouse = world.find("mm8:house/11");
+    REQUIRE(pHouse != nullptr);
+    CHECK(pHouse->house == fixture.houses.get(11));
+    CHECK(pHouse->map->fileName == "out01.odm");
+    CHECK(pHouse->house->mapId == 63); // The shared registry retains its real primary address.
+    REQUIRE(world.find("mm8:npc/42") != nullptr);
+    CHECK(world.find("mm8:npc/42")->name() == "Snapshot name");
+    CHECK(world.find("mm8:npc/42/trainer/305") != nullptr);
+    CHECK(world.find("mm8:npc/43/possible-house/11") != nullptr);
+    WorldKnowledge knowledge;
+    knowledge.visitedMaps = {"7out02.odm", "out01.odm", "out02.odm"};
+    knowledge.variables[WorldDatabase::houseDiscoveryKey(11)] = 1;
+    CHECK_FALSE(world.visible(*pHouse, knowledge, false));
+    CHECK(world.recordMap(*pHouse, knowledge, false) == nullptr);
+    CHECK(world.query(knowledge, false, "", WorldRecordKind::House, "world.mm8.map.out01").empty());
+    CHECK(world.queryLocations(knowledge, false, "world.mm8.map.out01").empty());
+    REQUIRE(world.queryLocations(knowledge, true, "world.mm8.map.out01").size() == 1);
+    geometry.fileName = "out02.odm";
+    world.indexMapLocations(geometry, *program);
+    const size_t records = world.records().size();
+    const auto local = world.queryLocations(knowledge, true, "world.mm8.map.out02");
+    REQUIRE(local.size() == 1);
+    knowledge.interactedSites["out02.odm"].insert(local.front().discoveryKeys.front());
+    pHouse = world.find("mm8:house/11");
+    REQUIRE(pHouse != nullptr);
+    CHECK(world.visible(*pHouse, knowledge, false));
+    CHECK(world.recordMap(*pHouse, knowledge, false)->fileName == "out02.odm");
+    CHECK(world.query(knowledge, false, "", WorldRecordKind::House, "world.mm8.map.out01").empty());
+    CHECK(world.query(knowledge, false, "", WorldRecordKind::House, "world.mm8.map.out02").size() == 1);
+    CHECK(world.queryLocations(knowledge, false, "world.mm8.map.out01").empty());
+    CHECK(world.queryLocations(knowledge, false, "world.mm8.map.out02").size() == 1);
+    world.indexMapLocations(geometry, *program);
+    CHECK(world.records().size() == records);
+    WorldDatabase primary = fixture.database();
+    CHECK(primary.visible(*primary.find("mm7:house/11"), knowledge, false));
+    WorldNpcState observed;
+    observed.observedOnly = true;
+    observed.houses[42] = 11;
+    observed.names[42] = "Remembered resident";
+    observed.topics[42] = {};
+    WorldDatabase discoveries(fixture.maps, fixture.houses, fixture.npcs, fixture.teachers, "mm8", {}, observed);
+    discoveries.indexNpcLocations(*program);
+    discoveries.indexMapLocations(geometry, *program);
+    REQUIRE(discoveries.find("mm8:npc/42") != nullptr);
+    CHECK(discoveries.find("mm8:npc/42")->lastObservedNpc);
+    CHECK(discoveries.find("mm8:npc/42")->name() == "Remembered resident");
+    CHECK(discoveries.find("mm8:npc/42/trainer/305") == nullptr);
+    CHECK(discoveries.find("mm8:npc/43/possible-house/11") == nullptr);
+}
+
 TEST_CASE("world database shared discovery queries reject secret current NPC locations and teaching offers")
 {
     Fixture fixture;

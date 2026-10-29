@@ -189,6 +189,14 @@ post-UI steps. Discovery map/list crops match after Guide and checked venue flag
 locations, physical Android/controller checks and the broader content matrix remain open. These source fixes
 are newer than Android 0.2.8; details and reproduction are in `ATLAS.md` and the fixture README.
 
+The 2026-10-29 cross-world venue fix adds Tatalia's actual shared Inn entrance without changing service
+1607's MM8 primary address. Physical sites can project a foreign shared venue and its residents into a local
+database; each additional entrance still needs its own saved interaction in Discovery. The final shared suite
+passes 133 cases / 50,009 assertions. A 13-step actual-door/save fixture and two AMD/OpenGL tours (40 UI steps,
+six captures, eight post-save steps) verify the unvisited/visited states. Discovery map/list crops match after
+Guide in both states. This is newer than prepared Android 0.2.9 and installed 0.2.8; phone work is deferred by
+the user. Wider content and physical acceptance remain open. Reproduction and evidence limits are in `ATLAS.md`.
+
 Completion requires the missing native functions, data validation against the active game packages, meaningful
 unit/runtime checks and visual checks. A placeholder page or a list of unrelated journal text is not a completed
 quest guide. Reference data must describe the active merged/modded game, rather than silently assert vanilla rules.

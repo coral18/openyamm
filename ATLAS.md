@@ -3302,3 +3302,37 @@ captions/declarations and fresh captures resolve those findings. The archived fa
 unit, lighting, GPU, capture and save receipts are under `atlas-house-alternatives-20261028` in the Windows
 development root. No global mouse/keyboard injection was used. These fixes require a later Android package
 than installed 0.2.8, including the updated shared metadata reader.
+
+
+### Cross-world shared Inn address and discovery isolation, 2026-10-29
+
+Tatalia's actual event 82 opens shared Adventurer's Inn service 1607, whose global primary address is MM8.
+The MM7 Atlas previously omitted it because the constructor filtered houses by their primary world. A literal
+context overlay now declares the real Tatalia door; indexing physical EnterHouse sites projects missing shared
+services into the selected world's database through the same house/resident/trainer/transport construction path.
+It retains the global house record and primary address. Deferred possible-resident declarations are replayed
+when their physical venue is first indexed; Discovery uses captured observed residents and topics only.
+
+Legacy global house discoveries remain sufficient at their declared primary address. Projected foreign
+entrances require their own local site observation, including map-scoped lists and record navigation/search.
+Visiting another entrance cannot reveal the first projected address. No event callback, save schema or global
+house table is changed. Re-indexing does not duplicate the service or residents.
+
+The focused Windows tests pass two cases / 62 assertions. The final World Database/Guide/interaction suite
+passes 133 cases / 50,009 assertions against the active runtime. Synthetic coverage includes independent
+entrances, captured NPC state, observed-topic privacy, trainers, deferred possible residents and repeat indexing.
+The active-package case checks Tatalia's real event/geometry and preserves the MM8 primary address.
+
+The 13-step faithful fixture actually interacts with the MM8 and Tatalia doors, saves both local states and
+reloads the visited state. Two AMD/OpenGL native tours pass 40 UI steps / six fresh captures, with eight
+fresh-process post-save checks. In unvisited Discovery the Inn remains absent despite the MM8 visit; after
+its Tatalia visit it appears as Building - Tatalia at the actual entrance. Map/list RGB crops match before and
+after Guide for both saves; checked map, gold, food and global/local discovery flags persist unchanged.
+These checks do not prove whole-save equality, normal cross-world travel or physical device behavior.
+
+Reproduce using `mm7_tatalia_shared_inn.yml` and `atlas_mm7_tatalia_shared_inn.yml`, as described in the fixture
+README. The first fixture incorrectly attempted to close a dialogue for the special roster service; the final
+fixture follows the existing headless Inn interaction without that unrelated dialogue action. Private logs,
+captures, crop comparisons and source receipts are retained under `atlas-cross-world-venues-20261029` in the
+Windows development root. Android work and POCO acceptance remain deferred at the user's request; this source
+fix is newer than the prepared 0.2.9 package and installed 0.2.8.

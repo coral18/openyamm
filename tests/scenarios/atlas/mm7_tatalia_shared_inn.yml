@@ -1,0 +1,34 @@
+id: atlas.mm7_tatalia_shared_inn
+title: Actual shared Inn visits retain separate MM8 and Tatalia entrance knowledge
+world: mm8
+mode: faithful
+steps:
+- new_game_flow:
+    start_map: out01.odm
+    party:
+      gold: 5000
+      food: 10
+      members:
+      - {name: Atlas Tester, class: Knight, level: 20, race_id: 0, skills: [], equipment: {}}
+- press_interact:
+    pose: {x: 13568, y: 9280, z: 960, yaw: 0, pitch: 0}
+    expect: {kind: event_target, triggered_event: 199, can_activate: true}
+- assert: {named_global_var_changed: {name: openyamm.discovery.house/1607, value: 1}}
+- load_map: {map: 7out13.odm}
+- set_pose: {x: 15300, y: 15266, z: 3077, yaw: 0, pitch: 0}
+- assert:
+    map: 7out13.odm
+    named_map_var_changed: {name: openyamm.discovery.site/bmodel/37/surface/40/event/82, value: 0}
+- save_game: unvisited
+- press_interact:
+    pose: {x: 15300, y: 15266, z: 3077, yaw: 0, pitch: 0}
+    expect: {kind: event_target, triggered_event: 82, can_activate: true}
+- assert:
+    map: 7out13.odm
+    named_map_var_changed: {name: openyamm.discovery.site/bmodel/37/surface/40/event/82, value: 1}
+- save_game: visited
+- load_game: visited
+- assert:
+    named_global_var_changed: {name: openyamm.discovery.house/1607, value: 1}
+- assert:
+    named_map_var_changed: {name: openyamm.discovery.site/bmodel/37/surface/40/event/82, value: 1}

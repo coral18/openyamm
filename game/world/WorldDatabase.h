@@ -229,6 +229,7 @@ public:
     static const char *kindName(WorldRecordKind kind);
 
 private:
+    void appendHouseRecords(const HouseEntry &house, const MapStatsEntry &address);
     bool houseLocationKnown(const WorldMapLocation &location, const WorldKnowledge &knowledge) const;
     bool featureSiteVisible(const WorldMapFeature &feature, const WorldInteractionSite &site,
         const WorldKnowledge &knowledge, bool guide) const;
@@ -240,7 +241,7 @@ private:
         const MonsterTable &monsters, const std::vector<WorldMonsterObservation> &observations,
         const MapDeltaData *pAuthoredActors);
     std::vector<WorldRecord> m_records;
-    std::vector<std::string> m_transportIssues;
+    std::vector<std::pair<uint32_t, uint32_t>> m_declaredNpcLocations;
     std::unordered_map<std::string, size_t> m_byId;
     std::vector<WorldMapLocation> m_locations;
     std::unordered_set<std::string> m_indexedLocationMaps;
@@ -251,6 +252,8 @@ private:
     const MapStats *m_pMaps = nullptr;
     const HouseTable *m_pHouses = nullptr;
     const NpcDialogTable *m_pNpcs = nullptr;
-    bool m_observedNpcs = false;
+    const MergedTeacherTopicTable *m_pTeachers = nullptr;
+    WorldNpcState m_npcsState;
+    WorldTransportState m_transportState;
 };
 } // namespace OpenYAMM::Game

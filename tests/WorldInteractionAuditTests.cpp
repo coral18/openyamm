@@ -239,6 +239,58 @@ TEST_CASE("active conditional house entrances preserve council branches and floo
     }
 }
 
+TEST_CASE("Tatalia shared Inn uses its real local door without inheriting MM8 discoveries")
+{
+    using namespace OpenYAMM::Game;
+    REQUIRE_MESSAGE(OpenYAMM::Tests::regressionMapLoaderLoaded(),
+        OpenYAMM::Tests::regressionMapLoaderFailure());
+    const auto &fixture = OpenYAMM::Tests::regressionMapLoader();
+    const auto &data = fixture.gameDataLoader;
+    const MapStatsEntry *pMap = data.getMapStats().findByFileName("7out13.odm");
+    const HouseEntry *pInn = data.getHouseTable().get(1607);
+    REQUIRE(pMap != nullptr);
+    REQUIRE(pInn != nullptr);
+    const MapStatsEntry *pPrimary = data.getMapStats().findById(pInn->mapId);
+    REQUIRE(pPrimary != nullptr);
+    CHECK(pPrimary->worldId == "mm8");
+    auto map = MapAssetLoader().load(fixture.assetFileSystem, *pMap, data.getMonsterTable(),
+        data.getObjectTable(), MapLoadPurpose::HeadlessGameplay);
+    REQUIRE(map);
+    REQUIRE(map->outdoorMapData);
+    std::string error;
+    REQUIRE_MESSAGE(GameDataLoader::loadEventPrograms(fixture.assetFileSystem, *map, error), error);
+    REQUIRE(map->localEventProgram);
+    const auto context = map->localEventProgram->getContextActionMetadata(82);
+    REQUIRE(context);
+    CHECK(context->kind == "enter_house");
+    CHECK(context->houseId == 1607);
+    WorldDatabase world(data.getMapStats(), data.getHouseTable(), data.getNpcDialogTable(),
+        data.getMergedTeacherTopicTable(), "mm7");
+    CHECK(world.find("mm7:house/1607") == nullptr);
+    world.indexMapLocations(*map->outdoorMapData, *map->localEventProgram);
+    const WorldRecord *pLocal = world.find("mm7:house/1607");
+    REQUIRE(pLocal != nullptr);
+    CHECK(pLocal->house == pInn);
+    CHECK(pLocal->map == pMap);
+    WorldKnowledge known;
+    known.visitedMaps = {pPrimary->fileName, pMap->fileName};
+    known.variables[WorldDatabase::houseDiscoveryKey(1607)] = 1;
+    CHECK_FALSE(world.visible(*pLocal, known, false));
+    CHECK(world.query(known, false, "", WorldRecordKind::House, WorldDatabase::mapId(*pMap)).empty());
+    const auto locations = world.queryLocations(known, true, WorldDatabase::mapId(*pMap));
+    const auto door = std::find_if(locations.begin(), locations.end(), [](const WorldMapLocation &location)
+        { return location.eventId == 82 && location.recordId == "mm7:house/1607"; });
+    REQUIRE(door != locations.end());
+    CHECK(door->x == doctest::Approx(15617));
+    CHECK(door->z == doctest::Approx(3204));
+    CHECK(door->discoveryKeys.size() >= 2);
+    known.interactedSites[pMap->fileName].insert(door->discoveryKeys.front());
+    CHECK(world.visible(*pLocal, known, false));
+    CHECK(world.recordMap(*pLocal, known, false) == pMap);
+    CHECK(world.query(known, false, "", WorldRecordKind::House, WorldDatabase::mapId(*pMap)).size() == 1);
+    CHECK(pInn->mapId == pPrimary->id);
+}
+
 TEST_CASE("Atlas dungeon parents agree with active physical outdoor entrances")
 {
     using namespace OpenYAMM::Game;
