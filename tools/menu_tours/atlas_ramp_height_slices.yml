@@ -1,0 +1,59 @@
+# 1600x900; isolated mm7_ramp_height_fixture save.
+# For MM8 use the focus drag from its retained tour; Lower is disabled at its lowest band.
+output_dir: captures
+exit: true
+steps:
+- expect: gameplay
+- capture: gameplay-pose
+- action: map_book
+- click:
+  - 1250
+  - 770
+- click:
+  - 1480
+  - 126
+- capture: discovery-before
+- click:
+  - 1152
+  - 57
+- wait: 3
+- click:
+  - 637
+  - 695
+- pointer_move:
+  - 900
+  - 400
+- wheel: 10
+- pointer_down:
+  - 900
+  - 400
+- pointer_move:
+  - 844
+  - 576
+- pointer_up:
+  - 844
+  - 576
+- pointer_move:
+  - 800
+  - 860
+- capture: guide-party-ramp
+- click:
+  - 103
+  - 695
+- capture: guide-lower-ramp
+- click:
+  - 499
+  - 695
+- capture: guide-all-ramp
+- click:
+  - 1152
+  - 57
+- pointer_move:
+  - 800
+  - 860
+- capture: discovery-after
+- key: Escape
+- key: Escape
+- expect: gameplay
+- key: F9
+- wait: 0.4

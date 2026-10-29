@@ -96,7 +96,7 @@ tables, and do not bundle its HTML, JS, translated prose, generated illustration
 | Region browsing, search, zoom/pan | Implemented | Implemented | More extensive map/content audit |
 | Continent overview | Existing game illustration | Original regional schematic | Optional licensed/original illustrated Jadame artwork |
 | Discovery fog and current party arrow | Implemented | Implemented | Wider dungeon/device checks |
-| Dungeon plans from engine geometry | Adaptive known height slices, party-height selection, component-aware discovered pins and height-aware notes | Same shared projection and controls | Sloped/mechanism-driven geometry and wider floor/visibility/device audit |
+| Dungeon plans from engine geometry | Adaptive known height slices, clipped known walkable ramp edges, party-height selection, component-aware discovered pins and height-aware notes | Same shared projection and controls | Semantic storeys, mechanism-driven geometry and wider floor/visibility/device audit |
 | Buildings, resident NPCs, trainers | Current/observed residents, Guide-only declared possible residences, indoor service markers and multiple physical entrances per canonical service | Same shared index; actual Adventurer's Inn discovery and Dagger Wound/Ravenshore entrances | Conditional service eligibility, wider scripted placement audit and generated/roaming NPCs |
 | Trainer requirements and prices | Gameplay evaluator, observed offers and race-specific mastery comparisons | Same shared evaluator | Conditional eligibility audit and starting-skill/race-selection checks |
 | Walking and scheduled transport | Directed walking/coach/boat graph, departure pins, last-offered schedules/fare/duration, live local overrides and destination navigation | Same shared knowledge/navigation | Remote scripted timetable references, availability forecasting and arrival-point links |
@@ -209,6 +209,15 @@ Guide browse. Four inspected saves add no indoor caches, remote map visits or ou
 source XYZ, gold and food; only the normal current-region canonical flag initializes. This is all-height
 navigation/rendering coverage, not every floor, campaign stage or physical device. The reusable preparation
 tool and exact limits are documented in `ATLAS.md` and the fixture README.
+
+The subsequent ramp fix corrects midpoint-only height assignment for known walkable floor edges. Their
+original raster samples now follow endpoint heights across intersected slices; walls/ceilings retain their
+metadata. The final shared suite passes 137 cases / 56,355 assertions. All 110 BLVs pass exact recomposition
+across 817 partial-knowledge slices with no blank authored plans. Real Gloaming/Earth supporting-floor tests
+and four native before/after tours (112 UI steps / 24 captures, six fixture, twenty post-save steps) check
+filtered changes, identical All heights crops and unchanged Discovery map/list crops. Eight save inspections
+retain checked map/resources/cache keys and independent discovery. These are sampled height/state checks;
+semantic storeys, mechanisms and physical acceptance remain open. This fix is not in Android 0.2.9 or 0.2.8.
 
 Completion requires the missing native functions, data validation against the active game packages, meaningful
 unit/runtime checks and visual checks. A placeholder page or a list of unrelated journal text is not a completed

@@ -675,3 +675,30 @@ and resulting saves. Require no new indoor cached maps, no remote map visits, un
 source position, gold and food; normal rendering may initialize only the current region's canonical visit.
 Do not assert whole-save equality or identical game time. This pass covers all-height Guide plans and browsing
 privacy, not physical campaign traversal, individual storeys, Android OS gestures or real controller hardware.
+
+
+## Known walkable ramps across height slices
+
+Run `mm7_ramp_height_fixture.yml` / `mm8_ramp_height_fixture.yml` in isolated runtimes with current assets.
+They place an explicit test party at a real Gloaming / Plane of Earth support surface and save `before` under
+`atlas_ramp_slices_mm7` / `atlas_ramp_slices_mm8` in the scenario temporary-save directory. The fixture poses
+are diagnostic placement; normal travel and saved camera-angle persistence are not asserted.
+
+Copy the correct world's save to private `saves/before.oysav`. At 1600x900 restore the one-shot
+`debug.menu_input_tour_path` after preparation, using `tools/menu_tours/atlas_ramp_height_slices.yml` for MM7
+and `atlas_mm8_ramp_height_slices.yml` for MM8. Each 28-step tour checks Discovery, Guide party height, a
+neighboring/lower control, All heights, Discovery return and quicksave. The MM8 pose is in the bottommost
+band: Lower is disabled, so `guide-lower-ramp` is deliberately a stationary control. Verify the startup log
+actually names `d03.blv` / `eleme.blv`; a successful process is insufficient if the wrong temporary save was copied.
+
+Compare map/list RGB crops before/after Guide. Against a pre-fix baseline, All heights map crops must remain
+identical; the Gloaming lower-slice and Earth party-band crops show corrected ramp fragments. The MM7
+party-band crop may overlap pre-existing pixels; its supporting-edge regression uses outline participation
+rather than assuming an isolated new raster pixel. Fresh-load both source and quicksave to verify checked map,
+gold 5000, food 10 and cache/discovery keys; MM7 house flags 219/221 remain zero. No whole-save or game-time
+identity is asserted. The before/after native set has 112 UI steps / 24 captures and twenty post-save steps.
+
+Focused cases `known walkable ramps*`, `active Castle Gloaming and Plane*` and
+`packaged MM7 MM8 dungeon layers*` cover unknown/hidden ramps, retained wall metadata, actual walkable support
+and exact layer-pixel recomposition over all 110 packaged BLVs. The summed per-slice outline count may exceed
+the All heights count because one ramp edge legitimately crosses several slices.

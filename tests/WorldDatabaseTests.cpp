@@ -1421,6 +1421,66 @@ TEST_CASE("overlapping known dungeon floors refine only their own height band wi
     CHECK(buildWorldFloorPlan(map, knowledge, true).refinedBands.empty());
 }
 
+TEST_CASE("known walkable ramps remain continuous across dungeon height slices")
+{
+    IndoorMapData map;
+    map.vertices = {{0, 0, -240}, {100, 0, -240}, {100, 100, -240}, {0, 100, -240},
+        {0, 0, 0}, {100, 0, 0}, {100, 100, 0}, {0, 100, 0},
+        {200, 0, -240}, {300, 0, -240}, {300, 400, 0}, {200, 400, 0}};
+    map.faces.resize(3);
+    for (uint16_t i = 0; i < 2; ++i)
+    {
+        map.faces[i].facetType = 3;
+        map.faces[i].planeNormal = {{0, 0, 65536}};
+        map.faces[i].vertexIndices = {uint16_t(i * 4), uint16_t(i * 4 + 1),
+            uint16_t(i * 4 + 2), uint16_t(i * 4 + 3)};
+        for (uint16_t edge = 0; edge < 4; ++edge)
+            map.outlines.push_back({uint16_t(i * 4 + edge), uint16_t(i * 4 + (edge + 1) % 4),
+                i, i, int16_t(i ? 0 : -240)});
+    }
+    map.faces[2].facetType = 4;
+    map.faces[2].planeNormal = {{0, -39322, 65536}};
+    map.faces[2].vertexIndices = {8, 9, 10, 11};
+    map.outlines.push_back({8, 11, 2, 2, -120});
+    WorldFloorPlanKnowledge known;
+    known.visibleOutlines = {0xff, 0x80};
+    const auto all = buildWorldFloorPlan(map, known, false);
+    REQUIRE(all.refinedBands.contains(0));
+    const auto lower = buildWorldFloorPlan(map, known, false, {}, WorldFloorPlanLayer{0, 1});
+    const auto middle = buildWorldFloorPlan(map, known, false, {}, WorldFloorPlanLayer{0, 2});
+    CHECK(lower.outlineCount == 5); // Four lower-room edges plus the lower portion of the known ramp.
+    CHECK(middle.outlineCount == 1);
+    CHECK(lower.worldToUv(200, 80) == middle.worldToUv(200, 80));
+    const auto drawn = [](const WorldFloorPlanRaster &plan, float x, float y)
+    {
+        const auto uv = plan.worldToUv(x, y);
+        const int px = int(std::lround(uv.first * plan.width));
+        const int py = int(std::lround(uv.second * plan.height));
+        for (int dy = -1; dy <= 1; ++dy)
+            for (int dx = -1; dx <= 1; ++dx)
+                if (px + dx >= 0 && px + dx < plan.width && py + dy >= 0 && py + dy < plan.height
+                    && plan.pixelsBgra[(size_t(py + dy) * plan.width + px + dx) * 4] == 190) return true;
+        return false;
+    };
+    CHECK(drawn(lower, 200, 80));
+    CHECK_FALSE(drawn(lower, 200, 320));
+    CHECK_FALSE(drawn(middle, 200, 80));
+    CHECK(drawn(middle, 200, 320));
+    known.visibleOutlines[1] = 0;
+    const auto undiscovered = buildWorldFloorPlan(map, known, false);
+    CHECK(undiscovered.outlineCount == 8);
+    CHECK(buildWorldFloorPlan(map, known, true).outlineCount == 9);
+    CHECK(buildWorldFloorPlan(map, known, false).pixelsBgra == undiscovered.pixelsBgra);
+    CHECK(known.visibleOutlines == std::vector<uint8_t>{0xff, 0});
+    known.visibleOutlines[1] = 0x80;
+    map.faces[2].facetType = 1; // A sloped wall edge retains its authored height, not a fictitious ramp.
+    CHECK(buildWorldFloorPlan(map, known, false, {}, WorldFloorPlanLayer{0, 1}).outlineCount == 4);
+    CHECK(drawn(buildWorldFloorPlan(map, known, false, {}, WorldFloorPlanLayer{0, 2}), 200, 80));
+    map.faces[2].facetType = 4;
+    map.faces[2].attributes = faceAttributeBit(FaceAttribute::Invisible);
+    CHECK(buildWorldFloorPlan(map, known, true).outlineCount == 8);
+}
+
 TEST_CASE("dungeon height refinement detects crossing floors and ignores separate rooms and touching edges")
 {
     IndoorMapData map;
@@ -1582,6 +1642,7 @@ TEST_CASE("packaged MM7 MM8 dungeon layers preserve discovery projection and pri
             CHECK(slice.centerY == all.centerY);
             CHECK(slice.pixelsPerWorldUnit == all.pixelsPerWorldUnit);
             CHECK(slice.layers == all.layers);
+            CHECK(slice.outlineCount > 0);
             REQUIRE(slice.pixelsBgra.size() == all.pixelsBgra.size());
             outlineCount += slice.outlineCount;
             ++layers[map.worldId];
@@ -1590,7 +1651,8 @@ TEST_CASE("packaged MM7 MM8 dungeon layers preserve discovery projection and pri
                     blank.pixelsBgra.begin() + i))
                     std::copy_n(slice.pixelsBgra.begin() + i, 4, combined.begin() + i);
         }
-        CHECK(outlineCount == all.outlineCount);
+        // A known ramp contributes a clipped portion to every height slice it crosses.
+        CHECK(outlineCount >= all.outlineCount);
         CHECK(combined == all.pixelsBgra);
         CHECK(partial.visibleOutlines == before);
         CHECK(partial.faceAttributes == original.faceAttributes);

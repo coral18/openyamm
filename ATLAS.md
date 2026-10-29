@@ -60,7 +60,8 @@ community guide's complete content has been integrated yet.
   the active shared registries and discovery history. They do not install a copied community-guide database.
 - Dungeon controls select known height bands, all heights or the party height, with matching site/arrow filtering
   and optional note elevations. Known overlapping horizontal surfaces refine their own band into smaller slices.
-  These remain height filters; complex slopes and mechanism-driven geometry still need wider audit.
+  Known walkable ramp edges are clipped across their actual height slices, rather than assigned wholly to
+  their midpoint. These remain height filters; semantic storeys and mechanism-driven geometry need wider audit.
 
 `game/world/WorldDatabase` indexes **references** to `MapStats`, `HouseTable`, `NpcDialogTable` and
 `MergedTeacherTopicTable`. It owns neither copies of those base records nor an alternative balancing/content database.
@@ -3391,3 +3392,43 @@ Private originals, core inspections, contact sheets and receipts are retained un
 `atlas-dungeon-navigation-20261029` in the Windows development root. The initial inspector invocation lacked
 its game DLL directory; only that tool invocation was corrected, retaining the successful MM7 UI and save run.
 No global OS input, Android changes, user campaigns or official-installation writes were used.
+
+
+### Walkable ramps cross their actual height slices, 2026-10-29
+
+The height audit found a concrete midpoint-only defect: a sloped outline crossing a slice boundary was drawn
+wholly at its stored average Z. One part could disappear from the party-height view and appear on the wrong
+slice. A new pure regression initially failed three checks. Active data confirms the same condition on Castle
+Gloaming outline 4297 (walkable floor 555, party sample -948,340,-125.375) and Plane of Earth outline 33
+(floor 2009, sample 2400,4090, approximately -2847.49).
+
+The shared floor-plan projection now uses endpoint heights only for known edges lying on a supporting walkable
+floor plane. It assigns each original raster sample to its actual height slice. Sloped walls and ceilings keep
+their authored metadata; invisible/unknown geometry stays hidden. Bounds and the All heights raster remain
+unchanged. The existing face-geometry cache is reused and is not allocated for wholly unknown geometry. No
+map, event, note schema, save format or gameplay collision rule changes.
+
+The final World Database/Guide/interaction suite passes 137 cases / 56,355 assertions. The focused ramp and
+package audit passes three cases / 6,731 assertions, checking both real supporting planes, independent known
+ramp portions, hidden/unknown controls, wall-edge metadata and all 110 BLVs. There are now 817 partial-knowledge
+slices (467 MM7 / 350 MM8), with no blank authored plans. Combining slices reproduces the All heights pixels
+exactly. A ramp may contribute to several slice outline counts, so their sum is no longer an edge partition;
+the test retains exact pixel recomposition and now checks every emitted layer has actual outline samples.
+
+Four AMD/OpenGL before/after tours pass 112 UI steps / 24 captures, six initial fixture and twenty post-save
+steps. Correctly loaded runtime floors snap the two fixture positions onto the expected real support surfaces.
+Filtered map crops change at Castle Gloaming's neighboring lower slice and the lowest Earth band; the MM7
+party-height crop overlaps existing raster detail and is unchanged. All heights map crops match exactly in
+both maps. Discovery map/list crops match before/after Guide in all four runs. Eight save inspections retain
+checked map, gold, food and cache keys; only the normal current-map canonical visit may initialize, and the
+checked MM7 council-house flags remain unset. These are sampled state checks, not whole-save equality or
+physical traversal of every ramp. MM8 Lower is correctly disabled at this bottommost band; its second filtered
+capture is a stationary control, not another tested height.
+
+Reproduce with `mm7_ramp_height_fixture.yml`, `mm8_ramp_height_fixture.yml` and the matching ramp-height tours
+listed in the fixture README. The first private MM8 baseline selected the MM7 temporary save; its retained
+failure was excluded and only that UI phase was rerun with the correct Earth save. Accepted native runs assert
+the actual startup map. Original failure, comparisons, source/binary hashes, saves, enlarged detail crops and
+logs are retained under `atlas-ramp-slices-20261029` in the Windows development root. Android remains deferred;
+this fix is newer than the prepared 0.2.9 package and installed 0.2.8. Semantic floors, moving mechanisms and
+broader conditional-content/device acceptance remain open.

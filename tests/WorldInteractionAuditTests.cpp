@@ -3,9 +3,11 @@
 #include "game/data/GameDataLoader.h"
 #include "game/maps/MapAssetLoader.h"
 #include "game/indoor/IndoorMapData.h"
+#include "game/indoor/IndoorGeometryUtils.h"
 #include "game/outdoor/OutdoorMapData.h"
 #include "game/world/WorldDatabase.h"
 #include "game/world/WorldAtlasPresentation.h"
+#include "game/world/WorldFloorPlan.h"
 #include "game/world/WorldGuide.h"
 #include "game/party/Party.h"
 #include "game/events/EventRuntime.h"
@@ -246,6 +248,58 @@ TEST_CASE("active MM7 and MM8 physical house bindings resolve without disclosing
     CHECK(legacy.interactedSites.empty());
     MESSAGE("Active physical house audit: ", maps, " maps, ", bindings, " bindings, ", services.size(),
         " services, ", additional, " additional-address bindings.");
+}
+
+TEST_CASE("active Castle Gloaming and Plane of Earth ramps reach their actual endpoint height slices")
+{
+    using namespace OpenYAMM::Game;
+    REQUIRE_MESSAGE(OpenYAMM::Tests::regressionMapLoaderLoaded(),
+        OpenYAMM::Tests::regressionMapLoaderFailure());
+    const auto &fixture = OpenYAMM::Tests::regressionMapLoader();
+    const auto &data = fixture.gameDataLoader;
+    struct Ramp
+    {
+        const char *pFile;
+        size_t outline, floor;
+        float x, y, height;
+    };
+    for (const Ramp &ramp : {Ramp{"d03.blv", 4297, 555, -948, 340, -125.375f},
+        Ramp{"eleme.blv", 33, 2009, 2400, 4090, -2848}})
+    {
+        CAPTURE(ramp.pFile);
+        const MapStatsEntry *pMap = data.getMapStats().findByFileName(ramp.pFile);
+        REQUIRE(pMap != nullptr);
+        auto asset = MapAssetLoader().load(fixture.assetFileSystem, *pMap, data.getMonsterTable(),
+            data.getObjectTable(), MapLoadPurpose::HeadlessGameplay);
+        REQUIRE(asset);
+        REQUIRE(asset->indoorMapData);
+        IndoorMapData &geometry = *asset->indoorMapData;
+        REQUIRE(ramp.outline < geometry.outlines.size());
+        const IndoorOutline edge = geometry.outlines[ramp.outline];
+        CHECK((edge.face1Id == ramp.floor || edge.face2Id == ramp.floor));
+        IndoorFaceGeometryCache cache(geometry.faces.size());
+        const IndoorFaceGeometryData *pFloor = cache.geometryForFace(geometry, geometry.vertices, ramp.floor);
+        REQUIRE(pFloor != nullptr);
+        CHECK(pFloor->kind == IndoorFaceKind::Floor);
+        CHECK(pFloor->isWalkable);
+        const float actualHeight = calculateIndoorFaceHeight(*pFloor, ramp.x, ramp.y);
+        CHECK(actualHeight == doctest::Approx(ramp.height).epsilon(0.001));
+        WorldFloorPlanKnowledge unknown;
+        const auto all = buildWorldFloorPlan(geometry, unknown, true);
+        const auto layer = all.layerAtHeight(actualHeight);
+        REQUIRE(layer);
+        CHECK_FALSE(worldFloorPlanLayerMatches(layer, edge.z)); // The former midpoint-only filter omitted it.
+        const auto withRamp = buildWorldFloorPlan(geometry, unknown, true, {}, layer);
+        geometry.outlines.erase(geometry.outlines.begin() + ramp.outline);
+        const auto withoutRamp = buildWorldFloorPlan(geometry, unknown, true, {}, layer);
+        CHECK(withRamp.outlineCount == withoutRamp.outlineCount + 1);
+        CHECK(withRamp.centerX == withoutRamp.centerX);
+        CHECK(withRamp.centerY == withoutRamp.centerY);
+        CHECK(withRamp.pixelsPerWorldUnit == withoutRamp.pixelsPerWorldUnit);
+        CHECK(buildWorldFloorPlan(geometry, unknown, false).pixelsBgra.empty());
+        CHECK(unknown.visibleOutlines.empty());
+        CHECK(unknown.faceAttributes.empty());
+    }
 }
 
 TEST_CASE("well references without active physical bindings never invent Atlas coordinates")

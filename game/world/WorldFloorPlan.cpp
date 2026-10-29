@@ -49,10 +49,10 @@ bool floorProjectionsOverlap(const IndoorFaceGeometryData &a, const IndoorFaceGe
 }
 
 void refineKnownFloorBands(const IndoorMapData &map, const WorldFloorPlanKnowledge &knowledge, bool guide,
-    const std::unordered_set<uint32_t> &knownFaces, std::unordered_set<int32_t> &refined)
+    const std::unordered_set<uint32_t> &knownFaces, std::unordered_set<int32_t> &refined,
+    IndoorFaceGeometryCache &cache)
 {
     if (knownFaces.empty()) return;
-    IndoorFaceGeometryCache cache(map.faces.size());
     std::map<int32_t, std::vector<const IndoorFaceGeometryData *>> bands;
     for (uint32_t face : knownFaces)
     {
@@ -82,6 +82,25 @@ void refineKnownFloorBands(const IndoorMapData &map, const WorldFloorPlanKnowled
                 }
             }
     }
+}
+
+bool outlineFollowsWalkableSlope(const IndoorMapData &map, const IndoorOutline &line,
+    const WorldFloorPlanKnowledge &knowledge, bool guide, IndoorFaceGeometryCache &cache)
+{
+    const IndoorVertex &a = map.vertices[line.vertex1Id], &b = map.vertices[line.vertex2Id];
+    if (a.z == b.z) return false;
+    for (uint32_t face : {uint32_t(line.face1Id), uint32_t(line.face2Id)})
+    {
+        const uint32_t attributes = planFaceAttributes(map, knowledge, guide, face);
+        if (hasFaceAttribute(attributes, FaceAttribute::IsPortal)
+            || hasFaceAttribute(attributes, FaceAttribute::Untouchable)) continue;
+        const IndoorFaceGeometryData *pGeometry = cache.geometryForFace(map, map.vertices, face);
+        if (pGeometry != nullptr && pGeometry->kind == IndoorFaceKind::Floor && pGeometry->hasPlane
+            && pGeometry->normal.z > 0
+            && std::abs(calculateIndoorFaceHeight(*pGeometry, float(a.x), float(a.y)) - a.z) <= 1
+            && std::abs(calculateIndoorFaceHeight(*pGeometry, float(b.x), float(b.y)) - b.z) <= 1) return true;
+    }
+    return false;
 }
 }
 
@@ -166,14 +185,10 @@ WorldFloorPlanRaster buildWorldFloorPlan(const IndoorMapData &map,
             minY = std::min(minY, double(map.vertices[id].y)); maxY = std::max(maxY, double(map.vertices[id].y));
         }
     }
-    refineKnownFloorBands(map, knowledge, guide, knownFaces, raster.refinedBands);
+    IndoorFaceGeometryCache cache(knownFaces.empty() ? 0 : map.faces.size());
+    refineKnownFloorBands(map, knowledge, guide, knownFaces, raster.refinedBands, cache);
     if (layer && !raster.refinedBands.contains(layer->index)) layer->subdivision = 0;
     raster.selectedLayer = layer;
-    for (const IndoorOutline *pLine : lines) raster.layers.push_back(*raster.layerAtHeight(pLine->z));
-    std::erase_if(lines, [&](const IndoorOutline *pLine) { return !worldFloorPlanLayerMatches(layer, pLine->z); });
-    raster.outlineCount = lines.size();
-    std::sort(raster.layers.begin(), raster.layers.end());
-    raster.layers.erase(std::unique(raster.layers.begin(), raster.layers.end()), raster.layers.end());
     // A remembered position can be known before any nearby wall outline. It frames an otherwise blank map,
     // without using undiscovered geometry to infer its bounds or awarding any reveal bits.
     for (const auto &[x, y] : knownPositions)
@@ -191,7 +206,7 @@ WorldFloorPlanRaster buildWorldFloorPlan(const IndoorMapData &map,
         raster.pixelsBgra[p + 2] = 24; raster.pixelsBgra[p + 3] = 255;
     }
     constexpr double padding = 40;
-    const double minimumSpan = raster.layers.empty() ? 512.0 : 1.0;
+    const double minimumSpan = lines.empty() ? 512.0 : 1.0;
     const double scale = std::min((raster.width - 2 * padding) / std::max(minimumSpan, maxX - minX),
                                   (raster.height - 2 * padding) / std::max(minimumSpan, maxY - minY));
     raster.centerX = (minX + maxX) / 2;
@@ -204,19 +219,44 @@ WorldFloorPlanRaster buildWorldFloorPlan(const IndoorMapData &map,
     };
     for (const auto *line : lines)
     {
+        const bool sloped = outlineFollowsWalkableSlope(map, *line, knowledge, guide, cache);
+        const double firstZ = map.vertices[line->vertex1Id].z;
+        const double deltaZ = double(map.vertices[line->vertex2Id].z) - firstZ;
+        std::optional<WorldFloorPlanLayer> previousLayer;
+        if (!sloped) raster.layers.push_back(*raster.layerAtHeight(line->z));
+        const bool flatVisible = worldFloorPlanLayerMatches(layer, line->z);
+        if (!sloped && !flatVisible) continue;
+        bool drawn = false;
         const auto [x0, y0] = project(map.vertices[line->vertex1Id]);
         const auto [x1, y1] = project(map.vertices[line->vertex2Id]);
         const int steps = std::max({1, std::abs(x1 - x0), std::abs(y1 - y0)});
         for (int step = 0; step <= steps; ++step)
         {
+            // Assign the same raster samples as All heights, preserving exact layer recomposition.
+            // Only known edges of a supporting floor use endpoint heights; wall/ceiling metadata stays intact.
+            if (sloped)
+            {
+                const float height = float(firstZ + deltaZ * step / steps);
+                const auto currentLayer = raster.layerAtHeight(height);
+                if (currentLayer != previousLayer)
+                {
+                    raster.layers.push_back(*currentLayer);
+                    previousLayer = currentLayer;
+                }
+                if (!worldFloorPlanLayerMatches(layer, height)) continue;
+            }
             const int x = int(std::lround(x0 + double(x1 - x0) * step / steps));
             const int y = int(std::lround(y0 + double(y1 - y0) * step / steps));
             if (x < 0 || y < 0 || x >= raster.width || y >= raster.height)
                 continue;
             const size_t p = (size_t(y) * raster.width + x) * 4;
             raster.pixelsBgra[p] = 190; raster.pixelsBgra[p + 1] = 211; raster.pixelsBgra[p + 2] = 223;
+            drawn = true;
         }
+        raster.outlineCount += drawn;
     }
+    std::sort(raster.layers.begin(), raster.layers.end());
+    raster.layers.erase(std::unique(raster.layers.begin(), raster.layers.end()), raster.layers.end());
     return raster;
 }
 std::pair<float, float> WorldFloorPlanRaster::worldToUv(float x, float y) const

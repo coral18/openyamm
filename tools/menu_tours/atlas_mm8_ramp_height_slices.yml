@@ -1,0 +1,59 @@
+# 1600x900; isolated mm8_ramp_height_fixture save.
+# Lower is disabled at this bottommost band; guide-lower-ramp is a stationary control.
+output_dir: captures
+exit: true
+steps:
+- expect: gameplay
+- capture: gameplay-pose
+- action: map_book
+- click:
+  - 1250
+  - 770
+- click:
+  - 1480
+  - 126
+- capture: discovery-before
+- click:
+  - 1152
+  - 57
+- wait: 3
+- click:
+  - 637
+  - 695
+- pointer_move:
+  - 900
+  - 400
+- wheel: 10
+- pointer_down:
+  - 900
+  - 400
+- pointer_move:
+  - 763.6367984693877
+  - 234.48222257653066
+- pointer_up:
+  - 763.6367984693877
+  - 234.48222257653066
+- pointer_move:
+  - 800
+  - 860
+- capture: guide-party-ramp
+- click:
+  - 103
+  - 695
+- capture: guide-lower-ramp
+- click:
+  - 499
+  - 695
+- capture: guide-all-ramp
+- click:
+  - 1152
+  - 57
+- pointer_move:
+  - 800
+  - 860
+- capture: discovery-after
+- key: Escape
+- key: Escape
+- expect: gameplay
+- key: F9
+- wait: 0.4
