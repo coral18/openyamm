@@ -3363,3 +3363,31 @@ these missing local event IDs; inherited family dispatch uses separate global ca
 current content gap without fabricating a map repair. Original-map/import provenance remains open; detailed
 findings and reproduction are in `ATLAS_SITE_REFERENCE_AUDIT.md`. No runtime source/assets or Android state
 changed in this audit.
+
+
+### Native navigation through all 110 dungeon plans, 2026-10-29
+
+Two isolated AMD/OpenGL desktop tours open every active MM7/MM8 dungeon from the continent's Dungeons list:
+63 MM7 plans and 47 MM8 plans. Each uses the normal Map Book sidebar, explicit Guide opt-in, the map's actual
+name as its search query, and its sorted result row; substring matches such as The Pit and numbered Barrows
+are selected deliberately. All-height plans, titles and local lists render in 110 fresh per-map captures.
+Seven contact sheets covering every plan were visually inspected. No unavailable-marker/geometry load error
+appears in the retained native logs.
+
+The tours pass 1,028 UI steps / 114 captures, plus four initial fixture steps and 114 fresh-process post-save
+steps. Both source-continent map/list RGB crops are identical before and after the full Guide browse. Core
+inspection of all four before/after saves finds no indoor cached maps, no added outdoor cache keys and no
+remote global discovery flags. Source XYZ, gold 5000 and food 10 remain unchanged. Normal native gameplay
+initializes only its current region's canonical visit flag (Harmondale / Dagger Wound); its clock advances
+about 1.54 game minutes around opening/closing the paused UI. This is checked state equality, not whole-save
+byte equality or real campaign traversal. Per-floor slopes/mechanisms and physical device acceptance remain
+separate from this all-height navigation/rendering check.
+
+`tools/prepare_atlas_dungeon_navigation.py` prepares both fixtures, native tours and post-save verifiers from
+the merged MapStats names into a fresh private directory. It does not launch the game or write settings/saves,
+rejects existing output files, and rejects ambiguous names or off-screen result ranks. Its inventory and all
+six YAML documents match the completed native runs exactly. Reproduction is documented in the fixture README.
+Private originals, core inspections, contact sheets and receipts are retained under
+`atlas-dungeon-navigation-20261029` in the Windows development root. The initial inspector invocation lacked
+its game DLL directory; only that tool invocation was corrected, retaining the successful MM7 UI and save run.
+No global OS input, Android changes, user campaigns or official-installation writes were used.

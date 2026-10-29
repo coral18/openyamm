@@ -645,3 +645,33 @@ checks raw scripted bindings including hidden model surfaces. A declared callbac
 must not acquire an Atlas-only located feature. Inherited slots are enumerated with their active table and
 initial state, independently of the local callback namespace. This does not prove intended original placement;
 see `ATLAS_SITE_REFERENCE_AUDIT.md` for runtime-mutability findings and remaining provenance limits.
+
+
+## Native navigation across every MM7/MM8 dungeon
+
+Prepare fresh private inputs (requires PyYAML):
+
+```sh
+python3 tools/prepare_atlas_dungeon_navigation.py /absolute/private/atlas-navigation
+```
+
+The tool reads the merged `assets_dev/engine/data_tables/map_stats.txt`; use `--map-stats <active-table>` when
+validating another runtime. Keep that table and the mounted packages at the same revision. `maps.json` records
+all selected names, files and search-result ranks. The generator rejects output overwrites and ambiguous or
+off-screen result selection, rather than silently testing a different dungeon.
+
+For each world, use a separate private runtime with current cached assets, Atlas enabled and a 1600x900 window.
+Run its generated `fixture.yml` using `--world mm7` / `--world mm8` and `--headless-run-scenario`. Copy the
+scenario temporary `before.oysav` from `atlas_dungeon_navigation_mm7` / `atlas_dungeon_navigation_mm8` to private
+`saves/before.oysav`. Set startup save to that path and restore `debug.menu_input_tour_path` to generated
+`tour.yml` after headless preparation; it is a one-shot directive. Run the normal game for the native tour,
+then generated `verify.yml` against its quicksave. The reference run uses two fixture steps per world and
+586/442 native steps, with 65/49 fresh captures and 65/49 post-save steps.
+
+Inspect every per-map capture's actual title/plan against `maps.json`; capture creation alone does not prove
+correct row selection. Compare `discovery-before` / `discovery-after` RGB crops (map: 48,227,1066,732; list:
+1103,227,1530,731). Use `openyamm_levelgen_inspect_save` with the game DLL directory on PATH for both source
+and resulting saves. Require no new indoor cached maps, no remote map visits, unchanged outdoor cache keys,
+source position, gold and food; normal rendering may initialize only the current region's canonical visit.
+Do not assert whole-save equality or identical game time. This pass covers all-height Guide plans and browsing
+privacy, not physical campaign traversal, individual storeys, Android OS gestures or real controller hardware.

@@ -202,6 +202,14 @@ It verifies all 693 declared physical house bindings / 674 services against exac
 checks independent knowledge at three additional-address bindings. Its focused case passes 5,387 assertions.
 Undeclared callbacks and conditional eligibility remain outside this binding-resolution check.
 
+The 2026-10-29 native dungeon navigation pass opens all 110 plans (63 MM7 / 47 MM8) through normal search and
+result selection. Two AMD/OpenGL tours pass 1,028 UI steps / 114 fresh captures, four fixture and 114 post-save
+steps; seven contact sheets cover all titles/plans. Source-continent map/list RGB crops match after the full
+Guide browse. Four inspected saves add no indoor caches, remote map visits or outdoor cache keys, retaining
+source XYZ, gold and food; only the normal current-region canonical flag initializes. This is all-height
+navigation/rendering coverage, not every floor, campaign stage or physical device. The reusable preparation
+tool and exact limits are documented in `ATLAS.md` and the fixture README.
+
 Completion requires the missing native functions, data validation against the active game packages, meaningful
 unit/runtime checks and visual checks. A placeholder page or a list of unrelated journal text is not a completed
 quest guide. Reference data must describe the active merged/modded game, rather than silently assert vanilla rules.
