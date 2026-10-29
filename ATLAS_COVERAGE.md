@@ -197,6 +197,11 @@ six captures, eight post-save steps) verify the unvisited/visited states. Discov
 Guide in both states. This is newer than prepared Android 0.2.9 and installed 0.2.8; phone work is deferred by
 the user. Wider content and physical acceptance remain open. Reproduction and evidence limits are in `ATLAS.md`.
 
+The subsequent active house-binding audit follows normal scene and event-overlay loading for all 137 maps.
+It verifies all 693 declared physical house bindings / 674 services against exact site discovery keys and
+checks independent knowledge at three additional-address bindings. Its focused case passes 5,387 assertions.
+Undeclared callbacks and conditional eligibility remain outside this binding-resolution check.
+
 Completion requires the missing native functions, data validation against the active game packages, meaningful
 unit/runtime checks and visual checks. A placeholder page or a list of unrelated journal text is not a completed
 quest guide. Reference data must describe the active merged/modded game, rather than silently assert vanilla rules.

@@ -626,3 +626,12 @@ A separate MM8 observation run with `mods/profile.yaml` enabling only `karol.tes
 the Atlas module is disabled. Use the same unused fixture and observe tour, then `mm8_guild_shelf_core_off.yml`.
 Its nine steps check observation/count/gold and another round trip. Preliminary door-only native controls
 also left the shelf's seen marker clear. User saves and official-installation data are never test-write targets.
+
+
+## Active house bindings across all maps
+
+Run focused case `active MM7 and MM8 physical house*` with `OPENYAMM_REGRESSION_ASSETS_ROOT` set to the normal
+cached runtime assets. It loads all 137 maps with current scenes and overlays, resolves every declared physical
+EnterHouse target to a Guide pin with the exact site key, and checks independent Discovery at additional
+addresses. This uses the normal asset loader; the older `OPENYAMM_ATLAS_AUDIT_ROOT` base cache is not its source.
+It does not infer missing callback metadata or simulate every conditional branch.

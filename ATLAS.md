@@ -3336,3 +3336,19 @@ fixture follows the existing headless Inn interaction without that unrelated dia
 captures, crop comparisons and source receipts are retained under `atlas-cross-world-venues-20261029` in the
 Windows development root. Android work and POCO acceptance remain deferred at the user's request; this source
 fix is newer than the prepared 0.2.9 package and installed 0.2.8.
+
+
+### Active physical house-binding audit, 2026-10-29
+
+The follow-up audit loads all 137 MM7/MM8 maps through the normal asset/scene/event-overlay path. It compares
+each supported physical EnterHouse binding, including authored alternative house IDs, with a Guide location
+carrying that exact site's discovery key. Transition/movie cards remain excluded. The active inventory is
+693 bindings / 674 services, including three additional-address bindings. It verifies finite pin coordinates,
+empty initial Discovery and independent local discovery for those additional addresses despite synthetic
+legacy knowledge of all global service visits. The focused audit passes 5,387 assertions.
+
+This complements the older base-only house audit rather than relabelling its cached assets as active scenes.
+It does not detect an undeclared EnterHouse call or certify conditional eligibility: the source/actual-door
+checks above cover specific hand-written replacements. Reproduce with test case `active MM7 and MM8 physical
+house*` and `OPENYAMM_REGRESSION_ASSETS_ROOT` pointing at the current cached runtime. No game source or assets
+changed during this audit; native acceptance remains that of the preceding shared-venue checkpoint.

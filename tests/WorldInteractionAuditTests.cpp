@@ -154,6 +154,100 @@ TEST_CASE("Atlas quest links resolve against fully indexed active MM7 and MM8 wo
     CHECK(links > quests);
 }
 
+TEST_CASE("active MM7 and MM8 physical house bindings resolve without disclosing additional entrances")
+{
+    using namespace OpenYAMM::Game;
+    REQUIRE_MESSAGE(OpenYAMM::Tests::regressionMapLoaderLoaded(),
+        OpenYAMM::Tests::regressionMapLoaderFailure());
+    const auto &fixture = OpenYAMM::Tests::regressionMapLoader();
+    const auto &data = fixture.gameDataLoader;
+    size_t maps = 0, bindings = 0, additional = 0;
+    std::set<uint32_t> services;
+    WorldKnowledge legacy;
+    for (const MapStatsEntry &entry : data.getMapStats().getEntries())
+        legacy.visitedMaps.insert(entry.fileName);
+    for (const auto &[id, house] : data.getHouseTable().entries())
+        legacy.variables[WorldDatabase::houseDiscoveryKey(id)] = 1;
+    for (const std::string &worldId : {"mm7", "mm8"})
+    {
+        WorldDatabase world(data.getMapStats(), data.getHouseTable(), data.getNpcDialogTable(),
+            data.getMergedTeacherTopicTable(), worldId);
+        for (const MapStatsEntry &entry : data.getMapStats().getEntries())
+        {
+            if (entry.worldId != worldId) continue;
+            CAPTURE(entry.fileName);
+            auto map = MapAssetLoader().load(fixture.assetFileSystem, entry, data.getMonsterTable(),
+                data.getObjectTable(), MapLoadPurpose::HeadlessGameplay);
+            REQUIRE(map);
+            std::string error;
+            REQUIRE_MESSAGE(GameDataLoader::loadEventPrograms(fixture.assetFileSystem, *map, error), error);
+            REQUIRE(map->localEventProgram);
+            std::vector<WorldInteractionSite> sites;
+            if (map->outdoorMapData)
+            {
+                sites = worldInteractionSites(*map->outdoorMapData);
+                world.indexMapLocations(*map->outdoorMapData, *map->localEventProgram);
+            }
+            else
+            {
+                REQUIRE(map->indoorMapData);
+                sites = worldInteractionSites(*map->indoorMapData);
+                world.indexMapLocations(entry, *map->indoorMapData, *map->localEventProgram);
+            }
+            const auto projected = world.queryLocations({}, true, WorldDatabase::mapId(entry));
+            for (const WorldInteractionSite &site : sites)
+            {
+                const auto action = map->localEventProgram->getContextActionMetadata(site.eventId);
+                if (!action || action->hidden || action->kind != "enter_house"
+                    || (action->source != "opcode" && action->source != "script")) continue;
+                std::set<uint32_t> targets(action->houseIds.begin(), action->houseIds.end());
+                if (action->houseId) targets.insert(*action->houseId);
+                for (uint32_t id : targets)
+                {
+                    CAPTURE(site.eventId);
+                    CAPTURE(id);
+                    const HouseEntry *pHouse = data.getHouseTable().get(id);
+                    REQUIRE(pHouse != nullptr);
+                    if (pHouse->type == "Dungeon Ent") continue;
+                    const auto location = std::find_if(projected.begin(), projected.end(),
+                        [&](const WorldMapLocation &value)
+                        {
+                            const WorldRecord *pTarget = world.find(value.recordId);
+                            return value.eventId == site.eventId && pTarget != nullptr && pTarget->house == pHouse
+                                && std::find(value.discoveryKeys.begin(), value.discoveryKeys.end(),
+                                    worldSiteDiscoveryKey(site.eventId, site.id)) != value.discoveryKeys.end();
+                        });
+                    REQUIRE(location != projected.end());
+                    CHECK_FALSE(world.locationVisible(*location, {}, false));
+                    CHECK(std::isfinite(location->x));
+                    CHECK(std::isfinite(location->y));
+                    CHECK(std::isfinite(location->z));
+                    REQUIRE_FALSE(location->discoveryKeys.empty());
+                    const MapStatsEntry *pPrimary = data.getMapStats().findById(pHouse->mapId);
+                    if (pPrimary == nullptr || pPrimary->id != entry.id)
+                    {
+                        // Global legacy service knowledge must not reveal a different physical entrance.
+                        CHECK_FALSE(world.locationVisible(*location, legacy, false));
+                        WorldKnowledge observed = legacy;
+                        observed.interactedSites[entry.fileName].insert(location->discoveryKeys.front());
+                        CHECK(world.locationVisible(*location, observed, false));
+                        ++additional;
+                    }
+                    ++bindings;
+                    services.insert(id);
+                }
+            }
+            ++maps;
+        }
+    }
+    CHECK(maps == 137);
+    CHECK(services.size() > 600);
+    CHECK(additional >= 2); // Shared MM8 Inn and the additional Tatalia entrance.
+    CHECK(legacy.interactedSites.empty());
+    MESSAGE("Active physical house audit: ", maps, " maps, ", bindings, " bindings, ", services.size(),
+        " services, ", additional, " additional-address bindings.");
+}
+
 TEST_CASE("active conditional house entrances preserve council branches and flooded venue discovery")
 {
     using namespace OpenYAMM::Game;
