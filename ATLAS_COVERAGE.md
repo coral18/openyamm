@@ -228,6 +228,12 @@ Four actual-door/save fixtures pass 51 steps across MM8, Atlas-off, legacy and c
 The focused suite passes 311 cases / 69,766 assertions, excluding two independently reproduced pre-existing
 data/environment failures documented in `ATLAS.md`. No Android installation or new physical-device acceptance is claimed.
 
+The subsequent Windows cache-parity fix overlays the current NPC topic table; its only differing row is the
+missing Verdant travel topic 10000. That shared dialogue test now passes, and the effective table matches
+source bytes. The expanded suite passes 312 cases / 69,790 assertions with only the pre-existing retired-source
+portrait case excluded. This corrects the development payload, without downloading full world packages or
+changing dialogue behavior; details are in `ATLAS.md`.
+
 Completion requires the missing native functions, data validation against the active game packages, meaningful
 unit/runtime checks and visual checks. A placeholder page or a list of unrelated journal text is not a completed
 quest guide. Reference data must describe the active merged/modded game, rather than silently assert vanilla rules.

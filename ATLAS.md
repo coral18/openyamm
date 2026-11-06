@@ -3474,3 +3474,19 @@ This is not a claim that the entire suite is green.
 The retained evidence is under private `atlas-primary-house-address-20261029/`, including baseline/current logs,
 `native-results.json`, `privacy-crops.json` and `native-save-results.json`. Public reproduction is in the fixture
 README. These PC fixes are newer than prepared Android 0.2.9 and installed 0.2.8; phone work remains deferred.
+
+
+## Windows runtime topic-table parity (2026-11-06)
+
+The previous checkpoint isolated a missing Verdant travel label to the cached Windows development payload.
+A row-by-row comparison finds current NPCs and NPC topic text unchanged from that cache; `npc_topic.txt`
+differs by exactly topic 10000, `Dimensional travel`. The existing small source-data overlay now includes
+the authoritative topic table. It does not replace the cached multi-GB world packages or edit dialogue rules.
+
+The effective mounted table matches the source byte-for-byte. The real shared Verdant dialogue regression
+now passes both unfinished/finished-story branches and its handoff to the travel selector. The expanded
+World Database/Guide/active-interaction/house-dialogue suite passes 312 cases / 69,790 assertions. Only the
+independently reproduced old source-portrait test remains explicitly excluded; a full-suite pass is not claimed.
+The source wrapper's shell syntax also passes. Private source/package hashes and logs are retained under
+`atlas-promotion-contacts-20261106/runtime-topics-*`. Android packaging already takes source tables and was
+not rebuilt or installed for this PC cache correction.
