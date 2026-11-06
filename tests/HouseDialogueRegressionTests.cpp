@@ -752,6 +752,46 @@ uint64_t fnv1a64(const std::vector<uint8_t> &bytes)
 }
 }
 
+TEST_CASE("Atlas actor NPC discovery is recorded only by a successfully opened matching actor dialogue")
+{
+    using namespace OpenYAMM::Game;
+    const OpenYAMM::Tests::RegressionGameData &gameData = requireRegressionGameData();
+    REQUIRE(gameData.npcDialogTable.getNpc(345) != nullptr);
+    for (int variant = 0; variant < 5; ++variant)
+    {
+        CAPTURE(variant);
+        OpenYAMM::Tests::HouseDialogueTestHarness harness(gameData);
+        MapStatsEntry map;
+        map.worldId = "mm7";
+        map.fileName = "7out01.odm";
+        harness.setCurrentMap(map);
+        MapDeltaData delta;
+        delta.actors.resize(1);
+        delta.actors[0].npcId = variant == 2 ? 346 : 345;
+        harness.worldRuntime().bindMapDeltaData(&delta);
+        GameplayRuntimeActorState actor;
+        actor.preciseX = 120;
+        actor.preciseY = -240;
+        actor.preciseZ = 50;
+        actor.isInvisible = variant == 3;
+        actor.isDead = variant == 4;
+        harness.worldRuntime().addActor(actor);
+        const EventDialogContent &dialog = harness.openNpcDialogue(345, 0,
+            variant == 1 ? std::nullopt : std::optional<uint32_t>{0});
+        CHECK(dialog.sourceId == 345);
+        const EventRuntimeState &state = harness.eventRuntimeState();
+        const WorldNpcState observed = worldObservedNpcs(gameData.npcDialogTable,
+            gameData.mergedTeacherTopicTable, state.namedGlobalVars);
+        CHECK(observed.houses.at(345) == 0);
+        CHECK(observed.actorLocations.contains(345) == (variant == 0));
+        if (variant == 0)
+        {
+            const WorldNpcActorLocation expected{"world.mm7.map.7out01", 0, 120, -240, 50, 720};
+            CHECK(observed.actorLocations.at(345) == expected);
+        }
+    }
+}
+
 TEST_CASE("Verdant dimensional travel topic hands off from dialogue to the travel selector")
 {
     const OpenYAMM::Tests::RegressionGameData &gameData = requireRegressionGameData();

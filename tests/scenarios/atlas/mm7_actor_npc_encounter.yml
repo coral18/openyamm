@@ -1,0 +1,53 @@
+id: atlas.mm7_actor_npc_encounter
+title: Malwick's actual actor encounter records a position while remote dialogue does not
+world: mm7
+mode: faithful
+steps:
+- new_game_flow:
+    start_map: 7out01.odm
+    party:
+      gold: 5000
+      food: 10
+      members:
+      - {name: Atlas Tester, class: Knight, level: 20, race_id: 0, skills: [], equipment: {}}
+- save_game: unknown
+- speak_npc: {source_id: 345}
+- assert:
+    named_global_var_changed:
+      {name: openyamm.discovery.npc-actor.v1/345/world.mm7.map.7out01/seen, value: 0}
+- press_action: {action: cancel_dialog}
+- save_game: remote-only
+- press_interact:
+    pose: {x: 6264, y: 8112, z: 416, yaw: 0, pitch: -0.4}
+    expect: {kind: actor, actor_index: 16, can_activate: true}
+- assert:
+    named_global_var_changed:
+      {name: openyamm.discovery.npc-actor.v1/345/world.mm7.map.7out01/seen, value: 1}
+- assert:
+    named_global_var_changed:
+      {name: openyamm.discovery.npc-actor.v1/345/world.mm7.map.7out01/actor, value: 16}
+- assert:
+    named_global_var_changed:
+      {name: openyamm.discovery.npc-actor.v1/345/world.mm7.map.7out01/x, value: 6464}
+- assert:
+    named_global_var_changed:
+      {name: openyamm.discovery.npc-actor.v1/345/world.mm7.map.7out01/y, value: 8112}
+- assert:
+    named_global_var_changed:
+      {name: openyamm.discovery.npc-actor.v1/345/world.mm7.map.7out01/z, value: 416}
+- assert: {named_global_var_changed: {name: openyamm.discovery.npc/345/house, value: 0}}
+- press_action: {action: cancel_dialog}
+- save_game: met
+- load_map: {map: 7out02.odm}
+- load_game: met
+- assert:
+    named_global_var_changed:
+      {name: openyamm.discovery.npc-actor.v1/345/world.mm7.map.7out01/seen, value: 1}
+- assert:
+    named_global_var_changed:
+      {name: openyamm.discovery.npc-actor.v1/345/world.mm7.map.7out01/x, value: 6464}
+- assert:
+    named_global_var_changed:
+      {name: openyamm.discovery.npc-actor.v1/345/world.mm7.map.7out01/z, value: 416}
+- save_game: verified
+tags: [mm7, atlas, npc, discovery, save]

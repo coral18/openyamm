@@ -22,6 +22,151 @@
 #include <set>
 #include <string>
 
+TEST_CASE("authored named actor NPCs have physical Atlas references without inferring Discovery")
+{
+    using namespace OpenYAMM::Game;
+    REQUIRE_MESSAGE(OpenYAMM::Tests::regressionMapLoaderLoaded(),
+        OpenYAMM::Tests::regressionMapLoaderFailure());
+    const auto &fixture = OpenYAMM::Tests::regressionMapLoader();
+    const auto &data = fixture.gameDataLoader;
+    struct Example { const char *pWorld; const char *pMap; uint32_t npcId; bool authoredActor; };
+    for (const Example &example : {Example{"mm7", "7out01.odm", 345, true},
+        Example{"mm8", "d05.blv", 264, false}})
+    {
+        CAPTURE(std::string(example.pWorld));
+        CAPTURE(std::string(example.pMap));
+        CAPTURE(example.npcId);
+        const auto &maps = data.getMapStats().getEntries();
+        const auto entry = std::find_if(maps.begin(), maps.end(), [&](const MapStatsEntry &map)
+            { return map.worldId == example.pWorld && map.fileName == example.pMap; });
+        REQUIRE(entry != maps.end());
+        auto map = MapAssetLoader().load(fixture.assetFileSystem, *entry, data.getMonsterTable(),
+            data.getObjectTable(), MapLoadPurpose::HeadlessGameplay);
+        REQUIRE(map);
+        std::string error;
+        REQUIRE_MESSAGE(GameDataLoader::loadEventPrograms(fixture.assetFileSystem, *map, error), error);
+        REQUIRE(map->localEventProgram);
+        const MapDeltaData *pActors = map->outdoorMapDeltaData ? &*map->outdoorMapDeltaData
+            : map->indoorMapDeltaData ? &*map->indoorMapDeltaData : nullptr;
+        REQUIRE(pActors != nullptr);
+        const auto actor = std::find_if(pActors->actors.begin(), pActors->actors.end(),
+            [&](const MapDeltaActor &value) { return value.npcId == example.npcId; });
+        REQUIRE((actor != pActors->actors.end()) == example.authoredActor);
+        const NpcEntry *pNpc = data.getNpcDialogTable().getNpc(example.npcId);
+        REQUIRE(pNpc != nullptr);
+        CHECK(pNpc->houseId == 0);
+        WorldDatabase world(data.getMapStats(), data.getHouseTable(), data.getNpcDialogTable(),
+            data.getMergedTeacherTopicTable(), example.pWorld);
+        if (map->outdoorMapData)
+        {
+            world.indexMapLocations(*map->outdoorMapData, *map->localEventProgram);
+            world.indexMapMonsters(*entry, *map->outdoorMapData, data.getMonsterTable(), {}, pActors);
+        }
+        else
+        {
+            REQUIRE(map->indoorMapData);
+            world.indexMapLocations(*entry, *map->indoorMapData, *map->localEventProgram);
+            world.indexMapMonsters(*entry, *map->indoorMapData, data.getMonsterTable(), {}, pActors);
+        }
+        world.indexMapNpcActors(map->map, *pActors);
+        const auto references = world.query({}, true, pNpc->name, WorldRecordKind::Npc,
+            WorldDatabase::mapId(*entry));
+        CHECK(std::any_of(references.begin(), references.end(), [&](const WorldRecord *pRecord)
+            { return pRecord->npc != nullptr && pRecord->npc->id == example.npcId; }) == example.authoredActor);
+        if (example.authoredActor)
+        {
+            const auto found = std::find_if(references.begin(), references.end(), [&](const WorldRecord *pRecord)
+                { return pRecord->npc != nullptr && pRecord->npc->id == example.npcId; });
+            REQUIRE(found != references.end());
+            const std::string id = (*found)->id;
+            REQUIRE((*found)->actorLocation);
+            CHECK((*found)->map == &*entry);
+            CHECK((*found)->actorLocation->x == actor->x);
+            CHECK((*found)->actorLocation->y == actor->y);
+            CHECK((*found)->actorLocation->z == actor->z);
+            CHECK((*found)->possibleNpcLocation);
+            const auto count = [&]()
+            {
+                const auto sites = world.queryLocations({}, true, WorldDatabase::mapId(*entry));
+                return std::count_if(sites.begin(), sites.end(), [&](const WorldMapLocation &location)
+                    { return location.recordId == id; });
+            };
+            CHECK(count() == 1);
+            world.indexMapNpcActors(*entry, *pActors);
+            CHECK(count() == 1);
+            world.indexMapLocations(*map->outdoorMapData, *map->localEventProgram);
+            CHECK(count() == 1); // Indexing doors cannot erase independently owned NPC points.
+            WorldKnowledge known;
+            known.visitedMaps.insert(entry->fileName);
+            known.variables[WorldDatabase::npcDiscoveryKey(example.npcId)] = 1;
+            known.variables[worldNpcHouseKey(example.npcId)] = 0;
+            known.informedRecords.insert(id);
+            CHECK_FALSE(world.visible(*world.find(id), known, false));
+        }
+        CHECK(world.query({}, false, pNpc->name, WorldRecordKind::Npc).empty());
+    }
+}
+
+TEST_CASE("Atlas authored actor NPC references match every active MM7 and MM8 companion")
+{
+    using namespace OpenYAMM::Game;
+    REQUIRE_MESSAGE(OpenYAMM::Tests::regressionMapLoaderLoaded(),
+        OpenYAMM::Tests::regressionMapLoaderFailure());
+    const auto &fixture = OpenYAMM::Tests::regressionMapLoader();
+    const auto &data = fixture.gameDataLoader;
+    size_t mapCount = 0, npcCount = 0;
+    for (const std::string &worldId : {"mm7", "mm8"})
+    {
+        WorldDatabase world(data.getMapStats(), data.getHouseTable(), data.getNpcDialogTable(),
+            data.getMergedTeacherTopicTable(), worldId);
+        for (const MapStatsEntry &entry : data.getMapStats().getEntries())
+        {
+            if (entry.worldId != worldId) continue;
+            CAPTURE(entry.fileName);
+            auto map = MapAssetLoader().load(fixture.assetFileSystem, entry, data.getMonsterTable(),
+                data.getObjectTable(), MapLoadPurpose::HeadlessGameplay);
+            REQUIRE(map);
+            const MapDeltaData *pActors = map->outdoorMapDeltaData ? &*map->outdoorMapDeltaData
+                : map->indoorMapDeltaData ? &*map->indoorMapDeltaData : nullptr;
+            REQUIRE(pActors != nullptr);
+            world.indexMapNpcActors(map->map, *pActors);
+            for (size_t i = 0; i < pActors->actors.size(); ++i)
+            {
+                const MapDeltaActor &actor = pActors->actors[i];
+                if (actor.npcId <= 0 || data.getNpcDialogTable().getNpc(uint32_t(actor.npcId)) == nullptr) continue;
+                CAPTURE(i);
+                const std::string id = worldId + ":npc/" + std::to_string(actor.npcId)
+                    + "/possible-actor/" + WorldDatabase::mapId(entry) + "/" + std::to_string(i);
+                const WorldRecord *pNpc = world.find(id);
+                REQUIRE(pNpc != nullptr);
+                REQUIRE(pNpc->actorLocation);
+                CHECK(pNpc->map == &entry);
+                CHECK(pNpc->actorLocation->x == actor.x);
+                CHECK(pNpc->actorLocation->y == actor.y);
+                CHECK(pNpc->actorLocation->z == actor.z);
+                CHECK(world.visible(*pNpc, {}, true));
+                CHECK_FALSE(world.visible(*pNpc, {}, false));
+                ++npcCount;
+            }
+            ++mapCount;
+        }
+        WorldGuideSource source;
+        source.worldId = worldId;
+        source.pQuests = &data.getJournalQuestTable();
+        source.pMaps = &data.getMapStats();
+        source.pNpcs = &data.getNpcDialogTable();
+        source.pHouses = &data.getHouseTable();
+        source.pRoster = &data.getRosterTable();
+        source.pWorld = &world;
+        WorldKnowledge knowledge;
+        source.pWorldKnowledge = &knowledge;
+        CHECK_FALSE(buildWorldGuide(source, WorldGuideSection::Quests, {}, true).empty());
+        CHECK_FALSE(buildWorldGuide(source, WorldGuideSection::Companions, {}, true).empty());
+    }
+    CHECK(mapCount == 137);
+    CHECK(npcCount > 0);
+}
+
 TEST_CASE("Atlas quest links resolve against fully indexed active MM7 and MM8 worlds")
 {
     using namespace OpenYAMM::Game;

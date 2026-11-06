@@ -22,6 +22,9 @@ community guide's complete content has been integrated yet.
   planes, their dungeon maps and Plane Between Planes are searchable. The developer Tutorial map remains searchable
   in Guide but is not positioned on the playable-world overview.
 - Region/dungeon selection, resident NPCs, buildings, mastery trainers, walking routes and transport schedules.
+- Fixed named actor NPCs outside buildings use package-authored possibility points in Guide and last-encounter
+  positions in Discovery. Only a successful dialogue tied to the matching living, visible actor records a position.
+  Remote NPC-ID dialogue supplies no coordinates. Points include height and reuse shared Core save knowledge.
 - Sites layer for physical chests, wells/fountains, shrines, obelisks, declared passages/teleports,
   authored encounter areas, last-observed creatures and saved map notes.
   Search and clustered small markers work on regional images and dungeon plans; declared map links open the
@@ -100,18 +103,20 @@ This is not yet the complete external guide equivalent. The current scopes and o
 recorded in [ATLAS_COVERAGE.md](ATLAS_COVERAGE.md); optional extensions require a decision under
 [ATLAS_DECISIONS.md](ATLAS_DECISIONS.md). Existing campaign relationships, Barrows/Regna graphs, observed
 site/chest states, item/ingredient sources, guild observations and companion contacts have substantial native
-coverage. Scripted monster sources, remaining conditional/handwritten declarations and wider content checks
+coverage. Party-relative scripted monster sources, remaining conditional/handwritten declarations and wider content checks
 are still incomplete. The guidebook also covers reference pages and campaign trackers. Player notes are editable
 in the Atlas and existing Map Book.
 Dungeon plans provide an all-height overview and filtered known height bands with explicit note elevations.
 The index uses current or last-observed
-resident locations/topics, but conditional/shared venues, generated/roaming NPCs and more information learned from
+resident and fixed actor locations/topics, but wider conditional/shared venues, generated NPC identities and more information learned from
 books or rumours require additional shared integration. Dynamically moved entrances require runtime metadata.
 Sites cover explicit map-local event bindings and inherited decoration/global-event bindings through the shared
 runtime binding rules. Conditional effects and source semantics still have the gaps listed in ATLAS_COVERAGE.md.
-The shared native code has an ARM64 Android Release build. Version 0.2.0 is installed and running on the test
-phone with both mods loaded. Atlas-specific physical acceptance remains separate from that startup proof;
-see [Android QA](ATLAS_ANDROID_QA.md). Controller acceptance is still open.
+The last accepted installation on POCO is ARM64 Android Release 0.2.8 / 111. The user confirmed MM8 fog and
+the party arrow; MM7 fog/direction and faster Guide loading were confirmed on earlier versions. Later PC
+checkpoints are not installed there. Phone work remains deferred; see [Android QA](ATLAS_ANDROID_QA.md).
+Physical Windows controller use was confirmed for opening Map Book and using Atlas; the sidebar D-pad
+follow-up and broader device acceptance remain open.
 
 The dated checkpoints below retain their historical validation scope. Use this overview and the coverage/QA
 documents for current status; an old checkpoint's list of missing functions is not a new completion requirement.
@@ -3554,3 +3559,38 @@ and `restored-crops.json` are under `atlas-profile-toggle-20261106/`. A prelimin
 assumed note ID; its failure is excluded and the accepted checks use the actual serialized Core-assigned ID.
 No engine behavior, manifest or save schema needed changing. Android/controller physical acceptance remains
 separate and pending; this is current PC evidence for the original optional-mod/save requirement.
+
+## Named actor NPC encounters (2026-11-06)
+
+The completion audit found that house-only NPC indexing omitted Mr. Malwick on Emerald Island. The shared
+World Database now indexes fixed NPC placements from fresh authored companions as Guide-only possibilities,
+including NPC/trainer points with actual Z. Their source map pointers belong to the stable MapStats registry,
+not temporary package reads. Reindexing actor data or doors preserves independent points without duplication.
+Quest and companion links also accept contacts outside buildings.
+
+Discovery uses a separate last-encounter observation captured by the shared successful-dialogue path. It
+requires the matching actor index/NPC identity and a living, visible runtime actor; coordinates come from its
+current feet position. A remote NPC-ID conversation still records house zero and cannot invent coordinates.
+An actual house encounter supersedes the remembered actor position. A later actor encounter supersedes the old
+position; a stale index cannot reveal it. Core saves the canonical map, actor index, XYZ and game time in the
+versioned `openyamm.discovery.npc-actor.v1/` namespace. Older saves without these observations remain unmapped
+until a real new encounter. No binary save schema or mod requirement changes.
+
+The final Windows regression set passes 318 cases / 71,331 assertions, excluding the previously documented
+retired-source portrait test. It checks all 137 active MM7/MM8 companions, source ownership, exact resolvable
+authored placements, link construction, privacy, relocation, teacher offers and invalid observations/save data.
+Two actual picked-actor/save-load fixtures pass 42 steps: Malwick (NPC 345 / actor 16) and S'ton (27 / 0).
+Each includes a remote-dialogue negative control. Simon 264 has no placement in the fresh d05 companion;
+this change does not fabricate a location or claim to cover every scripted appearance/generated identity.
+
+Eight fresh native AMD/OpenGL runs pass 150 UI steps / 26 captures. The six unknown/remote-only/met cases
+show no Discovery NPC point before an actual encounter, the authored Guide possibility, and the observed point
+after meeting. Twelve map/list RGB crops match before/after Guide. Two additional runs select Malwick's map
+point and S'ton's list entry and display `Last encountered here` with the correct map. Sixteen source/result
+save inspections retain the checked map, resources, party and NPC encounter knowledge. This is sampled state
+coverage, not full-save equality or physical Android/controller acceptance.
+
+Reproduction is in the fixture README. Private inputs, logs, inspections, captures and receipts live under
+`atlas-actor-npcs-20261106/`. Preliminary tours using the temporary-map borrowing bug were discarded before
+these final runs. The current source change has not been packaged or installed on Android; phone work remains
+deferred. Wider conditional/scripted NPC placement and generated NPC identities remain open.

@@ -60,7 +60,11 @@ void WorldDatabase::indexMapSites(const WorldRecord &source, const std::vector<W
         if (metadata->houseId) projectHouse(*metadata->houseId);
         for (uint32_t id : metadata->houseIds) projectHouse(id);
     }
-    std::erase_if(m_locations, [pSource](const WorldMapLocation &location) { return location.mapId == pSource->id; });
+    std::erase_if(m_locations, [this, pSource](const WorldMapLocation &location)
+    {
+        const WorldRecord *pTarget = find(location.recordId);
+        return location.mapId == pSource->id && (pTarget == nullptr || !pTarget->actorLocation);
+    });
     const auto targets = [&](uint16_t eventId)
     {
         std::vector<const WorldRecord *> result;
@@ -486,7 +490,10 @@ std::vector<const WorldRecord *> WorldDatabase::recordsAtLocation(const WorldMap
     if (!guide && pTarget->house != nullptr && !houseLocationKnown(location, knowledge)) return result;
     for (const WorldRecord &record : m_records)
         if ((record.kind != WorldRecordKind::Travel || includeTravel)
-            && (&record == pTarget || (pTarget->house != nullptr && record.house == pTarget->house))
+            && (&record == pTarget || (pTarget->house != nullptr && record.house == pTarget->house)
+                || (pTarget->actorLocation && record.npc == pTarget->npc
+                    && record.actorLocation == pTarget->actorLocation
+                    && record.possibleNpcLocation == pTarget->possibleNpcLocation))
             && visible(record, knowledge, guide))
             result.push_back(&record);
     std::sort(result.begin(), result.end(), [](const WorldRecord *a, const WorldRecord *b)

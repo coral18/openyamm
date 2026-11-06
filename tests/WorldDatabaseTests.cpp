@@ -25,6 +25,7 @@
 #include "game/maps/MapDeltaData.h"
 #include "game/maps/MapAssetLoader.h"
 #include "tests/RegressionMapLoader.h"
+#include "tests/PartySpellTestHarness.h"
 
 #include <algorithm>
 #include <fstream>
@@ -2068,6 +2069,128 @@ TEST_CASE("world database NPCs use current relocation topic and availability ove
     current = worldCurrentNpcs(fixture.npcs, state);
     WorldDatabase removed(fixture.maps, fixture.houses, fixture.npcs, fixture.teachers, "mm7", {}, current);
     CHECK(removed.find("mm7:npc/42") == nullptr);
+}
+
+TEST_CASE("world database actor NPC observations retain only actually encountered positions")
+{
+    Fixture fixture;
+    EventRuntimeState state;
+    const WorldNpcActorLocation first{"world.mm7.map.7out02", 8, 120, -230, 40, 17};
+    const WorldNpcActorLocation next{"world.mm7.map.7d21", 3, 450, 670, -900, 23};
+    recordWorldNpcObservation(state, 42, 0, {305});
+    recordWorldNpcActorLocation(state, 42, first);
+    WorldNpcState observed = worldObservedNpcs(fixture.npcs, fixture.teachers, state.namedGlobalVars);
+    REQUIRE(observed.actorLocations.at(42) == first);
+    WorldKnowledge knowledge;
+    knowledge.variables = state.namedGlobalVars;
+    WorldDatabase world(fixture.maps, fixture.houses, fixture.npcs, fixture.teachers, "mm7", {}, observed);
+    CHECK(world.query(knowledge, false, "Townsaver").empty()); // No containing-map knowledge.
+    knowledge.visitedMaps.insert("7out02.odm");
+    CHECK(world.query(knowledge, false, "Townsaver", WorldRecordKind::Npc).size() == 1);
+    CHECK(world.query(knowledge, false, "Grand Master Sword", WorldRecordKind::Trainer).size() == 1);
+    auto locations = world.queryLocations(knowledge, false, first.mapId);
+    REQUIRE_FALSE(locations.empty());
+    CHECK(locations.front().x == 120);
+    CHECK(locations.front().y == -230);
+    CHECK(locations.front().z == 40);
+    CHECK(world.queryLocations(knowledge, false, next.mapId).empty());
+    // Remote dialogue does not supply a new address or erase a previously witnessed encounter.
+    recordWorldNpcObservation(state, 42, 0, {});
+    CHECK(worldNpcActorLocationKnown(state.namedGlobalVars, 42, first));
+    recordWorldNpcActorLocation(state, 42, next);
+    CHECK_FALSE(worldNpcActorLocationKnown(state.namedGlobalVars, 42, first));
+    CHECK(worldNpcActorLocationKnown(state.namedGlobalVars, 42, next));
+    knowledge.variables = state.namedGlobalVars;
+    CHECK(world.queryLocations(knowledge, false, first.mapId).empty()); // A stale index cannot disclose old points.
+    observed = worldObservedNpcs(fixture.npcs, fixture.teachers, state.namedGlobalVars);
+    world = WorldDatabase(fixture.maps, fixture.houses, fixture.npcs, fixture.teachers, "mm7", {}, observed);
+    CHECK(world.query(knowledge, false, "Townsaver").empty()); // New map is still unknown.
+    knowledge.visitedMaps.insert("7d21.blv");
+    CHECK(world.query(knowledge, false, "Townsaver", WorldRecordKind::Npc).size() == 1);
+    CHECK(world.query(knowledge, false, "Grand Master Sword", WorldRecordKind::Trainer).empty());
+    recordWorldNpcObservation(state, 42, 11, {305});
+    observed = worldObservedNpcs(fixture.npcs, fixture.teachers, state.namedGlobalVars);
+    CHECK(observed.actorLocations.empty());
+    CHECK(observed.houses.at(42) == 11);
+    CHECK_FALSE(worldNpcActorLocationKnown(state.namedGlobalVars, 42, next));
+}
+
+TEST_CASE("world database actor NPC observations reject incomplete duplicate and malformed save state")
+{
+    Fixture fixture;
+    EventRuntimeState state;
+    const WorldNpcActorLocation location{"world.mm7.map.7out02", UINT32_MAX, INT32_MIN, INT32_MAX, 0, 0};
+    recordWorldNpcObservation(state, 42, 0, {});
+    recordWorldNpcActorLocation(state, 42, location);
+    CHECK(worldObservedNpcs(fixture.npcs, fixture.teachers, state.namedGlobalVars).actorLocations.at(42) == location);
+    CHECK_THROWS_AS(recordWorldNpcActorLocation(state, 0, location), std::invalid_argument);
+    WorldNpcActorLocation invalid = location;
+    invalid.mapId = "7out02.odm";
+    CHECK_THROWS_AS(recordWorldNpcActorLocation(state, 42, invalid), std::invalid_argument);
+    invalid.mapId = "world.mm7.map.";
+    CHECK_THROWS_AS(recordWorldNpcActorLocation(state, 42, invalid), std::invalid_argument);
+    invalid = location;
+    invalid.gameMinutes = -1;
+    CHECK_THROWS_AS(recordWorldNpcActorLocation(state, 42, invalid), std::invalid_argument);
+    const std::string prefix = "openyamm.discovery.npc-actor.v1/42/world.mm7.map.7out02/";
+    auto bad = state.namedGlobalVars;
+    bad.erase(prefix + "x");
+    CHECK_THROWS_AS(worldObservedNpcs(fixture.npcs, fixture.teachers, bad), std::invalid_argument);
+    bad = state.namedGlobalVars;
+    bad[prefix + "seen"] = 2;
+    CHECK_THROWS_AS(worldObservedNpcs(fixture.npcs, fixture.teachers, bad), std::invalid_argument);
+    bad = state.namedGlobalVars;
+    for (const auto &[key, value] : state.namedGlobalVars)
+        if (key.starts_with(prefix)) bad["openyamm.discovery.npc-actor.v1/42/world.mm7.map.7d21/"
+            + key.substr(prefix.size())] = value;
+    CHECK_THROWS_AS(worldObservedNpcs(fixture.npcs, fixture.teachers, bad), std::invalid_argument);
+}
+
+TEST_CASE("world database actor NPC recording validates the dialogue actor and uses runtime feet")
+{
+    Fixture fixture;
+    class NpcWorld : public OpenYAMM::Tests::PartySpellTestWorldRuntime
+    {
+    public:
+        GameplayRuntimeActorState actor;
+        bool exists = true;
+        float minutes = 12.75f;
+        bool actorRuntimeState(size_t index, GameplayRuntimeActorState &result) const override
+        {
+            if (index != 0 || !exists) return false;
+            result = actor;
+            return true;
+        }
+        float gameMinutes() const override { return minutes; }
+    };
+    for (int variant = 0; variant < 9; ++variant)
+    {
+        CAPTURE(variant);
+        NpcWorld runtime;
+        MapDeltaData delta;
+        delta.actors.resize(1);
+        delta.actors[0].npcId = variant == 1 ? 43 : 42;
+        delta.actors[0].x = 999; // Authored coordinates are not the current encounter.
+        runtime.bindMapDeltaData(&delta);
+        runtime.actor.preciseX = 25.4f;
+        runtime.actor.preciseY = -45.6f;
+        runtime.actor.preciseZ = -80;
+        if (variant == 2) runtime.actor.isDead = true;
+        if (variant == 3) runtime.actor.isInvisible = true;
+        if (variant == 4) runtime.exists = false;
+        if (variant == 5) runtime.actor.preciseX = std::numeric_limits<float>::infinity();
+        if (variant == 6) runtime.minutes = -1;
+        if (variant == 7) runtime.bindMapDeltaData(nullptr);
+        EventRuntimeState state;
+        CHECK(observeWorldNpcActor(state, 42, variant == 8 ? 1 : 0,
+            *fixture.maps.findById(63), runtime) == (variant == 0));
+        if (variant == 0)
+        {
+            const WorldNpcActorLocation expected{"world.mm7.map.7out02", 0, 25, -46, -80, 12};
+            CHECK(worldNpcActorLocationKnown(state.namedGlobalVars, 42, expected));
+        }
+        else CHECK(state.namedGlobalVars.empty());
+    }
 }
 
 TEST_CASE("world database NPC discovery is last observed rather than a secret current address")

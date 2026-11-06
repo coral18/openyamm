@@ -4070,6 +4070,12 @@ GameplayDialogController::PresentPendingDialogResult GameplayDialogController::p
             }
             recordWorldNpcObservation(context.eventRuntimeState, observedContext.sourceId,
                 observedContext.hostHouseId, teacherTopics);
+            if (observedContext.hostHouseId == 0 && observedContext.sourceActorIndex
+                && context.pCurrentMap != nullptr && context.pWorldRuntime != nullptr
+                && context.pNpcDialogTable != nullptr
+                && context.pNpcDialogTable->getNpc(observedContext.sourceId) != nullptr)
+                observeWorldNpcActor(context.eventRuntimeState, observedContext.sourceId,
+                    *observedContext.sourceActorIndex, *context.pCurrentMap, *context.pWorldRuntime);
             if (context.pNpcDialogTable != nullptr)
                 for (const EventDialogAction &action : context.activeEventDialog.actions)
                     if (action.kind == EventDialogActionKind::RosterJoinOffer)

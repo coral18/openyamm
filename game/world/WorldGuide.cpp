@@ -91,7 +91,8 @@ void appendCompanionContacts(WorldGuideEntry &entry, const WorldGuideSource &sou
             const std::string label = std::string(unlockContact ? "Possible unlock contact: "
                 : record.possibleNpcLocation || contactKind == ContactKind::Declared ? "Possible scripted contact: "
                 : record.lastObservedNpc ? "Last observed recruitment contact: " : "Configured recruitment contact: ")
-                + record.name() + " | " + record.house->name + " - " + record.map->name;
+                + record.name() + " | " + (record.house != nullptr ? record.house->name + " - " : "")
+                + record.map->name;
             text += "\n" + label;
             if (linked.insert(record.id).second)
                 entry.links.push_back({WorldGuideLink::Kind::Location, label, record.id});
@@ -446,7 +447,8 @@ std::vector<WorldGuideEntry> buildWorldGuide(const WorldGuideSource &source, Wor
                                 if (candidate.possibleNpcLocation && candidate.npc->id == pNpc->id)
                                 {
                                     const std::string label = "Possible: " + pNpc->name + " - "
-                                        + candidate.map->name + " - " + candidate.house->name;
+                                        + candidate.map->name
+                                        + (candidate.house != nullptr ? " - " + candidate.house->name : "");
                                     possibleContacts.push_back({WorldGuideLink::Kind::Location,
                                         label, candidate.id});
                                 }

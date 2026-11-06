@@ -800,3 +800,31 @@ Discovery may appear except ordinary current-map initialization in the first pha
 Atlas map/list RGB crops (48,227,1066,732 and 1103,227,1530,731), and inspect the editor text/coordinates.
 The accepted set passes 122 native steps / 18 captures and 150 post-UI steps / twelve save inspections;
 this is sampled PC verification, not complete save equality or physical Android/controller acceptance.
+
+## Named actor NPC positions
+
+Run `mm7_actor_npc_encounter.yml` and `mm8_actor_npc_encounter.yml` in fresh isolated Windows runtimes with
+the current ordinary packages. Each uses a deliberate approach pose and a real picked actor interaction:
+Malwick (NPC 345, actor 16, Emerald Island) and S'ton (NPC 27, actor 0, Dagger Wound). The initial NPC-ID-only
+conversation is a negative control: it can discover the name but cannot supply a position. Check all 21 steps,
+including exact actor XYZ/index, house zero, leaving the map, save/load and the final position assertions.
+
+Use the resulting temporary scenario saves `unknown`, `remote-only` and `met` as separate private
+`saves/before.oysav` inputs for `tools/menu_tours/atlas_mm{7,8}_actor_npc.yml`, at 1600x900. Restore the one-shot
+`debug.menu_input_tour_path` before every process. Require the correct startup map, all 18 UI steps, three fresh
+captures and exit zero. Inspect absence of an NPC discovery point in the first two inputs, the last-encounter
+point in the third, and the authored possibility in Guide. Compare Discovery map/list crops before/after Guide.
+Inspect source and quicksave NPC encounter variables, map, resources and party state; Guide must not create or
+rewrite actor-location knowledge. These fixtures prove the sampled encounters; they do not manufacture Simon's
+location, audit every scripted appearance or provide physical Android/controller acceptance.
+
+The corresponding `atlas_mm{7,8}_actor_npc_selected.yml` tours use the `met` input. Their 21 steps / four captures
+add a picked Malwick map point or S'ton list entry and inspect `Last encountered here` with the correct map name.
+Selection is a separate check; the six unselected runs provide the before/after Guide crop comparisons.
+
+The companion regression indexes all 137 active MM7/MM8 maps from fresh package reads, checks each resolvable
+authored actor's exact coordinates and stable registry ownership, and builds quest/companion links with no house
+pointer assumption. Pure tests cover relocation, house encounters, stale indexes, unknown containing maps,
+teacher offers, height, malformed saves and invalid/dead/invisible/mismatched actors. Reindexing doors or actors
+must neither remove independent actor points nor duplicate them. Old saves without encounter coordinates remain
+unmapped until a real actor dialogue; no guessed-position migration is applied.

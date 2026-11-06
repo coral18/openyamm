@@ -97,7 +97,7 @@ tables, and do not bundle its HTML, JS, translated prose, generated illustration
 | Continent overview | Existing game illustration | Original regional schematic | Optional licensed/original illustrated Jadame artwork |
 | Discovery fog and current party arrow | Implemented | Implemented | Wider dungeon/device checks |
 | Dungeon plans from engine geometry | Adaptive known height slices, clipped known walkable ramp edges, party-height selection, component-aware discovered pins and height-aware notes | Same shared projection and controls | Semantic storeys and wider floor/visibility/device audit; moving geometry awaits user decision |
-| Buildings, resident NPCs, trainers | Current/observed residents, Guide-only declared possible residences, indoor service markers and exact physical-address history per canonical service | Same shared index; actual Adventurer's Inn discovery and Dagger Wound/Ravenshore entrances | Conditional service eligibility, wider scripted placement audit and generated/roaming NPCs |
+| Buildings, resident/actor NPCs, trainers | Current/observed residents, Guide-only possible residences/authored actor placements, last-encounter actor positions, indoor service markers and exact physical-address history per canonical service | Same shared index; actual Adventurer's Inn discovery and Dagger Wound/Ravenshore entrances | Conditional service eligibility, wider scripted placement audit and generated NPC identities |
 | Trainer requirements and prices | Gameplay evaluator, observed offers and race-specific mastery comparisons | Same shared evaluator | Conditional eligibility audit and starting-skill/race-selection checks |
 | Walking and scheduled transport | Directed walking/coach/boat graph, departure pins, last-offered schedules/fare/duration, live local overrides and destination navigation | Same shared knowledge/navigation | Remote scripted timetable references, availability forecasting and arrival-point links |
 | Quest giver/objective/return chains | Shared registry, 76 quests, conditional clues and possible contact-location links | Shared registry, 69 quests, repaired Accuracy state, stage-sensitive Aislen/Pole delivery contacts and possible contact-location links | Remaining conditional stages and wider campaign audit; unused legacy MM8 rows 5/172 are not invented playable chains |
@@ -250,6 +250,16 @@ note editors and map/list crops match. Six fresh verifiers pass 150 steps / twel
 note ownership, checked addresses/quest flags, resources, inventory/health and cache sets. Each next input is
 the preceding quicksave; no campaign is regenerated between profile phases. This is sampled PC state evidence;
 physical Android/controller acceptance remains pending. Reproduction and limits are in `ATLAS.md`.
+
+The 2026-11-06 named-actor NPC fix closes the house-only indexing gap for fixed registry NPCs. Guide uses
+fresh authored placement possibilities; Discovery saves current actor feet coordinates only on a successful,
+matching actor dialogue. Remote conversations do not supply coordinates, and old saves receive no guessed
+positions. All 137 active companions and quest/companion link construction pass the expanded 318-case /
+71,331-assertion regression set (the existing retired-source portrait test remains excluded). Malwick/S'ton
+actual-interaction/save fixtures pass 42 steps. Eight native AMD/OpenGL tours pass 150 steps / 26 captures;
+sixteen inspected saves retain checked state and twelve Guide-roundtrip map/list crops match. Points/list
+entries select the correct last-encounter details. Wider scripted placement, generated NPC identities and
+physical-device acceptance remain open; this change is newer than the deferred Android packages.
 
 Completion requires the missing native functions, data validation against the active game packages, meaningful
 unit/runtime checks and visual checks. A placeholder page or a list of unrelated journal text is not a completed

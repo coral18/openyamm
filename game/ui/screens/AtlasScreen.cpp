@@ -707,6 +707,7 @@ void AtlasScreen::indexMapData(MapAssetInfo &map)
     }
     else
         throw std::runtime_error("Missing map geometry");
+    if (delta) m_world.indexMapNpcActors(map.map, *delta);
     m_world.indexMapInteractionReferences(map.map, m_data.itemTable(), m_data.spellTable());
     m_world.indexMapMonsterSpawns(map.map, *map.localEventProgram, m_data.monsterTable());
     m_world.indexMapGateReferences(map.map, m_data.worldGateCatalog(), m_pParty);
@@ -823,7 +824,7 @@ bool AtlasScreen::drawLocationMarkers(const WorldRecord &map, const Rect &image,
         const bool dungeon = pPrimary->kind == WorldRecordKind::Dungeon;
         const bool transport = pPrimary->kind == WorldRecordKind::Travel;
         const char *label = transport ? (toLowerCopy(pPrimary->house->type) == "boats" ? "B" : "C")
-            : dungeon ? "D" : trainer != pin.records.end() ? "T" : "B";
+            : dungeon ? "D" : trainer != pin.records.end() ? "T" : pPrimary->npc != nullptr ? "N" : "B";
         const std::string caption = pin.sites > 1 ? std::to_string(pin.sites) + " locations - select to inspect"
             : pPrimary->name();
         const Rect marker{pin.x - 6 * designScale(), pin.y - 6 * designScale(),
@@ -2220,6 +2221,7 @@ void AtlasScreen::drawDetails()
             text += " | Last encountered here";
         if (record->possibleNpcLocation)
             text += " | Authored possibility; quest conditions may apply. Current presence is not implied.";
+        if (record->actorLocation) text += " | " + record->map->name;
         if (record->house != nullptr)
         {
             const MapStatsEntry *pRecordMap = m_world.recordMap(*record, m_knowledge, m_guide, m_map);

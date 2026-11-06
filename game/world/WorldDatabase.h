@@ -79,6 +79,7 @@ struct WorldRecord
     std::optional<std::pair<float, float>> position;
 
     std::optional<std::string> npcName;
+    std::optional<WorldNpcActorLocation> actorLocation;
     bool lastObservedNpc = false;
     bool possibleNpcLocation = false;
     std::vector<uint32_t> npcTopicIds;
@@ -192,6 +193,7 @@ public:
         const ScriptedEventProgram &program, const ItemTable &items);
     void indexNpcLocations(const ScriptedEventProgram &program);
     void indexMapNpcTopics(const MapStatsEntry &map, const ScriptedEventProgram &program);
+    void indexMapNpcActors(const MapStatsEntry &map, const MapDeltaData &authoredActors);
     const std::vector<WorldNpcTopicReference> &npcTopicReferences() const;
     std::vector<const WorldItemSource *> itemSources(const WorldKnowledge &knowledge, bool guide) const;
     std::vector<WorldChestObservation> observedChests(const WorldMapFeature &feature,
@@ -234,6 +236,8 @@ private:
     bool featureSiteVisible(const WorldMapFeature &feature, const WorldInteractionSite &site,
         const WorldKnowledge &knowledge, bool guide) const;
     void appendPossibleNpcLocation(uint32_t npcId, uint32_t houseId);
+    void appendActorNpcRecords(uint32_t npcId, const MapStatsEntry &map,
+        const WorldNpcActorLocation &location, bool authored);
     void appendItemSource(const std::string &mapId, WorldItemSource source, const ItemTable &items);
     void indexMapSites(const WorldRecord &source, const std::vector<WorldInteractionSite> &sites,
         const ScriptedEventProgram &events);
