@@ -702,3 +702,32 @@ Focused cases `known walkable ramps*`, `active Castle Gloaming and Plane*` and
 `packaged MM7 MM8 dungeon layers*` cover unknown/hidden ramps, retained wall metadata, actual walkable support
 and exact layer-pixel recomposition over all 110 packaged BLVs. The summed per-slice outline count may exceed
 the All heights count because one ramp edge legitimately crosses several slices.
+
+
+## Shared venues must not reveal their primary address
+
+Use `tests/scenarios/atlas/mm8_shared_house_address.yml` with current normal assets in an isolated runtime.
+Its 14 steps use the actual Dagger Wound Inn event 199 and Ravenshore Inn event 209. The exported saves under
+`atlas_primary_house_address_fresh` distinguish `before` (only Dagger Wound visited) and `visited` (both visited).
+The explicit `load_map`/pose setup does not claim ordinary travel. The MM7 Tatalia shared-Inn fixture now has
+20 steps and checks separate Dagger Wound/Tatalia addresses while the unvisited Ravenshore address remains zero.
+
+For each exported MM8 save, copy it to private `saves/before.oysav`, set startup save accordingly and restore
+one-shot `debug.menu_input_tour_path=tools/menu_tours/atlas_shared_house_address.yml` (use an absolute path when
+running outside the checkout). At 1600x900 its 18 steps search Adventurer in Discovery, switch to Guide, return
+and quicksave. Require startup `out02.odm`. The first save must show no matching discoveries/pin; the second
+must show the real Ravenshore Inn. Compare Discovery map/list RGB crops (48,227,1066,732 and 1103,227,1530,731).
+
+For Atlas-off coverage, use a separate runtime whose profile enables only `karol.test`. Run the fixture's
+Dagger Wound visit and save before Ravenshore interaction, then review that exported save in another private
+runtime with Atlas enabled. Its primary address must still be hidden. For legacy migration, use an actual
+pre-fix global-only save: the next real Dagger Wound visit must preserve the previously inferred Ravenshore
+address and add Dagger Wound explicitly. Never fabricate that save by editing user campaigns. Old additional
+site observations remain valid after migration; the pure regression checks this independently.
+
+Inspect both source and UI quicksave with `openyamm_levelgen_inspect_save` (game DLL directory on PATH).
+Require identical `openyamm.discovery.house-address.v1/` dictionaries, no new cached map keys, unchanged
+checked map/gold/food, and no new house knowledge from Guide. Only normal current-map discovery may initialize.
+The accepted private set has four tours / 72 steps / 12 captures and eight inspected saves; it does not assert
+whole-save equality, game-time identity or Android/controller acceptance. Focused case `exact shared house
+visits*` checks primary-map/list/NPC/trainer search, migration idempotence and retained legacy-site evidence.

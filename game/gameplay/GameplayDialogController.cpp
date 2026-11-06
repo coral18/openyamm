@@ -28,6 +28,7 @@
 #include "game/tables/NpcDialogTable.h"
 #include "game/tables/SpellTable.h"
 #include "game/world/WorldDatabase.h"
+#include "game/world/WorldMapKnowledge.h"
 #include "game/party/Party.h"
 #include "game/party/SpellIds.h"
 #include "game/tables/RosterTable.h"
@@ -3911,6 +3912,24 @@ GameplayDialogController::PresentPendingDialogResult GameplayDialogController::p
     }
 
     const EventRuntimeState::PendingDialogueContext originalContext = *context.eventRuntimeState.pendingDialogueContext;
+    const auto observeHouse = [&](uint32_t houseId)
+    {
+        if (context.pCurrentMap == nullptr)
+        {
+            // A geography-free dialogue context can retain service knowledge without inventing an address.
+            context.eventRuntimeState.namedGlobalVars[WorldDatabase::houseDiscoveryKey(houseId)] = 1;
+            return;
+        }
+        const HouseEntry *pHouse = context.pHouseTable != nullptr ? context.pHouseTable->get(houseId) : nullptr;
+        const MapStatsEntry *pLegacyPrimary = nullptr;
+        if (pHouse != nullptr && context.pMapEntries != nullptr)
+        {
+            const auto found = std::find_if(context.pMapEntries->begin(), context.pMapEntries->end(),
+                [&](const MapStatsEntry &map) { return map.id == pHouse->mapId; });
+            if (found != context.pMapEntries->end()) pLegacyPrimary = &*found;
+        }
+        recordWorldHouseVisit(context.eventRuntimeState, houseId, *context.pCurrentMap, pLegacyPrimary);
+    };
 
     if (originalContext.kind == DialogueContextKind::Mm9Rude)
     {
@@ -3936,7 +3955,7 @@ GameplayDialogController::PresentPendingDialogResult GameplayDialogController::p
     {
         if (tryOpenAdventurersInnOverlay(context, originalContext.sourceId))
         {
-            context.eventRuntimeState.namedGlobalVars[WorldDatabase::houseDiscoveryKey(originalContext.sourceId)] = 1;
+            observeHouse(originalContext.sourceId);
             return result;
         }
 
@@ -4026,9 +4045,9 @@ GameplayDialogController::PresentPendingDialogResult GameplayDialogController::p
                     *action.transportOffer, *context.pMapEntries);
     }
     if (originalContext.kind == DialogueContextKind::HouseService)
-        context.eventRuntimeState.namedGlobalVars[WorldDatabase::houseDiscoveryKey(originalContext.sourceId)] = 1;
+        observeHouse(originalContext.sourceId);
     if (originalContext.hostHouseId != 0)
-        context.eventRuntimeState.namedGlobalVars[WorldDatabase::houseDiscoveryKey(originalContext.hostHouseId)] = 1;
+        observeHouse(originalContext.hostHouseId);
     const EventRuntimeState::PendingDialogueContext &observedContext = result.resolvedContext;
     if (observedContext.kind == DialogueContextKind::NpcTalk)
     {

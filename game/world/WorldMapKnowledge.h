@@ -2,12 +2,23 @@
 
 #include <cstdint>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace OpenYAMM::Game
 {
 struct EventRuntimeState;
 struct WorldGateChoice;
+struct MapStatsEntry;
+
+std::string worldHouseAddressVersionKey(uint32_t houseId);
+std::string worldHouseAddressKey(uint32_t houseId, const std::string &mapId);
+bool worldHouseAddressesRecorded(const std::unordered_map<std::string, int32_t> &variables, uint32_t houseId);
+bool worldHouseAddressKnown(const std::unordered_map<std::string, int32_t> &variables,
+    uint32_t houseId, const std::string &mapId);
+// A real visit records its canonical map. Legacy global-only knowledge explicitly retains its former primary address.
+void recordWorldHouseVisit(EventRuntimeState &state, uint32_t houseId, const MapStatsEntry &location,
+    const MapStatsEntry *pLegacyPrimary);
 
 struct WorldGateOffer
 {

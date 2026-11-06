@@ -815,3 +815,25 @@ artifact battle uses `MM7.TulareanArtifactBattleSpawns` as the single owner of b
 references. The lighting producer accepts validated literal rows or these plain table references, rejecting
 executable expressions/statements; runtime loading still validates every row. Gameplay scripts and baked-lighting
 dependency validation remain intact. The current Atlas installs MM7/MM8 catalogs only.
+
+
+### Physical house-address history
+
+Core records a successfully opened house at its actual canonical map, independently of the Atlas UI mod:
+
+```text
+openyamm.discovery.house/1607 = 1
+openyamm.discovery.house-address.v1/1607/seen = 1
+openyamm.discovery.house-address.v1/1607/map/world.mm8.map.out01 = 1
+```
+
+These are existing named-global int32 save variables; `1` means observed. The version marker distinguishes
+precise address history from an old global-only service flag. It enables direct lookups without scanning all
+saved variables per query. A shared service's other map is unknown until visited, even when it is the table's
+primary address. Existing per-map physical-site discoveries remain additional evidence for older visits.
+
+For legacy saves without the version marker, the global flag retains its previous primary-address meaning.
+The next successful real visit explicitly saves that old primary address and the actual current address before
+setting the marker. Guide never performs this migration. A dialogue context without geography records only
+the generic service flag; it cannot invent an exact address. No binary save version or module dependency is
+added, and ambiguous old service history cannot retroactively identify its original entrance.

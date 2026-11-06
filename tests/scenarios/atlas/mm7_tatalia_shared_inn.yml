@@ -14,8 +14,18 @@ steps:
     pose: {x: 13568, y: 9280, z: 960, yaw: 0, pitch: 0}
     expect: {kind: event_target, triggered_event: 199, can_activate: true}
 - assert: {named_global_var_changed: {name: openyamm.discovery.house/1607, value: 1}}
+- assert: {named_global_var_changed: {name: openyamm.discovery.house-address.v1/1607/seen, value: 1}}
+- assert:
+    named_global_var_changed:
+      {name: openyamm.discovery.house-address.v1/1607/map/world.mm8.map.out01, value: 1}
+- assert:
+    named_global_var_changed:
+      {name: openyamm.discovery.house-address.v1/1607/map/world.mm8.map.out02, value: 0}
 - load_map: {map: 7out13.odm}
 - set_pose: {x: 15300, y: 15266, z: 3077, yaw: 0, pitch: 0}
+- assert:
+    named_global_var_changed:
+      {name: openyamm.discovery.house-address.v1/1607/map/world.mm7.map.7out13, value: 0}
 - assert:
     map: 7out13.odm
     named_map_var_changed: {name: openyamm.discovery.site/bmodel/37/surface/40/event/82, value: 0}
@@ -26,9 +36,18 @@ steps:
 - assert:
     map: 7out13.odm
     named_map_var_changed: {name: openyamm.discovery.site/bmodel/37/surface/40/event/82, value: 1}
+- assert:
+    named_global_var_changed:
+      {name: openyamm.discovery.house-address.v1/1607/map/world.mm7.map.7out13, value: 1}
 - save_game: visited
 - load_game: visited
 - assert:
     named_global_var_changed: {name: openyamm.discovery.house/1607, value: 1}
 - assert:
     named_map_var_changed: {name: openyamm.discovery.site/bmodel/37/surface/40/event/82, value: 1}
+- assert:
+    named_global_var_changed:
+      {name: openyamm.discovery.house-address.v1/1607/map/world.mm7.map.7out13, value: 1}
+- assert:
+    named_global_var_changed:
+      {name: openyamm.discovery.house-address.v1/1607/map/world.mm8.map.out02, value: 0}

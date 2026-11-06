@@ -3583,12 +3583,20 @@ TEST_CASE("dwi temple skill learning")
 {
     const OpenYAMM::Tests::RegressionGameData &gameData = requireRegressionGameData();
     OpenYAMM::Tests::HouseDialogueTestHarness harness(gameData);
+    OpenYAMM::Game::MapStatsEntry map = {};
+    map.worldId = "mm8";
+    map.fileName = "out01.odm";
+    harness.setCurrentMap(map);
 
     REQUIRE(harness.party().setActiveMemberIndex(1));
     harness.party().addGold(2000);
     const int initialGold = harness.party().gold();
 
     const OpenYAMM::Game::EventDialogContent &rootDialog = harness.openHouseDialog(TempleHouseId);
+    CHECK_EQ(harness.eventRuntimeState().namedGlobalVars.at("openyamm.discovery.house/303"), 1);
+    CHECK_EQ(harness.eventRuntimeState().namedGlobalVars.at("openyamm.discovery.house-address.v1/303/seen"), 1);
+    CHECK_EQ(harness.eventRuntimeState().namedGlobalVars.at(
+        "openyamm.discovery.house-address.v1/303/map/world.mm8.map.out01"), 1);
     const std::optional<size_t> learnSkillsIndex = findActionIndexByLabel(rootDialog, "Learn Skills");
 
     REQUIRE(learnSkillsIndex.has_value());

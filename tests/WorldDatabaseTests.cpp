@@ -1928,6 +1928,72 @@ TEST_CASE("world database shared houses retain separate physical discoveries and
     CHECK(database.locations().size() == 2);
 }
 
+TEST_CASE("exact shared house visits do not disclose an unvisited primary address")
+{
+    Fixture fixture;
+    REQUIRE(fixture.maps.loadFromRows({mapRow(63, "Harmondale", "7out02.odm", "mm7"),
+        mapRow(64, "Erathia", "7out03.odm", "mm7")}));
+    WorldDatabase world = fixture.database();
+    const MapStatsEntry *pPrimary = fixture.maps.findById(63), *pOther = fixture.maps.findById(64);
+    REQUIRE(pPrimary != nullptr);
+    REQUIRE(pOther != nullptr);
+    std::string error;
+    const auto program = ScriptedEventProgram::loadFromLuaText(R"lua(
+        evt.map[3] = function() end
+        evt.meta.map.contextActions = {[3] = {kind = 'enter_house', source = 'script', houseId = 11}}
+    )lua", "@exact-house-address", ScriptedEventScope::Map, error);
+    REQUIRE_MESSAGE(program, error);
+    OutdoorMapData map;
+    map.worldId = "mm7";
+    map.entities.resize(1);
+    map.entities[0].eventIdSecondary = 3;
+    for (const MapStatsEntry *pMap : {pPrimary, pOther})
+    {
+        map.fileName = pMap->fileName;
+        world.indexMapLocations(map, *program);
+    }
+    EventRuntimeState state;
+    recordWorldHouseVisit(state, 11, *pOther, pPrimary);
+    WorldKnowledge known;
+    known.variables = state.namedGlobalVars;
+    known.visitedMaps = {pPrimary->fileName, pOther->fileName};
+    CHECK(worldHouseAddressesRecorded(known.variables, 11));
+    CHECK_FALSE(worldHouseAddressKnown(known.variables, 11, WorldDatabase::mapId(*pPrimary)));
+    CHECK(world.queryLocations(known, false, WorldDatabase::mapId(*pPrimary)).empty());
+    CHECK(world.query(known, false, "", WorldRecordKind::House, WorldDatabase::mapId(*pPrimary)).empty());
+    CHECK(world.query(known, false, "Harmondale", WorldRecordKind::House).empty());
+    CHECK(world.queryLocations(known, false, WorldDatabase::mapId(*pOther)).size() == 1);
+    CHECK(world.query(known, false, "Erathia", WorldRecordKind::House).size() == 1);
+    known.variables[WorldDatabase::npcDiscoveryKey(42)] = 1;
+    known.variables[worldNpcHouseKey(42)] = 11;
+    known.variables[worldNpcTeacherKey(42, 305)] = 1;
+    CHECK(world.query(known, false, "Harmondale", WorldRecordKind::Npc).empty());
+    CHECK(world.query(known, false, "Harmondale", WorldRecordKind::Trainer).empty());
+    known.visitedMaps.clear();
+    CHECK(world.queryLocations(known, false, WorldDatabase::mapId(*pOther)).empty());
+    known.visitedMaps = {pPrimary->fileName, pOther->fileName};
+    recordWorldHouseVisit(state, 11, *pPrimary, pPrimary);
+    known.variables = state.namedGlobalVars;
+    CHECK(world.queryLocations(known, false, WorldDatabase::mapId(*pPrimary)).size() == 1);
+    CHECK(world.queryLocations(known, false, WorldDatabase::mapId(*pOther)).size() == 1);
+
+    EventRuntimeState legacy;
+    legacy.namedGlobalVars[WorldDatabase::houseDiscoveryKey(11)] = 1;
+    recordWorldHouseVisit(legacy, 11, *pOther, pPrimary);
+    CHECK(worldHouseAddressKnown(legacy.namedGlobalVars, 11, WorldDatabase::mapId(*pPrimary)));
+    CHECK(worldHouseAddressKnown(legacy.namedGlobalVars, 11, WorldDatabase::mapId(*pOther)));
+    const auto migrated = legacy.namedGlobalVars;
+    recordWorldHouseVisit(legacy, 11, *pOther, pPrimary);
+    CHECK(legacy.namedGlobalVars == migrated);
+    EventRuntimeState oldSite;
+    oldSite.namedGlobalVars[WorldDatabase::houseDiscoveryKey(11)] = 1;
+    recordWorldHouseVisit(oldSite, 11, *pPrimary, pPrimary);
+    known.variables = oldSite.namedGlobalVars;
+    known.interactedSites[pOther->fileName].insert(worldSiteDiscoveryKey(3, "decoration/0"));
+    CHECK(world.queryLocations(known, false, WorldDatabase::mapId(*pOther)).size() == 1);
+    CHECK_THROWS_AS(recordWorldHouseVisit(oldSite, 0, *pOther, pPrimary), std::invalid_argument);
+}
+
 TEST_CASE("world database entrance discovery requires full exploration of the correct cell")
 {
     WorldRegionMapKnowledge knowledge;

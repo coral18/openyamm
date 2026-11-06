@@ -96,8 +96,8 @@ tables, and do not bundle its HTML, JS, translated prose, generated illustration
 | Region browsing, search, zoom/pan | Implemented | Implemented | More extensive map/content audit |
 | Continent overview | Existing game illustration | Original regional schematic | Optional licensed/original illustrated Jadame artwork |
 | Discovery fog and current party arrow | Implemented | Implemented | Wider dungeon/device checks |
-| Dungeon plans from engine geometry | Adaptive known height slices, clipped known walkable ramp edges, party-height selection, component-aware discovered pins and height-aware notes | Same shared projection and controls | Semantic storeys, mechanism-driven geometry and wider floor/visibility/device audit |
-| Buildings, resident NPCs, trainers | Current/observed residents, Guide-only declared possible residences, indoor service markers and multiple physical entrances per canonical service | Same shared index; actual Adventurer's Inn discovery and Dagger Wound/Ravenshore entrances | Conditional service eligibility, wider scripted placement audit and generated/roaming NPCs |
+| Dungeon plans from engine geometry | Adaptive known height slices, clipped known walkable ramp edges, party-height selection, component-aware discovered pins and height-aware notes | Same shared projection and controls | Semantic storeys and wider floor/visibility/device audit; moving geometry awaits user decision |
+| Buildings, resident NPCs, trainers | Current/observed residents, Guide-only declared possible residences, indoor service markers and exact physical-address history per canonical service | Same shared index; actual Adventurer's Inn discovery and Dagger Wound/Ravenshore entrances | Conditional service eligibility, wider scripted placement audit and generated/roaming NPCs |
 | Trainer requirements and prices | Gameplay evaluator, observed offers and race-specific mastery comparisons | Same shared evaluator | Conditional eligibility audit and starting-skill/race-selection checks |
 | Walking and scheduled transport | Directed walking/coach/boat graph, departure pins, last-offered schedules/fare/duration, live local overrides and destination navigation | Same shared knowledge/navigation | Remote scripted timetable references, availability forecasting and arrival-point links |
 | Quest giver/objective/return chains | Shared registry, 76 quests, conditional clues and possible contact-location links | Shared registry, 69 quests, repaired Accuracy state, stage-sensitive Aislen/Pole delivery contacts and possible contact-location links | Remaining conditional stages and wider campaign audit; unused legacy MM8 rows 5/172 are not invented playable chains |
@@ -218,6 +218,15 @@ and four native before/after tours (112 UI steps / 24 captures, six fixture, twe
 filtered changes, identical All heights crops and unchanged Discovery map/list crops. Eight save inspections
 retain checked map/resources/cache keys and independent discovery. These are sampled height/state checks;
 semantic storeys, mechanisms and physical acceptance remain open. This fix is not in Android 0.2.9 or 0.2.8.
+
+The 2026-11-06 shared-house address fix also prevents an actual visit at another entrance from revealing the
+unvisited primary address. Canonical address history belongs to Core and is captured with Atlas disabled.
+Legacy global-only saves retain their former primary-address interpretation and migrate only during a real
+visit; old ambiguity cannot be reconstructed. Four AMD/OpenGL tours pass 72 UI steps / 12 captures with equal
+Discovery map/list crops after Guide; eight inspected saves preserve address history, resources and cached maps.
+Four actual-door/save fixtures pass 51 steps across MM8, Atlas-off, legacy and cross-world Tatalia cases.
+The focused suite passes 311 cases / 69,766 assertions, excluding two independently reproduced pre-existing
+data/environment failures documented in `ATLAS.md`. No Android installation or new physical-device acceptance is claimed.
 
 Completion requires the missing native functions, data validation against the active game packages, meaningful
 unit/runtime checks and visual checks. A placeholder page or a list of unrelated journal text is not a completed

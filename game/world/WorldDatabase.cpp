@@ -1,4 +1,5 @@
 #include "game/world/WorldDatabase.h"
+#include "game/world/WorldMapKnowledge.h"
 #include "game/StringUtils.h"
 #include "game/maps/MapIdentity.h"
 #include "game/gameplay/TravelRuntime.h"
@@ -378,7 +379,10 @@ const MapStatsEntry *WorldDatabase::recordMap(const WorldRecord &record, const W
     const WorldRecord *pPrimary = find(mapId(*record.map));
     const MapStatsEntry *pDeclared = m_pMaps->findById(record.house->mapId);
     const bool declaredAddress = pDeclared != nullptr && mapId(*pDeclared) == mapId(*record.map);
-    const bool primaryKnown = pPrimary != nullptr && (guide || (declaredAddress && knowledge.knows(*pPrimary)));
+    const bool legacyAddress = declaredAddress && !worldHouseAddressesRecorded(knowledge.variables, record.house->id);
+    const bool exactAddress = worldHouseAddressKnown(knowledge.variables, record.house->id, mapId(*record.map));
+    const bool primaryKnown = pPrimary != nullptr && (guide || (knowledge.knows(*pPrimary)
+        && (legacyAddress || exactAddress)));
     if (primaryKnown && (preferredMap.empty() || preferredMap == pPrimary->id)) return record.map;
     const MapStatsEntry *pFirst = nullptr;
     for (const WorldMapLocation &location : m_locations)
@@ -507,7 +511,9 @@ std::vector<const WorldRecord *> WorldDatabase::query(const WorldKnowledge &know
             const WorldRecord *pSource = find(withinMap);
             if (pSource == nullptr || !knowledge.knows(*pSource)) continue;
             const MapStatsEntry *pDeclared = m_pMaps->findById(record.house->mapId);
-            if ((pDeclared == nullptr || mapId(*pDeclared) != withinMap)
+            const bool legacyAddress = pDeclared != nullptr && mapId(*pDeclared) == withinMap
+                && !worldHouseAddressesRecorded(knowledge.variables, record.house->id);
+            if (!legacyAddress && !worldHouseAddressKnown(knowledge.variables, record.house->id, withinMap)
                 && std::none_of(m_locations.begin(), m_locations.end(), [&](const WorldMapLocation &location)
                 {
                     const WorldRecord *pTarget = find(location.recordId);

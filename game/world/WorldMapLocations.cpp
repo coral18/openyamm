@@ -1,4 +1,5 @@
 #include "game/world/WorldDatabase.h"
+#include "game/world/WorldMapKnowledge.h"
 #include "game/events/ScriptedEventProgram.h"
 #include "game/outdoor/OutdoorMapData.h"
 #include "game/indoor/IndoorMapData.h"
@@ -415,10 +416,13 @@ bool WorldDatabase::houseLocationKnown(const WorldMapLocation &location, const W
     const WorldRecord *pSource = find(location.mapId);
     const WorldRecord *pTarget = find(location.recordId);
     if (pSource == nullptr || pTarget == nullptr || !knowledge.knows(*pSource)) return false;
-    // Retain the table address for legacy house discoveries. An additional entrance needs its own observation.
+    if (pTarget->house != nullptr
+        && worldHouseAddressKnown(knowledge.variables, pTarget->house->id, location.mapId)) return true;
+    // Global-only legacy discoveries retain their primary address. Exact visit history never infers another address.
     const MapStatsEntry *pDeclared = pTarget->house != nullptr
         ? m_pMaps->findById(pTarget->house->mapId) : nullptr;
-    if (pDeclared != nullptr && location.mapId == mapId(*pDeclared)) return true;
+    if (pDeclared != nullptr && location.mapId == mapId(*pDeclared)
+        && !worldHouseAddressesRecorded(knowledge.variables, pTarget->house->id)) return true;
     const auto found = knowledge.interactedSites.find(toLowerCopy(pSource->map->fileName));
     return found != knowledge.interactedSites.end()
         && std::any_of(location.discoveryKeys.begin(), location.discoveryKeys.end(),

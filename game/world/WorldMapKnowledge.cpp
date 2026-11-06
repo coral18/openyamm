@@ -1,5 +1,6 @@
 #include "game/world/WorldMapKnowledge.h"
 #include "game/world/WorldGateCatalog.h"
+#include "game/world/WorldDatabase.h"
 #include "game/events/EventRuntime.h"
 #include "game/StringUtils.h"
 
@@ -7,10 +8,56 @@
 #include <charconv>
 #include <cmath>
 #include <optional>
+#include <stdexcept>
 #include <tuple>
 
 namespace OpenYAMM::Game
 {
+std::string worldHouseAddressVersionKey(uint32_t houseId)
+{
+    if (houseId == 0) throw std::invalid_argument("Invalid observed house ID");
+    return "openyamm.discovery.house-address.v1/" + std::to_string(houseId) + "/seen";
+}
+
+std::string worldHouseAddressKey(uint32_t houseId, const std::string &mapId)
+{
+    if (houseId == 0 || !mapId.starts_with("world."))
+        throw std::invalid_argument("Invalid observed house address");
+    return "openyamm.discovery.house-address.v1/" + std::to_string(houseId) + "/map/" + mapId;
+}
+
+bool worldHouseAddressesRecorded(const std::unordered_map<std::string, int32_t> &variables, uint32_t houseId)
+{
+    const auto found = variables.find(worldHouseAddressVersionKey(houseId));
+    return found != variables.end() && found->second == 1;
+}
+
+bool worldHouseAddressKnown(const std::unordered_map<std::string, int32_t> &variables,
+    uint32_t houseId, const std::string &mapId)
+{
+    const auto found = variables.find(worldHouseAddressKey(houseId, mapId));
+    return found != variables.end() && found->second == 1;
+}
+
+void recordWorldHouseVisit(EventRuntimeState &state, uint32_t houseId, const MapStatsEntry &location,
+    const MapStatsEntry *pLegacyPrimary)
+{
+    const std::string globalKey = WorldDatabase::houseDiscoveryKey(houseId);
+    const std::string versionKey = worldHouseAddressVersionKey(houseId);
+    const std::string addressKey = worldHouseAddressKey(houseId, WorldDatabase::mapId(location));
+    const auto old = state.namedGlobalVars.find(globalKey);
+    if (!worldHouseAddressesRecorded(state.namedGlobalVars, houseId)
+        && old != state.namedGlobalVars.end() && old->second > 0 && pLegacyPrimary != nullptr)
+    {
+        // Earlier saves resolved this global flag to the table's primary map. Preserve that interpretation
+        // explicitly before adding richer address history; browsing Guide never performs this migration.
+        state.namedGlobalVars[worldHouseAddressKey(houseId, WorldDatabase::mapId(*pLegacyPrimary))] = 1;
+    }
+    state.namedGlobalVars[addressKey] = 1;
+    state.namedGlobalVars[versionKey] = 1;
+    state.namedGlobalVars[globalKey] = 1;
+}
+
 bool recordWorldMapArrival(EventRuntimeState &state, const std::string &sourceMapId, uint32_t eventId,
     float x, float y, float z, float gameMinutes)
 {

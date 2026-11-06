@@ -3432,3 +3432,45 @@ the actual startup map. Original failure, comparisons, source/binary hashes, sav
 logs are retained under `atlas-ramp-slices-20261029` in the Windows development root. Android remains deferred;
 this fix is newer than the prepared 0.2.9 package and installed 0.2.8. Semantic floors, moving mechanisms and
 broader conditional-content/device acceptance remain open.
+
+
+## Exact shared-house addresses (2026-11-06)
+
+A fresh Dagger Wound visit to Inn 1607 previously revealed its declared Ravenshore address as soon as the
+party reached that region, even without visiting that entrance. The global service flag could not distinguish
+which physical address had actually been visited. The reproduced pre-fix native capture showed the Inn in
+Discovery search and behind fog.
+
+The shared dialogue controller now records real house visits against canonical map IDs, including the separate
+Adventurer's Inn overlay and ordinary services/NPC hosts. World Database map resolution, map-local lists,
+NPC/trainer search and physical pins honor that history. Core captures it while the optional Atlas module is
+disabled. The existing generic service flag remains available; no binary save-schema change is needed.
+
+New histories never infer a service's primary address from another address. Older global-only histories lack
+that distinction: their former primary-address interpretation remains readable and is explicitly migrated on
+the next real visit before adding its current address. Older additional-site observations remain valid. Guide
+browsing neither migrates these records nor creates visits. This preserves old knowledge; it cannot reconstruct
+which entrance an ambiguous old save originally visited. Namespace details are in `MODDING.md`.
+
+Validation uses four native Windows AMD/OpenGL tours: fresh other-address-only, actually visited primary,
+Core capture with Atlas off and subsequent UI review, and a real pre-fix legacy save. Their 72 UI steps / 12
+captures show the primary hidden in the first/third cases and visible in the second/legacy cases. All four
+Discovery map/list RGB crops match after Guide. Eight source/result save inspections retain the exact address
+history, map, gold 5000, food 10 and cached map sets. Only the normal current-region canonical visit can
+initialize; this is not a whole-save or game-time equality claim.
+
+Actual-door/save scenarios cover fresh MM8 visits (14 steps), Atlas-off capture (8), legacy migration (9),
+and cross-world Dagger Wound/Tatalia (20). Tatalia's real event 82 records its own address while Ravenshore
+stays unknown through save/load. The pure address regression passes 25 assertions, including NPC/trainer
+search, legacy migration idempotence, old additional-site observations and unknown-region privacy. The normal
+temple skill-learning regression also checks its serialized address while retaining the existing gameplay checks.
+
+The expanded World Database/Guide/active-interaction/house-dialogue run has two pre-existing environment/data
+failures: Verdant's dimensional-travel label is missing from the cached NPC topic table, and the portrait test
+requires the retired source `worlds/mm8/icons/npc1130.bmp`. Both fail identically when the six changed Core/test
+files are replaced with the published pre-fix revision. No test was weakened and no retired icon was restored.
+The final focused run explicitly excludes those two cases and passes 311 cases / 69,766 assertions.
+This is not a claim that the entire suite is green.
+The retained evidence is under private `atlas-primary-house-address-20261029/`, including baseline/current logs,
+`native-results.json`, `privacy-crops.json` and `native-save-results.json`. Public reproduction is in the fixture
+README. These PC fixes are newer than prepared Android 0.2.9 and installed 0.2.8; phone work remains deferred.
