@@ -3490,3 +3490,38 @@ independently reproduced old source-portrait test remains explicitly excluded; a
 The source wrapper's shell syntax also passes. Private source/package hashes and logs are retained under
 `atlas-promotion-contacts-20261106/runtime-topics-*`. Android packaging already takes source tables and was
 not rebuilt or installed for this PC cache correction.
+
+
+## Knight/Dragon quest contact relocation acceptance (2026-11-06)
+
+The remaining conditional-contact check covers MM8 Knight quest 70 and Dragon quest 74 across faction choice,
+actual camp departure, Council encounter, final turn-in and save/load. Two strict scenarios pass 118 steps.
+They execute authored requests and alliance handoffs, pick event-501 exit faces, select the real transition
+confirmation and verify old NPC 15/17 removed and representative 52/53 moved to Council house 751. The real
+Council event 171 and resident selection record the new residence; an NPC-ID conversation alone does not.
+
+Initial alliance requests, recovered Egg/Ebonest/Sword items and final cure/slayer eligibility are explicit
+fixtures. Most travel is replaced by technical loads; combat, rescue, alchemy and ordinary Dragon-class
+promotion are not certified. The Knight-only party exercises honorary Dragon completion. There is no change
+to generated callbacks, faction rules, quest data, gameplay eligibility or save schema in this acceptance pass.
+The quest audit records all fixture limits and the current 602-row / 22-conditional-row relationship inventory.
+
+Four native Windows AMD/OpenGL tours pass 108 UI steps / 24 captures across active/historical states for both
+quests. They distinguish the old recorded-earlier contact from the current representative, retain the journal
+history after completion and show a usable NPC link only after the physical Council encounter. Two additional
+20-step tours / four captures select the current return-contact button and show the correctly selected NPC
+in `d09.blv`. The loaded game's map name remains authoritative; no Atlas-only geographic rename is invented.
+All four Guide-roundtrip Discovery map/list RGB crops match. Two separate inspected remote-only controls know
+the NPC name but retain house zero and no Council-house discovery, with no Discovery NPC navigation.
+
+Six fresh-process post-UI verifiers pass 186 steps, with twelve source/result Core save inspections. They retain
+selected alliance/active-or-historical quest state, old/new contact keys, actual observed house 751 and its exact
+canonical address. Checked map, gold 15000, food 10, inventory/health and cached map sets remain unchanged;
+only the normal current-map canonical visit can initialize. This is sampled state coverage, not full-save or
+game-time equality. Preliminary setup attempts and an idle/missing-exit-proof UI run are excluded from acceptance.
+
+Public scenarios/tours and reproduction are in the fixture README. Accepted private records are under
+`atlas-promotion-contacts-20261106/`: `fixture-results.json`, `native-results.json`, `link-results.json`,
+`save-results.json`, remote-control inspections and the acceptance receipt. The earlier runtime-topic fix in
+that directory passes 312 cases / 69,790 assertions with the retired source-portrait case explicitly excluded.
+Android and physical-controller follow-up remain deferred/pending; this is a PC conditional-content checkpoint.

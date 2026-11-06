@@ -1,0 +1,23 @@
+output_dir: captures
+exit: true
+steps:
+- {expect: gameplay}
+- {action: map_book}
+- click: [1250, 770]
+- click: [450, 57]
+- click: [1450, 126]
+- click: [275, 190]
+- {text: Ebonest}
+- {key: Return}
+- click: [200, 265]
+- pointer_move: [1035, 527]
+- {wheel: -1000}
+- {capture: current-contact-links}
+- click: [1000, 694]
+- pointer_move: [800, 860]
+- {capture: current-contact-map}
+- {key: Escape}
+- {key: Escape}
+- {expect: gameplay}
+- {key: F9}
+- {wait: 0.4}

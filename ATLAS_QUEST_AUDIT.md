@@ -1,7 +1,8 @@
 # Atlas quest relationships: content audit
 
 The shared `engine/data_tables/quest_locations.txt` currently describes 145 quests:
-76 MM7 and 69 MM8 entries, with 595 relationships. This is partial campaign coverage.
+76 MM7 and 69 MM8 entries, with 602 relationships. Entry coverage does not certify every campaign stage
+or optional dialogue clue.
 All names and descriptions resolve through the loaded game registries; the relationship file contains IDs,
 roles and disclosure metadata, not a second copy of quest prose. Mods and other consumers use the same table.
 
@@ -300,3 +301,30 @@ The two real-dialogue scenarios pass 100 and 98 steps. Public inputs are
 `tests/scenarios/atlas/mm8_delivery_{101,142}_knowledge.yml`, corresponding native `tools/menu_tours/` inputs
 and the paired `_privacy.yml` post-UI verifiers. Native acceptance and remaining limitations are recorded in
 `ATLAS.md`. Full quest-stage coverage and the parent coverage matrix remain open.
+
+
+### Promotion contact relocation, 2026-11-06
+
+Two current-runtime scenarios exercise the conditional contact rows for Knight quest 70 and Dragon quest 74.
+They accept the authored promotion request, give the Dragon Egg through the actual faction dialogue, leave
+Dragon Hunter's Camp / Dragon Cave through a picked event-501 exit and select its visible transition action.
+The leave hook removes NPC 15/17 and moves representative 52/53 to Council house 751. Both the departing
+and new return-contact keys survive; Dragon giver keys distinguish the same two stages. Council event 171
+and its resident selection establish an actual observed address, rather than guessing one from the NPC name.
+
+The final turn-in uses the actual promotion callback and retains the contact history after completion and
+save/load. The two strict scenarios pass 57 / 61 steps. Initial alliance requests (16/17), recovered items and
+final cure/slayer eligibility (73/75) are explicit fixtures. The party contains a Knight, so the Dragon turn-in
+checks honorary completion. NPC-ID conversations and technical map loads bypass most travel. These are not
+rescue, alchemy, combat, full campaign or ordinary Dragon-class promotion playthroughs. The real camp exits
+and Council visits are separately picked/selected; `enter_door_at` fallback loads are not accepted evidence.
+
+Private remote-conversation controls also verify the intended distinction: a call addressed only by NPC ID
+records no residence and produces no Discovery navigation to that NPC. Only the real Council visit supplies
+the house observation. This is existing Core behavior, not a relaxation of Discovery policy.
+
+The live relationship file has 602 rows after the requested-item variant follow-up, rather than the historical
+595 count above. Its 22 conditional rows cover Troll-home discovery (69), Knight/Dragon representative changes
+(21/22), twelve delivery recipients (102-107/143-148), Ninja's learned tomb (569) and the two tapestry branches
+(611/612). The earlier sections retain the dated evidence for those branches; this inventory does not claim
+that every possible condition in campaign scripts has a relationship row or a complete playthrough test.

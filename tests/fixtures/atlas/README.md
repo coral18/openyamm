@@ -731,3 +731,36 @@ checked map/gold/food, and no new house knowledge from Guide. Only normal curren
 The accepted private set has four tours / 72 steps / 12 captures and eight inspected saves; it does not assert
 whole-save equality, game-time identity or Android/controller acceptance. Focused case `exact shared house
 visits*` checks primary-map/list/NPC/trainer search, migration idempotence and retained legacy-site evidence.
+
+
+## MM8 promotion contacts before and after alliance relocation
+
+Run `mm8_champion_contact_relocation.yml` and `mm8_wyrm_contact_relocation.yml` in private runtimes with the
+current normal packages. They export `relocated` (quest still active) and `completed` under the scenario
+temporary-save directories `atlas_mm8_champion_relocation` / `atlas_mm8_wyrm_relocation`. The actual camp
+exit is picked as event 501 and confirmed by its visible dialog action; the real Council door is event 171,
+followed by resident 52/53. A technical map load alone does not execute a departure hook. Initial alliance
+requests, recovered items and final cure/slayer prerequisites are explicit fixtures; conversations by ID
+bypass most travel. The Knight-only party checks honorary completion of the Dragon request, not Dragon-class
+progression. See the scenario notes and `ATLAS_QUEST_AUDIT.md` for those limits.
+
+For each exported state, copy its save to private `saves/before.oysav`. At 1600x900 use
+`tools/menu_tours/atlas_mm8_champion_contacts.yml` or `atlas_mm8_wyrm_contacts.yml`. Restore the one-shot
+`debug.menu_input_tour_path` before **every** launch, including repeated runs. Require startup `d09.blv` and
+fresh capture timestamps. The old contact's quest line is marked recorded earlier; its current counterpart
+has a usable residence only after the actual Council visit. A remote-only NPC-ID conversation must not supply
+that address. Do not "repair" an intentionally unmapped remote observation by inventing a house.
+
+Compare Discovery map/list crops before and after Guide, and inspect source and UI quicksave using
+`openyamm_levelgen_inspect_save` with the game DLL directory on PATH. Require unchanged checked map, gold,
+food, party inventory/health and cached map sets; only normal current-map discovery may initialize. Fresh-load
+both saves to check the selected alliance flag, active/completed quest state, old NPC removed, current NPC in
+house 751, observed NPC house 751, independent house-address history and retained old/new quest contact keys.
+This is sampled state/privacy coverage, not whole-save equality, a campaign playthrough or device acceptance.
+
+
+The matching `atlas_mm8_champion_contact_link.yml` / `atlas_mm8_wyrm_contact_link.yml` tours use the active
+`relocated` save. They select the current return-contact button at the bottom of the quest details and capture
+the selected NPC in the map, rather than accepting mere button visibility as navigation proof. Their twenty
+steps / two captures per branch are separate from the twenty-seven-step Guide-privacy tours. The accepted set
+has 148 native steps / 28 captures, 186 fresh-load/post-UI steps and twelve source/result save inspections.

@@ -1,0 +1,110 @@
+id: atlas.mm8_champion_relocation
+title: Actual alliance relocation preserves old and current promotion contacts
+world: mm8
+mode: faithful
+steps:
+- new_game_flow:
+    start_map: d16.blv
+    party:
+      gold: 5000
+      food: 10
+      members:
+      - name: Atlas Tester
+        class: Knight
+        level: 20
+        race_id: 0
+        skills: []
+        equipment: {}
+- {note: 'The alliance request prerequisite and recovered items are explicit fixtures. NPC-id conversations and map loads
+    bypass physical travel/combat; the requests, alliance handoff, leave hook, promotion and knowledge recording are authored.'}
+- setup_shortcut: {kind: set_qbit, id: 16}
+- {save_game: alliance-request-fixture}
+- {load_game: alliance-request-fixture}
+- assert:
+    qbit_set: [16]
+- speak_npc: {source_id: 49}
+- select_topic: {kind: npc_topic, action_id: 52}
+- assert:
+    qbit_set: [70]
+    qbit_clear: [21, 22]
+- assert:
+    named_global_var_changed: {name: openyamm.discovery.quest/70/location/return/npc/15, value: 1}
+- assert:
+    named_global_var_changed: {name: openyamm.discovery.quest/70/location/return/npc/52, value: 0}
+- press_action: {action: cancel_dialog}
+- assert:
+    qbit_set: [16, 70]
+- speak_npc: {source_id: 15}
+- select_topic: {kind: npc_topic, action_id: 63}
+- select_topic: {kind: npc_topic, action_id: 64}
+- setup_shortcut: {kind: grant_item, item_id: 605}
+- {save_game: egg-inventory-fixture}
+- {load_game: egg-inventory-fixture}
+- assert:
+    inventory_any_member:
+    - {item_id: 605}
+- speak_npc: {source_id: 15}
+- select_topic: {kind: npc_topic, action_id: 64}
+- assert:
+    qbit_set: [70, 21]
+    qbit_clear: [22]
+- assert:
+    named_global_var_changed: {name: openyamm.discovery.quest/70/location/return/npc/15, value: 1}
+- assert:
+    named_global_var_changed: {name: openyamm.discovery.quest/70/location/return/npc/52, value: 1}
+- press_action: {action: cancel_dialog}
+- press_interact:
+    pose: {x: -1152, y: 1800, z: 0, yaw: 1.57079632679, pitch: 0}
+    expect: {kind: event_target, triggered_event: 501, can_activate: true}
+- select_topic: {kind: map_transition_confirm, action_id: 0}
+- assert: {map: out05.odm}
+- assert:
+    npc_house: {npc_id: 15, house_id: 0}
+- assert:
+    npc_house: {npc_id: 52, house_id: 751}
+- load_map: {map: out02.odm}
+- assert:
+    npc_house: {npc_id: 15, house_id: 0}
+- assert:
+    npc_house: {npc_id: 52, house_id: 751}
+- load_map: {map: d09.blv}
+- press_interact:
+    pose: {x: 256, y: -344, z: 768, yaw: 1.57079632679, pitch: 0}
+    expect: {kind: event_target, triggered_event: 171, can_activate: true}
+- select_topic: {kind: house_resident, action_id: 52}
+- assert:
+    named_global_var_changed: {name: openyamm.discovery.npc/52/house, value: 751}
+- {save_game: relocated}
+- {note: 'Final turn-in eligibility is a fixture: Blazen cure obtained (73). Rescue, alchemy and combat are not covered
+    by this relocation check.'}
+- setup_shortcut: {kind: set_qbit, id: 73}
+- setup_shortcut: {kind: grant_item, item_id: 539}
+- {save_game: promotion-item-fixture}
+- {load_game: promotion-item-fixture}
+- assert:
+    inventory_any_member:
+    - {item_id: 539}
+- press_interact:
+    pose: {x: 256, y: -344, z: 768, yaw: 1.57079632679, pitch: 0}
+    expect: {kind: event_target, triggered_event: 171, can_activate: true}
+- select_topic: {kind: house_resident, action_id: 52}
+- assert:
+    named_global_var_changed: {name: openyamm.discovery.npc/52/house, value: 751}
+- select_topic: {kind: npc_topic, action_id: 58}
+- assert:
+    qbit_set: [21]
+    qbit_clear: [70, 22]
+- assert:
+    named_global_var_changed: {name: openyamm.discovery.quest/70/location/return/npc/15, value: 1}
+- assert:
+    named_global_var_changed: {name: openyamm.discovery.quest/70/location/return/npc/52, value: 1}
+- {save_game: completed}
+- {load_game: completed}
+- assert:
+    qbit_set: [21]
+    qbit_clear: [70, 22]
+    npc_house: {npc_id: 52, house_id: 751}
+- assert:
+    named_global_var_changed: {name: openyamm.discovery.quest/70/location/return/npc/15, value: 1}
+- assert:
+    named_global_var_changed: {name: openyamm.discovery.quest/70/location/return/npc/52, value: 1}

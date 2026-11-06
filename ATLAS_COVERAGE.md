@@ -234,6 +234,15 @@ source bytes. The expanded suite passes 312 cases / 69,790 assertions with only 
 portrait case excluded. This corrects the development payload, without downloading full world packages or
 changing dialogue behavior; details are in `ATLAS.md`.
 
+The 2026-11-06 conditional-contact acceptance checks Knight/Dragon quests 70/74 through actual alliance
+handoffs, picked camp exits, Council resident encounters, final turn-ins and save/load (118 strict steps,
+with explicit prerequisite/item fixtures). Four AMD/OpenGL active/history tours pass 108 steps / 24 captures;
+two link-selection tours add 40 steps / four captures and select the correct Council NPC. Guide-roundtrip
+Discovery crops match in all four cases. Six post-UI verifiers pass 186 steps; twelve inspected saves retain
+checked quest/contact/address state, resources, inventory/health and cache sets. Remote-only controls retain
+no residence. This closes those sampled relocation stages, not every campaign branch or device gate.
+Reproduction and explicit limits are in `ATLAS.md`, the quest audit and the fixture README.
+
 Completion requires the missing native functions, data validation against the active game packages, meaningful
 unit/runtime checks and visual checks. A placeholder page or a list of unrelated journal text is not a completed
 quest guide. Reference data must describe the active merged/modded game, rather than silently assert vanilla rules.
