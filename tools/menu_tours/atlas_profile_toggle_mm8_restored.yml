@@ -1,0 +1,22 @@
+output_dir: captures
+exit: true
+steps:
+- {expect: gameplay}
+- {action: map_book}
+- click: [1250, 770]
+- click: [1480, 126]
+- click: [275, 125]
+- {text: Profile note MM8}
+- {key: Return}
+- click: [1250, 260]
+- pointer_move: [800, 860]
+- {capture: atlas-note-restored}
+- click: [1390, 807]
+- {capture: note-editor-restored}
+- {key: Escape}
+- {capture: note-edit-cancelled}
+- {key: Escape}
+- {key: Escape}
+- {expect: gameplay}
+- {key: F9}
+- {wait: 0.4}

@@ -3525,3 +3525,32 @@ Public scenarios/tours and reproduction are in the fixture README. Accepted priv
 `save-results.json`, remote-control inspections and the acceptance receipt. The earlier runtime-topic fix in
 that directory passes 312 cases / 69,790 assertions with the retired source-portrait case explicitly excluded.
 Android and physical-controller follow-up remain deferred/pending; this is a PC conditional-content checkpoint.
+
+
+## Current save/profile toggle acceptance (2026-11-06)
+
+The existing optional-module contract is rechecked with the newer physical-address and quest-contact history:
+one MM7 save after actual Dagger Wound/Tatalia Inn visits and one MM8 save after Quixote's real Council encounter.
+Each private campaign goes through Atlas enabled, disabled, then enabled again, with the previous phase's
+quicksave copied byte-for-byte to the next phase's input. No original user save or ordinary profile is modified.
+The existing `save_required: false` manifest remains unchanged; gameplay mod `karol.test` stays enabled throughout.
+
+Six fresh native Windows AMD/OpenGL processes pass 122 UI steps / 18 captures. They create one actual user note,
+show it in ordinary Map Book with Atlas disabled, exercise quicksave/quickload in that disabled profile and
+reopen its editor after re-enabling Atlas. The disabled sidebar omits Atlas; clicking its former position does
+not open it. Restored map/list RGB crops match the created-note state in both worlds. Note text and coordinates
+remain visible; restored editor ownership allows editing and cancellation without changing the saved note.
+
+Six fresh-process verifiers pass 150 steps and twelve source/result save inspections. User note 4294967295 and
+its per-map ownership survive each round trip. MM7 retains exact Inn addresses on Dagger Wound/Tatalia without
+inventing Ravenshore; MM8 retains house 751, the observed NPC 52 address, active quest 70, alliance 21 and both
+old/current return-contact keys. Checked map, resources, inventory/health and cached map sets stay unchanged.
+Only initial ordinary current-map discovery can initialize in the first phase; disabled/restored global
+Discovery dictionaries are unchanged. These checks certify the sampled state, not whole-save/time equality.
+
+Public `atlas_profile_toggle_mm{7,8}_{on,off,restored}.yml` tours and their input/profile instructions are in
+the fixture README. The private receipt, source/output hashes, logs, `native-results.json`, `save-results.json`
+and `restored-crops.json` are under `atlas-profile-toggle-20261106/`. A preliminary verifier used an incorrect
+assumed note ID; its failure is excluded and the accepted checks use the actual serialized Core-assigned ID.
+No engine behavior, manifest or save schema needed changing. Android/controller physical acceptance remains
+separate and pending; this is current PC evidence for the original optional-mod/save requirement.

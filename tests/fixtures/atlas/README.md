@@ -764,3 +764,39 @@ The matching `atlas_mm8_champion_contact_link.yml` / `atlas_mm8_wyrm_contact_lin
 the selected NPC in the map, rather than accepting mere button visibility as navigation proof. Their twenty
 steps / two captures per branch are separate from the twenty-seven-step Guide-privacy tours. The accepted set
 has 148 native steps / 28 captures, 186 fresh-load/post-UI steps and twelve source/result save inspections.
+
+
+## Optional Atlas profile toggle with current Core state
+
+Prepare two fresh private inputs using current normal assets: `visited` from `mm7_tatalia_shared_inn.yml`
+(`atlas_mm7_tatalia_shared_inn` temporary-save directory), and `relocated` from
+`mm8_champion_contact_relocation.yml` (`atlas_mm8_champion_relocation`). These retain the exact shared Inn
+addresses / current Council contact introduced by the later checkpoints. Do not substitute user campaigns.
+
+Use separate `on`, `off`, `restored` runtimes for each world at 1600x900, retaining the same gameplay mods and
+packages. Each phase starts from private `saves/before.oysav`. Run the matching
+`tools/menu_tours/atlas_profile_toggle_mm{7,8}_{on,off,restored}.yml` with the correct world. Restore the one-shot
+`debug.menu_input_tour_path` before every launch. Require startup `7out13.odm` / `d09.blv`, fresh screenshots,
+the expected full step count and process exit zero.
+
+The `on` phase uses the default discovered mods (Atlas plus `karol.test`) and creates `Profile note MM7/MM8`.
+Copy that phase's `saves/quicksave.oysav` unchanged to the `off` runtime's `saves/before.oysav`. Only its private
+`mods/profile.yaml` changes:
+
+```yaml
+enabled: [karol.test]
+```
+
+Require `Loaded 1 mod`, an absent Atlas sidebar button, readable note text in Map Book after quickload, and
+no Atlas opened by clicking its old button position. Copy the off quicksave unchanged to the restored runtime;
+omit the override profile there so both discovered mods load again. Its tour reopens the same note, checks
+the owned editor and cancels editing. Keep profiles/source saves of the ordinary runtime untouched.
+
+Inspect both source/output saves and fresh-load the phase outputs. The new note has actual Core ID 4294967295
+and `openyamm.map-notes.user/4294967295 = 1` in its map namespace. Before the first phase it is absent; after
+creation it must remain active and owned through disabled/restored save-load cycles. Retain the source's
+exact house-address/quest-contact keys, map, resources, inventory/health and cached map sets. No new global
+Discovery may appear except ordinary current-map initialization in the first phase. Compare created/restored
+Atlas map/list RGB crops (48,227,1066,732 and 1103,227,1530,731), and inspect the editor text/coordinates.
+The accepted set passes 122 native steps / 18 captures and 150 post-UI steps / twelve save inspections;
+this is sampled PC verification, not complete save equality or physical Android/controller acceptance.

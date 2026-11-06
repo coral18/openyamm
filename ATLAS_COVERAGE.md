@@ -243,6 +243,14 @@ checked quest/contact/address state, resources, inventory/health and cache sets.
 no residence. This closes those sampled relocation stages, not every campaign branch or device gate.
 Reproduction and explicit limits are in `ATLAS.md`, the quest audit and the fixture README.
 
+The current PC optional-mod/save requirement is rechecked against the newer Inn-address and Council-contact
+history. Two campaigns pass Atlas on -> off -> on across six native AMD/OpenGL processes (122 UI steps /
+18 captures). Map Book retains the notes with Atlas absent, including disabled-profile quickload; restored
+note editors and map/list crops match. Six fresh verifiers pass 150 steps / twelve save inspections, retaining
+note ownership, checked addresses/quest flags, resources, inventory/health and cache sets. Each next input is
+the preceding quicksave; no campaign is regenerated between profile phases. This is sampled PC state evidence;
+physical Android/controller acceptance remains pending. Reproduction and limits are in `ATLAS.md`.
+
 Completion requires the missing native functions, data validation against the active game packages, meaningful
 unit/runtime checks and visual checks. A placeholder page or a list of unrelated journal text is not a completed
 quest guide. Reference data must describe the active merged/modded game, rather than silently assert vanilla rules.

@@ -1,0 +1,24 @@
+output_dir: captures
+exit: true
+steps:
+- {expect: gameplay}
+- {action: map_book}
+- pointer_move: &id001 [996, 492]
+- {capture: map-book-note-off}
+- click: [1250, 770]
+- {expect: gameplay}
+- pointer_move: *id001
+- {capture: disabled-atlas-click}
+- {key: Escape}
+- {expect: gameplay}
+- {key: F9}
+- {wait: 0.4}
+- {key: F10}
+- {wait: 1}
+- {expect: gameplay}
+- {action: map_book}
+- pointer_move: *id001
+- {capture: map-book-note-off-reloaded}
+- {key: Escape}
+- {key: F9}
+- {wait: 0.4}
