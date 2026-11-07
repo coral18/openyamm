@@ -1,4 +1,5 @@
 #include "game/maps/SaveGame.h"
+#include "game/world/WorldNpcKnowledge.h"
 
 #include "game/events/EvtEnums.h"
 #include "game/tables/HouseTable.h"
@@ -4010,6 +4011,7 @@ namespace
 {
 constexpr char SaveExtensionMagic[8] = {'O', 'Y', 'E', 'X', 'T', 'S', '1', '\0'};
 const std::string WorldItemOriginsExtension = "openyamm.world-item-origins";
+const std::string GeneratedNpcObservationsExtension = "openyamm.generated-npc-observations";
 
 // The extension is attached to this exact serialized snapshot. Slot references never survive independently
 // of the core payload, and a legacy engine resave discards the trailer instead of retaining stale slot tags.
@@ -4024,6 +4026,34 @@ struct SavedWorldItemOrigin
 
 bool writeSaveExtensions(BinaryWriter &writer, const GameSaveData &data, std::string &error)
 {
+    struct NpcPacket
+    {
+        uint8_t scene = 0;
+        std::string map;
+        const std::vector<WorldGeneratedNpcObservation> *pObservations = nullptr;
+    };
+    std::vector<NpcPacket> npcPackets;
+    const auto collectNpcs = [&](uint8_t scene, const std::string &map, const auto &state)
+    {
+        if (!state || state->observedGeneratedNpcs.empty()) return true;
+        std::unordered_set<std::string> seen;
+        for (const WorldGeneratedNpcObservation &observation : state->observedGeneratedNpcs)
+            if (!validWorldGeneratedNpcObservation(observation)
+                || !seen.insert(worldGeneratedNpcRecordId(observation)).second
+                || (map.starts_with("world.") && observation.location.mapId != map))
+            {
+                error = "invalid generated NPC observation";
+                return false;
+            }
+        npcPackets.push_back({scene, map, &state->observedGeneratedNpcs});
+        return true;
+    };
+    if (!collectNpcs(0, "", data.outdoorWorld.eventRuntimeState)) return false;
+    for (const auto &[map, snapshot] : data.outdoorWorldStates)
+        if (!collectNpcs(1, map, snapshot.eventRuntimeState)) return false;
+    if (!collectNpcs(2, "", data.indoorScene.eventRuntimeState)) return false;
+    for (const auto &[map, snapshot] : data.indoorSceneStates)
+        if (!collectNpcs(3, map, snapshot.eventRuntimeState)) return false;
     std::vector<SavedWorldItemOrigin> origins;
     const auto collect = [&](uint8_t scene, const std::string &map, const auto &objects)
     {
@@ -4045,7 +4075,7 @@ bool writeSaveExtensions(BinaryWriter &writer, const GameSaveData &data, std::st
     if (data.indoorScene.mapDeltaData && !collect(2, "", data.indoorScene.mapDeltaData->spriteObjects)) return false;
     for (const auto &[map, snapshot] : data.indoorSceneStates)
         if (snapshot.mapDeltaData && !collect(3, map, snapshot.mapDeltaData->spriteObjects)) return false;
-    if (origins.empty()) return true;
+    if (origins.empty() && npcPackets.empty()) return true;
     if (origins.size() > UINT32_MAX)
     {
         error = "too many world item origins";
@@ -4064,11 +4094,89 @@ bool writeSaveExtensions(BinaryWriter &writer, const GameSaveData &data, std::st
         payload.write(origin.monsterId);
     }
     writer.writeBytes(SaveExtensionMagic, sizeof(SaveExtensionMagic));
-    writer.write(uint32_t(1)); // Number of namespaced extension packets.
-    writer.write(WorldItemOriginsExtension);
-    writer.write(uint32_t(1)); // Namespace schema, independent of the upstream save version.
-    writer.write(payload.bytes());
+    writer.write(uint32_t(!origins.empty()) + uint32_t(!npcPackets.empty()));
+    if (!origins.empty())
+    {
+        writer.write(WorldItemOriginsExtension);
+        writer.write(uint32_t(1)); // Namespace schema, independent of the upstream save version.
+        writer.write(payload.bytes());
+    }
+    if (!npcPackets.empty())
+    {
+        std::sort(npcPackets.begin(), npcPackets.end(), [](const NpcPacket &a, const NpcPacket &b)
+            { return std::tie(a.scene, a.map) < std::tie(b.scene, b.map); });
+        BinaryWriter npcs;
+        npcs.write(uint32_t(npcPackets.size()));
+        for (const NpcPacket &packet : npcPackets)
+        {
+            npcs.write(packet.scene);
+            npcs.write(packet.map);
+            npcs.write(uint32_t(packet.pObservations->size()));
+            for (const WorldGeneratedNpcObservation &npc : *packet.pObservations)
+            {
+                npcs.write(npc.actorKey);
+                npcs.write(npc.npcId);
+                npcs.write(npc.name);
+                npcs.write(npc.pictureId);
+                npcs.write(npc.professionId);
+                npcs.write(npc.location.mapId);
+                npcs.write(npc.location.actorIndex);
+                npcs.write(npc.location.x);
+                npcs.write(npc.location.y);
+                npcs.write(npc.location.z);
+                npcs.write(npc.location.gameMinutes);
+                npcs.write(npc.teacherTopics);
+            }
+        }
+        writer.write(GeneratedNpcObservationsExtension);
+        writer.write(uint32_t(1));
+        writer.write(npcs.bytes());
+    }
     return true;
+}
+
+bool readGeneratedNpcObservations(const std::vector<uint8_t> &bytes, GameSaveData &data)
+{
+    BinaryReader reader(bytes);
+    uint32_t packets = 0;
+    if (!reader.read(packets) || packets == 0 || packets > reader.remainingBytes() / 9) return false;
+    std::set<std::pair<uint8_t, std::string>> seenPackets;
+    for (uint32_t i = 0; i < packets; ++i)
+    {
+        uint8_t scene = 0;
+        std::string map;
+        uint32_t count = 0;
+        if (!reader.read(scene) || !reader.read(map) || !reader.read(count) || count == 0
+            || count > reader.remainingBytes() / 48 || !seenPackets.emplace(scene, map).second) return false;
+        std::optional<EventRuntimeState> *pState = nullptr;
+        if (scene == 0 && map.empty()) pState = &data.outdoorWorld.eventRuntimeState;
+        else if (scene == 1 && !map.empty())
+        {
+            const auto found = data.outdoorWorldStates.find(map);
+            if (found != data.outdoorWorldStates.end()) pState = &found->second.eventRuntimeState;
+        }
+        else if (scene == 2 && map.empty()) pState = &data.indoorScene.eventRuntimeState;
+        else if (scene == 3 && !map.empty())
+        {
+            const auto found = data.indoorSceneStates.find(map);
+            if (found != data.indoorSceneStates.end()) pState = &found->second.eventRuntimeState;
+        }
+        if (pState == nullptr || !*pState || !(*pState)->observedGeneratedNpcs.empty()) return false;
+        std::unordered_set<std::string> seen;
+        for (uint32_t n = 0; n < count; ++n)
+        {
+            WorldGeneratedNpcObservation npc;
+            if (!reader.read(npc.actorKey) || !reader.read(npc.npcId) || !reader.read(npc.name)
+                || !reader.read(npc.pictureId) || !reader.read(npc.professionId) || !reader.read(npc.location.mapId)
+                || !reader.read(npc.location.actorIndex) || !reader.read(npc.location.x) || !reader.read(npc.location.y)
+                || !reader.read(npc.location.z) || !reader.read(npc.location.gameMinutes)
+                || !reader.read(npc.teacherTopics) || !validWorldGeneratedNpcObservation(npc)
+                || (map.starts_with("world.") && npc.location.mapId != map)
+                || !seen.insert(worldGeneratedNpcRecordId(npc)).second) return false;
+            (*pState)->observedGeneratedNpcs.push_back(std::move(npc));
+        }
+    }
+    return !reader.failed() && reader.remainingBytes() == 0;
 }
 
 bool readWorldItemOrigins(const std::vector<uint8_t> &bytes, GameSaveData &data)
@@ -4132,14 +4240,15 @@ bool readSaveExtensions(BinaryReader &reader, GameSaveData &data, std::string &e
             error = "save extension data is corrupted";
             return false;
         }
-        if (name != WorldItemOriginsExtension || schema != 1)
+        if (schema != 1 || (name != WorldItemOriginsExtension && name != GeneratedNpcObservationsExtension))
         {
             error = "unsupported save extension '" + name + "' schema " + std::to_string(schema);
             return false;
         }
-        if (!readWorldItemOrigins(payload, data))
+        const bool items = name == WorldItemOriginsExtension;
+        if (items ? !readWorldItemOrigins(payload, data) : !readGeneratedNpcObservations(payload, data))
         {
-            error = "world item origin data is corrupted";
+            error = items ? "world item origin data is corrupted" : "generated NPC observation data is corrupted";
             return false;
         }
     }

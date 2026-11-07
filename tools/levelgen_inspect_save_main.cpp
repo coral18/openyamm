@@ -19,6 +19,28 @@ YAML::Node discoveriesNode(const std::unordered_map<std::string, int32_t> &varia
     return result;
 }
 
+YAML::Node generatedNpcsNode(const std::optional<EventRuntimeState> &state)
+{
+    YAML::Node result(YAML::NodeType::Sequence);
+    if (!state) return result;
+    for (const WorldGeneratedNpcObservation &npc : state->observedGeneratedNpcs)
+    {
+        YAML::Node entry;
+        entry["actor_key"] = npc.actorKey;
+        entry["npc_slot"] = npc.npcId;
+        entry["name"] = npc.name;
+        entry["picture_id"] = npc.pictureId;
+        entry["profession_id"] = npc.professionId;
+        entry["map_id"] = npc.location.mapId;
+        entry["actor_index"] = npc.location.actorIndex;
+        entry["position"] = std::vector<int32_t>{npc.location.x, npc.location.y, npc.location.z};
+        entry["game_minutes"] = npc.location.gameMinutes;
+        entry["teacher_topics"] = npc.teacherTopics;
+        result.push_back(entry);
+    }
+    return result;
+}
+
 YAML::Node explorationNode(const OutdoorWorldRuntime::Snapshot &world)
 {
     YAML::Node result;
@@ -143,6 +165,13 @@ int main(int argc, char **argv)
     result["gold"] = save->party.gold;
     result["food"] = save->party.food;
     result["discoveries"] = discoveriesNode(save->namedGlobalVars);
+    YAML::Node generated = result["generated_npc_observations"];
+    generated["current_outdoor"] = generatedNpcsNode(save->outdoorWorld.eventRuntimeState);
+    generated["current_indoor"] = generatedNpcsNode(save->indoorScene.eventRuntimeState);
+    for (const auto &[name, world] : save->outdoorWorldStates)
+        generated["cached_outdoor"][name] = generatedNpcsNode(world.eventRuntimeState);
+    for (const auto &[name, scene] : save->indoorSceneStates)
+        generated["cached_indoor"][name] = generatedNpcsNode(scene.eventRuntimeState);
     result["outdoor_states"] = YAML::Node(YAML::NodeType::Map);
     for (const auto &[name, world] : save->outdoorWorldStates)
         result["outdoor_states"][name] = explorationNode(world);

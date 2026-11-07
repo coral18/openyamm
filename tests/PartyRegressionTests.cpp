@@ -7,6 +7,7 @@
 #include "game/items/ItemRuntime.h"
 #include "game/maps/SaveGame.h"
 #include "game/world/WorldItemSources.h"
+#include "game/world/WorldNpcKnowledge.h"
 #include "game/world/WorldMapKnowledge.h"
 #include "game/world/WorldMapNotes.h"
 #include "game/world/WorldMonsterKnowledge.h"
@@ -361,6 +362,116 @@ TEST_CASE("ground loot origins extend saves without changing the legacy core pay
     reject(corrupted, "unexpected data");
     save.outdoorWorld.worldItems[0].lootMonsterId = -1;
     CHECK_FALSE(saveGameDataToPath(path, save, error));
+    std::filesystem::remove(path);
+}
+
+TEST_CASE("generated NPC observations extend all snapshot kinds without changing upstream save data")
+{
+    using namespace OpenYAMM::Game;
+    GameSaveData save;
+    save.mapFileName = "7out02.odm";
+    const WorldGeneratedNpcObservation jo{"7out02.odm#1#51#Peasant", 1223, "Jo", 40, 3,
+        {"world.mm7.map.7out02", 1, 120, 230, 40, 17}, {305}};
+    auto ann = jo;
+    ann.actorKey = "out01.odm#1#51#Peasant";
+    ann.location.mapId = "world.mm8.map.out01";
+    ann.name = "Ann";
+    auto inside = jo;
+    inside.actorKey = "7d21.blv#1#51#Peasant";
+    inside.location.mapId = "world.mm7.map.7d21";
+    save.outdoorWorld.eventRuntimeState.emplace();
+    save.outdoorWorld.eventRuntimeState->observedGeneratedNpcs = {jo};
+    save.outdoorWorldStates[ann.location.mapId].eventRuntimeState.emplace();
+    save.outdoorWorldStates[ann.location.mapId].eventRuntimeState->observedGeneratedNpcs = {ann};
+    save.indoorScene.eventRuntimeState.emplace();
+    save.indoorScene.eventRuntimeState->observedGeneratedNpcs = {inside};
+    save.indoorSceneStates[inside.location.mapId].eventRuntimeState.emplace();
+    save.indoorSceneStates[inside.location.mapId].eventRuntimeState->observedGeneratedNpcs = {inside};
+    // Both independent save namespaces must coexist; origins remain attached to actual item slots.
+    OutdoorWorldRuntime::WorldItemState item;
+    item.objectDescriptionId = 123;
+    item.lootMonsterId = 85;
+    save.outdoorWorld.worldItems = {item};
+    const auto path = std::filesystem::temp_directory_path() / "openyamm_generated_npc_observations.oysav";
+    std::string error;
+    REQUIRE_MESSAGE(saveGameDataToPath(path, save, error), error);
+    const auto loaded = loadGameDataFromPath(path, error);
+    REQUIRE_MESSAGE(loaded, error);
+    CHECK(loaded->outdoorWorld.eventRuntimeState->observedGeneratedNpcs == std::vector{jo});
+    CHECK(loaded->outdoorWorldStates.at(ann.location.mapId).eventRuntimeState->observedGeneratedNpcs
+        == std::vector{ann});
+    CHECK(loaded->indoorScene.eventRuntimeState->observedGeneratedNpcs == std::vector{inside});
+    CHECK(loaded->indoorSceneStates.at(inside.location.mapId).eventRuntimeState->observedGeneratedNpcs
+        == std::vector{inside});
+    CHECK(loaded->outdoorWorld.worldItems[0].lootMonsterId == 85);
+    EventRuntimeState refilled;
+    restoreWorldMapKnowledgeAfterRefill(*loaded->outdoorWorld.eventRuntimeState, refilled);
+    CHECK(refilled.observedGeneratedNpcs == std::vector{jo});
+    const auto readBytes = [&]()
+    {
+        std::ifstream input(path, std::ios::binary);
+        return std::vector<char>(std::istreambuf_iterator<char>(input), {});
+    };
+    const auto tagged = readBytes();
+    save.outdoorWorld.eventRuntimeState->observedGeneratedNpcs.clear();
+    save.outdoorWorldStates.at(ann.location.mapId).eventRuntimeState->observedGeneratedNpcs.clear();
+    save.indoorScene.eventRuntimeState->observedGeneratedNpcs.clear();
+    save.indoorSceneStates.at(inside.location.mapId).eventRuntimeState->observedGeneratedNpcs.clear();
+    save.outdoorWorld.worldItems[0].lootMonsterId = 0;
+    REQUIRE_MESSAGE(saveGameDataToPath(path, save, error), error);
+    const auto legacy = readBytes();
+    REQUIRE(tagged.size() > legacy.size());
+    CHECK(std::equal(legacy.begin(), legacy.end(), tagged.begin()));
+    const auto old = loadGameDataFromPath(path, error);
+    REQUIRE_MESSAGE(old, error);
+    CHECK(old->outdoorWorld.eventRuntimeState->observedGeneratedNpcs.empty());
+    const auto reject = [&](const std::vector<char> &bytes, const std::string &message)
+    {
+        { std::ofstream output(path, std::ios::binary); output.write(bytes.data(), bytes.size()); }
+        error.clear();
+        CHECK_FALSE(loadGameDataFromPath(path, error));
+        CHECK(error.find(message) != std::string::npos);
+    };
+    const std::string name = "openyamm.generated-npc-observations";
+    const auto found = std::search(tagged.begin() + legacy.size(), tagged.end(), name.begin(), name.end());
+    REQUIRE(found != tagged.end());
+    const size_t schema = size_t(found - tagged.begin()) + name.size();
+    const size_t payload = schema + 4 + 8;
+    const size_t firstRecord = payload + 4 + 1 + 8 + 4;
+    auto corrupted = tagged;
+    corrupted.pop_back();
+    reject(corrupted, "corrupted");
+    corrupted = tagged;
+    corrupted[schema] = 2;
+    reject(corrupted, "unsupported save extension");
+    corrupted = tagged;
+    corrupted[payload + 4] = 4; // No such scene.
+    reject(corrupted, "generated NPC observation data is corrupted");
+    corrupted = tagged;
+    corrupted[firstRecord + 8 + jo.actorKey.size()] = 0; // Invalid NPC slot.
+    corrupted[firstRecord + 8 + jo.actorKey.size() + 1] = 0;
+    reject(corrupted, "generated NPC observation data is corrupted");
+    corrupted = tagged;
+    corrupted[firstRecord + 8] = 'x'; // Actor identity must match the canonical map.
+    reject(corrupted, "generated NPC observation data is corrupted");
+    // Duplicate a valid record inside the wire packet, bypassing writer-side validation.
+    const size_t recordSize = 8 + jo.actorKey.size() + 4 + 8 + jo.name.size() + 4 + 4
+        + 8 + jo.location.mapId.size() + 20 + 8 + 4 * jo.teacherTopics.size();
+    corrupted = tagged;
+    const std::vector<char> duplicate(tagged.begin() + firstRecord, tagged.begin() + firstRecord + recordSize);
+    corrupted.insert(corrupted.begin() + firstRecord + recordSize, duplicate.begin(), duplicate.end());
+    corrupted[firstRecord - 4] = 2;
+    uint64_t payloadSize = 0;
+    for (size_t i = 0; i < 8; ++i)
+        payloadSize |= uint64_t(uint8_t(tagged[schema + 4 + i])) << (8 * i);
+    payloadSize += recordSize;
+    for (size_t i = 0; i < 8; ++i) corrupted[schema + 4 + i] = char(payloadSize >> (8 * i));
+    reject(corrupted, "generated NPC observation data is corrupted");
+    save.outdoorWorld.eventRuntimeState->observedGeneratedNpcs = {jo, jo};
+    CHECK_FALSE(saveGameDataToPath(path, save, error));
+    save.outdoorWorld.eventRuntimeState->observedGeneratedNpcs = {jo};
+    save.outdoorWorldStates.at(ann.location.mapId).eventRuntimeState->observedGeneratedNpcs = {jo};
+    CHECK_FALSE(saveGameDataToPath(path, save, error)); // Cannot bind an observation to another canonical map.
     std::filesystem::remove(path);
 }
 

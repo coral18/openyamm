@@ -25,6 +25,8 @@ community guide's complete content has been integrated yet.
 - Fixed named actor NPCs outside buildings use package-authored possibility points in Guide and last-encounter
   positions in Discovery. Only a successful dialogue tied to the matching living, visible actor records a position.
   Remote NPC-ID dialogue supplies no coordinates. Points include height and reuse shared Core save knowledge.
+- Generated pedestrian conversations retain the encountered name and last position per canonical map/actor,
+  independently of reusable NPC slots. Old saves do not infer identities from mutable overrides.
 - Scripted NPC conversations can establish a last-encounter map without establishing XYZ. Guide indexes
   callback-owned possible encounters, and searches progressively load dungeon metadata as needed. Selecting
   such a contact opens its map and explicitly states that no exact position is recorded; no pin is invented.
@@ -3640,3 +3642,31 @@ Public scenarios/tours and reproduction are in the fixture README. Private logs,
 captures and receipts are under `atlas-script-npcs-20261107/`. These are sampled encounter/navigation checks,
 not every conditional branch, arbitrary handwritten/computed NPC calls, generated identities or physical
 Android/controller acceptance. Android work remains deferred.
+
+
+## Generated pedestrian identities (2026-11-07)
+
+Actual generated-NPC conversations now freeze name, portrait, profession, offered teacher topics and runtime
+feet/time in shared Core map knowledge. Identity uses the existing generator actor key plus canonical map,
+not slots 1184–1223: the same numeric slot may belong to different people on different maps. Atlas borrows
+these encounter snapshots in both modes and never regenerates unseen people or reads their later name overrides.
+Discovery still requires knowledge of the containing map. Records are last encounters, not live presence claims.
+
+`openyamm.generated-npc-observations` schema 1 reuses the existing namespaced save-extension trailer for current
+and cached outdoor/indoor snapshots. Version 84's core payload is byte-identical without these observations;
+item-origin packets coexist independently. Older saves remain readable and acquire no guessed encounters.
+Earlier Extended readers that do not recognize this namespace reject it explicitly. Refills preserve encounter
+history without restoring generator mappings, inhabitants or live presentation overrides. Malformed identities,
+duplicate observations, wrong canonical cache bindings, unsupported schemas and truncated packets are rejected.
+
+Windows Release passes 447 focused regression cases / 76,704 assertions, excluding the same previously documented
+retired-source portrait case. Pure tests cover slot reuse across MM7/MM8 maps, frozen names and training,
+unknown/stale knowledge, source ownership and all four save snapshot kinds. Jo's real picked-actor scenario
+passes nine steps, including a different map and normal save/load. Three native AMD/OpenGL runs cover an older
+save, the actual encounter and the cached encounter after leaving Emerald Island: 78 UI steps / 15 captures,
+six inspected saves and six identical Discovery map/list crops before/after Guide. The existing 21-step MM8 S'ton actor scenario also passes on this build. The source/output inspection
+confirms Jo at (13080, 4328, 96), unchanged encounter knowledge and checked party/resources/map state.
+
+The public fixture and tour are linked in `tests/fixtures/atlas/README.md`. Private evidence is under the Windows
+development directory's `atlas-generated-npcs-20261107/`. This closes generated pedestrian encounter identity,
+not generated tavern mercenaries, every conditional NPC path or Android acceptance. Android remains deferred.

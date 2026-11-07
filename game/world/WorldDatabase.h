@@ -79,6 +79,7 @@ struct WorldRecord
     std::optional<std::pair<float, float>> position;
 
     std::optional<std::string> npcName;
+    const WorldGeneratedNpcObservation *pGeneratedNpc = nullptr;
     std::optional<WorldNpcActorLocation> actorLocation;
     std::optional<WorldNpcScriptLocation> scriptLocation;
     bool lastObservedNpc = false;
@@ -126,10 +127,11 @@ struct WorldKnowledge
     // Canonical world/map IDs; raw filenames can collide between worlds.
     std::unordered_map<std::string, std::vector<WorldSiteObservation>> siteObservations;
     std::unordered_map<std::string, std::vector<WorldGateOffer>> gateOffers;
+    std::unordered_map<std::string, std::unordered_map<std::string, WorldGeneratedNpcObservation>> generatedNpcs;
     bool knows(const WorldRecord &record) const;
 };
 
-// A read-only index over the authoritative tables. The tables must outlive this index.
+// A read-only index over authoritative tables and observation snapshots. Both must outlive this index.
 // Intended for Atlas, future editors and other consumers of world information.
 class WorldDatabase
 {
@@ -239,7 +241,8 @@ private:
         const WorldKnowledge &knowledge, bool guide) const;
     void appendPossibleNpcLocation(uint32_t npcId, uint32_t houseId);
     void appendEncounterNpcRecords(uint32_t npcId, const MapStatsEntry &map, bool authored,
-        std::optional<WorldNpcActorLocation> actor, std::optional<WorldNpcScriptLocation> script = {});
+        std::optional<WorldNpcActorLocation> actor, std::optional<WorldNpcScriptLocation> script = {},
+        const WorldGeneratedNpcObservation *pGenerated = nullptr);
     void appendItemSource(const std::string &mapId, WorldItemSource source, const ItemTable &items);
     void indexMapSites(const WorldRecord &source, const std::vector<WorldInteractionSite> &sites,
         const ScriptedEventProgram &events);

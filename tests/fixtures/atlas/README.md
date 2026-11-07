@@ -858,3 +858,30 @@ The unknown Guide maps must not enter campaign caches or NPC discovery; no scrip
 
 The accepted set has 67 UI steps / 12 captures, six inspected saves and six equal map/list crops. It verifies
 these sampled contacts and metadata ownership, not every conditional campaign branch or physical-device UX.
+
+
+## Generated pedestrian encounter identity
+
+`tests/scenarios/atlas/mm7_generated_npc_encounter.yml` starts a private MM7 party, saves an unknown baseline,
+actually talks to Emerald Island actor 1, leaves the map, then reloads the encounter save. It passes nine faithful
+steps. The resulting `met` / `verified` saves contain Jo, slot 1223, actor key `7out01.odm#1#51#Peasant`, canonical
+map `world.mm7.map.7out01` and position (13080, 4328, 96). The `away` save retains that snapshot in the canonical
+cached map, without attaching it to the current Harmondale map. The unknown save contains no typed encounter.
+
+Load these copies with `tools/menu_tours/atlas_mm7_generated_npc.yml` as `debug.menu_input_tour_path` at 1600x900.
+It searches from the continent overview, selects Jo's source map, checks Guide/Discovery and quicksaves on return
+to gameplay. Rearm that one-shot launch directive every run. For the old-save negative control, use a pre-change
+private campaign containing the generated slot/name overrides but no typed encounter; no Jo discovery is inferred.
+Three native runs pass 26 steps / five captures each, with six source/output inspections and six identical RGB
+map/list crops. Native captures confirm the correct name and last-encounter detail. Tests do not use OS input.
+
+`openyamm_levelgen_inspect_save` exposes `generated_npc_observations` for all four snapshot kinds, including frozen
+names, professions, portraits, topics, canonical maps and positions. The shared unit/save tests cover reused slots
+across MM7/MM8, immutable knowledge, duplicate/corrupt packets, coexistence with item provenance, legacy payload
+identity and refill retention. The focused Windows regression set is 447 cases / 76,704 assertions, excluding the
+already documented retired portrait-source case. Private logs/captures/inspections are in
+`openyamm-extended-dev/atlas-generated-npcs-20261107/`; they are not runtime assets or campaign data to commit.
+
+Generated tavern recruits (20000+) use a different identity source and remain outside this checkpoint. MM8 roles
+such as a generic Cleric of the Sun are not fabricated as unique generated people. Physical Android checks remain
+deferred by the user.

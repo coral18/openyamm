@@ -492,6 +492,7 @@ std::vector<const WorldRecord *> WorldDatabase::recordsAtLocation(const WorldMap
         if ((record.kind != WorldRecordKind::Travel || includeTravel)
             && (&record == pTarget || (pTarget->house != nullptr && record.house == pTarget->house)
                 || (pTarget->actorLocation && record.npc == pTarget->npc
+                    && record.pGeneratedNpc == pTarget->pGeneratedNpc
                     && record.actorLocation == pTarget->actorLocation
                     && record.possibleNpcLocation == pTarget->possibleNpcLocation))
             && visible(record, knowledge, guide))

@@ -36,8 +36,12 @@ std::string initialAtlasWorld(const Engine::AssetFileSystem &assets, const MapAs
 WorldNpcState atlasNpcState(const GameDataRepository &data, const WorldKnowledge &knowledge,
     bool guide, bool hasParty)
 {
-    return guide || !hasParty ? knowledge.currentNpcs
+    WorldNpcState result = guide || !hasParty ? knowledge.currentNpcs
         : worldObservedNpcs(data.npcDialogTable(), data.mergedTeacherTopicTable(), knowledge.variables);
+    result.generatedNpcs.clear();
+    for (const auto &[map, observations] : knowledge.generatedNpcs)
+        for (const auto &[key, npc] : observations) result.generatedNpcs.push_back(&npc);
+    return result;
 }
 std::string atlasTravelDays(int64_t days)
 {

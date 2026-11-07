@@ -8860,7 +8860,9 @@ bool GameApplication::openAtlasScreen(bool paused)
     if (paused)
     {
         const WorldGateCatalog &gateCatalog = m_gameDataRepository.worldGateCatalog();
-        const auto collectSites = [&knowledge, &gateCatalog](const std::string &file, const EventRuntimeState &state,
+        std::string generatedNpcError;
+        const auto collectSites = [&knowledge, &gateCatalog, &generatedNpcError](
+            const std::string &file, const EventRuntimeState &state,
             const std::string &canonicalMapId)
         {
             knowledge.monsterObservations[toLowerCopy(file)] = worldMonsterObservations(state);
@@ -8871,6 +8873,12 @@ bool GameApplication::openAtlasScreen(bool paused)
             {
                 knowledge.siteObservations[canonicalMapId] = worldSiteObservations(state);
                 knowledge.gateOffers[canonicalMapId] = worldGateOffers(state);
+                auto &observations = knowledge.generatedNpcs[canonicalMapId];
+                observations.clear(); // The live map supersedes its cached snapshot, including an empty ledger.
+                for (const WorldGeneratedNpcObservation &npc : state.observedGeneratedNpcs)
+                    if (!validWorldGeneratedNpcObservation(npc) || npc.location.mapId != canonicalMapId
+                        || !observations.emplace(npc.actorKey, npc).second)
+                        generatedNpcError = "Invalid generated NPC observations for " + canonicalMapId;
             }
             knowledge.notes[toLowerCopy(file)] = worldMapNotes(state, file);
             knowledge.arrivals[canonicalMapId.empty() ? toLowerCopy(file) : canonicalMapId]
@@ -8964,6 +8972,11 @@ bool GameApplication::openAtlasScreen(bool paused)
             knowledge.partyPosition = WorldPartyMapPosition{toLowerCopy(m_gameSession.currentMapFileName()),
                 runtime->partyX(), runtime->partyY(), runtime->gameplayCameraYawRadians(), runtime->partyFootZ()};
         knowledge.visitedMaps.insert(toLowerCopy(m_gameSession.currentMapFileName()));
+        if (!generatedNpcError.empty())
+        {
+            std::cerr << "Cannot open Atlas: " << generatedNpcError << '\n';
+            return false;
+        }
     }
     try
     {

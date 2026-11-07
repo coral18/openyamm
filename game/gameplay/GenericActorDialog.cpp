@@ -6,6 +6,7 @@
 #include "game/tables/NpcDialogTable.h"
 
 #include <algorithm>
+#include <stdexcept>
 #include <array>
 #include <charconv>
 #include <cstdlib>
@@ -67,11 +68,6 @@ std::string generatedActorKey(
 {
     return mapFileName + "#" + std::to_string(actorIndex.value_or(static_cast<size_t>(actorGroup)))
         + "#" + std::to_string(actorGroup) + "#" + actorName;
-}
-
-bool isGeneratedNpcSlot(uint32_t npcId)
-{
-    return npcId >= FirstGeneratedNpcId && npcId <= LastGeneratedNpcId;
 }
 
 uint32_t chooseGeneratedNpcId(const EventRuntimeState &runtimeState, const std::string &actorKey)
@@ -511,6 +507,26 @@ std::optional<GenericActorDialogResolution> resolveGenericActorDialog(
         generatedActorKey(mapFileName, actorGroup, actorName, actorIndex),
         actorMonsterId);
     return resolution;
+}
+
+bool isGeneratedNpcSlot(uint32_t npcId)
+{
+    return npcId >= FirstGeneratedNpcId && npcId <= LastGeneratedNpcId;
+}
+
+const std::string *generatedNpcActorKey(const EventRuntimeState &state, uint32_t npcId,
+    const std::string &mapFileName, uint32_t actorGroup, uint32_t actorIndex)
+{
+    if (!isGeneratedNpcSlot(npcId)) return nullptr;
+    const std::string prefix = generatedActorKey(mapFileName, actorGroup, "", actorIndex);
+    const std::string *pKey = nullptr;
+    for (const auto &[key, slot] : state.generatedNpcIdsByActorKey)
+        if (slot == npcId && key.starts_with(prefix))
+        {
+            if (pKey != nullptr) throw std::invalid_argument("Ambiguous generated NPC actor identity");
+            pKey = &key;
+        }
+    return pKey;
 }
 
 void applyGenericActorDialogResolution(

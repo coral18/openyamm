@@ -97,7 +97,7 @@ tables, and do not bundle its HTML, JS, translated prose, generated illustration
 | Continent overview | Existing game illustration | Original regional schematic | Optional licensed/original illustrated Jadame artwork |
 | Discovery fog and current party arrow | Implemented | Implemented | Wider dungeon/device checks |
 | Dungeon plans from engine geometry | Adaptive known height slices, clipped known walkable ramp edges, party-height selection, component-aware discovered pins and height-aware notes | Same shared projection and controls | Semantic storeys and wider floor/visibility/device audit; moving geometry awaits user decision |
-| Buildings, resident/actor/scripted NPCs, trainers | Current/observed residents, Guide-only possible residences/actor placements/map encounters, last-encounter actor positions or script maps, indoor service markers and exact physical-address history per canonical service | Same shared index; actual Adventurer's Inn discovery and Dagger Wound/Ravenshore entrances | Conditional service eligibility, handwritten/computed NPC calls, wider scripted placement audit and generated NPC identities |
+| Buildings, resident/actor/scripted NPCs, trainers | Current/observed residents, Guide-only possible residences/actor placements/map encounters, last-encounter actor positions or script maps, generated pedestrian identity snapshots, indoor service markers and exact physical-address history per canonical service | Same shared index; actual Adventurer's Inn discovery and Dagger Wound/Ravenshore entrances | Conditional service eligibility, handwritten/computed NPC calls, wider scripted placement audit and generated tavern mercenary identities |
 | Trainer requirements and prices | Gameplay evaluator, observed offers and race-specific mastery comparisons | Same shared evaluator | Conditional eligibility audit and starting-skill/race-selection checks |
 | Walking and scheduled transport | Directed walking/coach/boat graph, departure pins, last-offered schedules/fare/duration, live local overrides and destination navigation | Same shared knowledge/navigation | Remote scripted timetable references, availability forecasting and arrival-point links |
 | Quest giver/objective/return chains | Shared registry, 76 quests, conditional clues and possible contact-location links | Shared registry, 69 quests, repaired Accuracy state, stage-sensitive Aislen/Pole delivery contacts and possible contact-location links | Remaining conditional stages and wider campaign audit; unused legacy MM8 rows 5/172 are not invented playable chains |
@@ -277,3 +277,13 @@ quest guide. Reference data must describe the active merged/modded game, rather 
 
 Checkpoint evidence and implementation details are recorded in [ATLAS.md](ATLAS.md). All tests use isolated settings,
 saves and captures. Original user campaigns and the official installation remain outside test writes.
+
+
+The 2026-11-07 generated-pedestrian checkpoint adds immutable per-map/actor encounter snapshots, so reusable
+NPC slots cannot rename or relocate previously met people. It preserves the version 84 core payload and uses
+a validated namespaced save trailer. Jo's actual conversation/save/load passes nine steps. Three native PC
+runs pass 78 UI steps / 15 captures; six save inspections retain encounter state and six map/list crops match
+after Guide. The focused regression set passes 447 cases / 76,704 assertions with the documented portrait
+exclusion. This is actual MM7 pedestrian evidence plus shared MM7/MM8 identity/save logic coverage, not proof
+that every MM8 generic role is a generated individual. Generated tavern mercenaries and wider conditional NPC
+paths remain open; Android work remains deferred.

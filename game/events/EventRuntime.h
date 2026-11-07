@@ -7,6 +7,7 @@
 #include "game/maps/MapDeltaData.h"
 #include "game/outdoor/OutdoorMechanismAudio.h"
 #include "game/party/Party.h"
+#include "game/world/WorldNpcObservation.h"
 #include "game/tables/PortraitFxEventTable.h"
 
 #include <array>
@@ -514,6 +515,8 @@ struct EventRuntimeState
     std::unordered_map<uint32_t, uint32_t> npcPictureOverrides;
     std::unordered_map<uint32_t, uint32_t> npcProfessionOverrides;
     std::unordered_map<std::string, uint32_t> generatedNpcIdsByActorKey;
+    // Saved by the namespaced NPC-observation extension, independently of the upstream core layout.
+    std::vector<WorldGeneratedNpcObservation> observedGeneratedNpcs;
     std::unordered_map<uint32_t, GeneratedMercenaryRecruit> generatedMercenaryRecruitsByNpcId;
     std::unordered_map<uint32_t, uint32_t> npcItemOverrides;
     std::unordered_map<uint32_t, uint32_t> actorItemOverrides;

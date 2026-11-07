@@ -21,6 +21,7 @@
 #include "game/events/ScriptedEventProgram.h"
 #include "game/events/EventRuntime.h"
 #include "game/gameplay/MapEncounterDefinition.h"
+#include "game/gameplay/GenericActorDialog.h"
 #include "game/tables/MonsterTable.h"
 #include "game/maps/MapDeltaData.h"
 #include "game/maps/MapAssetLoader.h"
@@ -2191,6 +2192,133 @@ TEST_CASE("world database actor NPC recording validates the dialogue actor and u
         }
         else CHECK(state.namedGlobalVars.empty());
     }
+}
+
+TEST_CASE("generated NPC encounters freeze perceived identity only after an actual actor conversation")
+{
+    Fixture fixture;
+    class GeneratedWorld : public OpenYAMM::Tests::PartySpellTestWorldRuntime
+    {
+    public:
+        GameplayRuntimeActorState actor;
+        bool actorRuntimeState(size_t index, GameplayRuntimeActorState &result) const override
+        {
+            if (index != 0) return false;
+            result = actor;
+            return true;
+        }
+        float gameMinutes() const override { return 31.5f; }
+    } runtime;
+    MapDeltaData delta;
+    delta.actors.resize(1);
+    delta.actors[0].group = 51;
+    runtime.bindMapDeltaData(&delta);
+    runtime.actor.preciseX = 120.6f;
+    runtime.actor.preciseY = -250.2f;
+    runtime.actor.preciseZ = 80;
+    EventRuntimeState state;
+    GenericActorDialogResolution resolution;
+    resolution.generatedNpc = true;
+    resolution.npcId = 1223;
+    resolution.generatedActorKey = "7out02.odm#0#51#Peasant";
+    resolution.generatedName = "Jo";
+    resolution.generatedProfessionId = 3;
+    resolution.portraitPictureId = 40;
+    applyGenericActorDialogResolution(state, resolution);
+    CHECK(state.observedGeneratedNpcs.empty()); // Resolution alone is not an encounter.
+    CHECK_FALSE(observeWorldNpcActor(state, 1222, 0, *fixture.maps.findById(63), runtime));
+    REQUIRE(observeWorldNpcActor(state, 1223, 0, *fixture.maps.findById(63), runtime, {305, 305}));
+    REQUIRE(state.observedGeneratedNpcs.size() == 1);
+    const WorldGeneratedNpcObservation first = state.observedGeneratedNpcs.front();
+    CHECK(first.name == "Jo");
+    CHECK(first.pictureId == 40);
+    CHECK(first.professionId == 3);
+    CHECK(first.teacherTopics == std::vector<uint32_t>{305});
+    CHECK(first.location == WorldNpcActorLocation{"world.mm7.map.7out02", 0, 121, -250, 80, 31});
+    CHECK(state.namedGlobalVars.empty()); // No globally keyed slot masquerades as identity.
+    state.npcNameOverrides[1223] = "Somebody else";
+    state.npcProfessionOverrides[1223] = 9;
+    CHECK(state.observedGeneratedNpcs.front() == first);
+    runtime.actor.isDead = true;
+    CHECK_FALSE(observeWorldNpcActor(state, 1223, 0, *fixture.maps.findById(63), runtime));
+    CHECK(state.observedGeneratedNpcs.front() == first);
+    runtime.actor.isDead = false;
+    runtime.actor.isInvisible = true;
+    CHECK_FALSE(observeWorldNpcActor(state, 1223, 0, *fixture.maps.findById(63), runtime));
+    runtime.actor.isInvisible = false;
+    REQUIRE(observeWorldNpcActor(state, 1223, 0, *fixture.maps.findById(63), runtime));
+    REQUIRE(state.observedGeneratedNpcs.size() == 1);
+    CHECK(state.observedGeneratedNpcs.front().name == "Somebody else");
+    CHECK(state.observedGeneratedNpcs.front().teacherTopics.empty());
+    EventRuntimeState refilled;
+    restoreWorldMapKnowledgeAfterRefill(state, refilled);
+    CHECK(refilled.observedGeneratedNpcs == state.observedGeneratedNpcs);
+    CHECK(refilled.generatedNpcIdsByActorKey.empty()); // History does not regenerate inhabitants.
+    CHECK(refilled.npcNameOverrides.empty());
+    auto invalid = first;
+    invalid.location.actorIndex = 1;
+    CHECK_FALSE(validWorldGeneratedNpcObservation(invalid));
+    invalid = first;
+    invalid.location.mapId = "world.mm8.map.out01";
+    CHECK_FALSE(validWorldGeneratedNpcObservation(invalid));
+    invalid = first;
+    invalid.teacherTopics = {305, 305};
+    CHECK_FALSE(validWorldGeneratedNpcObservation(invalid));
+    state.generatedNpcIdsByActorKey["7out02.odm#0#51#Duplicate"] = 1223;
+    CHECK_THROWS_AS(observeWorldNpcActor(state, 1223, 0, *fixture.maps.findById(63), runtime), std::invalid_argument);
+}
+
+TEST_CASE("generated NPC records keep reused slots distinct and never borrow unseen names or training")
+{
+    Fixture fixture;
+    std::vector<std::string> row(16);
+    row[0] = "1223"; row[1] = "Random MapNPC 40"; row[10] = "305";
+    REQUIRE(fixture.npcs.loadNpcRows({row}));
+    WorldGeneratedNpcObservation jo{"7out02.odm#1#51#Peasant", 1223, "Jo", 40, 3,
+        {"world.mm7.map.7out02", 1, 120, 230, 40, 17}, {305}};
+    WorldGeneratedNpcObservation ann{"7d21.blv#1#51#Peasant", 1223, "Ann", 41, 4,
+        {"world.mm7.map.7d21", 1, 450, 670, -900, 23}, {}};
+    WorldGeneratedNpcObservation jadame{"out01.odm#1#51#Peasant", 1223, "Other world", 42, 5,
+        {"world.mm8.map.out01", 1, 120, 230, 40, 24}, {}};
+    WorldKnowledge knowledge;
+    for (const WorldGeneratedNpcObservation &npc : {jo, ann, jadame})
+        knowledge.generatedNpcs[npc.location.mapId].emplace(npc.actorKey, npc);
+    WorldNpcState input;
+    input.names[1223] = "Unseen replacement";
+    input.topics[1223] = {};
+    input.unavailable.insert(1223);
+    input.generatedNpcs = {&jo, &ann, &jadame};
+    WorldDatabase world(fixture.maps, fixture.houses, fixture.npcs, fixture.teachers, "mm7", {}, input);
+    CHECK(world.query(knowledge, false, "Jo").empty()); // Still needs source map knowledge.
+    knowledge.visitedMaps = {"7out02.odm", "7d21.blv", "out01.odm"};
+    const std::string joId = worldGeneratedNpcRecordId(jo), annId = worldGeneratedNpcRecordId(ann);
+    REQUIRE(world.find(joId));
+    REQUIRE(world.find(annId));
+    CHECK(joId != annId);
+    CHECK(world.find(worldGeneratedNpcRecordId(jadame)) == nullptr);
+    CHECK(world.query(knowledge, false, "Jo", WorldRecordKind::Npc).size() == 1);
+    CHECK(world.query(knowledge, false, "Ann", WorldRecordKind::Npc).size() == 1);
+    CHECK(world.query(knowledge, true, "Unseen replacement").empty());
+    CHECK(world.query(knowledge, true, "Random MapNPC").empty());
+    const auto trainers = world.query(knowledge, false, "Grand Master Sword", WorldRecordKind::Trainer);
+    REQUIRE(trainers.size() == 1);
+    CHECK(trainers.front()->npcName == "Jo");
+    const auto locations = world.queryLocations(knowledge, false, jo.location.mapId);
+    REQUIRE(locations.size() == 1);
+    CHECK(locations[0].x == 120);
+    CHECK(world.recordsAtLocation(locations[0], knowledge, false).size() == 2); // NPC plus its own trainer.
+    const auto oldJo = knowledge.generatedNpcs.at(jo.location.mapId).at(jo.actorKey);
+    knowledge.generatedNpcs.at(jo.location.mapId).at(jo.actorKey).name = "A new encounter";
+    CHECK_FALSE(knowledge.knows(*world.find(joId))); // An index snapshot cannot claim a different identity.
+    knowledge.generatedNpcs.at(jo.location.mapId).at(jo.actorKey) = oldJo;
+    WorldKnowledge unknown;
+    unknown.visitedMaps = knowledge.visitedMaps;
+    unknown.informedRecords.insert(joId);
+    unknown.variables[WorldDatabase::npcDiscoveryKey(1223)] = 1;
+    CHECK(world.query(unknown, false, "Jo").empty()); // No global slot or informed-id shortcut.
+    input.generatedNpcs.push_back(input.generatedNpcs.front());
+    CHECK_THROWS_AS(WorldDatabase(fixture.maps, fixture.houses, fixture.npcs, fixture.teachers, "mm7", {}, input),
+        std::invalid_argument);
 }
 
 TEST_CASE("world database scripted NPC encounters identify a map without inventing a position")

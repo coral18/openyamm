@@ -52,6 +52,10 @@ void applyGenericActorDialogResolution(
     const GenericActorDialogResolution &resolution
 );
 
+const std::string *generatedNpcActorKey(const EventRuntimeState &state, uint32_t npcId,
+    const std::string &mapFileName, uint32_t actorGroup, uint32_t actorIndex);
+bool isGeneratedNpcSlot(uint32_t npcId);
+
 std::optional<std::string> generatedNpcGroupNewsText(
     const EventRuntimeState &runtimeState,
     const NpcDialogTable &npcDialogTable,

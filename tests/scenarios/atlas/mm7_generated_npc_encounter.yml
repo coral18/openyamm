@@ -1,0 +1,43 @@
+id: atlas.mm7_generated_npc_encounter
+title: An actual generated peasant conversation retains its own identity
+world: mm7
+mode: faithful
+steps:
+- new_game_flow:
+    start_map: 7out01.odm
+    party:
+      gold: 5000
+      food: 10
+      members:
+      - name: Atlas Tester
+        class: Knight
+        level: 20
+        race_id: 0
+        skills: []
+        equipment: {}
+- save_game: unknown
+- press_interact:
+    pose:
+      x: 12880
+      y: 4328
+      z: 96
+      yaw: 0
+      pitch: -0.4
+    expect:
+      kind: actor
+      actor_index: 1
+      can_activate: true
+- press_action:
+    action: cancel_dialog
+- save_game: met
+- load_map:
+    map: 7out02.odm
+- save_game: away
+- load_game: met
+- save_game: verified
+tags:
+- mm7
+- atlas
+- npc
+- discovery
+- save

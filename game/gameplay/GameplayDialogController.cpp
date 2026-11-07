@@ -4077,7 +4077,7 @@ GameplayDialogController::PresentPendingDialogResult GameplayDialogController::p
                 && context.pNpcDialogTable != nullptr
                 && context.pNpcDialogTable->getNpc(observedContext.sourceId) != nullptr)
                 observeWorldNpcActor(context.eventRuntimeState, observedContext.sourceId,
-                    *observedContext.sourceActorIndex, *context.pCurrentMap, *context.pWorldRuntime);
+                    *observedContext.sourceActorIndex, *context.pCurrentMap, *context.pWorldRuntime, teacherTopics);
             else if (observedContext.hostHouseId == 0 && !observedContext.sourceActorIndex
                 && originalContext.sourceId == observedContext.sourceId && originalContext.npcSourceEventId != 0
                 && context.pCurrentMap != nullptr && context.pWorldRuntime != nullptr

@@ -93,6 +93,16 @@ std::string WorldRecord::searchText() const
 bool WorldKnowledge::knows(const WorldRecord &record) const
 {
     if (record.possibleNpcLocation) return false;
+    if (record.pGeneratedNpc != nullptr)
+    {
+        const WorldGeneratedNpcObservation &npc = *record.pGeneratedNpc;
+        const auto map = generatedNpcs.find(npc.location.mapId);
+        if (map == generatedNpcs.end()) return false;
+        const auto observed = map->second.find(npc.actorKey);
+        return observed != map->second.end() && observed->second == npc
+            && (record.teacher == nullptr || std::binary_search(npc.teacherTopics.begin(), npc.teacherTopics.end(),
+                record.teacher->topicId));
+    }
     if (!record.actorLocation && !record.scriptLocation && informedRecords.contains(record.id))
         return true;
     if (record.kind == WorldRecordKind::Npc || record.kind == WorldRecordKind::Trainer)
@@ -222,6 +232,15 @@ WorldDatabase::WorldDatabase(const MapStats &maps, const HouseTable &houses, con
         if (map != maps.getEntries().end() && map->worldId == worldId)
             appendEncounterNpcRecords(npcId, *map, false, {}, location);
     }
+    for (const WorldGeneratedNpcObservation *pNpc : m_npcsState.generatedNpcs)
+    {
+        if (pNpc == nullptr || !validWorldGeneratedNpcObservation(*pNpc))
+            throw std::invalid_argument("Invalid generated NPC observation");
+        const auto map = std::find_if(maps.getEntries().begin(), maps.getEntries().end(),
+            [&](const MapStatsEntry &entry) { return mapId(entry) == pNpc->location.mapId; });
+        if (map != maps.getEntries().end() && map->worldId == worldId)
+            appendEncounterNpcRecords(pNpc->npcId, *map, false, pNpc->location, {}, pNpc);
+    }
     std::sort(m_records.begin(), m_records.end(), [](const WorldRecord &a, const WorldRecord &b) { return a.id < b.id; });
     for (size_t i = 0; i < m_records.size(); ++i)
         if (!m_byId.emplace(m_records[i].id, i).second)
@@ -337,15 +356,17 @@ void WorldDatabase::appendPossibleNpcLocation(uint32_t npcId, uint32_t houseId)
 }
 
 void WorldDatabase::appendEncounterNpcRecords(uint32_t npcId, const MapStatsEntry &map, bool authored,
-    std::optional<WorldNpcActorLocation> actor, std::optional<WorldNpcScriptLocation> script)
+    std::optional<WorldNpcActorLocation> actor, std::optional<WorldNpcScriptLocation> script,
+    const WorldGeneratedNpcObservation *pGenerated)
 {
     if (actor.has_value() == script.has_value())
         throw std::invalid_argument("NPC encounter requires exactly one source kind");
     const NpcEntry *pNpc = m_pNpcs->getNpc(npcId);
-    if (pNpc == nullptr || (!m_npcsState.observedOnly && !authored
+    if (pNpc == nullptr || (pGenerated == nullptr && !m_npcsState.observedOnly && !authored
         && m_npcsState.unavailable.contains(npcId))) return;
     WorldRecord record;
-    record.id = map.worldId + ":npc/" + std::to_string(npcId);
+    record.id = pGenerated != nullptr ? worldGeneratedNpcRecordId(*pGenerated)
+        : map.worldId + ":npc/" + std::to_string(npcId);
     if (authored)
         record.id += actor ? "/possible-actor/" + actor->mapId + "/" + std::to_string(actor->actorIndex)
             : "/possible-script/" + script->mapId + "/" + std::to_string(script->eventId);
@@ -353,12 +374,14 @@ void WorldDatabase::appendEncounterNpcRecords(uint32_t npcId, const MapStatsEntr
     record.kind = WorldRecordKind::Npc;
     record.map = &map;
     record.npc = pNpc;
+    record.pGeneratedNpc = pGenerated;
+    if (pGenerated != nullptr) record.npcName = pGenerated->name;
     record.actorLocation = actor;
     record.scriptLocation = script;
     record.lastObservedNpc = !authored;
     record.possibleNpcLocation = authored;
     const auto topics = m_npcsState.topics.find(npcId);
-    record.npcTopicIds = authored ? pNpc->topicIds
+    record.npcTopicIds = pGenerated != nullptr ? pGenerated->teacherTopics : authored ? pNpc->topicIds
         : topics != m_npcsState.topics.end() ? topics->second : std::vector<uint32_t>{};
     m_records.push_back(record);
     if (actor)

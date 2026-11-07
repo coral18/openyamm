@@ -3,6 +3,7 @@
 #include "game/tables/NpcDialogTable.h"
 #include "game/tables/MergedBaseTables.h"
 #include "game/gameplay/GameplayRuntimeInterfaces.h"
+#include "game/gameplay/GenericActorDialog.h"
 #include "game/maps/MapDeltaData.h"
 #include "game/maps/MapIdentity.h"
 #include "game/tables/MapStats.h"
@@ -125,14 +126,46 @@ bool worldNpcScriptLocationKnown(const std::unordered_map<std::string, int32_t> 
     return readScriptLocation(variables, prefix, location.mapId) == location;
 }
 
+bool validWorldGeneratedNpcObservation(const WorldGeneratedNpcObservation &observation)
+{
+    const std::string &key = observation.actorKey;
+    const size_t first = key.find('#'), second = key.find('#', first == std::string::npos ? 0 : first + 1);
+    if (!isGeneratedNpcSlot(observation.npcId) || observation.name.empty() || observation.professionId == 0
+        || !validMapId(observation.location.mapId) || observation.location.gameMinutes < 0
+        || first == std::string::npos || first == 0 || second == std::string::npos
+        || key.find('#', second + 1) == std::string::npos || key.find('\0') != std::string::npos
+        || observation.name.find('\0') != std::string::npos) return false;
+    uint32_t actorIndex = 0;
+    const std::string index = key.substr(first + 1, second - first - 1);
+    const auto parsed = std::from_chars(index.data(), index.data() + index.size(), actorIndex);
+    if (parsed.ec != std::errc() || parsed.ptr != index.data() + index.size()
+        || index != std::to_string(actorIndex) || actorIndex != observation.location.actorIndex
+        || !observation.location.mapId.ends_with(".map." + normalizeMapFileStem(key.substr(0, first)))) return false;
+    return std::is_sorted(observation.teacherTopics.begin(), observation.teacherTopics.end())
+        && std::adjacent_find(observation.teacherTopics.begin(), observation.teacherTopics.end())
+            == observation.teacherTopics.end()
+        && std::none_of(observation.teacherTopics.begin(), observation.teacherTopics.end(),
+            [](uint32_t topic) { return topic == 0; });
+}
+
+std::string worldGeneratedNpcRecordId(const WorldGeneratedNpcObservation &observation)
+{
+    if (!validWorldGeneratedNpcObservation(observation))
+        throw std::invalid_argument("Invalid generated NPC observation");
+    return observation.location.mapId + "/generated-npc/" + observation.actorKey;
+}
+
 bool observeWorldNpcActor(EventRuntimeState &state, uint32_t npcId, uint32_t actorIndex,
-    const MapStatsEntry &map, const IGameplayWorldRuntime &world)
+    const MapStatsEntry &map, const IGameplayWorldRuntime &world, const std::vector<uint32_t> &teacherTopics)
 {
     const MapDeltaData *pDelta = world.mapDeltaData();
     GameplayRuntimeActorState actor;
     if (npcId == 0 || pDelta == nullptr || actorIndex >= pDelta->actors.size()
-        || pDelta->actors[actorIndex].npcId <= 0 || uint32_t(pDelta->actors[actorIndex].npcId) != npcId
         || !world.actorRuntimeState(actorIndex, actor) || actor.isDead || actor.isInvisible) return false;
+    const MapDeltaActor &source = pDelta->actors[actorIndex];
+    const std::string *pGeneratedKey = source.npcId <= 0
+        ? generatedNpcActorKey(state, npcId, map.fileName, source.group, actorIndex) : nullptr;
+    if (pGeneratedKey == nullptr && (source.npcId <= 0 || uint32_t(source.npcId) != npcId)) return false;
     const auto coordinate = [](double value) -> std::optional<int32_t>
     {
         const double rounded = std::round(value);
@@ -142,9 +175,28 @@ bool observeWorldNpcActor(EventRuntimeState &state, uint32_t npcId, uint32_t act
     const auto x = coordinate(actor.preciseX), y = coordinate(actor.preciseY), z = coordinate(actor.preciseZ);
     const auto time = coordinate(std::floor(double(world.gameMinutes())));
     if (!x || !y || !z || !time || *time < 0) return false;
-    recordWorldNpcActorLocation(state, npcId,
-        {map.canonicalId.empty() ? buildCanonicalMapId(map.worldId, map.fileName) : map.canonicalId,
-            actorIndex, *x, *y, *z, *time});
+    const WorldNpcActorLocation location{
+        map.canonicalId.empty() ? buildCanonicalMapId(map.worldId, map.fileName) : map.canonicalId,
+        actorIndex, *x, *y, *z, *time};
+    if (pGeneratedKey != nullptr)
+    {
+        const auto name = state.npcNameOverrides.find(npcId);
+        const auto profession = state.npcProfessionOverrides.find(npcId);
+        if (name == state.npcNameOverrides.end() || profession == state.npcProfessionOverrides.end()) return false;
+        const auto picture = state.npcPictureOverrides.find(npcId);
+        WorldGeneratedNpcObservation observation{*pGeneratedKey, npcId, name->second,
+            picture != state.npcPictureOverrides.end() ? picture->second : 0, profession->second,
+            location, teacherTopics};
+        std::sort(observation.teacherTopics.begin(), observation.teacherTopics.end());
+        observation.teacherTopics.erase(std::unique(observation.teacherTopics.begin(), observation.teacherTopics.end()),
+            observation.teacherTopics.end());
+        if (!validWorldGeneratedNpcObservation(observation)) return false;
+        const auto existing = std::find_if(state.observedGeneratedNpcs.begin(), state.observedGeneratedNpcs.end(),
+            [&](const WorldGeneratedNpcObservation &value) { return value.actorKey == observation.actorKey; });
+        if (existing != state.observedGeneratedNpcs.end()) *existing = std::move(observation);
+        else state.observedGeneratedNpcs.push_back(std::move(observation));
+    }
+    else recordWorldNpcActorLocation(state, npcId, location);
     return true;
 }
 
