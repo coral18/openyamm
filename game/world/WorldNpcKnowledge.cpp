@@ -19,6 +19,7 @@ namespace OpenYAMM::Game
 namespace
 {
 const std::string ActorPrefix = "openyamm.discovery.npc-actor.v1/";
+const std::string ScriptPrefix = "openyamm.discovery.npc-script.v1/";
 
 bool validMapId(const std::string &id)
 {
@@ -34,11 +35,12 @@ std::string actorPrefix(uint32_t npcId, const WorldNpcActorLocation &location)
     return ActorPrefix + std::to_string(npcId) + "/" + location.mapId + "/";
 }
 
-void clearActorLocation(EventRuntimeState &state, uint32_t npcId)
+void clearEncounterLocations(EventRuntimeState &state, uint32_t npcId)
 {
     const std::string prefix = ActorPrefix + std::to_string(npcId) + "/";
+    const std::string script = ScriptPrefix + std::to_string(npcId) + "/";
     for (auto &[key, value] : state.namedGlobalVars)
-        if (key.starts_with(prefix) && key.ends_with("/seen")) value = 0;
+        if ((key.starts_with(prefix) || key.starts_with(script)) && key.ends_with("/seen")) value = 0;
 }
 
 WorldNpcActorLocation readActorLocation(const std::unordered_map<std::string, int32_t> &variables,
@@ -52,8 +54,26 @@ WorldNpcActorLocation readActorLocation(const std::unordered_map<std::string, in
     };
     WorldNpcActorLocation result{mapId, std::bit_cast<uint32_t>(field("actor")),
         field("x"), field("y"), field("z"), field("time")};
-    actorPrefix(1, result); // Validate the saved map and time as strictly as newly recorded observations.
+    if (!validMapId(result.mapId) || result.gameMinutes < 0)
+        throw std::invalid_argument("Invalid saved NPC actor encounter");
     return result;
+}
+
+std::string scriptPrefix(uint32_t npcId, const WorldNpcScriptLocation &location)
+{
+    if (npcId == 0 || !validMapId(location.mapId) || location.eventId == 0 || location.gameMinutes < 0)
+        throw std::invalid_argument("Invalid NPC scripted encounter");
+    return ScriptPrefix + std::to_string(npcId) + "/" + location.mapId + "/";
+}
+
+WorldNpcScriptLocation readScriptLocation(const std::unordered_map<std::string, int32_t> &variables,
+    const std::string &prefix, const std::string &mapId)
+{
+    const auto event = variables.find(prefix + "event"), time = variables.find(prefix + "time");
+    if (!validMapId(mapId) || event == variables.end() || time == variables.end()
+        || event->second <= 0 || event->second > UINT16_MAX || time->second < 0)
+        throw std::invalid_argument("Invalid saved NPC scripted encounter");
+    return {mapId, uint16_t(event->second), time->second};
 }
 
 std::string teacherPrefix(uint32_t npcId)
@@ -66,7 +86,7 @@ void recordWorldNpcActorLocation(EventRuntimeState &state, uint32_t npcId,
     const WorldNpcActorLocation &location)
 {
     const std::string prefix = actorPrefix(npcId, location);
-    clearActorLocation(state, npcId);
+    clearEncounterLocations(state, npcId);
     state.namedGlobalVars[prefix + "actor"] = std::bit_cast<int32_t>(location.actorIndex);
     state.namedGlobalVars[prefix + "x"] = location.x;
     state.namedGlobalVars[prefix + "y"] = location.y;
@@ -83,6 +103,26 @@ bool worldNpcActorLocationKnown(const std::unordered_map<std::string, int32_t> &
     if (seen == variables.end() || seen->second == 0) return false;
     if (seen->second != 1) throw std::invalid_argument("Invalid saved NPC actor encounter flag");
     return readActorLocation(variables, prefix, location.mapId) == location;
+}
+
+void recordWorldNpcScriptLocation(EventRuntimeState &state, uint32_t npcId,
+    const WorldNpcScriptLocation &location)
+{
+    const std::string prefix = scriptPrefix(npcId, location);
+    clearEncounterLocations(state, npcId);
+    state.namedGlobalVars[prefix + "event"] = location.eventId;
+    state.namedGlobalVars[prefix + "time"] = location.gameMinutes;
+    state.namedGlobalVars[prefix + "seen"] = 1;
+}
+
+bool worldNpcScriptLocationKnown(const std::unordered_map<std::string, int32_t> &variables,
+    uint32_t npcId, const WorldNpcScriptLocation &location)
+{
+    const std::string prefix = scriptPrefix(npcId, location);
+    const auto seen = variables.find(prefix + "seen");
+    if (seen == variables.end() || seen->second == 0) return false;
+    if (seen->second != 1) throw std::invalid_argument("Invalid saved NPC scripted encounter flag");
+    return readScriptLocation(variables, prefix, location.mapId) == location;
 }
 
 bool observeWorldNpcActor(EventRuntimeState &state, uint32_t npcId, uint32_t actorIndex,
@@ -164,7 +204,7 @@ void recordWorldNpcObservation(EventRuntimeState &state, uint32_t npcId, uint32_
         throw std::invalid_argument("Invalid observed NPC or house ID");
     }
     // Zero is meaningful: an actor/remote dialogue does not prove a residence.
-    if (houseId != 0) clearActorLocation(state, npcId);
+    if (houseId != 0) clearEncounterLocations(state, npcId);
     state.namedGlobalVars[worldNpcHouseKey(npcId)] = std::bit_cast<int32_t>(houseId);
     state.namedGlobalVars["openyamm.discovery.npc/" + std::to_string(npcId)] = 1;
     const std::string prefix = teacherPrefix(npcId);
@@ -190,19 +230,23 @@ WorldNpcState worldObservedNpcs(const NpcDialogTable &npcs, const MergedTeacherT
     // One pass over saved variables; never scan every variable again for each indexed NPC or frame.
     for (const auto &[key, value] : variables)
     {
-        if (!key.starts_with(ActorPrefix) || !key.ends_with("/seen") || value == 0) continue;
-        const size_t separator = key.find('/', ActorPrefix.size());
+        const bool actor = key.starts_with(ActorPrefix);
+        if ((!actor && !key.starts_with(ScriptPrefix)) || !key.ends_with("/seen") || value == 0) continue;
+        const std::string &root = actor ? ActorPrefix : ScriptPrefix;
+        const size_t separator = key.find('/', root.size());
         uint32_t npcId = 0;
-        if (separator == std::string::npos) throw std::invalid_argument("Invalid saved NPC actor identity");
-        const std::string id = key.substr(ActorPrefix.size(), separator - ActorPrefix.size());
+        if (separator == std::string::npos) throw std::invalid_argument("Invalid saved NPC encounter identity");
+        const std::string id = key.substr(root.size(), separator - root.size());
         const auto parsed = std::from_chars(id.data(), id.data() + id.size(), npcId);
         if (value != 1 || parsed.ec != std::errc() || parsed.ptr != id.data() + id.size()
             || npcId == 0 || id != std::to_string(npcId))
-            throw std::invalid_argument("Invalid saved NPC actor identity");
+            throw std::invalid_argument("Invalid saved NPC encounter identity");
         const std::string mapId = key.substr(separator + 1, key.size() - separator - 6);
-        WorldNpcActorLocation location = readActorLocation(variables, key.substr(0, key.size() - 4), mapId);
-        if (!result.actorLocations.emplace(npcId, std::move(location)).second)
-            throw std::invalid_argument("Duplicate saved NPC actor encounters");
+        if (result.actorLocations.contains(npcId) || result.scriptLocations.contains(npcId))
+            throw std::invalid_argument("Duplicate saved NPC encounters");
+        const std::string prefix = key.substr(0, key.size() - 4);
+        if (actor) result.actorLocations.emplace(npcId, readActorLocation(variables, prefix, mapId));
+        else result.scriptLocations.emplace(npcId, readScriptLocation(variables, prefix, mapId));
     }
     for (const NpcEntry &npc : npcs.entries())
     {

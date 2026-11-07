@@ -1196,6 +1196,8 @@ bool ScriptedEventProgram::populateMetadataFromLua(
         "autonoteReferences", "notes", UINT16_MAX, program.m_autonoteReferences, error)) return false;
     if (!readIdReferences(pLuaState, lua_absindex(pLuaState, -1), scope,
         "qbitGrants", "qbits", UINT32_MAX, program.m_qbitGrants, error)) return false;
+    if (!readIdReferences(pLuaState, lua_absindex(pLuaState, -1), scope,
+        "npcEncounters", "npcs", UINT32_MAX, program.m_npcEncounters, error)) return false;
     if (!readNpcReferences(pLuaState, lua_absindex(pLuaState, -1), scope, "npcLocations", "locations",
         program.m_npcLocations, [](const NpcLocation &a, const NpcLocation &b)
         { return a.npcId < b.npcId || (a.npcId == b.npcId && a.houseId < b.houseId); }, error)) return false;
@@ -1260,6 +1262,11 @@ ScriptedEventProgram::npcTopicReferences() const
 const std::unordered_map<uint16_t, std::vector<uint32_t>> &ScriptedEventProgram::qbitGrants() const
 {
     return m_qbitGrants;
+}
+
+const std::unordered_map<uint16_t, std::vector<uint32_t>> &ScriptedEventProgram::npcEncounters() const
+{
+    return m_npcEncounters;
 }
 
 std::optional<ScriptedEventProgram> ScriptedEventProgram::loadFromLuaText(

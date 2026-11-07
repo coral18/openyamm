@@ -1,0 +1,45 @@
+id: atlas.mm8_scripted_npc_encounter
+title: Simon's real first-entry conversation records a dungeon without inventing XYZ
+world: mm8
+mode: faithful
+steps:
+- new_game_flow:
+    start_map: out01.odm
+    party:
+      gold: 5000
+      food: 10
+      members:
+      - {name: Atlas Tester, class: Knight, level: 20, race_id: 0, skills: [], equipment: {}}
+- speak_npc: {source_id: 264}
+- press_action: {action: cancel_dialog}
+- assert:
+    named_global_var_changed:
+      {name: openyamm.discovery.npc-script.v1/264/world.mm8.map.d05/seen, value: 0}
+- save_game: remote-only
+- load_map: {map: d05.blv}
+- advance_runtime: {seconds: 0.1}
+- assert:
+    named_global_var_changed:
+      {name: openyamm.discovery.npc-script.v1/264/world.mm8.map.d05/seen, value: 1}
+- assert:
+    named_global_var_changed:
+      {name: openyamm.discovery.npc-script.v1/264/world.mm8.map.d05/event, value: 1}
+- assert:
+    named_global_var_changed:
+      {name: openyamm.discovery.npc-actor.v1/264/world.mm8.map.d05/seen, value: 0}
+- assert: {named_global_var_changed: {name: openyamm.discovery.npc/264/house, value: 0}}
+- press_action: {action: cancel_dialog}
+- save_game: met
+- load_map: {map: out01.odm}
+- load_game: met
+- assert:
+    named_global_var_changed:
+      {name: openyamm.discovery.npc-script.v1/264/world.mm8.map.d05/seen, value: 1}
+- assert:
+    named_global_var_changed:
+      {name: openyamm.discovery.npc-script.v1/264/world.mm8.map.d05/event, value: 1}
+- assert:
+    named_global_var_changed:
+      {name: openyamm.discovery.npc-actor.v1/264/world.mm8.map.d05/seen, value: 0}
+- save_game: verified
+tags: [mm8, atlas, npc, discovery, save]

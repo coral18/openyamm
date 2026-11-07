@@ -84,6 +84,7 @@ public:
     const std::unordered_map<uint16_t, std::vector<std::string>> &connectionTargets() const;
     const std::unordered_map<uint16_t, std::vector<NpcLocation>> &npcLocations() const;
     const std::unordered_map<uint16_t, std::vector<NpcTopicReference>> &npcTopicReferences() const;
+    const std::unordered_map<uint16_t, std::vector<uint32_t>> &npcEncounters() const;
     const std::unordered_map<uint16_t, std::vector<uint32_t>> &qbitGrants() const;
     const std::unordered_map<uint16_t, std::vector<MonsterSpawn>> &monsterSpawns() const;
     const std::vector<TimerTrigger> &timerTriggers() const;
@@ -128,6 +129,7 @@ private:
     std::unordered_map<uint16_t, std::vector<std::string>> m_connectionTargets;
     std::unordered_map<uint16_t, std::vector<NpcLocation>> m_npcLocations;
     std::unordered_map<uint16_t, std::vector<NpcTopicReference>> m_npcTopicReferences;
+    std::unordered_map<uint16_t, std::vector<uint32_t>> m_npcEncounters;
     std::unordered_map<uint16_t, std::vector<uint32_t>> m_qbitGrants;
     std::unordered_map<uint16_t, std::vector<MonsterSpawn>> m_monsterSpawns;
     uint32_t m_levitateTrapFaceMask = 0;

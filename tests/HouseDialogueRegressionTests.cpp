@@ -792,6 +792,47 @@ TEST_CASE("Atlas actor NPC discovery is recorded only by a successfully opened m
     }
 }
 
+TEST_CASE("Atlas scripted NPC dialogue records map provenance but global and remote calls do not")
+{
+    using namespace OpenYAMM::Game;
+    const OpenYAMM::Tests::RegressionGameData &gameData = requireRegressionGameData();
+    const auto support = readBinaryFileBytes(std::filesystem::path(OPENYAMM_SOURCE_DIR)
+        / "assets_dev/engine/scripts/common/event_support.lua");
+    for (int variant = 0; variant < 4; ++variant)
+    {
+        CAPTURE(variant);
+        OpenYAMM::Tests::HouseDialogueTestHarness harness(gameData);
+        MapStatsEntry map;
+        map.worldId = "mm8";
+        map.fileName = "d05.blv";
+        harness.setCurrentMap(map);
+        const bool global = variant == 1;
+        const std::string registration = global ? "RegisterGlobalEvent" : "RegisterEvent";
+        std::string error;
+        const auto program = ScriptedEventProgram::loadFromLuaText(std::string(support.begin(), support.end())
+            + registration + "(1, '', function() evt.SpeakNPC(264) end)\n", "@scripted-npc-encounter",
+            global ? ScriptedEventScope::Global : ScriptedEventScope::Map, error);
+        REQUIRE_MESSAGE(program, error);
+        harness.eventRuntimeState().mapFileName = variant == 2 ? "d12.blv" : "d05.blv";
+        if (variant == 3) harness.openNpcDialogue(264);
+        else
+        {
+            EventRuntime runtime;
+            REQUIRE(runtime.executeEventById(global ? std::nullopt : program,
+                global ? program : std::nullopt, 1, harness.eventRuntimeState(), &harness.party()));
+            REQUIRE(harness.eventRuntimeState().pendingDialogueContext);
+            CHECK(harness.eventRuntimeState().pendingDialogueContext->npcSourceEventId == (global ? 0 : 1));
+            harness.presentPendingDialog(0, true);
+        }
+        const WorldNpcState observed = worldObservedNpcs(gameData.npcDialogTable,
+            gameData.mergedTeacherTopicTable, harness.eventRuntimeState().namedGlobalVars);
+        CHECK(observed.actorLocations.empty());
+        CHECK(observed.scriptLocations.contains(264) == (variant == 0));
+        if (variant == 0)
+            CHECK(observed.scriptLocations.at(264) == WorldNpcScriptLocation{"world.mm8.map.d05", 1, 720});
+    }
+}
+
 TEST_CASE("Verdant dimensional travel topic hands off from dialogue to the travel selector")
 {
     const OpenYAMM::Tests::RegressionGameData &gameData = requireRegressionGameData();

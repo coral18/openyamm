@@ -25,6 +25,9 @@ community guide's complete content has been integrated yet.
 - Fixed named actor NPCs outside buildings use package-authored possibility points in Guide and last-encounter
   positions in Discovery. Only a successful dialogue tied to the matching living, visible actor records a position.
   Remote NPC-ID dialogue supplies no coordinates. Points include height and reuse shared Core save knowledge.
+- Scripted NPC conversations can establish a last-encounter map without establishing XYZ. Guide indexes
+  callback-owned possible encounters, and searches progressively load dungeon metadata as needed. Selecting
+  such a contact opens its map and explicitly states that no exact position is recorded; no pin is invented.
 - Sites layer for physical chests, wells/fountains, shrines, obelisks, declared passages/teleports,
   authored encounter areas, last-observed creatures and saved map notes.
   Search and clustered small markers work on regional images and dungeon plans; declared map links open the
@@ -3594,3 +3597,46 @@ Reproduction is in the fixture README. Private inputs, logs, inspections, captur
 `atlas-actor-npcs-20261106/`. Preliminary tours using the temporary-map borrowing bug were discarded before
 these final runs. The current source change has not been packaged or installed on Android; phone work remains
 deferred. Wider conditional/scripted NPC placement and generated NPC identities remain open.
+
+## Scripted NPC map encounters (2026-11-07)
+
+Simon Templar is spoken to by Abandoned Temple's conditional on-load event 1; the fresh authored companion
+does not place actor 264. The shared NPC knowledge path now distinguishes that map encounter from an exact
+actor position. A successful dialogue originating in a matching local map callback records canonical map,
+event and time under `openyamm.discovery.npc-script.v1/`. Global-topic and remote NPC-ID calls do not provide
+that provenance. A newer actor, script or house encounter supersedes the previous remembered location kind.
+Discovery requires both the observation and knowledge of its containing map. Old saves receive no guessed map
+or coordinates, and the binary save schema/module requirements are unchanged.
+
+Guide declarations are generated from reachable local SpeakNPC calls through the existing NPC-reference export
+command. They bind to the active callback; replacing/removing a callback invalidates its old metadata. The
+retained MM7/MM8 regeneration changes 36 metadata files, adding 77 possible-encounter declarations without
+changing event handlers or earlier metadata. All 137 active maps pass the runtime reference audit, including
+58 surviving NPC/map/event references. This includes handler replacement filtering; unused legacy declarations
+are not promoted to discoveries. The temporary handwritten Simon declaration was removed once regeneration
+provided the canonical reference. No MM6 Atlas/catalog work is included.
+
+Guide NPC/trainer searches and nonempty Guide searches progressively index dungeon data, one map per frame,
+using the existing loader. This fixes missing scripted/indoor contacts when searching from the continent
+overview. Ordinary Guide entry retains its selected-map-first loading behavior. A script contact has no
+`WorldMapLocation` point, and its detail text distinguishes map-level knowledge from an actor's actual feet.
+
+The Windows regression set passes 379 cases / 73,976 assertions, with the previously documented retired-source
+portrait case excluded. Pure/registry tests cover callback ownership, exporter reachability, global versus local
+dialogues, stale/unknown maps, mutually exclusive observation kinds, teacher offers, malformed save data and
+stable source ownership. The actual Simon first-entry/save-load scenario passes 19 steps, including a remote
+negative control. Its initial red run exposed a headless-driver omission: runtime advance did not present
+queued on-load dialogue as live views do. It now calls the shared pending-dialogue presenter; the existing
+31-step blackmail return scenario passes after that correction.
+
+Three fresh native AMD/OpenGL processes pass 67 UI steps / 12 captures. They find Simon and the Faerie King
+from their continent overviews in Guide, select the proper Abandoned Temple / The Hall under the Hill maps,
+and show Simon's actual last-map encounter in Discovery. Six source/result save inspections retain checked
+NPC knowledge, map, resources, party and cached indoor-map sets. No XYZ/actor observation is fabricated, and
+six map/list RGB crops match before/after Guide. An early verifier incorrectly compared unordered cache keys
+as ordered lists; the accepted check compares their sets. No product change was needed for that verifier error.
+
+Public scenarios/tours and reproduction are in the fixture README. Private logs, regeneration delta, inspections,
+captures and receipts are under `atlas-script-npcs-20261107/`. These are sampled encounter/navigation checks,
+not every conditional branch, arbitrary handwritten/computed NPC calls, generated identities or physical
+Android/controller acceptance. Android work remains deferred.

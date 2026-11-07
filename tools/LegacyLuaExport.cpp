@@ -12782,10 +12782,13 @@ void emitNpcTopicMetadata(std::ostringstream &stream, std::string_view scopeTabl
     if (steps.empty()) return;
     std::vector<std::pair<uint32_t, uint32_t>> topics;
     std::vector<uint32_t> grants;
+    std::vector<uint32_t> encounters;
     for (uint8_t step : collectReachableSteps(event, steps, entryStep.value_or(steps.front())))
         for (const LegacyLuaInstruction *pInstruction : collectMeaningfulInstructionsForStep(event, step))
         {
             const auto &args = pInstruction->arguments;
+            if (scopeTableName == LuaScopeMap && pInstruction->operation == LegacyLuaOperation::SpeakNpc
+                && !args.empty() && args[0] > 0) encounters.push_back(args[0]);
             if (pInstruction->operation == LegacyLuaOperation::SetNpcTopic && args.size() >= 3
                 && args[0] > 0 && args[2] > 0) topics.emplace_back(args[0], args[2]);
             if ((pInstruction->operation == LegacyLuaOperation::Set
@@ -12811,6 +12814,14 @@ void emitNpcTopicMetadata(std::ostringstream &stream, std::string_view scopeTabl
         stream << (scopeTableName == LuaScopeGlobal ? "SetGlobalQBitGrants(" : "SetMapQBitGrants(")
             << handlerId << ", {";
         for (size_t index = 0; index < grants.size(); ++index) stream << (index == 0 ? "" : ", ") << grants[index];
+        stream << "})\n";
+    }
+    sortAndUnique(encounters);
+    if (!encounters.empty())
+    {
+        stream << "SetMapNpcEncounters(" << handlerId << ", {";
+        for (size_t index = 0; index < encounters.size(); ++index)
+            stream << (index == 0 ? "" : ", ") << encounters[index];
         stream << "})\n";
     }
 }

@@ -6327,6 +6327,13 @@ int luaSpeakNpc(lua_State *pLuaState)
     context.kind = DialogueContextKind::NpcTalk;
     context.sourceId = static_cast<uint32_t>(luaL_checkinteger(pLuaState, 1));
     context.hostHouseId = pRuntimeState->dialogueState.hostHouseId;
+    const LuaExecutionContext *pExecution = executionContextFromLua(pLuaState);
+    if (pExecution != nullptr && !pExecution->currentHandlerGlobalScope.value_or(pExecution->executingGlobalHandler))
+    {
+        context.npcSourceEventId = pExecution->currentHandlerEventId != 0
+            ? pExecution->currentHandlerEventId : pExecution->currentEventId;
+        if (context.npcSourceEventId != 0) context.npcSourceMapFileName = pRuntimeState->mapFileName;
+    }
     pRuntimeState->pendingDialogueContext = std::move(context);
     return 0;
 }

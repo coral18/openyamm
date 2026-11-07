@@ -1,0 +1,40 @@
+output_dir: captures
+exit: true
+steps:
+- wait: 0.5
+- key: Escape
+- expect: gameplay
+- action: map_book
+- click:
+  - 1250
+  - 770
+- click:
+  - 275
+  - 126
+- text: Simon
+- key: Return
+- pointer_move:
+  - 800
+  - 860
+- capture: discovery-before
+- click:
+  - 1300
+  - 250
+- pointer_move:
+  - 800
+  - 860
+- capture: encounter-selected
+- click:
+  - 1152
+  - 57
+- wait: 3
+- capture: guide-map
+- click:
+  - 1152
+  - 57
+- capture: discovery-return
+- key: Escape
+- key: Escape
+- expect: gameplay
+- key: F9
+- wait: 0.4

@@ -162,6 +162,9 @@ struct EventRuntimeState
         uint32_t transitionTextId = 0;
         uint32_t transitionImageId = 0;
         std::optional<MapNoteSourcePoint> mapNoteSourcePoint;
+        // A map callback can establish a meeting in a map without placing an actor at XYZ.
+        std::string npcSourceMapFileName;
+        uint16_t npcSourceEventId = 0;
     };
 
     struct PendingMovie

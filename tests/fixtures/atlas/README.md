@@ -828,3 +828,33 @@ pointer assumption. Pure tests cover relocation, house encounters, stale indexes
 teacher offers, height, malformed saves and invalid/dead/invisible/mismatched actors. Reindexing doors or actors
 must neither remove independent actor points nor duplicate them. Old saves without encounter coordinates remain
 unmapped until a real actor dialogue; no guessed-position migration is applied.
+
+## Scripted NPC map encounters
+
+Regenerate callback references with `tools/regenerate_lua_events.sh --npc-topic-refs-only`. The existing exporter
+now also emits `SetMapNpcEncounters` for reachable local SpeakNPC calls. Retain the MM7/MM8 outputs for this
+Atlas task; the canonical regeneration command also checks other worlds, without authorizing an MM6 Atlas.
+Do not patch generated base handlers or keep a second manual declaration of the same encounter.
+
+Run `mm8_scripted_npc_encounter.yml` in a fresh isolated Windows runtime. Its 19 steps first speak to NPC 264
+remotely on Dagger Wound (no map learned), then load Abandoned Temple and advance a neutral frame. The actual
+conditional on-load conversation must open, giving map `world.mm8.map.d05`, event 1 and house zero, with no
+actor-location observation. Leave/reload and verify the persisted script encounter. The corrected headless
+runtime-advance path uses the same pending-dialogue presenter as live views. The existing 31-step
+`mm8_blackmail_return_knowledge.yml` is the regression control for already active dialogue/time-advance behavior.
+
+Use the temporary scenario's `remote-only` and `met` saves as separate private `saves/before.oysav` inputs for
+`atlas_mm8_scripted_npc_remote_only.yml` and `atlas_mm8_scripted_npc_met.yml` at 1600x900. The latter waits for
+and closes the ordinary first-entry dialogue before opening Map Book. Restore the one-shot tour setting for
+each launch. The remote tour searches from Jadame, selects the Guide contact, and opens Abandoned Temple;
+the met tour selects the observed map-only contact and reads `Last encountered in this map` / no exact position.
+
+`atlas_mm7_scripted_npc_guide.yml` uses the earlier private MM7 profile-toggle restored quicksave (Tatalia,
+no Faerie King encounter). It searches from Antagarich and selects the Guide contact in The Hall under the Hill.
+All three tours return to Discovery and save. Require 22/23/22 steps, four fresh captures per run, correct startup
+maps, AMD/OpenGL logs and exit zero. Inspect all Guide/search/detail captures. Compare the usual map/list RGB
+crops before/after Guide and inspect source/result NPC variables, map, resources, party and cached map sets.
+The unknown Guide maps must not enter campaign caches or NPC discovery; no script encounter may acquire XYZ.
+
+The accepted set has 67 UI steps / 12 captures, six inspected saves and six equal map/list crops. It verifies
+these sampled contacts and metadata ownership, not every conditional campaign branch or physical-device UX.

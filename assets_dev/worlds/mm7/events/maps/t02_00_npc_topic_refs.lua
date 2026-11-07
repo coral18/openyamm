@@ -1,2 +1,3 @@
 -- generated possible NPC topics and campaign flags from legacy EVT/STR; load after the base handlers
 SetMapQBitGrants(195, {745})
+SetMapNpcEncounters(451, {615})

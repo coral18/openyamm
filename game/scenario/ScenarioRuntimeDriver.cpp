@@ -2073,6 +2073,8 @@ bool ScenarioRuntimeDriver::advanceRuntime(float seconds, std::string &failure)
     while (remaining > 0.0f)
     {
         const float deltaSeconds = std::min(RuntimeStepSeconds, remaining);
+        // Live views present queued on-load dialogue before allowing the world to advance.
+        session.gameplayScreenRuntime().ensurePendingEventDialogPresented(true);
         session.updateGameplay(input, deltaSeconds, false);
         session.bindCurrentGameplayInputFrame(nullptr);
         if (session.sharedInputFrameResult().worldInputBlocked

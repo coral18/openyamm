@@ -167,6 +167,60 @@ TEST_CASE("Atlas authored actor NPC references match every active MM7 and MM8 co
     CHECK(npcCount > 0);
 }
 
+TEST_CASE("Atlas scripted NPC encounters use active callback references without inventing physical actor points")
+{
+    using namespace OpenYAMM::Game;
+    REQUIRE_MESSAGE(OpenYAMM::Tests::regressionMapLoaderLoaded(),
+        OpenYAMM::Tests::regressionMapLoaderFailure());
+    const auto &fixture = OpenYAMM::Tests::regressionMapLoader();
+    const auto &data = fixture.gameDataLoader;
+    size_t maps = 0, contacts = 0;
+    for (const std::string &worldId : {"mm7", "mm8"})
+    {
+        WorldDatabase world(data.getMapStats(), data.getHouseTable(), data.getNpcDialogTable(),
+            data.getMergedTeacherTopicTable(), worldId);
+        for (const MapStatsEntry &entry : data.getMapStats().getEntries())
+        {
+            if (entry.worldId != worldId) continue;
+            CAPTURE(entry.fileName);
+            auto map = MapAssetLoader().load(fixture.assetFileSystem, entry, data.getMonsterTable(),
+                data.getObjectTable(), MapLoadPurpose::HeadlessGameplay);
+            REQUIRE(map);
+            std::string error;
+            REQUIRE_MESSAGE(GameDataLoader::loadEventPrograms(fixture.assetFileSystem, *map, error), error);
+            REQUIRE(map->localEventProgram);
+            const size_t points = world.locations().size();
+            world.indexMapNpcEncounters(map->map, *map->localEventProgram);
+            CHECK(world.locations().size() == points);
+            for (const auto &[event, npcs] : map->localEventProgram->npcEncounters())
+                for (uint32_t npc : npcs)
+                {
+                    CAPTURE(event);
+                    CAPTURE(npc);
+                    const std::string id = worldId + ":npc/" + std::to_string(npc) + "/possible-script/"
+                        + WorldDatabase::mapId(entry) + "/" + std::to_string(event);
+                    const WorldRecord *pNpc = world.find(id);
+                    REQUIRE(pNpc != nullptr);
+                    CHECK(pNpc->map == &entry);
+                    CHECK(pNpc->scriptLocation.has_value());
+                    CHECK_FALSE(pNpc->actorLocation.has_value());
+                    CHECK(world.visible(*pNpc, {}, true));
+                    CHECK_FALSE(world.visible(*pNpc, {}, false));
+                    ++contacts;
+                }
+            if (worldId == "mm8" && entry.fileName == "d05.blv")
+            {
+                REQUIRE(map->localEventProgram->npcEncounters().contains(1));
+                CHECK(map->localEventProgram->npcEncounters().at(1) == std::vector<uint32_t>{264});
+            }
+            ++maps;
+        }
+    }
+    CHECK(maps == 137);
+    CHECK(contacts > 0);
+    MESSAGE("Active scripted NPC encounter references: " << contacts << " across " << maps << " maps");
+}
+
 TEST_CASE("Atlas quest links resolve against fully indexed active MM7 and MM8 worlds")
 {
     using namespace OpenYAMM::Game;

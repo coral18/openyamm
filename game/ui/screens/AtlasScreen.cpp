@@ -191,6 +191,7 @@ AtlasScreen::AtlasScreen(const Engine::AssetFileSystem &assets, const GameDataRe
     {
         m_world.indexMapMonsterSpawns(pCurrentMap->map, *pCurrentMap->localEventProgram, m_data.monsterTable());
         m_world.indexMapNpcTopics(pCurrentMap->map, *pCurrentMap->localEventProgram);
+        m_world.indexMapNpcEncounters(pCurrentMap->map, *pCurrentMap->localEventProgram);
         m_world.indexMapInteractionReferences(pCurrentMap->map, m_data.itemTable(), m_data.spellTable());
         m_world.indexMapGateReferences(pCurrentMap->map, m_data.worldGateCatalog(), m_pParty);
     }
@@ -688,6 +689,7 @@ void AtlasScreen::indexMapData(MapAssetInfo &map)
         throw std::runtime_error(error.empty() ? "Missing event metadata" : error);
     m_world.indexMapConnections(map.map, *map.localEventProgram);
     m_world.indexMapNpcTopics(map.map, *map.localEventProgram);
+    m_world.indexMapNpcEncounters(map.map, *map.localEventProgram);
     const auto &observations = m_knowledge.monsterObservations[toLowerCopy(map.map.fileName)];
     if (map.outdoorMapData)
     {
@@ -730,10 +732,13 @@ void AtlasScreen::indexMapData(MapAssetInfo &map)
 void AtlasScreen::indexKnownRegions()
 {
     // Indexing event metadata can append possible residents; retain stable table pointers across it.
+    const bool searchDungeons = m_guide && (!m_search.empty()
+        || m_filter == WorldRecordKind::Npc || m_filter == WorldRecordKind::Trainer);
     std::vector<const MapStatsEntry *> maps;
     for (const WorldRecord &record : m_world.records())
         if ((record.kind == WorldRecordKind::Region
-            || (record.kind == WorldRecordKind::Dungeon && !m_connectionView && record.id == m_map))
+            || (record.kind == WorldRecordKind::Dungeon && !m_connectionView
+                && (record.id == m_map || searchDungeons)))
             && m_world.visible(record, m_knowledge, m_guide)
             && !m_indexedMaps.contains(record.id))
             maps.push_back(record.map);
@@ -2218,10 +2223,11 @@ void AtlasScreen::drawDetails()
     {
         text = record->name();
         if (record->lastObservedNpc)
-            text += " | Last encountered here";
+            text += record->scriptLocation ? " | Last encountered in this map" : " | Last encountered here";
         if (record->possibleNpcLocation)
             text += " | Authored possibility; quest conditions may apply. Current presence is not implied.";
-        if (record->actorLocation) text += " | " + record->map->name;
+        if (record->actorLocation || record->scriptLocation) text += " | " + record->map->name;
+        if (record->scriptLocation) text += " | No exact position is recorded";
         if (record->house != nullptr)
         {
             const MapStatsEntry *pRecordMap = m_world.recordMap(*record, m_knowledge, m_guide, m_map);

@@ -97,7 +97,7 @@ tables, and do not bundle its HTML, JS, translated prose, generated illustration
 | Continent overview | Existing game illustration | Original regional schematic | Optional licensed/original illustrated Jadame artwork |
 | Discovery fog and current party arrow | Implemented | Implemented | Wider dungeon/device checks |
 | Dungeon plans from engine geometry | Adaptive known height slices, clipped known walkable ramp edges, party-height selection, component-aware discovered pins and height-aware notes | Same shared projection and controls | Semantic storeys and wider floor/visibility/device audit; moving geometry awaits user decision |
-| Buildings, resident/actor NPCs, trainers | Current/observed residents, Guide-only possible residences/authored actor placements, last-encounter actor positions, indoor service markers and exact physical-address history per canonical service | Same shared index; actual Adventurer's Inn discovery and Dagger Wound/Ravenshore entrances | Conditional service eligibility, wider scripted placement audit and generated NPC identities |
+| Buildings, resident/actor/scripted NPCs, trainers | Current/observed residents, Guide-only possible residences/actor placements/map encounters, last-encounter actor positions or script maps, indoor service markers and exact physical-address history per canonical service | Same shared index; actual Adventurer's Inn discovery and Dagger Wound/Ravenshore entrances | Conditional service eligibility, handwritten/computed NPC calls, wider scripted placement audit and generated NPC identities |
 | Trainer requirements and prices | Gameplay evaluator, observed offers and race-specific mastery comparisons | Same shared evaluator | Conditional eligibility audit and starting-skill/race-selection checks |
 | Walking and scheduled transport | Directed walking/coach/boat graph, departure pins, last-offered schedules/fare/duration, live local overrides and destination navigation | Same shared knowledge/navigation | Remote scripted timetable references, availability forecasting and arrival-point links |
 | Quest giver/objective/return chains | Shared registry, 76 quests, conditional clues and possible contact-location links | Shared registry, 69 quests, repaired Accuracy state, stage-sensitive Aislen/Pole delivery contacts and possible contact-location links | Remaining conditional stages and wider campaign audit; unused legacy MM8 rows 5/172 are not invented playable chains |
@@ -260,6 +260,16 @@ actual-interaction/save fixtures pass 42 steps. Eight native AMD/OpenGL tours pa
 sixteen inspected saves retain checked state and twelve Guide-roundtrip map/list crops match. Points/list
 entries select the correct last-encounter details. Wider scripted placement, generated NPC identities and
 physical-device acceptance remain open; this change is newer than the deferred Android packages.
+
+The 2026-11-07 scripted-contact checkpoint adds map-level encounter knowledge without fabricating actor XYZ.
+Local callback provenance is recorded only when dialogue opens; global/remote calls cannot supply a map.
+Regenerated MM7/MM8 references are tied to their active handlers, with 58 surviving contacts audited across
+all 137 maps. Guide searches progressively index dungeon data and can find these contacts from the overview.
+The expanded 379-case / 73,976-assertion Windows set passes with the existing retired-source portrait exclusion.
+Simon first-entry/save-load and the existing blackmail control pass 50 steps. Three native AMD/OpenGL runs pass
+67 steps / 12 captures across Simon and Faerie King; six save inspections preserve checked state and six
+Discovery map/list crops match after Guide. Wider conditional/handwritten NPC paths, generated identities and
+device acceptance remain open. Reproduction and the headless pending-dialogue correction are in `ATLAS.md`.
 
 Completion requires the missing native functions, data validation against the active game packages, meaningful
 unit/runtime checks and visual checks. A placeholder page or a list of unrelated journal text is not a completed

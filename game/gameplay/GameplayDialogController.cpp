@@ -721,6 +721,8 @@ bool samePendingDialogueContext(
     return left->kind == right->kind
         && left->sourceId == right->sourceId
         && left->sourceActorIndex == right->sourceActorIndex
+        && left->npcSourceEventId == right->npcSourceEventId
+        && left->npcSourceMapFileName == right->npcSourceMapFileName
         && left->hostHouseId == right->hostHouseId
         && left->newsId == right->newsId
         && left->participantPictureId == right->participantPictureId
@@ -4076,6 +4078,20 @@ GameplayDialogController::PresentPendingDialogResult GameplayDialogController::p
                 && context.pNpcDialogTable->getNpc(observedContext.sourceId) != nullptr)
                 observeWorldNpcActor(context.eventRuntimeState, observedContext.sourceId,
                     *observedContext.sourceActorIndex, *context.pCurrentMap, *context.pWorldRuntime);
+            else if (observedContext.hostHouseId == 0 && !observedContext.sourceActorIndex
+                && originalContext.sourceId == observedContext.sourceId && originalContext.npcSourceEventId != 0
+                && context.pCurrentMap != nullptr && context.pWorldRuntime != nullptr
+                && !originalContext.npcSourceMapFileName.empty()
+                && toLowerCopy(originalContext.npcSourceMapFileName) == toLowerCopy(context.pCurrentMap->fileName)
+                && context.pNpcDialogTable != nullptr
+                && context.pNpcDialogTable->getNpc(observedContext.sourceId) != nullptr)
+            {
+                const double minutes = std::floor(double(context.pWorldRuntime->gameMinutes()));
+                if (std::isfinite(minutes) && minutes >= 0 && minutes <= INT32_MAX)
+                    recordWorldNpcScriptLocation(context.eventRuntimeState, observedContext.sourceId,
+                        {WorldDatabase::mapId(*context.pCurrentMap), originalContext.npcSourceEventId,
+                            int32_t(minutes)});
+            }
             if (context.pNpcDialogTable != nullptr)
                 for (const EventDialogAction &action : context.activeEventDialog.actions)
                     if (action.kind == EventDialogActionKind::RosterJoinOffer)

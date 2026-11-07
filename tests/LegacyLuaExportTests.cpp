@@ -2246,6 +2246,35 @@ TEST_CASE("Zokarr routing references describe random destinations without claimi
     CHECK(text.find("Controlling lever") == std::string::npos);
 }
 
+TEST_CASE("scripted NPC encounter references are typed map callback-owned possibilities")
+{
+    using namespace OpenYAMM::Game;
+    const auto bytes = readBinaryFixture(std::filesystem::path(OPENYAMM_SOURCE_DIR)
+        / "assets_dev/engine/scripts/common/event_support.lua");
+    const std::string support(bytes.begin(), bytes.end());
+    const auto load = [&](const std::string &text)
+    {
+        std::string error;
+        return ScriptedEventProgram::loadFromLuaText(support + text, "@npc-encounter-references",
+            ScriptedEventScope::Map, error);
+    };
+    const std::string handler = "RegisterEvent(1, '', function() error('Must not execute dialogue') end)\n";
+    const std::string refs = "SetMapNpcEncounters(1, {264, 27, 264})\n";
+    auto program = load(handler + refs);
+    REQUIRE(program);
+    CHECK(program->npcEncounters().at(1) == std::vector<uint32_t>{27, 264});
+    for (const char *pReplacement : {"nil", "function() end"})
+    {
+        program = load(handler + refs + "evt.map[1]=" + pReplacement);
+        REQUIRE(program);
+        CHECK(program->npcEncounters().empty());
+    }
+    for (const char *pInvalid : {"false", "{0}", "{-1}", "{true}", "{4294967296}", "{[1]=27,[3]=264}"})
+        CHECK_FALSE(load(handler + "SetMapNpcEncounters(1," + pInvalid + ")"));
+    CHECK_FALSE(load(refs));
+    CHECK(load(handler + "SetMapNpcEncounters(1,{})")->npcEncounters().empty());
+}
+
 TEST_CASE("NPC topic references are typed callback-owned possibilities and do not execute dialogue")
 {
     using namespace OpenYAMM::Game;
@@ -2283,6 +2312,31 @@ TEST_CASE("NPC topic references are typed callback-owned possibilities and do no
         REQUIRE(load(setter + "(10,{})"));
         CHECK(load(setter + "(10,{})")->npcTopicReferences().empty());
     }
+}
+
+TEST_CASE("scripted NPC encounter export follows reachable map branches without locating global dialogue")
+{
+    using namespace OpenYAMM::Game;
+    std::vector<uint8_t> bytes;
+    const auto append = [&](uint16_t event, uint8_t step, EvtOpcode opcode, std::vector<uint8_t> payload)
+    {
+        bytes.insert(bytes.end(), {uint8_t(4 + payload.size()), uint8_t(event), uint8_t(event >> 8),
+            step, uint8_t(opcode)});
+        bytes.insert(bytes.end(), payload.begin(), payload.end());
+    };
+    append(10, 0, EvtOpcode::Compare, {0x10, 0, 1, 0, 0, 0, 3});
+    append(10, 1, EvtOpcode::SpeakNpc, {8, 1, 0, 0}); // NPC 264.
+    appendExitRecord(bytes, 10, 2);
+    append(10, 3, EvtOpcode::SpeakNpc, {27, 0, 0, 0});
+    appendExitRecord(bytes, 10, 4);
+    append(10, 5, EvtOpcode::SpeakNpc, {99, 0, 0, 0}); // Unreachable.
+    EvtProgram events;
+    REQUIRE(events.loadFromBytes(bytes));
+    const std::string map = generateLegacyEventNpcTopicRefsLuaChunk(events, {}, {}, LegacyLuaExportScope::Map);
+    CHECK(map.find("SetMapNpcEncounters(10, {27, 264})") != std::string::npos);
+    CHECK(map.find("99") == std::string::npos);
+    const std::string global = generateLegacyEventNpcTopicRefsLuaChunk(events, {}, {}, LegacyLuaExportScope::Global);
+    CHECK(global.find("NpcEncounters") == std::string::npos);
 }
 
 TEST_CASE("NPC topic reference export follows reachable branches and omits cleared or unreachable topics")

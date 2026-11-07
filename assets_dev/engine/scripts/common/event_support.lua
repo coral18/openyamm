@@ -1151,6 +1151,14 @@ function support.setMapNpcTopicRefs(eventId, topics)
     setNpcTopicReferences("map", eventId, topics)
 end
 
+function support.setMapNpcEncounters(eventId, npcs)
+    local handler = evt.map[eventId]
+    assert(type(handler) == "function", "NPC encounter references require a registered map handler")
+    local meta = ensureMetaScope("map")
+    meta.npcEncounters = meta.npcEncounters or {}
+    meta.npcEncounters[eventId] = {handler = handler, npcs = npcs}
+end
+
 function support.setGlobalNpcTopicRefs(eventId, topics)
     setNpcTopicReferences("global", eventId, topics)
 end
@@ -1740,6 +1748,7 @@ SetGlobalAutonoteRefs = support.setGlobalAutonoteRefs
 SetMapNpcLocations = support.setMapNpcLocations
 SetGlobalNpcLocations = support.setGlobalNpcLocations
 SetMapNpcTopicRefs = support.setMapNpcTopicRefs
+SetMapNpcEncounters = support.setMapNpcEncounters
 SetGlobalNpcTopicRefs = support.setGlobalNpcTopicRefs
 SetMapQBitGrants = support.setMapQBitGrants
 SetGlobalQBitGrants = support.setGlobalQBitGrants

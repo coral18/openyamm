@@ -2193,6 +2193,108 @@ TEST_CASE("world database actor NPC recording validates the dialogue actor and u
     }
 }
 
+TEST_CASE("world database scripted NPC encounters identify a map without inventing a position")
+{
+    Fixture fixture;
+    EventRuntimeState state;
+    const WorldNpcActorLocation actor{"world.mm7.map.7out02", 8, 120, 230, 40, 17};
+    const WorldNpcScriptLocation script{"world.mm7.map.7d21", 1, 23};
+    recordWorldNpcObservation(state, 42, 0, {305});
+    recordWorldNpcActorLocation(state, 42, actor);
+    recordWorldNpcScriptLocation(state, 42, script);
+    CHECK_FALSE(worldNpcActorLocationKnown(state.namedGlobalVars, 42, actor));
+    CHECK(worldNpcScriptLocationKnown(state.namedGlobalVars, 42, script));
+    auto observed = worldObservedNpcs(fixture.npcs, fixture.teachers, state.namedGlobalVars);
+    CHECK(observed.actorLocations.empty());
+    REQUIRE(observed.scriptLocations.at(42) == script);
+    WorldDatabase world(fixture.maps, fixture.houses, fixture.npcs, fixture.teachers, "mm7", {}, observed);
+    WorldKnowledge knowledge;
+    knowledge.variables = state.namedGlobalVars;
+    knowledge.visitedMaps.insert("7out02.odm");
+    knowledge.informedRecords.insert("mm7:npc/42");
+    CHECK(world.query(knowledge, false, "Townsaver").empty());
+    knowledge.visitedMaps.insert("7d21.blv");
+    const auto npcs = world.query(knowledge, false, "Townsaver", WorldRecordKind::Npc, script.mapId);
+    REQUIRE(npcs.size() == 1);
+    CHECK(npcs.front()->lastObservedNpc);
+    CHECK(npcs.front()->scriptLocation == script);
+    CHECK_FALSE(npcs.front()->actorLocation);
+    CHECK(world.queryLocations(knowledge, false, script.mapId).empty());
+    recordWorldNpcObservation(state, 42, 0, {}); // A remote conversation supplies no newer address.
+    CHECK(worldNpcScriptLocationKnown(state.namedGlobalVars, 42, script));
+    recordWorldNpcActorLocation(state, 42, actor);
+    CHECK_FALSE(worldNpcScriptLocationKnown(state.namedGlobalVars, 42, script));
+    knowledge.variables = state.namedGlobalVars;
+    CHECK(world.query(knowledge, false, "Townsaver").empty()); // Stale script index is no longer valid.
+    recordWorldNpcScriptLocation(state, 42, script);
+    recordWorldNpcObservation(state, 42, 11, {});
+    CHECK_FALSE(worldNpcScriptLocationKnown(state.namedGlobalVars, 42, script));
+    CHECK(worldObservedNpcs(fixture.npcs, fixture.teachers, state.namedGlobalVars).scriptLocations.empty());
+}
+
+TEST_CASE("world database scripted NPC reference reindexing preserves stable ownership and creates no point")
+{
+    Fixture fixture;
+    const std::filesystem::path root = OPENYAMM_SOURCE_DIR;
+    std::ifstream file(root / "assets_dev/engine/scripts/common/event_support.lua");
+    REQUIRE(file.is_open());
+    const std::string support{std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>()};
+    std::string error;
+    auto program = ScriptedEventProgram::loadFromLuaText(support
+        + "RegisterEvent(1, '', function() error('Metadata must not execute dialogue') end)\n"
+          "SetMapNpcEncounters(1, {42})\n", "@npc-script-map", ScriptedEventScope::Map, error);
+    REQUIRE_MESSAGE(program, error);
+    WorldDatabase world = fixture.database();
+    const MapStatsEntry *pMap = fixture.maps.findById(95);
+    REQUIRE(pMap != nullptr);
+    const MapStatsEntry temporary = *pMap;
+    for (int i = 0; i < 2; ++i) world.indexMapNpcEncounters(temporary, *program);
+    const std::string id = "mm7:npc/42/possible-script/world.mm7.map.7d21/1";
+    const WorldRecord *pNpc = world.find(id);
+    REQUIRE(pNpc != nullptr);
+    CHECK(pNpc->map == pMap);
+    CHECK(pNpc->possibleNpcLocation);
+    CHECK_FALSE(world.visible(*pNpc, {}, false));
+    CHECK(world.visible(*pNpc, {}, true));
+    CHECK(world.query({}, true, "Townsaver", WorldRecordKind::Npc, WorldDatabase::mapId(*pMap)).size() == 1);
+    CHECK(world.queryLocations({}, true, WorldDatabase::mapId(*pMap)).empty());
+    program = ScriptedEventProgram::loadFromLuaText(support + "RegisterEvent(1, '', function() end)\n",
+        "@npc-script-removed", ScriptedEventScope::Map, error);
+    REQUIRE_MESSAGE(program, error);
+    world.indexMapNpcEncounters(temporary, *program);
+    CHECK(world.find(id) == nullptr);
+}
+
+TEST_CASE("world database scripted NPC observations reject malformed and conflicting saved sources")
+{
+    Fixture fixture;
+    EventRuntimeState state;
+    const WorldNpcScriptLocation script{"world.mm7.map.7d21", 1, 23};
+    recordWorldNpcObservation(state, 42, 0, {});
+    recordWorldNpcScriptLocation(state, 42, script);
+    const std::string prefix = "openyamm.discovery.npc-script.v1/42/world.mm7.map.7d21/";
+    for (const char *pField : {"event", "time"})
+    {
+        auto bad = state.namedGlobalVars;
+        bad.erase(prefix + pField);
+        CHECK_THROWS_AS(worldObservedNpcs(fixture.npcs, fixture.teachers, bad), std::invalid_argument);
+    }
+    for (int32_t event : {-1, 0, 65536})
+    {
+        auto bad = state.namedGlobalVars;
+        bad[prefix + "event"] = event;
+        CHECK_THROWS_AS(worldObservedNpcs(fixture.npcs, fixture.teachers, bad), std::invalid_argument);
+    }
+    auto bad = state.namedGlobalVars;
+    bad[prefix + "seen"] = 2;
+    CHECK_THROWS_AS(worldObservedNpcs(fixture.npcs, fixture.teachers, bad), std::invalid_argument);
+    recordWorldNpcActorLocation(state, 42, {"world.mm7.map.7out02", 0, 100, 200, 300, 25});
+    state.namedGlobalVars[prefix + "seen"] = 1;
+    CHECK_THROWS_AS(worldObservedNpcs(fixture.npcs, fixture.teachers, state.namedGlobalVars), std::invalid_argument);
+    CHECK_THROWS_AS(recordWorldNpcScriptLocation(state, 0, script), std::invalid_argument);
+    CHECK_THROWS_AS(recordWorldNpcScriptLocation(state, 42, {script.mapId, 0, 23}), std::invalid_argument);
+}
+
 TEST_CASE("world database NPC discovery is last observed rather than a secret current address")
 {
     Fixture fixture;

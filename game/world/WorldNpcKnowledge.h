@@ -24,6 +24,14 @@ struct WorldNpcActorLocation
     bool operator==(const WorldNpcActorLocation &) const = default;
 };
 
+struct WorldNpcScriptLocation
+{
+    std::string mapId;
+    uint16_t eventId = 0;
+    int32_t gameMinutes = 0;
+    bool operator==(const WorldNpcScriptLocation &) const = default;
+};
+
 // A derived read-only index input; definitions remain owned by the loaded NPC registry.
 struct WorldNpcState
 {
@@ -32,6 +40,7 @@ struct WorldNpcState
     std::unordered_map<uint32_t, std::string> names;
     std::unordered_set<uint32_t> unavailable;
     std::unordered_map<uint32_t, WorldNpcActorLocation> actorLocations;
+    std::unordered_map<uint32_t, WorldNpcScriptLocation> scriptLocations;
     bool observedOnly = false;
 };
 
@@ -46,6 +55,10 @@ bool observeWorldNpcActor(EventRuntimeState &state, uint32_t npcId, uint32_t act
     const MapStatsEntry &map, const IGameplayWorldRuntime &world);
 bool worldNpcActorLocationKnown(const std::unordered_map<std::string, int32_t> &variables,
     uint32_t npcId, const WorldNpcActorLocation &location);
+void recordWorldNpcScriptLocation(EventRuntimeState &state, uint32_t npcId,
+    const WorldNpcScriptLocation &location);
+bool worldNpcScriptLocationKnown(const std::unordered_map<std::string, int32_t> &variables,
+    uint32_t npcId, const WorldNpcScriptLocation &location);
 std::string worldNpcHouseKey(uint32_t npcId);
 std::string worldNpcTeacherKey(uint32_t npcId, uint32_t topicId);
 std::string worldNpcRosterOfferKey(uint32_t npcId, uint32_t rosterId);
