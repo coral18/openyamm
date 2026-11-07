@@ -5,6 +5,7 @@
 #include "game/world/WorldDatabase.h"
 #include "game/world/WorldGateCatalog.h"
 #include "game/tables/JournalAutonoteTable.h"
+#include "game/tables/JournalQuestTable.h"
 #include "game/tables/ItemTable.h"
 #include "game/tables/SpellTable.h"
 #include "game/items/ItemRuntime.h"
@@ -105,8 +106,9 @@ std::vector<WorldMapFeature> buildWorldMapFeatures(const std::string &mapId,
             {
                 const auto found = std::find_if(features.begin(), features.end(), [&](const WorldMapFeature &feature)
                     { return feature.site.id == id && feature.site.eventId == event; });
-                if (found == features.end() || found->kind != WorldMapFeatureKind::Connection)
-                    throw std::invalid_argument("Passage group has no matching physical connection: "
+                if (found == features.end() || (found->kind != WorldMapFeatureKind::Connection
+                    && found->kind != WorldMapFeatureKind::Shrine))
+                    throw std::invalid_argument("Site group has no matching physical passage or shrine: "
                         + mapId + "/" + id);
                 indices.push_back(size_t(found - features.begin()));
             }
@@ -123,7 +125,7 @@ std::vector<WorldMapFeature> buildWorldMapFeatures(const std::string &mapId,
 }
 
 void WorldDatabase::indexMapInteractionReferences(const MapStatsEntry &map,
-    const ItemTable &items, const SpellTable &spells)
+    const ItemTable &items, const SpellTable &spells, const JournalQuestTable &quests)
 {
     const std::string id = mapId(map);
     for (WorldMapFeature &feature : m_features)
@@ -155,6 +157,19 @@ void WorldDatabase::indexMapInteractionReferences(const MapStatsEntry &map,
             else if (reference.openedQBit != 0)
                 text += " Once unlocked, this passage can be reused without the item"
                     " while its campaign record remains set.";
+        }
+        else if (reference.kind == "offering")
+        {
+            const auto quest = std::find_if(quests.entries().begin(), quests.entries().end(),
+                [&](const JournalQuestEntry &entry) { return entry.qbitId == reference.requiredQBit; });
+            if (quest == quests.entries().end() || quest->text.empty() || quest->text == "0")
+                throw std::invalid_argument("Unknown offering quest: " + feature.id);
+            text = "Requires an active quest:\n" + quest->text
+                + "\n\nA party member must carry: " + pItem->name + ".\n"
+                + (reference.consumesItem ? "The item is consumed only when the offering succeeds.\n"
+                    : "The item is not consumed.\n")
+                + "This shrine accepts its offering only once.\n"
+                + "On success: place the offered item at this shrine and record its quest progress.";
         }
         else
         {

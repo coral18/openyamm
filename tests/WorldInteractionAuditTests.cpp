@@ -542,7 +542,8 @@ TEST_CASE("well references without active physical bindings never invent Atlas c
         WorldDatabase world(data.getMapStats(), data.getHouseTable(), data.getNpcDialogTable(),
             data.getMergedTeacherTopicTable(), reference.pWorld);
         world.indexMapLocations(geometry, *map->localEventProgram);
-        world.indexMapInteractionReferences(*entry, data.getItemTable(), data.getSpellTable());
+        world.indexMapInteractionReferences(*entry, data.getItemTable(), data.getSpellTable(),
+            data.getJournalQuestTable());
         for (uint16_t event : reference.events)
         {
             CAPTURE(event);
@@ -886,7 +887,8 @@ TEST_CASE("canonical companion contacts link Fredrick dialogue and Cauri rescue 
         data.getMergedTeacherTopicTable(), "mm8");
     world.indexNpcLocations(global);
     world.indexMapLocations(*map->outdoorMapData, *map->localEventProgram);
-    world.indexMapInteractionReferences(*pMap, data.getItemTable(), data.getSpellTable());
+    world.indexMapInteractionReferences(*pMap, data.getItemTable(), data.getSpellTable(),
+            data.getJournalQuestTable());
     WorldKnowledge knowledge;
     Party party;
     WorldGuideSource source;
@@ -1219,6 +1221,119 @@ TEST_CASE("MM8 Town Portal fountain references bind physical sites without unloc
     CHECK(map->localEventProgram->interactionReferences().contains(104));
 }
 
+TEST_CASE("statuette shrine references share quest and item data and match active offering requirements")
+{
+    using namespace OpenYAMM::Game;
+    REQUIRE_MESSAGE(OpenYAMM::Tests::regressionMapLoaderLoaded(),
+        OpenYAMM::Tests::regressionMapLoaderFailure());
+    const auto &fixture = OpenYAMM::Tests::regressionMapLoader();
+    const auto &data = fixture.gameDataLoader;
+    struct Shrine { const char *pMap; uint32_t item; uint32_t completed; };
+    for (const Shrine &shrine : {Shrine{"7out06.odm", 1421, 715}, {"7out13.odm", 1420, 714},
+        {"out14.odm", 1419, 713}})
+    {
+        CAPTURE(std::string(shrine.pMap));
+        const MapStatsEntry *pMap = data.getMapStats().findByFileName(shrine.pMap);
+        REQUIRE(pMap);
+        auto map = MapAssetLoader().load(fixture.assetFileSystem, *pMap, data.getMonsterTable(),
+            data.getObjectTable(), MapLoadPurpose::HeadlessGameplay);
+        REQUIRE(map);
+        REQUIRE(map->outdoorMapData);
+        std::string error;
+        REQUIRE_MESSAGE(GameDataLoader::loadEventPrograms(fixture.assetFileSystem, *map, error), error);
+        REQUIRE(map->localEventProgram);
+        const auto &events = *map->localEventProgram;
+        REQUIRE(events.interactionReferences().contains(452));
+        const SiteInteractionReference &reference = events.interactionReferences().at(452);
+        CHECK(reference.kind == "offering");
+        CHECK(reference.requiredQBit == 712);
+        CHECK(reference.completionQBit == shrine.completed);
+        CHECK(reference.itemId == shrine.item);
+        CHECK(reference.spriteId == 25);
+        CHECK(reference.consumesItem);
+        CHECK(events.getContextActionMetadata(452)->kind == "shrine");
+        WorldDatabase world(data.getMapStats(), data.getHouseTable(), data.getNpcDialogTable(),
+            data.getMergedTeacherTopicTable(), "mm7");
+        world.indexMapLocations(*map->outdoorMapData, events);
+        world.indexMapInteractionReferences(*pMap, data.getItemTable(), data.getSpellTable(),
+            data.getJournalQuestTable());
+        const auto feature = std::find_if(world.features().begin(), world.features().end(),
+            [](const WorldMapFeature &entry) { return entry.site.eventId == 452; });
+        REQUIRE(feature != world.features().end());
+        CHECK(feature->kind == WorldMapFeatureKind::Shrine);
+        CHECK(std::count_if(world.features().begin(), world.features().end(),
+            [](const WorldMapFeature &entry) { return entry.site.eventId == 452; }) == 1);
+        WorldKnowledge knowledge;
+        knowledge.visitedMaps.insert(shrine.pMap);
+        CHECK_FALSE(world.featureVisible(*feature, knowledge, false));
+        CHECK(world.siteReference(*feature, knowledge, false).empty());
+        const std::string guide(world.siteReference(*feature, knowledge, true));
+        REQUIRE(data.getItemTable().get(shrine.item));
+        CHECK(guide.find(data.getItemTable().get(shrine.item)->name) != std::string::npos);
+        CHECK(guide.find("A party member must carry:") != std::string::npos);
+        CHECK(guide.find("consumed only when the offering succeeds") != std::string::npos);
+        CHECK(guide.find("once") != std::string::npos);
+        CHECK(guide.find("Thom Lumbra") != std::string::npos);
+        CHECK(knowledge.variables.empty());
+        if (std::string(shrine.pMap) == "7out06.odm")
+        {
+            CHECK(feature->components.size() == 2);
+            CHECK(worldMapFeatureContainsSite(*feature, "bmodel/88/surface/27"));
+            knowledge.interactedSites[shrine.pMap].insert(worldSiteDiscoveryKey(452, "bmodel/88/surface/27"));
+            CHECK(world.featureVisible(*feature, knowledge, false));
+            CHECK(world.siteReference(*feature, knowledge, false).empty());
+        }
+        JournalQuestTable changedQuest;
+        REQUIRE(changedQuest.loadFromRows({{"712", "Updated shared quest text"}}));
+        world.indexMapInteractionReferences(*pMap, data.getItemTable(), data.getSpellTable(), changedQuest);
+        CHECK(world.siteReference(*feature, knowledge, true).find("Updated shared quest text") != std::string::npos);
+        CHECK(world.siteReference(*feature, knowledge, true).find("Thom Lumbra") == std::string::npos);
+        JournalQuestTable missingQuest;
+        CHECK_THROWS_AS(world.indexMapInteractionReferences(*pMap, data.getItemTable(), data.getSpellTable(),
+            missingQuest), std::invalid_argument);
+        for (bool active : {false, true})
+            for (bool completed : {false, true})
+                for (bool hasItem : {false, true})
+                {
+                    CAPTURE(active);
+                    CAPTURE(completed);
+                    CAPTURE(hasItem);
+                    PartySeed seed = Party::createDefaultSeed();
+                    seed.members.resize(1);
+                    seed.members.push_back(seed.members.front());
+                    seed.members[0].inventory.clear();
+                    seed.members[1].inventory.clear();
+                    InventoryItem item;
+                    item.objectDescriptionId = shrine.item;
+                    item.quantity = 2;
+                    if (hasItem) seed.members[1].inventory.push_back(item);
+                    Party party;
+                    party.seed(seed);
+                    party.setQuestBit(712, active);
+                    party.setQuestBit(shrine.completed, completed);
+                    EventRuntimeState state;
+                    EventRuntime runtime;
+                    REQUIRE(runtime.executeEventById(map->localEventProgram, std::nullopt, 452, state, &party));
+                    const bool success = active && !completed && hasItem;
+                    CHECK(party.hasQuestBit(shrine.completed) == (completed || success));
+                    CHECK(party.hasQuestBit(712) == active);
+                    CHECK(party.member(0)->inventory.empty());
+                    CHECK(state.spriteOverrides.contains(25) == success);
+                    const auto quantity = [&]()
+                    {
+                        uint32_t count = 0;
+                        for (const InventoryItem &entry : party.member(1)->inventory)
+                            if (entry.objectDescriptionId == shrine.item) count += entry.quantity;
+                        return count;
+                    };
+                    CHECK(quantity() == (hasItem ? 2u : 0u) - uint32_t(success));
+                    if (success) CHECK_FALSE(state.spriteOverrides.at(25).hidden);
+                    REQUIRE(runtime.executeEventById(map->localEventProgram, std::nullopt, 452, state, &party));
+                    CHECK(quantity() == (hasItem ? 2u : 0u) - uint32_t(success));
+                }
+    }
+}
+
 TEST_CASE("canonical interaction references describe active statue rescues and reusable keyed entrances")
 {
     using namespace OpenYAMM::Game;
@@ -1247,7 +1362,8 @@ TEST_CASE("canonical interaction references describe active statue rescues and r
             data.getMergedTeacherTopicTable(), worldId);
         if (map->outdoorMapData) world.indexMapLocations(*map->outdoorMapData, events);
         else world.indexMapLocations(*entry, *map->indoorMapData, events);
-        world.indexMapInteractionReferences(*entry, data.getItemTable(), data.getSpellTable());
+        world.indexMapInteractionReferences(*entry, data.getItemTable(), data.getSpellTable(),
+            data.getJournalQuestTable());
         for (const auto &[event, reference] : events.interactionReferences())
         {
             CAPTURE(event);
@@ -1337,7 +1453,8 @@ TEST_CASE("canonical Lincoln and submarine references match active party scope a
         WorldDatabase world(data.getMapStats(), data.getHouseTable(), data.getNpcDialogTable(),
             data.getMergedTeacherTopicTable(), worldId);
         world.indexMapLocations(*pEntry, *map->indoorMapData, events);
-        world.indexMapInteractionReferences(*pEntry, data.getItemTable(), data.getSpellTable());
+        world.indexMapInteractionReferences(*pEntry, data.getItemTable(), data.getSpellTable(),
+            data.getJournalQuestTable());
         size_t sites = 0;
         for (const WorldMapFeature &feature : world.features())
         {
@@ -1422,7 +1539,8 @@ TEST_CASE("canonical elemental prison passages group their physical components a
     WorldDatabase world(data.getMapStats(), data.getHouseTable(), data.getNpcDialogTable(),
         data.getMergedTeacherTopicTable(), "mm8");
     world.indexMapLocations(*map->outdoorMapData, *map->localEventProgram);
-    world.indexMapInteractionReferences(*entry, data.getItemTable(), data.getSpellTable());
+    world.indexMapInteractionReferences(*entry, data.getItemTable(), data.getSpellTable(),
+            data.getJournalQuestTable());
     const auto &groups = map->localEventProgram->siteGroups();
     REQUIRE(groups.size() == 4);
     size_t components = 0;

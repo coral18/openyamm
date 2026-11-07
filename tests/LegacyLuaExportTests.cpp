@@ -2109,11 +2109,17 @@ TEST_CASE("typed interaction references bind active callbacks and validate seman
     for (const char *pFields : {
         "kind='leave_dungeon', itemId=1406, itemScope='each_member', targetMap='7out15.odm'",
         "kind='enter_dungeon', itemId=619, itemScope='party', openedQBit=214, targetMap='d34.blv'",
-        "kind='enter_dungeon', itemId=1, itemScope='selected', targetMap='d10.blv'"})
+        "kind='enter_dungeon', itemId=1, itemScope='selected', targetMap='d10.blv'",
+        "kind='offering', itemId=1421, requiredQBit=712, completionQBit=715, spriteId=25, consumesItem=true"})
     {
         program = load(handler + "SetMapInteractionReference(1, {" + pFields + "})");
         REQUIRE(program);
         REQUIRE(program->interactionReferences().contains(1));
+        if (program->interactionReferences().at(1).kind == "offering")
+        {
+            CHECK(program->interactionReferences().at(1).requiredQBit == 712);
+            CHECK(program->getContextActionMetadata(1)->kind == "shrine");
+        }
         program = load(handler + "SetMapInteractionReference(1, {" + pFields + "})\nevt.map[1]=function() end");
         REQUIRE(program);
         CHECK(program->interactionReferences().empty());
@@ -2128,7 +2134,17 @@ TEST_CASE("typed interaction references bind active callbacks and validate seman
         "kind='enter_dungeon', itemId=619, openedQBit=2147483648, targetMap='d34.blv'",
         "kind='enter_dungeon', itemId=619, openedQBit=214, openedMapFlag='Opened', targetMap='d34.blv'",
         "kind='rescue', itemId=1, npcId=1, spriteId=1, completionQBit=1, itemScope='party'",
-        "kind='dimension_door', network='test.gate', openedQBit=1"})
+        "kind='dimension_door', network='test.gate', openedQBit=1",
+        "kind='offering', itemId=1421, completionQBit=715, spriteId=25",
+        "kind='offering', itemId=1421, requiredQBit=0, completionQBit=715, spriteId=25",
+        "kind='offering', itemId=1421, requiredQBit=-1, completionQBit=715, spriteId=25",
+        "kind='offering', itemId=1421, requiredQBit=1.5, completionQBit=715, spriteId=25",
+        "kind='offering', itemId=1421, requiredQBit=true, completionQBit=715, spriteId=25",
+        "kind='offering', itemId=1421, requiredQBit=712, completionQBit=712, spriteId=25",
+        "kind='offering', itemId=1421, requiredQBit=712, completionQBit=715, npcId=1, spriteId=25",
+        "kind='offering', itemId=1421, requiredQBit=712, completionQBit=715, spellId=1, spriteId=25",
+        "kind='offering', itemId=1421, requiredQBit=712, completionQBit=715, spriteId=25, itemScope='party'",
+        "kind='rescue', itemId=1, npcId=1, spriteId=1, completionQBit=1, requiredQBit=712"})
         CHECK_FALSE(load(handler + "SetMapInteractionReference(1, {" + pFields + "})"));
     program = load(handler + definition + "SetMapContextAction(1, {kind = 'well', source = 'script'})");
     REQUIRE(program);

@@ -336,3 +336,15 @@ Discovery crops and two inspected saves retaining party/gold/food/map; a five-st
 5,000 gold. References list defined random branches, without certifying RNG distribution or reachability.
 The existing raw-selector and damage-type/RNG gameplay discrepancies are recorded in `ATLAS_SITE_REFERENCE_AUDIT.md`;
 they were not silently rewritten in the Atlas. No Android delivery or full Atlas completion is claimed.
+
+The 2026-11-08 offering references cover the Angel/Eagle/Knight statuette altars through shared item and quest
+data. The existing interaction metadata API now describes the prerequisite quest and one-time offering, and
+Bracada's component surfaces share one shrine record. All 24 quest/completion/item combinations are checked,
+including a nonselected carrier. A 30-step physical scenario accepts the actual Thom Lumbra topic and activates
+all three real targets; dungeon item recovery is an explicit setup shortcut. The expanded selected suite,
+including gate-catalog coverage, passes 467 cases / 78,116 assertions with the established portrait exclusion.
+Six native AMD/OpenGL runs pass 240 UI steps / 30 captures. Twelve save inspections retain the party/resources
+and map, twelve matched Discovery crops retain the same filtered view, and six five-step post-UI roundtrips
+retain the expected offering flags and carried items. The map-return action clears the search, so the tour
+reapplies the same query before comparing views. The scoped inventory leaves seven recognized placed MM7
+water/shrine/drink callbacks without complete references. Full Atlas acceptance and Android remain open.

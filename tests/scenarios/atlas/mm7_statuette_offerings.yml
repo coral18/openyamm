@@ -1,0 +1,146 @@
+id: atlas.mm7_offering_encounter
+title: Accept the statuette quest and place all three offerings through real shrines
+world: mm7
+mode: faithful
+steps:
+- new_game_flow:
+    start_map: 7out04.odm
+    party:
+      gold: 5000
+      food: 10
+      members:
+      - name: Atlas Tester
+        class: Knight
+        level: 20
+        race_id: 0
+        skills: []
+        equipment: {}
+- press_interact:
+    pose:
+      x: -11072
+      y: -6144
+      z: 1344
+      yaw: 1.5707963
+      pitch: 1.1
+    expect:
+      kind: event_target
+      triggered_event: 63
+      can_activate: true
+- select_topic:
+    kind: house_resident
+    action_id: 627
+- select_topic:
+    kind: npc_topic
+    action_id: 1212
+- assert:
+    qbit_set:
+    - 712
+    qbit_clear:
+    - 713
+    - 714
+    - 715
+- press_action:
+    action: cancel_dialog
+- press_action:
+    action: cancel_dialog
+- load_map:
+    map: 7out06.odm
+- note: Recovery of the three statuettes from their dungeons is outside this shrine
+    fixture.
+- setup_shortcut:
+    kind: grant_item
+    item_id: 1421
+- save_game: unknown
+- press_interact:
+    pose:
+      x: -20560
+      y: 21528
+      z: 0
+      yaw: 3.14159265
+      pitch: -0.6
+    expect:
+      kind: event_target
+      triggered_event: 452
+      can_activate: true
+- assert:
+    qbit_set:
+    - 712
+    - 715
+    qbit_clear:
+    - 713
+    - 714
+    runtime_event_variable:
+      id: 93126673
+      value: 0
+- save_game: offered
+- load_game: offered
+- assert:
+    qbit_set:
+    - 712
+    - 715
+    qbit_clear:
+    - 713
+    - 714
+- load_map:
+    map: 7out13.odm
+- setup_shortcut:
+    kind: grant_item
+    item_id: 1420
+- save_game: unknown-7out13
+- press_interact:
+    pose:
+      x: -12772
+      y: -22176
+      z: 0
+      yaw: -1.5707963
+      pitch: -0.35
+    expect:
+      kind: event_target
+      triggered_event: 452
+      can_activate: true
+- assert:
+    qbit_set:
+    - 712
+    - 714
+    - 715
+    qbit_clear:
+    - 713
+    runtime_event_variable:
+      id: 93061137
+      value: 0
+- save_game: offered-7out13
+- load_map:
+    map: out14.odm
+- setup_shortcut:
+    kind: grant_item
+    item_id: 1419
+- save_game: unknown-out14
+- press_interact:
+    pose:
+      x: -16800
+      y: -4632
+      z: 600
+      yaw: 3.14159265
+      pitch: -1.1
+    expect:
+      kind: event_target
+      triggered_event: 452
+      can_activate: true
+- assert:
+    qbit_set:
+    - 712
+    - 713
+    - 714
+    - 715
+    qbit_clear: []
+    runtime_event_variable:
+      id: 92995601
+      value: 0
+- save_game: offered-out14
+- load_game: offered-out14
+- assert:
+    qbit_set:
+    - 712
+    - 713
+    - 714
+    - 715

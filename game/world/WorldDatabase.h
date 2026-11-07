@@ -29,6 +29,7 @@ class WorldGateCatalog;
 struct WorldGateChoice;
 class Party;
 class JournalAutonoteTable;
+class JournalQuestTable;
 struct JournalAutonoteEntry;
 enum class WorldRecordKind { Region, Dungeon, House, Npc, Trainer, Travel };
 
@@ -186,7 +187,8 @@ public:
     void indexMapGateReferences(const MapStatsEntry &map, const WorldGateCatalog &gates, const Party *pParty);
     std::string gateOfferText(const WorldMapFeature &feature, const WorldKnowledge &knowledge,
         const WorldGateCatalog &gates) const;
-    void indexMapInteractionReferences(const MapStatsEntry &map, const ItemTable &items, const SpellTable &spells);
+    void indexMapInteractionReferences(const MapStatsEntry &map, const ItemTable &items, const SpellTable &spells,
+        const JournalQuestTable &quests);
     void indexInheritedDecorations(const MapStatsEntry &map, const std::vector<WorldDecorationSite> &sites,
         const ScriptedEventProgram &globalEvents);
     void indexMapItemSources(const MapStatsEntry &map, std::vector<WorldItemSource> sources, const ItemTable &items);

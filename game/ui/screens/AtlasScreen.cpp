@@ -199,7 +199,8 @@ AtlasScreen::AtlasScreen(const Engine::AssetFileSystem &assets, const GameDataRe
         m_world.indexMapMonsterSpawns(pCurrentMap->map, *pCurrentMap->localEventProgram, m_data.monsterTable());
         m_world.indexMapNpcTopics(pCurrentMap->map, *pCurrentMap->localEventProgram);
         m_world.indexMapNpcEncounters(pCurrentMap->map, *pCurrentMap->localEventProgram);
-        m_world.indexMapInteractionReferences(pCurrentMap->map, m_data.itemTable(), m_data.spellTable());
+        m_world.indexMapInteractionReferences(pCurrentMap->map, m_data.itemTable(), m_data.spellTable(),
+            m_data.journalQuestTable());
         m_world.indexMapGateReferences(pCurrentMap->map, m_data.worldGateCatalog(), m_pParty);
     }
     if (pCurrentMap != nullptr && m_pGlobalEvents != nullptr
@@ -717,7 +718,8 @@ void AtlasScreen::indexMapData(MapAssetInfo &map)
     else
         throw std::runtime_error("Missing map geometry");
     if (delta) m_world.indexMapNpcActors(map.map, *delta);
-    m_world.indexMapInteractionReferences(map.map, m_data.itemTable(), m_data.spellTable());
+    m_world.indexMapInteractionReferences(map.map, m_data.itemTable(), m_data.spellTable(),
+        m_data.journalQuestTable());
     m_world.indexMapMonsterSpawns(map.map, *map.localEventProgram, m_data.monsterTable());
     m_world.indexMapGateReferences(map.map, m_data.worldGateCatalog(), m_pParty);
     if (map.localEventProgram) m_world.indexNpcLocations(*map.localEventProgram);

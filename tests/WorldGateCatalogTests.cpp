@@ -221,7 +221,8 @@ TEST_CASE("gate catalogs bind all five physical MM7 and MM8 sources without leak
             data.getMergedTeacherTopicTable(), source.pWorld);
         if (map->outdoorMapData) world.indexMapLocations(*map->outdoorMapData, *map->localEventProgram);
         else world.indexMapLocations(*entry, *map->indoorMapData, *map->localEventProgram);
-        world.indexMapInteractionReferences(*entry, data.getItemTable(), data.getSpellTable());
+        world.indexMapInteractionReferences(*entry, data.getItemTable(), data.getSpellTable(),
+            data.getJournalQuestTable());
         world.indexMapGateReferences(*entry, gates, nullptr);
         const auto feature = std::find_if(world.features().begin(), world.features().end(),
             [&](const WorldMapFeature &value) { return value.site.eventId == source.event; });

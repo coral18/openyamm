@@ -747,6 +747,7 @@ bool readInteractionReferences(lua_State *pLuaState, int metadataIndex, Scripted
                 uint32_t *pNumber = key == "itemId" ? &reference.itemId : key == "spellId" ? &reference.spellId
                     : key == "npcId" ? &reference.npcId : key == "spriteId" ? &reference.spriteId
                     : key == "completionQBit" ? &reference.completionQBit
+                    : key == "requiredQBit" ? &reference.requiredQBit
                     : key == "openedQBit" ? &reference.openedQBit : nullptr;
                 if (pNumber != nullptr)
                 {
@@ -794,6 +795,7 @@ bool readInteractionReferences(lua_State *pLuaState, int metadataIndex, Scripted
                 }
             }
             if (reference.kind != "dimension_door" && !reference.network.empty()) valid = false;
+            if (reference.kind != "offering" && reference.requiredQBit != 0) valid = false;
             const bool passage = reference.kind == "enter_dungeon" || reference.kind == "leave_dungeon";
             if (!passage && (!reference.itemScope.empty() || reference.openedQBit != 0)) valid = false;
             if (passage)
@@ -814,6 +816,12 @@ bool readInteractionReferences(lua_State *pLuaState, int metadataIndex, Scripted
                     && reference.npcId == 0 && reference.spriteId == 0
                     && reference.spellId == 0 && reference.completionQBit == 0
                     && !reference.consumesItem && !reference.addsFollower;
+            else if (reference.kind == "offering")
+                valid = valid && reference.itemId > 0 && reference.spriteId > 0
+                    && reference.requiredQBit > 0 && reference.completionQBit > 0
+                    && reference.requiredQBit != reference.completionQBit
+                    && reference.npcId == 0 && reference.spellId == 0 && !reference.addsFollower
+                    && reference.targetMap.empty() && reference.openedMapFlag.empty();
             else if (reference.kind == "rescue" || reference.kind == "stone_to_flesh")
                 valid = valid && reference.itemId > 0 && reference.npcId > 0 && reference.spriteId > 0
                     && reference.targetMap.empty() && reference.openedMapFlag.empty()
@@ -1450,7 +1458,7 @@ std::optional<ScriptedEventProgram::ContextActionMetadata> ScriptedEventProgram:
         metadata->interactionReference = reference->second;
         if (inferContext)
         {
-            metadata->kind = reference->second.kind;
+            metadata->kind = reference->second.kind == "offering" ? "shrine" : reference->second.kind;
             metadata->source = "script";
             if (!reference->second.targetMap.empty()) metadata->targetMap = reference->second.targetMap;
         }

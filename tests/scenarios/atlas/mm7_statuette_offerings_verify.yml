@@ -1,0 +1,22 @@
+id: atlas.mm7_statuette_offerings_verify
+title: Reading the completed statuette shrine guide preserves all three offerings
+  after save and reload
+world: mm7
+mode: faithful
+steps:
+- load_game:
+    path: saves/quicksave.oysav
+- assert: &id001
+    map: out14.odm
+    qbit_set:
+    - 712
+    - 713
+    - 714
+    - 715
+    qbit_clear: []
+    runtime_event_variable:
+      id: 92995601
+      value: 0
+- save_game: verified
+- load_game: verified
+- assert: *id001

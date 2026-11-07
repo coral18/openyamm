@@ -314,3 +314,33 @@ are existing import/gameplay investigations, not reasons to silently rewrite the
 Additionally, the current `_RandomJump` selects with the low bits of an LCG; successive nested choices can be
 correlated (a two-way choice followed by a four-way choice does not prove all child branches reachable).
 The Guide lists the callback's defined branches and does not certify their runtime distribution/reachability.
+
+## Statuette offerings, 2026-11-08
+
+The three placement altars now have callback-owned typed `offering` references: Bracada `7out06:452`,
+Tatalia `7out13:452` and Avlee `out14:452`. They use the shared names of items 1421/1420/1419 and shared quest
+712, with location progress 715/714/713. The Core descriptor declares a prerequisite quest, consumed item,
+completed offering and placed sprite. It does not execute or replace the gameplay callback. Unresolved quest
+text fails rather than falling back to a copied Atlas description.
+
+Bracada's two activation surfaces explicitly share one shrine record through the existing site-group API,
+extended to shrine features. Both component identities remain available for discovery and observed effects;
+the actual click on face 27 still resolves correctly. The misleading possibility of two rows for one altar is
+removed without inventing another location or changing world geometry.
+
+The real callback tests cover all 24 combinations of active quest, prior completion and item possession across
+the three maps, including an item carried by a nonselected member and a second attempted offering. Shared
+quest-text updates, missing-quest validation, callback replacement and malformed metadata are also covered.
+The full 137-map interaction inventory now leaves seven recognized physically placed MM7 water/shrine/drink
+callbacks without nonempty text or a typed interaction reference. It has no such MM8 gaps in this scoped set.
+
+The 30-step physical fixture accepts Thom Lumbra's actual house topic, then uses the normal picker at all three
+altars and reloads the resulting progress. Dungeon retrieval of the items is an explicit preparation shortcut.
+The callback's item consumption and each individual completion flag are checked. This does not certify the
+statuette dungeons or the final reward dialogue, and does not close the wider Atlas acceptance audit.
+
+The expanded selected Windows suite passes 467 cases / 78,116 assertions with the established portrait
+exclusion. Six native runs pass 240 UI steps / 30 captures, with twelve source/output save inspections and
+twelve equal Discovery map/list crops after restoring the same search. Six post-UI five-step roundtrips verify
+the individual completion flags and item conservation before and after offering. Native Discovery readers
+show only the recorded loss of the actually offered item; Guide readers use the shared full quest reference.

@@ -3710,3 +3710,32 @@ Public scenarios/tours and preparation are documented in `tests/fixtures/atlas/R
 in `openyamm-extended-dev/atlas-mercenaries-20261107/`. This covers the observed identities and campaign
 presentation; complete recruitment eligibility and the wider conditional NPC/content audit remain open.
 Android work remains deferred by the user.
+
+## Statuette shrine references, 2026-11-08
+
+The existing callback-owned `SetMapInteractionReference` API supports `kind = "offering"` for a one-time
+quest-item placement. It requires `itemId`, `spriteId`, `requiredQBit` and `completionQBit`; the two QBits must
+be distinct positive IDs. `consumesItem` declares whether the successful offering consumes the carried item.
+The inferred interaction context remains a shrine. Unrelated passage, NPC, spell and follower fields are
+rejected, and replacing the owning callback invalidates the reference as for existing interaction types.
+
+MM7 sidecars declare the Angel, Eagle and Knight offerings at `7out06:452`, `7out13:452` and `out14:452`.
+Their item names come from the shared item table; their prerequisite text comes from quest 712 in the shared
+journal table. There is no second copy of the quest or item descriptions. An unresolved quest fails explicitly.
+The active gameplay handlers are unchanged. Core retains these world facts when the optional Atlas UI is off.
+
+Explicit `SetMapSiteGroups` declarations now support shrine surfaces as well as passages. Bracada's two
+activation-surface groups form one altar record while retaining both component identities. A saved interaction
+with face 27 still resolves to the grouped altar; neither Discovery nor the Guide needs a duplicate row.
+
+`tests/scenarios/atlas/mm7_statuette_offerings.yml` accepts the actual quest through Thom Lumbra's house
+dialogue, then activates all three real altar targets and reloads their progress. Recovery of the three items
+from their dungeons is an explicit setup shortcut, outside this fixture. The test does not award progress by
+assertion or inject a recorded face target. The generic `atlas_mm7_statuette_offering.yml` menu tour can be run
+against each unknown/offered save. `mm7_statuette_offerings_verify.yml` verifies the final offered save after
+the native tour, including all three progress bits and the consumed final item across another save/load.
+
+The focused runtime test covers all combinations of active quest, completed offering and item possession at
+each shrine, with the item carried by another party member. It also checks repeat-use conservation, shared
+quest-text updates, unknown-quest failure, single-record grouping and Discovery/Guide separation. No save
+format change or gameplay-handler replacement is needed for these references. Android remains deferred.

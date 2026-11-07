@@ -15,6 +15,7 @@ struct SiteInteractionReference
     uint32_t npcId = 0;
     uint32_t spriteId = 0;
     uint32_t completionQBit = 0;
+    uint32_t requiredQBit = 0;
     bool consumesItem = false;
     bool addsFollower = false;
     // Empty means the legacy party-wide item requirement.
