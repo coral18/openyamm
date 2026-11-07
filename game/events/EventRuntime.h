@@ -517,6 +517,7 @@ struct EventRuntimeState
     std::unordered_map<std::string, uint32_t> generatedNpcIdsByActorKey;
     // Saved by the namespaced NPC-observation extension, independently of the upstream core layout.
     std::vector<WorldGeneratedNpcObservation> observedGeneratedNpcs;
+    std::vector<WorldMercenaryObservation> observedMercenaries;
     std::unordered_map<uint32_t, GeneratedMercenaryRecruit> generatedMercenaryRecruitsByNpcId;
     std::unordered_map<uint32_t, uint32_t> npcItemOverrides;
     std::unordered_map<uint32_t, uint32_t> actorItemOverrides;

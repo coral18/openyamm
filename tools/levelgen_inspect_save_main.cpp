@@ -41,6 +41,38 @@ YAML::Node generatedNpcsNode(const std::optional<EventRuntimeState> &state)
     return result;
 }
 
+YAML::Node mercenariesNode(const std::optional<EventRuntimeState> &state)
+{
+    YAML::Node result;
+    result["encounters"] = YAML::Node(YAML::NodeType::Sequence);
+    result["candidates"] = YAML::Node(YAML::NodeType::Sequence);
+    if (!state) return result;
+    for (const WorldMercenaryObservation &npc : state->observedMercenaries)
+    {
+        YAML::Node entry;
+        entry["npc_id"] = npc.npcId;
+        entry["roster_id"] = npc.rosterId;
+        entry["house_id"] = npc.houseId;
+        entry["name"] = npc.name;
+        entry["picture_id"] = npc.pictureId;
+        entry["map_id"] = npc.mapId;
+        entry["game_minutes"] = npc.gameMinutes;
+        result["encounters"].push_back(entry);
+    }
+    for (const auto &[id, recruit] : state->generatedMercenaryRecruitsByNpcId)
+    {
+        YAML::Node entry;
+        entry["npc_id"] = id;
+        entry["roster_id"] = recruit.rosterId;
+        entry["house_id"] = recruit.houseId;
+        entry["name"] = recruit.character.name;
+        entry["class"] = recruit.character.className;
+        entry["level"] = recruit.character.level;
+        result["candidates"].push_back(entry);
+    }
+    return result;
+}
+
 YAML::Node explorationNode(const OutdoorWorldRuntime::Snapshot &world)
 {
     YAML::Node result;
@@ -172,6 +204,13 @@ int main(int argc, char **argv)
         generated["cached_outdoor"][name] = generatedNpcsNode(world.eventRuntimeState);
     for (const auto &[name, scene] : save->indoorSceneStates)
         generated["cached_indoor"][name] = generatedNpcsNode(scene.eventRuntimeState);
+    YAML::Node mercenaries = result["mercenaries"];
+    mercenaries["current_outdoor"] = mercenariesNode(save->outdoorWorld.eventRuntimeState);
+    mercenaries["current_indoor"] = mercenariesNode(save->indoorScene.eventRuntimeState);
+    for (const auto &[name, world] : save->outdoorWorldStates)
+        mercenaries["cached_outdoor"][name] = mercenariesNode(world.eventRuntimeState);
+    for (const auto &[name, scene] : save->indoorSceneStates)
+        mercenaries["cached_indoor"][name] = mercenariesNode(scene.eventRuntimeState);
     result["outdoor_states"] = YAML::Node(YAML::NodeType::Map);
     for (const auto &[name, world] : save->outdoorWorldStates)
         result["outdoor_states"][name] = explorationNode(world);
@@ -185,6 +224,9 @@ int main(int argc, char **argv)
     {
         YAML::Node entry;
         entry["name"] = member.name;
+        entry["roster_id"] = member.rosterId;
+        entry["class"] = member.className;
+        entry["level"] = member.level;
         entry["health"] = member.health;
         entry["inventory"] = itemsNode(member.inventory);
         result["party"].push_back(entry);

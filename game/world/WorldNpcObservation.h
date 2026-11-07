@@ -29,4 +29,18 @@ struct WorldGeneratedNpcObservation
     std::vector<uint32_t> teacherTopics;
     bool operator==(const WorldGeneratedNpcObservation &) const = default;
 };
+
+// Recruitment slots are reused on different maps. This is the person actually met in a house,
+// not the template roster character and not a promise that the recruit still waits there.
+struct WorldMercenaryObservation
+{
+    uint32_t npcId = 0;
+    uint32_t rosterId = 0;
+    uint32_t houseId = 0;
+    std::string name;
+    uint32_t pictureId = 0;
+    std::string mapId;
+    int32_t gameMinutes = 0;
+    bool operator==(const WorldMercenaryObservation &) const = default;
+};
 }

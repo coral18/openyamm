@@ -1,0 +1,40 @@
+id: atlas.mm7_mercenary_encounter
+title: An existing generated tavern resident is met and recruited through actual house
+  dialogue
+world: mm7
+mode: faithful
+steps:
+- load_game:
+    path: before.oysav
+- save_game: unknown
+- press_interact:
+    pose:
+      x: -5184
+      y: 13420
+      z: 0
+      yaw: -1.5707963
+      pitch: 0
+    expect:
+      kind: event_target
+      triggered_event: 15
+      can_activate: true
+- select_topic:
+    kind: house_resident
+    action_id: 303
+- save_game: met
+- select_topic:
+    kind: generated_mercenary_join_offer
+    action_id: 303
+    match_label: Join
+- select_topic:
+    kind: roster_join_accept
+    action_id: 0
+    match_label: 'Yes'
+- press_action:
+    action: cancel_dialog
+- save_game: joined
+- load_map:
+    map: 7out01.odm
+- save_game: away
+- load_game: joined
+- save_game: verified

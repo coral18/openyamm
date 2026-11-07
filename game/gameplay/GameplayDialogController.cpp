@@ -4072,6 +4072,9 @@ GameplayDialogController::PresentPendingDialogResult GameplayDialogController::p
             }
             recordWorldNpcObservation(context.eventRuntimeState, observedContext.sourceId,
                 observedContext.hostHouseId, teacherTopics);
+            if (context.pCurrentMap != nullptr && context.pWorldRuntime != nullptr)
+                observeWorldMercenary(context.eventRuntimeState, observedContext.sourceId,
+                    observedContext.hostHouseId, *context.pCurrentMap, *context.pWorldRuntime);
             if (observedContext.hostHouseId == 0 && observedContext.sourceActorIndex
                 && context.pCurrentMap != nullptr && context.pWorldRuntime != nullptr
                 && context.pNpcDialogTable != nullptr

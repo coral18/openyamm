@@ -882,6 +882,46 @@ identity and refill retention. The focused Windows regression set is 447 cases /
 already documented retired portrait-source case. Private logs/captures/inspections are in
 `openyamm-extended-dev/atlas-generated-npcs-20261107/`; they are not runtime assets or campaign data to commit.
 
-Generated tavern recruits (20000+) use a different identity source and remain outside this checkpoint. MM8 roles
+Generated tavern recruits (NPC slots 303–310 in the current runtime) use a different identity source and remain outside this checkpoint. MM8 roles
 such as a generic Cleric of the Sun are not fabricated as unique generated people. Physical Android checks remain
 deferred by the user.
+
+
+## Generated tavern recruit identities and campaign profiles
+
+`mm7_mercenary_encounter.yml` and `mm8_mercenary_encounter.yml` under `tests/scenarios/atlas/` each consume a private
+`before.oysav` beside the copied scenario. Prepare that copy from the controlled level-20 Knight fixtures:
+
+1. MM7: run `mm7_generated_npc_encounter.yml` and use its Harmondale `away` save. MM8: run
+   `mm8_actor_npc_encounter.yml` and use its Dagger Wound `verified` save.
+2. Load an isolated copy in the regular game with `startup.save_file` and
+   `debug.menu_input_tour_path=.../tools/menu_tours/atlas_seed_mercenary.yml`. Normal view initialization creates
+   the candidate through the existing generator; this three-step tour quicksaves and exits.
+3. Copy that quicksave as `before.oysav` into a private run directory with the appropriate mercenary scenario.
+   Run the normal executable with `--world mm7` or `--world mm8` and `--headless-run-scenario fixture.yml` after
+   copying the scenario to that filename. No recruitment state is inserted by a shortcut.
+
+Each 13-step scenario picks the physical door (MM7: -5184,13420,0 / event 15; MM8: 2648,11200,736 / event 191),
+selects resident 303, uses Join/Yes, saves before/after recruitment, visits another map and reloads. The sample
+people are Bruce (Monk 17, house 240) and Wanda (Cleric 17, house 228); both use roster 42. Different parties or
+profiles may generate other names/classes normally. `met`, `joined`, `away` and `verified` are saved by the scenario.
+The `unknown` save has a generated candidate, but no typed mercenary encounter.
+
+The `atlas_mm7_mercenary.yml` / `atlas_mm8_mercenary.yml` tours search for the encountered person from the
+continent overview and select the source map, then compare Guide/Discovery. Their `_companion.yml` counterparts
+use the joined `verified` save and show the actual party character. Use 1600x900 and rearm the one-shot tour key
+on each launch. The template negative control repeats the earlier Guidebook/Companions `cleric` search: the
+reserved placeholder/filler entry disappears while Dyson Leyland and Maylander remain ordinary authored rows.
+
+The accepted Windows check has eight native processes, 165 steps / 27 captures including seed preparation,
+14 source/result inspections and 12 identical map/list/detail crops. The old Guide placeholder was captured
+before the change. All accepted runs share the same executable hash. The focused suite passes 453 cases /
+76,824 assertions, excluding the documented retired-source portrait case. Pure tests additionally cover Inn
+characters, source-map separation for shared venues, reused slots, stale knowledge, all four save scene kinds,
+three coexisting extension namespaces, legacy core-payload identity and duplicate/corrupt packets.
+
+The save inspector exposes `mercenaries` with frozen `encounters` and separate live `candidates`, plus party
+roster/class/level fields. Compare identities per canonical map, not NPC/roster slot alone; the MM7 away fixture
+contains an unrelated candidate in slot 303. Guide must not add encounters, rename the observed person or
+materialize a template as a companion. Private logs/captures/inspections are in
+`openyamm-extended-dev/atlas-mercenaries-20261107/`. Android remains deferred.

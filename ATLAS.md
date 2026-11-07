@@ -27,6 +27,8 @@ community guide's complete content has been integrated yet.
   Remote NPC-ID dialogue supplies no coordinates. Points include height and reuse shared Core save knowledge.
 - Generated pedestrian conversations retain the encountered name and last position per canonical map/actor,
   independently of reusable NPC slots. Old saves do not infer identities from mutable overrides.
+- Met generated tavern recruits retain their own names and source venues; companion entries use actual party/Inn
+  characters in place of reserved generator profiles.
 - Scripted NPC conversations can establish a last-encounter map without establishing XYZ. Guide indexes
   callback-owned possible encounters, and searches progressively load dungeon metadata as needed. Selecting
   such a contact opens its map and explicitly states that no exact position is recorded; no pin is invented.
@@ -3670,3 +3672,41 @@ confirms Jo at (13080, 4328, 96), unchanged encounter knowledge and checked part
 The public fixture and tour are linked in `tests/fixtures/atlas/README.md`. Private evidence is under the Windows
 development directory's `atlas-generated-npcs-20261107/`. This closes generated pedestrian encounter identity,
 not generated tavern mercenaries, every conditional NPC path or Android acceptance. Android remains deferred.
+
+
+## Generated tavern mercenaries (2026-11-07)
+
+The current generator reserves NPC slots 303–310 and roster slots 42–49. These are engine-owned templates,
+not authored people. The earlier fixture note naming 20000+ was incorrect and is corrected. Atlas excludes
+those templates from ordinary resident/possible-NPC records and shows generated roster entries only for actual
+party/Inn characters, under their campaign names and current class/level. A generated companion has no invented
+starting biography, template statistics or recruitment-contact link.
+
+Successful resident dialogue records the presented name, portrait, roster/NPC slots, actual host house,
+canonical source map and time in shared Core knowledge. The map and reused slot identify the latest encounter
+in that map. This remains a last-seen record after recruitment; it does not claim the person still waits there.
+Records stay attached to their witnessed map even for a shared venue, and a candidate in another map cannot
+rename them. Unmet candidates and old mutable overrides do not become observations.
+
+`openyamm.mercenary-encounters` schema 1 uses the existing save-extension trailer. Its current/cached indoor
+and outdoor packets coexist with pedestrian observations and item origins, leaving the version 84 core payload
+identical. Readers validate reserved NPC/roster identity, source binding, duplicates and packet bounds. Refills
+retain the observations independently of regenerated candidates. Atlas reads immutable snapshots; the existing
+generator and saved party remain the sources for actual character identities, classes and levels.
+
+Windows Release passes 453 selected regression cases / 76,824 assertions, with the documented retired-source
+portrait case excluded. Both real door/resident/Join/Yes scenarios pass 13 faithful steps each: Bruce at On the
+House (MM7 event 15, house 240) and Wanda at The Grog and Grub (MM8 event 191, house 228). Each joins roster slot
+42 and survives an intervening map and save/load. The MM7 away save also contains a different candidate in the
+same NPC slot on the other map; it does not replace Bruce's observed identity.
+
+Eight native AMD/OpenGL runs pass 165 UI steps / 27 captures, including one three-step seed preparation.
+Fourteen source/output save inspections retain observed NPC/pedestrian/mercenary knowledge, party/resources,
+active map and cached map sets. Twelve Discovery map/list/detail RGB crops match after Guide. Native cards show
+Bruce as Monk 17 and Wanda as Cleric 17. A before/after Guide comparison removes the raw `cleric` placeholder
+and its filler biography while retaining authored companions. Inn handling has focused unit coverage.
+
+Public scenarios/tours and preparation are documented in `tests/fixtures/atlas/README.md`. Private evidence is
+in `openyamm-extended-dev/atlas-mercenaries-20261107/`. This covers the observed identities and campaign
+presentation; complete recruitment eligibility and the wider conditional NPC/content audit remain open.
+Android work remains deferred by the user.

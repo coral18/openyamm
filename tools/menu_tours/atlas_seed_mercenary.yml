@@ -1,0 +1,6 @@
+output_dir: captures
+exit: true
+steps:
+- expect: gameplay
+- key: F9
+- wait: 0.4

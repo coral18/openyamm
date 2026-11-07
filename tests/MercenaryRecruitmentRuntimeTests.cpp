@@ -2,6 +2,7 @@
 
 #include "game/gameplay/MercenaryRecruitmentRuntime.h"
 #include "game/maps/SaveGame.h"
+#include "game/world/WorldNpcKnowledge.h"
 #include "game/party/SpellSchool.h"
 
 #include "tests/HouseDialogueTestHarness.h"
@@ -173,11 +174,21 @@ TEST_CASE("Generated mercenary residents can join the party through shared house
         harness.eventRuntimeState().generatedMercenaryRecruitsByNpcId.begin()->second;
     const size_t initialPartySize = harness.party().members().size();
 
+    CHECK(harness.eventRuntimeState().observedMercenaries.empty());
     const OpenYAMM::Game::EventDialogContent &houseDialog = harness.openHouseDialog(recruit.houseId);
+    CHECK(harness.eventRuntimeState().observedMercenaries.empty()); // Resident names alone are not a conversation.
     const size_t residentAction = findActionByLabel(houseDialog, recruit.character.name);
     REQUIRE(residentAction != static_cast<size_t>(-1));
 
     const OpenYAMM::Game::EventDialogContent &npcDialog = harness.executeAndPresent(residentAction);
+    REQUIRE(harness.eventRuntimeState().observedMercenaries.size() == 1);
+    const OpenYAMM::Game::WorldMercenaryObservation observation = harness.eventRuntimeState().observedMercenaries[0];
+    CHECK(observation.name == recruit.character.name);
+    CHECK(observation.npcId == recruit.npcId);
+    CHECK(observation.rosterId == recruit.rosterId);
+    CHECK(observation.houseId == recruit.houseId);
+    CHECK(observation.mapId == "world.mm8.map.out02");
+    CHECK(observation.pictureId == recruit.npcPictureId);
     const size_t joinAction = findActionByLabel(npcDialog, "Join");
     REQUIRE(joinAction != static_cast<size_t>(-1));
 
@@ -196,6 +207,10 @@ TEST_CASE("Generated mercenary residents can join the party through shared house
     CHECK(harness.eventRuntimeState().generatedMercenaryRecruitsByNpcId.count(recruit.npcId) == 0);
     CHECK(harness.eventRuntimeState().unavailableNpcIds.contains(recruit.npcId));
     CHECK(harness.eventRuntimeState().npcHouseOverrides.count(recruit.npcId) == 0);
+    REQUIRE(harness.eventRuntimeState().observedMercenaries.size() == 1);
+    CHECK(harness.eventRuntimeState().observedMercenaries[0] == observation);
+    harness.eventRuntimeState().npcNameOverrides[recruit.npcId] = "Unseen replacement";
+    CHECK(harness.eventRuntimeState().observedMercenaries[0].name == recruit.character.name);
 }
 
 TEST_CASE("Generated mercenary recruits persist in event runtime saves")

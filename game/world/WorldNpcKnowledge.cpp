@@ -4,6 +4,7 @@
 #include "game/tables/MergedBaseTables.h"
 #include "game/gameplay/GameplayRuntimeInterfaces.h"
 #include "game/gameplay/GenericActorDialog.h"
+#include "game/gameplay/MercenaryRecruitmentRuntime.h"
 #include "game/maps/MapDeltaData.h"
 #include "game/maps/MapIdentity.h"
 #include "game/tables/MapStats.h"
@@ -203,6 +204,43 @@ bool observeWorldNpcActor(EventRuntimeState &state, uint32_t npcId, uint32_t act
 std::string worldNpcHouseKey(uint32_t npcId)
 {
     return "openyamm.discovery.npc/" + std::to_string(npcId) + "/house";
+}
+
+bool validWorldMercenaryObservation(const WorldMercenaryObservation &observation)
+{
+    return isGeneratedMercenaryNpcId(observation.npcId)
+        && observation.rosterId == generatedMercenaryRosterIdForNpcId(observation.npcId)
+        && observation.houseId != 0 && !observation.name.empty() && observation.name.find('\0') == std::string::npos
+        && validMapId(observation.mapId) && observation.gameMinutes >= 0;
+}
+
+std::string worldMercenaryRecordId(const WorldMercenaryObservation &observation)
+{
+    if (!validWorldMercenaryObservation(observation))
+        throw std::invalid_argument("Invalid mercenary encounter");
+    return observation.mapId + "/mercenary/" + std::to_string(observation.npcId);
+}
+
+bool observeWorldMercenary(EventRuntimeState &state, uint32_t npcId, uint32_t houseId,
+    const MapStatsEntry &map, const IGameplayWorldRuntime &world)
+{
+    const auto found = state.generatedMercenaryRecruitsByNpcId.find(npcId);
+    const auto name = state.npcNameOverrides.find(npcId);
+    const auto picture = state.npcPictureOverrides.find(npcId);
+    const double minutes = std::floor(double(world.gameMinutes()));
+    if (found == state.generatedMercenaryRecruitsByNpcId.end() || found->second.npcId != npcId
+        || houseId == 0 || found->second.houseId != houseId || state.unavailableNpcIds.contains(npcId)
+        || name == state.npcNameOverrides.end() || !std::isfinite(minutes) || minutes < 0 || minutes > INT32_MAX)
+        return false;
+    WorldMercenaryObservation observation{npcId, found->second.rosterId, houseId, name->second,
+        picture != state.npcPictureOverrides.end() ? picture->second : found->second.npcPictureId,
+        map.canonicalId.empty() ? buildCanonicalMapId(map.worldId, map.fileName) : map.canonicalId, int32_t(minutes)};
+    if (!validWorldMercenaryObservation(observation)) return false;
+    const auto existing = std::find_if(state.observedMercenaries.begin(), state.observedMercenaries.end(),
+        [&](const WorldMercenaryObservation &value) { return value.npcId == npcId; });
+    if (existing != state.observedMercenaries.end()) *existing = std::move(observation);
+    else state.observedMercenaries.push_back(std::move(observation));
+    return true;
 }
 
 std::string worldNpcTeacherKey(uint32_t npcId, uint32_t topicId)

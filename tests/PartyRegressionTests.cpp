@@ -387,7 +387,16 @@ TEST_CASE("generated NPC observations extend all snapshot kinds without changing
     save.indoorScene.eventRuntimeState->observedGeneratedNpcs = {inside};
     save.indoorSceneStates[inside.location.mapId].eventRuntimeState.emplace();
     save.indoorSceneStates[inside.location.mapId].eventRuntimeState->observedGeneratedNpcs = {inside};
-    // Both independent save namespaces must coexist; origins remain attached to actual item slots.
+    const WorldMercenaryObservation recruit{303, 42, 11, "Known recruit", 501, jo.location.mapId, 18};
+    auto foreignRecruit = recruit;
+    foreignRecruit.mapId = ann.location.mapId;
+    auto indoorRecruit = recruit;
+    indoorRecruit.mapId = inside.location.mapId;
+    save.outdoorWorld.eventRuntimeState->observedMercenaries = {recruit};
+    save.outdoorWorldStates.at(ann.location.mapId).eventRuntimeState->observedMercenaries = {foreignRecruit};
+    save.indoorScene.eventRuntimeState->observedMercenaries = {indoorRecruit};
+    save.indoorSceneStates.at(inside.location.mapId).eventRuntimeState->observedMercenaries = {indoorRecruit};
+    // All three independent save namespaces must coexist; origins remain attached to actual item slots.
     OutdoorWorldRuntime::WorldItemState item;
     item.objectDescriptionId = 123;
     item.lootMonsterId = 85;
@@ -403,10 +412,17 @@ TEST_CASE("generated NPC observations extend all snapshot kinds without changing
     CHECK(loaded->indoorScene.eventRuntimeState->observedGeneratedNpcs == std::vector{inside});
     CHECK(loaded->indoorSceneStates.at(inside.location.mapId).eventRuntimeState->observedGeneratedNpcs
         == std::vector{inside});
+    CHECK(loaded->outdoorWorld.eventRuntimeState->observedMercenaries == std::vector{recruit});
+    CHECK(loaded->outdoorWorldStates.at(ann.location.mapId).eventRuntimeState->observedMercenaries
+        == std::vector{foreignRecruit});
+    CHECK(loaded->indoorScene.eventRuntimeState->observedMercenaries == std::vector{indoorRecruit});
+    CHECK(loaded->indoorSceneStates.at(inside.location.mapId).eventRuntimeState->observedMercenaries
+        == std::vector{indoorRecruit});
     CHECK(loaded->outdoorWorld.worldItems[0].lootMonsterId == 85);
     EventRuntimeState refilled;
     restoreWorldMapKnowledgeAfterRefill(*loaded->outdoorWorld.eventRuntimeState, refilled);
     CHECK(refilled.observedGeneratedNpcs == std::vector{jo});
+    CHECK(refilled.observedMercenaries == std::vector{recruit});
     const auto readBytes = [&]()
     {
         std::ifstream input(path, std::ios::binary);
@@ -417,6 +433,10 @@ TEST_CASE("generated NPC observations extend all snapshot kinds without changing
     save.outdoorWorldStates.at(ann.location.mapId).eventRuntimeState->observedGeneratedNpcs.clear();
     save.indoorScene.eventRuntimeState->observedGeneratedNpcs.clear();
     save.indoorSceneStates.at(inside.location.mapId).eventRuntimeState->observedGeneratedNpcs.clear();
+    save.outdoorWorld.eventRuntimeState->observedMercenaries.clear();
+    save.outdoorWorldStates.at(ann.location.mapId).eventRuntimeState->observedMercenaries.clear();
+    save.indoorScene.eventRuntimeState->observedMercenaries.clear();
+    save.indoorSceneStates.at(inside.location.mapId).eventRuntimeState->observedMercenaries.clear();
     save.outdoorWorld.worldItems[0].lootMonsterId = 0;
     REQUIRE_MESSAGE(saveGameDataToPath(path, save, error), error);
     const auto legacy = readBytes();
@@ -425,6 +445,7 @@ TEST_CASE("generated NPC observations extend all snapshot kinds without changing
     const auto old = loadGameDataFromPath(path, error);
     REQUIRE_MESSAGE(old, error);
     CHECK(old->outdoorWorld.eventRuntimeState->observedGeneratedNpcs.empty());
+    CHECK(old->outdoorWorld.eventRuntimeState->observedMercenaries.empty());
     const auto reject = [&](const std::vector<char> &bytes, const std::string &message)
     {
         { std::ofstream output(path, std::ios::binary); output.write(bytes.data(), bytes.size()); }
@@ -472,6 +493,40 @@ TEST_CASE("generated NPC observations extend all snapshot kinds without changing
     save.outdoorWorld.eventRuntimeState->observedGeneratedNpcs = {jo};
     save.outdoorWorldStates.at(ann.location.mapId).eventRuntimeState->observedGeneratedNpcs = {jo};
     CHECK_FALSE(saveGameDataToPath(path, save, error)); // Cannot bind an observation to another canonical map.
+    const std::string mercenaryNamespace = "openyamm.mercenary-encounters";
+    const auto mercenaryPacket = std::search(tagged.begin() + legacy.size(), tagged.end(),
+        mercenaryNamespace.begin(), mercenaryNamespace.end());
+    REQUIRE(mercenaryPacket != tagged.end());
+    const size_t mercenarySchema = size_t(mercenaryPacket - tagged.begin()) + mercenaryNamespace.size();
+    const size_t mercenaryPayload = mercenarySchema + 4 + 8;
+    const size_t mercenaryRecord = mercenaryPayload + 4 + 1 + 8 + 4;
+    corrupted = tagged;
+    corrupted[mercenarySchema] = 2;
+    reject(corrupted, "unsupported save extension");
+    corrupted = tagged;
+    corrupted[mercenaryPayload + 4] = 4;
+    reject(corrupted, "mercenary encounter data is corrupted");
+    corrupted = tagged;
+    corrupted[mercenaryRecord + 4] = 0; // Wrong roster identity for this reserved NPC slot.
+    reject(corrupted, "mercenary encounter data is corrupted");
+    const size_t mercenarySize = 36 + recruit.name.size() + recruit.mapId.size();
+    corrupted = tagged;
+    const std::vector<char> secondRecruit(tagged.begin() + mercenaryRecord,
+        tagged.begin() + mercenaryRecord + mercenarySize);
+    corrupted.insert(corrupted.begin() + mercenaryRecord + mercenarySize, secondRecruit.begin(), secondRecruit.end());
+    corrupted[mercenaryRecord - 4] = 2;
+    payloadSize = 0;
+    for (size_t i = 0; i < 8; ++i)
+        payloadSize |= uint64_t(uint8_t(tagged[mercenarySchema + 4 + i])) << (8 * i);
+    payloadSize += mercenarySize;
+    for (size_t i = 0; i < 8; ++i) corrupted[mercenarySchema + 4 + i] = char(payloadSize >> (8 * i));
+    reject(corrupted, "mercenary encounter data is corrupted");
+    save.outdoorWorldStates.at(ann.location.mapId).eventRuntimeState->observedGeneratedNpcs = {ann};
+    save.outdoorWorld.eventRuntimeState->observedMercenaries = {recruit, recruit};
+    CHECK_FALSE(saveGameDataToPath(path, save, error));
+    save.outdoorWorld.eventRuntimeState->observedMercenaries = {recruit};
+    save.outdoorWorldStates.at(ann.location.mapId).eventRuntimeState->observedMercenaries = {recruit};
+    CHECK_FALSE(saveGameDataToPath(path, save, error));
     std::filesystem::remove(path);
 }
 

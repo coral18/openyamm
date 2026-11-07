@@ -2321,6 +2321,59 @@ TEST_CASE("generated NPC records keep reused slots distinct and never borrow uns
         std::invalid_argument);
 }
 
+TEST_CASE("mercenary encounter records keep map local people separate from recruitment template slots")
+{
+    Fixture fixture;
+    std::vector<std::string> row(16);
+    row[0] = "303"; row[1] = "cleric";
+    REQUIRE(fixture.npcs.loadNpcRows({row}));
+    const WorldMercenaryObservation jo{303, 42, 11, "Jo the recruit", 501, "world.mm7.map.7out02", 17};
+    const WorldMercenaryObservation ann{303, 42, 11, "Ann the recruit", 502, "world.mm7.map.7d21", 21};
+    const WorldMercenaryObservation other{303, 42, 11, "Jadame recruit", 503, "world.mm8.map.out01", 31};
+    WorldNpcState input;
+    input.houses[303] = 11;
+    input.names[303] = "Unseen replacement";
+    input.unavailable.insert(303); // Joining the party cannot rewrite where the person was last met.
+    input.mercenaries = {&jo, &ann, &other};
+    WorldDatabase world(fixture.maps, fixture.houses, fixture.npcs, fixture.teachers, "mm7", {}, input);
+    CHECK(world.find("mm7:npc/303") == nullptr);
+    CHECK(world.find(worldMercenaryRecordId(other)) == nullptr);
+    WorldKnowledge knowledge;
+    for (const WorldMercenaryObservation &npc : {jo, ann, other})
+        knowledge.mercenaries[npc.mapId].emplace(npc.npcId, npc);
+    CHECK(world.query(knowledge, false, "Jo the recruit").empty());
+    knowledge.visitedMaps = {"7out02.odm", "7d21.blv", "out01.odm"};
+    CHECK(world.query(knowledge, false, "Jo the recruit").size() == 1);
+    CHECK(world.query(knowledge, false, "Ann the recruit").size() == 1);
+    CHECK(world.query(knowledge, true, "Unseen replacement").empty());
+    const WorldRecord *pJo = world.find(worldMercenaryRecordId(jo));
+    REQUIRE(pJo);
+    CHECK(world.recordMap(*pJo, knowledge, false, ann.mapId) == fixture.maps.findById(63));
+    CHECK(world.query(knowledge, false, "Jo the recruit", {}, ann.mapId).empty());
+    WorldMapLocation location{"test-door", ann.mapId, "mm7:house/11", 1, 1, 2, 3};
+    const auto residents = world.recordsAtLocation(location, knowledge, true);
+    CHECK(std::count_if(residents.begin(), residents.end(), [](const WorldRecord *pRecord)
+        { return pRecord->kind == WorldRecordKind::Npc; }) == 1);
+    CHECK(std::none_of(residents.begin(), residents.end(), [](const WorldRecord *pRecord)
+        { return pRecord->name() == "Jo the recruit"; }));
+    WorldKnowledge unknown;
+    unknown.visitedMaps = knowledge.visitedMaps;
+    unknown.informedRecords.insert(pJo->id);
+    unknown.variables[WorldDatabase::npcDiscoveryKey(303)] = 1;
+    CHECK(world.query(unknown, false, "Jo the recruit").empty());
+    knowledge.mercenaries.at(jo.mapId).at(303).name = "Another person";
+    CHECK_FALSE(knowledge.knows(*pJo));
+    auto invalid = jo;
+    invalid.rosterId = 41;
+    CHECK_FALSE(validWorldMercenaryObservation(invalid));
+    invalid = jo;
+    invalid.houseId = 0;
+    CHECK_FALSE(validWorldMercenaryObservation(invalid));
+    input.mercenaries.push_back(&jo);
+    CHECK_THROWS_AS(WorldDatabase(fixture.maps, fixture.houses, fixture.npcs, fixture.teachers, "mm7", {}, input),
+        std::invalid_argument);
+}
+
 TEST_CASE("world database scripted NPC encounters identify a map without inventing a position")
 {
     Fixture fixture;

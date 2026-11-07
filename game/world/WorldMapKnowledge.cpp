@@ -162,6 +162,7 @@ void restoreWorldMapKnowledgeAfterRefill(const EventRuntimeState &previous, Even
 {
     refilled.runtimeMapNotes = previous.runtimeMapNotes;
     refilled.observedGeneratedNpcs = previous.observedGeneratedNpcs;
+    refilled.observedMercenaries = previous.observedMercenaries;
     for (const auto &[key, value] : previous.namedMapVars)
         if (key.starts_with("openyamm.discovery.") || key.starts_with("openyamm.map-notes.user/"))
             refilled.namedMapVars[key] = value;

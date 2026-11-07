@@ -18,6 +18,7 @@
 #include "game/items/ItemInspectionText.h"
 #include "game/items/ItemRuntime.h"
 #include "game/gameplay/GuildSpellbookRules.h"
+#include "game/gameplay/MercenaryRecruitmentRuntime.h"
 #include "game/world/WorldGuildStockKnowledge.h"
 #include "game/party/SpellSchool.h"
 #include "game/party/Party.h"
@@ -827,15 +828,22 @@ std::vector<WorldGuideEntry> buildWorldGuide(const WorldGuideSource &source, Wor
                             break;
                         }
             }
-            if (pMember->name.empty()
+            const bool generated = generatedMercenaryNpcIdForRosterId(pMember->id) != 0;
+            if ((generated && pCurrent == nullptr) || pMember->name.empty()
                 || (!guide && !knowledge.roster.contains(pMember->id) && pCurrent == nullptr)) continue;
-            WorldGuideEntry entry{std::to_string(pMember->id), pMember->name};
+            WorldGuideEntry entry{std::to_string(pMember->id), generated ? pCurrent->name : pMember->name};
             if (pCurrent != nullptr)
                 entry.details = std::string(inInn ? "In the Adventurer's Inn roster." : "Travelling with the party.")
                     + "\nCampaign character: " + pCurrent->name + " | " + displayClassName(pCurrent->className)
                     + " | Level " + std::to_string(pCurrent->level) + "\n\n";
             else entry.details = source.pParty != nullptr ? "Not in the active party or Adventurer's Inn roster.\n\n"
                 : "Load a campaign to see this companion's current recruitment state.\n\n";
+            if (generated)
+            {
+                // The reserved roster row is a generator template, not this campaign person's starting profile.
+                result.push_back(std::move(entry));
+                continue;
+            }
             entry.details += "Starting profile: " + pMember->name + " | " + displayClassName(pMember->className)
                 + "\nLevel: " + std::to_string(pMember->level) + "\n\n" + pMember->blurb
                 + "\n\nMight " + std::to_string(pMember->might) + " | Intellect "

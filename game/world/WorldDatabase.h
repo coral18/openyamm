@@ -80,6 +80,7 @@ struct WorldRecord
 
     std::optional<std::string> npcName;
     const WorldGeneratedNpcObservation *pGeneratedNpc = nullptr;
+    const WorldMercenaryObservation *pMercenary = nullptr;
     std::optional<WorldNpcActorLocation> actorLocation;
     std::optional<WorldNpcScriptLocation> scriptLocation;
     bool lastObservedNpc = false;
@@ -128,6 +129,7 @@ struct WorldKnowledge
     std::unordered_map<std::string, std::vector<WorldSiteObservation>> siteObservations;
     std::unordered_map<std::string, std::vector<WorldGateOffer>> gateOffers;
     std::unordered_map<std::string, std::unordered_map<std::string, WorldGeneratedNpcObservation>> generatedNpcs;
+    std::unordered_map<std::string, std::unordered_map<uint32_t, WorldMercenaryObservation>> mercenaries;
     bool knows(const WorldRecord &record) const;
 };
 

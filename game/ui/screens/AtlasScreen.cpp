@@ -39,8 +39,11 @@ WorldNpcState atlasNpcState(const GameDataRepository &data, const WorldKnowledge
     WorldNpcState result = guide || !hasParty ? knowledge.currentNpcs
         : worldObservedNpcs(data.npcDialogTable(), data.mergedTeacherTopicTable(), knowledge.variables);
     result.generatedNpcs.clear();
+    result.mercenaries.clear();
     for (const auto &[map, observations] : knowledge.generatedNpcs)
         for (const auto &[key, npc] : observations) result.generatedNpcs.push_back(&npc);
+    for (const auto &[map, observations] : knowledge.mercenaries)
+        for (const auto &[id, npc] : observations) result.mercenaries.push_back(&npc);
     return result;
 }
 std::string atlasTravelDays(int64_t days)

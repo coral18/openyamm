@@ -34,6 +34,7 @@ struct WorldNpcState
     std::unordered_map<uint32_t, WorldNpcActorLocation> actorLocations;
     std::unordered_map<uint32_t, WorldNpcScriptLocation> scriptLocations;
     std::vector<const WorldGeneratedNpcObservation *> generatedNpcs;
+    std::vector<const WorldMercenaryObservation *> mercenaries;
     bool observedOnly = false;
 };
 
@@ -49,6 +50,10 @@ bool observeWorldNpcActor(EventRuntimeState &state, uint32_t npcId, uint32_t act
     const std::vector<uint32_t> &teacherTopics = {});
 std::string worldGeneratedNpcRecordId(const WorldGeneratedNpcObservation &observation);
 bool validWorldGeneratedNpcObservation(const WorldGeneratedNpcObservation &observation);
+bool observeWorldMercenary(EventRuntimeState &state, uint32_t npcId, uint32_t houseId,
+    const MapStatsEntry &map, const IGameplayWorldRuntime &world);
+bool validWorldMercenaryObservation(const WorldMercenaryObservation &observation);
+std::string worldMercenaryRecordId(const WorldMercenaryObservation &observation);
 bool worldNpcActorLocationKnown(const std::unordered_map<std::string, int32_t> &variables,
     uint32_t npcId, const WorldNpcActorLocation &location);
 void recordWorldNpcScriptLocation(EventRuntimeState &state, uint32_t npcId,

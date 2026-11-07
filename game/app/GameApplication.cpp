@@ -8879,6 +8879,12 @@ bool GameApplication::openAtlasScreen(bool paused)
                     if (!validWorldGeneratedNpcObservation(npc) || npc.location.mapId != canonicalMapId
                         || !observations.emplace(npc.actorKey, npc).second)
                         generatedNpcError = "Invalid generated NPC observations for " + canonicalMapId;
+                auto &mercenaries = knowledge.mercenaries[canonicalMapId];
+                mercenaries.clear();
+                for (const WorldMercenaryObservation &npc : state.observedMercenaries)
+                    if (!validWorldMercenaryObservation(npc) || npc.mapId != canonicalMapId
+                        || !mercenaries.emplace(npc.npcId, npc).second)
+                        generatedNpcError = "Invalid mercenary encounters for " + canonicalMapId;
             }
             knowledge.notes[toLowerCopy(file)] = worldMapNotes(state, file);
             knowledge.arrivals[canonicalMapId.empty() ? toLowerCopy(file) : canonicalMapId]

@@ -490,6 +490,7 @@ std::vector<const WorldRecord *> WorldDatabase::recordsAtLocation(const WorldMap
     if (!guide && pTarget->house != nullptr && !houseLocationKnown(location, knowledge)) return result;
     for (const WorldRecord &record : m_records)
         if ((record.kind != WorldRecordKind::Travel || includeTravel)
+            && (record.pMercenary == nullptr || record.pMercenary->mapId == location.mapId)
             && (&record == pTarget || (pTarget->house != nullptr && record.house == pTarget->house)
                 || (pTarget->actorLocation && record.npc == pTarget->npc
                     && record.pGeneratedNpc == pTarget->pGeneratedNpc

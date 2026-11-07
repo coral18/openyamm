@@ -97,7 +97,7 @@ tables, and do not bundle its HTML, JS, translated prose, generated illustration
 | Continent overview | Existing game illustration | Original regional schematic | Optional licensed/original illustrated Jadame artwork |
 | Discovery fog and current party arrow | Implemented | Implemented | Wider dungeon/device checks |
 | Dungeon plans from engine geometry | Adaptive known height slices, clipped known walkable ramp edges, party-height selection, component-aware discovered pins and height-aware notes | Same shared projection and controls | Semantic storeys and wider floor/visibility/device audit; moving geometry awaits user decision |
-| Buildings, resident/actor/scripted NPCs, trainers | Current/observed residents, Guide-only possible residences/actor placements/map encounters, last-encounter actor positions or script maps, generated pedestrian identity snapshots, indoor service markers and exact physical-address history per canonical service | Same shared index; actual Adventurer's Inn discovery and Dagger Wound/Ravenshore entrances | Conditional service eligibility, handwritten/computed NPC calls, wider scripted placement audit and generated tavern mercenary identities |
+| Buildings, resident/actor/scripted NPCs, trainers | Current/observed residents, Guide-only possible residences/actor placements/map encounters, last-encounter actor positions or script maps, generated pedestrian/tavern-recruit identity snapshots, indoor service markers and exact physical-address history per canonical service | Same shared index; actual Adventurer's Inn discovery and Dagger Wound/Ravenshore entrances | Conditional service eligibility, handwritten/computed NPC calls, and wider scripted placement audit |
 | Trainer requirements and prices | Gameplay evaluator, observed offers and race-specific mastery comparisons | Same shared evaluator | Conditional eligibility audit and starting-skill/race-selection checks |
 | Walking and scheduled transport | Directed walking/coach/boat graph, departure pins, last-offered schedules/fare/duration, live local overrides and destination navigation | Same shared knowledge/navigation | Remote scripted timetable references, availability forecasting and arrival-point links |
 | Quest giver/objective/return chains | Shared registry, 76 quests, conditional clues and possible contact-location links | Shared registry, 69 quests, repaired Accuracy state, stage-sensitive Aislen/Pole delivery contacts and possible contact-location links | Remaining conditional stages and wider campaign audit; unused legacy MM8 rows 5/172 are not invented playable chains |
@@ -108,7 +108,7 @@ tables, and do not bundle its HTML, JS, translated prose, generated illustration
 | Alchemy recipes and ingredients | Recursive recipes, direct alternative ingredient links and creature-source navigation | Same shared rules and discovery gates | Broader canonical-content audit |
 | Spellbook reference and guild links | Spell/book navigation, observed shelf history and possible guild links from shared stock rules | Same shared observations and discovery filtering | Access/learning eligibility, conditional venue and wider content audit |
 | Classes and skill caps | Paged family comparison grid, race mastery, starting-skill profiles, HP/SP growth and exact-rank trainer searches | Same shared registry | Promotion quest/branch conditions, starting stats/portrait eligibility and class-history discoveries |
-| Recruitable companions | Shared merged roster, live party/Inn status and recorded invitations | Same shared status, Guide dialogue/unlock contacts and physical rescue links | Complete recruitment eligibility, Inn venue navigation and wider contact audit |
+| Recruitable companions | Shared merged roster, live party/Inn status, actual generated campaign profiles and recorded invitations | Same shared status, Guide dialogue/unlock contacts and physical rescue links | Complete recruitment eligibility, Inn venue navigation and wider contact audit |
 | Arcomage/Arena tracking | Existing campaign counters and linked taverns | Existing campaign counters and linked taverns | Visual checklist polish and wider save-state audit |
 | Custom markers and notes | Native place/edit/delete, optional dungeon height, All/Party assignment and shared Map Book state | Same shared notes and canonical snapshot ownership | Marker styles, richer editing and Android/controller checks |
 | Optional Atlas mod | Profile-controlled native UI module | Same shared module | Launcher toggles and wider device checks |
@@ -287,3 +287,13 @@ after Guide. The focused regression set passes 447 cases / 76,704 assertions wit
 exclusion. This is actual MM7 pedestrian evidence plus shared MM7/MM8 identity/save logic coverage, not proof
 that every MM8 generic role is a generated individual. Generated tavern mercenaries and wider conditional NPC
 paths remain open; Android work remains deferred.
+
+
+The subsequent generated-mercenary checkpoint records actual resident encounters per canonical map/slot and
+keeps reserved NPC/roster templates out of ordinary person records. Companions show the campaign character's
+name/class/level. The unchanged version 84 core payload is extended by validated mercenary packets alongside
+existing namespaces. Real MM7/MM8 door, dialogue and recruitment fixtures pass 26 steps; eight native processes
+pass 165 UI steps / 27 captures, including seed preparation. Fourteen save inspections retain checked knowledge
+and campaign state; twelve body crops match after Guide. The focused Windows suite passes 453 cases / 76,824
+assertions with the established portrait exclusion. Wider eligibility/contact/content checks remain open;
+Android remains deferred.

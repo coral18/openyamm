@@ -1,4 +1,5 @@
 #include "game/world/WorldDatabase.h"
+#include "game/gameplay/MercenaryRecruitmentRuntime.h"
 #include "game/world/WorldMapKnowledge.h"
 #include "game/StringUtils.h"
 #include "game/maps/MapIdentity.h"
@@ -93,6 +94,13 @@ std::string WorldRecord::searchText() const
 bool WorldKnowledge::knows(const WorldRecord &record) const
 {
     if (record.possibleNpcLocation) return false;
+    if (record.pMercenary != nullptr)
+    {
+        const auto map = mercenaries.find(record.pMercenary->mapId);
+        if (map == mercenaries.end()) return false;
+        const auto observed = map->second.find(record.pMercenary->npcId);
+        return observed != map->second.end() && observed->second == *record.pMercenary;
+    }
     if (record.pGeneratedNpc != nullptr)
     {
         const WorldGeneratedNpcObservation &npc = *record.pGeneratedNpc;
@@ -241,6 +249,30 @@ WorldDatabase::WorldDatabase(const MapStats &maps, const HouseTable &houses, con
         if (map != maps.getEntries().end() && map->worldId == worldId)
             appendEncounterNpcRecords(pNpc->npcId, *map, false, pNpc->location, {}, pNpc);
     }
+    for (const WorldMercenaryObservation *pMercenary : m_npcsState.mercenaries)
+    {
+        if (pMercenary == nullptr || !validWorldMercenaryObservation(*pMercenary))
+            throw std::invalid_argument("Invalid mercenary encounter");
+        const auto map = std::find_if(maps.getEntries().begin(), maps.getEntries().end(),
+            [&](const MapStatsEntry &entry) { return mapId(entry) == pMercenary->mapId; });
+        if (map == maps.getEntries().end() || map->worldId != worldId) continue;
+        const NpcEntry *pNpc = npcs.getNpc(pMercenary->npcId);
+        const HouseEntry *pHouse = houses.get(pMercenary->houseId);
+        if (pNpc == nullptr || pHouse == nullptr)
+            throw std::invalid_argument("Unknown NPC or house in mercenary encounter");
+        WorldRecord record;
+        record.id = worldMercenaryRecordId(*pMercenary);
+        record.parentId = pHouse->canonicalId.empty() ? worldId + ":house/" + std::to_string(pHouse->id)
+            : pHouse->canonicalId;
+        record.kind = WorldRecordKind::Npc;
+        record.map = &*map;
+        record.house = pHouse;
+        record.npc = pNpc;
+        record.npcName = pMercenary->name;
+        record.pMercenary = pMercenary;
+        record.lastObservedNpc = true;
+        m_records.push_back(std::move(record));
+    }
     std::sort(m_records.begin(), m_records.end(), [](const WorldRecord &a, const WorldRecord &b) { return a.id < b.id; });
     for (size_t i = 0; i < m_records.size(); ++i)
         if (!m_byId.emplace(m_records[i].id, i).second)
@@ -298,7 +330,7 @@ void WorldDatabase::appendHouseRecords(const HouseEntry &house, const MapStatsEn
     for (uint32_t npcId : m_pNpcs->getNpcIdsForHouse(id, &m_npcsState.houses))
     {
         const NpcEntry *npc = m_pNpcs->getNpc(npcId);
-        if (npc == nullptr || m_npcsState.unavailable.contains(npcId)
+        if (npc == nullptr || isGeneratedMercenaryNpcId(npcId) || m_npcsState.unavailable.contains(npcId)
             || (m_npcsState.observedOnly && !m_npcsState.houses.contains(npcId)))
             continue;
         WorldRecord resident = record;
@@ -330,6 +362,7 @@ void WorldDatabase::appendHouseRecords(const HouseEntry &house, const MapStatsEn
 
 void WorldDatabase::appendPossibleNpcLocation(uint32_t npcId, uint32_t houseId)
 {
+    if (isGeneratedMercenaryNpcId(npcId)) return;
     if (m_npcsState.observedOnly) return;
     const NpcEntry *pNpc = m_pNpcs->getNpc(npcId);
     const HouseEntry *pHouse = m_pHouses->get(houseId);
@@ -359,6 +392,7 @@ void WorldDatabase::appendEncounterNpcRecords(uint32_t npcId, const MapStatsEntr
     std::optional<WorldNpcActorLocation> actor, std::optional<WorldNpcScriptLocation> script,
     const WorldGeneratedNpcObservation *pGenerated)
 {
+    if (isGeneratedMercenaryNpcId(npcId)) return;
     if (actor.has_value() == script.has_value())
         throw std::invalid_argument("NPC encounter requires exactly one source kind");
     const NpcEntry *pNpc = m_pNpcs->getNpc(npcId);
@@ -499,7 +533,7 @@ std::string WorldDatabase::recordDisplayName(const WorldRecord &record, const Wo
     if (!shared) return name;
     std::vector<std::string> residents;
     for (const WorldRecord &candidate : m_records)
-        if (candidate.kind == WorldRecordKind::Npc && candidate.house == record.house
+        if (candidate.kind == WorldRecordKind::Npc && candidate.house == record.house && candidate.pMercenary == nullptr
             && visible(candidate, knowledge, guide))
             residents.push_back(candidate.npcName.value_or(candidate.npc->name));
     std::sort(residents.begin(), residents.end());
@@ -512,6 +546,12 @@ std::string WorldDatabase::recordDisplayName(const WorldRecord &record, const Wo
 const MapStatsEntry *WorldDatabase::recordMap(const WorldRecord &record, const WorldKnowledge &knowledge,
     bool guide, const std::string &preferredMap) const
 {
+    if (record.pMercenary != nullptr)
+    {
+        const WorldRecord *pSource = find(record.pMercenary->mapId);
+        if (!guide && (!knowledge.knows(record) || pSource == nullptr || !knowledge.knows(*pSource))) return nullptr;
+        return record.map;
+    }
     if (record.house == nullptr)
     {
         if ((record.actorLocation || record.scriptLocation) && !guide)

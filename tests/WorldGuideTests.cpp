@@ -2410,6 +2410,59 @@ TEST_CASE("world guide companions retain Inn members in Discovery and distinguis
     CHECK(reference[0].details.find("Load a campaign") != std::string::npos);
 }
 
+TEST_CASE("world guide generated companions use known campaign people instead of reserved roster templates")
+{
+    std::vector<std::vector<std::string>> rows(2);
+    for (uint32_t id : {1, 42})
+    {
+        std::vector<std::string> row(124);
+        row[0] = std::to_string(id); row[1] = id == 42 ? "cleric" : "Authored companion";
+        row[2] = "cleric"; row[7] = id == 42 ? "100000" : "5"; row[123] = "Template biography";
+        rows.push_back(row);
+    }
+    RosterTable roster;
+    REQUIRE(roster.loadFromRows(rows));
+    WorldGuideSource source;
+    source.pRoster = &roster;
+    WorldGuideKnowledge knowledge;
+    knowledge.roster.insert(42);
+    CHECK(buildWorldGuide(source, WorldGuideSection::Companions, knowledge, false).empty());
+    const auto unknown = buildWorldGuide(source, WorldGuideSection::Companions, knowledge, true);
+    REQUIRE(unknown.size() == 1);
+    CHECK(unknown[0].id == "1");
+    Character recruit;
+    recruit.rosterId = 42; recruit.name = "Known mercenary"; recruit.className = "knight"; recruit.level = 23;
+    Party::Snapshot state;
+    state.members = {recruit};
+    Party party;
+    party.restoreSnapshot(state);
+    source.pParty = &party;
+    for (bool guide : {false, true})
+    {
+        const auto entries = buildWorldGuide(source, WorldGuideSection::Companions, knowledge, guide);
+        const auto found = std::find_if(entries.begin(), entries.end(), [](const WorldGuideEntry &entry)
+            { return entry.id == "42"; });
+        REQUIRE(found != entries.end());
+        CHECK(found->title == "Known mercenary");
+        CHECK(found->details.find("Level 23") != std::string::npos);
+        CHECK(found->details.find("Travelling with the party") != std::string::npos);
+        CHECK(found->details.find("100000") == std::string::npos);
+        CHECK(found->details.find("Template biography") == std::string::npos);
+        CHECK(found->details.find("Starting profile") == std::string::npos);
+        CHECK(found->links.empty()); // A template slot does not establish a physical recruitment contact.
+    }
+    state.members.clear();
+    AdventurersInnMember waiting;
+    waiting.character = recruit;
+    state.adventurersInnMembers = {waiting};
+    party.restoreSnapshot(state);
+    const auto inn = buildWorldGuide(source, WorldGuideSection::Companions, knowledge, false);
+    REQUIRE(inn.size() == 1);
+    CHECK(inn[0].title == recruit.name);
+    CHECK(inn[0].details.find("In the Adventurer's Inn roster") != std::string::npos);
+    CHECK(party.adventurersInnMembers()[0].character.name == recruit.name);
+}
+
 TEST_CASE("world guide companion contacts follow typed topics while Discovery uses actual recorded invitations")
 {
     std::vector<std::vector<std::string>> rows(2);
