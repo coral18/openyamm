@@ -209,3 +209,31 @@ Original map/import provenance is still required before changing geography. The 
 establish effects, not placement. No Atlas-only pin, invented coordinate, generated event edit or gameplay
 asset change is introduced. The test permits a future authoritative map repair to supply an actual binding.
 Private evidence is retained in `atlas-well-bindings-20261029` under the Windows development root.
+
+
+## Local source-archive comparison, 2026-11-07
+
+The original-input search now has concrete local sources. The MM7 base `DATA/GAMES.LOD` matches its GOG
+installer hash database (`1207658916`, MD5 `c651ef69758771ca97fd3fb042721af5`). Its version-7 out12 map
+has no binding for local callback 202 in any examined model cog field or sprite event field. The installed
+Merge version-8 out12 member is byte-identical to the current OpenYAMM map; neither contains that binding.
+This rules out losing a direct 202 binding during that map's Merge-to-OpenYAMM import. It does not establish
+that no original interpreter, patch, save or future mod could invoke the callback indirectly.
+
+The three installed MM8 map members likewise contain none of the five target bindings. They differ in geometry
+from the current port's maps. This installation contains Merge/Redone, and its available GOG hash database
+covers six localization/support files, not `games.lod`; its archive is therefore **not authenticated as pristine
+MM8**. These comparisons add a source variant, not proof about every original MM8 release or patch.
+
+The machine-readable fingerprints, raw map versions/counts, target IDs and qualification are retained in
+[the source receipt](tests/fixtures/atlas/well_source_provenance_20261107.json). Nine map variants were decoded. The four
+active map fingerprints match their current Git blobs. Positive event controls retain out12's well/wishing
+surface 201/205 and Shadowspire's active 101; the negative result is not a parser that reports every event absent.
+Original archives and extracted map bytes stay outside Git, in the Windows development evidence folder
+`atlas-original-well-bindings-20261107/`. Installed games were opened read-only.
+
+These six declarations still lack direct physical bindings in the active world and receive no fabricated
+Atlas coordinates. Assigning their effects to a chosen object would be world/gameplay authoring; that proposal
+is separately recorded for the user's later decision. A future demonstrated import or dispatch bug remains a
+normal authorized fix, rather than a reason to invent an Atlas-only placement. The registry retains the
+references, and the existing binding regression permits a real source repair to supply a binding.

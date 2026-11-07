@@ -1,0 +1,207 @@
+{
+  "schema": 1,
+  "date": "2026-11-07",
+  "base_commit": "c81e3a5f200710e245460e2a997302f9882bf748",
+  "scope": "Raw physical bindings for six declared well callbacks; no game files changed",
+  "targets": {
+    "mm7/out12.odm": [
+      202
+    ],
+    "mm8/out04.odm": [
+      101,
+      102
+    ],
+    "mm8/out06.odm": [
+      102
+    ],
+    "mm8/out08.odm": [
+      101,
+      102
+    ]
+  },
+  "mm7_base_archive": {
+    "gog_product": "1207658916",
+    "archive": "DATA/GAMES.LOD",
+    "manifest": "goggame-1207658916.hashdb",
+    "algorithm": "MD5",
+    "expected": "c651ef69758771ca97fd3fb042721af5",
+    "actual": "c651ef69758771ca97fd3fb042721af5",
+    "matches_installer_manifest": true
+  },
+  "mm8_installed_archive": {
+    "gog_product": "1207658918",
+    "archive": "Data/games.lod",
+    "installation_has_merge": true,
+    "covered_by_available_hashdb": false,
+    "pristine_gog_status": "unverified"
+  },
+  "maps": [
+    {
+      "source": "installed-base",
+      "world": "mm7",
+      "map": "out12.odm",
+      "sha256": "b0f04cd961e8564ac06ece4c757a62488b6ae34a818b6345f1075a4b44286dae",
+      "version": 7,
+      "models": 24,
+      "faces": 1292,
+      "entities": 385,
+      "matching_faces": [],
+      "matching_entities": [],
+      "positive_surface_controls": {
+        "201": 62,
+        "205": 1
+      }
+    },
+    {
+      "source": "installed-merge",
+      "world": "mm7",
+      "map": "out12.odm",
+      "sha256": "b42a5600cb7aca9d6a21b50a6e8fd087311eb19507a77917eb2971e47c537574",
+      "version": 8,
+      "models": 24,
+      "faces": 1292,
+      "entities": 384,
+      "matching_faces": [],
+      "matching_entities": [],
+      "positive_surface_controls": {
+        "201": 62,
+        "205": 1
+      }
+    },
+    {
+      "source": "runtime",
+      "world": "mm7",
+      "map": "out12.odm",
+      "sha256": "b42a5600cb7aca9d6a21b50a6e8fd087311eb19507a77917eb2971e47c537574",
+      "version": 8,
+      "models": 24,
+      "faces": 1292,
+      "entities": 384,
+      "matching_faces": [],
+      "matching_entities": [],
+      "matches_git_blob": true,
+      "positive_surface_controls": {
+        "201": 62,
+        "205": 1
+      }
+    },
+    {
+      "source": "installed-base",
+      "world": "mm8",
+      "map": "out04.odm",
+      "sha256": "e27e4a962e652d04afb1d9c054361afd300c321c8414d143e06c9d26ec6f8785",
+      "version": 8,
+      "models": 92,
+      "faces": 4722,
+      "entities": 1170,
+      "matching_faces": [],
+      "matching_entities": [],
+      "positive_surface_controls": {
+        "191": 2,
+        "150": 8
+      }
+    },
+    {
+      "source": "runtime",
+      "world": "mm8",
+      "map": "out04.odm",
+      "sha256": "3baf59f9ac90a14e993049e0b6a9dffe247a92d60aa10303b04aa42ba61160fe",
+      "version": 8,
+      "models": 48,
+      "faces": 2391,
+      "entities": 585,
+      "matching_faces": [],
+      "matching_entities": [],
+      "matches_git_blob": true,
+      "positive_surface_controls": {
+        "191": 2,
+        "150": 8
+      }
+    },
+    {
+      "source": "installed-base",
+      "world": "mm8",
+      "map": "out06.odm",
+      "sha256": "70ba9841c842af57995f05e9b5f0796d244e9bf7ceafc1ac5e4eb2c66461e5a3",
+      "version": 8,
+      "models": 175,
+      "faces": 9557,
+      "entities": 1218,
+      "matching_faces": [],
+      "matching_entities": [],
+      "positive_surface_controls": {
+        "101": 51,
+        "104": 23
+      }
+    },
+    {
+      "source": "runtime",
+      "world": "mm8",
+      "map": "out06.odm",
+      "sha256": "8d4378e8be738a8d7046788818636378c0bd75f88af4f17db55c2aacabbe05c1",
+      "version": 8,
+      "models": 84,
+      "faces": 4507,
+      "entities": 607,
+      "matching_faces": [],
+      "matching_entities": [],
+      "matches_git_blob": true,
+      "positive_surface_controls": {
+        "101": 51,
+        "104": 23
+      }
+    },
+    {
+      "source": "installed-base",
+      "world": "mm8",
+      "map": "out08.odm",
+      "sha256": "6499a16db2bd3f99830c6ef58a772b302cf4f68e6aea33ea2f4f9ac9f457313b",
+      "version": 8,
+      "models": 84,
+      "faces": 3747,
+      "entities": 726,
+      "matching_faces": [],
+      "matching_entities": [],
+      "positive_surface_controls": {
+        "191": 2,
+        "150": 8
+      }
+    },
+    {
+      "source": "runtime",
+      "world": "mm8",
+      "map": "out08.odm",
+      "sha256": "cff5f790420e728edbbdc87e6bf03f562238c483034efcc682afafdde9b41e47",
+      "version": 8,
+      "models": 61,
+      "faces": 2571,
+      "entities": 269,
+      "matching_faces": [],
+      "matching_entities": [],
+      "matches_git_blob": true,
+      "positive_surface_controls": {
+        "191": 2,
+        "150": 8
+      }
+    }
+  ],
+  "conclusions": [
+    "MM7 callback 202 has no physical binding in the manifest-matching GOG base map.",
+    "The installed Merge MM7 map is byte-identical to the active OpenYAMM map.",
+    "The three installed MM8 base-archive variants also lack the five target bindings, but are not authenticated as pristine GOG data.",
+    "No coordinates are inferred from callback effect text."
+  ],
+  "limitations": [
+    "No conclusion about every possible late script/save/mod invocation.",
+    "No MM8 pristine-archive authenticity claim.",
+    "No gameplay bonus or physical placement restored."
+  ],
+  "active_runtime_check": {
+    "case": "well references without active physical bindings never invent Atlas coordinates",
+    "cases_passed": 1,
+    "assertions_passed": 40,
+    "unbound_callbacks": 6,
+    "inherited_decoration_slots": 46,
+    "product_code_changed": false
+  }
+}

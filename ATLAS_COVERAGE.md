@@ -297,3 +297,13 @@ pass 165 UI steps / 27 captures, including seed preparation. Fourteen save inspe
 and campaign state; twelve body crops match after Guide. The focused Windows suite passes 453 cases / 76,824
 assertions with the established portrait exclusion. Wider eligibility/contact/content checks remain open;
 Android remains deferred.
+
+
+The 2026-11-07 source comparison authenticates the MM7 base archive against its local GOG manifest and finds
+no direct 202 binding there either. The installed Merge out12 map is byte-identical to the active port map.
+Three installed MM8 variants also lack the five target bindings, but that Merge installation's available hash
+database does not authenticate its games archive as pristine MM8. Nine decoded variants and four Git/runtime
+fingerprint matches are recorded in `tests/fixtures/atlas/well_source_provenance_20261107.json`. This resolves the missing
+MM7 source-input evidence without inventing a location or claiming all original interpreter behavior proved.
+Attaching unplaced callback bonuses to selected objects is a separate world-content decision, not an automatic
+Atlas mapping repair. Demonstrated import/dispatch bugs remain in the authorized correction scope.
