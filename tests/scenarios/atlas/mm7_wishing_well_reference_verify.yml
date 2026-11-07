@@ -1,0 +1,14 @@
+id: atlas.mm7_wishing_well_reference_verify
+title: Reading the wishing well Guide does not spend gold across save and reload
+world: mm7
+mode: faithful
+steps:
+- load_game: {path: before.oysav}
+- assert:
+    map: 7out06.odm
+    runtime_event_variable: {id: 21, value: 5000}
+- save_game: verified
+- load_game: verified
+- assert:
+    map: 7out06.odm
+    runtime_event_variable: {id: 21, value: 5000}

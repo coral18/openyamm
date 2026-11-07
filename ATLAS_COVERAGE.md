@@ -325,3 +325,14 @@ After final party-scope wording, the exporter suite passes 60 cases / 2,105 asse
 tour checks the full scrolling reference and unchanged Discovery crops; the resulting save passes a five-step
 reload/roundtrip check with Town Portal QBit 301 still clear. Android remains deferred, and full Atlas acceptance
 remains open.
+
+The Bracada wishing-well follow-up describes the fourteen declared `7out06:459` branches, including payment
+guards and the selected-character damage instruction. The `t02:13` altar gets its door-toggle reference;
+the legacy drink hint at `7d10:6` keeps its active door context and does not become a well marker. The inventory
+now requires nonempty reference text or a typed interaction reference, leaving ten recognized placed MM7
+water/shrine/drink callbacks without such a reference. The selected Windows suite passes 461 cases / 77,575
+assertions with the established portrait exclusion. A 28-step native tour produces six captures, two equal
+Discovery crops and two inspected saves retaining party/gold/food/map; a five-step post-UI roundtrip retains
+5,000 gold. References list defined random branches, without certifying RNG distribution or reachability.
+The existing raw-selector and damage-type/RNG gameplay discrepancies are recorded in `ATLAS_SITE_REFERENCE_AUDIT.md`;
+they were not silently rewritten in the Atlas. No Android delivery or full Atlas completion is claimed.

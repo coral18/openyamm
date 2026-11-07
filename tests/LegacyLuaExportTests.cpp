@@ -1796,6 +1796,151 @@ TEST_CASE("portal fountain references remap IDs and reject unknown or rewritten 
     CHECK(generateLegacyEventSiteRefsLuaChunk(events, {}, lookups, LegacyLuaExportScope::Map).empty());
 }
 
+TEST_CASE("Bracada wishing well reference includes damage and the generated affordability guard")
+{
+    using namespace OpenYAMM::Game;
+    const std::filesystem::path root = OPENYAMM_SOURCE_DIR;
+    const auto base = root / "assets_dev/worlds/mm7/_legacy/events/7out06";
+    EvtProgram events;
+    StrTable strings;
+    REQUIRE(events.loadFromBytes(readBinaryFixture(base.string() + ".EVT")));
+    REQUIRE(strings.loadFromBytes(readBinaryFixture(base.string() + ".STR")));
+    LegacyLuaExportLookups lookups;
+    lookups.eventTitles[459] = "Well";
+    const std::string refs = generateLegacyEventSiteRefsLuaChunk(events, strings, lookups,
+        LegacyLuaExportScope::Map, LegacyEventVersion::Mm7);
+    const size_t start = refs.find("SetMapSiteReference(459,");
+    REQUIRE(start != std::string::npos);
+    const std::string reference = refs.substr(start, refs.find('\n', start) - start);
+    for (const char *pText : {"Damage: 50 to the selected character.", "Party gold -100", "Party gold -99",
+        "Party gold at least 99", "Party gold below 100", "Party gold +250", "Earth resistance bonus +20",
+        "Random outcomes", "Temporary Might +20", "Temporary Intellect +20", "Temporary Personality +20",
+        "Temporary Endurance +20", "Temporary Accuracy +20", "Temporary Speed +20", "Temporary Luck +20"})
+        CHECK(reference.find(pText) != std::string::npos);
+    const auto support = readBinaryFixture(root / "assets_dev/engine/scripts/common/event_support.lua");
+    std::string error;
+    const auto program = ScriptedEventProgram::loadFromLuaText(std::string(support.begin(), support.end())
+        + generateLegacyEventLuaChunk(events, strings, lookups, LegacyLuaExportScope::Map, LegacyEventVersion::Mm7)
+        + refs, "@wishing-well", ScriptedEventScope::Map, error);
+    REQUIRE_MESSAGE(program, error);
+    for (int gold : {0, 98, 99, 100})
+    {
+        CAPTURE(gold);
+        PartySeed seed = Party::createDefaultSeed();
+        seed.members.resize(1);
+        seed.members.front().health = seed.members.front().maxHealth = 120;
+        seed.members.push_back(seed.members.front());
+        seed.gold = gold;
+        Party party;
+        party.seed(seed);
+        EventRuntimeState state;
+        state.eventRandomState = 1;
+        EventRuntime runtime;
+        REQUIRE(runtime.executeEventById(program, std::nullopt, 459, state, &party));
+        CHECK(party.gold() == (gold < 99 ? gold : 0));
+        CHECK((state.eventRandomState != 1) == (gold == 100));
+        CHECK(party.member(0)->health == 120);
+        CHECK(party.member(1)->health == 120);
+    }
+}
+
+TEST_CASE("site damage and door references preserve targets and distinct mechanisms")
+{
+    using namespace OpenYAMM::Game;
+    std::vector<uint8_t> bytes;
+    const auto append = [&](uint16_t id, uint8_t step, EvtOpcode opcode, std::vector<uint8_t> payload)
+    {
+        bytes.insert(bytes.end(), {uint8_t(4 + payload.size()), uint8_t(id), 0, step, uint8_t(opcode)});
+        bytes.insert(bytes.end(), payload.begin(), payload.end());
+    };
+    append(1, 0, EvtOpcode::ReceiveDamage, {7, 1, 50, 0, 0, 0});
+    appendExitRecord(bytes, 1, 1);
+    append(2, 0, EvtOpcode::ReceiveDamage, {0, 1, 50, 0, 0, 0}); // Fixed member not described as selected.
+    appendExitRecord(bytes, 2, 1);
+    append(3, 0, EvtOpcode::ReceiveDamage, {7, 1, 0xff, 0xff, 0xff, 0xff});
+    appendExitRecord(bytes, 3, 1);
+    append(4, 0, EvtOpcode::ChangeDoorState, {17, 2});
+    appendExitRecord(bytes, 4, 1);
+    append(5, 0, EvtOpcode::Compare, {0x15, 0, 100, 0, 0, 0, 3});
+    append(5, 1, EvtOpcode::ChangeDoorState, {17, 0});
+    appendExitRecord(bytes, 5, 2);
+    append(5, 3, EvtOpcode::ChangeDoorState, {18, 0});
+    appendExitRecord(bytes, 5, 4);
+    append(6, 0, EvtOpcode::ChangeDoorState, {17, 3});
+    appendExitRecord(bytes, 6, 1);
+    append(7, 0, EvtOpcode::ReceiveDamage, {7, 11, 50, 0, 0, 0});
+    appendExitRecord(bytes, 7, 1);
+    append(8, 0, EvtOpcode::Add, {0x10, 0, 7, 0, 0, 0});
+    append(8, 1, EvtOpcode::Subtract, {0x15, 0, 99, 0, 0, 0});
+    append(8, 2, EvtOpcode::Add, {3, 0, 5, 0, 0, 0});
+    appendExitRecord(bytes, 8, 3);
+    append(9, 0, EvtOpcode::Compare, {0x15, 0, 100, 0, 0, 0, 2});
+    appendExitRecord(bytes, 9, 1);
+    append(9, 2, EvtOpcode::Add, {0x10, 0, 7, 0, 0, 0});
+    append(9, 3, EvtOpcode::Subtract, {0x15, 0, 99, 0, 0, 0});
+    appendExitRecord(bytes, 9, 4);
+    append(10, 0, EvtOpcode::Subtract, {0x15, 0, 99, 0, 0, 0});
+    append(10, 1, EvtOpcode::Subtract, {0x15, 0, 3, 0, 0, 0});
+    appendExitRecord(bytes, 10, 2);
+    EvtProgram events;
+    REQUIRE(events.loadFromBytes(bytes));
+    LegacyLuaExportLookups lookups;
+    for (uint16_t id = 1; id <= 10; ++id) lookups.eventTitles[id] = "Altar";
+    lookups.townPortalDestinations[7] = {"Test destination"};
+    const std::string refs = generateLegacyEventSiteRefsLuaChunk(events, {}, lookups, LegacyLuaExportScope::Map);
+    CHECK(refs.find("Damage: 50 to the selected character.") != std::string::npos);
+    CHECK(refs.find("Toggles a local door.") != std::string::npos);
+    for (uint16_t id : {2, 3, 6, 7, 10})
+        CHECK(refs.find("SetMapSiteReference(" + std::to_string(id) + ",") == std::string::npos);
+    const size_t start = refs.find("SetMapSiteReference(5,");
+    REQUIRE(start != std::string::npos);
+    const std::string doors = refs.substr(start, refs.find('\n', start) - start);
+    CHECK(doors.find("Outcome 2") != std::string::npos);
+    CHECK(doors.find("Party gold below 100") != std::string::npos);
+    CHECK(doors.find("Party gold at least 100") != std::string::npos);
+    for (uint16_t id : {8, 9})
+    {
+        const size_t offset = refs.find("SetMapSiteReference(" + std::to_string(id) + ",");
+        REQUIRE(offset != std::string::npos);
+        const std::string cost = refs.substr(offset, refs.find('\n', offset) - offset);
+        CHECK(cost.find("Unlocks Town Portal access to: Test destination") != std::string::npos);
+        CHECK((cost.find("Party gold below 99") != std::string::npos) == (id == 8));
+        CHECK((cost.find("Outcome 2") != std::string::npos) == (id == 8));
+    }
+    const auto support = readBinaryFixture(std::filesystem::path(OPENYAMM_SOURCE_DIR)
+        / "assets_dev/engine/scripts/common/event_support.lua");
+    std::string error;
+    const auto program = ScriptedEventProgram::loadFromLuaText(std::string(support.begin(), support.end())
+        + generateLegacyEventLuaChunk(events, {}, lookups, LegacyLuaExportScope::Map) + refs,
+        "@site-damage-and-door", ScriptedEventScope::Map, error);
+    REQUIRE_MESSAGE(program, error);
+    PartySeed seed = Party::createDefaultSeed();
+    seed.members.resize(1);
+    seed.members.front().health = seed.members.front().maxHealth = 120;
+    seed.members.push_back(seed.members.front());
+    Party party;
+    party.seed(seed);
+    EventRuntimeState state;
+    EventRuntime runtime;
+    REQUIRE(runtime.executeEventById(program, std::nullopt, 1, state, &party));
+    CHECK(party.member(0)->health == 70);
+    CHECK(party.member(1)->health == 120);
+    REQUIRE(runtime.executeEventById(program, std::nullopt, 4, state, &party));
+    REQUIRE(state.mechanisms.contains(17));
+    CHECK(state.mechanisms.at(17).isMoving);
+    for (int gold : {98, 99})
+    {
+        seed.gold = gold;
+        seed.members.front().health = 1;
+        party.seed(seed);
+        state = {};
+        REQUIRE(runtime.executeEventById(program, std::nullopt, 8, state, &party));
+        CHECK(party.hasQuestBit(7));
+        CHECK(party.gold() == (gold < 99 ? gold : 0));
+        CHECK(party.member(0)->health == (gold < 99 ? 1 : 6));
+    }
+}
+
 TEST_CASE("Harmondale unnoted gold well reference uses the real callback thresholds")
 {
     using namespace OpenYAMM::Game;

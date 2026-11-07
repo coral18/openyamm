@@ -60,7 +60,8 @@ Typed drink declarations may retain an empty effect reference so an unsupported 
 interaction category. Random branches describe possibilities without sampling RNG or claiming probabilities.
 
 The effect reference is omitted for unrepresented reachable behavior: character-selection changes,
-spells, damage instructions, general quest/item/class predicates, unknown operations, loops, comparisons after mutations,
+spells, unsupported damage targets/types, general quest/item/class predicates, unknown operations, loops,
+comparisons after mutations,
 and unsupported writes. A flag assigned 1 is not an incrementing multi-use counter. These are remaining content/API
 work; this generated set does not establish complete well/shrine effect coverage.
 
@@ -282,3 +283,34 @@ without a complete reference, all in MM7. This count is scoped to that interacti
 completion. Native Alvar verification uses `mm8_portal_fountain_reference.yml`, the corresponding menu tour,
 and `mm8_portal_fountain_reference_verify.yml`: reading and scrolling the Guide leaves QBit 301 clear after
 quicksave, load, save and another load. Discovery map/list crops remain unchanged.
+
+## Bracada wishing well and altar mechanisms, 2026-11-07
+
+MM7 `7out06:459` now has a complete read-only projection of its declared callback branches: fourteen outcomes,
+including the selected-character damage instruction, temporary bonuses, conditions and gold changes. Currency
+subtraction includes the Lua formatter's actual early-return affordability guard. Below 99 gold there is no
+charge or random selection; 99 gold buys the feedback-only branch; the random branch requires at least 100.
+Currency bounds prune contradictory guard paths. Effects before a failed payment are retained, and unsupported
+post-write currency tests/payments still reject the whole reference. No gameplay handler or RNG was changed.
+
+The altar `t02:13` now describes its local door toggle. Door action IDs remain part of internal outcome identity,
+so identical wording cannot merge branches that affect different doors. The legacy `7d10:6` "Take a Drink"
+callback also receives a mechanism description, but its active context remains `open_door`; it does not become
+an Atlas well. No positions or geometry were added. Six MM7 metadata files change, including the clarified
+wording that random references list defined branches rather than evaluated live probabilities.
+
+The current interaction inventory now requires nonempty text or a typed interaction reference, rather than
+counting an empty drink declaration as a complete description. Ten recognized placed MM7 water/shrine/drink
+callbacks still lack such a reference; MM8 has none in this scoped inventory. This remains narrower than
+complete Atlas acceptance. The native 28-step Bracada tour checks scrolling to the damage and 99-gold branches;
+two inspected saves retain the party, gold, food and map, with matching Discovery map/list crops. A five-step
+post-UI roundtrip retains 5,000 gold.
+
+Accuracy limits remain explicit: `luaDamagePlayer` currently ignores its damage-type argument; the reference
+therefore describes the amount/selected target without inventing an elemental mitigation calculation. The
+original readable OUT06 reference names Insanity, Curse and Death where the active generated callback names
+Mild disease, Sleep and Eradication. The Steadwick cure callback also has a raw-selector discrepancy. These
+are existing import/gameplay investigations, not reasons to silently rewrite their effects in the Atlas.
+Additionally, the current `_RandomJump` selects with the low bits of an LCG; successive nested choices can be
+correlated (a two-way choice followed by a four-way choice does not prove all child branches reachable).
+The Guide lists the callback's defined branches and does not certify their runtime distribution/reachability.

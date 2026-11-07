@@ -13019,7 +13019,19 @@ std::optional<std::string> buildSiteReference(const LegacyLuaEvent &event,
         std::vector<std::string> effects;
         std::vector<uint8_t> visited;
         std::set<std::string> portalWrites;
+        std::vector<std::pair<uint32_t, uint32_t>> doorActions;
+        std::map<std::string, std::pair<int64_t, int64_t>> currencyBounds;
         bool mutated = false;
+    };
+    const auto refineCurrency = [](Path &path, const FormattedSelector &selector, int32_t value, bool success)
+    {
+        if (!subtractRequiresSufficientValue(selector)) return true;
+        auto [iterator, inserted] = path.currencyBounds.try_emplace(selector.expression,
+            std::pair<int64_t, int64_t>{INT32_MIN, INT32_MAX});
+        auto &[minimum, maximum] = iterator->second;
+        if (success) minimum = std::max(minimum, int64_t(value));
+        else maximum = std::min(maximum, int64_t(value) - 1);
+        return minimum <= maximum;
     };
     std::vector<Path> outcomes;
     size_t visits = 0;
@@ -13051,6 +13063,29 @@ std::optional<std::string> buildSiteReference(const LegacyLuaEvent &event,
                     if (pAction->arguments.size() != 2) return false;
                     const FormattedSelector selector = formatSelector(pAction->arguments[0], lookups.qbitRemaps);
                     const int32_t value = int32_t(pAction->arguments[1]);
+                    if (pAction->operation == LegacyLuaOperation::Subtract
+                        && subtractRequiresSufficientValue(selector) && value > 0)
+                    {
+                        // The Lua formatter returns early when a currency subtraction cannot be paid.
+                        // Preserve effects before that guard, and never treat a post-write balance as entry state.
+                        if (path.mutated) return false;
+                        const auto found = path.currencyBounds.find(selector.expression);
+                        const auto bounds = found == path.currencyBounds.end()
+                            ? std::pair<int64_t, int64_t>{INT32_MIN, INT32_MAX} : found->second;
+                        if (bounds.second < value) return walk(std::nullopt, std::move(path));
+                        if (bounds.first < value)
+                        {
+                            const auto label = siteNumericLabel(selector);
+                            if (!label) return false;
+                            const std::string key = selector.expression + "/" + std::to_string(value);
+                            Path blocked = path;
+                            blocked.requirements.push_back({key, *label + " below " + std::to_string(value), false});
+                            if (!refineCurrency(blocked, selector, value, false)
+                                || !walk(std::nullopt, std::move(blocked))) return false;
+                            path.requirements.push_back({key, *label + " at least " + std::to_string(value), true});
+                            if (!refineCurrency(path, selector, value, true)) return false;
+                        }
+                    }
                     if (const auto names = sitePortalNames(selector, pAction->arguments[1], lookups))
                     {
                         if (pAction->operation == LegacyLuaOperation::Subtract) return false;
@@ -13089,6 +13124,24 @@ std::optional<std::string> buildSiteReference(const LegacyLuaEvent &event,
                     path.effects.push_back(action + std::to_string(value));
                     break;
                 }
+                case LegacyLuaOperation::ReceiveDamage:
+                {
+                    if (pAction->arguments.size() != 3 || pAction->arguments[2] > INT32_MAX
+                        || !formatDamageType(pAction->arguments[1]).starts_with("const.Damage.")) return false;
+                    const EvtPartySelector player = EvtPartySelector(pAction->arguments[0]);
+                    if (player != EvtPartySelector::Current) return false;
+                    path.mutated = true;
+                    path.effects.push_back("Damage: " + std::to_string(pAction->arguments[2])
+                        + " to the selected character.");
+                    break;
+                }
+                case LegacyLuaOperation::ChangeDoorState:
+                    if (pAction->arguments.size() != 2 || pAction->arguments[1] > 2) return false;
+                    path.mutated = true;
+                    path.doorActions.emplace_back(pAction->arguments[0], pAction->arguments[1]);
+                    path.effects.push_back(pAction->arguments[1] == 0 ? "Opens a local door."
+                        : pAction->arguments[1] == 1 ? "Closes a local door." : "Toggles a local door.");
+                    break;
                 case LegacyLuaOperation::ChangeEvent:
                     if (pAction->arguments.size() != 1) return false;
                     path.mutated = true;
@@ -13137,6 +13190,7 @@ std::optional<std::string> buildSiteReference(const LegacyLuaEvent &event,
         const auto branch = [&](bool success, std::optional<uint8_t> next, const std::string &text)
         {
             Path fork = path;
+            if (!refineCurrency(fork, selector, int32_t(terminal.arguments[1]), success)) return true;
             const auto previous = std::find_if(fork.requirements.begin(), fork.requirements.end(),
                 [&](const Requirement &requirement) { return requirement.key == key; });
             if (previous != fork.requirements.end())
@@ -13162,7 +13216,8 @@ std::optional<std::string> buildSiteReference(const LegacyLuaEvent &event,
         for (size_t i = 0; i < outcomes.size() && !reduced; ++i)
             for (size_t j = i + 1; j < outcomes.size() && !reduced; ++j)
             {
-                if (outcomes[i].effects != outcomes[j].effects) continue;
+                if (outcomes[i].effects != outcomes[j].effects || outcomes[i].doorActions != outcomes[j].doorActions)
+                    continue;
                 auto &a = outcomes[i].requirements;
                 const auto &b = outcomes[j].requirements;
                 if (std::includes(a.begin(), a.end(), b.begin(), b.end(), less))
@@ -13202,8 +13257,12 @@ std::optional<std::string> buildSiteReference(const LegacyLuaEvent &event,
         [](const Path &path) { return !path.portalWrites.empty(); })
         ? "Town Portal unlocks affect the whole party; character bonuses apply to the selected character."
         : "Effects apply to the selected character unless the effect concerns party resources.";
+    if (std::any_of(outcomes.begin(), outcomes.end(), [](const Path &path) { return !path.doorActions.empty(); }))
+        text = "Door effects apply to the current location; character bonuses apply to the selected character.\n"
+            "Party resources and Town Portal unlocks affect the whole party.";
     text += "\nHealth and spell point gains stop at their maximum; attribute increases use the game's normal limits.";
-    if (randomOutcomes) text += "\nRandom outcomes are possibilities; their probabilities are not shown.";
+    if (randomOutcomes)
+        text += "\nRandom outcomes below follow the interaction definition; their probabilities are not shown.";
     for (size_t i = 0; i < outcomes.size(); ++i)
     {
         text += "\n\nOutcome " + std::to_string(i + 1) + ":";

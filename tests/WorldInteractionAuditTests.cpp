@@ -1045,7 +1045,8 @@ TEST_CASE("Atlas campaign interaction inventory reads canonical map programs and
                 << (metadata ? metadata->kind : events.hasEvent(site.eventId) ? "unclassified" : "unregistered")
                 << '\t' << (metadata && metadata->hidden) << '\t' << title << '\t'
                 << site.x << '\t' << site.y << '\t' << site.z << '\t' << indexed << '\t'
-                << (events.siteReferences().contains(site.eventId)
+                << ((events.siteReferences().contains(site.eventId)
+                        && !events.siteReferences().at(site.eventId).empty())
                     || events.interactionReferences().contains(site.eventId))
                 << '\t' << events.itemRewards().contains(site.eventId)
                 << '\t' << events.autonoteReferences().contains(site.eventId) << '\n';
@@ -1081,7 +1082,9 @@ TEST_CASE("canonical drink sites expose active effects only in Guide and retain 
         {"mm8", "d35.blv", 451, "No attribute or condition change"},
         {"mm7", "7d22.blv", 197, "No attribute or condition change", "well"},
         {"mm8", "out03.odm", 103, "No attribute or condition change", "well"},
-        {"mm8", "out13.odm", 102, "No attribute or condition change", "well"}};
+        {"mm8", "out13.odm", 102, "No attribute or condition change", "well"},
+        {"mm7", "7out06.odm", 459, "Damage: 50 to the selected character.", "well"},
+        {"mm7", "t02.blv", 13, "Toggles a local door.", "shrine"}};
     for (const Drink &drink : drinks)
     {
         CAPTURE(std::string(drink.pWorld));
@@ -1111,7 +1114,8 @@ TEST_CASE("canonical drink sites expose active effects only in Guide and retain 
         const auto feature = std::find_if(features.begin(), features.end(), [&](const WorldMapFeature &item)
             { return item.site.eventId == drink.event; });
         REQUIRE(feature != features.end());
-        CHECK(feature->kind == WorldMapFeatureKind::Water);
+        CHECK(feature->kind == (std::string(drink.pKind) == "shrine"
+            ? WorldMapFeatureKind::Shrine : WorldMapFeatureKind::Water));
         WorldKnowledge knowledge;
         knowledge.visitedMaps.insert(drink.pMap);
         CHECK_FALSE(world.featureVisible(*feature, knowledge, false));
@@ -1122,6 +1126,34 @@ TEST_CASE("canonical drink sites expose active effects only in Guide and retain 
         CHECK(world.featureVisible(*feature, knowledge, false));
         CHECK(world.siteReference(*feature, knowledge, false).empty());
     }
+}
+
+TEST_CASE("a legacy drink hint cannot turn an active door callback into an Atlas well")
+{
+    using namespace OpenYAMM::Game;
+    REQUIRE_MESSAGE(OpenYAMM::Tests::regressionMapLoaderLoaded(),
+        OpenYAMM::Tests::regressionMapLoaderFailure());
+    const auto &fixture = OpenYAMM::Tests::regressionMapLoader();
+    const auto &data = fixture.gameDataLoader;
+    const MapStatsEntry *pMap = data.getMapStats().findByFileName("7d10.blv");
+    REQUIRE(pMap);
+    auto map = MapAssetLoader().load(fixture.assetFileSystem, *pMap, data.getMonsterTable(),
+        data.getObjectTable(), MapLoadPurpose::HeadlessGameplay);
+    REQUIRE(map);
+    REQUIRE(map->indoorMapData);
+    std::string error;
+    REQUIRE_MESSAGE(GameDataLoader::loadEventPrograms(fixture.assetFileSystem, *map, error), error);
+    REQUIRE(map->localEventProgram);
+    const auto &events = *map->localEventProgram;
+    REQUIRE(events.getContextActionMetadata(6));
+    CHECK(events.getContextActionMetadata(6)->kind == "open_door");
+    REQUIRE(events.siteReferences().contains(6));
+    CHECK(events.siteReferences().at(6).find("Toggles a local door.") != std::string::npos);
+    WorldDatabase world(data.getMapStats(), data.getHouseTable(), data.getNpcDialogTable(),
+        data.getMergedTeacherTopicTable(), "mm7");
+    world.indexMapLocations(*pMap, *map->indoorMapData, events);
+    CHECK(std::none_of(world.features().begin(), world.features().end(),
+        [](const WorldMapFeature &feature) { return feature.site.eventId == 6; }));
 }
 
 TEST_CASE("MM8 Town Portal fountain references bind physical sites without unlocking travel through Guide")

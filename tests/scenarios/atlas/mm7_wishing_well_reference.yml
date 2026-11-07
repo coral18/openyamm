@@ -1,0 +1,20 @@
+id: atlas.mm7_wishing_well_reference
+title: Prepare an untouched Bracada wishing well for native Atlas Guide verification
+world: mm7
+mode: faithful
+steps:
+- new_game_flow:
+    start_map: 7out06.odm
+    party:
+      gold: 5000
+      food: 10
+      members:
+      - name: Atlas Tester
+        class: Knight
+        level: 20
+        race_id: 0
+        skills: []
+        equipment: {}
+- assert:
+    runtime_event_variable: {id: 21, value: 5000}
+- save_game: before
