@@ -941,6 +941,7 @@ TEST_CASE("canonical journal well references bind all newly explained sites with
         std::vector<uint16_t> events;
     };
     const Map maps[] = {
+        {"mm7", "7out01.odm", {112, 113, 114}},
         {"mm7", "7out03.odm", {203, 204, 208, 209, 210}},
         {"mm7", "7out04.odm", {204}}, {"mm7", "7out05.odm", {203, 204, 205, 207}},
         {"mm7", "7out06.odm", {461}}, {"mm7", "7out13.odm", {202, 203, 204}},
@@ -987,7 +988,7 @@ TEST_CASE("canonical journal well references bind all newly explained sites with
             ++references;
         }
     }
-    CHECK(references == 21);
+    CHECK(references == 24);
 }
 
 TEST_CASE("Atlas campaign interaction inventory reads canonical map programs and physical sites")

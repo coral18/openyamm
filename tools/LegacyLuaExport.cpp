@@ -12911,6 +12911,29 @@ bool sitePersonalUseFlag(const LegacyLuaEvent &event, const FormattedSelector &s
     return assigned;
 }
 
+bool siteRemainingUses(const LegacyLuaEvent &event, const FormattedSelector &selector)
+{
+    if (selector.semantic != SelectorSemantic::MapVar) return false;
+    bool checked = false;
+    bool consumed = false;
+    for (const LegacyLuaInstruction &instruction : event.instructions)
+    {
+        if (instruction.operation != LegacyLuaOperation::Compare && instruction.operation != LegacyLuaOperation::Add
+            && instruction.operation != LegacyLuaOperation::Set
+            && instruction.operation != LegacyLuaOperation::Subtract)
+            continue;
+        if (instruction.arguments.size() != 2) return false;
+        const FormattedSelector other = formatSelector(instruction.arguments[0], {});
+        if (other.semantic != SelectorSemantic::MapVar) continue;
+        // One source-local reserve only: do not conflate separate counters or infer a replenishment schedule.
+        if (other.expression != selector.expression || instruction.arguments[1] != 1) return false;
+        if (instruction.operation == LegacyLuaOperation::Compare) checked = true;
+        else if (instruction.operation == LegacyLuaOperation::Subtract) consumed = true;
+        else return false;
+    }
+    return checked && consumed;
+}
+
 std::optional<std::string> siteRequirement(const LegacyLuaEvent &event,
     const LegacyLuaInstruction &instruction, bool success, const LegacyLuaExportLookups &lookups)
 {
@@ -12931,6 +12954,8 @@ std::optional<std::string> siteRequirement(const LegacyLuaEvent &event,
         return success ? "Spell points are full" : "Spell points are below maximum";
     if (sitePersonalUseFlag(event, selector) && selectorValueMatches(selector, instruction.arguments[1]))
         return success ? "Already used by this character" : "Not yet used by this character";
+    if (siteRemainingUses(event, selector) && value == 1)
+        return success ? "At least one use remains at this source" : "No uses remain at this source";
     if (const EventAttributeInfo *pAttribute = eventAttributeInfo(selector.expression);
         pAttribute != nullptr && pAttribute->kind == EventAttributeValueKind::Condition)
         return std::string(success ? "Affected by: " : "Not affected by: ") + std::string(pAttribute->label);
@@ -13010,6 +13035,16 @@ std::optional<std::string> buildSiteReference(const LegacyLuaEvent &event,
                     if (selector.semantic == SelectorSemantic::Autonote) break;
                     if (siteUseCounter(event, selector)) break;
                     if (sitePersonalUseFlag(event, selector)) break;
+                    if (siteRemainingUses(event, selector))
+                    {
+                        const std::string key = selector.expression + "/1";
+                        if (std::none_of(path.requirements.begin(), path.requirements.end(),
+                            [&](const Requirement &requirement)
+                            { return requirement.key == key && requirement.success; }))
+                            return false;
+                        path.effects.push_back("Consumes one remaining use of this source.");
+                        break;
+                    }
                     if (const EventAttributeInfo *pAttribute = eventAttributeInfo(selector.expression);
                         pAttribute != nullptr && pAttribute->writable
                         && pAttribute->kind == EventAttributeValueKind::Condition)

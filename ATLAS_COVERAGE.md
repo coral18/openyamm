@@ -307,3 +307,10 @@ fingerprint matches are recorded in `tests/fixtures/atlas/well_source_provenance
 MM7 source-input evidence without inventing a location or claiming all original interpreter behavior proved.
 Attaching unplaced callback bonuses to selected objects is a separate world-content decision, not an automatic
 Atlas mapping repair. Demonstrated import/dispatch bugs remain in the authorized correction scope.
+
+The remaining-use follow-up explains the three placed Emerald Island wells `7out01:112/113/114`: +5 HP,
++5 SP and +2 permanent Luck below 15, with their shared source-use limit. Guide references are generated
+without changing callbacks or disclosing them in Discovery. The Windows suite passes 455 cases / 77,112
+assertions with the established portrait exclusion. A 16-step native tour and four captures verify the Luck
+reader and unchanged Discovery map/list after Guide. The wider drink audit still has 19 placed callbacks
+without a complete effect reference; no complete Atlas acceptance or new Android delivery is claimed.

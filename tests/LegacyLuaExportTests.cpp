@@ -1567,6 +1567,105 @@ TEST_CASE("canonical well references ignore note bookkeeping while preserving re
     }
 }
 
+TEST_CASE("Emerald Island well references preserve shared remaining uses and the Luck threshold")
+{
+    using namespace OpenYAMM::Game;
+    const std::filesystem::path root = OPENYAMM_SOURCE_DIR;
+    const auto base = root / "assets_dev/worlds/mm7/_legacy/events/7out01";
+    EvtProgram events;
+    StrTable strings;
+    REQUIRE(events.loadFromBytes(readBinaryFixture(base.string() + ".EVT")));
+    REQUIRE(strings.loadFromBytes(readBinaryFixture(base.string() + ".str")));
+    LegacyLuaExportLookups lookups;
+    for (uint16_t id : {112, 113, 114}) lookups.eventTitles[id] = "Drink from the Well";
+    const std::string refs = generateLegacyEventSiteRefsLuaChunk(events, strings, lookups,
+        LegacyLuaExportScope::Map, LegacyEventVersion::Mm7);
+    for (const auto &[id, effect] : std::array<std::pair<uint16_t, const char *>, 3>{
+        {{112, "Health +5"}, {113, "Spell points +5"}, {114, "Base Luck +2"}}})
+    {
+        const size_t start = refs.find("SetMapSiteReference(" + std::to_string(id) + ",");
+        REQUIRE(start != std::string::npos);
+        const std::string reference = refs.substr(start, refs.find('\n', start) - start);
+        CHECK(reference.find(effect) != std::string::npos);
+        CHECK(reference.find("At least one use remains at this source") != std::string::npos);
+        CHECK(reference.find("Consumes one remaining use of this source.") != std::string::npos);
+        CHECK(reference.find("Not yet used by this character") == std::string::npos);
+        CHECK(reference.find("since this location reset") == std::string::npos);
+        if (id == 114) CHECK(reference.find("Base Luck below 15") != std::string::npos);
+    }
+    const auto support = readBinaryFixture(root / "assets_dev/engine/scripts/common/event_support.lua");
+    std::string error;
+    const auto program = ScriptedEventProgram::loadFromLuaText(std::string(support.begin(), support.end())
+        + generateLegacyEventLuaChunk(events, strings, lookups, LegacyLuaExportScope::Map, LegacyEventVersion::Mm7)
+        + refs, "@remaining-well-uses", ScriptedEventScope::Map, error);
+    REQUIRE_MESSAGE(program, error);
+    for (uint16_t id : {112, 113, 114})
+        for (uint8_t uses : {0, 1, 2})
+            for (uint32_t luck : {14, 15})
+            {
+                CAPTURE(id);
+                CAPTURE(uses);
+                CAPTURE(luck);
+                PartySeed seed = Party::createDefaultSeed();
+                seed.members.resize(1);
+                seed.members.front().health = 1;
+                seed.members.front().maxHealth = 80;
+                seed.members.front().spellPoints = 1;
+                seed.members.front().maxSpellPoints = 80;
+                seed.members.front().luck = luck;
+                seed.members.push_back(seed.members.front());
+                Party party;
+                party.seed(seed);
+                EventRuntimeState state;
+                const size_t counter = id - 110;
+                state.mapVars[counter] = uses;
+                const EvtVariable variable = id == 112 ? EvtVariable::CurrentHealth
+                    : id == 113 ? EvtVariable::CurrentSpellPoints : EvtVariable::BaseLuck;
+                const auto attribute = EventRuntime::decodeVariable(uint32_t(variable));
+                const int before = EventRuntime::getVariableValue(state, attribute, &party, 0);
+                EventRuntime runtime;
+                int consumed = 0;
+                for (int call = 0; call < 3; ++call)
+                {
+                    REQUIRE(runtime.executeEventById(program, std::nullopt, id, state, &party));
+                    if (consumed < uses && (id != 114 || (luck < 15 && consumed == 0))) ++consumed;
+                    CHECK(state.mapVars[counter] == uses - consumed);
+                    CHECK(EventRuntime::getVariableValue(state, attribute, &party, 0)
+                        == before + consumed * (id == 114 ? 2 : 5));
+                    CHECK(EventRuntime::getVariableValue(state, attribute, &party, 1) == before);
+                }
+            }
+}
+
+TEST_CASE("well reserve references reject ambiguous counters and post-consumption requirements")
+{
+    using namespace OpenYAMM::Game;
+    std::vector<uint8_t> bytes;
+    const auto append = [&](uint16_t id, uint8_t step, EvtOpcode opcode, std::vector<uint8_t> payload)
+    {
+        bytes.insert(bytes.end(), {uint8_t(4 + payload.size()), uint8_t(id), 0, step, uint8_t(opcode)});
+        bytes.insert(bytes.end(), payload.begin(), payload.end());
+    };
+    for (uint16_t id = 1; id <= 5; ++id)
+    {
+        if (id != 1) append(id, 0, EvtOpcode::Compare, {0x7b, 0, 1, 0, 0, 0, 2});
+        appendExitRecord(bytes, id, 1);
+        append(id, id == 1 ? 0 : 2, EvtOpcode::Subtract, {0x7b, 0, uint8_t(id == 2 ? 2 : 1), 0, 0, 0});
+        append(id, 3, EvtOpcode::Add, {0x15, 0, 5, 0, 0, 0});
+        if (id == 3) append(id, 4, EvtOpcode::Set, {0x7b, 0, 1, 0, 0, 0});
+        if (id == 4) append(id, 4, EvtOpcode::Subtract, {0x7c, 0, 1, 0, 0, 0});
+        if (id == 5) append(id, 4, EvtOpcode::Compare, {0x7b, 0, 1, 0, 0, 0, 5});
+        appendExitRecord(bytes, id, 5);
+    }
+    EvtProgram events;
+    REQUIRE(events.loadFromBytes(bytes));
+    LegacyLuaExportLookups lookups;
+    for (uint16_t id = 1; id <= 5; ++id) lookups.eventTitles[id] = "Drink from the well";
+    const std::string refs = generateLegacyEventSiteRefsLuaChunk(events, {}, lookups, LegacyLuaExportScope::Map);
+    for (uint16_t id = 1; id <= 5; ++id)
+        CHECK(refs.find("SetMapSiteReference(" + std::to_string(id) + ",") == std::string::npos);
+}
+
 TEST_CASE("Harmondale unnoted gold well reference uses the real callback thresholds")
 {
     using namespace OpenYAMM::Game;

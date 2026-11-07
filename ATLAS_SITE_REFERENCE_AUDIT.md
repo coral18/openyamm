@@ -50,7 +50,8 @@ branches or turn a generated reference into party knowledge. Synchronous identif
 unidentified spell sources, queued item delivery outside the observation window and item transformations remain open.
 
 The current projection supports acyclic numeric character/resource/resistance comparisons, HP/SP fullness, simple
-local and per-character use gates, condition presence/application/removal, bounded random jumps, and nonnegative
+local and per-character use gates, guarded source-local remaining uses, condition presence/application/removal,
+bounded random jumps, and nonnegative
 Add/Set/Subtract on supported writable stats/resources. It follows each branch and omits
 feedback-only paths and unreachable actions. Map-load/timer continuations remain separate from the interaction.
 Comparison-chain recognition also stops on cycles and preserves the normal labelled callback output.
@@ -237,3 +238,20 @@ Atlas coordinates. Assigning their effects to a chosen object would be world/gam
 is separately recorded for the user's later decision. A future demonstrated import or dispatch bug remains a
 normal authorized fix, rather than a reason to invent an Atlas-only placement. The registry retains the
 references, and the existing binding regression permits a real source repair to supply a binding.
+
+## Emerald Island remaining-use wells, 2026-11-07
+
+The current 137-map inventory found 22 physically placed well/fountain/shrine/drink callbacks without a
+complete Guide effect reference. Three are now explained: MM7 `7out01:112/113/114`, restoring 5 HP, restoring
+5 SP, and adding 2 permanent Luck when base Luck is below 15. These consume a shared source-local reserve,
+not a per-character use flag. The exporter follows the guarded decrement and preserves the Luck threshold.
+It does not infer initial stock, replenishment timing or current remaining stock from the interaction alone.
+Multiple reserve variables, replenishment within the callback, unsupported decrements and post-write
+requirements remain rejected rather than producing a partial description.
+
+Only `7out01_00_site_refs.lua` changed on MM7/MM8 metadata regeneration. Gameplay callbacks and save formats
+are unchanged. The real-EVT regression exercises zero/one/two remaining uses, Luck 14/15, repeated use and
+the unaffected second party member; separate negative fixtures cover unsupported reserve patterns.
+The physical-site integration test includes all three Water features and their Guide/Discovery separation.
+The Windows native tour `tools/menu_tours/atlas_mm7_well_reserve.yml` checks the Luck reference in its reader;
+Discovery map and result-list crops match before and after Guide. Other unrepresented callbacks remain open.
