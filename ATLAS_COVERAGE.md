@@ -314,3 +314,14 @@ without changing callbacks or disclosing them in Discovery. The Windows suite pa
 assertions with the established portrait exclusion. A 16-step native tour and four captures verify the Luck
 reader and unchanged Discovery map/list after Guide. The wider drink audit still has 19 placed callbacks
 without a complete effect reference; no complete Atlas acceptance or new Android delivery is claimed.
+
+The Town Portal follow-up uses the shared typed destination table to describe the four active MM8 fountains,
+including first use at full HP/SP. Three placed feedback-only wells also receive an explicit no-bonus reference.
+The refreshed 137-map interaction inventory leaves twelve recognized placed water/shrine/drink callbacks
+without complete references, all in MM7. Generated metadata does not create locations for unbound callbacks;
+Ravenshore's dimensional-travel overlay still invalidates its legacy gold-fountain description.
+The selected Windows suite passes 458 cases / 77,447 assertions with the established portrait exclusion.
+After final party-scope wording, the exporter suite passes 60 cases / 2,105 assertions. A 26-step native Alvar
+tour checks the full scrolling reference and unchanged Discovery crops; the resulting save passes a five-step
+reload/roundtrip check with Town Portal QBit 301 still clear. Android remains deferred, and full Atlas acceptance
+remains open.

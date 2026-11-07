@@ -60,7 +60,7 @@ Typed drink declarations may retain an empty effect reference so an unsupported 
 interaction category. Random branches describe possibilities without sampling RNG or claiming probabilities.
 
 The effect reference is omitted for unrepresented reachable behavior: character-selection changes,
-spells, damage instructions, quest/item/class predicates, unknown operations, loops, comparisons after mutations,
+spells, damage instructions, general quest/item/class predicates, unknown operations, loops, comparisons after mutations,
 and unsupported writes. A flag assigned 1 is not an incrementing multi-use counter. These are remaining content/API
 work; this generated set does not establish complete well/shrine effect coverage.
 
@@ -255,3 +255,30 @@ the unaffected second party member; separate negative fixtures cover unsupported
 The physical-site integration test includes all three Water features and their Guide/Discovery separation.
 The Windows native tour `tools/menu_tours/atlas_mm7_well_reserve.yml` checks the Luck reference in its reader;
 Discovery map and result-list crops match before and after Guide. Other unrepresented callbacks remain open.
+
+## Town Portal and feedback-only fountains, 2026-11-07
+
+The exporter now reads destination names from the shared `town_portal_switch.txt` through the existing typed
+table loader. It resolves canonical QBits with the same per-map import aliases as gameplay. Only explicitly
+defined destination bits can be described as Town Portal unlocks; an arbitrary quest-table comment cannot
+define one. A destination shared by several rows retains all distinct names. Unknown bits, clearing an
+unlock, and testing an unlock after rewriting it remain unsupported. A destination write can precede an
+independent HP/SP or resource check, without pretending the written bit is a pre-interaction condition.
+
+The four active MM8 fountains are Alvar `out03:104`, Shadowspire `out06:104`, Regna `out13:104` and Balthazar's
+Lair `d24:451`. They unlock party travel even when HP/SP is full; restorative effects retain their own
+conditions. The generated legacy Ravenshore `out02:104` description includes its gold condition, but the
+active Merge dimensional-travel replacement invalidates it. The physical integration regression verifies
+that the stale gold-fountain reference does not survive that replacement.
+
+Eleven feedback-only callbacks also get an explicit statement that they define no attribute/condition change.
+This includes three previously undescribed placed wells: MM7 `7d22:197`, MM8 `out03:103` and `out13:102`.
+The other declarations do not invent physical sites. Bare hints without feedback stay undescribed, and a
+feedback message cannot hide a reachable unsupported effect. Regeneration changes eleven MM7/MM8 metadata
+files, adding sixteen declarations; gameplay handlers, geometry and save formats remain unchanged.
+
+The refreshed 137-map inventory leaves twelve recognized, physically indexed water/shrine/drink callbacks
+without a complete reference, all in MM7. This count is scoped to that interaction inventory, not full Atlas
+completion. Native Alvar verification uses `mm8_portal_fountain_reference.yml`, the corresponding menu tour,
+and `mm8_portal_fountain_reference_verify.yml`: reading and scrolling the Guide leaves QBit 301 clear after
+quicksave, load, save and another load. Discovery map/list crops remain unchanged.

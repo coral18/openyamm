@@ -5,6 +5,7 @@
 #include "game/events/EvtEnums.h"
 #include "game/indoor/IndoorMapData.h"
 #include "game/tables/MapStats.h"
+#include "game/tables/MergedBaseTables.h"
 #include "tools/EventIr.h"
 #include "tools/EventIrLegacyImport.h"
 #include "tools/LegacyLuaExport.h"
@@ -318,6 +319,7 @@ struct LuaExportTablePaths
     std::string monsterData = "engine/data_tables/monster_data.txt";
     std::string placeMon = "engine/data_tables/english/place_mon.txt";
     std::string spells = "engine/data_tables/spells.txt";
+    std::string townPortalSwitch = "engine/data_tables/town_portal_switch.txt";
     std::string npc = "engine/data_tables/npc.txt";
     std::string roster = "engine/data_tables/roster.txt";
     std::string npcGroup = "engine/data_tables/english/npc_group.txt";
@@ -426,6 +428,10 @@ bool loadLuaExportConfig(const std::filesystem::path &path, LuaExportTablePaths 
         else if (key == "spells")
         {
             tablePaths.spells = value;
+        }
+        else if (key == "town_portal_switch")
+        {
+            tablePaths.townPortalSwitch = value;
         }
         else if (key == "npc")
         {
@@ -2461,6 +2467,24 @@ int main(int argc, char **argv)
     lookups.monsterNames = loadMonsterNames(assetFileSystem, tablePaths.monsterData);
     lookups.placedMonsterNames = loadPlacedMonsterNames(assetFileSystem, tablePaths.placeMon);
     lookups.spellNames = loadSpellNames(assetFileSystem, tablePaths.spells);
+    std::vector<std::vector<std::string>> portalRows;
+    OpenYAMM::Game::MergedTownPortalSwitchTable portals;
+    if (!loadTextTableRows(assetFileSystem, tablePaths.townPortalSwitch, portalRows)
+        || !portals.loadFromRows(portalRows))
+    {
+        std::cerr << "Failed to load Town Portal destinations: " << tablePaths.townPortalSwitch << '\n';
+        return 1;
+    }
+    for (const OpenYAMM::Game::MergedTownPortalSwitchGroup &group : portals.groups())
+        for (const OpenYAMM::Game::MergedTownPortalDestination &destination : group.destinations)
+        {
+            const MapStatsEntry *pMap = mapStats.findById(destination.mapId);
+            if (pMap == nullptr || destination.qbitIndex == 0 || destination.iconName.empty()
+                || toLowerCopy(destination.iconName) == "none") continue;
+            std::vector<std::string> &names = lookups.townPortalDestinations[destination.qbitIndex];
+            const std::string &name = destination.description.empty() ? pMap->name : destination.description;
+            if (std::find(names.begin(), names.end(), name) == names.end()) names.push_back(name);
+        }
     std::string questNotesError;
     lookups.questNotes = loadQuestNotes(assetFileSystem, tablePaths.quests, questNotesError);
 

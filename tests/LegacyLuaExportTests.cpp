@@ -4,6 +4,7 @@
 #include "tools/LegacyLuaExport.h"
 #include "game/events/ScriptedEventProgram.h"
 #include "game/events/EventRuntime.h"
+#include "game/tables/MergedBaseTables.h"
 
 #include <algorithm>
 #include <cctype>
@@ -1666,6 +1667,135 @@ TEST_CASE("well reserve references reject ambiguous counters and post-consumptio
         CHECK(refs.find("SetMapSiteReference(" + std::to_string(id) + ",") == std::string::npos);
 }
 
+TEST_CASE("MM8 fountain references preserve Town Portal unlocks and independent healing conditions")
+{
+    using namespace OpenYAMM::Game;
+    const std::filesystem::path root = OPENYAMM_SOURCE_DIR;
+    const auto portalBytes = readBinaryFixture(root / "assets_dev/engine/data_tables/town_portal_switch.txt");
+    const auto table = OpenYAMM::Engine::TextTable::parseTabSeparated(
+        std::string(portalBytes.begin(), portalBytes.end()));
+    REQUIRE(table);
+    std::vector<std::vector<std::string>> rows;
+    for (size_t row = 0; row < table->getRowCount(); ++row) rows.push_back(table->getRow(row));
+    MergedTownPortalSwitchTable portals;
+    REQUIRE(portals.loadFromRows(rows));
+    LegacyLuaExportLookups lookups;
+    for (const MergedTownPortalSwitchGroup &group : portals.groups())
+        for (const MergedTownPortalDestination &destination : group.destinations)
+            if (destination.mapId != 0 && !destination.description.empty())
+                lookups.townPortalDestinations[destination.qbitIndex].push_back(destination.description);
+    struct Fountain { const char *pMap; uint16_t event; uint16_t rawBit; uint16_t bit; bool healing; };
+    for (const Fountain &fountain : {Fountain{"out03", 104, 181, 301, false}, {"out06", 104, 182, 305, false},
+        {"out13", 104, 183, 304, false}, {"d24", 451, 184, 303, true}})
+    {
+        CAPTURE(std::string(fountain.pMap));
+        const auto base = root / "assets_dev/worlds/mm8/_legacy/events" / fountain.pMap;
+        EvtProgram events;
+        StrTable strings;
+        REQUIRE(events.loadFromBytes(readBinaryFixture(base.string() + ".EVT")));
+        REQUIRE(strings.loadFromBytes(readBinaryFixture(base.string() + ".STR")));
+        lookups.qbitRemaps = {{fountain.rawBit, fountain.bit}};
+        lookups.eventTitles[fountain.event] = "Drink from the Fountain";
+        const std::string refs = generateLegacyEventSiteRefsLuaChunk(events, strings, lookups,
+            LegacyLuaExportScope::Map, LegacyEventVersion::Mm8);
+        const size_t start = refs.find("SetMapSiteReference(" + std::to_string(fountain.event) + ",");
+        REQUIRE(start != std::string::npos);
+        const std::string reference = refs.substr(start, refs.find('\n', start) - start);
+        const std::string &destination = lookups.townPortalDestinations.at(fountain.bit).front();
+        CHECK(reference.find("Unlocks Town Portal access to: " + destination) != std::string::npos);
+        CHECK(reference.find("Town Portal unlocks affect the whole party") != std::string::npos);
+        CHECK(reference.find("Town Portal access not yet unlocked for: " + destination) != std::string::npos);
+        CHECK(reference.find("TP Buff") == std::string::npos);
+        CHECK(reference.find("QBit") == std::string::npos);
+        if (fountain.bit != 304)
+        {
+            CHECK(reference.find(fountain.healing ? "Health +25" : "Spell points +25") != std::string::npos);
+            CHECK(reference.find(fountain.healing ? "Health is below maximum" : "Spell points are below maximum")
+                != std::string::npos);
+            CHECK(reference.find("Town Portal access already unlocked for: " + destination) != std::string::npos);
+        }
+        LegacyLuaExportLookups unnamed = lookups;
+        unnamed.townPortalDestinations.clear();
+        CHECK(generateLegacyEventSiteRefsLuaChunk(events, strings, unnamed, LegacyLuaExportScope::Map,
+            LegacyEventVersion::Mm8).find("SetMapSiteReference(" + std::to_string(fountain.event) + ",")
+            == std::string::npos);
+        const auto support = readBinaryFixture(root / "assets_dev/engine/scripts/common/event_support.lua");
+        std::string error;
+        const auto program = ScriptedEventProgram::loadFromLuaText(std::string(support.begin(), support.end())
+            + generateLegacyEventLuaChunk(events, strings, lookups, LegacyLuaExportScope::Map, LegacyEventVersion::Mm8)
+            + refs, "@portal-fountain", ScriptedEventScope::Map, error);
+        REQUIRE_MESSAGE(program, error);
+        for (bool known : {false, true})
+            for (bool full : {false, true})
+            {
+                CAPTURE(known);
+                CAPTURE(full);
+                PartySeed seed = Party::createDefaultSeed();
+                seed.members.resize(1);
+                seed.members.front().maxHealth = 80;
+                seed.members.front().health = full ? 80 : 1;
+                seed.members.front().maxSpellPoints = 80;
+                seed.members.front().spellPoints = full ? 80 : 1;
+                seed.members.push_back(seed.members.front());
+                Party party;
+                party.seed(seed);
+                EventRuntimeState state;
+                const auto unlock = EventRuntime::decodeVariable(uint32_t(EvtVariable::QBits)
+                    | (uint32_t(fountain.bit) << 16));
+                if (known) EventRuntime::setVariableValue(state, unlock, 1, &party, {0});
+                const auto attribute = EventRuntime::decodeVariable(uint32_t(fountain.healing
+                    ? EvtVariable::CurrentHealth : EvtVariable::CurrentSpellPoints));
+                const int before = EventRuntime::getVariableValue(state, attribute, &party, 0);
+                EventRuntime runtime;
+                REQUIRE(runtime.executeEventById(program, std::nullopt, fountain.event, state, &party));
+                CHECK(EventRuntime::getVariableValue(state, unlock, &party, 0) == 1);
+                const int gain = full || fountain.bit == 304 ? 0 : 25;
+                CHECK(EventRuntime::getVariableValue(state, attribute, &party, 0) == before + gain);
+                CHECK(EventRuntime::getVariableValue(state, attribute, &party, 1) == before);
+                REQUIRE(runtime.executeEventById(program, std::nullopt, fountain.event, state, &party));
+                CHECK(EventRuntime::getVariableValue(state, unlock, &party, 0) == 1);
+                CHECK(EventRuntime::getVariableValue(state, attribute, &party, 0) == before + 2 * gain);
+            }
+    }
+}
+
+TEST_CASE("portal fountain references remap IDs and reject unknown or rewritten unlock conditions")
+{
+    using namespace OpenYAMM::Game;
+    std::vector<uint8_t> bytes;
+    const auto append = [&](uint16_t id, uint8_t step, EvtOpcode opcode, std::vector<uint8_t> payload)
+    {
+        bytes.insert(bytes.end(), {uint8_t(4 + payload.size()), uint8_t(id), 0, step, uint8_t(opcode)});
+        bytes.insert(bytes.end(), payload.begin(), payload.end());
+    };
+    append(1, 0, EvtOpcode::Compare, {0x10, 0, 7, 0, 0, 0, 2});
+    append(1, 1, EvtOpcode::Add, {0x10, 0, 7, 0, 0, 0});
+    append(1, 2, EvtOpcode::Compare, {4, 0, 0, 0, 0, 0, 4}); // HP fullness is independent of the flag.
+    append(1, 3, EvtOpcode::Add, {3, 0, 25, 0, 0, 0});
+    appendExitRecord(bytes, 1, 4);
+    append(2, 0, EvtOpcode::Add, {0x10, 0, 8, 0, 0, 0}); // A journal comment is not a portal definition.
+    appendExitRecord(bytes, 2, 1);
+    append(3, 0, EvtOpcode::Add, {0x10, 0, 7, 0, 0, 0});
+    append(3, 1, EvtOpcode::Compare, {0x10, 0, 7, 0, 0, 0, 2}); // The compared bit has just changed.
+    appendExitRecord(bytes, 3, 2);
+    append(4, 0, EvtOpcode::Subtract, {0x10, 0, 7, 0, 0, 0}); // Removing an unlock is not unlocking it.
+    appendExitRecord(bytes, 4, 1);
+    EvtProgram events;
+    REQUIRE(events.loadFromBytes(bytes));
+    LegacyLuaExportLookups lookups;
+    lookups.qbitRemaps = {{7, 10007}, {8, 10008}};
+    lookups.townPortalDestinations[10007] = {"First destination", "Second destination"};
+    lookups.questNotes[10008] = "TP Buff is only a comment";
+    for (uint16_t id = 1; id <= 4; ++id) lookups.eventTitles[id] = "Drink from the Fountain";
+    const std::string refs = generateLegacyEventSiteRefsLuaChunk(events, {}, lookups, LegacyLuaExportScope::Map);
+    CHECK(refs.find("Unlocks Town Portal access to: First destination, Second destination") != std::string::npos);
+    CHECK(refs.find("Health +25") != std::string::npos);
+    for (uint16_t id : {2, 3, 4})
+        CHECK(refs.find("SetMapSiteReference(" + std::to_string(id) + ",") == std::string::npos);
+    lookups.townPortalDestinations[10007] = {""};
+    CHECK(generateLegacyEventSiteRefsLuaChunk(events, {}, lookups, LegacyLuaExportScope::Map).empty());
+}
+
 TEST_CASE("Harmondale unnoted gold well reference uses the real callback thresholds")
 {
     using namespace OpenYAMM::Game;
@@ -1754,10 +1884,17 @@ TEST_CASE("drink reference export handles condition application and personal use
     append(6, 0, EvtOpcode::Compare, {0x34, 0, 10, 0, 0, 0, 2});
     append(6, 1, EvtOpcode::Add, {0x3f, 0, 25, 0, 0, 0});
     appendExitRecord(bytes, 6, 2);
+    append(7, 0, EvtOpcode::StatusText, {0, 0, 0, 0}); // A real feedback-only well.
+    appendExitRecord(bytes, 7, 1);
+    appendExitRecord(bytes, 8, 0); // A bare hint is not evidence of a usable well callback.
+    append(9, 0, EvtOpcode::StatusText, {0, 0, 0, 0});
+    append(9, 1, EvtOpcode::CastSpell, std::vector<uint8_t>(27, 0));
+    appendExitRecord(bytes, 9, 2);
     EvtProgram events;
     REQUIRE(events.loadFromBytes(bytes));
     LegacyLuaExportLookups lookups;
     for (uint16_t id : {1, 2, 3, 4, 5, 6}) lookups.eventTitles[id] = "Take a Drink";
+    for (uint16_t id : {7, 8, 9}) lookups.eventTitles[id] = "Drink from the Well";
     const std::string references = generateLegacyEventSiteRefsLuaChunk(events, {}, lookups, LegacyLuaExportScope::Map);
     CHECK(references.find("Can apply: Paralysis") != std::string::npos);
     CHECK(references.find("Base Endurance below 35") != std::string::npos);
@@ -1770,6 +1907,9 @@ TEST_CASE("drink reference export handles condition application and personal use
     CHECK(references.find("Can apply: Severe poison") != std::string::npos);
     CHECK(references.find("their probabilities are not shown") != std::string::npos);
     CHECK(references.find("SetMapSiteReference(4, \"\", \"drink\")") != std::string::npos);
+    CHECK(references.find("SetMapSiteReference(7, \"No attribute or condition change") != std::string::npos);
+    CHECK(references.find("SetMapSiteReference(8,") == std::string::npos);
+    CHECK(references.find("SetMapSiteReference(9,") == std::string::npos);
     const auto supportBytes = readBinaryFixture(std::filesystem::path(OPENYAMM_SOURCE_DIR)
         / "assets_dev/engine/scripts/common/event_support.lua");
     const std::string callbacks = generateLegacyEventLuaChunk(events, {}, lookups, LegacyLuaExportScope::Map);

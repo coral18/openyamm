@@ -1,0 +1,29 @@
+output_dir: captures
+exit: true
+steps:
+- expect: gameplay
+- action: map_book
+- click: [1250, 770]
+- click: [1480, 126]
+- click: [275, 126]
+- text: Town Portal
+- key: Return
+- pointer_move: [800, 860]
+- capture: discovery-before
+- click: [1152, 57]
+- wait: 3
+- click: [1250, 260]
+- capture: guide-preview
+- click: [1390, 806]
+- capture: guide-reference-top
+- pointer_move: [700, 600]
+- wheel: -12
+- capture: guide-reference-bottom
+- click: [1152, 57]
+- pointer_move: [800, 860]
+- capture: discovery-after
+- key: Escape
+- key: Escape
+- expect: gameplay
+- key: F9
+- wait: 0.4

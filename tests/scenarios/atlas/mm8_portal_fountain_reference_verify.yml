@@ -1,0 +1,14 @@
+id: atlas.mm8_portal_fountain_reference_verify
+title: Reading the Alvar fountain guide leaves Town Portal locked after save and reload
+world: mm8
+mode: faithful
+steps:
+- load_game: {path: before.oysav}
+- assert:
+    map: out03.odm
+    qbit_clear: [301]
+- save_game: verified
+- load_game: verified
+- assert:
+    map: out03.odm
+    qbit_clear: [301]

@@ -1066,6 +1066,7 @@ TEST_CASE("canonical drink sites expose active effects only in Guide and retain 
         const char *pMap;
         uint16_t event;
         const char *pReference;
+        const char *pKind = "drink";
     };
     const Drink drinks[] = {
         {"mm7", "7out06.odm", 460, "Random outcomes"},
@@ -1077,7 +1078,10 @@ TEST_CASE("canonical drink sites expose active effects only in Guide and retain 
         {"mm7", "7d24.blv", 198, "No attribute or condition change"},
         {"mm7", "7d25.blv", 452, "Not yet used by this character"},
         {"mm8", "d20.blv", 451, "No attribute or condition change"},
-        {"mm8", "d35.blv", 451, "No attribute or condition change"}};
+        {"mm8", "d35.blv", 451, "No attribute or condition change"},
+        {"mm7", "7d22.blv", 197, "No attribute or condition change", "well"},
+        {"mm8", "out03.odm", 103, "No attribute or condition change", "well"},
+        {"mm8", "out13.odm", 102, "No attribute or condition change", "well"}};
     for (const Drink &drink : drinks)
     {
         CAPTURE(std::string(drink.pWorld));
@@ -1096,7 +1100,7 @@ TEST_CASE("canonical drink sites expose active effects only in Guide and retain 
         const ScriptedEventProgram &events = *map->localEventProgram;
         const auto action = events.getContextActionMetadata(drink.event);
         REQUIRE(action);
-        CHECK(action->kind == "drink");
+        CHECK(action->kind == drink.pKind);
         REQUIRE(events.siteReferences().contains(drink.event));
         CHECK(events.siteReferences().at(drink.event).find(drink.pReference) != std::string::npos);
         WorldDatabase world(data.getMapStats(), data.getHouseTable(), data.getNpcDialogTable(),
@@ -1118,6 +1122,69 @@ TEST_CASE("canonical drink sites expose active effects only in Guide and retain 
         CHECK(world.featureVisible(*feature, knowledge, false));
         CHECK(world.siteReference(*feature, knowledge, false).empty());
     }
+}
+
+TEST_CASE("MM8 Town Portal fountain references bind physical sites without unlocking travel through Guide")
+{
+    using namespace OpenYAMM::Game;
+    REQUIRE_MESSAGE(OpenYAMM::Tests::regressionMapLoaderLoaded(),
+        OpenYAMM::Tests::regressionMapLoaderFailure());
+    const auto &fixture = OpenYAMM::Tests::regressionMapLoader();
+    const auto &data = fixture.gameDataLoader;
+    struct Fountain { const char *pMap; uint16_t event; uint32_t bit; };
+    for (const Fountain &target : {Fountain{"out03.odm", 104, 301}, {"out06.odm", 104, 305},
+        {"out13.odm", 104, 304}, {"d24.blv", 451, 303}})
+    {
+        CAPTURE(std::string(target.pMap));
+        const MapStatsEntry *pEntry = data.getMapStats().findByFileName(target.pMap);
+        REQUIRE(pEntry);
+        auto map = MapAssetLoader().load(fixture.assetFileSystem, *pEntry, data.getMonsterTable(),
+            data.getObjectTable(), MapLoadPurpose::HeadlessGameplay);
+        REQUIRE(map);
+        std::string error;
+        REQUIRE_MESSAGE(GameDataLoader::loadEventPrograms(fixture.assetFileSystem, *map, error), error);
+        REQUIRE(map->localEventProgram);
+        const ScriptedEventProgram &events = *map->localEventProgram;
+        REQUIRE(events.siteReferences().contains(target.event));
+        REQUIRE(events.qbitGrants().contains(target.event));
+        CHECK(events.qbitGrants().at(target.event) == std::vector<uint32_t>{target.bit});
+        WorldDatabase world(data.getMapStats(), data.getHouseTable(), data.getNpcDialogTable(),
+            data.getMergedTeacherTopicTable(), "mm8");
+        if (map->outdoorMapData) world.indexMapLocations(*map->outdoorMapData, events);
+        else world.indexMapLocations(*pEntry, *map->indoorMapData, events);
+        size_t matched = 0;
+        for (const WorldMapFeature &feature : world.features())
+        {
+            if (feature.site.eventId != target.event) continue;
+            ++matched;
+            CHECK(feature.kind == WorldMapFeatureKind::Water);
+            WorldKnowledge knowledge;
+            knowledge.visitedMaps.insert(target.pMap);
+            CHECK_FALSE(world.featureVisible(feature, knowledge, false));
+            CHECK(world.siteReference(feature, knowledge, false).empty());
+            CHECK(world.siteReference(feature, knowledge, true).find("Unlocks Town Portal access to:")
+                != std::string::npos);
+            knowledge.interactedSites[target.pMap].insert(worldSiteDiscoveryKey(target.event, feature.site.id));
+            CHECK(world.featureVisible(feature, knowledge, false));
+            CHECK(world.siteReference(feature, knowledge, false).empty());
+            CHECK(knowledge.variables.empty());
+            CHECK(knowledge.autonoteIds.empty());
+        }
+        CHECK(matched > 0);
+    }
+    // Merge replaces Ravenshore's legacy gold fountain with the dimensional-travel callback.
+    const MapStatsEntry *pRavenshore = data.getMapStats().findByFileName("out02.odm");
+    REQUIRE(pRavenshore);
+    auto map = MapAssetLoader().load(fixture.assetFileSystem, *pRavenshore, data.getMonsterTable(),
+        data.getObjectTable(), MapLoadPurpose::HeadlessGameplay);
+    REQUIRE(map);
+    std::string error;
+    REQUIRE_MESSAGE(GameDataLoader::loadEventPrograms(fixture.assetFileSystem, *map, error), error);
+    REQUIRE(map->localEventProgram);
+    CHECK_FALSE(map->localEventProgram->siteReferences().contains(104));
+    REQUIRE(map->localEventProgram->getContextActionMetadata(104));
+    CHECK(map->localEventProgram->getContextActionMetadata(104)->kind == "teleport");
+    CHECK(map->localEventProgram->interactionReferences().contains(104));
 }
 
 TEST_CASE("canonical interaction references describe active statue rescues and reusable keyed entrances")

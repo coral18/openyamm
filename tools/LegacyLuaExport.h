@@ -7,6 +7,7 @@
 #include <optional>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 namespace OpenYAMM::Game
 {
@@ -45,6 +46,7 @@ struct LegacyLuaExportLookups
     std::unordered_map<uint32_t, std::string> actorGroupNames;
     std::unordered_map<uint32_t, std::string> mapEncounterNames;
     std::unordered_map<uint32_t, std::string> spellNames;
+    std::unordered_map<uint32_t, std::vector<std::string>> townPortalDestinations;
     std::unordered_map<uint32_t, std::string> questNotes;
     std::unordered_map<uint32_t, std::string> autonoteTexts;
     std::unordered_map<uint32_t, std::string> awardTexts;

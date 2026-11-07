@@ -1,3 +1,4 @@
 -- generated site references from legacy EVT/STR; load after the base handlers
+SetMapSiteReference(451, "Town Portal unlocks affect the whole party; character bonuses apply to the selected character.\nHealth and spell point gains stop at their maximum; attribute increases use the game's normal limits.\n\nOutcome 1:\nHealth +25\nRequirements (all):\n- Health is below maximum\n- Town Portal access already unlocked for: Baltazar's Lair\n\nOutcome 2:\nUnlocks Town Portal access to: Baltazar's Lair\nRequirements (all):\n- Health is full\n- Town Portal access not yet unlocked for: Baltazar's Lair\n\nOutcome 3:\nUnlocks Town Portal access to: Baltazar's Lair\nHealth +25\nRequirements (all):\n- Health is below maximum\n- Town Portal access not yet unlocked for: Baltazar's Lair")
 SetMapConnectionTargets(501, {"out08.odm"})
 SetMapConnectionTargets(502, {"out08.odm"})

@@ -1,0 +1,10 @@
+id: atlas.mm8_portal_fountain_reference
+title: Prepare an unvisited Alvar fountain for native Atlas Guide verification
+world: mm8
+mode: faithful
+steps:
+- new_game_flow: {start_map: out03.odm}
+- assert:
+    map: out03.odm
+    qbit_clear: [301]
+- save_game: before

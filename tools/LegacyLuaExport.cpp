@@ -12934,12 +12934,31 @@ bool siteRemainingUses(const LegacyLuaEvent &event, const FormattedSelector &sel
     return checked && consumed;
 }
 
+std::optional<std::string> sitePortalNames(const FormattedSelector &selector, uint32_t value,
+    const LegacyLuaExportLookups &lookups)
+{
+    if (selector.semantic != SelectorSemantic::QBit || !selectorValueMatches(selector, value)) return std::nullopt;
+    const auto destinations = lookups.townPortalDestinations.find(selector.index);
+    if (destinations == lookups.townPortalDestinations.end() || destinations->second.empty()) return std::nullopt;
+    std::string names;
+    for (const std::string &name : destinations->second)
+    {
+        if (name.empty()) return std::nullopt;
+        if (!names.empty()) names += ", ";
+        names += name;
+    }
+    return names;
+}
+
 std::optional<std::string> siteRequirement(const LegacyLuaEvent &event,
     const LegacyLuaInstruction &instruction, bool success, const LegacyLuaExportLookups &lookups)
 {
     if (instruction.arguments.size() != 2) return std::nullopt;
-    const FormattedSelector selector = formatSelector(instruction.arguments[0], {});
+    const FormattedSelector selector = formatSelector(instruction.arguments[0], lookups.qbitRemaps);
     const int32_t value = int32_t(instruction.arguments[1]);
+    if (const auto names = sitePortalNames(selector, instruction.arguments[1], lookups))
+        return std::string(success ? "Town Portal access already unlocked for: "
+            : "Town Portal access not yet unlocked for: ") + *names;
     if (selector.semantic == SelectorSemantic::Autonote
         && selectorValueMatches(selector, instruction.arguments[1]))
     {
@@ -12999,6 +13018,7 @@ std::optional<std::string> buildSiteReference(const LegacyLuaEvent &event,
         std::vector<Requirement> requirements;
         std::vector<std::string> effects;
         std::vector<uint8_t> visited;
+        std::set<std::string> portalWrites;
         bool mutated = false;
     };
     std::vector<Path> outcomes;
@@ -13029,8 +13049,16 @@ std::optional<std::string> buildSiteReference(const LegacyLuaEvent &event,
                 case LegacyLuaOperation::Subtract:
                 {
                     if (pAction->arguments.size() != 2) return false;
-                    const FormattedSelector selector = formatSelector(pAction->arguments[0], {});
+                    const FormattedSelector selector = formatSelector(pAction->arguments[0], lookups.qbitRemaps);
                     const int32_t value = int32_t(pAction->arguments[1]);
+                    if (const auto names = sitePortalNames(selector, pAction->arguments[1], lookups))
+                    {
+                        if (pAction->operation == LegacyLuaOperation::Subtract) return false;
+                        path.effects.push_back("Unlocks Town Portal access to: " + *names);
+                        // A destination bit does not mutate character attributes. Its own later tests remain unsafe.
+                        path.portalWrites.insert(selector.expression);
+                        break;
+                    }
                     path.mutated = true;
                     if (selector.semantic == SelectorSemantic::Autonote) break;
                     if (siteUseCounter(event, selector)) break;
@@ -13097,8 +13125,8 @@ std::optional<std::string> buildSiteReference(const LegacyLuaEvent &event,
         if (terminal.operation != LegacyLuaOperation::Compare || !terminal.jumpTargetStep
             || terminal.arguments.size() != 2)
             return false;
-        const FormattedSelector selector = formatSelector(terminal.arguments[0], {});
-        const bool unstable = path.mutated;
+        const FormattedSelector selector = formatSelector(terminal.arguments[0], lookups.qbitRemaps);
+        const bool unstable = path.mutated || path.portalWrites.contains(selector.expression);
         if (unstable && selector.semantic != SelectorSemantic::Autonote) return false;
         const auto positive = siteRequirement(event, terminal, true, lookups);
         const auto negative = siteRequirement(event, terminal, false, lookups);
@@ -13170,8 +13198,11 @@ std::optional<std::string> buildSiteReference(const LegacyLuaEvent &event,
     for (const Path &path : outcomes)
         for (const Requirement &requirement : path.requirements)
             if (requirement.unstable || requirement.text.empty()) return std::nullopt;
-    std::string text = "Effects apply to the selected character unless the effect concerns party resources.\n"
-        "Health and spell point gains stop at their maximum; attribute increases use the game's normal limits.";
+    std::string text = std::any_of(outcomes.begin(), outcomes.end(),
+        [](const Path &path) { return !path.portalWrites.empty(); })
+        ? "Town Portal unlocks affect the whole party; character bonuses apply to the selected character."
+        : "Effects apply to the selected character unless the effect concerns party resources.";
+    text += "\nHealth and spell point gains stop at their maximum; attribute increases use the game's normal limits.";
     if (randomOutcomes) text += "\nRandom outcomes are possibilities; their probabilities are not shown.";
     for (size_t i = 0; i < outcomes.size(); ++i)
     {
@@ -13690,7 +13721,11 @@ std::string generateLegacyEventSiteRefsLuaChunk(
             || (action->kind != "well" && action->kind != "fountain" && action->kind != "shrine"
                 && action->kind != "drink"))) continue;
         const bool drink = scope == LegacyLuaExportScope::Map && action && action->kind == "drink";
-        const auto reference = buildSiteReference(direct, lookups, drink);
+        const bool feedback = scope == LegacyLuaExportScope::Map
+            && std::any_of(direct.instructions.begin(), direct.instructions.end(),
+                [](const LegacyLuaInstruction &instruction)
+                { return instruction.operation == LegacyLuaOperation::StatusText; });
+        const auto reference = buildSiteReference(direct, lookups, drink || feedback);
         if (drink)
             metadata << "SetMapSiteReference(" << direct.eventId << ", "
                 << luaQuoted(reference.value_or("")) << ", \"drink\")\n";
