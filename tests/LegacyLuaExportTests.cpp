@@ -2110,7 +2110,8 @@ TEST_CASE("typed interaction references bind active callbacks and validate seman
         "kind='leave_dungeon', itemId=1406, itemScope='each_member', targetMap='7out15.odm'",
         "kind='enter_dungeon', itemId=619, itemScope='party', openedQBit=214, targetMap='d34.blv'",
         "kind='enter_dungeon', itemId=1, itemScope='selected', targetMap='d10.blv'",
-        "kind='offering', itemId=1421, requiredQBit=712, completionQBit=715, spriteId=25, consumesItem=true"})
+        "kind='offering', itemId=1421, requiredQBit=712, completionQBit=715, spriteId=25, consumesItem=true",
+        "kind='quest_objective', requiredQBit=554, completionQBit=574"})
     {
         program = load(handler + "SetMapInteractionReference(1, {" + pFields + "})");
         REQUIRE(program);
@@ -2118,6 +2119,12 @@ TEST_CASE("typed interaction references bind active callbacks and validate seman
         if (program->interactionReferences().at(1).kind == "offering")
         {
             CHECK(program->interactionReferences().at(1).requiredQBit == 712);
+            CHECK(program->getContextActionMetadata(1)->kind == "shrine");
+        }
+        if (program->interactionReferences().at(1).kind == "quest_objective")
+        {
+            CHECK(program->interactionReferences().at(1).requiredQBit == 554);
+            CHECK(program->interactionReferences().at(1).completionQBit == 574);
             CHECK(program->getContextActionMetadata(1)->kind == "shrine");
         }
         program = load(handler + "SetMapInteractionReference(1, {" + pFields + "})\nevt.map[1]=function() end");
@@ -2144,7 +2151,25 @@ TEST_CASE("typed interaction references bind active callbacks and validate seman
         "kind='offering', itemId=1421, requiredQBit=712, completionQBit=715, npcId=1, spriteId=25",
         "kind='offering', itemId=1421, requiredQBit=712, completionQBit=715, spellId=1, spriteId=25",
         "kind='offering', itemId=1421, requiredQBit=712, completionQBit=715, spriteId=25, itemScope='party'",
-        "kind='rescue', itemId=1, npcId=1, spriteId=1, completionQBit=1, requiredQBit=712"})
+        "kind='rescue', itemId=1, npcId=1, spriteId=1, completionQBit=1, requiredQBit=712",
+        "kind='quest_objective', completionQBit=574",
+        "kind='quest_objective', requiredQBit=554",
+        "kind='quest_objective', requiredQBit=554, completionQBit=554",
+        "kind='quest_objective', requiredQBit=0, completionQBit=574",
+        "kind='quest_objective', requiredQBit=1.5, completionQBit=574",
+        "kind='quest_objective', requiredQBit=554, completionQBit=-1",
+        "kind='quest_objective', requiredQBit=554, completionQBit=true",
+        "kind='quest_objective', requiredQBit=554, completionQBit=574, itemId=1",
+        "kind='quest_objective', requiredQBit=554, completionQBit=574, npcId=1",
+        "kind='quest_objective', requiredQBit=554, completionQBit=574, spriteId=1",
+        "kind='quest_objective', requiredQBit=554, completionQBit=574, spellId=1",
+        "kind='quest_objective', requiredQBit=554, completionQBit=574, consumesItem=true",
+        "kind='quest_objective', requiredQBit=554, completionQBit=574, addsFollower=true",
+        "kind='quest_objective', requiredQBit=554, completionQBit=574, network='test.gate'",
+        "kind='quest_objective', requiredQBit=554, completionQBit=574, targetMap='t03.blv'",
+        "kind='quest_objective', requiredQBit=554, completionQBit=574, openedMapFlag='Opened'",
+        "kind='quest_objective', requiredQBit=554, completionQBit=574, openedQBit=1",
+        "kind='quest_objective', requiredQBit=554, completionQBit=574, itemScope='party'"})
         CHECK_FALSE(load(handler + "SetMapInteractionReference(1, {" + pFields + "})"));
     program = load(handler + definition + "SetMapContextAction(1, {kind = 'well', source = 'script'})");
     REQUIRE(program);

@@ -128,11 +128,26 @@ void WorldDatabase::indexMapInteractionReferences(const MapStatsEntry &map,
     const ItemTable &items, const SpellTable &spells, const JournalQuestTable &quests)
 {
     const std::string id = mapId(map);
+    const auto questText = [&](uint32_t qbit) -> const std::string &
+    {
+        const auto quest = std::find_if(quests.entries().begin(), quests.entries().end(),
+            [&](const JournalQuestEntry &entry) { return entry.qbitId == qbit; });
+        if (quest == quests.entries().end() || quest->text.empty() || quest->text == "0")
+            throw std::invalid_argument("Unknown interaction quest: " + id + "/" + std::to_string(qbit));
+        return quest->text;
+    };
     for (WorldMapFeature &feature : m_features)
     {
         if (feature.mapId != id || !feature.interactionReference) continue;
         const SiteInteractionReference &reference = *feature.interactionReference;
         if (reference.kind == "dimension_door") continue;
+        if (reference.kind == "quest_objective")
+        {
+            feature.guideReference = "Requires an active quest:\n" + questText(reference.requiredQBit)
+                + "\n\nOn success: complete this altar's objective and record its quest progress."
+                + "\nThis ritual can be completed only once; the final quest turn-in is separate.";
+            continue;
+        }
         const ItemDefinition *pItem = items.get(reference.itemId);
         if (pItem == nullptr) throw std::invalid_argument("Unknown interaction item: " + feature.id);
         std::string text;
@@ -160,11 +175,7 @@ void WorldDatabase::indexMapInteractionReferences(const MapStatsEntry &map,
         }
         else if (reference.kind == "offering")
         {
-            const auto quest = std::find_if(quests.entries().begin(), quests.entries().end(),
-                [&](const JournalQuestEntry &entry) { return entry.qbitId == reference.requiredQBit; });
-            if (quest == quests.entries().end() || quest->text.empty() || quest->text == "0")
-                throw std::invalid_argument("Unknown offering quest: " + feature.id);
-            text = "Requires an active quest:\n" + quest->text
+            text = "Requires an active quest:\n" + questText(reference.requiredQBit)
                 + "\n\nA party member must carry: " + pItem->name + ".\n"
                 + (reference.consumesItem ? "The item is consumed only when the offering succeeds.\n"
                     : "The item is not consumed.\n")

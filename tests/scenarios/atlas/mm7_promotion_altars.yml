@@ -1,0 +1,107 @@
+id: atlas.mm7_promotion_altar_encounter
+title: Real altar picks preserve one-time Light and Dark priest objective progress
+world: mm7
+mode: faithful
+steps:
+- new_game_flow:
+    start_map: 7d19.blv
+    party:
+      gold: 5000
+      food: 10
+      members:
+      - name: Atlas Tester
+        class: Cleric
+        level: 20
+        race_id: 0
+        skills: []
+        equipment: {}
+- set_pose: &id001
+    x: 3200
+    y: 4950
+    z: 0
+    yaw: 1.5707963
+    pitch: -0.4
+- save_game: moon-unknown
+- press_interact:
+    pose: *id001
+    expect:
+      kind: event_target
+      triggered_event: 376
+      can_activate: true
+- assert:
+    qbit_clear:
+    - 554
+    - 574
+- note: Quest acceptance is an explicit preparation shortcut; this fixture tests the
+    physical altar, not its NPC.
+- setup_shortcut:
+    kind: set_qbit
+    id: 554
+- save_game: moon-active-setup
+- load_game: moon-active-setup
+- press_interact:
+    pose: *id001
+    expect:
+      kind: event_target
+      triggered_event: 376
+      can_activate: true
+- assert:
+    qbit_set:
+    - 554
+    - 574
+    qbit_clear:
+    - 757
+- save_game: moon-completed
+- load_game: moon-completed
+- assert:
+    qbit_set:
+    - 554
+    - 574
+    qbit_clear:
+    - 757
+- load_map:
+    map: t03.blv
+- set_pose: &id002
+    x: 0
+    y: 500
+    z: 0
+    yaw: 1.5707963
+    pitch: -0.5
+- save_game: sun-unknown
+- press_interact:
+    pose: *id002
+    expect:
+      kind: event_target
+      triggered_event: 376
+      can_activate: true
+- assert:
+    qbit_clear:
+    - 556
+    - 575
+- note: Quest acceptance is an explicit preparation shortcut; this fixture tests the
+    physical altar, not its NPC.
+- setup_shortcut:
+    kind: set_qbit
+    id: 556
+- save_game: sun-active-setup
+- load_game: sun-active-setup
+- press_interact:
+    pose: *id002
+    expect:
+      kind: event_target
+      triggered_event: 376
+      can_activate: true
+- assert:
+    qbit_set:
+    - 556
+    - 575
+    qbit_clear:
+    - 757
+- save_game: sun-completed
+- load_game: sun-completed
+- assert:
+    qbit_set:
+    - 556
+    - 575
+    qbit_clear:
+    - 757

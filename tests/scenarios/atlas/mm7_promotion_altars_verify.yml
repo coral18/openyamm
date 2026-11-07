@@ -1,0 +1,18 @@
+id: atlas.mm7_promotion_altars_verify
+title: Guide browsing preserves both completed priest altar objectives
+world: mm7
+mode: faithful
+steps:
+- load_game:
+    path: saves/quicksave.oysav
+- assert: &id001
+    qbit_set:
+    - 554
+    - 556
+    - 574
+    - 575
+    qbit_clear:
+    - 757
+- save_game: roundtrip
+- load_game: roundtrip
+- assert: *id001

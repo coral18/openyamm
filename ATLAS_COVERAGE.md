@@ -348,3 +348,12 @@ and map, twelve matched Discovery crops retain the same filtered view, and six f
 retain the expected offering flags and carried items. The map-return action clears the search, so the tour
 reapplies the same query before comparing views. The scoped inventory leaves seven recognized placed MM7
 water/shrine/drink callbacks without complete references. Full Atlas acceptance and Android remain open.
+
+The 2026-11-08 priest-altar follow-up supplies shared quest references for the Grand Temples of the Moon and
+Sun. Guide distinguishes their one-time objective from the later NPC turn-in; the gameplay callbacks and
+save format are unchanged. The selected Windows suite passes 468 cases / 78,276 assertions. A 28-step
+real-picker fixture and four native runs (160 UI steps / 20 captures) verify both altars before/after their
+rituals. Eight save inspections, eight matching same-layer Discovery map/list crops and four post-UI
+roundtrips preserve the checked party/resources/map and quest progress. Five recognized placed MM7
+water/shrine/drink interactions still lack complete references in this scoped inventory. This checkpoint does
+not certify the NPC promotion rewards, full Atlas coverage or deferred Android/controller acceptance.

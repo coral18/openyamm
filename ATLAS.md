@@ -3739,3 +3739,30 @@ The focused runtime test covers all combinations of active quest, completed offe
 each shrine, with the item carried by another party member. It also checks repeat-use conservation, shared
 quest-text updates, unknown-quest failure, single-record grouping and Discovery/Guide separation. No save
 format change or gameplay-handler replacement is needed for these references. Android remains deferred.
+
+## Priest promotion altar references, 2026-11-08
+
+The Grand Temple of the Moon (`7d19:376`) and Grand Temple of the Sun (`t03:376`) declare read-only,
+callback-owned `quest_objective` references. They reuse the required quest text from the shared
+`JournalQuestTable` (554/556), with one-time objective progress 574/575. Guide explains the prerequisite,
+objective completion and separate final turn-in. Discovery does not acquire that reference by visiting,
+interacting or browsing Guide. No promotion, texture, reward, generated Lua handler or save format is changed.
+
+The descriptor uses the existing `requiredQBit` and `completionQBit` fields. It rejects item, spell, NPC,
+sprite, travel and consumption fields that do not belong to this kind. Replacing the owning callback drops
+its metadata. Missing prerequisite quest text is a content error. The completion bits have no journal text;
+the reference does not turn internal registry notes into player prose or fabricate a promotion reward.
+
+Reproduce the physical interaction with `tests/scenarios/atlas/mm7_promotion_altars.yml`: it clicks both real
+indoor altars before and after an explicitly declared quest-acceptance shortcut, then verifies saved progress.
+The prerequisite shortcut is followed by save/load before input, so the runtime driver uses that party state.
+It does not certify quest acceptance, the promotion dialogue or its final reward. Use
+`tools/menu_tours/atlas_mm7_promotion_altar.yml` with the resulting Moon/Sun saves for native inspection, then
+`tests/scenarios/atlas/mm7_promotion_altars_verify.yml` with the completed Sun UI output for a roundtrip check.
+Discovery comparisons select All heights before both captures: selecting a shrine can otherwise select its
+height slice, which changes the map view without changing discovered terrain.
+
+Windows verification passes 468 selected cases / 78,276 assertions, the 28-step physical fixture, four native
+runs (160 UI steps / 20 captures), eight save inspections, eight same-layer Discovery crop comparisons and
+four five-step post-UI roundtrips. Evidence stays outside Git under `atlas-rituals-20261108/` in the Windows
+development directory. The wider Atlas objective and deferred physical-device checks remain open.

@@ -344,3 +344,26 @@ exclusion. Six native runs pass 240 UI steps / 30 captures, with twelve source/o
 twelve equal Discovery map/list crops after restoring the same search. Six post-UI five-step roundtrips verify
 the individual completion flags and item conservation before and after offering. Native Discovery readers
 show only the recorded loss of the actually offered item; Guide readers use the shared full quest reference.
+
+## Priest promotion rituals, 2026-11-08
+
+The two Evenmorn priest altars now use typed `quest_objective` references rather than duplicated quest prose:
+Moon `7d19:376` requires 554 and records 574; Sun `t03:376` requires 556 and records 575. Both are classified as
+shrines through the existing shared context path. These sidecars describe their active callbacks without
+editing generated Lua or executing a ritual to build the Guide. Original readable D19/T03 event 376 confirms
+the same required/completed branching, texture change and temporary congratulations flag.
+
+The reference distinguishes completion of the altar objective from the later NPC quest turn-in. It resolves
+only the player-facing prerequisite quest text; the completion flags' internal notes are not journal text.
+
+The selected Windows regression suite passes 468 cases / 78,276 assertions with the established unrelated
+portrait exclusion. Runtime callback checks cover all eight prerequisite/completion combinations, including
+second invocation, texture changes and the temporary congratulations flag. Shared quest-text reindexing,
+missing text, callback replacement and invalid metadata are checked separately.
+
+The physical fixture passes 28 steps through actual face picks on both altars, with a declared prerequisite
+setup shortcut and save/load before runtime input. Four native runs pass 160 UI steps / 20 captures; eight
+save inspections preserve the party, resources and map, and eight same-layer Discovery map/list crops match.
+Four post-UI five-step roundtrips retain the expected progress. This leaves five recognized physically placed
+water/shrine/drink callbacks without a complete reference in the scoped inventory: MM7 `7out03:205`,
+`7out13:401`, `out12:205`, `out14:401` and `t01:12`. Full Atlas and device acceptance remain open.

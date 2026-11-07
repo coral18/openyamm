@@ -1334,6 +1334,100 @@ TEST_CASE("statuette shrine references share quest and item data and match activ
     }
 }
 
+TEST_CASE("promotion altar references share quest text and match one-time active ritual conditions")
+{
+    using namespace OpenYAMM::Game;
+    REQUIRE_MESSAGE(OpenYAMM::Tests::regressionMapLoaderLoaded(),
+        OpenYAMM::Tests::regressionMapLoaderFailure());
+    const auto &fixture = OpenYAMM::Tests::regressionMapLoader();
+    const auto &data = fixture.gameDataLoader;
+    struct Ritual { const char *pMap; uint32_t required; uint32_t completed; const char *pTexture; };
+    for (const Ritual &ritual : {Ritual{"7d19.blv", 554, 574, "t2bedsht"}, {"t03.blv", 556, 575, "cfb1"}})
+    {
+        CAPTURE(std::string(ritual.pMap));
+        const MapStatsEntry *pMap = data.getMapStats().findByFileName(ritual.pMap);
+        REQUIRE(pMap);
+        auto map = MapAssetLoader().load(fixture.assetFileSystem, *pMap, data.getMonsterTable(),
+            data.getObjectTable(), MapLoadPurpose::HeadlessGameplay);
+        REQUIRE(map);
+        REQUIRE(map->indoorMapData);
+        std::string error;
+        REQUIRE_MESSAGE(GameDataLoader::loadEventPrograms(fixture.assetFileSystem, *map, error), error);
+        REQUIRE(map->localEventProgram);
+        const auto &events = *map->localEventProgram;
+        REQUIRE(events.interactionReferences().contains(376));
+        const SiteInteractionReference &reference = events.interactionReferences().at(376);
+        CHECK(reference.kind == "quest_objective");
+        CHECK(reference.requiredQBit == ritual.required);
+        CHECK(reference.completionQBit == ritual.completed);
+        CHECK(events.getContextActionMetadata(376)->kind == "shrine");
+        WorldDatabase world(data.getMapStats(), data.getHouseTable(), data.getNpcDialogTable(),
+            data.getMergedTeacherTopicTable(), "mm7");
+        world.indexMapLocations(*pMap, *map->indoorMapData, events);
+        world.indexMapInteractionReferences(*pMap, data.getItemTable(), data.getSpellTable(),
+            data.getJournalQuestTable());
+        const auto feature = std::find_if(world.features().begin(), world.features().end(),
+            [](const WorldMapFeature &entry) { return entry.site.eventId == 376; });
+        REQUIRE(feature != world.features().end());
+        CHECK(feature->kind == WorldMapFeatureKind::Shrine);
+        const auto quest = std::find_if(data.getJournalQuestTable().entries().begin(),
+            data.getJournalQuestTable().entries().end(),
+            [&](const JournalQuestEntry &entry) { return entry.qbitId == ritual.required; });
+        REQUIRE(quest != data.getJournalQuestTable().entries().end());
+        WorldKnowledge knowledge;
+        knowledge.visitedMaps.insert(ritual.pMap);
+        CHECK_FALSE(world.featureVisible(*feature, knowledge, false));
+        CHECK(world.siteReference(*feature, knowledge, false).empty());
+        const std::string guide(world.siteReference(*feature, knowledge, true));
+        CHECK(guide.find(quest->text) != std::string::npos);
+        CHECK(guide.find("only once") != std::string::npos);
+        CHECK(guide.find("final quest turn-in is separate") != std::string::npos);
+        CHECK(guide.find("carry") == std::string::npos);
+        CHECK(knowledge.variables.empty());
+        knowledge.interactedSites[ritual.pMap].insert(worldSiteDiscoveryKey(376, feature->site.id));
+        CHECK(world.featureVisible(*feature, knowledge, false));
+        CHECK(world.siteReference(*feature, knowledge, false).empty());
+        JournalQuestTable updated;
+        REQUIRE(updated.loadFromRows({{std::to_string(ritual.required), "Changed shared ritual quest"}}));
+        world.indexMapInteractionReferences(*pMap, data.getItemTable(), data.getSpellTable(), updated);
+        CHECK(world.siteReference(*feature, knowledge, true).find("Changed shared ritual quest") != std::string::npos);
+        CHECK(world.siteReference(*feature, knowledge, true).find(quest->text) == std::string::npos);
+        JournalQuestTable missing;
+        CHECK_THROWS_AS(world.indexMapInteractionReferences(*pMap, data.getItemTable(), data.getSpellTable(),
+            missing), std::invalid_argument);
+        for (bool active : {false, true})
+            for (bool completed : {false, true})
+            {
+                CAPTURE(active);
+                CAPTURE(completed);
+                PartySeed seed = Party::createDefaultSeed();
+                seed.members.resize(1);
+                seed.members[0].inventory.clear();
+                Party party;
+                party.seed(seed);
+                party.setQuestBit(ritual.required, active);
+                party.setQuestBit(ritual.completed, completed);
+                const int gold = party.gold();
+                EventRuntimeState state;
+                EventRuntime runtime;
+                REQUIRE(runtime.executeEventById(map->localEventProgram, std::nullopt, 376, state, &party));
+                const bool success = active && !completed;
+                CHECK(party.hasQuestBit(ritual.completed) == (completed || success));
+                CHECK(party.hasQuestBit(ritual.required) == active);
+                CHECK_FALSE(party.hasQuestBit(757));
+                CHECK(party.member(0)->inventory.empty());
+                CHECK(party.gold() == gold);
+                CHECK(state.textureOverrides.contains(20) == success);
+                if (success) CHECK(state.textureOverrides.at(20) == ritual.pTexture);
+                // Completion blocks a second invocation, including its texture and feedback side effects.
+                state.textureOverrides.clear();
+                REQUIRE(runtime.executeEventById(map->localEventProgram, std::nullopt, 376, state, &party));
+                CHECK(state.textureOverrides.empty());
+                CHECK(party.hasQuestBit(ritual.completed) == (completed || success));
+            }
+    }
+}
+
 TEST_CASE("canonical interaction references describe active statue rescues and reusable keyed entrances")
 {
     using namespace OpenYAMM::Game;
