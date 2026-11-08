@@ -3766,3 +3766,34 @@ Windows verification passes 468 selected cases / 78,276 assertions, the 28-step 
 runs (160 UI steps / 20 captures), eight save inspections, eight same-layer Discovery crop comparisons and
 four five-step post-UI roundtrips. Evidence stays outside Git under `atlas-rituals-20261108/` in the Windows
 development directory. The wider Atlas objective and deferred physical-device checks remain open.
+
+## Stone-circle objective groups, 2026-11-08
+
+Read-only `quest_objective` descriptors now connect the Evenmorn, Tatalia and Avlee stone circles to shared
+quest 561. Each declares its local completion bit (563/564/565), the group bit 562 and its two sibling
+objectives. Guide distinguishes one visit, completion of all three objectives and the separate NPC turn-in.
+This extends the existing descriptor; the gameplay callbacks, quest prose, save format and world geometry
+remain authoritative. The Core does not execute an event to derive its reference or predict current eligibility.
+
+`objectiveGroupQBit` and `otherObjectiveQBits` must be supplied together for a grouped objective. Siblings are
+a dense, distinct positive-integer array; prerequisite, local completion, group and sibling identities must not
+overlap. These fields are rejected for other reference kinds, and replacing the owning callback drops them.
+The reference describes declared dependencies; runtime callback coverage checks them against all three maps.
+
+Evenmorn's active callback had no context classification, so its existing physical stone circle was absent
+from Sites. Its typed reference supplies the shared shrine classification. Evenmorn and Avlee explicitly group
+the six activation components of each circle into one feature, retaining all component discovery identities.
+No Atlas-only coordinates or new world objects are added.
+
+Reproduce the three real face picks with `tests/scenarios/atlas/mm7_stone_circles.yml`; accepting Anthony's
+quest is an explicit setup shortcut followed by save/load before input. Actual activation records each local
+visit and completes the group on the third distinct circle. The fixture preserves that state through map
+travel and reload, without claiming the NPC promotion/reward dialogue. Use
+`tools/menu_tours/atlas_mm7_stone_circle.yml` with the generated before/after saves, then
+`tests/scenarios/atlas/mm7_stone_circles_verify.yml` on the visited Avlee UI output for the final roundtrip.
+
+Verification passes 469 selected Windows cases / 79,490 assertions, including all 96 callback-state
+combinations and six visit orders. The physical fixture passes 28 steps. Six native runs pass 222 UI steps /
+30 captures, twelve save inspections, twelve equal Discovery map/list crops and six post-UI roundtrips.
+Evidence stays outside Git under `atlas-stone-circles-20261108/` in the Windows development directory.
+The broader Atlas objective, remaining content gaps and deferred physical-device checks remain open.

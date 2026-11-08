@@ -748,12 +748,36 @@ bool readInteractionReferences(lua_State *pLuaState, int metadataIndex, Scripted
                     : key == "npcId" ? &reference.npcId : key == "spriteId" ? &reference.spriteId
                     : key == "completionQBit" ? &reference.completionQBit
                     : key == "requiredQBit" ? &reference.requiredQBit
+                    : key == "objectiveGroupQBit" ? &reference.objectiveGroupQBit
                     : key == "openedQBit" ? &reference.openedQBit : nullptr;
                 if (pNumber != nullptr)
                 {
                     if (!lua_isinteger(pLuaState, -1) || lua_tointeger(pLuaState, -1) <= 0
                         || lua_tointeger(pLuaState, -1) > INT32_MAX) return fail();
                     *pNumber = uint32_t(lua_tointeger(pLuaState, -1));
+                }
+                else if (key == "otherObjectiveQBits")
+                {
+                    if (!lua_istable(pLuaState, -1)) return fail();
+                    const size_t count = lua_rawlen(pLuaState, -1);
+                    if (count == 0 || count > 64) return fail();
+                    size_t entries = 0;
+                    lua_pushnil(pLuaState);
+                    while (lua_next(pLuaState, -2) != 0)
+                    {
+                        if (!lua_isinteger(pLuaState, -2) || lua_tointeger(pLuaState, -2) < 1
+                            || uint64_t(lua_tointeger(pLuaState, -2)) > count
+                            || !lua_isinteger(pLuaState, -1) || lua_tointeger(pLuaState, -1) <= 0
+                            || lua_tointeger(pLuaState, -1) > INT32_MAX) return fail();
+                        const uint32_t qbit = uint32_t(lua_tointeger(pLuaState, -1));
+                        if (std::find(reference.otherObjectiveQBits.begin(), reference.otherObjectiveQBits.end(), qbit)
+                            != reference.otherObjectiveQBits.end()) return fail();
+                        reference.otherObjectiveQBits.push_back(qbit);
+                        ++entries;
+                        lua_pop(pLuaState, 1);
+                    }
+                    if (entries != count) return fail();
+                    std::sort(reference.otherObjectiveQBits.begin(), reference.otherObjectiveQBits.end());
                 }
                 else if (key == "consumesItem" || key == "addsFollower")
                 {
@@ -795,6 +819,18 @@ bool readInteractionReferences(lua_State *pLuaState, int metadataIndex, Scripted
                 }
             }
             if (reference.kind != "dimension_door" && !reference.network.empty()) valid = false;
+            if (reference.kind != "quest_objective"
+                && (reference.objectiveGroupQBit != 0 || !reference.otherObjectiveQBits.empty())) valid = false;
+            if (reference.kind == "quest_objective")
+            {
+                valid = valid && ((reference.objectiveGroupQBit != 0) == !reference.otherObjectiveQBits.empty());
+                if (reference.objectiveGroupQBit != 0)
+                    valid = valid && reference.objectiveGroupQBit != reference.requiredQBit
+                        && reference.objectiveGroupQBit != reference.completionQBit;
+                for (uint32_t qbit : reference.otherObjectiveQBits)
+                    valid = valid && qbit != reference.requiredQBit && qbit != reference.completionQBit
+                        && qbit != reference.objectiveGroupQBit;
+            }
             if (reference.kind != "offering" && reference.kind != "quest_objective"
                 && reference.requiredQBit != 0) valid = false;
             const bool passage = reference.kind == "enter_dungeon" || reference.kind == "leave_dungeon";

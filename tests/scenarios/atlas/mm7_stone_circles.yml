@@ -1,0 +1,119 @@
+id: atlas.mm7_stone_circle_encounter
+title: Physically visit each stone circle and preserve local and shared progress
+world: mm7
+mode: faithful
+steps:
+- new_game_flow:
+    start_map: out09.odm
+    party:
+      gold: 5000
+      food: 10
+      members:
+      - name: Atlas Tester
+        class: Druid
+        level: 20
+        race_id: 0
+        skills: []
+        equipment: {}
+- set_pose: &id001
+    x: -13304
+    y: 4250
+    z: 0
+    yaw: 1.5707963
+    pitch: -0.5
+- save_game: evenmorn-unknown
+- press_interact:
+    pose: *id001
+    expect:
+      kind: event_target
+      triggered_event: 401
+      can_activate: true
+- assert:
+    qbit_clear:
+    - 561
+    - 562
+    - 563
+- note: Quest acceptance is outside this fixture and uses a declared preparation shortcut.
+- setup_shortcut:
+    kind: set_qbit
+    id: 561
+- save_game: active-setup
+- load_game: active-setup
+- press_interact:
+    pose: *id001
+    expect:
+      kind: event_target
+      triggered_event: 401
+      can_activate: true
+- assert:
+    qbit_set:
+    - 563
+    - 561
+    qbit_clear:
+    - 564
+    - 565
+    - 757
+    - 562
+- save_game: evenmorn-visited
+- load_game: evenmorn-visited
+- load_map:
+    map: 7out13.odm
+- set_pose: &id002
+    x: -4600
+    y: 6830
+    z: 3000
+    yaw: 1.5707963
+    pitch: -0.4
+- save_game: tatalia-unknown
+- press_interact:
+    pose: *id002
+    expect:
+      kind: event_target
+      triggered_event: 401
+      can_activate: true
+- assert:
+    qbit_set:
+    - 563
+    - 564
+    - 561
+    qbit_clear:
+    - 565
+    - 757
+    - 562
+- save_game: tatalia-visited
+- load_game: tatalia-visited
+- load_map:
+    map: out14.odm
+- set_pose: &id003
+    x: -5624
+    y: -4450
+    z: 1450
+    yaw: 1.5707963
+    pitch: -0.4
+- save_game: avlee-unknown
+- press_interact:
+    pose: *id003
+    expect:
+      kind: event_target
+      triggered_event: 401
+      can_activate: true
+- assert:
+    qbit_set:
+    - 563
+    - 564
+    - 565
+    - 561
+    - 562
+    qbit_clear:
+    - 757
+- save_game: avlee-visited
+- load_game: avlee-visited
+- assert:
+    qbit_set:
+    - 561
+    - 562
+    - 563
+    - 564
+    - 565
+    qbit_clear:
+    - 757

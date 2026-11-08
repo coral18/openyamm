@@ -144,8 +144,14 @@ void WorldDatabase::indexMapInteractionReferences(const MapStatsEntry &map,
         if (reference.kind == "quest_objective")
         {
             feature.guideReference = "Requires an active quest:\n" + questText(reference.requiredQBit)
-                + "\n\nOn success: complete this altar's objective and record its quest progress."
-                + "\nThis ritual can be completed only once; the final quest turn-in is separate.";
+                + "\n\nOn success: complete this altar's objective and record its quest progress.";
+            if (reference.objectiveGroupQBit != 0)
+                feature.guideReference += "\nThis location records one objective in a group of "
+                    + std::to_string(reference.otherObjectiveQBits.size() + 1)
+                    + ". The group completes when all of its objectives are recorded."
+                    + "\nNo further effect if this objective or the whole group is already complete.";
+            feature.guideReference +=
+                "\nThis ritual can be completed only once; the final quest turn-in is separate.";
             continue;
         }
         const ItemDefinition *pItem = items.get(reference.itemId);

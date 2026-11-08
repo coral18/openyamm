@@ -14,6 +14,7 @@
 #include "tests/RegressionMapLoader.h"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstdlib>
 #include <filesystem>
@@ -1284,7 +1285,11 @@ TEST_CASE("statuette shrine references share quest and item data and match activ
             CHECK(world.siteReference(*feature, knowledge, false).empty());
         }
         JournalQuestTable changedQuest;
-        REQUIRE(changedQuest.loadFromRows({{"712", "Updated shared quest text"}}));
+        std::vector<std::vector<std::string>> questRows;
+        for (const JournalQuestEntry &entry : data.getJournalQuestTable().entries())
+            questRows.push_back({std::to_string(entry.qbitId),
+                entry.qbitId == 712 ? "Updated shared quest text" : entry.text});
+        REQUIRE(changedQuest.loadFromRows(questRows));
         world.indexMapInteractionReferences(*pMap, data.getItemTable(), data.getSpellTable(), changedQuest);
         CHECK(world.siteReference(*feature, knowledge, true).find("Updated shared quest text") != std::string::npos);
         CHECK(world.siteReference(*feature, knowledge, true).find("Thom Lumbra") == std::string::npos);
@@ -1426,6 +1431,114 @@ TEST_CASE("promotion altar references share quest text and match one-time active
                 CHECK(party.hasQuestBit(ritual.completed) == (completed || success));
             }
     }
+}
+
+TEST_CASE("stone circle references distinguish local visits from completing the shared objective group")
+{
+    using namespace OpenYAMM::Game;
+    REQUIRE_MESSAGE(OpenYAMM::Tests::regressionMapLoaderLoaded(),
+        OpenYAMM::Tests::regressionMapLoaderFailure());
+    const auto &fixture = OpenYAMM::Tests::regressionMapLoader();
+    const auto &data = fixture.gameDataLoader;
+    const std::array<const char *, 3> maps = {"out09.odm", "7out13.odm", "out14.odm"};
+    std::vector<std::optional<ScriptedEventProgram>> programs;
+    for (size_t index = 0; index < maps.size(); ++index)
+    {
+        CAPTURE(std::string(maps[index]));
+        const MapStatsEntry *pMap = data.getMapStats().findByFileName(maps[index]);
+        REQUIRE(pMap);
+        auto map = MapAssetLoader().load(fixture.assetFileSystem, *pMap, data.getMonsterTable(),
+            data.getObjectTable(), MapLoadPurpose::HeadlessGameplay);
+        REQUIRE(map);
+        REQUIRE(map->outdoorMapData);
+        std::string error;
+        REQUIRE_MESSAGE(GameDataLoader::loadEventPrograms(fixture.assetFileSystem, *map, error), error);
+        REQUIRE(map->localEventProgram);
+        const auto &events = *map->localEventProgram;
+        REQUIRE(events.interactionReferences().contains(401));
+        const SiteInteractionReference &reference = events.interactionReferences().at(401);
+        CHECK(reference.kind == "quest_objective");
+        CHECK(reference.requiredQBit == 561);
+        CHECK(reference.completionQBit == 563 + index);
+        CHECK(reference.objectiveGroupQBit == 562);
+        std::vector<uint32_t> others = {563, 564, 565};
+        std::erase(others, uint32_t(563 + index));
+        CHECK(reference.otherObjectiveQBits == others);
+        WorldDatabase world(data.getMapStats(), data.getHouseTable(), data.getNpcDialogTable(),
+            data.getMergedTeacherTopicTable(), "mm7");
+        world.indexMapLocations(*map->outdoorMapData, events);
+        world.indexMapInteractionReferences(*pMap, data.getItemTable(), data.getSpellTable(),
+            data.getJournalQuestTable());
+        const auto feature = std::find_if(world.features().begin(), world.features().end(),
+            [](const WorldMapFeature &entry) { return entry.site.eventId == 401; });
+        REQUIRE(feature != world.features().end());
+        CHECK(feature->kind == WorldMapFeatureKind::Shrine);
+        CHECK(std::count_if(world.features().begin(), world.features().end(),
+            [](const WorldMapFeature &entry) { return entry.site.eventId == 401; }) == 1);
+        CHECK(feature->components.size() == (index == 1 ? 0 : 6));
+        WorldKnowledge knowledge;
+        knowledge.visitedMaps.insert(maps[index]);
+        CHECK_FALSE(world.featureVisible(*feature, knowledge, false));
+        CHECK(world.siteReference(*feature, knowledge, false).empty());
+        const std::string text(world.siteReference(*feature, knowledge, true));
+        CHECK(text.find("Anthony Green") != std::string::npos);
+        CHECK(text.find("group of 3") != std::string::npos);
+        CHECK(text.find("all of its objectives") != std::string::npos);
+        CHECK(text.find("this objective or the whole group") != std::string::npos);
+        CHECK(text.find("final quest turn-in is separate") != std::string::npos);
+        knowledge.interactedSites[maps[index]].insert(worldSiteDiscoveryKey(401, feature->site.id));
+        CHECK(world.featureVisible(*feature, knowledge, false));
+        CHECK(world.siteReference(*feature, knowledge, false).empty());
+        CHECK(knowledge.variables.empty());
+        // Include inconsistent imported states: an already completed group must never reactivate a local visit.
+        for (uint32_t mask = 0; mask < 32; ++mask)
+        {
+            CAPTURE(mask);
+            Party party;
+            PartySeed seed = Party::createDefaultSeed();
+            seed.members.resize(1);
+            seed.members[0].inventory.clear();
+            party.seed(seed);
+            for (uint32_t bit = 561; bit <= 565; ++bit)
+                party.setQuestBit(bit, (mask & (1u << (bit - 561))) != 0);
+            const bool active = party.hasQuestBit(561);
+            const bool groupDone = party.hasQuestBit(562);
+            const bool visited = party.hasQuestBit(reference.completionQBit);
+            const bool othersDone = party.hasQuestBit(others[0]) && party.hasQuestBit(others[1]);
+            const bool success = active && !groupDone && !visited;
+            const int gold = party.gold();
+            EventRuntimeState state;
+            EventRuntime runtime;
+            REQUIRE(runtime.executeEventById(map->localEventProgram, std::nullopt, 401, state, &party));
+            CHECK(party.hasQuestBit(561) == active);
+            CHECK(party.hasQuestBit(reference.completionQBit) == (visited || success));
+            CHECK(party.hasQuestBit(562) == (groupDone || (success && othersDone)));
+            for (uint32_t bit : others)
+                CHECK(party.hasQuestBit(bit) == ((mask & (1u << (bit - 561))) != 0));
+            CHECK_FALSE(party.hasQuestBit(757));
+            CHECK(party.member(0)->inventory.empty());
+            CHECK(party.gold() == gold);
+            REQUIRE(runtime.executeEventById(map->localEventProgram, std::nullopt, 401, state, &party));
+            CHECK(party.hasQuestBit(562) == (groupDone || (success && othersDone)));
+        }
+        programs.push_back(std::move(map->localEventProgram));
+    }
+    // Each of the six possible visit orders must complete the group on the third distinct circle only.
+    std::array<size_t, 3> order = {0, 1, 2};
+    do
+    {
+        Party party;
+        party.seed(Party::createDefaultSeed());
+        party.setQuestBit(561, true);
+        for (size_t visit = 0; visit < order.size(); ++visit)
+        {
+            EventRuntime runtime;
+            EventRuntimeState state;
+            REQUIRE(runtime.executeEventById(programs[order[visit]], std::nullopt, 401, state, &party));
+            CHECK(party.hasQuestBit(uint32_t(563 + order[visit])));
+            CHECK(party.hasQuestBit(562) == (visit == 2));
+        }
+    } while (std::next_permutation(order.begin(), order.end()));
 }
 
 TEST_CASE("canonical interaction references describe active statue rescues and reusable keyed entrances")

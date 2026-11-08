@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <string>
+#include <vector>
 
 namespace OpenYAMM::Game
 {
@@ -16,6 +17,8 @@ struct SiteInteractionReference
     uint32_t spriteId = 0;
     uint32_t completionQBit = 0;
     uint32_t requiredQBit = 0;
+    uint32_t objectiveGroupQBit = 0;
+    std::vector<uint32_t> otherObjectiveQBits;
     bool consumesItem = false;
     bool addsFollower = false;
     // Empty means the legacy party-wide item requirement.

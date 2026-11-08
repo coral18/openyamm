@@ -2111,7 +2111,9 @@ TEST_CASE("typed interaction references bind active callbacks and validate seman
         "kind='enter_dungeon', itemId=619, itemScope='party', openedQBit=214, targetMap='d34.blv'",
         "kind='enter_dungeon', itemId=1, itemScope='selected', targetMap='d10.blv'",
         "kind='offering', itemId=1421, requiredQBit=712, completionQBit=715, spriteId=25, consumesItem=true",
-        "kind='quest_objective', requiredQBit=554, completionQBit=574"})
+        "kind='quest_objective', requiredQBit=554, completionQBit=574",
+        "kind='quest_objective', requiredQBit=554, completionQBit=574, "
+        "objectiveGroupQBit=576, otherObjectiveQBits={577,575}"})
     {
         program = load(handler + "SetMapInteractionReference(1, {" + pFields + "})");
         REQUIRE(program);
@@ -2126,6 +2128,12 @@ TEST_CASE("typed interaction references bind active callbacks and validate seman
             CHECK(program->interactionReferences().at(1).requiredQBit == 554);
             CHECK(program->interactionReferences().at(1).completionQBit == 574);
             CHECK(program->getContextActionMetadata(1)->kind == "shrine");
+            const auto &reference = program->interactionReferences().at(1);
+            if (reference.objectiveGroupQBit != 0)
+            {
+                CHECK(reference.objectiveGroupQBit == 576);
+                CHECK(reference.otherObjectiveQBits == std::vector<uint32_t>{575, 577});
+            }
         }
         program = load(handler + "SetMapInteractionReference(1, {" + pFields + "})\nevt.map[1]=function() end");
         REQUIRE(program);
@@ -2171,6 +2179,27 @@ TEST_CASE("typed interaction references bind active callbacks and validate seman
         "kind='quest_objective', requiredQBit=554, completionQBit=574, openedQBit=1",
         "kind='quest_objective', requiredQBit=554, completionQBit=574, itemScope='party'"})
         CHECK_FALSE(load(handler + "SetMapInteractionReference(1, {" + pFields + "})"));
+    const std::string objective = "kind='quest_objective', requiredQBit=554, completionQBit=574, ";
+    for (const char *pFields : {"objectiveGroupQBit=576", "otherObjectiveQBits={575}",
+        "objectiveGroupQBit=554, otherObjectiveQBits={575}",
+        "objectiveGroupQBit=574, otherObjectiveQBits={575}",
+        "objectiveGroupQBit=576, otherObjectiveQBits={554}",
+        "objectiveGroupQBit=576, otherObjectiveQBits={574}",
+        "objectiveGroupQBit=576, otherObjectiveQBits={576}",
+        "objectiveGroupQBit=576, otherObjectiveQBits={575,575}",
+        "objectiveGroupQBit=576, otherObjectiveQBits={}",
+        "objectiveGroupQBit=576, otherObjectiveQBits=false",
+        "objectiveGroupQBit=576, otherObjectiveQBits={0}",
+        "objectiveGroupQBit=576, otherObjectiveQBits={-1}",
+        "objectiveGroupQBit=576, otherObjectiveQBits={1.5}",
+        "objectiveGroupQBit=576, otherObjectiveQBits={true}",
+        "objectiveGroupQBit=576, otherObjectiveQBits={2147483648}",
+        "objectiveGroupQBit=576, otherObjectiveQBits={[1]=575,[3]=577}",
+        "objectiveGroupQBit=576, otherObjectiveQBits={575,extra=577}",
+        "objectiveGroupQBit=0, otherObjectiveQBits={575}"})
+        CHECK_FALSE(load(handler + "SetMapInteractionReference(1, {" + objective + pFields + "})"));
+    CHECK_FALSE(load(handler + "SetMapInteractionReference(1, {kind='offering', itemId=1421, "
+        "requiredQBit=712, completionQBit=715, spriteId=25, objectiveGroupQBit=576, otherObjectiveQBits={575}})"));
     program = load(handler + definition + "SetMapContextAction(1, {kind = 'well', source = 'script'})");
     REQUIRE(program);
     CHECK(program->getContextActionMetadata(1)->kind == "well");

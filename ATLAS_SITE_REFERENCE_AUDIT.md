@@ -367,3 +367,31 @@ save inspections preserve the party, resources and map, and eight same-layer Dis
 Four post-UI five-step roundtrips retain the expected progress. This leaves five recognized physically placed
 water/shrine/drink callbacks without a complete reference in the scoped inventory: MM7 `7out03:205`,
 `7out13:401`, `out12:205`, `out14:401` and `t01:12`. Full Atlas and device acceptance remain open.
+
+## Stone-circle objective groups, 2026-11-08
+
+The `out09:401`, `7out13:401` and `out14:401` references use shared quest 561, individual records 563/564/565
+and group record 562. Readable original OUT09/OUT13/OUT14 event 401 confirms the same prerequisite, local/group
+blocking and sibling-dependent group completion. The active callbacks are unchanged.
+
+Evenmorn's callback was previously classified as `generic_event`, outside the recognized shrine-only gap
+count, despite six actual activation surfaces. Its typed reference now exposes that real site. Evenmorn and
+Avlee each use explicit six-component groups, so each named circle occupies one Sites row while actual picks
+and discovery still resolve all components.
+
+The real-picker fixture passes 28 steps across all three maps and reloads the completed group. Six native
+runs pass 222 UI steps / 30 captures, with twelve source/output save inspections, twelve equal Discovery
+map/list crops and six post-UI five-step roundtrips. Before and after each visit, Guide uses the shared full
+quest reference while Discovery retains its actual exploration and observations. This does not certify the
+NPC quest-acceptance or final promotion/reward dialogue; those remain outside this fixture.
+
+A separate classification audit identifies five physically placed generic callbacks with exported reference
+or journal evidence which the current Sites index omits: `out09:452/453` and `out10:202/452/453`. Readable
+original event hints identify the two 452s as altars, both 453s as obelisks and `out10:202` as a well. These
+existing-object classification gaps remain open, separately from the recognized water/shrine reference count.
+
+The selected Windows suite passes 469 cases / 79,490 assertions with the established unrelated portrait
+exclusion. Runtime callback coverage checks all 96 prerequisite/local/group/sibling combinations across the
+three circles and all six visit orders. Parser checks cover dense arrays, distinct identities, unsupported
+reference kinds, incomplete group declarations and callback replacement. Three recognized placed MM7
+water/shrine/drink callbacks still lack complete references: `7out03:205`, `out12:205` and `t01:12`.

@@ -357,3 +357,13 @@ rituals. Eight save inspections, eight matching same-layer Discovery map/list cr
 roundtrips preserve the checked party/resources/map and quest progress. Five recognized placed MM7
 water/shrine/drink interactions still lack complete references in this scoped inventory. This checkpoint does
 not certify the NPC promotion rewards, full Atlas coverage or deferred Android/controller acceptance.
+
+The 2026-11-08 stone-circle follow-up connects all three MM7 circles to their shared druid quest and separate
+local/group progress. It restores Evenmorn's omitted physical circle and combines each six-component circle
+on Evenmorn and Avlee into one Sites row. The selected Windows suite passes 469 cases / 79,490 assertions,
+including all 96 callback-state combinations and all six visit orders. A 28-step real-picker fixture and six
+native runs (222 UI steps / 30 captures) preserve the checked discoveries and quest flags through Guide,
+travel and reload. Twelve save inspections, twelve equal Discovery map/list crops and six post-UI roundtrips
+pass. Three recognized placed water/shrine/drink references remain incomplete, and a separate audit identifies
+five omitted existing generic callbacks on Evenmorn/Nighon for classification repair. Full Atlas coverage,
+NPC promotion rewards and deferred device acceptance are not certified by this checkpoint.
