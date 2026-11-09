@@ -3831,8 +3831,9 @@ The wider Atlas objective, three remaining recognized reference gaps and deferre
 The altar in `t01:12` now has an authored, read-only reference through the existing `SetMapSiteReference`
 API. It describes the three prior mechanism activations and subsequent door toggle without exposing raw
 map-variable numbers or presenting door positions as prerequisites. The original readable T01 events
-4/6/11/12 and the active generated handlers agree: events 4/6/11 set persistent local records 2/3/4, and
-altar 12 toggles door 14 only when all three are present. Reusing a prerequisite mechanism retains its record.
+4/6/11/12 and active generated handlers agree on the three prerequisite activations. Their slot numbers differ:
+original records 0/1/2 are stored as 2/3/4 in the active import. Altar 12 toggles door 14 only when all three
+are present. Reusing a prerequisite mechanism retains its record; this metadata preserves the active slots.
 
 This is world metadata for one authored puzzle, not generalized exporter support for arbitrary map-variable
 predicates. The sidecar explicitly captures the altar and its three prerequisite callbacks. Replacing any of
@@ -3984,3 +3985,36 @@ Use `tests/scenarios/atlas/mm7_bracada_drink.yml`, `tools/menu_tours/atlas_mm7_b
 `tests/scenarios/atlas/mm7_bracada_drink_verify.yml` with the isolated setup in the fixture README.
 Private evidence is under `atlas-bracada-drink-20261109/`. Wider Atlas/content and deferred physical
 device acceptance remain open; no Android build or install was performed.
+
+## Original condition-selector cohort, 2026-11-09
+
+A read-only source triage tool now checks all 79 unique physically indexed MM7/MM8 well/drink/shrine
+callbacks against local readable original scripts. Seventy have no named condition operations; nine have
+such operations. Four already had reviewed explicit repairs. Full source review confirmed five further
+import errors, now repaired with map-local overlays and shared gameplay/Guide definitions:
+
+| Site | Restored behavior |
+| --- | --- |
+| MM8 Ravenshore `out02:102` | Medium poison rather than Severe poison. |
+| MM8 Murmurwoods `out07:101` | Medium poison; retains shared journal entry 224. |
+| MM7 Deyja `7out05:206` | Drunkenness and its original repeat-message RNG, rather than Mild poison. |
+| MM7 Tatalia `7out13:214` | All three disease prerequisites/outcomes, rather than two severities and Unconsciousness. |
+| MM7 Clanker's Laboratory `7d12:451` | Severe poison when both base and temporary Endurance are below 35, rather than Paralysis. |
+
+Generated scripts and global selectors remain unchanged. Existing wrong conditions are not retrospectively
+reinterpreted. Source comparison also exposes shifted local-variable indices outside this condition cohort;
+the Temple of the Light notes above now distinguish original slots 0/1/2 from active imported slots 2/3/4.
+That broader import/save compatibility issue is not changed or certified by these local repairs.
+
+The focused runtime case passes 3163 assertions over 384 initial states; four Python triage tests pass.
+The selected Windows suite passes 476 cases / 85,367 assertions with the established portrait exclusion.
+Five real-picker fixtures pass 459 steps, including repeated uses and reload. Two native MM7/MM8 tours
+pass 79 UI steps / 12 captures; four save inspections, four equal Discovery crops and 92 post-UI scenario
+steps preserve the checked conditions, resources, journal and cached-map keys. Native screenshots confirm
+correct Guide text and observed-only Discovery outcomes. These are scoped checks, not full-save equality.
+
+Reproduction is in `tests/fixtures/atlas/README.md`; private evidence is under
+`atlas-condition-source-audit-20261109/`. The tool continues to label all nine overlaid callbacks as
+requiring runtime review, rather than treating an overlay filename as proof. The source triage result is
+not a general event verifier or completion of the full Atlas objective. Android/controller acceptance and
+wider content/source families remain open; no Android build or install was performed.

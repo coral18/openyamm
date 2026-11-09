@@ -424,7 +424,8 @@ reference is owned by the altar callback and depends on callbacks 4/6/11, using 
 It uses no raw map-variable labels and does not claim that the current positions of doors 6/8/13 determine
 readiness. Actual callbacks set records 2/3/4 on every use and never clear them; altar 12 checks all three.
 
-The original readable T01 control flow confirms these requirements. Tests cover all eight flag combinations,
+The original readable T01 control flow confirms these requirements, using original slots 0/1/2 rather than
+the active import's 2/3/4. This metadata preserves active save slots; it does not remap them. Tests cover all eight flag combinations,
 all six control orders, repeat activation and invalidation when the altar or any prerequisite is replaced.
 The 28-step real-picker scenario checks each partial state, the final door motion and save/reload records.
 This does not implement general map-variable projection or certify a full dungeon walkthrough.
@@ -508,3 +509,25 @@ global remap or save migration. Verification: 591 focused assertions over 48 ini
 four save inspections, four equal Discovery crops and two 25-step post-UI roundtrips. The focused case
 was rerun after the final label-only alignment with the shared Medium poison wording. Reproduction and
 scope limits are recorded in `ATLAS.md` and the fixture README; full Atlas/device acceptance remains open.
+
+## Original condition-source cohort, 2026-11-09
+
+`tools/audit_atlas_condition_sources.py` compares named condition-operation sets on all 79 physically
+indexed well/drink/shrine callbacks with local original readable exports. It checks both missing and
+unexpected generated conditions. Its result is triage only: operands, branch ordering and active overlays
+require separate review. Seventy callbacks have no condition operations; nine have explicit reviewed
+condition repairs. The five newly repaired callbacks are `mm8/out02:102`, `mm8/out07:101`, `mm7/7out05:206`,
+`mm7/7out13:214` and `mm7/7d12:451`. Their behavior and source differences are listed in `ATLAS.md`.
+
+The existing generated scripts remain stale for these selectors; explicit overlays own the repaired
+behavior and reference text. Murmurwoods rebinds its shared autonote 224 after replacement. There is no
+global remap or inferred save migration. The tool deliberately reports all nine overlays as requiring
+runtime review, so its summary alone cannot certify correctness. The active Temple puzzle slots also
+differ from original raw slot numbers, as clarified above; that wider import issue remains outside these repairs.
+
+Verification passes four Python triage tests and 476 selected Windows cases / 85,367 assertions, including
+3163 focused assertions over 384 initial states. Five actual-picker fixtures pass 459 steps. Two native
+tours pass 79 steps / 12 captures; four save inspections, four equal Discovery crops and 92 post-UI steps
+preserve checked conditions/resources, note 224 and cached map keys. See the fixture README for exact
+reproduction. No further condition-operation mismatch without an explicit overlay remains in this
+79-callback cohort; this does not certify arbitrary event imports, all source semantics or full Atlas/device acceptance.

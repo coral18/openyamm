@@ -419,3 +419,11 @@ with shared local definitions for gameplay and Guide. The focused condition/RNG 
 the selected Windows suite passes 475 cases / 82,204 assertions, with a focused recheck after a label-only
 refinement. A real-picker repeat/refusal fixture and native Discovery/Guide/save checks pass; details are
 in `ATLAS.md`. This closes that known import error without certifying all event imports or device acceptance.
+
+The original-condition source cohort now covers all 79 physically indexed MM7/MM8 wells, drinks and
+shrines: 70 without condition operations and nine with reviewed local repairs. Five additional poison,
+drunkenness and disease import errors are repaired without changing generated scripts or global mappings.
+The selected Windows suite passes 476 cases / 85,367 assertions; five real-picker fixtures and native
+MM7/MM8 Guide/Discovery/save checks pass. The read-only triage tool and its four tests are documented in
+`ATLAS.md` and the fixture README. Its operation-set report is not proof of complete event semantics;
+broader import/save compatibility, other content families and physical-device acceptance remain open.

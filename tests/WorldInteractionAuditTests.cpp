@@ -942,6 +942,7 @@ TEST_CASE("canonical journal well references bind all newly explained sites with
         const char *pWorld;
         const char *pFile;
         std::vector<uint16_t> events;
+        const char *pExpected = "Outcome 1";
     };
     const Map maps[] = {
         {"mm7", "7out01.odm", {112, 113, 114}},
@@ -949,7 +950,8 @@ TEST_CASE("canonical journal well references bind all newly explained sites with
         {"mm7", "7out04.odm", {204}}, {"mm7", "7out05.odm", {203, 204, 205, 207}},
         {"mm7", "7out06.odm", {461}}, {"mm7", "7out13.odm", {202, 203, 204}},
         {"mm7", "out10.odm", {203, 204, 206}}, {"mm7", "out11.odm", {321}},
-        {"mm7", "out14.odm", {204, 205}}, {"mm8", "out07.odm", {101}}};
+        {"mm7", "out14.odm", {204, 205}},
+        {"mm8", "out07.odm", {101}, "Can apply: Medium poison"}};
     size_t references = 0;
     for (const Map &target : maps)
     {
@@ -980,7 +982,7 @@ TEST_CASE("canonical journal well references bind all newly explained sites with
             CHECK_FALSE(world.featureVisible(*feature, knowledge, false));
             CHECK(world.siteReference(*feature, knowledge, false).empty());
             const std::string text(world.siteReference(*feature, knowledge, true));
-            CHECK(text.find("Outcome 1") != std::string::npos);
+            CHECK(text.find(target.pExpected) != std::string::npos);
             CHECK(text.find("Outcome 2") == std::string::npos);
             CHECK(text.find("Journal note") == std::string::npos);
             knowledge.interactedSites[target.pFile].insert(worldSiteDiscoveryKey(event, feature->site.id));
@@ -1076,7 +1078,7 @@ TEST_CASE("canonical drink sites expose active effects only in Guide and retain 
         {"mm7", "7out06.odm", 460, "Random outcomes"},
         {"mm7", "7out13.odm", 214, "Random outcomes"},
         {"mm7", "d02.blv", 451, "+25"},
-        {"mm7", "7d12.blv", 451, "Can apply: Paralysis"},
+        {"mm7", "7d12.blv", 451, "Can apply: Severe poison"},
         {"mm7", "7d24.blv", 196, "No attribute or condition change"},
         {"mm7", "7d24.blv", 197, "No attribute or condition change"},
         {"mm7", "7d24.blv", 198, "No attribute or condition change"},
@@ -2171,6 +2173,132 @@ TEST_CASE("Bracada drink applies original poison severities and refuses every ex
         }
     }
     CHECK(rolledSeverities.size() == 3);
+}
+
+TEST_CASE("remaining original well and drink conditions retain prerequisites scope journal and RNG")
+{
+    using namespace OpenYAMM::Game;
+    REQUIRE_MESSAGE(OpenYAMM::Tests::regressionMapLoaderLoaded(),
+        OpenYAMM::Tests::regressionMapLoaderFailure());
+    const auto &fixture = OpenYAMM::Tests::regressionMapLoader();
+    const auto &data = fixture.gameDataLoader;
+    enum class Effect { MediumPoison, Drunk, Disease, EndurancePoison };
+    struct Example { const char *pMap; uint16_t event; Effect effect; const char *pText; uint32_t note = 0; };
+    const Example examples[] = {
+        {"out02.odm", 102, Effect::MediumPoison, "Can apply: Medium poison"},
+        {"out07.odm", 101, Effect::MediumPoison, "Can apply: Medium poison", 224},
+        {"7out05.odm", 206, Effect::Drunk, "Can apply: Drunkenness"},
+        {"7out13.odm", 214, Effect::Disease, "Can apply: Mild disease"},
+        {"7d12.blv", 451, Effect::EndurancePoison, "Can apply: Severe poison"}};
+    const CharacterCondition poisons[] = {CharacterCondition::PoisonWeak, CharacterCondition::PoisonMedium,
+        CharacterCondition::PoisonSevere};
+    const CharacterCondition diseases[] = {CharacterCondition::DiseaseWeak, CharacterCondition::DiseaseMedium,
+        CharacterCondition::DiseaseSevere};
+    for (const Example &example : examples)
+    {
+        CAPTURE(std::string(example.pMap));
+        const MapStatsEntry *pMap = data.getMapStats().findByFileName(example.pMap);
+        REQUIRE(pMap);
+        auto map = MapAssetLoader().load(fixture.assetFileSystem, *pMap, data.getMonsterTable(),
+            data.getObjectTable(), MapLoadPurpose::HeadlessGameplay);
+        REQUIRE(map);
+        std::string error;
+        REQUIRE_MESSAGE(GameDataLoader::loadEventPrograms(fixture.assetFileSystem, *map, error), error);
+        REQUIRE(map->localEventProgram);
+        const auto &events = *map->localEventProgram;
+        CHECK(events.siteReferences().at(example.event).find(example.pText) != std::string::npos);
+        if (example.note != 0)
+            CHECK(events.autonoteReferences().at(example.event) == std::vector<uint32_t>{example.note});
+        const int masks = example.effect == Effect::EndurancePoison ? 16 : 8;
+        for (int mask = 0; mask < masks; ++mask)
+        {
+            for (bool unrelated : {false, true})
+            {
+                for (uint32_t randomSeed : {0u, 1u, 2u, 3u})
+                {
+                    CAPTURE(mask);
+                    CAPTURE(unrelated);
+                    CAPTURE(randomSeed);
+                    PartySeed seed = Party::createDefaultSeed();
+                    seed.members.resize(1);
+                    seed.members.front().health = seed.members.front().maxHealth = 120;
+                    seed.members.front().conditions.reset();
+                    seed.members.front().conditions.set(size_t(CharacterCondition::Cursed));
+                    seed.members.front().conditions.set(size_t(example.effect == Effect::Disease
+                        ? CharacterCondition::Unconscious : CharacterCondition::Paralyzed), unrelated);
+                    if (example.effect == Effect::Drunk)
+                    {
+                        seed.members.front().conditions.set(size_t(CharacterCondition::Drunk), (mask & 1) != 0);
+                        seed.members.front().conditions.set(size_t(CharacterCondition::PoisonWeak), (mask & 2) != 0);
+                        seed.members.front().conditions.set(size_t(CharacterCondition::PoisonSevere), (mask & 4) != 0);
+                    }
+                    else if (example.effect != Effect::EndurancePoison)
+                    {
+                        for (int bit = 0; bit < 3; ++bit)
+                            seed.members.front().conditions.set(size_t(example.effect == Effect::Disease
+                                ? diseases[bit] : poisons[bit]), (mask & (1 << bit)) != 0);
+                    }
+                    seed.members.push_back(seed.members.front());
+                    seed.members.back().conditions.set(size_t(CharacterCondition::PoisonSevere));
+                    seed.gold = 5000;
+                    seed.food = 10;
+                    Party party;
+                    party.seed(seed);
+                    auto expected = party.member(0)->conditions;
+                    const auto other = party.member(1)->conditions;
+                    EventRuntimeState state;
+                    state.eventRandomState = randomSeed;
+                    const auto note = EventRuntime::decodeVariable(0xe1u | (example.note << 16));
+                    if (example.note != 0 && unrelated)
+                        EventRuntime::setVariableValue(state, note, 1, &party, {0});
+                    uint32_t expectedRandom = randomSeed;
+                    int randomStep = 0;
+                    if (example.effect == Effect::MediumPoison)
+                        expected.set(size_t(CharacterCondition::PoisonMedium));
+                    else if (example.effect == Effect::Drunk)
+                    {
+                        expected.set(size_t(CharacterCondition::Drunk));
+                        if ((mask & 1) != 0) randomStep = 5;
+                    }
+                    else if (example.effect == Effect::Disease)
+                    {
+                        if (mask == 0) randomStep = 4;
+                    }
+                    else
+                    {
+                        // Independent thresholds: even 20 base + 20 temporary does not pass either check.
+                        const int values[] = {20, 34, 35, 36};
+                        const int base = values[mask / 4], bonus = values[mask % 4];
+                        EventRuntime::setVariableValue(state,
+                            EventRuntime::decodeVariable(uint32_t(EvtVariable::BaseEndurance)), base, &party, {0});
+                        EventRuntime::setVariableValue(state,
+                            EventRuntime::decodeVariable(uint32_t(EvtVariable::EnduranceBonus)), bonus, &party, {0});
+                        if (base < 35 && bonus < 35) expected.set(size_t(CharacterCondition::PoisonSevere));
+                    }
+                    if (randomStep != 0)
+                    {
+                        if (expectedRandom == 0)
+                            expectedRandom = uint32_t(example.event) * 2654435761u ^ uint32_t(randomStep) * 40503u;
+                        expectedRandom = expectedRandom * 1664525u + 1013904223u;
+                        if (example.effect == Effect::Disease)
+                            expected.set(size_t(diseases[expectedRandom % 3]));
+                    }
+                    EventRuntime runtime;
+                    REQUIRE(runtime.executeEventById(map->localEventProgram, std::nullopt, example.event,
+                        state, &party));
+                    CHECK(party.member(0)->conditions == expected);
+                    CHECK(party.member(1)->conditions == other);
+                    CHECK(party.member(0)->health == 120);
+                    CHECK(party.member(1)->health == 120);
+                    CHECK(party.gold() == 5000);
+                    CHECK(party.food() == 10);
+                    CHECK(state.eventRandomState == expectedRandom);
+                    if (example.note != 0)
+                        CHECK(EventRuntime::getVariableValue(state, note, &party, 0) == 1);
+                }
+            }
+        }
+    }
 }
 
 TEST_CASE("canonical interaction references describe active statue rescues and reusable keyed entrances")

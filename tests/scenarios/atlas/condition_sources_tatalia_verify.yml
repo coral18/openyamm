@@ -1,0 +1,151 @@
+id: atlas.condition_sources_tatalia_verify
+title: Atlas preserves actual well conditions and shared journal
+world: mm7
+mode: faithful
+steps:
+- load_game:
+    path: saves/quicksave.oysav
+- &id001
+  assert:
+    map: 7out13.odm
+- &id002
+  assert:
+    runtime_event_variable:
+      id: 21
+      value: 5000
+- &id003
+  assert:
+    runtime_event_variable:
+      id: 23
+      value: 10
+- &id004
+  assert:
+    runtime_event_variable:
+      id: 109
+      member_index: 0
+      value: 0
+- &id005
+  assert:
+    runtime_event_variable:
+      id: 111
+      member_index: 0
+      value: 0
+- &id006
+  assert:
+    runtime_event_variable:
+      id: 112
+      member_index: 0
+      value: 0
+- &id007
+  assert:
+    runtime_event_variable:
+      id: 113
+      member_index: 0
+      value: 0
+- &id008
+  assert:
+    runtime_event_variable:
+      id: 114
+      member_index: 0
+      value: 1
+- &id009
+  assert:
+    runtime_event_variable:
+      id: 115
+      member_index: 0
+      value: 0
+- &id010
+  assert:
+    runtime_event_variable:
+      id: 116
+      member_index: 0
+      value: 0
+- &id011
+  assert:
+    runtime_event_variable:
+      id: 117
+      member_index: 0
+      value: 0
+- &id012
+  assert:
+    runtime_event_variable:
+      id: 118
+      member_index: 0
+      value: 0
+- &id013
+  assert:
+    runtime_event_variable:
+      id: 109
+      member_index: 1
+      value: 0
+- &id014
+  assert:
+    runtime_event_variable:
+      id: 111
+      member_index: 1
+      value: 0
+- &id015
+  assert:
+    runtime_event_variable:
+      id: 112
+      member_index: 1
+      value: 0
+- &id016
+  assert:
+    runtime_event_variable:
+      id: 113
+      member_index: 1
+      value: 0
+- &id017
+  assert:
+    runtime_event_variable:
+      id: 114
+      member_index: 1
+      value: 0
+- &id018
+  assert:
+    runtime_event_variable:
+      id: 115
+      member_index: 1
+      value: 0
+- &id019
+  assert:
+    runtime_event_variable:
+      id: 116
+      member_index: 1
+      value: 0
+- &id020
+  assert:
+    runtime_event_variable:
+      id: 117
+      member_index: 1
+      value: 0
+- &id021
+  assert:
+    runtime_event_variable:
+      id: 118
+      member_index: 1
+      value: 0
+- save_game: roundtrip
+- load_game: roundtrip
+- *id001
+- *id002
+- *id003
+- *id004
+- *id005
+- *id006
+- *id007
+- *id008
+- *id009
+- *id010
+- *id011
+- *id012
+- *id013
+- *id014
+- *id015
+- *id016
+- *id017
+- *id018
+- *id019
+- *id020
+- *id021

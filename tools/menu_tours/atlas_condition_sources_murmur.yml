@@ -1,0 +1,74 @@
+output_dir: captures
+exit: true
+steps:
+- expect: gameplay
+- action: map_book
+- click:
+  - 1250
+  - 770
+- click:
+  - 1480
+  - 126
+- click:
+  - 275
+  - 126
+- text: poison
+- key: Return
+- pointer_move:
+  - 800
+  - 860
+- capture: discovery-before
+- click:
+  - 1152
+  - 57
+- wait: 3
+- click:
+  - 1250
+  - 260
+- capture: guide-view
+- click:
+  - 1390
+  - 806
+- capture: guide-reference-top
+- pointer_move:
+  - 700
+  - 600
+- wheel: -6
+- capture: guide-reference-bottom
+- click:
+  - 450
+  - 57
+- click:
+  - 1152
+  - 57
+- click:
+  - 275
+  - 126
+- key: Backspace
+- key: Backspace
+- &id001
+  key: Backspace
+- *id001
+- *id001
+- *id001
+- text: poison
+- key: Return
+- pointer_move:
+  - 800
+  - 860
+- capture: discovery-after
+- click:
+  - 1250
+  - 260
+- click:
+  - 1390
+  - 806
+- capture: recorded-condition
+- click:
+  - 450
+  - 57
+- key: Escape
+- key: Escape
+- expect: gameplay
+- key: F9
+- wait: 0.4

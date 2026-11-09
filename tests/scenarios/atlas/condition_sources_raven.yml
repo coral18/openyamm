@@ -1,0 +1,228 @@
+id: atlas.condition_sources_raven
+title: Check real well or drink conditions and repeat behavior
+world: mm8
+mode: faithful
+steps:
+- new_game_flow:
+    start_map: out02.odm
+    party:
+      gold: 5000
+      food: 10
+      members:
+      - name: Wish Tester
+        class: Knight
+        level: 20
+        race_id: 0
+        skills: []
+        equipment: {}
+      - name: Other Tester
+        class: Knight
+        level: 20
+        race_id: 0
+        skills: []
+        equipment: {}
+- set_pose: &id001
+    x: 8704
+    y: 2300
+    z: 160
+    yaw: -1.5707963
+    pitch: -0.5
+- &id002
+  assert:
+    map: out02.odm
+- &id003
+  assert:
+    runtime_event_variable:
+      id: 21
+      value: 5000
+- &id004
+  assert:
+    runtime_event_variable:
+      id: 23
+      value: 10
+- &id005
+  assert:
+    runtime_event_variable:
+      id: 109
+      member_index: 0
+      value: 0
+- &id006
+  assert:
+    runtime_event_variable:
+      id: 111
+      member_index: 0
+      value: 0
+- &id007
+  assert:
+    runtime_event_variable:
+      id: 112
+      member_index: 0
+      value: 0
+- assert:
+    runtime_event_variable:
+      id: 113
+      member_index: 0
+      value: 0
+- &id008
+  assert:
+    runtime_event_variable:
+      id: 114
+      member_index: 0
+      value: 0
+- &id009
+  assert:
+    runtime_event_variable:
+      id: 115
+      member_index: 0
+      value: 0
+- &id010
+  assert:
+    runtime_event_variable:
+      id: 116
+      member_index: 0
+      value: 0
+- &id011
+  assert:
+    runtime_event_variable:
+      id: 117
+      member_index: 0
+      value: 0
+- &id012
+  assert:
+    runtime_event_variable:
+      id: 118
+      member_index: 0
+      value: 0
+- &id013
+  assert:
+    runtime_event_variable:
+      id: 109
+      member_index: 1
+      value: 0
+- &id014
+  assert:
+    runtime_event_variable:
+      id: 111
+      member_index: 1
+      value: 0
+- &id015
+  assert:
+    runtime_event_variable:
+      id: 112
+      member_index: 1
+      value: 0
+- &id016
+  assert:
+    runtime_event_variable:
+      id: 113
+      member_index: 1
+      value: 0
+- &id017
+  assert:
+    runtime_event_variable:
+      id: 114
+      member_index: 1
+      value: 0
+- &id018
+  assert:
+    runtime_event_variable:
+      id: 115
+      member_index: 1
+      value: 0
+- &id019
+  assert:
+    runtime_event_variable:
+      id: 116
+      member_index: 1
+      value: 0
+- &id020
+  assert:
+    runtime_event_variable:
+      id: 117
+      member_index: 1
+      value: 0
+- &id021
+  assert:
+    runtime_event_variable:
+      id: 118
+      member_index: 1
+      value: 0
+- save_game: before
+- &id022
+  press_interact:
+    pose: *id001
+    expect:
+      kind: event_target
+      triggered_event: 102
+      can_activate: true
+- *id002
+- *id003
+- *id004
+- *id005
+- *id006
+- *id007
+- &id023
+  assert:
+    runtime_event_variable:
+      id: 113
+      member_index: 0
+      value: 1
+- *id008
+- *id009
+- *id010
+- *id011
+- *id012
+- *id013
+- *id014
+- *id015
+- *id016
+- *id017
+- *id018
+- *id019
+- *id020
+- *id021
+- *id022
+- *id002
+- *id003
+- *id004
+- *id005
+- *id006
+- *id007
+- *id023
+- *id008
+- *id009
+- *id010
+- *id011
+- *id012
+- *id013
+- *id014
+- *id015
+- *id016
+- *id017
+- *id018
+- *id019
+- *id020
+- *id021
+- save_game: after
+- load_game: after
+- *id002
+- *id003
+- *id004
+- *id005
+- *id006
+- *id007
+- *id023
+- *id008
+- *id009
+- *id010
+- *id011
+- *id012
+- *id013
+- *id014
+- *id015
+- *id016
+- *id017
+- *id018
+- *id019
+- *id020
+- *id021

@@ -1003,3 +1003,28 @@ crops across Guide. Run `tests/scenarios/atlas/mm7_bracada_drink_verify.yml` on 
 for the untouched quicksave use member 0's Medium poison value 0. Both retain gold 5000, food 10 and the
 other member's unpoisoned state. The focused case `Bracada drink applies*` covers all eight poison masks,
 with/without unrelated paralysis, all three actual RNG outcomes, repeat refusal and member isolation.
+
+## Original condition-selector cohort
+
+`tools/audit_atlas_condition_sources.py --inventory <interactions.tsv> --report <report.json>` compares
+named condition-operation sets on physically indexed MM7/MM8 wells, drinks and shrines with the local
+readable original EVT exports. Generate `interactions.tsv` with the existing campaign interaction inventory
+unit case and `OPENYAMM_ATLAS_INTERACTION_AUDIT` pointing to an existing directory. The script is read-only
+triage: matching operation sets do not prove branch order or operands; an explicit overlay always requires
+runtime review. Four parser/inventory tests run with
+`python3 -m unittest discover -s tests -p test_atlas_condition_sources.py`.
+
+The resulting 79-callback cohort contains nine condition-bearing callbacks. Four had prior reviewed repairs;
+the other five now have explicit overlays. The focused runtime case
+`remaining original well and drink conditions*` checks 384 initial-state combinations, including all
+poison/disease masks, Deyja drunkenness versus poison, Clanker's independent 35-point base/temporary Endurance
+thresholds, original RNG call structure, Murmurwoods note 224 and member/resource isolation.
+
+Run `tests/scenarios/atlas/condition_sources_{raven,murmur,deyja,tatalia,lab}.yml` separately with their
+specified world and private settings/saves. They perform real picks twice and verify conditions/resources
+through reload; these poses are test setup, not full campaign traversal. For Murmurwoods and Tatalia, copy
+the scenario's temporary `after.oysav` to private `saves/before.oysav`, enable the Atlas UI mod, and run
+`tools/menu_tours/atlas_condition_sources_{murmur,tatalia}.yml` at 1600x900. Use the corresponding
+`condition_sources_*_verify.yml` on each UI quicksave. Compare Discovery map/list crops across Guide and
+inspect source/output saves. These checks preserve actual observed poison/disease and the Murmurwoods note;
+they do not certify every field in a save, every other event family or physical-device input.
