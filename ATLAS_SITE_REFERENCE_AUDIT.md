@@ -457,3 +457,22 @@ Discovery map/list crops and two 19-step post-UI roundtrips pass. Guide does not
 note 265. Discovery records the selected member's actual removed disease/curse only after using the well.
 The normal cached runtime was checked to exclude the test setup script. One recognized reference gap remains:
 MM7 `out12:205`, whose selector-import questions still need investigation. Broader acceptance remains open.
+
+## Land of the Giants wishing-well selector repair, 2026-11-09
+
+`out12:205` has a map-local explicit replacement restoring its original Eradicated/Dead/Stoned operations
+without editing generated Lua or remapping global selectors. A condition set with zero applies the condition;
+it does not cure it. Payment boundaries, other outcomes and both random-choice calls are preserved. One
+outcome table drives both gameplay and the Guide reference, including harmful outcomes and the age-modifier
+reset. Unrelated map variable 0 is no longer overwritten; old saves receive no inferred migration.
+
+Verification passes 473 selected Windows cases / 80,241 assertions, including 247 focused assertions over
+ten outcomes, zero-initial-state RNG parity and wallet boundaries. A 36-step physical fixture, two native
+runs (68 steps / 10 captures), four save inspections, four equal Discovery crops and two 23-step post-UI
+roundtrips preserve the checked payment, selected Fire bonus and other-member/condition state. The source
+reference and fixture paths are recorded in `ATLAS.md` and the fixture README.
+
+The refreshed inventory contains 6696 physical-site records across 136 maps with sites (137 maps loaded).
+No recognized well/shrine/drink record lacks a reference. That does not prove arbitrary unclassified events
+are fully understood, resolve the previously documented Bracada selector discrepancy, or close full Atlas
+and deferred device acceptance. No new placement was invented for the six unbound base callbacks.

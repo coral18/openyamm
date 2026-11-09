@@ -939,3 +939,23 @@ Run `tests/scenarios/atlas/mm7_steadwick_cure.yml` with that isolated asset root
 learned note 265, and reload. Use `atlas_mm7_steadwick_cure.yml` from `tools/menu_tours/` at 1600x900 on the
 before/after saves, then the `_verify.yml` scenario on cured UI output. The normal runtime does not mount this
 preparation script; it is not a gameplay mod or a migration for existing saves.
+
+## Land of the Giants wishing well
+
+Run `tests/scenarios/atlas/mm7_giant_wishing_well.yml` from private settings/saves with normal cached
+packages. The explicit pose targets the real water surface (`out12.odm`, model 21, face 1), avoiding the
+well's separate hint-only frame. This is a diagnostic pose, not a campaign-traversal assertion. The fresh
+fixture checks the 5000-gold payment, selected-member Fire resistance bonus +50, unchanged other member
+and condition flags, then reloads the result. Other random outcomes and wallet boundaries are covered by
+`Land of the Giants wishing well preserves*`; the physical fixture does not claim to exercise every outcome.
+
+Copy the temporary `before.oysav` and `after.oysav` from `atlas_mm7_giant_wishing_well` into two private
+runtimes as `saves/before.oysav`. Install the Atlas UI mod in each runtime's `mods/` directory; the engine
+asset root alone does not enable the module. At 1600x900 use
+`tools/menu_tours/atlas_mm7_giant_wishing_well.yml` as the one-shot native input tour. Guide must list all
+ten authored outcomes and the exact payment boundaries; Discovery must remain unchanged after browsing.
+The initial Discovery list is empty; after real use it contains the well with its recorded result.
+Compare map/list crops and inspect the source/output saves. Run
+`tests/scenarios/atlas/mm7_giant_wishing_well_verify.yml` on the after-use UI quicksave; for the untouched
+UI quicksave, use gold 15000 and selected-member Fire resistance bonus 0 instead. Other condition flags and
+the second member remain unchanged in both cases. Do not use a player's campaign for these fixtures.

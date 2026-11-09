@@ -1806,6 +1806,141 @@ TEST_CASE("Steadwick disease well repairs only the selected diseased member and 
         }
 }
 
+TEST_CASE("Land of the Giants wishing well preserves its rolls and prices and restores original condition outcomes")
+{
+    using namespace OpenYAMM::Game;
+    REQUIRE_MESSAGE(OpenYAMM::Tests::regressionMapLoaderLoaded(),
+        OpenYAMM::Tests::regressionMapLoaderFailure());
+    const auto &fixture = OpenYAMM::Tests::regressionMapLoader();
+    const auto &data = fixture.gameDataLoader;
+    const MapStatsEntry *pMap = data.getMapStats().findByFileName("out12.odm");
+    REQUIRE(pMap);
+    auto map = MapAssetLoader().load(fixture.assetFileSystem, *pMap, data.getMonsterTable(),
+        data.getObjectTable(), MapLoadPurpose::HeadlessGameplay);
+    REQUIRE(map);
+    REQUIRE(map->outdoorMapData);
+    std::string error;
+    REQUIRE_MESSAGE(GameDataLoader::loadEventPrograms(fixture.assetFileSystem, *map, error), error);
+    REQUIRE(map->localEventProgram);
+    const auto &events = *map->localEventProgram;
+    REQUIRE(events.siteReferences().contains(205));
+    const std::string &text = events.siteReferences().at(205);
+    for (const char *pText : {"5000 gold", "exactly 4999", "Below 4999", "probabilities are not shown",
+        "Can apply: Eradication", "Can apply: Death", "Can apply: Petrification", "Experience +5000",
+        "magical age adjustment", "No additional effect", "Air resistance bonus +50",
+        "Fire resistance bonus +50", "Party gold +10000", "Skill points +10", "Armor class bonus -50"})
+        CHECK(text.find(pText) != std::string::npos);
+    CHECK(text.find("MapVar") == std::string::npos);
+    WorldDatabase world(data.getMapStats(), data.getHouseTable(), data.getNpcDialogTable(),
+        data.getMergedTeacherTopicTable(), "mm7");
+    world.indexMapLocations(*map->outdoorMapData, events);
+    const auto feature = std::find_if(world.features().begin(), world.features().end(),
+        [](const WorldMapFeature &entry) { return entry.site.eventId == 205; });
+    REQUIRE(feature != world.features().end());
+    CHECK(feature->kind == WorldMapFeatureKind::Water);
+    WorldKnowledge knowledge;
+    knowledge.visitedMaps.insert("out12.odm");
+    CHECK_FALSE(world.featureVisible(*feature, knowledge, false));
+    CHECK(world.siteReference(*feature, knowledge, false).empty());
+    CHECK(world.siteReference(*feature, knowledge, true) == text);
+    CHECK(knowledge.variables.empty());
+    CHECK(knowledge.autonoteIds.empty());
+    const auto read = [&](const char *pPath)
+    {
+        const std::optional<std::string> content = fixture.assetFileSystem.readTextFile(pPath);
+        REQUIRE(content);
+        return *content;
+    };
+    const std::string original = read("engine/scripts/common/event_support.lua")
+        + read("worlds/mm7/events/maps/out12.lua");
+    const auto imported = ScriptedEventProgram::loadFromLuaText(original, "@imported-wishing-well",
+        ScriptedEventScope::Map, error);
+    REQUIRE_MESSAGE(imported, error);
+    const auto makeParty = []()
+    {
+        PartySeed seed = Party::createDefaultSeed();
+        seed.members.resize(1);
+        seed.members.push_back(seed.members.front());
+        seed.gold = 15000;
+        seed.members[0].experience = 1000;
+        seed.members[0].health = 80;
+        seed.members[0].ageModifier = 17;
+        seed.members[0].armorClassModifier = 0;
+        seed.members[0].skillPoints = 0;
+        seed.members[0].conditions.set(size_t(CharacterCondition::Cursed));
+        seed.members[1].health = 77;
+        Party party;
+        party.seed(seed);
+        return party;
+    };
+    const std::array<std::vector<uint16_t>, 3> children = {
+        std::vector<uint16_t>{7, 9, 11, 12}, {16, 18, 20}, {24, 26, 28}};
+    std::map<uint16_t, uint32_t> seeds;
+    for (uint32_t seed = 1; seed < 1024 && seeds.size() != 10; ++seed)
+    {
+        const uint32_t first = seed * 1664525u + 1013904223u;
+        const uint32_t second = first * 1664525u + 1013904223u;
+        const auto &group = children[first % children.size()];
+        seeds.try_emplace(group[second % group.size()], seed);
+    }
+    REQUIRE(seeds.size() == 10);
+    // Zero exercises the runtime's initial seed calculation rather than a supplied random state.
+    seeds.emplace(0, 0);
+    for (const auto &[outcome, seed] : seeds)
+    {
+        CAPTURE(outcome);
+        CAPTURE(seed);
+        Party party = makeParty();
+        Party oldParty = makeParty();
+        const auto other = party.member(1)->conditions;
+        EventRuntimeState state, oldState;
+        state.mapVars[0] = oldState.mapVars[0] = 17;
+        state.eventRandomState = oldState.eventRandomState = seed;
+        EventRuntime runtime, oldRuntime;
+        REQUIRE(runtime.executeEventById(map->localEventProgram, std::nullopt, 205, state, &party));
+        REQUIRE(oldRuntime.executeEventById(imported, std::nullopt, 205, oldState, &oldParty));
+        CHECK(state.eventRandomState == oldState.eventRandomState);
+        CHECK(party.gold() == oldParty.gold());
+        CHECK(state.mapVars[0] == 17);
+        if (outcome == 0)
+            continue;
+        CHECK(party.gold() == (outcome == 24 ? 20000 : 10000));
+        const Character *pMember = party.member(0);
+        CHECK(pMember->experience == (outcome == 9 ? 6000 : 1000));
+        CHECK(pMember->ageModifier == (outcome == 9 ? 0 : 17));
+        CHECK(pMember->skillPoints == (outcome == 26 ? 10 : 0));
+        CHECK(pMember->armorClassModifier == (outcome == 28 ? -50 : 0));
+        CHECK(pMember->conditions.test(size_t(CharacterCondition::Eradicated)) == (outcome == 7));
+        CHECK(pMember->conditions.test(size_t(CharacterCondition::Dead)) == (outcome == 12));
+        CHECK(pMember->conditions.test(size_t(CharacterCondition::Petrified)) == (outcome == 20));
+        CHECK(pMember->conditions.test(size_t(CharacterCondition::Cursed)));
+        for (const auto &[variable, expected] : {std::pair{EvtVariable::AirResistanceBonus, outcome == 16 ? 50 : 0},
+            std::pair{EvtVariable::FireResistanceBonus, outcome == 18 ? 50 : 0}})
+            CHECK(EventRuntime::getVariableValue(state, EventRuntime::decodeVariable(uint32_t(variable)),
+                &party, 0) == expected);
+        CHECK(party.member(1)->health == 77);
+        CHECK(party.member(1)->conditions == other);
+    }
+    for (int gold : {0, 4998, 4999, 5000})
+    {
+        CAPTURE(gold);
+        Party party = makeParty();
+        Party::Snapshot snapshot = party.snapshot();
+        snapshot.gold = gold;
+        party.restoreSnapshot(snapshot);
+        EventRuntimeState state;
+        state.eventRandomState = seeds.at(11);
+        EventRuntime runtime;
+        REQUIRE(runtime.executeEventById(map->localEventProgram, std::nullopt, 205, state, &party));
+        CHECK(party.gold() == (gold >= 4999 ? 0 : gold));
+        CHECK((state.eventRandomState != seeds.at(11)) == (gold == 5000));
+        CHECK(party.member(0)->experience == 1000);
+        CHECK(party.member(0)->ageModifier == 17);
+        CHECK(party.member(0)->skillPoints == 0);
+        CHECK(party.member(0)->conditions.count() == 1);
+    }
+}
+
 TEST_CASE("canonical interaction references describe active statue rescues and reusable keyed entrances")
 {
     using namespace OpenYAMM::Game;

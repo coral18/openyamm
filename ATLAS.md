@@ -3888,3 +3888,37 @@ two native runs pass 76 UI steps / 10 captures, four save inspections and four e
 Two 19-step post-UI roundtrips preserve selected/other-member conditions, unchanged health and note 265.
 Evidence stays outside Git under `atlas-steadwick-cure-20261109/`. The recognized reference inventory now
 retains only `out12:205`; the full Atlas objective and deferred device checks remain open.
+
+## Land of the Giants wishing-well import repair, 2026-11-09
+
+`out12:205` now uses an explicit map-local overlay instead of its three incorrectly imported condition
+selectors. The readable original OUT12 event sets Eradicated, Dead and Stoned; zero is the operand of a
+condition application, not a cure. The imported program instead wrote map variable 0, applied Eradication
+in the Death branch and reset MainCondition in the Stoned branch. The overlay restores those three
+results using the existing shared runtime. It preserves the other seven branches, selected-character
+scope, party gold, random call IDs/steps/options and the original price boundaries: below 4999 no effect,
+4999 paid without a random roll, and 5000 paid for a roll when at least that amount is available.
+
+Gameplay and Guide text share one authored outcome definition. The reference lists all ten declared
+results, including the possible harmful conditions, without promising probabilities. It clears only the
+magical age modifier in the age/experience branch. Generated event Lua, global selector mappings, shared
+condition behavior, world geometry and save format remain unchanged; no old save state is reinterpreted.
+The official EVT variable behavior reference recorded in the preceding section supports the condition
+semantics; no reference implementation code was copied.
+
+The focused case passes 247 assertions, exercising all ten outcomes, initial random state zero, imported
+payment/RNG parity, member isolation, unrelated map-variable preservation and wallet values 0/4998/4999/5000.
+The selected Windows suite passes 473 cases / 80,241 assertions with the established unrelated portrait
+exclusion. The 36-step physical fixture uses the real water face and verifies its deterministic fresh-state
+Fire resistance result through reload. Two native UI runs pass 68 steps / 10 captures, with four save
+inspections, four equal Discovery map/list crops and two 23-step post-UI roundtrips preserving the checked
+gold, selected-member bonus, condition flags and other member. These checks do not certify every random
+outcome through physical picking or equality of every save field.
+
+Reproduction: `tests/scenarios/atlas/mm7_giant_wishing_well.yml`,
+`tools/menu_tours/atlas_mm7_giant_wishing_well.yml` and
+`tests/scenarios/atlas/mm7_giant_wishing_well_verify.yml`; see the fixture README for isolated module setup.
+Evidence stays outside Git under `atlas-giant-wishing-well-20261109/`. The refreshed physical inventory has
+no recognized well/shrine/drink site without a reference. This closes that narrow content inventory only;
+broader conditional content, the separately documented Bracada selector discrepancy and deferred physical
+Android/controller acceptance remain open.

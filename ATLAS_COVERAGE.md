@@ -395,3 +395,12 @@ runs pass 76 UI steps / 10 captures; four save inspections, four matching Discov
 post-UI roundtrips preserve the checked conditions, health, learned note and exploration. Normal runtime
 packages exclude the test preparation. MM7 `out12:205` remains in the recognized reference-gap inventory;
 wider content and deferred device acceptance remain open.
+
+The 2026-11-09 Land of the Giants follow-up repairs three imported condition selectors in `out12:205`
+using a map-local overlay and one shared definition for its gameplay and Guide text. It retains payment
+boundaries and random-call structure. All ten outcomes and wallet boundaries pass the focused 247-assertion
+case; the selected Windows suite passes 473 cases / 80,241 assertions. A 36-step physical fixture and two
+native tours (68 UI steps / 10 captures), four save inspections, four equal Discovery crops and two 23-step
+post-UI roundtrips preserve the checked resources, selected bonus, conditions and other member. The
+recognized well/shrine/drink reference-gap inventory is now empty; wider conditional/content audits,
+the separately documented Bracada selector issue and deferred device acceptance remain open.
