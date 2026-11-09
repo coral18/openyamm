@@ -1,0 +1,81 @@
+id: atlas.mm7_bracada_drink_verify_after
+title: Atlas browsing preserves the selected poison and other member
+world: mm7
+mode: faithful
+steps:
+- load_game:
+    path: saves/quicksave.oysav
+- &id001
+  assert:
+    map: 7out06.odm
+- &id002
+  assert:
+    runtime_event_variable:
+      id: 21
+      value: 5000
+- &id003
+  assert:
+    runtime_event_variable:
+      id: 23
+      value: 10
+- &id004
+  assert:
+    runtime_event_variable:
+      id: 111
+      member_index: 0
+      value: 0
+- &id005
+  assert:
+    runtime_event_variable:
+      id: 113
+      member_index: 0
+      value: 1
+- &id006
+  assert:
+    runtime_event_variable:
+      id: 115
+      member_index: 0
+      value: 0
+- &id007
+  assert:
+    runtime_event_variable:
+      id: 117
+      member_index: 0
+      value: 0
+- &id008
+  assert:
+    runtime_event_variable:
+      id: 111
+      member_index: 1
+      value: 0
+- &id009
+  assert:
+    runtime_event_variable:
+      id: 113
+      member_index: 1
+      value: 0
+- &id010
+  assert:
+    runtime_event_variable:
+      id: 115
+      member_index: 1
+      value: 0
+- &id011
+  assert:
+    runtime_event_variable:
+      id: 117
+      member_index: 1
+      value: 0
+- save_game: roundtrip
+- load_game: roundtrip
+- *id001
+- *id002
+- *id003
+- *id004
+- *id005
+- *id006
+- *id007
+- *id008
+- *id009
+- *id010
+- *id011

@@ -2094,6 +2094,85 @@ TEST_CASE("Bracada wishing well restores original conditions while preserving it
     }
 }
 
+TEST_CASE("Bracada drink applies original poison severities and refuses every existing poison without rolling")
+{
+    using namespace OpenYAMM::Game;
+    REQUIRE_MESSAGE(OpenYAMM::Tests::regressionMapLoaderLoaded(),
+        OpenYAMM::Tests::regressionMapLoaderFailure());
+    const auto &fixture = OpenYAMM::Tests::regressionMapLoader();
+    const auto &data = fixture.gameDataLoader;
+    const MapStatsEntry *pMap = data.getMapStats().findByFileName("7out06.odm");
+    REQUIRE(pMap);
+    auto map = MapAssetLoader().load(fixture.assetFileSystem, *pMap, data.getMonsterTable(),
+        data.getObjectTable(), MapLoadPurpose::HeadlessGameplay);
+    REQUIRE(map);
+    std::string error;
+    REQUIRE_MESSAGE(GameDataLoader::loadEventPrograms(fixture.assetFileSystem, *map, error), error);
+    REQUIRE(map->localEventProgram);
+    const auto &events = *map->localEventProgram;
+    const std::string &text = events.siteReferences().at(460);
+    for (const char *pText : {"selected character", "no existing poison of any severity", "decides against",
+        "Random outcomes", "probabilities are not shown", "Mild poison", "Medium poison", "Severe poison"})
+        CHECK(text.find(pText) != std::string::npos);
+    CHECK(text.find("Paralysis") == std::string::npos);
+    const CharacterCondition poisons[] = {CharacterCondition::PoisonWeak, CharacterCondition::PoisonMedium,
+        CharacterCondition::PoisonSevere};
+    std::set<size_t> rolledSeverities;
+    for (int mask = 0; mask < 8; ++mask)
+    {
+        for (bool paralyzed : {false, true})
+        {
+            for (uint32_t randomSeed : {1u, 2u, 3u})
+            {
+                CAPTURE(mask);
+                CAPTURE(paralyzed);
+                CAPTURE(randomSeed);
+                PartySeed seed = Party::createDefaultSeed();
+                seed.members.resize(1);
+                seed.members.front().health = seed.members.front().maxHealth = 120;
+                seed.members.front().conditions.reset();
+                seed.members.front().conditions.set(size_t(CharacterCondition::Cursed));
+                seed.members.front().conditions.set(size_t(CharacterCondition::Paralyzed), paralyzed);
+                for (int index = 0; index < 3; ++index)
+                    seed.members.front().conditions.set(size_t(poisons[index]), (mask & (1 << index)) != 0);
+                seed.members.push_back(seed.members.front());
+                seed.members.back().conditions.set(size_t(CharacterCondition::PoisonSevere));
+                seed.gold = 5000;
+                seed.food = 10;
+                Party party;
+                party.seed(seed);
+                auto expected = party.member(0)->conditions;
+                const auto other = party.member(1)->conditions;
+                EventRuntimeState state;
+                state.eventRandomState = randomSeed;
+                uint32_t nextRandom = randomSeed;
+                if (mask == 0)
+                {
+                    nextRandom = randomSeed * 1664525u + 1013904223u;
+                    const size_t severity = nextRandom % 3;
+                    rolledSeverities.insert(severity);
+                    expected.set(size_t(poisons[severity]));
+                }
+                EventRuntime runtime;
+                REQUIRE(runtime.executeEventById(map->localEventProgram, std::nullopt, 460, state, &party));
+                CHECK(state.eventRandomState == nextRandom);
+                CHECK(party.member(0)->conditions == expected);
+                CHECK(party.member(1)->conditions == other);
+                CHECK(party.member(0)->health == 120);
+                CHECK(party.member(1)->health == 120);
+                CHECK(party.gold() == 5000);
+                CHECK(party.food() == 10);
+                // An actual second drink is refused and must not consume another random choice.
+                REQUIRE(runtime.executeEventById(map->localEventProgram, std::nullopt, 460, state, &party));
+                CHECK(state.eventRandomState == nextRandom);
+                CHECK(party.member(0)->conditions == expected);
+                CHECK(party.member(1)->conditions == other);
+            }
+        }
+    }
+    CHECK(rolledSeverities.size() == 3);
+}
+
 TEST_CASE("canonical interaction references describe active statue rescues and reusable keyed entrances")
 {
     using namespace OpenYAMM::Game;

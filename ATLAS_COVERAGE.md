@@ -413,3 +413,9 @@ physical fixture, two native tours (72 steps / 11 captures), four save inspectio
 crops and two 39-step post-UI roundtrips retain the checked payment, rewards and condition result without
 teaching unobserved outcomes. These checks close this specific import error, not all condition imports or
 the wider Atlas/device acceptance. Details and reproduction are recorded in `ATLAS.md`.
+
+The separate Bracada drink (`7out06:460`) now restores original poison severities and poison prerequisites,
+with shared local definitions for gameplay and Guide. The focused condition/RNG case passes 591 assertions;
+the selected Windows suite passes 475 cases / 82,204 assertions, with a focused recheck after a label-only
+refinement. A real-picker repeat/refusal fixture and native Discovery/Guide/save checks pass; details are
+in `ATLAS.md`. This closes that known import error without certifying all event imports or device acceptance.

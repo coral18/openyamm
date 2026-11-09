@@ -987,3 +987,19 @@ Use `tests/scenarios/atlas/mm7_bracada_well_repair_verify.yml` on the after-use 
 UI quicksave use gold 1000, both bonuses zero and Death zero instead. The verifier preserves the checked
 resources, corrected condition result and other member across another save/load; it does not certify every
 save field or all random branches through physical picking.
+
+## Bracada poisoned drink
+
+Run `tests/scenarios/atlas/mm7_bracada_drink.yml` with normal cached packages and private settings/saves.
+The pose targets the real `7out06.odm` water surface, model 2, face 27. Fresh deterministic state applies
+Medium poison to member 0. A second real use refuses another drink; resources, other conditions and
+member 1 remain unchanged through reload. This fixture pose does not certify campaign traversal.
+
+Copy its temporary before/after saves from `atlas_mm7_bracada_drink` to separate private runtimes as
+`saves/before.oysav`, enable the Atlas UI module, and at 1600x900 run
+`tools/menu_tours/atlas_mm7_bracada_drink.yml`. Guide selects the first `Drink` row and lists all three
+poison severities; Discovery after actual use lists only Medium poison. Compare Discovery map/list
+crops across Guide. Run `tests/scenarios/atlas/mm7_bracada_drink_verify.yml` on the after-use quicksave;
+for the untouched quicksave use member 0's Medium poison value 0. Both retain gold 5000, food 10 and the
+other member's unpoisoned state. The focused case `Bracada drink applies*` covers all eight poison masks,
+with/without unrelated paralysis, all three actual RNG outcomes, repeat refusal and member isolation.

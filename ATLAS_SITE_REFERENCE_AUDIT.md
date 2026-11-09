@@ -496,3 +496,15 @@ observed rewards/Death and payment. See `ATLAS.md` and the fixture README for re
 The recognized water/shrine/drink reference-gap inventory remains empty. This does not certify all
 condition imports: the separate Bracada drink callback 460 remains a source-comparison candidate.
 Broader Atlas/content and deferred device acceptance stay open.
+
+## Bracada drink selector follow-up, 2026-11-09
+
+The previously identified `7out06:460` candidate now restores the original three poison prerequisites
+and outcomes through an explicit overlay; the imported Yellow/Red/Paralyzed selection was incorrect.
+Gameplay and Guide share the local poison definitions. The original random call is retained, existing
+poison refuses another drink without a roll, and other members/resources remain unchanged. There is no
+global remap or save migration. Verification: 591 focused assertions over 48 initial condition/RNG cases,
+475 selected Windows cases / 82,204 assertions, 51 real-picker steps, 74 native UI steps / 11 captures,
+four save inspections, four equal Discovery crops and two 25-step post-UI roundtrips. The focused case
+was rerun after the final label-only alignment with the shared Medium poison wording. Reproduction and
+scope limits are recorded in `ATLAS.md` and the fixture README; full Atlas/device acceptance remains open.

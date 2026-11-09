@@ -3961,3 +3961,26 @@ Reproduction is in `tests/fixtures/atlas/README.md`, using
 water/shrine/drink reference inventory remains empty; wider content/source comparisons and deferred device
 acceptance remain open. Bracada's separate drink callback 460 is a next selector-comparison candidate;
 this wishing-well repair does not certify that unrelated callback.
+
+## Bracada poisoned-drink repair, 2026-11-09
+
+The separate `7out06:460` import candidate is repaired by `7out06_zz_poisoned_drink.lua`. Readable original
+OUT06 checks and applies Green/Yellow/Red poison; the import checked/applied Yellow/Red/Paralyzed instead.
+The explicit overlay restores all three poison severities, refuses drinking if the selected character
+already has any poison, and preserves the original random call (460, step 4, ordered options 5/7/9).
+Unrelated paralysis does not replace the poison prerequisite. Generated Lua, global mappings and saves
+are unchanged. The same local poison definitions generate the Guide, with canonical Mild/Medium/Severe
+labels; Discovery retains only actual observed effects.
+
+The focused case passes 591 assertions across all eight poison masks, with and without unrelated
+paralysis, three real RNG outcomes, repeat use and member/resource isolation. The selected Windows suite
+passes 475 cases / 82,204 assertions; the final label-only refinement is rechecked by the focused case.
+The 51-step real-picker fixture applies Medium poison to the selected member, refuses a second use and
+retains conditions/resources on reload. Two native runs pass 74 UI steps / 11 captures; four save
+inspections, four equal Discovery crops and two 25-step post-UI roundtrips retain the checked poison,
+other member and resources. These are scoped checks, not full-save equality or a complete campaign run.
+
+Use `tests/scenarios/atlas/mm7_bracada_drink.yml`, `tools/menu_tours/atlas_mm7_bracada_drink.yml` and
+`tests/scenarios/atlas/mm7_bracada_drink_verify.yml` with the isolated setup in the fixture README.
+Private evidence is under `atlas-bracada-drink-20261109/`. Wider Atlas/content and deferred physical
+device acceptance remain open; no Android build or install was performed.
