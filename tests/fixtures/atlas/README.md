@@ -959,3 +959,31 @@ Compare map/list crops and inspect the source/output saves. Run
 `tests/scenarios/atlas/mm7_giant_wishing_well_verify.yml` on the after-use UI quicksave; for the untouched
 UI quicksave, use gold 15000 and selected-member Fire resistance bonus 0 instead. Other condition flags and
 the second member remain unchanged in both cases. Do not use a player's campaign for these fixtures.
+
+## Bracada wishing-well condition repair
+
+Run `tests/scenarios/atlas/mm7_bracada_well_repair.yml` with normal cached packages and private settings/saves.
+The explicit water-face pose targets `7out06.odm`, model 87, face 1, rather than the separate hint-only frame.
+The fresh deterministic event state yields Accuracy +20, Speed +20 and then Death over three real interactions.
+It verifies the 100-gold payment each time, absence of the incorrectly imported Eradication, isolation of the
+second member and persistence through reload. The two-member party intentionally survives the selected
+member's death. This pose is fixture setup, not a campaign traversal assertion.
+
+`Bracada wishing well restores*` separately replays all thirteen authored paths, checking the ordered random
+call arguments and every leaf's actual gameplay effect. Native-RNG comparison against the imported program
+covers 64 initial states including zero and wallet boundaries 0/98/99/100. The existing LCG correlates
+consecutive choices; branch replay is not proof of every branch's random reachability or probability. The
+repair deliberately preserves that existing RNG behavior.
+
+Copy the scenario's temporary before/after saves from `atlas_mm7_bracada_well_repair` into separate private
+runtimes as `saves/before.oysav`; enable the Atlas UI module in each `mods/` folder. At 1600x900 use
+`tools/menu_tours/atlas_mm7_bracada_well_repair.yml` as the native one-shot tour. The Well-category search
+also finds other water sites; the Guide tour selects the fourth row, specifically `Well`, and must show
+Insanity, Curse and Death rather than Mild disease, Sleep and Eradication. After real use, Discovery's
+reader must show actual recorded wishes, without teaching the other outcomes. Compare Discovery map/list
+crops before/after Guide and inspect source/output saves.
+
+Use `tests/scenarios/atlas/mm7_bracada_well_repair_verify.yml` on the after-use UI quicksave. For the untouched
+UI quicksave use gold 1000, both bonuses zero and Death zero instead. The verifier preserves the checked
+resources, corrected condition result and other member across another save/load; it does not certify every
+save field or all random branches through physical picking.

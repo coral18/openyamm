@@ -1941,6 +1941,159 @@ TEST_CASE("Land of the Giants wishing well preserves its rolls and prices and re
     }
 }
 
+TEST_CASE("Bracada wishing well restores original conditions while preserving its choice graph and prices")
+{
+    using namespace OpenYAMM::Game;
+    REQUIRE_MESSAGE(OpenYAMM::Tests::regressionMapLoaderLoaded(),
+        OpenYAMM::Tests::regressionMapLoaderFailure());
+    const auto &fixture = OpenYAMM::Tests::regressionMapLoader();
+    const auto &data = fixture.gameDataLoader;
+    const MapStatsEntry *pMap = data.getMapStats().findByFileName("7out06.odm");
+    REQUIRE(pMap);
+    auto map = MapAssetLoader().load(fixture.assetFileSystem, *pMap, data.getMonsterTable(),
+        data.getObjectTable(), MapLoadPurpose::HeadlessGameplay);
+    REQUIRE(map);
+    std::string error;
+    REQUIRE_MESSAGE(GameDataLoader::loadEventPrograms(fixture.assetFileSystem, *map, error), error);
+    REQUIRE(map->localEventProgram);
+    const auto read = [&](const char *pPath)
+    {
+        const std::optional<std::string> content = fixture.assetFileSystem.readTextFile(pPath);
+        REQUIRE(content);
+        return *content;
+    };
+    const std::string support = read("engine/scripts/common/event_support.lua");
+    const std::string overlay = read("worlds/mm7/events/maps/7out06_zz_wishing_well.lua");
+    const auto imported = ScriptedEventProgram::loadFromLuaText(support
+        + read("worlds/mm7/events/maps/7out06.lua"), "@imported-bracada-well", ScriptedEventScope::Map, error);
+    REQUIRE_MESSAGE(imported, error);
+    const std::string &text = map->localEventProgram->siteReferences().at(459);
+    for (const char *pText : {"100 gold", "exactly 99 gold", "Below 99 gold", "probabilities are not shown",
+        "Can apply: Insanity", "Can apply: Curse", "Can apply: Death", "Earth resistance bonus +20",
+        "Damage: 50 to the selected character.", "Party gold +250", "Temporary Might +20",
+        "Temporary Intellect +20", "Temporary Personality +20", "Temporary Endurance +20",
+        "Temporary Accuracy +20", "Temporary Speed +20", "Temporary Luck +20"})
+        CHECK(text.find(pText) != std::string::npos);
+    for (const char *pText : {"Mild disease", "Sleep", "Eradication"})
+        CHECK(text.find(pText) == std::string::npos);
+    const auto makeParty = [](int gold)
+    {
+        PartySeed seed = Party::createDefaultSeed();
+        seed.members.resize(1);
+        seed.members.front().health = seed.members.front().maxHealth = 120;
+        seed.members.front().conditions.reset();
+        seed.members.front().conditions.set(size_t(CharacterCondition::Weak));
+        seed.members.push_back(seed.members.front());
+        seed.gold = gold;
+        Party party;
+        party.seed(seed);
+        return party;
+    };
+    const std::map<int, std::pair<int, std::vector<int>>> choices = {
+        {0, {5, {6, 16}}}, {6, {7, {8, 10, 12, 14}}}, {16, {17, {18, 20, 22}}},
+        {22, {23, {24, 34}}}, {24, {25, {26, 28, 30, 32}}}, {34, {35, {36, 38, 40}}}};
+    const std::map<int, EvtVariable> addedVariables = {
+        {10, EvtVariable::EarthResistanceBonus}, {26, EvtVariable::MightBonus},
+        {28, EvtVariable::IntellectBonus}, {30, EvtVariable::PersonalityBonus},
+        {32, EvtVariable::EnduranceBonus}, {36, EvtVariable::AccuracyBonus},
+        {38, EvtVariable::SpeedBonus}, {40, EvtVariable::LuckBonus}};
+    const std::vector<std::vector<int>> paths = {{6, 8}, {6, 10}, {6, 12}, {6, 14}, {16, 18}, {16, 20},
+        {16, 22, 24, 26}, {16, 22, 24, 28}, {16, 22, 24, 30}, {16, 22, 24, 32},
+        {16, 22, 34, 36}, {16, 22, 34, 38}, {16, 22, 34, 40}};
+    for (const auto &path : paths)
+    {
+        const int outcome = path.back();
+        CAPTURE(outcome);
+        // Replay each authored path because the existing LCG correlates consecutive branch choices.
+        // Separate tests below use the real RNG and compare it with the imported program.
+        std::string replay = "local cursor = 0\nfunction PickRandomOption(event, step, options)\n"
+            "assert(event == 459)\ncursor = cursor + 1\n";
+        int parent = 0;
+        for (size_t index = 0; index < path.size(); ++index)
+        {
+            const auto &[step, options] = choices.at(parent);
+            replay += "if cursor == " + std::to_string(index + 1) + " then\nassert(step == "
+                + std::to_string(step) + " and #options == " + std::to_string(options.size()) + ")\n";
+            for (size_t option = 0; option < options.size(); ++option)
+                replay += "assert(options[" + std::to_string(option + 1) + "] == "
+                    + std::to_string(options[option]) + ")\n";
+            replay += "return " + std::to_string(path[index]) + "\nend\n";
+            parent = path[index];
+        }
+        replay += "error('Unexpected extra random choice')\nend\n";
+        const auto program = ScriptedEventProgram::loadFromLuaText(support + replay + overlay,
+            "@bracada-authored-path", ScriptedEventScope::Map, error);
+        REQUIRE_MESSAGE(program, error);
+        Party party = makeParty(1000);
+        const Character other = *party.member(1);
+        EventRuntimeState state;
+        EventRuntime runtime;
+        REQUIRE(runtime.executeEventById(program, std::nullopt, 459, state, &party));
+        CHECK(party.gold() == (outcome == 18 ? 1150 : 900));
+        CHECK(party.member(0)->health == (outcome == 12 ? 70 : 120));
+        auto conditions = other.conditions;
+        if (outcome == 8) conditions.set(size_t(CharacterCondition::Insane));
+        if (outcome == 14) conditions.set(size_t(CharacterCondition::Cursed));
+        if (outcome == 20) conditions.set(size_t(CharacterCondition::Dead));
+        CHECK(party.member(0)->conditions == conditions);
+        CHECK(party.member(1)->health == other.health);
+        CHECK(party.member(1)->conditions == other.conditions);
+        for (const auto &[id, variable] : addedVariables)
+        {
+            const auto decoded = EventRuntime::decodeVariable(uint32_t(variable));
+            CHECK(EventRuntime::getVariableValue(state, decoded, &party, 0) == (outcome == id ? 20 : 0));
+            CHECK(EventRuntime::getVariableValue(state, decoded, &party, 1) == 0);
+        }
+    }
+    for (uint32_t seed = 0; seed < 64; ++seed)
+    {
+        CAPTURE(seed);
+        Party party = makeParty(1000), oldParty = makeParty(1000);
+        EventRuntimeState state, oldState;
+        state.eventRandomState = oldState.eventRandomState = seed;
+        EventRuntime runtime, oldRuntime;
+        REQUIRE(runtime.executeEventById(map->localEventProgram, std::nullopt, 459, state, &party));
+        REQUIRE(oldRuntime.executeEventById(imported, std::nullopt, 459, oldState, &oldParty));
+        CHECK(state.eventRandomState == oldState.eventRandomState);
+        CHECK(party.gold() == oldParty.gold());
+        CHECK(party.member(0)->health == oldParty.member(0)->health);
+        auto expected = oldParty.member(0)->conditions;
+        for (const auto &[oldCondition, corrected] : {
+            std::pair{CharacterCondition::DiseaseWeak, CharacterCondition::Insane},
+            std::pair{CharacterCondition::Asleep, CharacterCondition::Cursed},
+            std::pair{CharacterCondition::Eradicated, CharacterCondition::Dead}})
+        {
+            if (expected.test(size_t(oldCondition)))
+            {
+                expected.reset(size_t(oldCondition));
+                expected.set(size_t(corrected));
+            }
+        }
+        CHECK(party.member(0)->conditions == expected);
+        for (const auto &[id, variable] : addedVariables)
+        {
+            const auto decoded = EventRuntime::decodeVariable(uint32_t(variable));
+            CHECK(EventRuntime::getVariableValue(state, decoded, &party, 0)
+                == EventRuntime::getVariableValue(oldState, decoded, &oldParty, 0));
+        }
+        CHECK(party.member(1)->conditions == oldParty.member(1)->conditions);
+        CHECK(party.member(1)->health == oldParty.member(1)->health);
+    }
+    for (int gold : {0, 98, 99, 100})
+    {
+        CAPTURE(gold);
+        Party party = makeParty(gold);
+        EventRuntimeState state;
+        state.eventRandomState = 1;
+        EventRuntime runtime;
+        REQUIRE(runtime.executeEventById(map->localEventProgram, std::nullopt, 459, state, &party));
+        CHECK(party.gold() == (gold < 99 ? gold : 0));
+        CHECK((state.eventRandomState != 1) == (gold == 100));
+        CHECK(party.member(0)->health == 120);
+        CHECK(party.member(1)->health == 120);
+    }
+}
+
 TEST_CASE("canonical interaction references describe active statue rescues and reusable keyed entrances")
 {
     using namespace OpenYAMM::Game;

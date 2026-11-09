@@ -404,3 +404,12 @@ native tours (68 UI steps / 10 captures), four save inspections, four equal Disc
 post-UI roundtrips preserve the checked resources, selected bonus, conditions and other member. The
 recognized well/shrine/drink reference-gap inventory is now empty; wider conditional/content audits,
 the separately documented Bracada selector issue and deferred device acceptance remain open.
+
+The subsequent Bracada wishing-well follow-up resolves the separately documented `7out06:459` condition
+import error. A map-local overlay restores Insanity, Curse and Death while retaining the other declared
+outcomes, payment and random calls; its effect definitions also generate the Guide text. The focused case
+passes 1372 assertions, and the selected Windows suite passes 474 cases / 81,613 assertions. A 98-step
+physical fixture, two native tours (72 steps / 11 captures), four save inspections, four equal Discovery
+crops and two 39-step post-UI roundtrips retain the checked payment, rewards and condition result without
+teaching unobserved outcomes. These checks close this specific import error, not all condition imports or
+the wider Atlas/device acceptance. Details and reproduction are recorded in `ATLAS.md`.

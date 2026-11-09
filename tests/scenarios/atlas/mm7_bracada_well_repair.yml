@@ -1,0 +1,250 @@
+id: atlas.mm7_bracada_well_repair
+title: Use Bracada well through real picking and retain original reward and death
+  outcomes
+world: mm7
+mode: faithful
+steps:
+- new_game_flow:
+    start_map: 7out06.odm
+    party:
+      gold: 1000
+      food: 10
+      members:
+      - name: Wish Tester
+        class: Knight
+        level: 20
+        race_id: 0
+        skills: []
+        equipment: {}
+      - name: Other Tester
+        class: Knight
+        level: 20
+        race_id: 0
+        skills: []
+        equipment: {}
+- set_pose: &id001
+    x: 5000
+    y: -6686
+    z: 8
+    yaw: 0
+    pitch: -1.4
+- &id002
+  assert:
+    map: 7out06.odm
+- assert:
+    runtime_event_variable:
+      id: 21
+      value: 1000
+- assert:
+    runtime_event_variable:
+      id: 30
+      member_index: 0
+      value: 0
+- &id003
+  assert:
+    runtime_event_variable:
+      id: 29
+      member_index: 0
+      value: 0
+- &id004
+  assert:
+    runtime_event_variable:
+      id: 119
+      member_index: 0
+      value: 0
+- &id005
+  assert:
+    runtime_event_variable:
+      id: 121
+      member_index: 0
+      value: 0
+- &id006
+  assert:
+    runtime_event_variable:
+      id: 110
+      member_index: 0
+      value: 0
+- &id007
+  assert:
+    runtime_event_variable:
+      id: 105
+      member_index: 0
+      value: 0
+- &id008
+  assert:
+    runtime_event_variable:
+      id: 107
+      member_index: 0
+      value: 0
+- &id009
+  assert:
+    runtime_event_variable:
+      id: 112
+      member_index: 0
+      value: 0
+- &id010
+  assert:
+    runtime_event_variable:
+      id: 30
+      member_index: 1
+      value: 0
+- &id011
+  assert:
+    runtime_event_variable:
+      id: 29
+      member_index: 1
+      value: 0
+- &id012
+  assert:
+    runtime_event_variable:
+      id: 119
+      member_index: 1
+      value: 0
+- &id013
+  assert:
+    runtime_event_variable:
+      id: 121
+      member_index: 1
+      value: 0
+- &id014
+  assert:
+    runtime_event_variable:
+      id: 110
+      member_index: 1
+      value: 0
+- &id015
+  assert:
+    runtime_event_variable:
+      id: 105
+      member_index: 1
+      value: 0
+- &id016
+  assert:
+    runtime_event_variable:
+      id: 107
+      member_index: 1
+      value: 0
+- &id017
+  assert:
+    runtime_event_variable:
+      id: 112
+      member_index: 1
+      value: 0
+- save_game: before
+- press_interact:
+    pose: *id001
+    expect:
+      kind: event_target
+      triggered_event: 459
+      can_activate: true
+- *id002
+- assert:
+    runtime_event_variable:
+      id: 21
+      value: 900
+- &id018
+  assert:
+    runtime_event_variable:
+      id: 30
+      member_index: 0
+      value: 20
+- *id003
+- *id004
+- *id005
+- *id006
+- *id007
+- *id008
+- *id009
+- *id010
+- *id011
+- *id012
+- *id013
+- *id014
+- *id015
+- *id016
+- *id017
+- press_interact:
+    pose: *id001
+    expect:
+      kind: event_target
+      triggered_event: 459
+      can_activate: true
+- *id002
+- assert:
+    runtime_event_variable:
+      id: 21
+      value: 800
+- *id018
+- &id019
+  assert:
+    runtime_event_variable:
+      id: 29
+      member_index: 0
+      value: 20
+- *id004
+- *id005
+- *id006
+- *id007
+- *id008
+- *id009
+- *id010
+- *id011
+- *id012
+- *id013
+- *id014
+- *id015
+- *id016
+- *id017
+- press_interact:
+    pose: *id001
+    expect:
+      kind: event_target
+      triggered_event: 459
+      can_activate: true
+- *id002
+- &id020
+  assert:
+    runtime_event_variable:
+      id: 21
+      value: 700
+- *id018
+- *id019
+- &id021
+  assert:
+    runtime_event_variable:
+      id: 119
+      member_index: 0
+      value: 1
+- *id005
+- *id006
+- *id007
+- *id008
+- *id009
+- *id010
+- *id011
+- *id012
+- *id013
+- *id014
+- *id015
+- *id016
+- *id017
+- save_game: after
+- load_game: after
+- *id002
+- *id020
+- *id018
+- *id019
+- *id021
+- *id005
+- *id006
+- *id007
+- *id008
+- *id009
+- *id010
+- *id011
+- *id012
+- *id013
+- *id014
+- *id015
+- *id016
+- *id017

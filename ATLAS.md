@@ -3922,3 +3922,42 @@ Evidence stays outside Git under `atlas-giant-wishing-well-20261109/`. The refre
 no recognized well/shrine/drink site without a reference. This closes that narrow content inventory only;
 broader conditional content, the separately documented Bracada selector discrepancy and deferred physical
 Android/controller acceptance remain open.
+
+## Bracada wishing-well condition repair, 2026-11-09
+
+The separate `7out06:459` selector discrepancy recorded on 2026-11-07 is now repaired by
+`7out06_zz_wishing_well.lua`. The original OUT06 event applies Insane, Cursed and Dead; its imported
+callback applied DiseasedGreen, Asleep and Eradicated instead. The explicit map-local replacement uses the
+existing shared condition API, without modifying generated handlers, global selectors or save format.
+It leaves the other ten declared outcomes, selected-member scope, damage call, party payment and all
+six random call IDs/steps/option orders unchanged. There is no retroactive save-state reinterpretation.
+
+The choice graph's leaf definitions also generate the Guide description, so the repaired condition names
+and amounts have one owner. Payment remains 100 gold for a roll, exactly 99 paid without a roll, and no
+effect below 99. The Guide lists the thirteen declared random effects without claiming probabilities.
+The existing LCG correlates successive choices; this repair neither changes it nor claims all declared
+paths are reachable by every initial random state. Damage retains the existing runtime implementation;
+the reference does not promise elemental mitigation that the runtime does not apply.
+
+The focused case passes 1372 assertions. It replays all thirteen authored paths with checked random-call
+arguments and verifies the actual selected-member effects and unaffected other member. A separate real-RNG
+comparison against the imported callback checks 64 initial states, including zero, for unchanged random
+state, payments, health and numeric outcomes, with only the three intended condition substitutions.
+Wallet checks cover 0/98/99/100. The selected Windows suite passes 474 cases / 81,613 assertions with the
+established unrelated portrait exclusion.
+
+The isolated 98-step physical scenario targets the real water surface three times. The fresh deterministic
+state yields Accuracy +20, Speed +20 and then Death, with 100 gold paid each time and no Eradication or
+second-member change; these persist after reload. Two native runs pass 72 UI steps / 11 captures, including
+the repaired Guide and Discovery's actual recorded rewards/Death. Four source/output save inspections,
+four equal Discovery map/list crops and two 39-step post-UI roundtrips preserve the checked resources,
+conditions and bonuses. This is not full-save equality or physical picking of every random branch.
+
+Reproduction is in `tests/fixtures/atlas/README.md`, using
+`tests/scenarios/atlas/mm7_bracada_well_repair.yml`,
+`tools/menu_tours/atlas_mm7_bracada_well_repair.yml` and
+`tests/scenarios/atlas/mm7_bracada_well_repair_verify.yml`. Private evidence is under
+`atlas-bracada-well-repair-20261109/`. No runtime test-preparation overlay is needed. The refreshed recognized
+water/shrine/drink reference inventory remains empty; wider content/source comparisons and deferred device
+acceptance remain open. Bracada's separate drink callback 460 is a next selector-comparison candidate;
+this wishing-well repair does not certify that unrelated callback.

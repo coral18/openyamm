@@ -476,3 +476,23 @@ The refreshed inventory contains 6696 physical-site records across 136 maps with
 No recognized well/shrine/drink record lacks a reference. That does not prove arbitrary unclassified events
 are fully understood, resolve the previously documented Bracada selector discrepancy, or close full Atlas
 and deferred device acceptance. No new placement was invented for the six unbound base callbacks.
+
+## Bracada wishing-well original-condition repair, 2026-11-09
+
+The earlier `7out06:459` import discrepancy is resolved by an explicit map-local overlay: the three
+condition leaves now apply original Insanity, Curse and Death, using the existing shared runtime.
+The remaining ten leaves, damage call, payments and all random-call IDs/steps/options are retained.
+The authored choice graph owns both runtime effects and Guide text; generated Lua, global selectors,
+geometry and save schema are unchanged. No past save condition is guessed or migrated.
+
+Verification passes 474 selected Windows cases / 81,613 assertions. The focused 1372-assertion case checks
+thirteen replayed authored paths, 64 real-RNG initial states against the imported program, member isolation
+and wallet boundaries. Replay validates declared branch effects, not random reachability/probabilities.
+The 98-step real-picker fixture obtains Accuracy, Speed and Death over three uses and retains them on
+reload. Two native runs pass 72 UI steps / 11 captures, four save inspections, four equal Discovery crops
+and two 39-step post-UI roundtrips. Guide lists the corrected condition names; Discovery shows only the
+observed rewards/Death and payment. See `ATLAS.md` and the fixture README for reproduction and limitations.
+
+The recognized water/shrine/drink reference-gap inventory remains empty. This does not certify all
+condition imports: the separate Bracada drink callback 460 remains a source-comparison candidate.
+Broader Atlas/content and deferred device acceptance stay open.
