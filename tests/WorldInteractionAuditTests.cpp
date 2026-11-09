@@ -1622,6 +1622,96 @@ TEST_CASE("Evenmorn and Nighon named legacy objects retain shared references and
     }
 }
 
+TEST_CASE("temple altar reference follows all three authored mechanism prerequisites and their callbacks")
+{
+    using namespace OpenYAMM::Game;
+    REQUIRE_MESSAGE(OpenYAMM::Tests::regressionMapLoaderLoaded(),
+        OpenYAMM::Tests::regressionMapLoaderFailure());
+    const auto &fixture = OpenYAMM::Tests::regressionMapLoader();
+    const auto &data = fixture.gameDataLoader;
+    const MapStatsEntry *pMap = data.getMapStats().findByFileName("t01.blv");
+    REQUIRE(pMap);
+    auto map = MapAssetLoader().load(fixture.assetFileSystem, *pMap, data.getMonsterTable(),
+        data.getObjectTable(), MapLoadPurpose::HeadlessGameplay);
+    REQUIRE(map);
+    REQUIRE(map->indoorMapData);
+    std::string error;
+    REQUIRE_MESSAGE(GameDataLoader::loadEventPrograms(fixture.assetFileSystem, *map, error), error);
+    REQUIRE(map->localEventProgram);
+    const auto &events = *map->localEventProgram;
+    REQUIRE(events.siteReferences().contains(12));
+    const std::string &text = events.siteReferences().at(12);
+    CHECK(text.find("all three linked door mechanisms") != std::string::npos);
+    CHECK(text.find("current door positions do not matter") != std::string::npos);
+    CHECK(text.find("toggles a local door") != std::string::npos);
+    CHECK(text.find("MapVar") == std::string::npos);
+    WorldDatabase world(data.getMapStats(), data.getHouseTable(), data.getNpcDialogTable(),
+        data.getMergedTeacherTopicTable(), "mm7");
+    world.indexMapLocations(*pMap, *map->indoorMapData, events);
+    const auto feature = std::find_if(world.features().begin(), world.features().end(),
+        [](const WorldMapFeature &entry) { return entry.site.eventId == 12; });
+    REQUIRE(feature != world.features().end());
+    CHECK(feature->kind == WorldMapFeatureKind::Shrine);
+    WorldKnowledge knowledge;
+    knowledge.visitedMaps.insert("t01.blv");
+    CHECK_FALSE(world.featureVisible(*feature, knowledge, false));
+    CHECK(world.siteReference(*feature, knowledge, false).empty());
+    CHECK(world.siteReference(*feature, knowledge, true) == text);
+    knowledge.interactedSites["t01.blv"].insert(worldSiteDiscoveryKey(12, feature->site.id));
+    CHECK(world.featureVisible(*feature, knowledge, false));
+    CHECK(world.siteReference(*feature, knowledge, false).empty());
+    CHECK(knowledge.variables.empty());
+    CHECK(knowledge.autonoteIds.empty());
+    for (uint32_t mask = 0; mask < 8; ++mask)
+    {
+        CAPTURE(mask);
+        Party party;
+        party.seed(Party::createDefaultSeed());
+        EventRuntimeState state;
+        for (size_t bit = 0; bit < 3; ++bit) state.mapVars[bit + 2] = uint8_t((mask >> bit) & 1);
+        EventRuntime runtime;
+        REQUIRE(runtime.executeEventById(map->localEventProgram, std::nullopt, 12, state, &party));
+        CHECK(state.mechanisms.contains(14) == (mask == 7));
+        if (mask == 7) CHECK(state.mechanisms.at(14).isMoving);
+        for (size_t bit = 0; bit < 3; ++bit) CHECK(state.mapVars[bit + 2] == ((mask >> bit) & 1));
+    }
+    std::array<uint16_t, 3> controls = {4, 6, 11};
+    do
+    {
+        EventRuntime runtime;
+        EventRuntimeState state;
+        Party party;
+        party.seed(Party::createDefaultSeed());
+        for (size_t index = 0; index < controls.size(); ++index)
+        {
+            REQUIRE(runtime.executeEventById(map->localEventProgram, std::nullopt, controls[index], state, &party));
+            // A second activation changes the mechanism again, but preserves its recorded prerequisite.
+            REQUIRE(runtime.executeEventById(map->localEventProgram, std::nullopt, controls[index], state, &party));
+            REQUIRE(runtime.executeEventById(map->localEventProgram, std::nullopt, 12, state, &party));
+            CHECK(state.mechanisms.contains(14) == (index == 2));
+        }
+        CHECK(state.mapVars[2] == 1);
+        CHECK(state.mapVars[3] == 1);
+        CHECK(state.mapVars[4] == 1);
+    } while (std::next_permutation(controls.begin(), controls.end()));
+    // A replacement to the altar or any prerequisite invalidates the authored description.
+    const auto read = [&](const char *pPath)
+    {
+        const std::optional<std::string> text = fixture.assetFileSystem.readTextFile(pPath);
+        REQUIRE(text);
+        return *text;
+    };
+    const std::string source = read("engine/scripts/common/event_support.lua")
+        + read("worlds/mm7/events/maps/t01.lua") + read("worlds/mm7/events/maps/t01_zz_site_refs.lua");
+    for (uint16_t event : {4, 6, 11, 12})
+    {
+        const auto changed = ScriptedEventProgram::loadFromLuaText(source + "\nevt.map["
+            + std::to_string(event) + "] = function() end", "@temple-altar-reference", ScriptedEventScope::Map, error);
+        REQUIRE_MESSAGE(changed, error);
+        CHECK_FALSE(changed->siteReferences().contains(12));
+    }
+}
+
 TEST_CASE("canonical interaction references describe active statue rescues and reusable keyed entrances")
 {
     using namespace OpenYAMM::Game;

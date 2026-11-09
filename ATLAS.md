@@ -3825,3 +3825,29 @@ inspections and ten matching Discovery map/list crops retain the checked party/r
 Five post-UI 21-step roundtrips preserve Accuracy, Speed, Intellect, Personality, Skill points, all three
 learned-note bits and both obelisk progress bits. Evidence stays outside Git in `atlas-map-classification-20261108/`.
 The wider Atlas objective, three remaining recognized reference gaps and deferred device checks remain open.
+
+## Temple of the Light mechanism altar, 2026-11-09
+
+The altar in `t01:12` now has an authored, read-only reference through the existing `SetMapSiteReference`
+API. It describes the three prior mechanism activations and subsequent door toggle without exposing raw
+map-variable numbers or presenting door positions as prerequisites. The original readable T01 events
+4/6/11/12 and the active generated handlers agree: events 4/6/11 set persistent local records 2/3/4, and
+altar 12 toggles door 14 only when all three are present. Reusing a prerequisite mechanism retains its record.
+
+This is world metadata for one authored puzzle, not generalized exporter support for arbitrary map-variable
+predicates. The sidecar explicitly captures the altar and its three prerequisite callbacks. Replacing any of
+them invalidates the reference. No generated handler, world geometry, door logic, engine API or save schema
+is changed; Discovery still shows only actual site observations and keeps the full reference in Guide.
+
+`tests/scenarios/atlas/mm7_temple_mechanisms.yml` uses normal physical picks on all three controls and the
+altar. It checks the records after each altar attempt, the final door motion and their survival through reload.
+Poses are explicit test setup, not certification of an entire dungeon walkthrough. Use
+`tools/menu_tours/atlas_mm7_temple_mechanisms.yml` on the before/after saves and
+`tests/scenarios/atlas/mm7_temple_mechanisms_verify.yml` on the completed UI output for reproduction.
+
+Verification passes 471 selected Windows cases / 79,783 assertions, including a focused 162-assertion
+check of all eight prerequisite states, all six control orders and callback invalidation. The physical
+scenario passes 28 steps. Two native runs pass 80 UI steps / 10 captures; four source/output save inspections,
+four equal Discovery map/list crops and two nine-step post-UI roundtrips preserve the checked party,
+exploration and prerequisite records. Evidence stays outside Git under `atlas-temple-mechanisms-20261109/`.
+The wider Atlas objective, the two remaining recognized well-reference gaps and deferred device checks remain open.

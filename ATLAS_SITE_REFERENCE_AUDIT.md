@@ -416,3 +416,22 @@ five 21-step post-UI roundtrips preserve all checked bonuses, learned notes and 
 The new inventory has no omitted generic physical callback with exported reference or journal evidence in
 this scope. Recognized reference gaps remain `7out03:205`, `out12:205` and `t01:12`; that is not a full Atlas
 completion claim or certification of all generic callbacks without such metadata.
+
+## Temple of the Light mechanism altar, 2026-11-09
+
+`t01:12` now describes its three prerequisite mechanism activations and local door toggle. The authored
+reference is owned by the altar callback and depends on callbacks 4/6/11, using the existing dependency API.
+It uses no raw map-variable labels and does not claim that the current positions of doors 6/8/13 determine
+readiness. Actual callbacks set records 2/3/4 on every use and never clear them; altar 12 checks all three.
+
+The original readable T01 control flow confirms these requirements. Tests cover all eight flag combinations,
+all six control orders, repeat activation and invalidation when the altar or any prerequisite is replaced.
+The 28-step real-picker scenario checks each partial state, the final door motion and save/reload records.
+This does not implement general map-variable projection or certify a full dungeon walkthrough.
+
+The selected Windows suite passes 471 cases / 79,783 assertions with the established unrelated portrait
+exclusion. The focused puzzle case passes 162 assertions. Two native runs pass 80 UI steps / 10 captures,
+with four source/output save inspections, four equal Discovery map/list crops and two nine-step roundtrips.
+Both unused and completed prerequisite records survive Guide browsing and save/load. The scoped recognized
+reference inventory now leaves only MM7 `7out03:205` and `out12:205`; both still have documented selector/import
+questions. This does not close wider content, original-source or deferred device acceptance.

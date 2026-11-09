@@ -1,0 +1,30 @@
+id: atlas.mm7_temple_mechanisms_verify
+title: Guide browsing preserves all three temple prerequisite records
+world: mm7
+mode: faithful
+steps:
+- load_game:
+    path: saves/quicksave.oysav
+- &id001
+  assert:
+    map: t01.blv
+    map_var_changed:
+      index: 2
+      value: 1
+- &id002
+  assert:
+    map: t01.blv
+    map_var_changed:
+      index: 3
+      value: 1
+- &id003
+  assert:
+    map: t01.blv
+    map_var_changed:
+      index: 4
+      value: 1
+- save_game: roundtrip
+- load_game: roundtrip
+- *id001
+- *id002
+- *id003

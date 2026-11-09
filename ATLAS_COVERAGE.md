@@ -376,3 +376,12 @@ cases / 79,621 assertions; the physical fixture passes 38 steps, and five native
 preserve the checked stats, notes, obelisk flags and exploration. No generic physically placed callback with
 exported reference or journal evidence remains omitted in this inventory. Three recognized reference gaps,
 wider content coverage and deferred device acceptance remain open.
+
+The 2026-11-09 Temple of the Light altar reference explains the three prerequisite mechanism activations and
+subsequent door toggle through an explicit callback-owned world sidecar. It does not alter the gameplay
+handlers or add general map-variable projection. All eight states, six control orders, repeat activation and
+callback replacement pass the focused 162-assertion check. The selected suite passes 471 cases / 79,783
+assertions, the physical fixture passes 28 steps, and two native runs pass 80 UI steps / 10 captures. Four
+save inspections, four matching Discovery map/list crops and two nine-step post-UI roundtrips preserve the
+checked state. The recognized reference inventory retains two MM7 wells (`7out03:205`, `out12:205`) with
+selector/import questions; broader content and deferred device acceptance remain open.
