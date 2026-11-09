@@ -395,3 +395,24 @@ exclusion. Runtime callback coverage checks all 96 prerequisite/local/group/sibl
 three circles and all six visit orders. Parser checks cover dense arrays, distinct identities, unsupported
 reference kinds, incomplete group declarations and callback replacement. Three recognized placed MM7
 water/shrine/drink callbacks still lack complete references: `7out03:205`, `out12:205` and `t01:12`.
+
+## Restored generic-site classifications, 2026-11-08
+
+The five omitted generic callbacks identified above now have explicit shared context classifications:
+Evenmorn `452` shrine / `453` obelisk, and Nighon `202` well / `452` shrine / `453` obelisk. Every classification
+uses an existing physical binding and agrees with the readable original OUT09/OUT10 hints. Generated gameplay
+handlers, geometry and rewards are unchanged. Existing generated altar references and shared journal entries
+supply their text; the skill-point well's generated reference is newly supported by the exporter.
+
+Skill-point writes now use the shared attribute label, while skill-point predicates remain rejected. The real
+canonical well check covers both already-learned and unlearned journal states, selected-member reward and
+repeat-use blocking. The index audit checks all five physical features, exactly one feature each, Guide-only
+references and journal entries that stay hidden in Discovery until actually learned.
+
+Final verification, confirmed on 2026-11-09: the selected suite passes 470 cases / 79,621 assertions with the
+established unrelated portrait exclusion. All five restored objects pass a 38-step real-picker scenario and
+five native UI runs (200 steps / 25 captures). Ten saves and ten equal Discovery map/list crops pass inspection;
+five 21-step post-UI roundtrips preserve all checked bonuses, learned notes and obelisk progress.
+The new inventory has no omitted generic physical callback with exported reference or journal evidence in
+this scope. Recognized reference gaps remain `7out03:205`, `out12:205` and `t01:12`; that is not a full Atlas
+completion claim or certification of all generic callbacks without such metadata.

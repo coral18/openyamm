@@ -12865,7 +12865,8 @@ std::optional<std::string> siteNumericLabel(const FormattedSelector &selector, b
     const EventAttributeInfo *pAttribute = eventAttributeInfo(selector.expression);
     // Fullness predicates are handled separately; their calculated maxima are not ordinary numeric comparisons.
     if (pAttribute == nullptr
-        || (!pAttribute->referenceNumeric && !(forWrite && pAttribute->variable == EvtVariable::ArmorClassBonus))
+        || (!pAttribute->referenceNumeric && !(forWrite && (pAttribute->variable == EvtVariable::ArmorClassBonus
+            || pAttribute->variable == EvtVariable::NumSkillPoints)))
         || (forWrite && !pAttribute->writable)
         || pAttribute->variable == EvtVariable::MaxHealth
         || pAttribute->variable == EvtVariable::MaxSpellPoints) return std::nullopt;

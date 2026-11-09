@@ -1349,15 +1349,18 @@ TEST_CASE("site reference export follows branches and rejects incomplete or stat
     append(7, 0, EvtOpcode::Compare, {0x15, 0, 99, 0, 0, 0, 2});
     append(7, 1, EvtOpcode::Jmp, {0}); // A comparison ladder's fallthrough returns to its own condition.
     appendExitRecord(bytes, 7, 2);
+    append(8, 0, EvtOpcode::Compare, {0xf3, 0, 1, 0, 0, 0, 2}); // Skill-point predicates remain unaudited.
+    append(8, 1, EvtOpcode::Add, {0x15, 0, 200, 0, 0, 0});
+    appendExitRecord(bytes, 8, 2);
     EvtProgram events;
     REQUIRE(events.loadFromBytes(bytes));
     LegacyLuaExportLookups lookups;
-    for (uint16_t id : {1, 2, 3, 4, 5, 6, 7}) lookups.eventTitles[id] = "Drink from the well";
+    for (uint16_t id : {1, 2, 3, 4, 5, 6, 7, 8}) lookups.eventTitles[id] = "Drink from the well";
     const std::string refs = generateLegacyEventSiteRefsLuaChunk(events, {}, lookups, LegacyLuaExportScope::Map);
     CHECK(refs.find("SetMapSiteReference(1,") != std::string::npos);
     CHECK(refs.find("Party gold +200") != std::string::npos);
     CHECK(refs.find("Party gold below 99") != std::string::npos);
-    for (uint16_t id : {2, 3, 4, 5, 6, 7})
+    for (uint16_t id : {2, 3, 4, 5, 6, 7, 8})
         CHECK(refs.find("SetMapSiteReference(" + std::to_string(id) + ",") == std::string::npos);
     // The full exporter must also terminate for a cyclic callback, using its existing labelled representation.
     const std::string cyclicCallbacks = generateLegacyEventLuaChunk(events, {}, lookups, LegacyLuaExportScope::Map);
@@ -1501,6 +1504,7 @@ TEST_CASE("canonical well references ignore note bookkeeping while preserving re
         {"7out05", 205, 273, EvtVariable::FireResistanceBonus, 10, "Fire resistance bonus +10"},
         {"7out05", 207, 271, EvtVariable::FireResistance, 5, "Fire resistance +5"},
         {"7out06", 461, 274, EvtVariable::PersonalityBonus, 25, "Temporary Personality +25"},
+        {"out10", 202, 277, EvtVariable::NumSkillPoints, 2, "Skill points +2"},
         {"out10", 203, 278, EvtVariable::BasePersonality, 2, "Base Personality +2"},
         {"out10", 204, 279, EvtVariable::FireResistanceBonus, 20, "Fire resistance bonus +20"},
         {"out10", 206, 276, EvtVariable::IntellectBonus, 50, "Temporary Intellect +50"},

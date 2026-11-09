@@ -1541,6 +1541,87 @@ TEST_CASE("stone circle references distinguish local visits from completing the 
     } while (std::next_permutation(order.begin(), order.end()));
 }
 
+TEST_CASE("Evenmorn and Nighon named legacy objects retain shared references and discovery gates")
+{
+    using namespace OpenYAMM::Game;
+    REQUIRE_MESSAGE(OpenYAMM::Tests::regressionMapLoaderLoaded(),
+        OpenYAMM::Tests::regressionMapLoaderFailure());
+    const auto &fixture = OpenYAMM::Tests::regressionMapLoader();
+    const auto &data = fixture.gameDataLoader;
+    struct Site
+    {
+        const char *pMap;
+        uint16_t event;
+        WorldMapFeatureKind kind;
+        uint16_t note;
+        uint32_t qbit;
+        const char *pReference;
+    };
+    for (const Site &site : {Site{"out09.odm", 452, WorldMapFeatureKind::Shrine, 0, 0, "Base Accuracy +10"},
+        {"out09.odm", 453, WorldMapFeatureKind::Obelisk, 316, 683, ""},
+        {"out10.odm", 202, WorldMapFeatureKind::Water, 277, 0, "Skill points +2"},
+        {"out10.odm", 452, WorldMapFeatureKind::Shrine, 0, 0, "Base Personality +10"},
+        {"out10.odm", 453, WorldMapFeatureKind::Obelisk, 317, 684, ""}})
+    {
+        CAPTURE(std::string(site.pMap));
+        CAPTURE(site.event);
+        const MapStatsEntry *pMap = data.getMapStats().findByFileName(site.pMap);
+        REQUIRE(pMap);
+        auto map = MapAssetLoader().load(fixture.assetFileSystem, *pMap, data.getMonsterTable(),
+            data.getObjectTable(), MapLoadPurpose::HeadlessGameplay);
+        REQUIRE(map);
+        REQUIRE(map->outdoorMapData);
+        std::string error;
+        REQUIRE_MESSAGE(GameDataLoader::loadEventPrograms(fixture.assetFileSystem, *map, error), error);
+        REQUIRE(map->localEventProgram);
+        const auto &events = *map->localEventProgram;
+        WorldDatabase world(data.getMapStats(), data.getHouseTable(), data.getNpcDialogTable(),
+            data.getMergedTeacherTopicTable(), "mm7");
+        world.indexMapLocations(*map->outdoorMapData, events);
+        const auto feature = std::find_if(world.features().begin(), world.features().end(),
+            [&](const WorldMapFeature &entry) { return entry.site.eventId == site.event; });
+        REQUIRE(feature != world.features().end());
+        CHECK(feature->kind == site.kind);
+        CHECK(std::count_if(world.features().begin(), world.features().end(),
+            [&](const WorldMapFeature &entry) { return entry.site.eventId == site.event; }) == 1);
+        WorldKnowledge knowledge;
+        knowledge.visitedMaps.insert(site.pMap);
+        CHECK_FALSE(world.featureVisible(*feature, knowledge, false));
+        CHECK(world.siteReference(*feature, knowledge, false).empty());
+        const std::string reference(world.siteReference(*feature, knowledge, true));
+        if (site.pReference[0] != 0)
+        {
+            CHECK(reference.find(site.pReference) != std::string::npos);
+            CHECK(reference.find("Not yet used by this character") != std::string::npos);
+        }
+        const auto &notes = data.getJournalAutonoteTable();
+        const auto guideNotes = world.siteJournalEntries(*feature, notes, knowledge, true);
+        REQUIRE(guideNotes.size() == (site.note != 0 ? 1 : 0));
+        if (site.note != 0) CHECK((guideNotes.front()->noteBit >> 16) == site.note);
+        CHECK(knowledge.autonoteIds.empty());
+        CHECK(knowledge.variables.empty());
+        knowledge.interactedSites[site.pMap].insert(worldSiteDiscoveryKey(site.event, feature->site.id));
+        CHECK(world.featureVisible(*feature, knowledge, false));
+        CHECK(world.siteReference(*feature, knowledge, false).empty());
+        CHECK(world.siteJournalEntries(*feature, notes, knowledge, false).empty());
+        Party party;
+        party.seed(Party::createDefaultSeed());
+        EventRuntime runtime;
+        EventRuntimeState state;
+        REQUIRE(runtime.executeEventById(map->localEventProgram, std::nullopt, site.event, state, &party));
+        if (site.qbit != 0) CHECK(party.hasQuestBit(site.qbit));
+        if (site.note != 0)
+        {
+            const auto note = EventRuntime::decodeVariable(0xe1u | (uint32_t(site.note) << 16));
+            CHECK(EventRuntime::getVariableValue(state, note, &party) == 1);
+            knowledge.autonoteIds.insert(site.note);
+            const auto learned = world.siteJournalEntries(*feature, notes, knowledge, false);
+            REQUIRE(learned.size() == 1);
+            CHECK(learned.front() == guideNotes.front());
+        }
+    }
+}
+
 TEST_CASE("canonical interaction references describe active statue rescues and reusable keyed entrances")
 {
     using namespace OpenYAMM::Game;

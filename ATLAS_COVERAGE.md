@@ -367,3 +367,12 @@ travel and reload. Twelve save inspections, twelve equal Discovery map/list crop
 pass. Three recognized placed water/shrine/drink references remain incomplete, and a separate audit identifies
 five omitted existing generic callbacks on Evenmorn/Nighon for classification repair. Full Atlas coverage,
 NPC promotion rewards and deferred device acceptance are not certified by this checkpoint.
+
+The restored-site follow-up, verified on 2026-11-09, supplies the five omitted existing Evenmorn/Nighon sites:
+two altars, two obelisks and the skill-point well. The generated well description now includes its +2 reward
+and per-character limit. Shared journal text remains discovery-gated. The selected Windows suite passes 470
+cases / 79,621 assertions; the physical fixture passes 38 steps, and five native tours pass 200 UI steps /
+25 captures. Ten save inspections, ten matching Discovery map/list crops and five 21-step post-UI roundtrips
+preserve the checked stats, notes, obelisk flags and exploration. No generic physically placed callback with
+exported reference or journal evidence remains omitted in this inventory. Three recognized reference gaps,
+wider content coverage and deferred device acceptance remain open.

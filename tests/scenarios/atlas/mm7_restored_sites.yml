@@ -1,0 +1,149 @@
+id: atlas.mm7_classified_site_encounter
+title: Physically inspect restored well, altars and obelisks without changing their
+  gameplay
+world: mm7
+mode: faithful
+steps:
+- new_game_flow:
+    start_map: out09.odm
+    party:
+      gold: 5000
+      food: 10
+      members:
+      - name: Atlas Tester
+        class: Knight
+        level: 20
+        race_id: 0
+        accuracy: 15
+        speed: 15
+        intellect: 15
+        personality: 15
+        skills: []
+        equipment: {}
+- set_pose: &id001
+    x: -2560
+    y: -16850
+    z: 0
+    yaw: 1.5707963
+    pitch: -0.034
+- save_game: islandaltar-unknown
+- press_interact:
+    pose: *id001
+    expect:
+      kind: event_target
+      triggered_event: 452
+      can_activate: true
+- assert:
+    runtime_event_variable:
+      id: 37
+      member_index: 0
+      value: 25
+- assert:
+    runtime_event_variable:
+      id: 36
+      member_index: 0
+      value: 25
+- save_game: islandaltar-used
+- load_game: islandaltar-used
+- set_pose: &id002
+    x: -12528
+    y: -8224
+    z: 450
+    yaw: 1.5707963
+    pitch: 0
+- save_game: islandobelisk-unknown
+- press_interact:
+    pose: *id002
+    expect:
+      kind: event_target
+      triggered_event: 453
+      can_activate: true
+- assert:
+    runtime_event_variable:
+      id: 20709601
+      member_index: 0
+      value: 1
+- assert:
+    qbit_set:
+    - 683
+- save_game: islandobelisk-used
+- load_game: islandobelisk-used
+- load_map:
+    map: out10.odm
+- set_pose: &id003
+    x: 5920
+    y: -10560
+    z: 760
+    yaw: 3.14159265
+    pitch: -1.4
+- save_game: well-unknown
+- press_interact:
+    pose: *id003
+    expect:
+      kind: event_target
+      triggered_event: 202
+      can_activate: true
+- assert:
+    runtime_event_variable:
+      id: 243
+      member_index: 0
+      value: 2
+- assert:
+    runtime_event_variable:
+      id: 18153697
+      member_index: 0
+      value: 1
+- save_game: well-used
+- load_game: well-used
+- set_pose: &id004
+    x: -18984
+    y: -18340
+    z: 1440
+    yaw: 1.5707963
+    pitch: -0.5
+- save_game: mountainaltar-unknown
+- press_interact:
+    pose: *id004
+    expect:
+      kind: event_target
+      triggered_event: 452
+      can_activate: true
+- assert:
+    runtime_event_variable:
+      id: 33
+      member_index: 0
+      value: 25
+- assert:
+    runtime_event_variable:
+      id: 34
+      member_index: 0
+      value: 25
+- save_game: mountainaltar-used
+- load_game: mountainaltar-used
+- set_pose: &id005
+    x: -19760
+    y: 15900
+    z: 2800
+    yaw: 1.5707963
+    pitch: 0
+- save_game: mountainobelisk-unknown
+- press_interact:
+    pose: *id005
+    expect:
+      kind: event_target
+      triggered_event: 453
+      can_activate: true
+- assert:
+    runtime_event_variable:
+      id: 20775137
+      member_index: 0
+      value: 1
+- assert:
+    qbit_set:
+    - 684
+- save_game: mountainobelisk-used
+- load_game: mountainobelisk-used
+- assert:
+    qbit_set:
+    - 683
+    - 684

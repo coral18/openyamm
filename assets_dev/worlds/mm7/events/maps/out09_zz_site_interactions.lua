@@ -1,4 +1,7 @@
 -- Read-only shrine reference; load after gameplay overlays.
+-- The original event hints classify these existing objects despite the current blank hints.
+SetMapContextAction(452, {kind = "shrine", source = "script"})
+SetMapContextAction(453, {kind = "obelisk", source = "script"})
 SetMapInteractionReference(6, {kind = "dimension_door", network = "merge.dimension_doors"})
 SetMapInteractionReference(401, {
     kind = "quest_objective", requiredQBit = 561, completionQBit = 563,

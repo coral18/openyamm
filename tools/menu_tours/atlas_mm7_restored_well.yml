@@ -1,0 +1,75 @@
+output_dir: captures
+exit: true
+steps:
+- expect: gameplay
+- action: map_book
+- click:
+  - 1250
+  - 770
+- click:
+  - 1480
+  - 126
+- click:
+  - 275
+  - 126
+- text: Skill points
+- key: Return
+- click:
+  - 1250
+  - 260
+- pointer_move:
+  - 800
+  - 860
+- capture: discovery-before
+- click:
+  - 1390
+  - 806
+- capture: discovery-findings
+- click:
+  - 1152
+  - 57
+- wait: 3
+- click:
+  - 1250
+  - 260
+- capture: guide-view
+- click:
+  - 1390
+  - 806
+- capture: guide-reference
+- click:
+  - 450
+  - 57
+- click:
+  - 1152
+  - 57
+- click:
+  - 275
+  - 126
+- &id001
+  key: Backspace
+- *id001
+- *id001
+- key: Backspace
+- key: Backspace
+- key: Backspace
+- key: Backspace
+- key: Backspace
+- key: Backspace
+- key: Backspace
+- key: Backspace
+- key: Backspace
+- text: Skill points
+- key: Return
+- click:
+  - 1250
+  - 260
+- pointer_move:
+  - 800
+  - 860
+- capture: discovery-after
+- key: Escape
+- key: Escape
+- expect: gameplay
+- key: F9
+- wait: 0.4

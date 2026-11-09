@@ -3797,3 +3797,31 @@ combinations and six visit orders. The physical fixture passes 28 steps. Six nat
 30 captures, twelve save inspections, twelve equal Discovery map/list crops and six post-UI roundtrips.
 Evidence stays outside Git under `atlas-stone-circles-20261108/` in the Windows development directory.
 The broader Atlas objective, remaining content gaps and deferred physical-device checks remain open.
+
+## Restored Evenmorn and Mount Nighon site classifications, 2026-11-08
+
+The existing Evenmorn altar/obelisk (`out09:452/453`) and Nighon well/altar/obelisk (`out10:202/452/453`)
+now declare their correct context categories in explicit world metadata sidecars. Their generated callbacks
+had blank hints and generic classification; the readable original event hints identify these actual objects.
+The shared Sites index uses their existing physical geometry, generated altar references and journal links.
+No map object, coordinate, gameplay reward or duplicate journal/quest prose is added.
+
+The Nighon skill-point well also receives a generated effect reference from its canonical EVT: +2 Skill points,
+once per character. The exporter permits skill-point writes through its shared attribute label; skill-point
+comparison predicates remain unsupported. `tools/regenerate_lua_events.sh --site-refs-only` regenerated the
+metadata in the cached Windows mirror. Only the reviewed MM7 Nighon sidecar changed among the MM7/MM8
+site-reference outputs and was brought back into this checkout. Generated gameplay handlers were not edited.
+
+`tests/scenarios/atlas/mm7_restored_sites.yml` physically activates all five objects and checks their actual
+bonuses/journal bits through saves and map travel. Poses are explicit fixture setup, not a claim about walking
+to every location. `tools/menu_tours/atlas_mm7_restored_well.yml` reproduces the well reference/observation view;
+corresponding private altar and obelisk tours use Accuracy, Personality and Obelisk queries.
+`tests/scenarios/atlas/mm7_restored_sites_verify.yml` checks all five stat values, three journal-note bits and
+both obelisk progress bits after browsing from the final Nighon obelisk save.
+
+Final verification, confirmed after resume on 2026-11-09: 470 selected Windows cases / 79,621 assertions,
+a 38-step physical fixture and five native runs (200 UI steps / 25 captures) pass. Ten source/output save
+inspections and ten matching Discovery map/list crops retain the checked party/resources/map and exploration.
+Five post-UI 21-step roundtrips preserve Accuracy, Speed, Intellect, Personality, Skill points, all three
+learned-note bits and both obelisk progress bits. Evidence stays outside Git in `atlas-map-classification-20261108/`.
+The wider Atlas objective, three remaining recognized reference gaps and deferred device checks remain open.
