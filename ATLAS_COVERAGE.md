@@ -385,3 +385,13 @@ assertions, the physical fixture passes 28 steps, and two native runs pass 80 UI
 save inspections, four matching Discovery map/list crops and two nine-step post-UI roundtrips preserve the
 checked state. The recognized reference inventory retains two MM7 wells (`7out03:205`, `out12:205`) with
 selector/import questions; broader content and deferred device acceptance remain open.
+
+The 2026-11-09 Steadwick follow-up repairs the eastern well's imported selectors in a map-local explicit
+override: any disease severity enables its original all-condition reset for the selected member. Health,
+other members and unrelated map state are preserved. The reference and shared note 265 describe that actual
+behavior. The selected suite passes 472 cases / 79,994 assertions, including sixteen focused disease/journal
+combinations. An explicitly isolated test setup and 24-step real-picker fixture verify the cure. Two native
+runs pass 76 UI steps / 10 captures; four save inspections, four matching Discovery crops and two 19-step
+post-UI roundtrips preserve the checked conditions, health, learned note and exploration. Normal runtime
+packages exclude the test preparation. MM7 `out12:205` remains in the recognized reference-gap inventory;
+wider content and deferred device acceptance remain open.

@@ -3851,3 +3851,40 @@ scenario passes 28 steps. Two native runs pass 80 UI steps / 10 captures; four s
 four equal Discovery map/list crops and two nine-step post-UI roundtrips preserve the checked party,
 exploration and prerequisite records. Evidence stays outside Git under `atlas-temple-mechanisms-20261109/`.
 The wider Atlas objective, the two remaining recognized well-reference gaps and deferred device checks remain open.
+
+## Steadwick disease-well import repair, 2026-11-09
+
+The eastern well in `7out03:205` had a selector-import error: the active generated callback tested two disease
+flags and unconsciousness, then wrote map variable 1 instead of performing its original MainCondition action.
+The explicit `7out03_zz_well_repair.lua` overlay restores all three disease prerequisites and the shared
+MainCondition reset. It replaces only this event and rebinds its journal and site references to the new callback.
+Generated Lua and global selector mappings are unchanged. The old unrelated map-variable value is preserved;
+there is no save reinterpretation, migration or attempt to reconstruct earlier condition history.
+
+The original readable OUT03 event 205 is the control-flow reference. MainCondition set semantics clear all
+condition flags. When the selected character has disease of any severity,
+this also clears their other current conditions. Without disease it has no cure effect. Only the selected
+member is affected; health is unchanged. The metadata describes this behavior without duplicating journal
+text, which still comes from shared autonote 265 and remains discovery-gated.
+
+The configured local `reference/OpenEnroth-git/` checkout was absent on this host. The official
+[OpenEnroth EVT variable implementation](https://github.com/OpenEnroth/OpenEnroth/blob/master/src/Engine/Evt/EvtVariables.cpp)
+was read as a behavior reference to check MainCondition reset and condition-set semantics; no code was copied.
+The inspected file blob was `4925ecb2d7f06721f2d39b410f31065db920dcbf`. OpenYAMM's existing shared runtime
+already implements the required MainCondition reset; the repair uses that API and changes no engine code.
+
+`tests/scenarios/atlas/mm7_steadwick_cure.yml` uses an explicitly isolated disease setup followed by a real
+well pick, checks both members and learned-note state, and reloads the result. The test-only
+`tests/fixtures/atlas/mm7_disease_well_setup.lua` must be mounted only in a copied fixture overlay. It uses
+map slot 74 as a one-time setup marker in fresh private saves so that reload does not reapply disease.
+It is outside runtime mounts and was verified absent from the normal cached runtime. Base package ZIPs are
+hardlinked into the private fixture; only its small overlay is copied. No multi-GB payload is downloaded again.
+Use `tools/menu_tours/atlas_mm7_steadwick_cure.yml` for before/after UI inspection and
+`tests/scenarios/atlas/mm7_steadwick_cure_verify.yml` on the cured output for a roundtrip check.
+
+Verification passes 472 selected Windows cases / 79,994 assertions and the focused 211-assertion well case.
+All sixteen disease-mask/journal-state combinations pass. The isolated physical fixture passes 24 steps;
+two native runs pass 76 UI steps / 10 captures, four save inspections and four equal Discovery map/list crops.
+Two 19-step post-UI roundtrips preserve selected/other-member conditions, unchanged health and note 265.
+Evidence stays outside Git under `atlas-steadwick-cure-20261109/`. The recognized reference inventory now
+retains only `out12:205`; the full Atlas objective and deferred device checks remain open.

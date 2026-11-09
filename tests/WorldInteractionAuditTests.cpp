@@ -1712,6 +1712,100 @@ TEST_CASE("temple altar reference follows all three authored mechanism prerequis
     }
 }
 
+TEST_CASE("Steadwick disease well repairs only the selected diseased member and keeps shared journal privacy")
+{
+    using namespace OpenYAMM::Game;
+    REQUIRE_MESSAGE(OpenYAMM::Tests::regressionMapLoaderLoaded(),
+        OpenYAMM::Tests::regressionMapLoaderFailure());
+    const auto &fixture = OpenYAMM::Tests::regressionMapLoader();
+    const auto &data = fixture.gameDataLoader;
+    const MapStatsEntry *pMap = data.getMapStats().findByFileName("7out03.odm");
+    REQUIRE(pMap);
+    auto map = MapAssetLoader().load(fixture.assetFileSystem, *pMap, data.getMonsterTable(),
+        data.getObjectTable(), MapLoadPurpose::HeadlessGameplay);
+    REQUIRE(map);
+    REQUIRE(map->outdoorMapData);
+    std::string error;
+    REQUIRE_MESSAGE(GameDataLoader::loadEventPrograms(fixture.assetFileSystem, *map, error), error);
+    REQUIRE(map->localEventProgram);
+    const auto &events = *map->localEventProgram;
+    REQUIRE(events.autonoteReferences().contains(205));
+    CHECK(events.autonoteReferences().at(205) == std::vector<uint32_t>{265});
+    REQUIRE(events.siteReferences().contains(205));
+    WorldDatabase world(data.getMapStats(), data.getHouseTable(), data.getNpcDialogTable(),
+        data.getMergedTeacherTopicTable(), "mm7");
+    world.indexMapLocations(*map->outdoorMapData, events);
+    const auto feature = std::find_if(world.features().begin(), world.features().end(),
+        [](const WorldMapFeature &entry) { return entry.site.eventId == 205; });
+    REQUIRE(feature != world.features().end());
+    CHECK(feature->kind == WorldMapFeatureKind::Water);
+    WorldKnowledge knowledge;
+    knowledge.visitedMaps.insert("7out03.odm");
+    CHECK_FALSE(world.featureVisible(*feature, knowledge, false));
+    CHECK(world.siteReference(*feature, knowledge, false).empty());
+    CHECK(world.siteReference(*feature, knowledge, true).find("disease of any severity") != std::string::npos);
+    CHECK(world.siteReference(*feature, knowledge, true).find("Health is unchanged") != std::string::npos);
+    CHECK(world.siteJournalEntries(*feature, data.getJournalAutonoteTable(), knowledge, true).size() == 1);
+    knowledge.interactedSites["7out03.odm"].insert(worldSiteDiscoveryKey(205, feature->site.id));
+    CHECK(world.featureVisible(*feature, knowledge, false));
+    CHECK(world.siteJournalEntries(*feature, data.getJournalAutonoteTable(), knowledge, false).empty());
+    CHECK(knowledge.autonoteIds.empty());
+    const std::array<CharacterCondition, 3> diseases = {CharacterCondition::DiseaseWeak,
+        CharacterCondition::DiseaseMedium, CharacterCondition::DiseaseSevere};
+    for (uint32_t diseaseMask = 0; diseaseMask < 8; ++diseaseMask)
+        for (bool learned : {false, true})
+        {
+            CAPTURE(diseaseMask);
+            CAPTURE(learned);
+            PartySeed seed = Party::createDefaultSeed();
+            seed.members.resize(1);
+            seed.members.push_back(seed.members.front());
+            seed.gold = 5000;
+            Party party;
+            party.seed(seed);
+            Character *pMember = party.member(0);
+            pMember->health = 37;
+            pMember->conditions.set(size_t(CharacterCondition::Cursed));
+            pMember->conditions.set(size_t(CharacterCondition::PoisonWeak));
+            pMember->conditionStartGameMinutes.fill(123.0f);
+            for (size_t bit = 0; bit < diseases.size(); ++bit)
+                if ((diseaseMask & (1u << bit)) != 0) pMember->conditions.set(size_t(diseases[bit]));
+            party.member(1)->conditions.set(size_t(CharacterCondition::DiseaseSevere));
+            party.member(1)->conditions.set(size_t(CharacterCondition::PoisonSevere));
+            const auto otherConditions = party.member(1)->conditions;
+            const int otherHealth = party.member(1)->health;
+            EventRuntimeState state;
+            state.mapVars[1] = 13; // The faulty imported selector used to overwrite this unrelated map variable.
+            const auto note = EventRuntime::decodeVariable(0xe1u | (265u << 16));
+            if (learned) EventRuntime::setVariableValue(state, note, 1, &party, {0});
+            EventRuntime runtime;
+            REQUIRE(runtime.executeEventById(map->localEventProgram, std::nullopt, 205, state, &party));
+            if (diseaseMask != 0)
+            {
+                CHECK(pMember->conditions.none());
+                CHECK(std::all_of(pMember->conditionStartGameMinutes.begin(), pMember->conditionStartGameMinutes.end(),
+                    [](float value) { return value == 0.0f; }));
+            }
+            else
+            {
+                CHECK(pMember->conditions.count() == 2);
+                CHECK(pMember->conditionStartGameMinutes.front() == 123.0f);
+            }
+            CHECK(EventRuntime::getVariableValue(state, note, &party) == int(learned || diseaseMask != 0));
+            CHECK(pMember->health == 37);
+            CHECK(party.member(1)->conditions == otherConditions);
+            CHECK(party.member(1)->health == otherHealth);
+            CHECK(party.gold() == 5000);
+            CHECK(state.mapVars[1] == 13);
+            // Non-disease conditions alone must not turn this well into an unconditional free cure.
+            pMember->conditions.set(size_t(CharacterCondition::Cursed));
+            const auto beforeRepeat = pMember->conditions;
+            REQUIRE(runtime.executeEventById(map->localEventProgram, std::nullopt, 205, state, &party));
+            CHECK(pMember->conditions == beforeRepeat);
+            CHECK(pMember->health == 37);
+        }
+}
+
 TEST_CASE("canonical interaction references describe active statue rescues and reusable keyed entrances")
 {
     using namespace OpenYAMM::Game;

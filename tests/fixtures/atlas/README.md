@@ -925,3 +925,17 @@ roster/class/level fields. Compare identities per canonical map, not NPC/roster 
 contains an unrelated candidate in slot 303. Guide must not add encounters, rename the observed person or
 materialize a template as a companion. Private logs/captures/inspections are in
 `openyamm-extended-dev/atlas-mercenaries-20261107/`. Android remains deferred.
+
+## Steadwick disease-well fixture
+
+`mm7_disease_well_setup.lua` is test preparation for fresh isolated saves. Mount it as
+`worlds/mm7/events/maps/7out03_zzz_atlas_fixture.lua` in a copied small `assets.zip` overlay; hardlink the
+unchanged engine/world ZIPs into the private asset root and point only the fixture's `settings.ini` there.
+Keep the normal runtime asset root separate. The setup gives member 0 mild disease and curse, member 1
+severe disease and curse, and both 20 HP. Map slot 74 prevents reapplying the setup when loading these saves.
+
+Run `tests/scenarios/atlas/mm7_steadwick_cure.yml` with that isolated asset root and two party members. Its
+24 steps include the actual water-surface pick, selected-member cure, unchanged other member and health,
+learned note 265, and reload. Use `atlas_mm7_steadwick_cure.yml` from `tools/menu_tours/` at 1600x900 on the
+before/after saves, then the `_verify.yml` scenario on cured UI output. The normal runtime does not mount this
+preparation script; it is not a gameplay mod or a migration for existing saves.

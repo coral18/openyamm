@@ -1,0 +1,62 @@
+id: atlas.mm7_steadwick_cure_verify
+title: Atlas browsing preserves the real cure, health and other member disease
+world: mm7
+mode: faithful
+steps:
+- load_game:
+    path: saves/quicksave.oysav
+- &id001
+  assert:
+    map: 7out03.odm
+- &id002
+  assert:
+    runtime_event_variable:
+      id: 112
+      member_index: 0
+      value: 0
+- &id003
+  assert:
+    runtime_event_variable:
+      id: 105
+      member_index: 0
+      value: 0
+- &id004
+  assert:
+    runtime_event_variable:
+      id: 116
+      member_index: 1
+      value: 1
+- &id005
+  assert:
+    runtime_event_variable:
+      id: 105
+      member_index: 1
+      value: 1
+- &id006
+  assert:
+    runtime_event_variable:
+      id: 3
+      member_index: 0
+      value: 20
+- &id007
+  assert:
+    runtime_event_variable:
+      id: 3
+      member_index: 1
+      value: 20
+- &id008
+  assert:
+    runtime_event_variable:
+      id: 17367265
+      member_index: 0
+      value: 1
+- save_game: roundtrip
+- load_game: roundtrip
+- *id001
+- *id002
+- *id003
+- *id004
+- *id005
+- *id006
+- *id007
+- *id008

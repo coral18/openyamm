@@ -435,3 +435,25 @@ with four source/output save inspections, four equal Discovery map/list crops an
 Both unused and completed prerequisite records survive Guide browsing and save/load. The scoped recognized
 reference inventory now leaves only MM7 `7out03:205` and `out12:205`; both still have documented selector/import
 questions. This does not close wider content, original-source or deferred device acceptance.
+
+## Steadwick disease-well selector repair, 2026-11-09
+
+The remaining `7out03:205` gap was a gameplay import defect as well as missing guide content. A map-local
+explicit override now tests all three shared disease selectors and performs the existing MainCondition reset,
+as specified by the readable original OUT03 control flow. It preserves health, other members and unrelated
+map variable 1; global remapping and generated handlers are unchanged. The old journal annotation is rebound
+to the repaired callback, and the guide describes the actual conditional cure, including its all-condition
+reset and unchanged health. Learned-note privacy still uses the shared journal registry.
+
+The focused runtime case checks all eight disease-bit combinations with both initial journal states,
+selected-member conditions/timestamps, unrelated conditions without disease, repeat use, other-member
+isolation, health, gold and preservation of the formerly overwritten map variable. The physical scenario
+uses a declared test-only preparation overlay in a copied cache and normal picking at the real water surface.
+
+Verification passes 472 selected cases / 79,994 assertions with the established unrelated portrait exclusion;
+the focused well case passes 211 assertions across sixteen disease/journal combinations. The isolated
+24-step real-picker fixture, two native runs (76 UI steps / 10 captures), four save inspections, four equal
+Discovery map/list crops and two 19-step post-UI roundtrips pass. Guide does not cure either member or teach
+note 265. Discovery records the selected member's actual removed disease/curse only after using the well.
+The normal cached runtime was checked to exclude the test setup script. One recognized reference gap remains:
+MM7 `out12:205`, whose selector-import questions still need investigation. Broader acceptance remains open.

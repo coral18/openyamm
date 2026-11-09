@@ -1,0 +1,110 @@
+id: atlas.mm7_steadwick_cure
+title: Use the repaired Steadwick well with isolated disease setup
+world: mm7
+mode: faithful
+steps:
+- note: Requires the isolated test-only disease setup overlay; the normal game does
+    not load it.
+- new_game_flow:
+    start_map: 7out03.odm
+    party:
+      gold: 5000
+      food: 10
+      members:
+      - name: Cure Tester
+        class: Knight
+        level: 20
+        race_id: 0
+        skills: []
+        equipment: {}
+      - name: Other Tester
+        class: Knight
+        level: 20
+        race_id: 0
+        skills: []
+        equipment: {}
+- set_pose: &id001
+    x: -5848
+    y: 5352
+    z: 824
+    yaw: 3.14159265
+    pitch: -1.4
+- assert:
+    runtime_event_variable:
+      id: 112
+      member_index: 0
+      value: 1
+- assert:
+    runtime_event_variable:
+      id: 105
+      member_index: 0
+      value: 1
+- assert:
+    runtime_event_variable:
+      id: 116
+      member_index: 1
+      value: 1
+- assert:
+    runtime_event_variable:
+      id: 105
+      member_index: 1
+      value: 1
+- assert:
+    runtime_event_variable:
+      id: 17367265
+      member_index: 0
+      value: 0
+- save_game: before
+- press_interact:
+    pose: *id001
+    expect:
+      kind: event_target
+      triggered_event: 205
+      can_activate: true
+- &id002
+  assert:
+    runtime_event_variable:
+      id: 112
+      member_index: 0
+      value: 0
+- &id003
+  assert:
+    runtime_event_variable:
+      id: 105
+      member_index: 0
+      value: 0
+- &id004
+  assert:
+    runtime_event_variable:
+      id: 116
+      member_index: 1
+      value: 1
+- &id005
+  assert:
+    runtime_event_variable:
+      id: 105
+      member_index: 1
+      value: 1
+- &id006
+  assert:
+    runtime_event_variable:
+      id: 17367265
+      member_index: 0
+      value: 1
+- assert:
+    runtime_event_variable:
+      id: 3
+      member_index: 0
+      value: 20
+- assert:
+    runtime_event_variable:
+      id: 3
+      member_index: 1
+      value: 20
+- save_game: after
+- load_game: after
+- *id002
+- *id003
+- *id004
+- *id005
+- *id006
