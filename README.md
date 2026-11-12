@@ -1,312 +1,141 @@
-# OpenYAMM
+<div align="center">
 
-OpenYAMM is Open Yet Another Might and Magic: a modern C++ reimplementation of
-Might and Magic VI, VII, and VIII, inspired by MMMerge and built on an engine
-that started from Might and Magic VIII.
+# OpenYAMM Extended
 
-It uses the original game data with HD artwork, a new HUD and menus, modern
-rendering, and UX improvements.
+### Interactive Atlas for Might & Magic VII and VIII
 
-## Status
+**Explore Antagarich. Navigate Jadame. Keep the mystery of discovery.**
 
-OpenYAMM is playable across Might and Magic VI, VII, and VIII, including
-continent travel between the games. Windows, Linux, and Android builds are
-supported.
+A native in-game atlas with exploration fog, dungeon plans, party tracking and a connected guidebook.
 
-The games share combat, spells, dialogue, quests, inventory, party state, and
-save/load systems. Development is active, with ongoing work on gameplay
-compatibility, polish, tooling, and the editor.
+[See it in action](#see-it-in-action) · [Get started](#get-started) · [Integration handover](https://github.com/coral18/openyamm/blob/extended/atlas-mm8/ATLAS_HANDOFF.md) · [Upstream OpenYAMM](https://github.com/pjasicek/openyamm)
 
-## Features
+</div>
 
-- HD textures, items, equipment, portraits, and interface backgrounds
-- HD MM6 monsters
-- New Obsidian HUD, menus, inventory, dialogue, and journal screens
-- Indoor and outdoor water with reflections, lightmaps, and shadows
-- Modeled MM6 ships and HD decorations
-- Enemy health bars, floating damage, and party recovery indicators
-- Android touch controls and context actions
+![The native MM8 Atlas showing Shadowspire in Guide Mode, with regional artwork, clustered map markers and a searchable location list](https://raw.githubusercontent.com/coral18/openyamm/refs/heads/extended/atlas-mm8/docs/atlas/images/mm8-shadowspire.png)
 
-## Screenshots
+<p align="center"><em>Shadowspire, Jadame — captured in the native Windows build. Guide Mode is explicitly enabled.</em></p>
 
-**New HUD**
+> **Project status:** Atlas v1 is ready for source review on the existing Extended base.
+> The implementation lives on **[extended/atlas-mm8](https://github.com/coral18/openyamm/tree/extended/atlas-mm8)**.
+> It has not been ported to OpenYAMM 2.1; the mod manifest alone is not an installable plugin for stock OpenYAMM.
 
-![Obsidian gameplay HUD with a five-character party](res/showcase/gameplay-hud.webp)
+## An atlas that grows with your adventure
 
-**HD items and inventory**
+By default, the Atlas shows what your party has discovered. Unexplored terrain stays hidden; visiting a building,
+meeting a trainer or learning a clue adds the corresponding knowledge. Opening the Atlas does not reveal a region.
 
-![God Lich inventory and equipped paperdoll](res/showcase/inventory.webp)
+When you want a reference, switch to **Guide Mode**. Browse authored locations and linked game information,
+then return to Discovery without teaching the party anything you only looked up.
 
-**Water and reflections**
+| Explore | Find your way | Connect the details |
+| --- | --- | --- |
+| Persistent exploration fog and a party arrow showing position and heading | Continent, region and dungeon navigation; search, filters, zoom and pan | Buildings, NPCs, trainers, travel routes, interactive sites and map connections |
+| Small clustered markers and editable personal notes | Dungeon plans generated from engine geometry, with known height slices | Linked reference pages for items, spells, classes, alchemy, companions, progress, monsters and quests |
 
-![Outdoor water with bridge and sailboat reflections](res/showcase/water-shoreline.webp)
+**26 outdoor regions · 110 dungeon plans · two world catalogs**
 
-**HD MM6 monsters**
+MM7 and MM8 share the same native interface and world index. Switching the viewed catalog does not move your party.
+Guide indexing progresses one map at a time, giving the current location priority.
 
-![HD MM6 hydra variants](res/showcase/creatures-hydras.webp)
+## See it in action
 
-**Android touch controls**
+The screenshots below are unmodified captures from the November 12, 2026 Windows build.
 
-![Android gameplay in New Sorpigal with touch controls](res/showcase/android-gameplay.webp)
+<table>
+  <tr>
+    <td width="50%">
+      <a href="https://raw.githubusercontent.com/coral18/openyamm/refs/heads/extended/atlas-mm8/docs/atlas/images/mm7-discovery.png"><img src="https://raw.githubusercontent.com/coral18/openyamm/refs/heads/extended/atlas-mm8/docs/atlas/images/mm7-discovery.png" alt="MM7 Emerald Island in Discovery Mode: unexplored terrain is black and the party arrow marks the small explored area" width="100%"></a>
+      <p><strong>Discovery first</strong><br>Emerald Island, MM7. The party knows only the explored area.</p>
+    </td>
+    <td width="50%">
+      <a href="https://raw.githubusercontent.com/coral18/openyamm/refs/heads/extended/atlas-mm8/docs/atlas/images/mm7-the-pit.png"><img src="https://raw.githubusercontent.com/coral18/openyamm/refs/heads/extended/atlas-mm8/docs/atlas/images/mm7-the-pit.png" alt="MM7 The Pit in Guide Mode: a native geometry-derived dungeon plan, grouped location markers and height controls" width="100%"></a>
+      <p><strong>Inside the dungeon</strong><br>The Pit, MM7. Engine geometry supplies the plan and height filters.</p>
+    </td>
+  </tr>
+</table>
 
 <details>
-<summary>More interface screenshots</summary>
+<summary><strong>Open the linked spell-reference example</strong></summary>
 
-**Main menu**
+![Armageddon in the MM7 Guidebook, with spellbook links and actual guild sources in Deyja and The Pit](https://raw.githubusercontent.com/coral18/openyamm/refs/heads/extended/atlas-mm8/docs/atlas/images/mm7-spell-sources.png)
 
-![New main menu](res/showcase/main-menu.webp)
-
-**Quest journal**
-
-![Quest journal with restored fonts and navigation icons](res/showcase/journal-quests.webp)
-
-**HD equipment**
-
-![HD plate armor and inventory items](res/showcase/equipment-plate.webp)
-
-**MM6 Town Portal**
-
-![HD Enroth Town Portal map](res/showcase/town-portal-mm6.webp)
-
-**MM8 Town Portal**
-
-![HD Jadame Town Portal map](res/showcase/town-portal-mm8.webp)
-
-**Recovery indicator and enemy health bars**
-
-![Party recovery indicator after an attack, with goblin health bars](res/showcase/hud-recovery-combat.webp)
+Spell references link to possible guild stock and the corresponding Atlas location. Possible stock describes the
+shared stock pool; it does not promise that a book is currently on sale or that the party can access the guild.
 
 </details>
 
-<details>
-<summary>More rendering and combat screenshots</summary>
-
-**Indoor water**
-
-![Water and reflections in the Tomb of VARN](res/showcase/water-varn.webp)
-
-**Lightmaps and shadows**
-
-![Lightmaps and shadows around buildings and a timber gate](res/showcase/lighting-street.webp)
-
-**HD decorations**
-
-![HD flowers, trees, and stonework in New Sorpigal](res/showcase/world-decorations.webp)
-
-**Modeled MM6 ships**
-
-![Modeled MM6 ships at the harbor](res/showcase/world-ships.webp)
-
-**HD MM6 dragon**
-
-![HD MM6 red dragon](res/showcase/creatures-dragon.webp)
-
-**Floating damage**
-
-![Floating damage number above a Thunder Lizard](res/showcase/combat-floating-damage.webp)
-
-</details>
-
-<details>
-<summary>More Android screenshots</summary>
-
-**Shop interaction**
-
-![Touch targeting and the shop interaction button](res/showcase/android-shop.webp)
-
-**NPC interaction**
-
-![NPC target highlight and the conversation button](res/showcase/android-npc.webp)
-
-</details>
-
-## Assets
-
-Development assets are loaded from:
-
-```text
-assets_dev/
-```
-
-The default development layout is:
-
-```text
-assets_dev/
-  engine/             shared tables, scripts and presentation
-  worlds/mm6/         world-local maps and presentation
-  worlds/mm7/
-  worlds/mm8/
-  worlds/mmmerge/     Merge-specific maps
-```
-
-Runtime packages can be distributed as ZIP archives under:
-
-```text
-assets/
-```
-
-The engine keeps practical original asset formats such as TXT gameplay tables, BMP-style
-art assets, WAV sound effects, MP3/FLAC music, and OGV video. Legacy archive and video
-container formats are replaced for runtime use.
-
-Runtime assets and the prebuilt Android sprite profile are stored directly
-in Git, so a normal clone can build and launch against `assets_dev` and CI can package
-Android without texture encoding or Git LFS. The lossless sprite inputs, creature
-master bank, original extractions and editor assets are optional local authoring
-data. See [asset storage and optional review tools](tools/ASSET_STORAGE.md).
-The MM9 world payload is currently local and is excluded from the portable checkout.
-
-## Building
-
-The engine uses C++20, SDL3, bgfx, PhysicsFS, FFmpeg, and Lua. Gameplay tables
-use tab-separated text, and scene and UI layouts use YAML.
-
-Requirements:
-
-- CMake 3.22 or newer
-- C++20 compiler
-- Git and Python 3.11 or newer
-- standard native build tools for your platform
-
-CMake fetches and builds the project dependencies, including Lua 5.4. A separate
-system Lua development package is not required.
-
-Configure and build:
-
-```sh
-cmake -S . -B build
-cmake --build build --target openyamm -j25
-```
-
-Run:
-
-```sh
-./build/game/openyamm
-```
-
-Build tests:
-
-```sh
-cmake --build build --target openyamm_unit_tests -j25
-./build/tests/openyamm_unit_tests
-```
-
-Build the editor:
-
-```sh
-cmake -S . -B build -DOPENYAMM_BUILD_EDITOR=ON
-cmake --build build --target openyamm-editor -j25
-```
-
-Run the editor:
-
-```sh
-./build/editor/openyamm-editor
-```
-
-## Visual Checks
-
-For repeatable visual checks, see [Desktop runs and native screenshot tours](tools/RUN_GAME.md).
-The game can save PNGs directly through bgfx, including the HUD, on Wayland or X11. Use the debug
-console command `screenshot [name]`, launch-time capture settings, or a YAML tour to capture several
-camera poses in one run. Ready-to-run MM6/MM7/MM8 water viewpoints are in
-[`tools/screenshot_tours/`](tools/screenshot_tours/).
-
-## Nightly Builds
-
-The [Package builds](https://github.com/pjasicek/openyamm/actions/workflows/nightly.yml) GitHub Actions workflow
-builds unsigned Windows x64, x86_64 Flatpak, and signed Android arm64 packages every day at 03:27 UTC. After all
-packages pass structural and checksum checks, the workflow uploads complete packages to Nextcloud and updates the
-[nightly prerelease](https://github.com/pjasicek/openyamm/releases/tag/nightly) with download links and checksums.
-Public release links are published once a public Nextcloud folder share is configured.
-See [Nextcloud publishing setup](packaging/NEXTCLOUD.md) for the repository secrets and public folder share.
-The same workflow can be run manually,
-with publishing optionally disabled so the packages remain short-lived workflow artifacts.
-
-Every push to `main` also gets its own package-build run for Windows x64, x86_64 Flatpak, and Android arm64. Open the
-commit's `Package builds` run on the Actions page to download its SHA-named artifacts. Commit artifacts are retained for
-one day; scheduled builds continue to update the rolling nightly prerelease.
-
-Extract the Windows zip and run `openyamm.exe`. Install or update the Flatpak bundle with:
-
-```sh
-flatpak install --user --reinstall OpenYAMM-nightly-x86_64.flatpak
-```
-
-On an arm64 Android 6.0 or newer device, download `OpenYAMM-nightly-android-arm64.apk` and open it to install or update
-the nightly. Android may ask you to allow installs from the browser or file manager used to open the APK.
-
-Nightly packages are development snapshots and may be unstable. Back up existing saves before using them. Publishing
-packaged game assets remains subject to the asset distribution rights noted in the Windows distribution documentation.
-
-## Tagged Releases
-
-Pushing a canonical `X.Y` tag, such as `1.0`, runs the same validated package builds. With public Nextcloud
-publishing configured, it creates a normal GitHub release for that tag. The release links to versioned
-Windows, Flatpak, and signed Android packages on Nextcloud and contains their SHA256 files.
-The Android version name matches the tag; its monotonically increasing version code is calculated as
-`major * 10000 + minor * 100` (`1.0` becomes `10000`).
-
-Create a release only after the workflow changes are present on the commit being tagged:
-
-```sh
-git tag -a 1.0 -m "OpenYAMM 1.0"
-git push origin 1.0
-```
-
-The workflow rejects non-canonical versions, does not mark tagged releases as prereleases, and does not overwrite an
-existing release with the same tag.
-
-## Useful CMake Options
-
-```text
-OPENYAMM_BUILD_EDITOR=ON      Build the editor target
-OPENYAMM_BUILD_TOOLS=ON       Build asset and data tooling
-OPENYAMM_BUILD_TESTS=ON       Build unit tests
-OPENYAMM_DEV_ASSETS_DIR=...   Override the development asset directory
-OPENYAMM_USE_SYSTEM_SDL3=ON   Use an installed SDL3 package
-```
-
-## Repository Layout
-
-```text
-engine/              shared runtime systems
-game/                game application and gameplay systems
-editor/              editor application
-tools/               asset cooking, reusable review apps and development tools
-tests/               unit and regression tests
-assets_dev/          development asset root
-assets_cooked/android/sprites_new/  prebuilt Android creature GPU packages
-assets_source/       optional authoring banks (local; selected binaries can use LFS)
-assets_editor_dev/   optional local editor asset root
-level_generation/    optional local generation projects (excluded from Git)
-reference/           local behavioral/data references (excluded from Git and LFS)
-res/                 README screenshots
-```
-
-## License
-
-OpenYAMM's original source code, build scripts, tests, and documentation are licensed under the
-**GNU General Public License, version 3 or later** (`GPL-3.0-or-later`), unless otherwise stated.
-Copyright (C) 2026 Petr Jasicek (pjasicek).
-
-See [LICENSE](LICENSE) for the full license and [COPYRIGHT](COPYRIGHT) for the attribution and scope.
-Distributors must preserve the applicable copyright notices and make the corresponding source available
-as required by the GPL. OpenYAMM is provided without warranty.
-
-Third-party dependencies retain their own licenses. Original Might and Magic assets, imported game data,
-and their converted or restored versions are not covered by the OpenYAMM code license; their distribution
-requires the appropriate rights from their respective rights holders.
-
-## Editor Screenshots
-
-![Editor screenshot 1](res/editor_1.webp)
-![Editor screenshot 2](res/editor_2.webp)
-
-## Credits
-
-OpenYAMM builds on years of work and research from the Might and Magic community,
-with thanks due to:
-
-- the OpenEnroth development team
-- Rodril and all MMMerge contributors
+## Get started
+
+1. **Use the Atlas branch:** [browse `extended/atlas-mm8`](https://github.com/coral18/openyamm/tree/extended/atlas-mm8).
+   The repository's `main` branch hosts this presentation; Atlas source development remains on the linked branch.
+2. **Prepare the matching base and assets.** Follow the [engine build documentation](https://github.com/coral18/openyamm/blob/extended/atlas-mm8/README_ENGINE.md)
+   and [Windows iteration notes](https://github.com/coral18/openyamm/blob/extended/atlas-mm8/ATLAS.md#windows-iteration).
+   Use runtime assets matching this branch; compatibility with a newer official payload is not established.
+3. **Enable the Atlas module.** Install the bundled `mods/interactive-atlas` manifest. If you use an explicit
+   `mods/profile.yaml`, include the module ID in its enabled list:
+
+   ```yaml
+   enabled:
+     - openyamm.interactive-atlas
+   ```
+
+   Retain any other mods your campaign requires. See the [mod/profile documentation](https://github.com/coral18/openyamm/blob/extended/atlas-mm8/MODDING.md).
+4. **Open it in game:** select MM7 or MM8, click the minimap to open the **Map Book**, then choose **Atlas** in its sidebar.
+   Discovery is the default; Guide Mode is optional.
+
+The Atlas UI is optional. Disabling its module hides the entry while preserving shared discoveries and notes.
+The module selects native C++ functionality already compiled into Extended; it does not load a DLL or embed a website.
+
+## Built on shared game data
+
+The Atlas uses OpenYAMM's renderer, menus, geometry, tables and event metadata. A shared **World Database** references
+authoritative game records instead of maintaining a separate Atlas copy. Discovery and observations use the game's
+save systems. Guide browsing neither travels nor awards visits, items or quest progress.
+
+The accompanying **Mod Loader v1** provides manifest validation, dependencies, load order, conflicts, QBit-range
+checks, typed class patches and save requirements. A graphical mod manager and VCMI-style launcher remain future plans.
+
+## Verification and compatibility
+
+The November 12, 2026 checkpoint includes:
+
+| Check | Result and scope |
+| --- | --- |
+| Windows Release | Build succeeds; **563 selected regression cases / 281,275 assertions** pass |
+| Guide navigation | **24,623 links** resolve across eight sections after indexing all 137 MM7/MM8 map entries, including the developer map |
+| Native desktop UI | Two MM7/MM8 GPU tours: **68 steps and 14 captures** |
+| Guide privacy and saves | Four save inspections, four matching Discovery crops, and 26 post-UI save/load steps |
+| Android | Shared interface; last physically tested POCO release is **0.2.8 / 111**. Later PC fixes are not installed there |
+| Controller | Physical Map Book opening and Atlas use confirmed; the later Map Book D-pad follow-up still needs physical acceptance |
+
+The selected suite excludes one existing unrelated test requiring a retired portrait-asset path. These checks
+establish the recorded behavior; they do not certify every campaign state or a complete playthrough.
+See the [handover](https://github.com/coral18/openyamm/blob/extended/atlas-mm8/ATLAS_HANDOFF.md),
+[coverage matrix](https://github.com/coral18/openyamm/blob/extended/atlas-mm8/ATLAS_COVERAGE.md) and
+[reproducible fixtures](https://github.com/coral18/openyamm/blob/extended/atlas-mm8/tests/fixtures/atlas/README.md).
+
+**For upstream integration:** begin with [ATLAS_HANDOFF.md](https://github.com/coral18/openyamm/blob/extended/atlas-mm8/ATLAS_HANDOFF.md).
+It maps the shared index, knowledge, UI and mod-loader changes and records save-format and API boundaries.
+This branch contains other Extended changes, so an upstream port needs a scoped review rather than a wholesale merge.
+MM6/MM9 atlases and upstream 2.1 compatibility are outside this handover.
+
+## Documentation
+
+- [Atlas implementation and development notes](https://github.com/coral18/openyamm/blob/extended/atlas-mm8/ATLAS.md)
+- [Current coverage and limitations](https://github.com/coral18/openyamm/blob/extended/atlas-mm8/ATLAS_COVERAGE.md)
+- [Mod Loader, profiles and typed patches](https://github.com/coral18/openyamm/blob/extended/atlas-mm8/MODDING.md)
+- [Android verification history](https://github.com/coral18/openyamm/blob/extended/atlas-mm8/ATLAS_ANDROID_QA.md)
+- [Deferred ideas awaiting a decision](https://github.com/coral18/openyamm/blob/extended/atlas-mm8/ATLAS_DECISIONS.md)
+- [Base engine build and project documentation](https://github.com/coral18/openyamm/blob/extended/atlas-mm8/README_ENGINE.md)
+
+## Credits and license
+
+Built on **[OpenYAMM by pjasicek and its contributors](https://github.com/pjasicek/openyamm)**.
+The community [MM7](https://www.reddit.com/r/MightAndMagic/comments/1ww8pq0/i_made_an_interactive_world_map_guide_for_might/)
+and [MM8](https://www.reddit.com/r/MightAndMagic/comments/1x7x7ok/simon_found_a_map_of_jadame_i_made_it_clickable/)
+interactive guides inspired the workflow. This is an original native implementation: their HTML, JavaScript,
+authored descriptions and embedded artwork are not bundled, and their complete content has not been imported.
+
+Code is distributed under the repository's [GNU GPL v3 license](https://github.com/coral18/openyamm/blob/extended/atlas-mm8/LICENSE).
+Original Might & Magic game assets retain their respective rights; the code license does not grant rights to those assets.
