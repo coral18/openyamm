@@ -1,7 +1,9 @@
 # Interactive Atlas MM7 and MM8: coverage and completion work
 
-Active objective: complete native interactive atlases for MM7 and MM8, using shared game/world data.
-The MM8 world-map slice is a checkpoint, not completion of this objective.
+Current-base handover (2026-11-12): the agreed native MM7/MM8 map, discovery and navigation implementation
+is prepared for author review; see [ATLAS_HANDOFF.md](ATLAS_HANDOFF.md). This matrix retains detailed reference
+limits and historical checks. It is not a claim that every external-guide fact, campaign state or later-device
+revision has been accepted. Upstream 2.1 integration is a separate task.
 
 Scope control (2026-10-26): this matrix inventories implemented behavior and possible gaps; it does not
 authorize every suggested extension. Finish the agreed map/discovery/navigation functions and their fixes first.
@@ -9,7 +11,13 @@ New ideas not originally agreed require the user's decision in [ATLAS_DECISIONS.
 Pending ideas are not additional completion gates. In particular, party spell-learning assessments, availability
 forecasting, extra marker styles and replacement Jadame artwork are deferred pending approval.
 
-Current acceptance priorities:
+Final current-base verification: Windows Release build; 563 selected regression cases / 281,275 assertions;
+24,623 resolved Guide links over all 137 maps; two native GPU tours (68 steps / 14 captures), four save inspections,
+four equal Discovery crops and 26 post-UI save/load steps. The audit repairs unused MM7 guild sources; it does not
+certify every conditional campaign state. The handover documents the one excluded unrelated artwork test.
+Later PC fixes remain untested on POCO; the last accepted phone release remains 0.2.8.
+
+Acceptance scope (device follow-ups remain explicitly separate):
 
 1. Correct MM7/MM8 map identity, region/dungeon navigation, search and filters.
 2. Discovery-only terrain and pins by default; Guide remains an explicit opt-in and must not teach discoveries.

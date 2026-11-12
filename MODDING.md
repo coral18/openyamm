@@ -87,7 +87,7 @@ ui_modules:
   - openyamm.interactive-atlas
 ```
 
-Remove its ID from an explicit profile to hide the Atlas entry in both main and pause menus. Restart to apply the
+Remove its ID from an explicit profile to hide the Atlas entry in the Map Book sidebar. Restart to apply the
 profile. Core retains shared discovery tracking and world APIs; disabling the UI does not erase discoveries.
 An explicit profile from an older build must add the Atlas ID to enable it. With no profile, all installed mods
 are enabled as before. The development wrapper installs its manifest without overwriting existing profiles.

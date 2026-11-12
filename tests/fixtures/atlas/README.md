@@ -1028,3 +1028,30 @@ the scenario's temporary `after.oysav` to private `saves/before.oysav`, enable t
 `condition_sources_*_verify.yml` on each UI quicksave. Compare Discovery map/list crops across Guide and
 inspect source/output saves. These checks preserve actual observed poison/disease and the Murmurwoods note;
 they do not certify every field in a save, every other event family or physical-device input.
+
+## Final full-Guide links and guild navigation (2026-11-12)
+
+Run `all active MM7 and MM8 Guide sections resolve every emitted navigation link` with the normal prepared
+runtime packages (`OPENYAMM_REGRESSION_ASSETS_ROOT`). It indexes all 137 maps, constructs every Guide section,
+and checks all emitted reference/location/feature/trainer targets. An existing directory supplied through
+`OPENYAMM_ATLAS_INTERACTION_AUDIT` receives `guide-links.tsv`. The final catalog contains 24,623 links;
+Guide knowledge stays empty. This does not evaluate every campaign predicate.
+
+For native reproduction, run `mm7_spell_guild_fixture.yml` and `mm8_spell_guild_fixture.yml` from
+`tests/scenarios/atlas/` in separate private runtimes with normal assets and only the Atlas UI mod enabled.
+Copy each scenario's exported `before.oysav` from the matching `atlas_handoff_mm7`/`atlas_handoff_mm8` temporary
+scenario directory into private `saves/before.oysav`. Select that startup save, set 1600x900 and the one-shot
+`debug.menu_input_tour_path` to `tools/menu_tours/atlas_spell_guild_links.yml`, then launch the matching world.
+
+The shared 34-step tour checks that an unknown Armageddon spell is hidden in Discovery, enables Guide, completes
+the progressive source scan, opens a real guild source and returns to Discovery. MM7 must show Guild of Twilight
+in Deyja and Guild of Night in The Pit, without unused Emerald Island placeholder guilds. The last link opens
+Guild of Night's The Pit plan. MM8's last link opens Guild of Dark in Shadowspire. Turning Guide off hides the
+unvisited destinations. Inspect those captures and compare initial/final RGB map `(48,227)-(1066,732)` and
+list `(1103,227)-(1530,731)` crops. The tour leaves `saves/quicksave.oysav`.
+
+Run the corresponding `mm7_spell_guild_verify.yml`/`mm8_spell_guild_verify.yml` in each private runtime.
+They assert unchanged source map/gold/food and zero discovery for target map/house before and after another
+save/load roundtrip. Inspect before/quicksave with `openyamm_levelgen_inspect_save`: party and cached indoor/
+outdoor map-key sets must remain unchanged. Native rendering legitimately reveals local source terrain;
+do not require the entire initial headless save to be byte-identical.

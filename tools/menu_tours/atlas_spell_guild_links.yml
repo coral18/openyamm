@@ -1,0 +1,70 @@
+# 1600x900; use either fresh spell-guild fixture, with Atlas enabled and no gameplay test mod.
+output_dir: captures
+exit: true
+steps:
+- expect: gameplay
+- action: map_book
+- click:
+  - 1250
+  - 770
+- pointer_move:
+  - 800
+  - 860
+- capture: discovery-map-before
+- click:
+  - 450
+  - 57
+- click:
+  - 325
+  - 126
+- click:
+  - 275
+  - 190
+- text: Armageddon
+- key: Return
+- click:
+  - 200
+  - 265
+- capture: discovery-spell-hidden
+- click:
+  - 1152
+  - 57
+- wait: 1
+- click:
+  - 1430
+  - 190
+- wait: 8
+- click:
+  - 200
+  - 265
+- capture: guide-spell-top
+- pointer_move:
+  - 1035
+  - 527
+- wheel: -1000
+- capture: guide-real-guilds
+- click:
+  - 1035
+  - 695
+- capture: guide-guild-location
+- click:
+  - 1152
+  - 57
+- capture: unvisited-guild-stays-hidden
+- click:
+  - 1450
+  - 57
+- click:
+  - 1250
+  - 770
+- pointer_move:
+  - 800
+  - 860
+- capture: discovery-map-after
+- click:
+  - 1450
+  - 57
+- key: Escape
+- expect: gameplay
+- key: F9
+- wait: 0.4

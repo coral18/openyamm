@@ -9,6 +9,7 @@
 #include "game/world/WorldAtlasPresentation.h"
 #include "game/world/WorldFloorPlan.h"
 #include "game/world/WorldGuide.h"
+#include "game/world/WorldItemSources.h"
 #include "game/party/Party.h"
 #include "game/events/EventRuntime.h"
 #include "tests/RegressionMapLoader.h"
@@ -354,6 +355,194 @@ TEST_CASE("Atlas quest links resolve against fully indexed active MM7 and MM8 wo
     CHECK(maps == 137);
     CHECK(quests == 145);
     CHECK(links > quests);
+}
+
+TEST_CASE("all active MM7 and MM8 Guide sections resolve every emitted navigation link")
+{
+    using namespace OpenYAMM::Game;
+    REQUIRE_MESSAGE(OpenYAMM::Tests::regressionMapLoaderLoaded(),
+        OpenYAMM::Tests::regressionMapLoaderFailure());
+    const auto &fixture = OpenYAMM::Tests::regressionMapLoader();
+    const auto &data = fixture.gameDataLoader;
+    const auto decorations = MapAssetLoader::loadDecorationTable(fixture.assetFileSystem);
+    REQUIRE(decorations);
+    std::ofstream inventory;
+    if (const char *pDirectory = std::getenv("OPENYAMM_ATLAS_INTERACTION_AUDIT"))
+    {
+        inventory.open(std::filesystem::path(pDirectory) / "guide-links.tsv");
+        REQUIRE(inventory.is_open());
+        inventory << "world\tsection\tentry\tkind\ttarget\n";
+    }
+    size_t maps = 0, links = 0;
+    const auto skills = allCanonicalSkillNames();
+    const WorldGuideSection sections[] = {WorldGuideSection::Items, WorldGuideSection::Spells,
+        WorldGuideSection::Classes, WorldGuideSection::Alchemy, WorldGuideSection::Companions,
+        WorldGuideSection::Progress, WorldGuideSection::Monsters, WorldGuideSection::Quests};
+    for (const std::string &worldId : {"mm7", "mm8"})
+    {
+        CAPTURE(worldId);
+        const auto presentation = loadWorldAtlasPresentation(fixture.assetFileSystem, worldId);
+        WorldDatabase world(data.getMapStats(), data.getHouseTable(), data.getNpcDialogTable(),
+            data.getMergedTeacherTopicTable(), worldId, presentation.maps);
+        std::optional<ScriptedEventProgram> global;
+        for (const MapStatsEntry &entry : data.getMapStats().getEntries())
+        {
+            if (entry.worldId != worldId) continue;
+            auto map = MapAssetLoader().load(fixture.assetFileSystem, entry, data.getMonsterTable(),
+                data.getObjectTable(), MapLoadPurpose::HeadlessGameplay);
+            REQUIRE(map);
+            std::string error;
+            REQUIRE_MESSAGE(GameDataLoader::loadEventPrograms(fixture.assetFileSystem, *map, error), error);
+            REQUIRE(map->localEventProgram);
+            REQUIRE(map->globalEventProgram);
+            global = map->globalEventProgram;
+            const auto &events = *map->localEventProgram;
+            const auto &delta = map->outdoorMapData ? map->outdoorMapDeltaData : map->indoorMapDeltaData;
+            if (delta)
+            {
+                world.indexMapItemSources(entry,
+                    buildWorldItemSources(*delta, data.getItemTable(), data.getObjectTable()), data.getItemTable());
+                world.indexMapNpcActors(entry, *delta);
+            }
+            world.indexMapConnections(entry, events);
+            world.indexMapNpcTopics(entry, events);
+            world.indexMapNpcEncounters(entry, events);
+            world.indexNpcLocations(events);
+            world.indexNpcLocations(*global);
+            if (map->outdoorMapData)
+            {
+                world.indexMapLocations(*map->outdoorMapData, events);
+                world.indexMapMonsters(entry, *map->outdoorMapData, data.getMonsterTable(), {},
+                    delta ? &*delta : nullptr);
+                world.indexMapItemRewards(entry, events, worldInteractionSites(*map->outdoorMapData),
+                    data.getItemTable());
+            }
+            else
+            {
+                REQUIRE(map->indoorMapData);
+                world.indexMapLocations(entry, *map->indoorMapData, events);
+                world.indexMapMonsters(entry, *map->indoorMapData, data.getMonsterTable(), {},
+                    delta ? &*delta : nullptr);
+                world.indexMapItemRewards(entry, events, worldInteractionSites(*map->indoorMapData),
+                    data.getItemTable());
+            }
+            const auto inherited = map->outdoorMapData
+                ? worldInheritedDecorationSites(*map->outdoorMapData, *decorations, delta ? &*delta : nullptr)
+                : worldInheritedDecorationSites(*map->indoorMapData, *decorations, delta ? &*delta : nullptr);
+            world.indexInheritedDecorations(entry, inherited, *global);
+            world.indexDecorationItemRewards(entry, inherited, *global, data.getItemTable());
+            world.indexSharedItemRewards(*global, data.getItemTable());
+            world.indexMapMonsterSpawns(entry, events, data.getMonsterTable());
+            world.indexMapInteractionReferences(entry, data.getItemTable(), data.getSpellTable(),
+                data.getJournalQuestTable());
+            world.indexMapGateReferences(entry, data.getWorldGateCatalog(), nullptr);
+            ++maps;
+        }
+        WorldKnowledge locations;
+        WorldGuideKnowledge knowledge;
+        WorldGuideSource source;
+        source.worldId = worldId;
+        source.pItems = &data.getItemTable();
+        source.pSpells = &data.getSpellTable();
+        source.pClasses = &data.getClassMultiplierTable();
+        source.pSkills = &data.getClassSkillTable();
+        source.pPotions = &data.getMergedPotionSettingTable();
+        source.pReagents = &data.getMergedReagentSettingTable();
+        source.pMixes = &data.getPotionMixingTable();
+        source.pPotionNotes = &data.getPotionNoteTable();
+        source.pRoster = &data.getRosterTable();
+        source.pHouses = &data.getHouseTable();
+        source.pMaps = &data.getMapStats();
+        source.pMonsters = &data.getMonsterTable();
+        source.pQuests = &data.getJournalQuestTable();
+        source.pNpcs = &data.getNpcDialogTable();
+        source.pWorld = &world;
+        source.pWorldKnowledge = &locations;
+        source.pCharacterSelection = &data.getMergedCharacterSelectionTable();
+        source.pGlobalEvents = global ? &*global : nullptr;
+        std::map<WorldGuideSection, std::vector<WorldGuideEntry>> guides;
+        std::map<WorldGuideSection, std::set<std::string>> ids;
+        for (WorldGuideSection section : sections)
+        {
+            CAPTURE(int(section));
+            guides[section] = buildWorldGuide(source, section, knowledge, true);
+            REQUIRE_FALSE(guides[section].empty());
+            for (const auto &entry : guides[section])
+            {
+                CHECK_FALSE(entry.id.empty());
+                CHECK_FALSE(entry.title.empty());
+                CHECK(ids[section].insert(entry.id).second);
+            }
+            MESSAGE(worldId << " Guide section " << int(section) << ": " << guides[section].size() << " entries");
+        }
+        // A standalone Guide can omit party knowledge; indexed physical venues must still be respected.
+        std::set<std::pair<std::string, std::string>> guildLinks, standaloneGuildLinks;
+        for (const WorldGuideEntry &entry : guides[WorldGuideSection::Spells])
+            for (const WorldGuideLink &link : entry.links)
+                if (link.kind == WorldGuideLink::Kind::Location) guildLinks.emplace(entry.id, link.target);
+        CHECK_FALSE(guildLinks.empty());
+        CHECK(buildWorldGuide(source, WorldGuideSection::Spells, knowledge, false).empty());
+        source.pWorldKnowledge = nullptr;
+        for (const WorldGuideEntry &entry : buildWorldGuide(source, WorldGuideSection::Spells, knowledge, true))
+            for (const WorldGuideLink &link : entry.links)
+                if (link.kind == WorldGuideLink::Kind::Location)
+                    standaloneGuildLinks.emplace(entry.id, link.target);
+        CHECK(standaloneGuildLinks == guildLinks);
+        CHECK(buildWorldGuide(source, WorldGuideSection::Spells, knowledge, false).empty());
+        source.pWorldKnowledge = &locations;
+        for (const auto &[section, entries] : guides)
+            for (const WorldGuideEntry &entry : entries)
+                for (const WorldGuideLink &link : entry.links)
+                {
+                    CAPTURE(int(section));
+                    CAPTURE(entry.id);
+                    CAPTURE(link.label);
+                    CAPTURE(link.target);
+                    CHECK_FALSE(link.label.empty());
+                    CHECK_FALSE(link.target.empty());
+                    if (link.kind == WorldGuideLink::Kind::Location)
+                    {
+                        const WorldRecord *pTarget = world.find(link.target);
+                        REQUIRE(pTarget);
+                        CHECK(world.visible(*pTarget, locations, true));
+                        CHECK(world.recordMap(*pTarget, locations, true));
+                    }
+                    else if (link.kind == WorldGuideLink::Kind::Feature)
+                    {
+                        const auto target = std::find_if(world.features().begin(), world.features().end(),
+                            [&](const WorldMapFeature &feature) { return feature.id == link.target; });
+                        REQUIRE(target != world.features().end());
+                        CHECK(world.featureVisible(*target, locations, true));
+                        CHECK(world.find(target->mapId));
+                    }
+                    else if (link.kind == WorldGuideLink::Kind::Trainer)
+                    {
+                        CHECK(std::find(skills.begin(), skills.end(), canonicalSkillName(link.target)) != skills.end());
+                        CHECK(link.mastery >= 1);
+                        CHECK(link.mastery <= 3);
+                    }
+                    else
+                    {
+                        const WorldGuideSection targetSection = link.kind == WorldGuideLink::Kind::Item
+                            ? WorldGuideSection::Items : link.kind == WorldGuideLink::Kind::Spell
+                            ? WorldGuideSection::Spells : link.kind == WorldGuideLink::Kind::Class
+                            ? WorldGuideSection::Classes : link.kind == WorldGuideLink::Kind::Monster
+                            ? WorldGuideSection::Monsters : WorldGuideSection::Alchemy;
+                        CHECK(ids[targetSection].contains(link.target));
+                    }
+                    if (inventory.is_open()) inventory << worldId << '\t' << int(section) << '\t' << entry.id
+                        << '\t' << int(link.kind) << '\t' << link.target << '\n';
+                    ++links;
+                }
+        CHECK(locations.visitedMaps.empty());
+        CHECK(locations.variables.empty());
+        CHECK(knowledge.items.empty());
+        CHECK(knowledge.monsters.empty());
+        CHECK(knowledge.quests.empty());
+    }
+    CHECK(maps == 137);
+    CHECK(links > 0);
+    MESSAGE("Resolved Guide links: " << links << " across all eight sections of MM7 and MM8");
 }
 
 TEST_CASE("active MM7 and MM8 physical house bindings resolve without disclosing additional entrances")

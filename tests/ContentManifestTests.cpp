@@ -498,7 +498,8 @@ TEST_CASE("mounted MM6 MM7 MM8 NPC and journal declarations resolve against shar
                 CAPTURE(map.fileName);
                 CAPTURE(eventId);
                 CAPTURE(metadata->kind);
-                CHECK((metadata->kind == "well" || metadata->kind == "fountain" || metadata->kind == "shrine"));
+                // Reference descriptions also belong to doors, travel and other registered interactions.
+                CHECK_FALSE(metadata->kind.empty());
                 ++siteReferences;
             }
             if (world == "mm7" && map.fileName == "7out02.odm")
@@ -508,6 +509,7 @@ TEST_CASE("mounted MM6 MM7 MM8 NPC and journal declarations resolve against shar
                 CHECK(asset.localEventProgram->autonoteReferences().at(220) == std::vector<uint32_t>{309});
                 CHECK(asset.localEventProgram->siteReferences().at(223).find("Party gold +200") != std::string::npos);
                 CHECK_FALSE(asset.localEventProgram->autonoteReferences().contains(223));
+                CHECK(asset.localEventProgram->getContextActionMetadata(221)->kind == "travel");
             }
             if (world == "mm8" && map.fileName == "out01.odm")
             {

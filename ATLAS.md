@@ -1,5 +1,9 @@
 # Native Interactive Atlas: MM7 and MM8
 
+**Current-base handover (2026-11-12):** the native Atlas v1 map/discovery/navigation implementation is ready
+for source review. Start with [ATLAS_HANDOFF.md](ATLAS_HANDOFF.md) for scope, final verification, integration
+boundaries and known limits. This does not include a port to upstream 2.1 or the complete external guides.
+
 Reference: [hulululuh's MM7 interactive world-map guide](https://www.reddit.com/r/MightAndMagic/comments/1ww8pq0/i_made_an_interactive_world_map_guide_for_might/).
 This is an original native implementation using OpenYAMM's renderer, menus and game data. The reference HTML,
 JavaScript, SVG floor plans, translated descriptions and embedded artwork are not bundled. The downloaded guide
@@ -10,7 +14,7 @@ is also a behavioral reference, not a bundled HTML application. Its downloaded a
 without a declared reuse license. See [the explicit coverage/completion checklist](ATLAS_COVERAGE.md): neither
 community guide's complete content has been integrated yet.
 
-## Working slice
+## Implemented native Atlas
 
 - Optional native UI module provided by `mods/interactive-atlas/mod.yaml`, enabled through the normal mod profile.
   Disabling it removes the Atlas menu entry and preserves shared discoveries and save compatibility.
@@ -4018,3 +4022,26 @@ Reproduction is in `tests/fixtures/atlas/README.md`; private evidence is under
 requiring runtime review, rather than treating an overlay filename as proof. The source triage result is
 not a general event verifier or completion of the full Atlas objective. Android/controller acceptance and
 wider content/source families remain open; no Android build or install was performed.
+
+
+## Current-base handover and complete Guide-link check, 2026-11-12
+
+The agreed native map/discovery/navigation stage is prepared for upstream review on the existing Extended base;
+[ATLAS_HANDOFF.md](ATLAS_HANDOFF.md) is the entry point for the author. This stage does not merge upstream 2.1,
+claim full third-party guide content, or close deferred physical-device checks.
+
+A full active-data navigation audit indexes all 137 MM7/MM8 maps and resolves 24,623 links across all eight Guide
+sections (12,692 MM7; 11,931 MM8), checking unique entry IDs and typed/physical destinations without awarding
+knowledge. It caught 22 stock links to unused MM7 guild rows 177/179. Spell sources now use shared venue visibility
+in Guide as well as Discovery, including standalone callers without party knowledge. Actual guild sources remain.
+The expanded Windows regression selection passes 563 cases / 281,275 assertions. The excluded existing temple
+portrait case requires a retired original-icon path; this is not a claim that every repository test passes. The
+manifest-reference test now permits valid non-well interactions instead of rejecting doors, passages and drinks.
+
+The final Windows Release executable (`da2c73ba0dd642aadc2ee2fc9497a80f64f4b9c702873b9c1cb6c9a13af60b80`)
+passes two fresh-campaign desktop-GPU tours: 68 steps / 14 captures. Armageddon's MM7 source opens The Pit and
+its MM8 source opens Shadowspire. Four inspected saves preserve party, source map, gold/food and cached map keys;
+four Discovery map/list crops match before/after Guide. Another 26 headless post-UI steps verify that destination
+map/house discoveries remain zero through save/load. Private evidence is under
+`%USERPROFILE%\openyamm-extended-dev\atlas-handoff-20261112`; reproducible fixtures/tour and instructions are
+checked in under `tests/scenarios/atlas/`, `tools/menu_tours/` and `tests/fixtures/atlas/README.md`.

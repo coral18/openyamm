@@ -666,13 +666,17 @@ std::vector<WorldGuideEntry> buildWorldGuide(const WorldGuideSource &source, Wor
         };
         std::vector<GuildSource> guildSources;
         if (source.pWorld != nullptr)
+        {
+            const WorldKnowledge emptyKnowledge;
+            const WorldKnowledge &worldKnowledge = source.pWorldKnowledge != nullptr
+                ? *source.pWorldKnowledge : emptyKnowledge;
             for (const WorldRecord &record : source.pWorld->records())
                 if (record.kind == WorldRecordKind::House && record.map->worldId == source.worldId
-                    && (guide || (source.pWorldKnowledge != nullptr
-                        && source.pWorld->visible(record, *source.pWorldKnowledge, false))))
+                    && source.pWorld->visible(record, worldKnowledge, guide))
                     guildSources.push_back({&record, source.pWorldKnowledge != nullptr
                         ? worldGuildStockObservation(source.pWorldKnowledge->variables, record.house->id)
                         : std::nullopt});
+        }
         for (const SpellEntry &spell : source.pSpells->entries())
         {
             const std::vector<const ItemDefinition *> &spellbooks = books[uint32_t(spell.id)];

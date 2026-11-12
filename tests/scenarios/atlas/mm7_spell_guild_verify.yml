@@ -1,0 +1,37 @@
+id: atlas.handoff_verify_mm7
+title: Guide links preserve unvisited destinations through save/load
+world: mm7
+mode: faithful
+steps:
+- load_game:
+    path: saves/quicksave.oysav
+- &id001
+  assert:
+    map: 7out01.odm
+- &id002
+  assert:
+    runtime_event_variable:
+      id: 21
+      value: 5000
+- &id003
+  assert:
+    runtime_event_variable:
+      id: 23
+      value: 10
+- &id004
+  assert:
+    named_global_var_changed:
+      name: openyamm.discovery.world.mm7.map.7d26
+      value: 0
+- &id005
+  assert:
+    named_global_var_changed:
+      name: openyamm.discovery.house/178
+      value: 0
+- save_game: roundtrip
+- load_game: roundtrip
+- *id001
+- *id002
+- *id003
+- *id004
+- *id005
