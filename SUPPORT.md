@@ -10,20 +10,22 @@ I can do. I have more work I could take on, but the available capacity does not 
 OpenYAMM author's frequent updates.
 
 If community support allows me to upgrade to a higher-usage plan, I will use that extra capacity to
-**substantially accelerate Atlas development**, spend more time on compatibility and testing, and make
-sustained collaboration with the OpenYAMM author more practical.
+substantially accelerate Atlas development, spend more time on compatibility and testing, and make
+collaboration with the OpenYAMM author more practical. It will also give me room to work on other mods,
+tools and ideas for the Might & Magic community.
 
-The initial funding goal is development capacity: higher-usage AI tools for the Atlas and its upstream port.
-Progress and changes to that goal will be reported in the repository. Support helps fund this work; it does
-not purchase game assets, an official OpenYAMM release, a feature deadline or a guaranteed integration outcome.
-The source remains freely available under its existing license.
+Longer term, I'd love to build a larger original RPG in Unreal Engine, inspired by the spirit of Might & Magic.
+This is a long-term ambition; work on that game has not started.
+
+Support helps pay for higher-usage AI tools across my projects, starting with the Atlas and its upstream port.
+I'll share progress and any new projects as the work develops. OpenYAMM Atlas remains free and open source
+under its existing license.
 
 ## Support on Ko-fi
 
 **[Support Karol on Ko-fi](https://ko-fi.com/kvonloraque)**
 
-This is my general creator page, supporting ongoing projects and development tools, including OpenYAMM Atlas.
-Support is optional; the project's source remains freely available.
+This is my general creator page, supporting OpenYAMM Atlas and future projects. Contributions are optional.
 
 ## Other ways to help
 
@@ -40,4 +42,4 @@ Both interactive guides that inspired the Atlas workflow are by **[u/hulululuh](
 - [MM8 clickable map of Jadame](https://www.reddit.com/r/MightAndMagic/comments/1x7x7ok/simon_found_a_map_of_jadame_i_made_it_clickable/)
 
 Their HTML, JavaScript, authored guide text and embedded artwork are not bundled. Supporting this project
-supports Karol's Atlas work; it does not imply endorsement by or funding for those authors.
+supports Karol's work; it does not imply endorsement by or funding for those authors.
