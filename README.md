@@ -1,12 +1,12 @@
 <div align="center">
 
-# OpenYAMM Extended
+# OpenYAMM Atlas
 
 ### Interactive Atlas for Might & Magic VII and VIII
 
 **Explore Antagarich. Navigate Jadame. Keep the mystery of discovery.**
 
-A native in-game atlas with exploration fog, dungeon plans, party tracking and a connected guidebook.
+A community project by **Karol**, built on OpenYAMM: exploration fog, dungeon plans, party tracking and a connected guidebook.
 
 [See it in action](#see-it-in-action) · [Get started](#get-started) · [Integration handover](https://github.com/coral18/openyamm/blob/extended/atlas-mm8/ATLAS_HANDOFF.md) · [Upstream OpenYAMM](https://github.com/pjasicek/openyamm)
 
@@ -16,9 +16,9 @@ A native in-game atlas with exploration fog, dungeon plans, party tracking and a
 
 <p align="center"><em>Shadowspire, Jadame — captured in the native Windows build. Guide Mode is explicitly enabled.</em></p>
 
-> **Project status:** Atlas v1 is ready for source review on the existing Extended base.
+> **Project status:** Atlas v1 is ready for source review on the current Atlas base.
 > The implementation lives on **[extended/atlas-mm8](https://github.com/coral18/openyamm/tree/extended/atlas-mm8)**.
-> It has not been ported to OpenYAMM 2.1; the mod manifest alone is not an installable plugin for stock OpenYAMM.
+> It has not been ported to OpenYAMM 2.2; the mod manifest alone is not an installable plugin for stock OpenYAMM.
 
 ## An atlas that grows with your adventure
 
@@ -85,7 +85,7 @@ shared stock pool; it does not promise that a book is currently on sale or that 
    Discovery is the default; Guide Mode is optional.
 
 The Atlas UI is optional. Disabling its module hides the entry while preserving shared discoveries and notes.
-The module selects native C++ functionality already compiled into Extended; it does not load a DLL or embed a website.
+The module selects native C++ functionality already compiled into this Atlas build; it does not load a DLL or embed a website.
 
 ## Built on shared game data
 
@@ -117,8 +117,21 @@ See the [handover](https://github.com/coral18/openyamm/blob/extended/atlas-mm8/A
 
 **For upstream integration:** begin with [ATLAS_HANDOFF.md](https://github.com/coral18/openyamm/blob/extended/atlas-mm8/ATLAS_HANDOFF.md).
 It maps the shared index, knowledge, UI and mod-loader changes and records save-format and API boundaries.
-This branch contains other Extended changes, so an upstream port needs a scoped review rather than a wholesale merge.
-MM6/MM9 atlases and upstream 2.1 compatibility are outside this handover.
+This branch contains other fork changes, so an upstream port needs a scoped review rather than a wholesale merge.
+MM6/MM9 atlases and upstream 2.2 compatibility are outside this handover.
+
+## Support development
+
+I currently develop OpenYAMM Atlas with **ChatGPT Plus**. Subscription usage limits are the main constraint on
+my development pace: I could do more work, but I cannot currently keep up with upstream's release cadence.
+
+If community support lets me move to a higher-usage plan, I will use the extra capacity to substantially
+accelerate Atlas development, compatibility work and collaboration with the OpenYAMM author.
+The project remains free and open source.
+
+[![Support Atlas development](https://raw.githubusercontent.com/coral18/openyamm/refs/heads/extended/atlas-mm8/docs/atlas/support.svg)](https://github.com/coral18/openyamm/blob/main/SUPPORT.md)
+
+See the [support page](https://github.com/coral18/openyamm/blob/main/SUPPORT.md) for the funding goal and current payment-link status.
 
 ## Documentation
 
@@ -132,9 +145,12 @@ MM6/MM9 atlases and upstream 2.1 compatibility are outside this handover.
 ## Credits and license
 
 Built on **[OpenYAMM by pjasicek and its contributors](https://github.com/pjasicek/openyamm)**.
-The community [MM7](https://www.reddit.com/r/MightAndMagic/comments/1ww8pq0/i_made_an_interactive_world_map_guide_for_might/)
-and [MM8](https://www.reddit.com/r/MightAndMagic/comments/1x7x7ok/simon_found_a_map_of_jadame_i_made_it_clickable/)
-interactive guides inspired the workflow. This is an original native implementation: their HTML, JavaScript,
+Both community guides were created by **[u/hulululuh](https://www.reddit.com/user/hulululuh/)**:
+
+- [MM7: I made an interactive world map / guide for Might and Magic VII](https://www.reddit.com/r/MightAndMagic/comments/1ww8pq0/i_made_an_interactive_world_map_guide_for_might/)
+- [MM8: Simon “found” a map of Jadame. I made it clickable.](https://www.reddit.com/r/MightAndMagic/comments/1x7x7ok/simon_found_a_map_of_jadame_i_made_it_clickable/)
+
+Their guides inspired the Atlas workflow. This is an original native implementation: their HTML, JavaScript,
 authored descriptions and embedded artwork are not bundled, and their complete content has not been imported.
 
 Code is distributed under the repository's [GNU GPL v3 license](https://github.com/coral18/openyamm/blob/extended/atlas-mm8/LICENSE).
