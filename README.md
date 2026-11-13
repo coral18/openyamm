@@ -126,8 +126,10 @@ I currently develop OpenYAMM Atlas with **ChatGPT Plus**. Subscription usage lim
 my development pace: I could do more work, but I cannot currently keep up with upstream's release cadence.
 
 If community support lets me move to a higher-usage plan, I will use the extra capacity to substantially
-accelerate Atlas development, compatibility work and collaboration with the OpenYAMM author.
-The project remains free and open source.
+accelerate Atlas development and compatibility work, and make collaboration with the OpenYAMM author easier.
+It will also give me room to explore other Might & Magic mods, tools and projects. Longer term, I'd love to
+create a larger original RPG in Unreal Engine that captures the spirit of the series. That is a future
+ambition; my current work is OpenYAMM Atlas, which remains free and open source.
 
 [![Support Atlas development](https://raw.githubusercontent.com/coral18/openyamm/refs/heads/extended/atlas-mm8/docs/atlas/support.svg)](https://ko-fi.com/kvonloraque)
 
