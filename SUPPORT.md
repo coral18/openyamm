@@ -18,12 +18,12 @@ Progress and changes to that goal will be reported in the repository. Support he
 not purchase game assets, an official OpenYAMM release, a feature deadline or a guaranteed integration outcome.
 The source remains freely available under its existing license.
 
-## Payment-link status
+## Support on Ko-fi
 
-**The payment page is being set up. No donation checkout has been activated yet.**
+**[Support Karol on Ko-fi](https://ko-fi.com/kvonloraque)**
 
-The planned service is Ko-fi. The verified creator page will be linked here after Karol connects it to his
-own payout account. Until then, there is no payment recipient linked by this project.
+This is my general creator page, supporting ongoing projects and development tools, including OpenYAMM Atlas.
+Support is optional; the project's source remains freely available.
 
 ## Other ways to help
 
