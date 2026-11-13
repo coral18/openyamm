@@ -129,9 +129,9 @@ If community support lets me move to a higher-usage plan, I will use the extra c
 accelerate Atlas development, compatibility work and collaboration with the OpenYAMM author.
 The project remains free and open source.
 
-[![Support Atlas development](https://raw.githubusercontent.com/coral18/openyamm/refs/heads/extended/atlas-mm8/docs/atlas/support.svg)](https://github.com/coral18/openyamm/blob/main/SUPPORT.md)
+[![Support Atlas development](https://raw.githubusercontent.com/coral18/openyamm/refs/heads/extended/atlas-mm8/docs/atlas/support.svg)](https://ko-fi.com/kvonloraque)
 
-See the [support page](https://github.com/coral18/openyamm/blob/main/SUPPORT.md) for the funding goal and current payment-link status.
+See the [support page](https://github.com/coral18/openyamm/blob/main/SUPPORT.md) for the funding goal, or [support Karol on Ko-fi](https://ko-fi.com/kvonloraque).
 
 ## Documentation
 
