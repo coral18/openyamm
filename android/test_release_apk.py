@@ -31,7 +31,7 @@ def main():
     parser.add_argument("--resume-cycles", type=int, default=3,
                         help="Test Home, task switching and screen off/on without restarting the game")
     parser.add_argument("--package", default="org.openyamm.extended")
-    parser.add_argument("--log-tag", default="OpenYAMM-Extended")
+    parser.add_argument("--log-tag", default="OpenYAMM-Atlas")
     args = parser.parse_args()
     if args.resume_cycles < 0:
         parser.error("--resume-cycles must be nonnegative")

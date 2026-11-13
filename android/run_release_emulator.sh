@@ -307,4 +307,4 @@ if [[ "${follow_logs}" != "1" ]]; then
 fi
 
 echo "Following logs. Press Ctrl-C to stop."
-"${adb_bin}" -s "${serial}" logcat -v time -s OpenYAMM-Extended SDL AndroidRuntime DEBUG libc
+"${adb_bin}" -s "${serial}" logcat -v time -s OpenYAMM-Atlas SDL AndroidRuntime DEBUG libc

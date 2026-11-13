@@ -9,7 +9,7 @@ int main(int argc, char **argv)
 {
     try
     {
-        SDL_SetAppMetadata("OpenYAMM", nullptr, "io.github.openyamm.OpenYAMM");
+        SDL_SetAppMetadata("OpenYAMM Atlas", nullptr, "io.github.openyamm.OpenYAMM");
         return OpenYAMM::Game::runApplication(argc, argv);
     }
     catch (const std::exception &exception)

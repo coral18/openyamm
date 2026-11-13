@@ -1,4 +1,9 @@
-# Android Atlas acceptance
+# OpenYAMM Atlas — Android acceptance
+
+The project was renamed on 2026-11-13. The dated packages below were tested under the former Extended name;
+their filenames, hashes, application ID and signing records are preserved. New source builds use the Atlas
+label and log marker. This rename has not been installed or accepted on a physical device.
+
 
 ## Release package, 2026-10-26
 

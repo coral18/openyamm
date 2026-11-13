@@ -167,4 +167,4 @@ echo "Launching ${package_name}..."
 "${adb_bin}" -s "${serial}" shell monkey -p "${package_name}" 1 >/dev/null
 
 echo "Following logs. Press Ctrl-C to stop."
-"${adb_bin}" -s "${serial}" logcat -v time -s OpenYAMM-Extended SDL AndroidRuntime DEBUG libc
+"${adb_bin}" -s "${serial}" logcat -v time -s OpenYAMM-Atlas SDL AndroidRuntime DEBUG libc

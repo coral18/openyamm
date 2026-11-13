@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Verify an Extended bootstrap APK and optionally compare its runtime content with release 1.0."""
+"""Verify an OpenYAMM Atlas APK and optionally compare its runtime content with release 1.0."""
 
 import argparse
 import hashlib
@@ -86,8 +86,8 @@ def verify(apk_path, aapt, baseline_apk=None, baseline_ref="1.0", build_type=Non
     package = re.search(r"^package: name='([^']+)'", badging, re.MULTILINE)
     if package is None or package.group(1) != "org.openyamm.extended":
         raise ValueError("APK must use the separate org.openyamm.extended application ID")
-    if "application-label:'OpenYAMM Extended'" not in badging:
-        raise ValueError("APK is missing the OpenYAMM Extended application label")
+    if "application-label:'OpenYAMM Atlas'" not in badging:
+        raise ValueError("APK is missing the OpenYAMM Atlas application label")
     activity = re.search(r"^launchable-activity: name='([^']+)'", badging, re.MULTILINE)
     if activity is None or activity.group(1) != "org.openyamm.android.OpenYammActivity":
         raise ValueError("APK launcher must resolve to the existing Java activity")
@@ -113,8 +113,8 @@ def verify(apk_path, aapt, baseline_apk=None, baseline_ref="1.0", build_type=Non
                          and name.endswith(".bin"))
         if not shaders or any(apk.getinfo(name).file_size == 0 for name in shaders):
             raise ValueError("Missing or empty Android shaders")
-        if not has_marker(apk, "lib/arm64-v8a/libmain.so", b"OpenYAMM Extended bootstrap build"):
-            raise ValueError("Native library is missing the Extended build marker")
+        if not has_marker(apk, "lib/arm64-v8a/libmain.so", b"OpenYAMM Atlas build"):
+            raise ValueError("Native library is missing the Atlas build marker")
         rows = apk.read("assets/engine/data_tables/class_multipliers.txt").decode().splitlines()
         knight_rows = [row.split("\t") for row in rows if row.startswith("Knight\t")]
         if len(knight_rows) != 1 or knight_rows[0][1:] != ["35", "5", "0", "0", "None"]:
@@ -156,7 +156,7 @@ def main():
     report = verify(args.apk, args.aapt, args.baseline_apk, args.baseline_ref, args.build_type)
     args.report.parent.mkdir(parents=True, exist_ok=True)
     args.report.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
-    print(f"Verified Extended ARM64 APK: base Knight HP/level=5, karol.test packaged, {report['shader_count']} shaders")
+    print(f"Verified Atlas ARM64 APK: base Knight HP/level=5, karol.test packaged, {report['shader_count']} shaders")
     if "runtime_comparison" in report:
         comparison = report["runtime_comparison"]
         print(f"Release 1.0 parity: {comparison['baseline_entries']} entries checked, "

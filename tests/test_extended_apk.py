@@ -74,7 +74,7 @@ class RuntimeComparisonTests(unittest.TestCase):
         mod = (Path(__file__).resolve().parents[1] / "mods/karol-test/mod.yaml").read_bytes()
         root = Path(__file__).resolve().parents[1]
         payload = {
-            "lib/arm64-v8a/libmain.so": b"OpenYAMM Extended bootstrap build",
+            "lib/arm64-v8a/libmain.so": b"OpenYAMM Atlas build",
             "lib/arm64-v8a/libSDL3.so": b"fixture",
             "assets/engine/events/Global.lua": b"fixture",
             "assets/worlds/mm7/maps/7out01.odm": b"fixture",
@@ -88,7 +88,7 @@ class RuntimeComparisonTests(unittest.TestCase):
             "assets/engine/world/atlas/mm8.yml": (root / "assets_dev/engine/world/atlas/mm8.yml").read_bytes(),
             "assets/engine/data_tables/class_multipliers.txt": b"Knight\t35\t5\t0\t0\tNone\n",
         }
-        badging = ("package: name='org.openyamm.extended'\napplication-label:'OpenYAMM Extended'\n"
+        badging = ("package: name='org.openyamm.extended'\napplication-label:'OpenYAMM Atlas'\n"
                    "launchable-activity: name='org.openyamm.android.OpenYammActivity'\n")
         with tempfile.TemporaryDirectory() as directory:
             apk = Path(directory) / "fixture.apk"

@@ -1,15 +1,15 @@
-# Native Interactive Atlas: MM7 and MM8
+# OpenYAMM Atlas: native MM7 and MM8 atlases
 
 **Current-base handover (2026-11-12):** the native Atlas v1 map/discovery/navigation implementation is ready
 for source review. Start with [ATLAS_HANDOFF.md](ATLAS_HANDOFF.md) for scope, final verification, integration
 boundaries and known limits. This does not include a port to upstream 2.1 or the complete external guides.
 
-Reference: [hulululuh's MM7 interactive world-map guide](https://www.reddit.com/r/MightAndMagic/comments/1ww8pq0/i_made_an_interactive_world_map_guide_for_might/).
+Reference: [u/hulululuh](https://www.reddit.com/user/hulululuh/) — [MM7 interactive world-map guide](https://www.reddit.com/r/MightAndMagic/comments/1ww8pq0/i_made_an_interactive_world_map_guide_for_might/).
 This is an original native implementation using OpenYAMM's renderer, menus and game data. The reference HTML,
 JavaScript, SVG floor plans, translated descriptions and embedded artwork are not bundled. The downloaded guide
 did not include a declared reuse license; a future import of its authored material requires an appropriate license.
 
-The later [MM8 community guide](https://www.reddit.com/r/MightAndMagic/comments/1x7x7ok/simon_found_a_map_of_jadame_i_made_it_clickable/)
+The same author's [MM8 community guide](https://www.reddit.com/r/MightAndMagic/comments/1x7x7ok/simon_found_a_map_of_jadame_i_made_it_clickable/)
 is also a behavioral reference, not a bundled HTML application. Its downloaded archive contains one HTML file
 without a declared reuse license. See [the explicit coverage/completion checklist](ATLAS_COVERAGE.md): neither
 community guide's complete content has been integrated yet.
@@ -132,10 +132,15 @@ follow-up and broader device acceptance remain open.
 The dated checkpoints below retain their historical validation scope. Use this overview and the coverage/QA
 documents for current status; an old checkpoint's list of missing functions is not a new completion requirement.
 
+## Project identity
+
+OpenYAMM Atlas is maintained by Karol. Earlier checkpoints use the former project name OpenYAMM Extended.
+Historical artifacts, hashes and the existing technical build paths retain their recorded identities.
+
 ## Windows iteration
 
 The prepared PC directory is `%USERPROFILE%\openyamm-extended-dev` with `tools/msys64`, `source`, `build`, `cache/ccache`
-and an isolated `runtime` directory. Launch manually with `%USERPROFILE%\openyamm-extended-dev\OpenYAMM Extended.cmd`. From WSL:
+and an isolated `runtime` directory. Launch manually with `%USERPROFILE%\openyamm-extended-dev\OpenYAMM Atlas.cmd`. From WSL:
 
 ```bash
 tools/extended_windows_dev.sh build

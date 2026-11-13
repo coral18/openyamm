@@ -1,4 +1,4 @@
-name: Extended Android
+name: Atlas Android
 
 on:
   push:
@@ -22,7 +22,7 @@ concurrency:
 
 jobs:
   android:
-    name: Build OpenYAMM Extended Android APK
+    name: Build OpenYAMM Atlas Android APK
     runs-on: ubuntu-24.04
     timeout-minutes: 240
     env:
@@ -170,7 +170,7 @@ jobs:
           source_apk="android/app/build/outputs/apk/$variant/app-$variant.apk"
           test -s "$source_apk"
           mkdir -p dist
-          apk="dist/OpenYAMM-Extended-atlas-$variant-android-arm64.apk"
+          apk="dist/OpenYAMM-Atlas-$variant-android-arm64.apk"
           mv "$source_apk" "$apk"
           sha256sum "$apk" > "$apk.sha256"
           echo "path=$apk" >> "$GITHUB_OUTPUT"
@@ -207,7 +207,7 @@ jobs:
         if: steps.parts.outputs.part00 == 'true'
         uses: actions/upload-artifact@v7
         with:
-          name: openyamm-extended-${{ env.OPENYAMM_ANDROID_BUILD_TYPE }}-part-00
+          name: openyamm-atlas-${{ env.OPENYAMM_ANDROID_BUILD_TYPE }}-part-00
           path: dist/parts/apk.part.00
           if-no-files-found: error
           retention-days: 3
@@ -217,7 +217,7 @@ jobs:
         if: steps.parts.outputs.part01 == 'true'
         uses: actions/upload-artifact@v7
         with:
-          name: openyamm-extended-${{ env.OPENYAMM_ANDROID_BUILD_TYPE }}-part-01
+          name: openyamm-atlas-${{ env.OPENYAMM_ANDROID_BUILD_TYPE }}-part-01
           path: dist/parts/apk.part.01
           if-no-files-found: error
           retention-days: 3
@@ -227,7 +227,7 @@ jobs:
         if: steps.parts.outputs.part02 == 'true'
         uses: actions/upload-artifact@v7
         with:
-          name: openyamm-extended-${{ env.OPENYAMM_ANDROID_BUILD_TYPE }}-part-02
+          name: openyamm-atlas-${{ env.OPENYAMM_ANDROID_BUILD_TYPE }}-part-02
           path: dist/parts/apk.part.02
           if-no-files-found: error
           retention-days: 3
@@ -237,7 +237,7 @@ jobs:
         if: steps.parts.outputs.part03 == 'true'
         uses: actions/upload-artifact@v7
         with:
-          name: openyamm-extended-${{ env.OPENYAMM_ANDROID_BUILD_TYPE }}-part-03
+          name: openyamm-atlas-${{ env.OPENYAMM_ANDROID_BUILD_TYPE }}-part-03
           path: dist/parts/apk.part.03
           if-no-files-found: error
           retention-days: 3
@@ -247,7 +247,7 @@ jobs:
         if: steps.parts.outputs.part04 == 'true'
         uses: actions/upload-artifact@v7
         with:
-          name: openyamm-extended-${{ env.OPENYAMM_ANDROID_BUILD_TYPE }}-part-04
+          name: openyamm-atlas-${{ env.OPENYAMM_ANDROID_BUILD_TYPE }}-part-04
           path: dist/parts/apk.part.04
           if-no-files-found: error
           retention-days: 3
@@ -257,7 +257,7 @@ jobs:
         if: steps.parts.outputs.part05 == 'true'
         uses: actions/upload-artifact@v7
         with:
-          name: openyamm-extended-${{ env.OPENYAMM_ANDROID_BUILD_TYPE }}-part-05
+          name: openyamm-atlas-${{ env.OPENYAMM_ANDROID_BUILD_TYPE }}-part-05
           path: dist/parts/apk.part.05
           if-no-files-found: error
           retention-days: 3
@@ -267,7 +267,7 @@ jobs:
         if: steps.parts.outputs.part06 == 'true'
         uses: actions/upload-artifact@v7
         with:
-          name: openyamm-extended-${{ env.OPENYAMM_ANDROID_BUILD_TYPE }}-part-06
+          name: openyamm-atlas-${{ env.OPENYAMM_ANDROID_BUILD_TYPE }}-part-06
           path: dist/parts/apk.part.06
           if-no-files-found: error
           retention-days: 3
@@ -277,7 +277,7 @@ jobs:
         if: steps.parts.outputs.part07 == 'true'
         uses: actions/upload-artifact@v7
         with:
-          name: openyamm-extended-${{ env.OPENYAMM_ANDROID_BUILD_TYPE }}-part-07
+          name: openyamm-atlas-${{ env.OPENYAMM_ANDROID_BUILD_TYPE }}-part-07
           path: dist/parts/apk.part.07
           if-no-files-found: error
           retention-days: 3
@@ -287,7 +287,7 @@ jobs:
         if: steps.parts.outputs.part08 == 'true'
         uses: actions/upload-artifact@v7
         with:
-          name: openyamm-extended-${{ env.OPENYAMM_ANDROID_BUILD_TYPE }}-part-08
+          name: openyamm-atlas-${{ env.OPENYAMM_ANDROID_BUILD_TYPE }}-part-08
           path: dist/parts/apk.part.08
           if-no-files-found: error
           retention-days: 3
@@ -296,7 +296,7 @@ jobs:
       - name: Upload verification report
         uses: actions/upload-artifact@v7
         with:
-          name: openyamm-extended-android-verification
+          name: openyamm-atlas-android-verification
           path: |
             dist/extended-apk-verification.json
             dist/*.apk.sha256

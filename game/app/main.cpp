@@ -240,6 +240,7 @@ int runApplication(int argc, char **argv)
     av_log_set_level(AV_LOG_ERROR);
 
     OpenYAMM::Engine::ApplicationConfig config = OpenYAMM::Engine::ApplicationConfig::createDefault();
+    config.appName = "OpenYAMM Atlas";
     std::vector<std::string> arguments;
     bool worldArgumentProvided = false;
     bool assetScaleArgumentProvided = false;

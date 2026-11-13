@@ -1,4 +1,9 @@
-# OpenYAMM Extended
+# OpenYAMM Atlas
+
+OpenYAMM Atlas is Karol's community project focused on native MM7/MM8 atlases and the shared APIs they need.
+The original Extended vision below is retained as a long-term design reference; it does not claim feature
+parity with newer upstream releases or authorize implementing every future module now. Technical identifiers
+from earlier builds remain stable for compatibility.
 
 ## Product contract
 
@@ -43,7 +48,7 @@ maps, travel, rest and quest changes. Declarative effects cover common behavior;
 Do not prioritize MMO/multiplayer, procedural dungeon generation, renderer rewrites, replacing all monsters with
 3D, a new continent, a full MM9 remake, cloud infrastructure or hundreds of active skills.
 
-## Bootstrap acceptance
+## Original bootstrap acceptance (historical)
 
 Branch: `extended/bootstrap-android`. Fork: `coral18/openyamm`. Local upstream remote: `pjasicek/openyamm`.
 

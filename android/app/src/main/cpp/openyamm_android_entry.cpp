@@ -24,7 +24,7 @@
 
 namespace
 {
-constexpr const char *LogTag = "OpenYAMM-Extended";
+constexpr const char *LogTag = "OpenYAMM-Atlas";
 constexpr size_t CopyBufferSize = 1024 * 1024;
 
 struct PackagedAsset
@@ -372,7 +372,7 @@ int main(int argc, char **argv)
         {
             throw std::runtime_error("Failed to disable SDL touch-generated mouse events");
         }
-        openYammLog("OpenYAMM Extended bootstrap build");
+        openYammLog("OpenYAMM Atlas build");
         openYammLog("Starting shared OpenYAMM game entry argc=%d", argc);
         prepareAndroidAssetRoot();
         const int result = OpenYAMM::Game::runApplication(argc, argv);

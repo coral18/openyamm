@@ -208,7 +208,7 @@ On Windows PowerShell, use:
 Keep the keystore and secrets backed up. Every published update for `org.openyamm.extended` must use the same signing
 key; replacing it requires users to uninstall the existing app before installing the new build.
 
-## Extended bootstrap
+## Atlas branding and legacy bootstrap
 
 The installed application ID is `org.openyamm.extended`; the Java namespace remains `org.openyamm.android`.
 The activity component is `org.openyamm.extended/org.openyamm.android.OpenYammActivity`.
@@ -216,7 +216,9 @@ This allows installation beside the official game and keeps settings and saves i
 There is no save import or migration yet.
 
 The bootstrap changes only Knight's health per level from 5 to 6; base health remains 35.
-The launcher label is `OpenYAMM Extended`, and logcat uses `OpenYAMM-Extended` with an explicit bootstrap marker.
+The current launcher label is `OpenYAMM Atlas`, and logcat uses `OpenYAMM-Atlas` with the marker
+`OpenYAMM Atlas build`. The existing `org.openyamm.extended` ID and signing key are retained so a branding
+update can preserve the installed app and its data. Archived packages below retain their original filenames.
 
 `.github/workflows/extended-android.yml` builds a debug-signed ARM64 APK without upstream secrets.
 It verifies the APK signature, application ID, resolved activity, ABI, shaders, native marker and packaged Knight row.

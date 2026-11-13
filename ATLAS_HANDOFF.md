@@ -1,7 +1,7 @@
-# MM7/MM8 native Atlas — upstream handover
+# OpenYAMM Atlas — MM7/MM8 integration handover
 
-This document describes the completed **current-base Atlas v1 handover**, not a port to OpenYAMM 2.1.
-Source: [coral18/openyamm, extended/atlas-mm8](https://github.com/coral18/openyamm/tree/extended/atlas-mm8).
+This document describes the completed **current-base Atlas v1 handover**, not a port to OpenYAMM 2.2.
+Source: [Atlas source branch](https://github.com/coral18/openyamm/tree/extended/atlas-mm8).
 The branch descends from upstream `c1bc5434fbf630a96ac2465818ab25474b14b31c` (2026-10-05).
 It contains other Extended work as well: do not merge the entire branch as an Atlas-only patch.
 
@@ -102,3 +102,20 @@ Port on a separate branch against the author's current data/API, with particular
    channels distinct if distributing a fork. Do not commit multi-GB runtime payloads.
 
 No upstream 2.1 merge, combined build, save migration or MM9 Atlas is included in this handover.
+
+
+## Project identity, 2026-11-13
+
+The public project name is **OpenYAMM Atlas**, maintained by **Karol**. Earlier records use the name
+OpenYAMM Extended. It is a community fork focused on the Atlas, separate from the official upstream release.
+Legacy branch/build-directory names, the Android application ID, signing identity and save namespaces stay
+stable across this branding change. Old package filenames and test hashes remain historical evidence.
+See [support and development capacity](SUPPORT.md) for the current funding goal.
+
+
+## Community inspiration and credits
+
+Both reference guides are by **[u/hulululuh](https://www.reddit.com/user/hulululuh/)**:
+[MM7 guide announcement](https://www.reddit.com/r/MightAndMagic/comments/1ww8pq0/i_made_an_interactive_world_map_guide_for_might/)
+and [MM8 Jadame guide announcement](https://www.reddit.com/r/MightAndMagic/comments/1x7x7ok/simon_found_a_map_of_jadame_i_made_it_clickable/).
+OpenYAMM itself is by [pjasicek and contributors](https://github.com/pjasicek/openyamm).
