@@ -304,4 +304,3 @@ TEST_CASE("Atlas port: world database party marker follows minimap direction and
     CHECK(northEast.first > center.first);
     CHECK(northEast.second < center.second);
 }
-
