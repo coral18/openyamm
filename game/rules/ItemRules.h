@@ -49,11 +49,22 @@ struct ItemBaseStats
     int armorClass = 0;
 };
 
-// One extra line of an item's inspect popup, in its colour (0xRRGGBB).
+// One extra line of an item's inspect popup, in its colour (0xRRGGBB). A part of it, such as a stat's name, may have a
+// colour of its own (MAW colours each stat).
 struct ItemInspectLine
 {
     std::string text;
     uint32_t color = 0xffffff;
+    // The bytes [accentBegin, accentBegin + accentLength) of the text, in accentColor; none when accentLength is 0.
+    size_t accentBegin = 0;
+    size_t accentLength = 0;
+    uint32_t accentColor = 0xffffff;
+
+    // The colour where the line is drawn in one colour: the accent's when it has one.
+    uint32_t singleColor() const
+    {
+        return accentLength > 0 ? accentColor : color;
+    }
 };
 
 // What the gather key brings to the party: at most this many corpses and ground items.
@@ -140,8 +151,8 @@ public:
         const ItemDefinition &itemDefinition,
         const StandardItemEnchantTable *pStandardTable,
         const SpecialItemEnchantTable *pSpecialTable) const;
-    // The "Special:" text of the inspect popup (Standard: the standard enchantment, else the special's description);
-    // the viewer may be null.
+    // The "Special:" text of the inspect popup (Standard: the standard enchantment, else the special's description),
+    // empty when the rules list it among their inspect lines; the viewer may be null.
     virtual std::string enchantDescription(
         const InventoryItem &item,
         const ItemDefinition &itemDefinition,
@@ -158,12 +169,17 @@ public:
     // Whether the inventory has the item search field (MAW, for its many bags; user 2026-11-04).
     virtual bool inventorySearch() const;
     // Lines the rules add to the inspect popup below the item's type and stats (MAW: enchantments, level required).
+    // craftPreview: also, in grey, what crafting would add to the item next (the Craftable stats setting; MAW: the
+    // Hourglass's enchantment, the Eye of Void's special, the bonus power and its cap).
     virtual std::vector<ItemInspectLine> inspectLines(
         const InventoryItem &item,
         const ItemDefinition &itemDefinition,
         const StandardItemEnchantTable *pStandardTable,
         const SpecialItemEnchantTable *pSpecialTable,
-        const Character *pViewer) const;
+        const Character *pViewer,
+        bool craftPreview) const;
+    // Whether the rules have such a preview (the Craftable stats setting and its key); Standard has no crafting.
+    virtual bool previewsCrafting() const;
 
     // A member's merchant value (the percent off house prices, up to 100) when the rules compute it themselves (MAW:
     // skill x mastery plus Glamour, no reputation); nothing for Standard's skill, bonus and reputation.
@@ -174,8 +190,8 @@ public:
     // vendor keeps its items, the rules give them their power and enchantments, as on the other shops (MAW). Standard:
     // no, the stock is sold as written.
     virtual bool rollsFixedShopStock() const;
-    // Changes a shop's freshly rolled stock (MAW: magic shops and alchemists sell crafting materials). Standard:
-    // nothing.
+    // Changes a shop's freshly rolled stock (MAW: magic shops sell crafting materials; alchemists' reagents and low
+    // potions come in stacks, InventoryItem::quantity, sold one at a time). Standard: nothing.
     virtual void adjustShopStock(
         std::vector<InventoryItem> &stock,
         const HouseEntry &house,
@@ -233,14 +249,6 @@ public:
     // The tagged bag a ground item goes to when the party picks it up (MAW: crafting items to a crafting bag, potions
     // and reagents to an alchemy bag). Standard: none, bags are not tagged.
     virtual std::optional<BagTag> bagTag(const ItemDefinition &definition) const;
-    // The member who takes the alchemy items when the party sorts, if the rules have one and someone was picked.
-    // Standard: nobody.
-    virtual std::optional<size_t> alchemist(const Party &party) const;
-    // The alchemist key on a member's inventory: picks the member, or drops the pick when it is theirs already; the
-    // status line. Standard: nothing, the key does nothing.
-    virtual std::optional<std::string> pickAlchemist(Party &party, size_t memberIndex) const;
-    // Where an alchemy item goes in its alchemist's bags, lowest first; nothing for any other item (Standard: all).
-    virtual std::optional<int> alchemySortRank(const InventoryItem &item) const;
     // Why the party cannot open a chest on a map of this lock rating (MapStatsEntry::disarmDifficulty), or nothing
     // (Standard: chests always open, their traps aside).
     virtual std::optional<std::string> chestOpenRefusal(const Party &party, int mapLock) const;

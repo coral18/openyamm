@@ -46,6 +46,13 @@ namespace OpenYAMM::Game
 {
 namespace
 {
+// A timed potion effect entered its last minutes this step and still runs (a long rest that ends it says nothing).
+bool potionExpiryWarningStarts(float previousRemainingSeconds, float remainingSeconds)
+{
+    return previousRemainingSeconds > Party::PotionExpiryWarningSeconds && remainingSeconds > 0.0f
+        && remainingSeconds <= Party::PotionExpiryWarningSeconds;
+}
+
 // An implant's family (no two of a family add up): its set id `family:<name>`, else its canonical id's name without the
 // tier (dermal_2 -> dermal).
 std::string implantFamily(const ItemDefinition &item)
@@ -2854,6 +2861,7 @@ void Party::restoreSnapshot(const Snapshot &snapshot)
     m_lastStatus.clear();
     m_heldItemIdForQueries = 0;
     m_pendingAudioRequests.clear();
+    m_expiringPotionEffects.clear();
     recordEverOwnedItemsFromCurrentState();
     rebuildMagicalBonusesFromBuffs();
     ++m_dialogueEligibilityRevision;
@@ -3032,6 +3040,7 @@ void Party::seed(const PartySeed &seed)
     m_lastStatus.clear();
     m_heldItemIdForQueries = 0;
     m_pendingAudioRequests.clear();
+    m_expiringPotionEffects.clear();
     normalizeFormationCells();
     recordEverOwnedItemsFromCurrentState();
     rebuildMagicalBonusesFromBuffs();
@@ -3353,6 +3362,7 @@ bool Party::applyDamageToMember(
         const bool wasDead = member.conditions.test(static_cast<size_t>(CharacterCondition::Dead));
         const bool wasUnconscious = member.conditions.test(static_cast<size_t>(CharacterCondition::Unconscious));
         member.health -= damage;
+        pushSelfTextEvent({SelfTextEvent::Kind::Damage, memberIndex, damage});
         const bool preservationActive =
             m_characterBuffs[memberIndex][static_cast<size_t>(CharacterBuffId::Preservation)].active();
         updateMemberIncapacitatedCondition(member, preservationActive, m_gameMinutes);
@@ -3636,9 +3646,14 @@ void Party::setSpellMovementMultiplier(float multiplier)
     m_spellMovementMultiplier = std::max(multiplier, 1.0f);
 }
 
+void Party::setTalentMovementMultiplier(float multiplier)
+{
+    m_talentMovementMultiplier = std::max(multiplier, 1.0f);
+}
+
 float Party::movementMultiplier() const
 {
-    return m_rulesMovementMultiplier * m_spellMovementMultiplier;
+    return m_rulesMovementMultiplier * m_spellMovementMultiplier * m_talentMovementMultiplier;
 }
 
 const GameRules &Party::rules() const
@@ -4476,7 +4491,8 @@ bool Party::canMemberLearnSkill(size_t memberIndex, const std::string &skillName
         return false;
     }
 
-    return m_pClassSkillTable->getEffectiveCap(pMember->className, pMember->raceId, canonicalSkill)
+    return rules().skills.masteryCap(*pMember, canonicalSkill,
+               m_pClassSkillTable->getEffectiveCap(pMember->className, pMember->raceId, canonicalSkill))
         != SkillMastery::None;
 }
 
@@ -4635,7 +4651,7 @@ int Party::withdrawAllBankGold()
 
 bool Party::isFull() const
 {
-    return m_members.size() >= MaxMembers;
+    return m_members.size() >= (m_soloRun ? 1 : MaxMembers);
 }
 
 bool Party::recruitRosterMember(const RosterEntry &rosterEntry)
@@ -5481,13 +5497,33 @@ bool Party::setActiveCombatantIndex(size_t combatantIndex)
         return setActiveMemberIndex(combatantIndex);
     }
 
-    if (!isHirelingCombatant(combatantIndex))
+    if (combatantIndex >= actingCombatantCount())
     {
         return false;
     }
 
     m_activeHirelingIndex = combatantIndex - m_members.size();
     return true;
+}
+
+size_t Party::actingCombatantCount() const
+{
+    return m_soloRun ? m_members.size() : combatantCount();
+}
+
+void Party::setSoloRun(bool soloRun)
+{
+    m_soloRun = soloRun;
+
+    if (m_soloRun)
+    {
+        m_activeHirelingIndex.reset();
+    }
+}
+
+bool Party::soloRun() const
+{
+    return m_soloRun;
 }
 
 bool Party::canSelectCombatantInGameplay(size_t combatantIndex) const
@@ -7809,6 +7845,14 @@ void Party::advanceTimedStates(float deltaSeconds)
         const float previousRemainingSeconds = buff.remainingSeconds;
         buff.remainingSeconds = std::max(0.0f, buff.remainingSeconds - deltaSeconds);
 
+        if (buff.spellId == 0 && potionExpiryWarningStarts(previousRemainingSeconds, buff.remainingSeconds))
+        {
+            ExpiringPotionEffect expiring;
+            expiring.kind = ExpiringPotionEffect::Kind::PartyBuff;
+            expiring.partyBuff = PartyBuffId(&buff - m_partyBuffs.data());
+            m_expiringPotionEffects.push_back(expiring);
+        }
+
         if (previousRemainingSeconds > 0.0f && buff.remainingSeconds <= 0.0f)
         {
             buffsChanged = true;
@@ -7842,6 +7886,15 @@ void Party::advanceTimedStates(float deltaSeconds)
 
             const float previousRemainingSeconds = buff.remainingSeconds;
             buff.remainingSeconds = std::max(0.0f, buff.remainingSeconds - deltaSeconds);
+
+            if (buff.spellId == 0 && potionExpiryWarningStarts(previousRemainingSeconds, buff.remainingSeconds))
+            {
+                ExpiringPotionEffect expiring;
+                expiring.kind = ExpiringPotionEffect::Kind::CharacterBuff;
+                expiring.memberIndex = memberIndex;
+                expiring.characterBuff = CharacterBuffId(&buff - pBuffs->data());
+                m_expiringPotionEffects.push_back(expiring);
+            }
 
             if (isSpellId(buff.spellId, SpellId::Regeneration))
             {
@@ -7914,11 +7967,24 @@ void Party::advanceTimedStates(float deltaSeconds)
     {
         // Potions' immunities, skill levels and auras run out.
         const size_t potionEffectsBefore = member.rulesetState.potionEffects.size();
+        const size_t memberIndex = size_t(&member - m_members.data());
         std::erase_if(
             member.rulesetState.potionEffects,
-            [deltaSeconds](TimedPotionEffect &effect)
+            [this, deltaSeconds, memberIndex](TimedPotionEffect &effect)
             {
+                const float previousRemainingSeconds = effect.remainingSeconds;
                 effect.remainingSeconds -= deltaSeconds;
+
+                if (potionExpiryWarningStarts(previousRemainingSeconds, effect.remainingSeconds))
+                {
+                    ExpiringPotionEffect expiring;
+                    expiring.kind = ExpiringPotionEffect::Kind::RulesetEffect;
+                    expiring.memberIndex = memberIndex;
+                    expiring.rulesetEffect = effect.kind;
+                    expiring.rulesetEffectKey = effect.key;
+                    m_expiringPotionEffects.push_back(expiring);
+                }
+
                 return effect.remainingSeconds <= 0;
             });
         buffsChanged = buffsChanged || member.rulesetState.potionEffects.size() != potionEffectsBefore;
@@ -8085,7 +8151,10 @@ bool Party::applyRecoveryToMember(size_t memberIndex, float recoverySeconds)
         return false;
     }
 
-    pMember->recoverySecondsRemaining = std::max(pMember->recoverySecondsRemaining, std::max(0.0f, recoverySeconds));
+    const float applied = std::max(0.0f, recoverySeconds);
+    pMember->recoveryTotalSeconds = pMember->recoverySecondsRemaining > 0.0f
+        ? std::max(pMember->recoveryTotalSeconds, applied) : applied;
+    pMember->recoverySecondsRemaining = std::max(pMember->recoverySecondsRemaining, applied);
     return true;
 }
 
@@ -8102,7 +8171,7 @@ bool Party::switchToNextReadyMember()
     }
 
     // The members, then the hirelings (MM9's rotation runs over every slot); without hirelings, the members only.
-    const size_t count = combatantCount();
+    const size_t count = actingCombatantCount();
     const size_t currentIndex = activeCombatantIndex();
 
     for (size_t offset = 1; offset <= count; ++offset)
@@ -8380,6 +8449,10 @@ bool Party::clearMemberCondition(size_t memberIndex, CharacterCondition conditio
         return false;
     }
 
+    if (pMember->conditions.test(static_cast<size_t>(condition)))
+    {
+        pushSelfTextEvent({SelfTextEvent::Kind::ConditionCleared, memberIndex, 0, condition});
+    }
     pMember->conditions.reset(static_cast<size_t>(condition));
     pMember->conditionStartGameMinutes[static_cast<size_t>(condition)] = 0.0f;
     pMember->conditionExpireGameMinutes[static_cast<size_t>(condition)] = 0.0f;
@@ -8423,6 +8496,7 @@ bool Party::applyMemberCondition(
     {
         pMember->conditionStartGameMinutes[static_cast<size_t>(condition)] = std::max(0.0f, gameMinutes);
         recordConditionStatistics(memberIndex, condition);
+        pushSelfTextEvent({SelfTextEvent::Kind::ConditionGained, memberIndex, 0, condition});
 
         switch (condition)
         {
@@ -8457,6 +8531,17 @@ bool Party::hasMemberConditionImmunity(size_t memberIndex, CharacterCondition co
     return pMember != nullptr && hasConditionImmunity(*pMember, condition);
 }
 
+void Party::pushSelfTextEvent(const SelfTextEvent &event)
+{
+    // A party game never takes them: the oldest go so the queue stays small.
+    constexpr size_t SelfTextEventLimit = 16;
+    if (m_selfTextEvents.size() >= SelfTextEventLimit)
+    {
+        m_selfTextEvents.erase(m_selfTextEvents.begin());
+    }
+    m_selfTextEvents.push_back(event);
+}
+
 bool Party::healMember(size_t memberIndex, int amount)
 {
     Character *pMember = combatant(memberIndex);
@@ -8486,6 +8571,10 @@ bool Party::healMember(size_t memberIndex, int amount)
         *pMember,
         m_characterBuffs[memberIndex][static_cast<size_t>(CharacterBuffId::Preservation)].active(),
         m_gameMinutes);
+    if (pMember->health > previousHealth)
+    {
+        pushSelfTextEvent({SelfTextEvent::Kind::Heal, memberIndex, pMember->health - previousHealth});
+    }
     return pMember->health > previousHealth;
 }
 
@@ -8835,6 +8924,16 @@ const std::vector<Party::PendingAudioRequest> &Party::pendingAudioRequests() con
 void Party::clearPendingAudioRequests()
 {
     m_pendingAudioRequests.clear();
+}
+
+const std::vector<Party::ExpiringPotionEffect> &Party::expiringPotionEffects() const
+{
+    return m_expiringPotionEffects;
+}
+
+void Party::clearExpiringPotionEffects()
+{
+    m_expiringPotionEffects.clear();
 }
 
 void Party::queueSound(SoundId soundId)
@@ -9635,5 +9734,67 @@ void Party::recordEverOwnedItemsFromCurrentState()
     }
 
     m_statistics.pStatistics = pStatistics;
+}
+
+void prefillSoloActionBar(Character &member)
+{
+    std::vector<uint32_t> spells(member.knownSpellIds.begin(), member.knownSpellIds.end());
+    std::sort(spells.begin(), spells.end());
+    size_t next = 0;
+    const auto place = [&member, &next](const ActionBarSlot &slot)
+    {
+        while (next < ActionBarSlotCount / 2 && member.actionBar[next].kind != ActionBarSlotKind::Empty)
+        {
+            ++next;
+        }
+
+        if (next < ActionBarSlotCount / 2)
+        {
+            member.actionBar[next++] = slot;
+        }
+    };
+
+    if (std::none_of(member.actionBar.begin(), member.actionBar.end(),
+            [](const ActionBarSlot &slot) { return slot.kind == ActionBarSlotKind::Weapon; }))
+    {
+        place({ActionBarSlotKind::Weapon, 0, {}});
+    }
+
+    // A member with a bow gets the swap between the melee weapon and the bow on the next key.
+    if (member.equipment.bow != 0
+        && std::none_of(member.actionBar.begin(), member.actionBar.end(), [](const ActionBarSlot &slot)
+            { return slot.kind == ActionBarSlotKind::Weapon && slot.id == ActionBarWeaponSwapId; }))
+    {
+        place({ActionBarSlotKind::Weapon, ActionBarWeaponSwapId, {}});
+    }
+
+    for (const uint32_t spellId : spells)
+    {
+        const bool onBar = std::any_of(member.actionBar.begin(), member.actionBar.end(),
+            [spellId](const ActionBarSlot &slot) { return slot.kind == ActionBarSlotKind::Spell && slot.id == spellId; });
+
+        if (!onBar)
+        {
+            place({ActionBarSlotKind::Spell, spellId, {}});
+        }
+    }
+}
+
+void makeSoloRunParty(Party &party)
+{
+    Party::Snapshot snapshot = party.snapshot();
+
+    if (snapshot.members.size() > 1)
+    {
+        snapshot.members.resize(1);
+        snapshot.activeMemberIndex = 0;
+        snapshot.memberFormationCells.clear();
+        party.restoreSnapshot(snapshot);
+    }
+
+    if (Character *pMember = party.member(0))
+    {
+        prefillSoloActionBar(*pMember);
+    }
 }
 }

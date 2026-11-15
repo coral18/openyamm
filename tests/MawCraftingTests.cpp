@@ -593,7 +593,7 @@ TEST_CASE("the Workbench's Alchemy tab mixes the ingredients of closed bags (pla
     CHECK_NE(outcome.resultItem.objectDescriptionId, BottleItemId);
 }
 
-TEST_CASE("MAW magic shops and alchemists stock crafting materials in place of gems")
+TEST_CASE("MAW magic shops stock crafting materials in place of gems; alchemists do not")
 {
     REQUIRE(OpenYAMM::Tests::regressionGameDataLoaded());
     const OpenYAMM::Tests::RegressionGameData &gameData = OpenYAMM::Tests::regressionGameData();
@@ -617,31 +617,20 @@ TEST_CASE("MAW magic shops and alchemists stock crafting materials in place of g
     };
 
     // A poor party gets gems (tier 1-3 with nothing banked); every valuable gem slot is replaced.
-    for (const char *pType : {"Magic Shop", "Alchemist"})
+    for (const InventoryItem &item : stock("Magic Shop"))
+    {
+        CHECK_GE(item.objectDescriptionId, 1041u);
+        CHECK_LE(item.objectDescriptionId, 1043u);
+    }
+
+    // Weapon shops and alchemists keep their stock (alchemists sell no crafting items: user, 2026-11-13); gems sell
+    // at MAW's prices.
+    for (const char *pType : {"Weapon Shop", "Alchemist"})
     {
         for (const InventoryItem &item : stock(pType))
         {
-            CHECK_GE(item.objectDescriptionId, 1041u);
-            CHECK_LE(item.objectDescriptionId, 1043u);
+            CHECK_EQ(item.objectDescriptionId, 177u);
         }
-    }
-
-    // A weapon shop keeps its stock; gems sell at MAW's prices.
-    for (const InventoryItem &item : stock("Weapon Shop"))
-    {
-        CHECK_EQ(item.objectDescriptionId, 177u);
-    }
-
-    // The alchemist's guaranteed row of empty bottles is never swapped.
-    HouseEntry alchemist;
-    alchemist.type = "Alchemist";
-    std::vector<InventoryItem> bottles(40, ItemGenerator::makeInventoryItem(220, gameData.itemTable,
-        ItemGenerationMode::Shop));
-    pRules->itemRules().adjustShopStock(bottles, alchemist, party, gameData.itemTable, rng);
-
-    for (const InventoryItem &item : bottles)
-    {
-        CHECK_EQ(item.objectDescriptionId, 220u);
     }
 
     const ItemDefinition *pGem = gameData.itemTable.get(1043);
@@ -673,6 +662,89 @@ TEST_CASE("the Workbench outlook: item power, the gems' reach and what the Hourg
     CHECK_NE(lines[3].find(eye.summary), std::string::npos);
 
     CHECK(standardCraftingRules().craftOutlook(target, craftingContext).empty());
+}
+
+TEST_CASE("the inspect popup's craftable stats: grey lines for the Hourglass, the Eye, Enchant Item and the bonus power")
+{
+    const OpenYAMM::Tests::RegressionGameData &gameData = OpenYAMM::Tests::regressionGameData();
+    const std::unique_ptr<MawRules> pRules = mawRules();
+    pRules->setItemTable(&gameData.itemTable);
+    const MawCraftingRules &crafting = pRules->craftingRules();
+    const ItemRules &items = pRules->gameRules().items;
+    const ItemDefinition &armor = baseItem(*pRules, "Armor");
+    Character viewer;
+    viewer.level = 200;
+    constexpr uint32_t Grey = 0x8c8c8c;
+    const auto lines = [&](const InventoryItem &inspected, bool craftPreview)
+    {
+        return items.inspectLines(inspected, armor, &gameData.standardItemEnchantTable,
+            &gameData.specialItemEnchantTable, &viewer, craftPreview);
+    };
+    const auto greyLines = [](const std::vector<ItemInspectLine> &all)
+    {
+        std::vector<std::string> grey;
+
+        for (const ItemInspectLine &line : all)
+        {
+            if (line.singleColor() == Grey)
+            {
+                grey.push_back(line.text);
+            }
+        }
+
+        return grey;
+    };
+    const auto indexOf = [](const std::vector<ItemInspectLine> &all, const std::string &text)
+    {
+        return std::find_if(all.begin(), all.end(), [&text](const ItemInspectLine &line) { return line.text == text; })
+            - all.begin();
+    };
+    CHECK(items.previewsCrafting());
+    CHECK_FALSE(standardItemRules().previewsCrafting());
+
+    // One enchantment: the Hourglass's second above it, the Eye of Void's special, the bonus power and its cap.
+    InventoryItem target = item(armor, 1, 10);
+    target.rulesetFields.itemPower = 12;
+    const std::vector<ItemInspectLine> plain = lines(target, false);
+    const std::vector<ItemInspectLine> shown = lines(target, true);
+    CHECK(greyLines(plain).empty());
+    const std::vector<std::string> grey = greyLines(shown);
+    REQUIRE_EQ(grey.size(), 3u);
+    REQUIRE_EQ(shown.size(), plain.size() + 3);
+
+    // Each is the line the item would show after the step the Workbench makes (1062 the Hourglass, 1061 the Eye).
+    const CraftResult hourglass = crafting.craft(target, material(1062), context(200));
+    const CraftResult eye = crafting.craft(target, material(1061), context(200));
+    REQUIRE(hourglass.possible);
+    REQUIRE(eye.possible);
+    const std::vector<ItemInspectLine> afterHourglass = lines(hourglass.target, false);
+    const std::vector<ItemInspectLine> afterEye = lines(eye.target, false);
+    CHECK_LT(size_t(indexOf(afterHourglass, grey[0])), afterHourglass.size());
+    CHECK_LT(size_t(indexOf(afterEye, grey[1])), afterEye.size());
+    CHECK_EQ(grey[2], "Item Bonus Power: 12/40");
+    // The would-be enchantment stands above the item's own.
+    CHECK_EQ(indexOf(shown, grey[0]) + 1, indexOf(shown, plain[size_t(indexOf(afterHourglass, grey[0]))].text));
+
+    // Both enchantments and a special: only the bonus power is left to show.
+    InventoryItem full = eye.target;
+    full.rulesetFields.secondStandardEnchantId = 2;
+    full.rulesetFields.secondStandardEnchantPower = 10;
+    CHECK_EQ(greyLines(lines(full, true)), std::vector<std::string>{"Item Bonus Power: 12/40"});
+
+    // No enchantment: the stat Enchant Item would add, without a strength (the potion's), and the Eye's special.
+    InventoryItem blank = item(armor, 0, 0);
+    const std::vector<std::string> blankGrey = greyLines(lines(blank, true));
+    REQUIRE_EQ(blankGrey.size(), 3u);
+    CHECK_EQ(blankGrey[0].substr(blankGrey[0].size() - 3), " +X");
+    CHECK_EQ(blankGrey[2], "Item Bonus Power: 0/40");
+
+    // A viewer too low for the Crafting Cube to raise the item sees the power without a cap.
+    viewer.level = 20;
+    CHECK_EQ(greyLines(lines(full, true)), std::vector<std::string>{"Item Bonus Power: 12"});
+
+    // An unidentified item shows none of it.
+    target.identified = false;
+    CHECK(greyLines(lines(target, true)).empty());
 }
 
 TEST_CASE("a solo character tags bags past the eighth, each tag on its own (OY-344)")

@@ -36,7 +36,6 @@ namespace OpenYAMM::Game
 {
 namespace
 {
-constexpr uint32_t PotionBottleItemId = 220;
 constexpr int FirstSkillEnchant = 17;
 constexpr int LastSkillEnchant = 24;
 constexpr int ArmsmasterEnchant = 22;
@@ -51,6 +50,8 @@ constexpr double ShopLevelShare = 0.75;
 constexpr double SellShare = 0.4;
 constexpr int CelestialLevelCap = 600;
 constexpr int MadnessCelestialLevelCap = 1000;
+// The inspect popup's lines for what crafting would add.
+constexpr uint32_t CraftPreviewColor = 0x8c8c8c;
 
 // The specials MAW swaps between a melee and a caster flavour (zzMaw-Items.lua:1267-1295).
 constexpr uint16_t AscensionSpecial = 39;
@@ -114,6 +115,63 @@ bool isSkillEnchant(int type)
 bool isResistanceEnchant(int type)
 {
     return type >= FirstResistanceEnchant && type <= LastResistanceEnchant;
+}
+
+// A stat's colour in MAW's tooltips (itemStatName, zzMaw-Items.lua:1680-1706); skills are pale yellow.
+uint32_t mawStatColor(int type)
+{
+    switch (StandardItemEnchantKind(type))
+    {
+        case StandardItemEnchantKind::Might:
+            return 0xff0000;
+        case StandardItemEnchantKind::Intellect:
+            return 0xff8000;
+        case StandardItemEnchantKind::Personality:
+            return 0x007fff;
+        case StandardItemEnchantKind::Endurance:
+        case StandardItemEnchantKind::HitPoints:
+            return 0x00ff00;
+        case StandardItemEnchantKind::Accuracy:
+            return 0xffff00;
+        case StandardItemEnchantKind::Speed:
+            return 0x7f00ff;
+        case StandardItemEnchantKind::Luck:
+            return 0xffffff;
+        case StandardItemEnchantKind::SpellPoints:
+            return 0x0064ff;
+        case StandardItemEnchantKind::ArmorClass:
+            return 0xe6cc80;
+        case StandardItemEnchantKind::FireResistance:
+            return 0xff4646;
+        case StandardItemEnchantKind::AirResistance:
+            return 0xadd8e6;
+        case StandardItemEnchantKind::WaterResistance:
+            return 0x64b4ff;
+        case StandardItemEnchantKind::EarthResistance:
+            return 0x994c00;
+        case StandardItemEnchantKind::MindResistance:
+            return 0xc8c8ff;
+        case StandardItemEnchantKind::BodyResistance:
+            return 0xffc0cb;
+        default:
+            return 0xffff99;
+    }
+}
+
+// A stat line whose stat name is in the stat's colour, the rest in `color`.
+ItemInspectLine mawStatLine(std::string text, const std::string &stat, int type, uint32_t color)
+{
+    ItemInspectLine line {std::move(text), color};
+    const size_t at = stat.empty() ? std::string::npos : line.text.find(stat);
+
+    if (at != std::string::npos)
+    {
+        line.accentBegin = at;
+        line.accentLength = stat.size();
+        line.accentColor = mawStatColor(type);
+    }
+
+    return line;
 }
 
 int &resistanceField(CharacterResistanceSet &resistances, int type)
@@ -873,22 +931,107 @@ double mawEnchantSlotMultiplier(const ItemDefinition &itemDefinition, const MawB
     return 1;
 }
 
-std::string mawArtifactDescription(const std::string &notes)
+namespace
 {
-    std::string text = notes;
+struct TextSpan
+{
+    size_t begin = 0;
+    size_t end = 0;
+};
 
-    if (const size_t special = text.find("(Special"); special != std::string::npos)
+// A text's parenthetical notes: "(...)", or the full-width "（...）" a Chinese translation writes.
+std::vector<TextSpan> parentheticalNotes(const std::string &text)
+{
+    constexpr std::string_view WideOpen = "\xef\xbc\x88";
+    constexpr std::string_view WideClose = "\xef\xbc\x89";
+    std::vector<TextSpan> notes;
+    size_t position = 0;
+
+    while (position < text.size())
     {
-        const size_t close = text.find(')', special);
-        text.erase(special, close != std::string::npos ? close - special + 1 : std::string::npos);
+        const size_t open = std::min(text.find('(', position), text.find(WideOpen, position));
+
+        if (open == std::string::npos)
+        {
+            break;
+        }
+
+        const size_t narrowClose = text.find(')', open);
+        const size_t wideClose = text.find(WideClose, open);
+        size_t end = text.size();
+
+        if (narrowClose < wideClose)
+        {
+            end = narrowClose + 1;
+        }
+        else if (wideClose != std::string::npos)
+        {
+            end = wideClose + WideClose.size();
+        }
+
+        notes.push_back({open, end});
+        position = end;
     }
 
-    const size_t first = text.find_first_not_of(" \t\n");
+    return notes;
+}
 
-    if (first != std::string::npos && text[first] == '(')
+// Takes a note out of the text. The space before it goes too when the end or punctuation follows
+// ("... stehlen (Spezialkraft: Vampirismus)." becomes "... stehlen."); otherwise one space stays between its
+// neighbours.
+void eraseNote(std::string &text, TextSpan note)
+{
+    const bool closes =
+        note.end >= text.size() || std::string_view(".,;:!?").find(text[note.end]) != std::string::npos;
+
+    if (closes)
     {
-        const size_t close = text.find(')', first);
-        text.erase(0, close != std::string::npos ? close + 1 : text.size());
+        while (note.begin > 0 && text[note.begin - 1] == ' ')
+        {
+            --note.begin;
+        }
+    }
+    else if (note.begin > 0 && text[note.begin - 1] == ' ')
+    {
+        while (note.end < text.size() && text[note.end] == ' ')
+        {
+            ++note.end;
+        }
+    }
+
+    text.erase(note.begin, note.end - note.begin);
+}
+}
+
+std::string mawArtifactDescription(const std::string &notes, const std::string &shown)
+{
+    // Which of the English notes go: the "(Special Powers: ...)" one and a "(...)" that opens the text.
+    const std::vector<TextSpan> englishNotes = parentheticalNotes(notes);
+    const size_t first = notes.find_first_not_of(" \t\n");
+    std::vector<size_t> removed;
+
+    for (size_t index = 0; index < englishNotes.size(); ++index)
+    {
+        const bool special = notes.compare(englishNotes[index].begin, 8, "(Special") == 0;
+        const bool opening = index == 0 && englishNotes[index].begin == first;
+
+        if (special || opening)
+        {
+            removed.push_back(index);
+        }
+    }
+
+    // The same notes of the shown text, by their order: a translation words them its own way and may put them
+    // elsewhere ("(Wampiryczny) Jeden z ..."), but keeps their number. One that does not is shown whole.
+    std::string text = shown;
+    const std::vector<TextSpan> shownNotes = parentheticalNotes(text);
+
+    if (shownNotes.size() == englishNotes.size())
+    {
+        for (auto index = removed.rbegin(); index != removed.rend(); ++index)
+        {
+            eraseNote(text, shownNotes[*index]);
+        }
     }
 
     const size_t begin = text.find_first_not_of(" \t\n");
@@ -1670,6 +1813,10 @@ void MawItemRules::applyEquippedEnchantEffects(
         return;
     }
 
+    // A dragon-race wearer's items count three times over (zzMaw-Items.lua:3002-3014), in a solo run too (the user
+    // reverted the solo run's 2.5 times on 2026-11-15).
+    constexpr double extraShares = 2.0;
+
     // Its Dodging and Unarmed additions too, the dragon's Scales and Fangs, still within twice the trained skill
     // (IT:3003-3015).
     for (const auto &[pName, old] : {std::pair{"Dodging", dodgingBefore}, std::pair{"Unarmed", unarmedBefore}})
@@ -1679,16 +1826,15 @@ void MawItemRules::applyEquippedEnchantEffects(
 
         if (added > 0 && room > 0)
         {
-            bonuses.itemSkillBonuses[pName] += std::min(2 * added, room);
+            bonuses.itemSkillBonuses[pName] += std::min(int(std::lround(extraShares * added)), room);
         }
     }
 
-    // A dragon-race wearer's items give their stats, hit points, armour and resistances three times over
-    // (zzMaw-Items.lua:3002-3014).
+    // The items' stats, hit points, armour and resistances.
     CharacterStatBonuses &after = bonuses.magicalBonuses;
-    const auto triple = [](int &value, int old)
+    const auto triple = [extraShares](int &value, int old)
     {
-        value += 2 * (value - old);
+        value += int(std::lround(extraShares * (value - old)));
     };
 
     for (int CharacterStatBonuses::*pField : {&CharacterStatBonuses::might, &CharacterStatBonuses::intellect,
@@ -2090,15 +2236,22 @@ std::string MawItemRules::displayName(
 }
 
 std::string MawItemRules::enchantDescription(
-    const InventoryItem &storedItem,
+    const InventoryItem &,
+    const ItemDefinition &,
+    const StandardItemEnchantTable *,
+    const SpecialItemEnchantTable *,
+    const Character *) const
+{
+    return {};
+}
+
+std::string MawItemRules::specialText(
+    const InventoryItem &item,
     const ItemDefinition &itemDefinition,
     const StandardItemEnchantTable *pStandardTable,
     const SpecialItemEnchantTable *pSpecialTable,
     const Character *pViewer) const
 {
-    const InventoryItem item =
-        pViewer != nullptr ? celestialAtLevel(storedItem, itemDefinition, int(pViewer->level)) : storedItem;
-
     if (m_rules.itemData().baseItem(itemDefinition.itemId) == nullptr)
     {
         return ItemRules::enchantDescription(item, itemDefinition, pStandardTable, pSpecialTable, pViewer);
@@ -2183,7 +2336,7 @@ std::optional<uint32_t> MawItemRules::nameColor(const InventoryItem &item) const
     }
 }
 
-std::string MawItemRules::enchantLine(
+ItemInspectLine MawItemRules::enchantLine(
     int type,
     int power,
     bool first,
@@ -2192,10 +2345,11 @@ std::string MawItemRules::enchantLine(
     const Character *pViewer) const
 {
     const MawBaseItem *pBase = m_rules.itemData().baseItem(itemDefinition.itemId);
+    const std::string stat = mawEnchantStatName(pStandardTable, type);
 
     if (pBase == nullptr)
     {
-        return Engine::tr("{stat} +{amount}", {{"stat", mawEnchantStatName(pStandardTable, type)}, {"amount", power}});
+        return mawStatLine(Engine::tr("{stat} +{amount}", {{"stat", stat}, {"amount", power}}), stat, type, 0xffffff);
     }
 
     const bool ring = itemDefinition.equipStat == "Ring";
@@ -2210,12 +2364,12 @@ std::string MawItemRules::enchantLine(
         const double percent = mawRound((1 - 1 / (points / 100 + 1)) * 1000) / 10;
         std::ostringstream text;
         text << percent;
-        return Engine::tr(
-            "{stat} +{percent}%", {{"stat", mawEnchantStatName(pStandardTable, type)}, {"percent", text.str()}});
+        return mawStatLine(
+            Engine::tr("{stat} +{percent}%", {{"stat", stat}, {"percent", text.str()}}), stat, type, 0xffffff);
     }
 
     const int shown = readEnchantment(type, power, first, itemDefinition, *pBase, ring);
-    return Engine::tr("{stat} +{amount}", {{"stat", mawEnchantStatName(pStandardTable, type)}, {"amount", shown}});
+    return mawStatLine(Engine::tr("{stat} +{amount}", {{"stat", stat}, {"amount", shown}}), stat, type, 0xffffff);
 }
 
 std::vector<ItemInspectLine> MawItemRules::inspectLines(
@@ -2223,7 +2377,8 @@ std::vector<ItemInspectLine> MawItemRules::inspectLines(
     const ItemDefinition &itemDefinition,
     const StandardItemEnchantTable *pStandardTable,
     const SpecialItemEnchantTable *pSpecialTable,
-    const Character *pViewer) const
+    const Character *pViewer,
+    bool craftPreview) const
 {
     // A Celestial item reads at the viewer's level (Tooltip.lua:205).
     const InventoryItem item =
@@ -2232,6 +2387,8 @@ std::vector<ItemInspectLine> MawItemRules::inspectLines(
     const MawItemData &data = m_rules.itemData();
     const MawBaseItem *pBase = data.baseItem(itemDefinition.itemId);
     const ItemRulesetFields &fields = item.rulesetFields;
+    // The special has no "Special:" label and sits under the stats (Discord, 2026-11-14).
+    const std::string special = specialText(item, itemDefinition, pStandardTable, pSpecialTable, pViewer);
 
     // A dimension map: its level, what its affixes add to loot and density, then the affixes, the locked ones grey.
     if (const MapStatsEntry *pMap = dimensionMapTarget(item))
@@ -2277,21 +2434,28 @@ std::vector<ItemInspectLine> MawItemRules::inspectLines(
     {
         const MawArtifactBonuses bonuses = artifactBonuses(*pArtifact, itemDefinition);
 
+        if (!special.empty())
+        {
+            lines.push_back({special, 0xffffff});
+        }
+
+        // Stat names in their colours, a loss red (tooltipArtifactScaling).
         for (const std::vector<std::pair<int, int>> *pStats : {&bonuses.stats, &bonuses.flat})
         {
             for (const auto &[type, amount] : *pStats)
             {
+                const std::string stat = mawEnchantStatName(pStandardTable, type);
+
                 // MAW's immunity value reads as such (Tooltip.lua tooltipArtifactScaling).
                 if (amount >= 65000)
                 {
-                    const std::string stat = mawEnchantStatName(pStandardTable, type);
-                    lines.push_back({Engine::tr("{stat}: Immune", {{"stat", stat}}), 0x96c8ffu});
+                    lines.push_back(mawStatLine(Engine::tr("{stat}: Immune", {{"stat", stat}}), stat, type, 0xffffff));
                 }
                 else if (amount != 0)
                 {
-                    lines.push_back({Engine::tr(amount > 0 ? "{stat} +{amount}" : "{stat} {amount}",
-                                         {{"stat", mawEnchantStatName(pStandardTable, type)}, {"amount", amount}}),
-                        amount > 0 ? 0x96c8ffu : 0xff6464u});
+                    lines.push_back(mawStatLine(Engine::tr(amount > 0 ? "{stat} +{amount}" : "{stat} {amount}",
+                                                    {{"stat", stat}, {"amount", amount}}),
+                        stat, type, amount > 0 ? 0xffffffu : 0xff6464u));
                 }
             }
         }
@@ -2301,9 +2465,9 @@ std::vector<ItemInspectLine> MawItemRules::inspectLines(
             if (amount != 0)
             {
                 const std::string name = Engine::localize(displaySkillName(skill), "skill");
-                lines.push_back({Engine::tr(amount > 0 ? "{stat} +{amount}" : "{stat} {amount}",
-                                     {{"stat", name}, {"amount", amount}}),
-                    amount > 0 ? 0x96c8ffu : 0xff6464u});
+                lines.push_back(mawStatLine(Engine::tr(amount > 0 ? "{stat} +{amount}" : "{stat} {amount}",
+                                                {{"stat", name}, {"amount", amount}}),
+                    name, FirstSkillEnchant, amount > 0 ? 0xffffffu : 0xff6464u));
             }
         }
 
@@ -2387,8 +2551,44 @@ std::vector<ItemInspectLine> MawItemRules::inspectLines(
 
     if (pBase == nullptr)
     {
+        if (!special.empty())
+        {
+            lines.push_back({special, 0xffffff});
+        }
+
         return lines;
     }
+
+    // As MAW's tooltip: the quality bonus, the base enchantments with their stats in colour, the special, the
+    // legendary affix (Discord, 2026-11-14).
+    if (fields.qualityPercent > 0)
+    {
+        lines.push_back({Engine::tr("Quality bonus: +{percent}%", {{"percent", fields.qualityPercent}}), 0xffbe5a});
+    }
+
+    // What crafting would add next, in grey where the real line would stand (MAW's Alt view, Tooltip.lua:295-350,
+    // 434-474): the Hourglass's second enchantment above the first, Enchant Item's stat on an item without any, the
+    // Eye of Void's special, and below the item level the bonus power against the Crafting Cube's cap for the viewer
+    // (MAW shows its hard cap of 255).
+    // The same steps the Workbench previews, from the item's own craft stream.
+    MawCraftingRules::Forecast forecast;
+
+    if (craftPreview && item.identified)
+    {
+        CraftingContext craftingContext;
+        craftingContext.pItemTable = m_rules.itemTable();
+        craftingContext.pStandardEnchantTable = pStandardTable;
+        craftingContext.pSpecialEnchantTable = pSpecialTable;
+        craftingContext.ownerLevel = pViewer != nullptr ? int(pViewer->level) : 1;
+        forecast = m_rules.craftingRules().forecast(storedItem, craftingContext);
+    }
+
+    const auto addPreview = [&lines](ItemInspectLine line)
+    {
+        line.color = CraftPreviewColor;
+        line.accentLength = 0;
+        lines.push_back(std::move(line));
+    };
 
     if (item.identified)
     {
@@ -2396,14 +2596,39 @@ std::vector<ItemInspectLine> MawItemRules::inspectLines(
         {
             if (type != 0)
             {
-                lines.push_back(
-                    {enchantLine(type, power, first, itemDefinition, pStandardTable, pViewer), 0x96c8ff});
+                lines.push_back(enchantLine(type, power, first, itemDefinition, pStandardTable, pViewer));
             }
         };
 
+        if (forecast.secondEnchant)
+        {
+            const ItemRulesetFields &crafted = forecast.secondEnchant->rulesetFields;
+            addPreview(enchantLine(crafted.secondStandardEnchantId, crafted.secondStandardEnchantPower, false,
+                itemDefinition, pStandardTable, pViewer));
+        }
+
+        if (forecast.firstEnchant)
+        {
+            // The stat alone: its strength is the potion's.
+            addPreview({Engine::tr("{stat} +X",
+                {{"stat", mawEnchantStatName(pStandardTable, forecast.firstEnchant->standardEnchantId)}})});
+        }
+
         addEnchant(fields.secondStandardEnchantId, fields.secondStandardEnchantPower, false);
         addEnchant(item.standardEnchantId, item.standardEnchantPower, true);
+    }
 
+    if (!special.empty())
+    {
+        lines.push_back({special, 0xffffff});
+    }
+    else if (forecast.special)
+    {
+        addPreview({specialText(*forecast.special, itemDefinition, pStandardTable, pSpecialTable, pViewer)});
+    }
+
+    if (item.identified)
+    {
         if (fields.legendaryAffixId != 0)
         {
             lines.push_back({Engine::localize(data.legendaryAffixText(fields.legendaryAffixId)), 0xffff1e});
@@ -2442,11 +2667,6 @@ std::vector<ItemInspectLine> MawItemRules::inspectLines(
         lines.push_back({Engine::tr("Attack speed: {speed}", {{"speed", formatSpeed(recovery)}}), 0xffffff});
     }
 
-    if (fields.qualityPercent > 0)
-    {
-        lines.push_back({Engine::tr("Quality bonus: +{percent}%", {{"percent", fields.qualityPercent}}), 0xffbe5a});
-    }
-
     // The held auras on a weapon in the viewer's hands (tooltipFireAura).
     if (isWeapon(itemDefinition) && pViewer != nullptr)
     {
@@ -2468,6 +2688,17 @@ std::vector<ItemInspectLine> MawItemRules::inspectLines(
     }
 
     lines.push_back({Engine::tr("Item level: {level}", {{"level", fields.itemPower * 5}}), 0xc8c8c8});
+
+    if (craftPreview && item.identified)
+    {
+        // The cap only while the Crafting Cube can still raise the power for this viewer ("7/1" would read as an
+        // error on an item found above the viewer's level).
+        addPreview({forecast.powerCap > fields.itemPower
+            ? Engine::tr("Item Bonus Power: {power}/{cap}",
+                  {{"power", int64_t(fields.itemPower)}, {"cap", int64_t(forecast.powerCap)}})
+            : Engine::tr("Item Bonus Power: {power}", {{"power", int64_t(fields.itemPower)}})});
+    }
+
     const int requiredLevel = levelRequirement(itemDefinition, fields);
 
     if (requiredLevel > 1)
@@ -2478,6 +2709,11 @@ std::vector<ItemInspectLine> MawItemRules::inspectLines(
     }
 
     return lines;
+}
+
+bool MawItemRules::previewsCrafting() const
+{
+    return true;
 }
 
 std::optional<int> MawItemRules::merchantValue(const Character &member) const
@@ -2496,8 +2732,9 @@ std::optional<int> MawItemRules::merchantValue(const Character &member) const
 
 namespace
 {
-// MM6-MM8's magic shops (wands, jewellery) and alchemists sell MAW's crafting materials; MM9's "Magic" vendors sell
-// spellbooks only, and its apothecaries (rings, amulets, potions, scrolls) take the alchemist's and magic shop's place.
+// MM6-MM8's magic shops (wands, jewellery) sell MAW's crafting materials; alchemists sell potions and reagents only
+// (user, 2026-11-13). MM9's "Magic" vendors sell spellbooks only, and its apothecaries (rings, amulets, potions,
+// scrolls) take the magic shop's place.
 bool magicShop(const HouseEntry &house)
 {
     return house.type == "Magic Shop" && house.vendorStockProfile == VendorStockProfile::None;
@@ -2505,7 +2742,91 @@ bool magicShop(const HouseEntry &house)
 
 bool sellsCraftingMaterials(const HouseEntry &house)
 {
-    return magicShop(house) || house.type == "Alchemist" || house.type == "Apothecary Shop";
+    return magicShop(house) || house.type == "Apothecary Shop";
+}
+
+// The same goods apart from where they lie and how many there are.
+bool sameStackKind(const InventoryItem &left, const InventoryItem &right)
+{
+    InventoryItem a = left;
+    InventoryItem b = right;
+    a.gridX = b.gridX = a.gridY = b.gridY = 0;
+    a.quantity = b.quantity = 1;
+    return a == b;
+}
+
+// How many of an item an alchemist stocks in one stack: reagents 10-20, the basic potions (red, blue, yellow) 8-12,
+// the potions mixed from two of them (orange, purple, green) 5-8, the higher ones (layered, white) 1-3; nothing for
+// the permanent potions (black, and the white Essences and Potion of Doom, 272-279) and empty bottles, which stay single
+// (user, 2026-11-14).
+std::optional<std::pair<uint32_t, uint32_t>> alchemistStackSize(const ItemDefinition &definition)
+{
+    constexpr uint32_t FirstEssenceItemId = 272;
+    constexpr uint32_t PotionOfDoomItemId = 279;
+
+    if (definition.equipStat == "Reagent" || definition.equipStat == "Herb")
+    {
+        return std::pair<uint32_t, uint32_t>{10, 20};
+    }
+
+    const std::string &colour = definition.unidentifiedName;
+    const bool permanent = colour == "Black Potion"
+        || (definition.itemId >= FirstEssenceItemId && definition.itemId <= PotionOfDoomItemId);
+
+    if (definition.equipStat != "Bottle" || colour == "Potion Bottle" || permanent)
+    {
+        return std::nullopt;
+    }
+
+    if (colour == "Red Potion" || colour == "Blue Potion" || colour == "Yellow Potion")
+    {
+        return std::pair<uint32_t, uint32_t>{8, 12};
+    }
+
+    if (colour == "Orange Potion" || colour == "Purple Potion" || colour == "Green Potion")
+    {
+        return std::pair<uint32_t, uint32_t>{5, 8};
+    }
+
+    return std::pair<uint32_t, uint32_t>{1, 3};
+}
+
+// Alchemists (MM9: apothecaries) stock reagents and potions by the stack: one stack per kind, a repeated kind's slot
+// left empty; a stack sells one item at a time.
+void stackShopConsumables(
+    std::vector<InventoryItem> &stock,
+    const HouseEntry &house,
+    const ItemTable &itemTable,
+    std::mt19937 &rng)
+{
+    if (house.type != "Alchemist" && house.vendorStockProfile != VendorStockProfile::Mm9Apothecary)
+    {
+        return;
+    }
+
+    for (size_t index = 0; index < stock.size(); ++index)
+    {
+        InventoryItem &item = stock[index];
+        const ItemDefinition *pDefinition = itemTable.get(item.objectDescriptionId);
+        const std::optional<std::pair<uint32_t, uint32_t>> size =
+            pDefinition != nullptr ? alchemistStackSize(*pDefinition) : std::nullopt;
+
+        if (!size)
+        {
+            continue;
+        }
+
+        const auto earlier = std::find_if(stock.begin(), stock.begin() + index,
+            [&item](const InventoryItem &other) { return sameStackKind(other, item); });
+
+        if (earlier != stock.begin() + index)
+        {
+            item = {};
+            continue;
+        }
+
+        item.quantity = std::uniform_int_distribution<uint32_t>(size->first, size->second)(rng);
+    }
 }
 }
 
@@ -2538,6 +2859,8 @@ void MawItemRules::adjustShopStock(
     const ItemTable &itemTable,
     std::mt19937 &rng) const
 {
+    // Stacked first: a stack the crafting materials below replace becomes a single item.
+    stackShopConsumables(stock, house, itemTable, rng);
     const MawCraftingData &crafting = m_rules.craftingData();
 
     if (!sellsCraftingMaterials(house) || crafting.gemTiers() <= 0
@@ -2573,9 +2896,7 @@ void MawItemRules::adjustShopStock(
     {
         const ItemDefinition *pDefinition = itemTable.get(item.objectDescriptionId);
 
-        // The alchemist's row of empty bottles is the guaranteed native stock; only the random slots are swapped.
-        if (pDefinition == nullptr || ItemEnchantRuntime::categoryForItem(*pDefinition) != ItemEnchantCategory::None
-            || (house.type == "Alchemist" && item.objectDescriptionId == PotionBottleItemId))
+        if (pDefinition == nullptr || ItemEnchantRuntime::categoryForItem(*pDefinition) != ItemEnchantCategory::None)
         {
             continue;
         }
@@ -2855,70 +3176,6 @@ float MawItemRules::shopServiceMultiplier(const ItemDefinition &itemDefinition, 
     return identify ? float(difficulty * difficulty) : 5.0f;
 }
 
-std::optional<size_t> MawItemRules::alchemist(const Party &party) const
-{
-    const int32_t member = m_rules.state().alchemistMember;
-    return member >= 0 && size_t(member) < party.members().size() ? std::optional<size_t>(size_t(member))
-                                                                   : std::nullopt;
-}
-
-std::optional<std::string> MawItemRules::pickAlchemist(Party &party, size_t memberIndex) const
-{
-    const Character *pMember = party.member(memberIndex);
-
-    if (pMember == nullptr)
-    {
-        return std::nullopt;
-    }
-
-    int32_t &alchemistMember = m_rules.state().alchemistMember;
-
-    if (alchemist(party) == memberIndex)
-    {
-        alchemistMember = -1;
-        return Engine::tr("No alchemy preference when sorting");
-    }
-
-    alchemistMember = int32_t(memberIndex);
-    return Engine::tr("{name} will now take alchemy items when sorting", {{"name", pMember->name}});
-}
-
-std::optional<int> MawItemRules::alchemySortRank(const InventoryItem &item) const
-{
-    // MAW's alchemyItemsOrder: reagents of each potion tier beside their MM7 copies, then the crafting items.
-    static constexpr std::array<uint16_t, 73> AlchemyItemsOrder = {
-        200, 1002, 1764, 201, 1003, 202, 1004, 203, 1005, 204, 1006,
-        205, 1007, 1763, 206, 1008, 207, 1009, 208, 1010, 209, 1011,
-        210, 1012, 1762, 211, 1013, 212, 1014, 213, 1015, 214, 1016,
-        215, 1017, 216, 1018, 217, 1019, 218, 1020, 219, 1021,
-        1069, 1068, 1064, 1067, 1065, 1063, 1070, 1066, 1061, 1062, 1060, 1059, 1058, 1057, 1056, 1055, 1054, 1053,
-        1052, 1051, 1050, 1049, 1048, 1047, 1046, 1045, 1044, 1043, 1042, 1041};
-    const uint32_t itemId = item.objectDescriptionId;
-
-    // The potions lead, the highest id first.
-    if (itemId >= 220 && itemId < 300)
-    {
-        return int(299 - itemId);
-    }
-
-    const auto found = std::find(AlchemyItemsOrder.begin(), AlchemyItemsOrder.end(), itemId);
-
-    if (found == AlchemyItemsOrder.end())
-    {
-        return std::nullopt;
-    }
-
-    // An empty stateful material (1051-1060 with nothing stored) goes ten places later.
-    int rank = 100 + int(found - AlchemyItemsOrder.begin());
-
-    if (itemId > 1050 && itemId <= 1060 && item.rulesetFields.craftState == 0)
-    {
-        rank += 10;
-    }
-
-    return rank;
-}
-
 bool MawItemRules::openSealedItem(InventoryItem &item, const Character &reader) const
 {
     const int school = sealedBookSchool(item);
@@ -3041,7 +3298,8 @@ std::optional<std::string> MawItemRules::itemDescription(const InventoryItem &it
     {
         if (const ItemDefinition *pDefinition = pItemTable->get(item.objectDescriptionId))
         {
-            return mawArtifactDescription(pDefinition->notes);
+            // Looked up whole, then cut: the translations are of the whole text.
+            return mawArtifactDescription(pDefinition->notes, Engine::localize(pDefinition->notes));
         }
     }
 

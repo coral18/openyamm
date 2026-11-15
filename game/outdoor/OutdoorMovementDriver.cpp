@@ -21,6 +21,8 @@ constexpr float EventHoldSeconds = 0.75f;
 constexpr float DamageTickSeconds = 1.0f;
 // The original's flight ceiling, for maps whose scene sets none.
 constexpr float DefaultFlightCeiling = 4000.0f;
+// The party's outdoor gravity (OutdoorMovementController's GravityPerSecond): it times a special jump's push in flight.
+constexpr float PartyGravityPerSecond = 1280.0f;
 
 const char *supportKindName(OutdoorSupportKind supportKind)
 {
@@ -246,7 +248,8 @@ void OutdoorMovementDriver::update(
     const float cosPitch = std::cos(movementPitchRadians);
     const float sinPitch = std::sin(movementPitchRadians);
     const float inputSpeedScale = std::clamp(input.movementSpeedScale, 0.0f, 1.0f);
-    const float speedMultiplier = std::max(m_speedMultiplier, 0.0f) * inputSpeedScale;
+    const float speedMultiplier =
+        std::max(m_speedMultiplier, 0.0f) * inputSpeedScale * std::max(input.partySpeedMultiplier, 0.0f);
     const bx::Vec3 forward = {cosYaw, sinYaw, 0.0f};
     const bx::Vec3 forwardFlying = {cosYaw * cosPitch, sinYaw * cosPitch, sinPitch};
     const bx::Vec3 right = {sinYaw, -cosYaw, 0.0f};
@@ -378,6 +381,7 @@ void OutdoorMovementDriver::update(
             m_state.verticalVelocity = std::max(m_state.verticalVelocity, m_pendingImpulseVelocityZ);
             m_jumpCarryVelocityX = m_pendingImpulseVelocityX;
             m_jumpCarryVelocityY = m_pendingImpulseVelocityY;
+            m_jumpCarryFlightSeconds = 2.0f * std::max(0.0f, m_pendingImpulseVelocityZ) / PartyGravityPerSecond;
             m_pendingImpulseVelocityX = 0.0f;
             m_pendingImpulseVelocityY = 0.0f;
             m_pendingImpulseVelocityZ = 0.0f;
@@ -444,7 +448,15 @@ void OutdoorMovementDriver::update(
             m_state.verticalVelocity = 0.0f;
         }
 
-        if (!m_state.airborne && m_state.verticalVelocity <= 0.0f)
+        // A flying party never lands, so a special jump's push (a MAW Puller's hit) lasts as long as the same jump
+        // would keep a walking party in the air.
+        if (m_partyMovementState.flying)
+        {
+            m_jumpCarryFlightSeconds -= OutdoorMovementStepSeconds;
+        }
+
+        if ((!m_state.airborne && m_state.verticalVelocity <= 0.0f)
+            || (m_partyMovementState.flying && m_jumpCarryFlightSeconds <= 0.0f))
         {
             m_jumpCarryVelocityX = 0.0f;
             m_jumpCarryVelocityY = 0.0f;

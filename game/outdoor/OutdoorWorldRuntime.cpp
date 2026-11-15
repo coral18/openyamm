@@ -2947,6 +2947,7 @@ OutdoorWorldRuntime::MapActorState buildMapActorState(
     const bool authoredMm9CivilianHostility = state.mm9Civilian && actor.hostilityType != 0;
     const bool templateHostility = !state.mm9Civilian && monsterTable.isHostileToParty(relationMonsterId);
     state.hostileToParty = authoredAggressor || authoredMm9CivilianHostility || templateHostility;
+    state.aggressor = authoredAggressor;
     state.hostilityType = actor.hostilityType;
 
     if (state.hostilityType == 0 && state.hostileToParty && pStats != nullptr)
@@ -4111,7 +4112,12 @@ OutdoorTargetFacts resolveOutdoorTargetFacts(
     const GameplayActorTargetPolicyState actorPolicyState = buildGameplayActorTargetPolicyState(actor);
     const float actorTargetZ = actor.preciseZ + std::max(24.0f, static_cast<float>(actor.height) * 0.7f);
     const float partyTargetZ = partyZ + PartyTargetHeightOffset;
-    const float worldSenseRange = pGameplayActorService->partyEngagementRange(actorPolicyState);
+    // Until it has noticed the party, a monster senses it only within the range of its relation to the party.
+    const float worldSenseRange = mm9Sight
+        ? pGameplayActorService->partyEngagementRange(actorPolicyState)
+        : pGameplayActorService->partyNoticeRange(actorPolicyState,
+            actor.hasDetectedParty || actor.angeredByParty || actor.provokedByParty || actor.aggressor,
+            pEventRuntimeState != nullptr ? &pEventRuntimeState->monsterRelationOverrides : nullptr);
     const float partySenseRange = mm9Sight && worldSenseRange > 0.0f
         ? mm9SenseRange(worldSenseRange, mm9Sight->range, GameplayActorService::MaximumPartyEngagementRange)
         : worldSenseRange;
@@ -7253,6 +7259,7 @@ void OutdoorWorldRuntime::refreshConditionalMonsterRelations()
 
         const bool hostile = m_pMonsterTable->isHostileToParty(relationMonsterId);
         actor.angeredByParty = false;
+        actor.aggressor = actor.aggressor && hostile;
         actor.hostileToParty = hostile;
         actor.hasDetectedParty = actor.hasDetectedParty && hostile;
     }
@@ -7401,8 +7408,10 @@ bool OutdoorWorldRuntime::steerOutdoorHomingProjectile(
 
         if (actor.actorId == homing.targetActorId && !actor.isDead && actor.currentHp > 0)
         {
-            target = GameplayWorldPoint{actor.preciseX, actor.preciseY,
-                actor.preciseZ + std::max(24.0f, static_cast<float>(actor.height) * 0.7f)};
+            const float aimHeight = homing.targetAimHeight > 0.0f
+                ? homing.targetAimHeight
+                : std::max(24.0f, static_cast<float>(actor.height) * 0.7f);
+            target = GameplayWorldPoint{actor.preciseX, actor.preciseY, actor.preciseZ + aimHeight};
         }
     }
 
@@ -8833,6 +8842,11 @@ bool OutdoorWorldRuntime::allowsTownPortal() const
 bool OutdoorWorldRuntime::allowsRest() const
 {
     return m_map.runtimeRestrictions.allowRest;
+}
+
+bool OutdoorWorldRuntime::allowsSpellcasting() const
+{
+    return m_map.runtimeRestrictions.allowSpellcasting;
 }
 
 const std::vector<uint8_t> *OutdoorWorldRuntime::journalMapFullyRevealedCells() const
@@ -15757,6 +15771,12 @@ void OutdoorWorldRuntime::applyProjectileFrameResult(
 
         if (impact.queuePartyProjectileActorEvent)
         {
+            // A missile whose hit roll failed floats "Miss" over the monster.
+            if (!impact.hit)
+            {
+                recordPartyAttackWorldResult(impact.actorIndex, false, true, true);
+            }
+
             if (m_pGameplayCombatController != nullptr)
             {
                 m_pGameplayCombatController->recordPartyProjectileActorImpact(
@@ -16270,6 +16290,7 @@ void OutdoorWorldRuntime::applyEventRuntimeState(bool syncPersistentHostilityMas
             }
 
             actor.angeredByParty = false;
+            actor.aggressor = actor.aggressor && hostileToParty;
             actor.hostileToParty = hostileToParty;
             actor.hasDetectedParty = hostileToParty;
             if (hostileToParty)
@@ -17813,6 +17834,7 @@ std::optional<GameplayPartyAttackActorFacts> OutdoorWorldRuntime::partyAttackAct
         return std::nullopt;
     }
 
+    const std::optional<float> aimHeight = partyShotAimHeight(actorIndex);
     return GameplayPartyAttackActorFacts{
         .actorIndex = actorIndex,
         .monsterId = pActor->monsterId,
@@ -17825,7 +17847,7 @@ std::optional<GameplayPartyAttackActorFacts> OutdoorWorldRuntime::partyAttackAct
             },
         .radius = pActor->radius,
         .height = pActor->height,
-        .targetHeight = mapActorTargetHeight(*pActor),
+        .targetHeight = aimHeight.value_or(mapActorTargetHeight(*pActor)),
         .currentHp = pActor->currentHp,
         .maxHp = pActor->maxHp,
         .effectiveArmorClass = effectiveMapActorArmorClass(actorIndex),
@@ -17835,17 +17857,22 @@ std::optional<GameplayPartyAttackActorFacts> OutdoorWorldRuntime::partyAttackAct
         .isInvisible = pActor->isInvisible,
         .hostileToParty = pActor->hostileToParty,
         .visibleForFallback = visibleForFallback,
-        .lineOfSightToParty = partyAttackActorHasLineOfSight(actorIndex),
+        .lineOfSightToParty = aimHeight.has_value(),
     };
 }
 
 bool OutdoorWorldRuntime::partyAttackActorHasLineOfSight(size_t actorIndex) const
 {
+    return partyShotAimHeight(actorIndex).has_value();
+}
+
+std::optional<float> OutdoorWorldRuntime::partyShotAimHeight(size_t actorIndex) const
+{
     const MapActorState *pActor = mapActorState(actorIndex);
 
     if (pActor == nullptr || m_pPartyRuntime == nullptr || pActor->isDead || pActor->isInvisible)
     {
-        return false;
+        return std::nullopt;
     }
 
     const OutdoorMoveState &moveState = m_pPartyRuntime->movementState();
@@ -17854,13 +17881,15 @@ bool OutdoorWorldRuntime::partyAttackActorHasLineOfSight(size_t actorIndex) cons
         moveState.y,
         moveState.footZ + m_partyCollisionHeight / 3.0f,
     };
-    const bx::Vec3 target = {
-        pActor->preciseX,
-        pActor->preciseY,
-        pActor->preciseZ + mapActorTargetHeight(*pActor),
-    };
 
-    return hasClearOutdoorLineOfSight(source, target);
+    return GameMechanics::clearPartyShotAimHeight(
+        mapActorTargetHeight(*pActor),
+        pActor->height,
+        [this, &source, pActor](float aimHeight)
+        {
+            return hasClearOutdoorLineOfSight(
+                source, bx::Vec3{pActor->preciseX, pActor->preciseY, pActor->preciseZ + aimHeight});
+        });
 }
 
 std::vector<GameplayPartyAttackActorFacts> OutdoorWorldRuntime::collectPartyAttackFallbackActors(
@@ -17879,22 +17908,23 @@ std::vector<GameplayPartyAttackActorFacts> OutdoorWorldRuntime::collectPartyAtta
             continue;
         }
 
-        bool visibleForFallback = GameMechanics::actorBoxInViewport(
-            viewProjectionMatrix,
-            pActor->preciseX,
-            pActor->preciseY,
-            pActor->preciseZ,
-            float(pActor->radius),
-            float(pActor->height));
-        if (visibleForFallback && !partyAttackActorHasLineOfSight(actorIndex))
+        // Only an actor on screen can be the fallback target; its facts test the line to it.
+        if (!GameMechanics::actorBoxInViewport(
+                viewProjectionMatrix,
+                pActor->preciseX,
+                pActor->preciseY,
+                pActor->preciseZ,
+                float(pActor->radius),
+                float(pActor->height)))
         {
-            visibleForFallback = false;
+            continue;
         }
 
-        std::optional<GameplayPartyAttackActorFacts> facts = partyAttackActorFacts(actorIndex, visibleForFallback);
+        std::optional<GameplayPartyAttackActorFacts> facts = partyAttackActorFacts(actorIndex, true);
 
         if (facts)
         {
+            facts->visibleForFallback = facts->lineOfSightToParty;
             actors.push_back(*facts);
         }
     }
@@ -18437,14 +18467,19 @@ bool OutdoorWorldRuntime::applyMonsterAttackToMapActor(
         actor.velocityY = knockback.y;
         actor.velocityZ = knockback.z;
 
-        // A kill by a monster fighting for the party: the rules' reward.
-        if (pSourceActor != nullptr && outdoorActorFightsForParty(*pSourceActor) && m_pParty != nullptr
-            && m_pMonsterTable != nullptr)
+        // A kill by a monster fighting for the party, or by or of a charmed or berserk one: the rules' reward.
+        const bool byPartyAlly = pSourceActor != nullptr && outdoorActorFightsForParty(*pSourceActor);
+        const bool mindControlled = pSourceActor != nullptr && pSourceActor != &actor
+            && (gameplayActorMindControlled(gameplayActorControlModeFromOutdoor(pSourceActor->controlMode))
+                || gameplayActorMindControlled(gameplayActorControlModeFromOutdoor(actor.controlMode)));
+
+        if ((byPartyAlly || mindControlled) && m_pParty != nullptr && m_pMonsterTable != nullptr)
         {
             if (const MonsterTable::MonsterStatsEntry *pStats = m_pMonsterTable->findStatsById(actor.monsterId))
             {
                 MonsterKillReward reward = killReward(actor, *pStats);
-                reward.byPartyAlly = true;
+                reward.byPartyAlly = byPartyAlly;
+                reward.mindControlled = mindControlled;
                 m_pParty->grantMonsterKillExperience(reward);
             }
         }
@@ -18660,9 +18695,9 @@ void OutdoorWorldRuntime::aggroNearbyMapActorFaction(
     float partyY,
     float partyZ)
 {
-    // Only friendly actors change here, and a monster hostile on its own rouses no friendly ally: hitting a raiding
-    // warlock must not turn the town warlocks of its class (see the indoor alert).
-    if (actorIndex >= m_mapActors.size() || m_pMonsterTable == nullptr || !alertsFriendlyActors)
+    // A monster hostile on its own rouses only allies that are hostile too: hitting a raiding warlock must not turn the
+    // town warlocks of its class (see the indoor alert).
+    if (actorIndex >= m_mapActors.size() || m_pMonsterTable == nullptr)
     {
         return;
     }
@@ -18684,10 +18719,19 @@ void OutdoorWorldRuntime::aggroNearbyMapActorFaction(
 
         MapActorState &otherActor = m_mapActors[otherActorIndex];
 
-        // Allies already hostile keep their current action; re-alerting them on every party hit would
-        // cancel their attacks and snap their facing for the whole group under rapid fire.
-        if (otherActor.hostileToParty || isActorUnavailableForCombat(otherActor)
-            || outdoorActorFightsForParty(otherActor))
+        if (isActorUnavailableForCombat(otherActor) || outdoorActorFightsForParty(otherActor)
+            || (!alertsFriendlyActors && !otherActor.hostileToParty))
+        {
+            continue;
+        }
+
+        // MM9 townsfolk and guards decide their attitude themselves: no other actor's alert turns them (see the
+        // indoor alert).
+        if (const Mm9AiProfile *pOtherMm9Profile =
+                m_actorBehaviors.mm9LoopProfile(otherActor.monsterId, otherActor.mm9Civilian);
+            pOtherMm9Profile != nullptr
+            && (pOtherMm9Profile->archetype == Mm9AiArchetype::Civilian
+                || pOtherMm9Profile->archetype == Mm9AiArchetype::Guard))
         {
             continue;
         }
@@ -18714,8 +18758,18 @@ void OutdoorWorldRuntime::aggroNearbyMapActorFaction(
             continue;
         }
 
-        setMapActorHostileToParty(otherActorIndex, partyX, partyY, partyZ, true);
-        otherActor.angeredByParty = true;
+        // MM8's alert sets hostility type 4 and the Aggressor bit (0x439354, 0x43935a), not encounter memory: the
+        // ally notices the party at the engagement range once its AI runs. Allies already hostile keep their current
+        // action; resetting it on every party hit would cancel their attacks and snap their facing for the whole
+        // group under rapid fire.
+        if (!otherActor.hostileToParty)
+        {
+            setMapActorHostileToParty(otherActorIndex, partyX, partyY, partyZ, true);
+            otherActor.angeredByParty = true;
+        }
+
+        otherActor.aggressor = true;
+        otherActor.hostilityType = 4;
     }
 }
 
@@ -18821,6 +18875,7 @@ void OutdoorWorldRuntime::attachPartyMissileHoming(
     uint32_t firstProjectileId,
     uint32_t sourcePartyMemberIndex,
     std::optional<size_t> targetActorIndex,
+    float aimZ,
     bool weaponHoming)
 {
     const float rulesTurnRate = gameRulesFor(m_pParty).combat.partyMissileHomingTurnRate();
@@ -18831,10 +18886,13 @@ void OutdoorWorldRuntime::attachPartyMissileHoming(
         return;
     }
 
+    const MapActorState &actor = m_mapActors[*targetActorIndex];
+    const float aimHeight = aimZ - actor.preciseZ;
     GameplayProjectileService::ProjectileHoming homing = {};
     homing.targetKind = GameplayProjectileService::ProjectileHoming::TargetKind::Actor;
     homing.targetActorIndex = *targetActorIndex;
-    homing.targetActorId = m_mapActors[*targetActorIndex].actorId;
+    homing.targetActorId = actor.actorId;
+    homing.targetAimHeight = aimHeight > 0.0f && aimHeight <= float(actor.height) ? aimHeight : 0.0f;
     homing.turnRadiansPerSecond = turnRate;
     // A weapon's homing lets go after a while; the ruleset's lasts the whole flight.
     homing.maxSeconds = rulesTurnRate > 0.0f ? 0.0f : WeaponHomingSeconds;
@@ -19015,6 +19073,10 @@ bool OutdoorWorldRuntime::applyPartyAttackToMapActor(
         setMapActorHostileToParty(actorIndex, partyX, partyY, partyZ, false);
         actor.angeredByParty = alertsFriendlyActors;
         actor.provokedByParty = !died;
+        // MM8's hit reaction sets hostility type 4 (0x403366) and its faction alert the Aggressor bit (0x439298): it
+        // comes for the party from any distance its AI runs at, not only within its relation's range.
+        actor.aggressor = true;
+        actor.hostilityType = 4;
     }
     else if (!died && !actor.hostileToParty && actor.mm9Civilian)
     {
@@ -19241,8 +19303,8 @@ void OutdoorWorldRuntime::applyPartyAttackMeleeEffects(
 
     if (attack.stunTarget)
     {
-        actor.stunRemainingSeconds =
-            std::max(actor.stunRemainingSeconds, 0.5f + 0.35f * static_cast<float>(skillLevel));
+        actor.stunRemainingSeconds = std::max(
+            actor.stunRemainingSeconds, attack.stunSeconds.value_or(0.5f + 0.35f * static_cast<float>(skillLevel)));
         actor.aiState = ActorAiState::Stunned;
         actor.animation = ActorAnimation::GotHit;
         actor.actionSeconds = std::max(actor.actionSeconds, actor.stunRemainingSeconds);
@@ -19301,6 +19363,8 @@ bool OutdoorWorldRuntime::spawnPartyAttackProjectile(const GameplayPartyAttackPr
     worldRequest.blastMinimumDamage = request.blastMinimumDamage;
     worldRequest.blastMaximumDamage = request.blastMaximumDamage;
     worldRequest.critical = request.critical;
+    worldRequest.pierceCount = request.pierceCount;
+    worldRequest.pierceShare = request.pierceShare;
     worldRequest.sourceX = request.source.x;
     worldRequest.sourceY = request.source.y;
     worldRequest.sourceZ = request.source.z;
@@ -19312,8 +19376,8 @@ bool OutdoorWorldRuntime::spawnPartyAttackProjectile(const GameplayPartyAttackPr
 
     if (spawned)
     {
-        attachPartyMissileHoming(
-            firstProjectileId, worldRequest.sourcePartyMemberIndex, request.targetActorIndex, request.homing);
+        attachPartyMissileHoming(firstProjectileId, worldRequest.sourcePartyMemberIndex, request.targetActorIndex,
+            request.target.z, request.homing);
     }
 
     return spawned;
@@ -19344,7 +19408,8 @@ bool OutdoorWorldRuntime::castPartyAttackSpell(const GameplayPartyAttackSpellReq
 void OutdoorWorldRuntime::recordPartyAttackWorldResult(
     std::optional<size_t> actorIndex,
     bool attacked,
-    bool actionPerformed)
+    bool actionPerformed,
+    bool missed)
 {
     if (actorIndex && actionPerformed && *actorIndex < m_mapActors.size())
     {
@@ -19359,6 +19424,7 @@ void OutdoorWorldRuntime::recordPartyAttackWorldResult(
                 .z = actor.preciseZ,
                 .height = static_cast<float>(actor.height),
                 .killed = false,
+                .miss = missed,
             });
     }
 
@@ -20056,6 +20122,7 @@ bool OutdoorWorldRuntime::resurrectMapActor(size_t actorIndex, int health, bool 
     actor.hostilityType = friendlyToParty ? 0 : actor.hostilityType;
     actor.alertStatusBit = false;
     actor.angeredByParty = false;
+    actor.aggressor = false;
     actor.hostileToParty = !friendlyToParty
         && m_pMonsterTable != nullptr
         && m_pGameplayActorService != nullptr
@@ -22915,7 +22982,8 @@ bool OutdoorWorldRuntime::castPartySpellProjectile(const GameplayPartySpellProje
 
     if (cast)
     {
-        attachPartyMissileHoming(firstProjectileId, request.casterMemberIndex, request.targetActorIndex);
+        attachPartyMissileHoming(
+            firstProjectileId, request.casterMemberIndex, request.targetActorIndex, request.targetZ);
     }
 
     return cast;
@@ -22954,6 +23022,8 @@ bool OutdoorWorldRuntime::spawnPartyProjectile(const PartyProjectileRequest &req
     spawnRequest.explosionRadius = request.explosionRadius;
     spawnRequest.blastMinimumDamage = request.blastMinimumDamage;
     spawnRequest.blastMaximumDamage = request.blastMaximumDamage;
+    spawnRequest.pierceCount = request.pierceCount;
+    spawnRequest.pierceShare = request.pierceShare;
     spawnRequest.impactSoundIdOverride = request.impactSoundId;
     spawnRequest.turnBasedPendingAction = request.turnBasedPendingAction;
     spawnRequest.sourceX = request.sourceX;
@@ -23511,6 +23581,11 @@ void OutdoorWorldRuntime::collectGameplayMinimapMarkers(std::vector<GameplayMini
         return;
     }
 
+    // Markers are cached for a moment while the party moves, so actors a little outside the window are kept; the
+    // renderer clips them to the circle. Actors farther out are skipped before anything is built for them.
+    const float marginU = minimapState.uSpan * 0.25f;
+    const float marginV = minimapState.vSpan * 0.25f;
+
     for (size_t actorIndex = 0; actorIndex < mapActorCount(); ++actorIndex)
     {
         const MapActorState *pActor = mapActorState(actorIndex);
@@ -23520,13 +23595,26 @@ void OutdoorWorldRuntime::collectGameplayMinimapMarkers(std::vector<GameplayMini
             continue;
         }
 
+        const GameplayMinimapPoint markerPoint = gameplayMinimapWorldToUv(
+            minimapState,
+            static_cast<float>(pActor->x),
+            static_cast<float>(pActor->y));
+
+        if (markerPoint.x < minimapState.u0 - marginU || markerPoint.x > minimapState.u0 + minimapState.uSpan + marginU
+            || markerPoint.y < minimapState.v0 - marginV
+            || markerPoint.y > minimapState.v0 + minimapState.vSpan + marginV)
+        {
+            continue;
+        }
+
         const bool hostileToParty =
             pActor->hostileToParty && !outdoorActorIsPartyControlled(pActor->controlMode);
 
+        // Outdoors every living actor in the window is known, whether or not it was ever near the party.
         if (!wizardEyeShowsActorMarker(
                 pActor->isDead,
                 outdoorMapActorCorpseWasConsumed(m_mapActorCorpseViews, actorIndex),
-                pActor->nearby))
+                true))
         {
             continue;
         }
@@ -23535,10 +23623,6 @@ void OutdoorWorldRuntime::collectGameplayMinimapMarkers(std::vector<GameplayMini
         marker.type = pActor->isDead
             ? GameplayMinimapMarkerType::CorpseActor
             : hostileToParty ? GameplayMinimapMarkerType::HostileActor : GameplayMinimapMarkerType::FriendlyActor;
-        const GameplayMinimapPoint markerPoint = gameplayMinimapWorldToUv(
-            minimapState,
-            static_cast<float>(pActor->x),
-            static_cast<float>(pActor->y));
         marker.u = markerPoint.x;
         marker.v = markerPoint.y;
         markers.push_back(marker);

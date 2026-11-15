@@ -5,7 +5,10 @@
 #include "game/mm9/Mm9Formation.h"
 #include "game/party/Party.h"
 #include "game/party/QuickItemSlot.h"
+#include "game/rules/MonsterRules.h"
 #include "game/ui/GameplayUiController.h"
+#include "game/ui/HudReading.h"
+#include "game/ui/SoloBarSelectorModel.h"
 
 #include <bgfx/bgfx.h>
 
@@ -14,6 +17,7 @@
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace OpenYAMM::Game
@@ -222,6 +226,14 @@ struct GameplayHudBatchQuad
     uint16_t scissorHeight = 0;
     // Multiplies the texture; runs of quads with a tint draw with the HUD tint program.
     uint32_t tintAbgr = 0xffffffffu;
+};
+
+// A text line and where its top left goes, for lines drawn together (GameplayUiRuntime::renderHudFontLayerRuns).
+struct GameplayHudTextRun
+{
+    std::string text;
+    float x = 0.0f;
+    float y = 0.0f;
 };
 
 // One layer of HUD text: a font atlas and the colour its glyphs are multiplied by at draw time.
@@ -534,6 +546,8 @@ enum class GameplayJournalPointerTargetType
     ProgressMap,
     ProgressGuide,
     ProgressAllContinents,
+    // The map list's scroll bar (a press drags it).
+    ProgressScrollBar,
     // The aura panel's targets (GameplayJournalAuras.h), packed into noteId.
     AuraPanel,
     // The Trainers notes' finder targets (GameplayJournalTrainers.h), packed into noteId.
@@ -807,11 +821,35 @@ struct GameplayOverlayInteractionState
     GameplayWorldHit gameplayHudPressedContextActionHit = {};
     bool gameplayHudQuickCastRequested = false;
     bool gameplayHudAttackRequested = false;
+    // Whether the party carries any scroll and any potion, for the HUD's two item buttons (GameplayQuickItems):
+    // listing the party's items walks every bag.
+    HudReading<std::array<bool, 2>, const Party *> quickItemButtonCarried;
+    // The map progress bar's numbers (GameplayMapProgressBar): the count walks every actor of the map, and the bar,
+    // its tab's bounds and the solo HUD's buff rows all ask for it in one frame.
+    HudReading<std::optional<RulesetMapProgress>, const IGameplayWorldRuntime *> mapProgress;
+    // A solo run's action-bar swap slot (a weapon slot with id 1) was pressed: swap the melee weapon and the bow.
+    bool soloWeaponSwapRequested = false;
+    // A solo run's action bar asked for a talent (its index in the talent table), used by the world interaction frame.
+    std::optional<uint32_t> soloTalentRequested;
     bool gameplayHudTriggerRequested = false;
     bool gameplayHudSpellTargetConfirmRequested = false;
     bool gameplayHudSpellTargetCancelRequested = false;
     bool gameplayHudDropHeldItemRequested = false;
     bool partyBuffPopupOpen = false;
+    // The solo HUD's buff tiles: the longest remaining time seen for each shown buff (its sweep's whole), so the sweep
+    // needs no saved duration; a buff no longer shown is forgotten.
+    std::vector<std::pair<uint32_t, float>> soloBuffLongestSeconds;
+    // The solo HUD's self combat text: the lines shown by the crosshair, newest last, with the SDL tick each came at
+    // and its colour (GameplaySoloHud). Transient.
+    struct SoloSelfTextLine
+    {
+        std::string text;
+        uint32_t colorAbgr = 0xffffffffu;
+        uint64_t startTicks = 0;
+    };
+    std::vector<SoloSelfTextLine> soloSelfText;
+    // The solo action bar's slot selector (GameplaySoloBarSelector), open over the paused game. Transient.
+    SoloBarSelectorState soloBarSelector;
     std::optional<size_t> personalBuffPopupMember;
     bool overlayPersonalBuffClickLatch = false;
     std::optional<size_t> overlayPersonalBuffPressedIndex;

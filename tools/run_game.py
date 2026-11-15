@@ -49,6 +49,9 @@ def parse_args():
     parser.add_argument('--settings', type=Path, default=ROOT / 'settings.ini', help='Settings to copy')
     parser.add_argument('--binary', type=Path, default=ROOT / 'build/game/openyamm', help='Executable to test')
     parser.add_argument('--assets', type=Path, help='Asset root override (otherwise resolved from copied settings)')
+    parser.add_argument('--extra-mount', type=Path,
+                        help='A development folder read in front of the asset root (the game\'s --extra-mount), such as '
+                             'the Map Studio\'s mount of builds')
     parser.add_argument('--set', action='append', default=[], metavar='SECTION.KEY=VALUE', help='Repeatable override')
     parser.add_argument('--seconds', type=finite_number, default=15, help='Run after warmup; 0 waits until closed')
     parser.add_argument('--warmup', type=finite_number, default=3, help='Seconds after startup save is loaded')
@@ -71,6 +74,10 @@ def parse_args():
     if args.seconds < 0 or args.warmup < 0:
         parser.error('seconds and warmup must be nonnegative')
     return args
+
+
+def extra_mount_arguments(args):
+    return ['--extra-mount', str(args.extra_mount.resolve(strict=True))] if args.extra_mount else []
 
 
 def write_settings(path, settings):
@@ -116,6 +123,11 @@ def prepare(args, run, binary, metadata):
     if not asset_path.is_absolute():
         asset_path = (Path.cwd() if args.assets else source.parent) / asset_path
     settings['assets']['root'] = str(asset_path.resolve(strict=True))
+    # Pins typed in an isolated run (`pin <text>`) go to the inbox of the settings they came from, not the run folder.
+    pin_inbox = Path(settings['debug'].get('pin_inbox_path') or 'pins_inbox')
+    if not pin_inbox.is_absolute():
+        pin_inbox = source.parent / pin_inbox
+    settings['debug']['pin_inbox_path'] = str(pin_inbox)
     # Owned paths/startup controls cannot be redirected by inherited settings or --set.
     settings['startup'].update(start_in_main_menu='true' if args.menu else 'false', save_file='')
     settings['debug'].update(start_world=args.world, start_map_file=args.map or '', override_start_position='false')
@@ -126,7 +138,7 @@ def prepare(args, run, binary, metadata):
         shutil.copy2(run / 'settings.ini', run / 'launch-settings.ini')
         metadata.update(settings_sha256=digest(run / 'launch-settings.ini'),
                         assets=settings['assets']['root'], display=os.environ.get('DISPLAY'),
-                        command=[str(binary), '--world', args.world])
+                        command=[str(binary), '--world', args.world, *extra_mount_arguments(args)])
         return dict(os.environ, TMPDIR=str(run / 'tmp'))
     steps = []
     if args.save:
@@ -158,7 +170,8 @@ def prepare(args, run, binary, metadata):
         variable = f'OPENYAMM_{trace}_TRACE_FILE'
         if environment.get(variable):
             environment[variable] = str(run / 'logs' / f'{trace.lower()}_environment_trace.log')
-    command = [str(binary), '--world', args.world, '--headless-run-scenario', str(scenario_path), '--scenario-no-color']
+    command = [str(binary), '--world', args.world, *extra_mount_arguments(args), '--headless-run-scenario',
+               str(scenario_path), '--scenario-no-color']
     if args.save and not args.map and not args.position:
         # A plain save replay needs the exact saved state, without a scenario round trip.
         prepared = private_save
@@ -180,7 +193,7 @@ def prepare(args, run, binary, metadata):
     shutil.copy2(run / 'settings.ini', run / 'launch-settings.ini')
     metadata.update(settings_sha256=digest(run / 'launch-settings.ini'), save_sha256=digest(startup_save),
                     assets=settings['assets']['root'], display=os.environ.get('DISPLAY'),
-                    command=[str(binary), '--world', args.world])
+                    command=[str(binary), '--world', args.world, *extra_mount_arguments(args)])
     return environment
 
 
@@ -190,7 +203,7 @@ def run_game(args, run, binary, environment, metadata):
             subprocess.run(['glxinfo', '-B'], env=environment, stdout=renderer_log,
                            stderr=subprocess.STDOUT, timeout=15, check=False)
     # Line buffering makes the startup marker and per-second FPS available while the game runs.
-    command = ['stdbuf', '-oL', '-eL', str(binary), '--world', args.world]
+    command = ['stdbuf', '-oL', '-eL', str(binary), '--world', args.world, *extra_mount_arguments(args)]
     # A minimized window keeps rendering (screenshots, logs, timed exit) without covering the desktop.
     environment = dict(environment, OPENYAMM_START_MINIMIZED='0' if args.visible else '1')
     metadata['window'] = 'visible' if args.visible else 'minimized'

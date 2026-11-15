@@ -2,6 +2,7 @@
 
 #include "game/party/WorldSpells.h"
 #include "engine/Localization.h"
+#include "game/ui/GameplaySoloHud.h"
 #include "game/ui/GameplayUiSkin.h"
 #include "game/gameplay/GameplayScreenRuntime.h"
 #include "game/party/SkillData.h"
@@ -59,6 +60,7 @@ std::vector<GameplayPotionEffectLine> gameplayPotionEffectLines(const Character 
     std::vector<std::string_view> immuneNames;
     std::string immunities;
     float immunitySeconds = 0;
+    uint32_t firstImmunity = 0;
 
     for (const TimedPotionEffect &effect : member.rulesetState.potionEffects)
     {
@@ -75,6 +77,7 @@ std::vector<GameplayPotionEffectLine> gameplayPotionEffectLines(const Character 
                     && std::find(immuneNames.begin(), immuneNames.end(), ConditionNames[effect.key])
                         == immuneNames.end())
                 {
+                    firstImmunity = immuneNames.empty() ? effect.key : firstImmunity;
                     immuneNames.push_back(ConditionNames[effect.key]);
                     immunities += (immunities.empty() ? "" : Engine::tr(", "))
                         + Engine::localize(ConditionNames[effect.key], "condition");
@@ -88,7 +91,7 @@ std::vector<GameplayPotionEffectLine> gameplayPotionEffectLines(const Character 
                 const std::string effectName =
                     pSpell != nullptr ? Engine::localize(pSpell->name, "spell") : Engine::tr("Aura");
                 lines.push_back({Engine::tr("{effect} (potion)", {{"effect", effectName}}),
-                    effect.remainingSeconds});
+                    effect.remainingSeconds, effect.kind, effect.key});
                 break;
             }
             case TimedPotionEffect::Kind::SkillBonus:
@@ -98,18 +101,20 @@ std::vector<GameplayPotionEffectLine> gameplayPotionEffectLines(const Character 
                     skill ? Engine::localize(displaySkillName(*skill), "skill") : Engine::tr("Skill");
                 lines.push_back({Engine::tr("{skill} +{amount} (potion)",
                                      {{"skill", skillName}, {"amount", int64_t(effect.amount)}}),
-                    effect.remainingSeconds});
+                    effect.remainingSeconds, effect.kind, effect.key});
                 break;
             }
             case TimedPotionEffect::Kind::Regeneration:
-                lines.push_back({Engine::tr("Regeneration (potion)"), effect.remainingSeconds});
+                lines.push_back(
+                    {Engine::tr("Regeneration (potion)"), effect.remainingSeconds, effect.kind, effect.key});
                 break;
         }
     }
 
     if (!immunities.empty())
     {
-        lines.push_back({Engine::tr("Immune to {conditions}", {{"conditions", immunities}}), immunitySeconds});
+        lines.push_back({Engine::tr("Immune to {conditions}", {{"conditions", immunities}}), immunitySeconds,
+            TimedPotionEffect::Kind::Immunity, firstImmunity});
     }
 
     return lines;
@@ -260,6 +265,11 @@ void renderGameplayBuffHud(GameplayScreenRuntime &context, int width, int height
     {
         return;
     }
+    // A solo run shows its buffs in the unit frame's rows (GameplaySoloHud).
+    if (context.soloHud())
+    {
+        return;
+    }
     renderBuffPanel(context, *pParty, GameplayBuffPresentation::Hero, width, height);
     renderBuffPanel(context, *pParty, GameplayBuffPresentation::Skull, width, height);
     const std::vector<PartyBuffId> ids = sortedGameplaySpecialBuffs(*pParty);
@@ -366,6 +376,10 @@ GameplayHudPointerTarget gameplayBuffHudTarget(GameplayScreenRuntime &context,
         if (movement)
         {
             return {GameplayHudPointerTargetType::PartyBuff, size_t(movement->id)};
+        }
+        if (context.soloHud())
+        {
+            return GameplaySoloHud::buffTargetAt(context, width, height, x, y).value_or(GameplayHudPointerTarget{});
         }
         for (GameplayBuffPresentation panel : {GameplayBuffPresentation::Hero, GameplayBuffPresentation::Skull})
         {

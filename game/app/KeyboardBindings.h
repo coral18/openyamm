@@ -57,18 +57,19 @@ enum class KeyboardAction : uint8_t
     Land,
     DoubleSpeed,
     // MAW's keys (devdocs/maw/GAPS.md §11 D.18), listed only in a MAW game: lift a stuck party, open the Workbench,
-    // gather corpses and crafting items, and on the inventory and skills pages the alchemist pick and the switches;
-    // a lone Knight's charge at the monster under the cursor.
+    // gather corpses and crafting items, the skills page's switches; a lone Knight's charge at the monster under the
+    // cursor.
     Unstuck,
     OpenWorkbench,
     GatherLoot,
-    AlchemistPick,
     SkillCover,
     SkillManaShield,
     SkillRotation,
     KnightCharge,
     // Held: items glow in their rarity colour (the gameplay.rarity_glow setting "hold").
     ShowItemRarity,
+    // Held: item popups show what crafting would add (the gameplay.craft_preview setting "hold").
+    ShowCraftableStats,
     // MMMerge's four extra quick spells (ExtraQuickSpells.lua): cast the active member's slot, else attack.
     QuickSpell1,
     QuickSpell2,
@@ -115,6 +116,30 @@ enum class KeyboardAction : uint8_t
     Upkeep,
     // The Journal on its Quests page, as MM7's Quest key opens the quest book (OY-481); unbound by default.
     QuestBook,
+    // A solo run's weapon cycling (devdocs/solo_action/WEAPONS.md "Bow swap"): the next weapon of the melee weapon
+    // and the bow; with the bow drawn, Attack shoots even at melee range. The wheel, down for the next one
+    // (PreviousWeapon is wheel up).
+    NextWeapon,
+    // Auto-walk (OY-628): toggles walking forward as if Forward were held, as in the Elder Scrolls games. Num Lock, the
+    // usual auto-run key elsewhere, is free in both control schemes.
+    AutoWalk,
+    // The free cursor of the modern controls (OY-637), as GrayFace's patch gives the middle button: mouse look off and
+    // the cursor free while the world keeps running, until pressed again.
+    CursorMode,
+    // A solo run's weapon cycling the other way (see NextWeapon).
+    PreviousWeapon,
+    // A solo run's action bar (devdocs/solo_action/HUD.md): use slot 1-10, by default the number keys 1-0. In a solo
+    // run they win over the party's number keys, the bags' and the followers'.
+    ActionBar1,
+    ActionBar2,
+    ActionBar3,
+    ActionBar4,
+    ActionBar5,
+    ActionBar6,
+    ActionBar7,
+    ActionBar8,
+    ActionBar9,
+    ActionBar10,
     Count
 };
 

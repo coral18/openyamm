@@ -143,6 +143,8 @@ enum class Control
     SliderTrack,
     // A place chip: a BattleOrderPlace.
     Place,
+    // Whose HP the HP condition reads: 0 the lowest ally's, 1 the member's own (BattleOrder::ownHealth).
+    HealthWho,
 };
 
 struct Hit
@@ -388,7 +390,9 @@ std::string conditionSummary(const GameplayScreenRuntime &context, const Charact
 
     if (order.allyHealthBelowPercent)
     {
-        parts.push_back(Engine::tr("an ally below {percent} % HP", {{"percent", int64_t(*order.allyHealthBelowPercent)}}));
+        const int64_t percent = int64_t(*order.allyHealthBelowPercent);
+        parts.push_back(order.ownHealth ? Engine::tr("own HP below {percent} %", {{"percent", percent}})
+                                        : Engine::tr("an ally below {percent} % HP", {{"percent", percent}}));
     }
 
     if (order.keepSpellPointsPercent && order.kind == BattleOrderKind::Spell)
@@ -537,6 +541,8 @@ struct EditorRects
     Rect renewToggle;
     Rect renewTrack;
     Rect allyToggle;
+    // The HP row's chips: any ally, own.
+    std::array<Rect, 2> healthWho;
     Rect allyTrack;
     Rect keepToggle;
     Rect keepTrack;
@@ -581,6 +587,15 @@ EditorRects editorRects(const Layout &layout, bool upkeep)
 
     const float step = upkeep ? 38 : 32;
     rects.allyToggle = pageRect(layout, left, y, right - left, 13);
+    const float whoWidth = 46;
+    float whoX = right - 30 - 2 * whoWidth - 4;
+
+    for (Rect &chip : rects.healthWho)
+    {
+        chip = pageRect(layout, whoX, y - 1, whoWidth, 14);
+        whoX += whoWidth + 4;
+    }
+
     rects.allyTrack = pageRect(layout, left + 14, y + 17, right - left - 18, 8);
     y += step;
     rects.keepToggle = pageRect(layout, left, y, right - left, 13);
@@ -917,6 +932,14 @@ Hit hitTest(const GameplayScreenRuntime &context, const GameplayObsidianPainter 
             if (editor.placeChips[chip].contains(x, y))
             {
                 return {Control::Place, chip};
+            }
+        }
+
+        for (size_t chip = 0; chip < editor.healthWho.size(); ++chip)
+        {
+            if (editor.healthWho[chip].contains(x, y))
+            {
+                return {Control::HealthWho, chip};
             }
         }
 
@@ -1572,8 +1595,16 @@ void renderEditor(GameplayScreenRuntime &context, const GameplayObsidianPainter 
     // An ally's HP.
     {
         const int percent = order.allyHealthBelowPercent.value_or(50);
-        rowText(rects.allyToggle, Engine::tr("An ally's HP is below"), std::to_string(percent) + " %",
-            order.allyHealthBelowPercent.has_value(), true);
+        const bool on = order.allyHealthBelowPercent.has_value();
+        rowText(rects.allyToggle, Engine::tr("HP is below"), std::to_string(percent) + " %", on, true);
+        const std::array<std::string, 2> whoLabels = {Engine::tr("any ally"), Engine::tr("own")};
+
+        for (size_t chip = 0; chip < whoLabels.size(); ++chip)
+        {
+            drawChip(painter, layout, rects.healthWho[chip], whoLabels[chip], on && order.ownHealth == (chip == 1),
+                hover.control == Control::HealthWho && hover.index == chip);
+        }
+
         drawSlider(painter, rects.allyTrack, float(percent - AllyMinimum) / float(AllyMaximum - AllyMinimum),
             std::nullopt, order.allyHealthBelowPercent.has_value(), std::nullopt);
     }
@@ -1872,13 +1903,34 @@ constexpr size_t MenuUpkeepRow = 6;
 constexpr float MenuWidth = 200;
 constexpr float MenuHeader = 30;
 constexpr float MenuRowHeight = 17;
+// A solo run's spell menu has one more row: put the spell on the action bar (or take it off).
+constexpr size_t MenuActionBarRow = MenuRows;
+
+size_t menuRows(const GameplayScreenRuntime &context)
+{
+    return MenuRows + (context.soloHud() ? 1 : 0);
+}
+
+// The action bar slot (main row, 0-9) holding the spell, if any.
+std::optional<size_t> actionBarSlotOfSpell(const Character &member, uint32_t spellId)
+{
+    for (size_t slot = 0; slot < ActionBarSlotCount / 2; ++slot)
+    {
+        if (member.actionBar[slot].kind == ActionBarSlotKind::Spell && member.actionBar[slot].id == spellId)
+        {
+            return slot;
+        }
+    }
+
+    return std::nullopt;
+}
 
 Rect menuRect(const GameplayScreenRuntime &context, int width, int height)
 {
     const MenuState &state = menu(context);
     const float scale = float(height) / 480.0f;
     const float menuWidth = MenuWidth * scale;
-    const float menuHeight = (MenuHeader + MenuRowHeight * MenuRows + 6) * scale;
+    const float menuHeight = (MenuHeader + MenuRowHeight * float(menuRows(context)) + 6) * scale;
     return {std::clamp(state.x, 0.0f, std::max(0.0f, float(width) - menuWidth)),
         std::clamp(state.y, 0.0f, std::max(0.0f, float(height) - menuHeight)), menuWidth, menuHeight};
 }
@@ -1888,7 +1940,7 @@ std::optional<size_t> menuRowAt(const GameplayScreenRuntime &context, int width,
     const Rect box = menuRect(context, width, height);
     const float scale = float(height) / 480.0f;
 
-    for (size_t row = 0; row < MenuRows; ++row)
+    for (size_t row = 0; row < menuRows(context); ++row)
     {
         const float top = box.y + (MenuHeader + float(row) * MenuRowHeight + (row >= 5 ? 4 : 0)) * scale;
 
@@ -2455,6 +2507,14 @@ void GameplayBattleOrders::handleInput(GameplayScreenRuntime &context, const Gam
                 pSelected->place = BattleOrderPlace(hit.index);
             }
             break;
+        case Control::HealthWho:
+            if (pSelected != nullptr)
+            {
+                // Choosing whose HP also ticks the condition.
+                pSelected->ownHealth = hit.index == 1;
+                pSelected->allyHealthBelowPercent = pSelected->allyHealthBelowPercent.value_or(50);
+            }
+            break;
     }
 }
 
@@ -2509,7 +2569,7 @@ void GameplayBattleOrders::renderSpellMenu(GameplayScreenRuntime &context, int w
     const std::optional<size_t> hot =
         pInput != nullptr ? menuRowAt(context, width, height, pInput->pointerX, pInput->pointerY) : std::nullopt;
 
-    for (size_t row = 0; row < MenuRows; ++row)
+    for (size_t row = 0; row < menuRows(context); ++row)
     {
         const float top = MenuHeader + float(row) * MenuRowHeight + (row >= 5 ? 4 : 0);
 
@@ -2542,6 +2602,12 @@ void GameplayBattleOrders::renderSpellMenu(GameplayScreenRuntime &context, int w
         else if (row == MenuUpkeepRow)
         {
             label = Engine::tr("Add to {member}'s upkeep", {{"member", pMember->name}});
+        }
+        else if (row == MenuActionBarRow)
+        {
+            const std::optional<size_t> onBar = actionBarSlotOfSpell(*pMember, uint32_t(pSpell->id));
+            label = onBar ? Engine::tr("Take off the action bar ({key})", {{"key", int64_t((*onBar + 1) % 10)}})
+                          : Engine::tr("Put on the action bar");
         }
         else
         {
@@ -2607,6 +2673,28 @@ void GameplayBattleOrders::handleSpellMenuInput(GameplayScreenRuntime &context, 
     {
         const std::string &bound = *row == 0 ? member.quickSpellName : member.extraQuickSpellNames[*row - 1];
         assignQuickSlot(context, memberIndex, *row, bound == pSpell->name ? nullptr : pSpell);
+        return;
+    }
+
+    // The solo run's action bar: the spell leaves its slot, or takes the first empty one of keys 1-0.
+    if (*row == MenuActionBarRow)
+    {
+        if (const std::optional<size_t> onBar = actionBarSlotOfSpell(member, uint32_t(pSpell->id)))
+        {
+            member.actionBar[*onBar] = {};
+            return;
+        }
+
+        for (size_t slot = 0; slot < ActionBarSlotCount / 2; ++slot)
+        {
+            if (member.actionBar[slot].kind == ActionBarSlotKind::Empty)
+            {
+                member.actionBar[slot] = {ActionBarSlotKind::Spell, uint32_t(pSpell->id), {}};
+                return;
+            }
+        }
+
+        context.setStatusBarEvent(Engine::tr("The action bar is full"));
         return;
     }
 

@@ -9,6 +9,7 @@
 #include "game/ui/GameplayUiController.h"
 
 #include <cstdint>
+#include <array>
 #include <optional>
 #include <string>
 #include <vector>
@@ -40,7 +41,8 @@ public:
         bool canRunAction = false;
         bool quickCastPressed = false;
         bool hasReadyMember = false;
-        // Turn-based mode acts on the press only: a held key would act for the next member too.
+        // Turn-based mode: a held key repeats only after the first-repeat pause, then on the interval, as the
+        // original's key repeat, so a tap acts for one member; Fast attack repeat does not shorten that pause.
         bool turnBased = false;
         // The Fast attack repeat setting: the first repeat comes after the short interval, not the key-repeat pause.
         bool fastRepeat = false;
@@ -55,7 +57,8 @@ public:
     {
         bool attackPressed = false;
         bool hasReadyMember = false;
-        // Turn-based mode acts on the press only: a held key would act for the next member too.
+        // Turn-based mode: a held key repeats only after the first-repeat pause, then on the interval, as the
+        // original's key repeat, so a tap acts for one member; Fast attack repeat does not shorten that pause.
         bool turnBased = false;
         // The Fast attack repeat setting: the first repeat comes after the short interval, not the key-repeat pause.
         bool fastRepeat = false;
@@ -111,6 +114,10 @@ public:
     // With no actor under the crosshair, a standing destructible there (a face, BModel or prop a party blow or
     // missile damages) takes the attack instead of the nearest hostile, unless that hostile is within blow reach.
     static bool crosshairDestructibleOverridesFallback(bool crosshairOnStandingDestructible, float fallbackDistance);
+    // Whether a party attack made now meets an actor in blow reach, as executePartyAttack picks its target (the usable
+    // actor under the crosshair, else the nearest hostile the fallback finds): a solo dragon rakes it, or breathes.
+    static bool partyAttackTargetInMeleeReach(IGameplayWorldRuntime &world, const GameplayPartyAttackFrameInput &input,
+        std::optional<size_t> directActorIndex);
 
     struct AttackCastResult
     {
@@ -155,6 +162,35 @@ public:
         uint32_t blasterProjectileObjectId = 0;
         bool pressedThisFrame = false;
         GameplaySpellActionController::TargetQueries targetQueries = {};
+        // The first-person view model's blade direction across the screen at the blow (right, up): the melee hit
+        // effect follows it instead of the attacker's side of the portrait row.
+        std::optional<std::array<float, 2>> blowScreenDirection;
+        // A view model swing that landed its blow now: its whoosh played when it started, and the recovery counts
+        // from the press, so the time it took is taken off.
+        bool swingSoundPlayed = false;
+        float recoverySpentSeconds = 0.0f;
+        // A solo run's talent blow (devdocs/solo_action/TALENT_INTERACTIONS.md): the weapon attack whatever the battle
+        // orders say (Charge's 100 % blow too), at this share of its damage. An extra blow (Cleave's other monsters,
+        // Sweeping Blows) plays no sound and costs no recovery; a shot prefers the bow even in melee reach.
+        bool talentBlow = false;
+        float talentShare = 1.0f;
+        bool talentExtraBlow = false;
+        bool talentShot = false;
+        // Multishot: the bow shot leaves as this many arrows fanned evenly over the arc (radians, the whole width),
+        // each on its own heading, hitting the first monster in its line.
+        uint8_t talentFanArrows = 0;
+        float talentFanArcRadians = 0.0f;
+        // Piercing Arrows: every arrow of a bow shot flies on through this many more monsters at pierceShare of its
+        // damage.
+        uint8_t pierceCount = 0;
+        float pierceShare = 0.0f;
+        // A solo run with the bow in the arms (swapped in, ViewModelLink::bowSelected, or an archer with no main-hand
+        // weapon): Attack shoots even at melee range, where a party member would strike with the bow's melee fallback
+        // (or fists). The one rule a solo run changes.
+        bool preferBow = false;
+    // A solo run with the melee weapon in the arms: Attack never shoots, as a party member out of melee reach would
+    // (a weapon order to shoot included); with nothing in reach the blow swings at the air. Talent shots still shoot.
+    bool preferMelee = false;
     };
 
     struct PartyAttackExecutionResult
@@ -190,6 +226,9 @@ public:
     // An Attack press: the active combatant's attack (a member's battle orders, game/party/BattleOrders.h); in real time
     // a member who holds hands the press to the next ready combatant.
     static PartyAttackExecutionResult executePartyAttack(const PartyAttackConfig &config);
+    // The swing sound of the member's melee weapon at a point (a view model swing plays it as the swing starts).
+    static void playMeleeSwingSound(GameplayScreenRuntime &runtime, const Character &attacker, const ItemTable *pItemTable,
+                                    float x, float y, float z);
     struct PartyUpkeepConfig
     {
         GameplayScreenRuntime *pRuntime = nullptr;

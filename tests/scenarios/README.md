@@ -94,7 +94,10 @@ present}}` checks a journal map pin (`maw_bounty.yml`). `press_action: {action, 
 binding by its settings name (`attack`, `cast_ready`, `follower_1`, ...), held for one frame by default, and `setup_shortcut: {kind: hire_follower, id}` hires
 an NPC as a follower (`follower_keys.yml`). `assert: {quick_item_ring: {open, member_index}}` checks the potion
 radial's ring and `assert: {quick_item_popup: {kind, member_index}}` the basebar's potion or scroll popup
-(`potion_slot_keys.yml`). Each run saves into its own temporary folder (`openyamm_scenario_saves/<id>-<random>`),
+(`potion_slot_keys.yml`). `debug_launch: {startup_console_file: <path>}` runs a start-of-map console file as the
+game does for `debug.startup_console_file`, and `debug_launch: {exit_pose: true, expect_contains: [...]}` writes the
+exit pose file of `debug.exit_pose_path` into the run's folder and checks its text (`debug/play_here.yml`, the Map
+Studio's Play here). Each run saves into its own temporary folder (`openyamm_scenario_saves/<id>-<random>`),
 removed when it ends, so parallel runs of one scenario do not share saves.
 
 For loads that must fail: `save_game: {name, required_package_schema: {package, schema}}` rewrites the save to need a
@@ -178,8 +181,9 @@ For turn-based combat ([TURN_BASED_COMBAT_AUDIT.md](../../devdocs/TURN_BASED_COM
 `press_action: combat` toggles turn-based mode, `turn_based_turns: {count, max_seconds}` plays turns through the input
 path (Pass whenever the party may; a turn counts when it reaches its movement phase), and `assert: {turn_based:
 {active, stage, front_member, actor_index, actor_queued, actor_effect, effect_min, effect_max, report}}` checks the turn
-engine (`front_member` is the member the queue waits for, or `none`; `actor_effect: slow | stun | paralyze` with
-`effect_min`/`effect_max` checks the remaining seconds of a monster's effect; `report` prints the queue).
+engine (`front_member` is the member the queue waits for, or `none`; `actor_effect: slow | stun | paralyze | fear |
+control` with `effect_min`/`effect_max` checks the remaining seconds of a monster's effect, control being its charm,
+berserk or enslavement, and `actor_index` may be `last`; `report` prints the queue).
 `assert: {member_points: {member_index, spell_points_min, spell_points_max, health_min, health_max}}` checks a member's
 points, `setup_shortcut: {kind: set_member_points, member_index, health, spell_points}` sets them, and `buff` takes
 `remaining_min`/`remaining_max` in game seconds. The driver applies a completed turn's game time after each gameplay

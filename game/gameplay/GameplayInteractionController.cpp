@@ -2,9 +2,16 @@
 #include "engine/Localization.h"
 
 #include "game/ui/GameplayFormationBuilder.h"
+#include "game/ui/GameplaySoloBarSelector.h"
 #include "game/ui/GameplayQuickItems.h"
 
 #include "game/gameplay/GameplayHeldItemController.h"
+#include "game/audio/GameAudioSystem.h"
+#include "game/gameplay/GameMechanics.h"
+#include "game/gameplay/MeleeContactEffects.h"
+#include "game/items/ItemEnchantRuntime.h"
+#include "game/party/BattleOrders.h"
+#include "game/rules/SoloTalents.h"
 #include "game/gameplay/GameplayInputController.h"
 #include "game/gameplay/GameplayInputFrame.h"
 #include "game/gameplay/GameplayScreenRuntime.h"
@@ -26,8 +33,10 @@
 #include <SDL3/SDL_timer.h>
 
 #include <algorithm>
+#include <numbers>
 #include <chrono>
 #include <sstream>
+#include <utility>
 
 namespace OpenYAMM::Game
 {
@@ -43,6 +52,8 @@ constexpr uint64_t ContextActionRefreshNanoseconds = 250 * 1000 * 1000;
 constexpr uint64_t ContextActionIdleRetryNanoseconds = 1000 * 1000 * 1000;
 constexpr uint64_t KeyboardInteractionFirstRepeatNanoseconds = 500 * 1000 * 1000;
 constexpr uint64_t KeyboardInteractionRepeatNanoseconds = 67 * 1000 * 1000;
+// One turn of the mouse wheel is several steps: a solo run's weapon cycling takes them as one.
+constexpr uint64_t WeaponCycleGuardNanoseconds = 250 * 1000 * 1000;
 constexpr float ContextActionRayOriginChangeThresholdSquared = 4.0f;
 constexpr float ContextActionRayDirectionChangeThresholdSquared = 0.000001f;
 constexpr uint32_t ArrowProjectileObjectId = 545;
@@ -922,32 +933,141 @@ GameplaySpellActionController::TargetQueries buildSpellActionTargetQueries(
     return targetQueries;
 }
 
-void executePartyAttack(
+// A solo run with the bow in the arms shoots at any range: the bow swapped in, or an archer's bow with nothing (or only
+// a broken weapon) in the main hand, as the view model's kit shows it.
+// The member's recovery for a melee blow or a bow shot, in real seconds: the profile's, or the rules' own when they
+// decide it (MAW: weapon delay, speed, Haste), in the original's ticks (128 per 2.13 s of real time, as MawCombatRules
+// turns them into seconds).
+float attackRecoverySeconds(GameplayScreenRuntime &runtime, const Party *pParty, const Character &member, bool shot)
+{
+    const CharacterAttackProfile profile = GameMechanics::buildCharacterAttackProfile(member, runtime.itemTable(),
+        runtime.spellTable(), characterAttackTuningFromSettings(runtime.settingsSnapshot()));
+    float seconds = shot ? profile.rangedRecoverySeconds : profile.meleeRecoverySeconds;
+    if (runtime.itemTable() != nullptr)
+    {
+        if (const std::optional<int> ticks = gameRulesFor(pParty).combat.characterAttackRecoveryTicks(member,
+                shot ? CharacterAttackMode::Bow : CharacterAttackMode::Melee, *runtime.itemTable(),
+                runtime.standardItemEnchantTable(), runtime.specialItemEnchantTable()))
+        {
+            constexpr float RealtimeSecondsPerTick = 2.133333333333333f / 128.0f;
+            seconds = float(*ticks) * RealtimeSecondsPerTick;
+        }
+    }
+    return seconds;
+}
+
+bool soloBowDrawn(GameplayScreenRuntime &runtime, const Character *pMember)
+{
+    const bool archer = pMember != nullptr && pMember->equipment.bow != 0 && !pMember->equipmentRuntime.bow.broken
+        && (pMember->equipment.mainHand == 0 || pMember->equipmentRuntime.mainHand.broken);
+    return runtime.soloRun() && (runtime.viewModelLink().bowSelected || archer);
+}
+
+// Whether a solo dragon's attack press shows the breath rather than the claws: it can breathe and its target is out of
+// claw reach, as executePartyAttack decides at the release (choosePartyAttackMode). Only what the forelegs play
+// depends on it; the rules decide again at the release.
+bool soloDragonBreathes(IGameplayWorldRuntime &world, const Party &party, const Character &member,
+    const CharacterAttackProfile &profile, const GameplayWorldHit &attackHit,
+    const GameplayWorldPickRequest &pickRequest)
+{
+    if (!gameRulesFor(&party).classes.isDragon(member) || !profile.hasDragonBreath
+        || !profile.rangedAttackBonus.has_value())
+    {
+        return false;
+    }
+    const std::optional<size_t> directActor = attackHit.kind == GameplayWorldHitKind::Actor && attackHit.actor
+        ? std::optional<size_t>(attackHit.actor->actorIndex) : std::nullopt;
+    return !GameplayActionController::partyAttackTargetInMeleeReach(
+        world, world.buildPartyAttackFrameInput(pickRequest), directActor);
+}
+
+// A solo run's talent blow (devdocs/solo_action/TALENTS.md): a set target, a share of the damage, an extra blow without
+// sound or recovery, a shot.
+std::vector<size_t> collectTalentTargets(IGameplayWorldRuntime &world, const GameplayPartyAttackFrameInput &attackInput,
+    float reach, float arcDegrees, size_t maxCount);
+
+struct TalentBlow
+{
+    std::optional<size_t> actorIndex;
+    float share = 1.0f;
+    bool extra = false;
+    bool shot = false;
+    // Multishot's fan: the arrows of one shot and the arc they spread over (radians, the whole width).
+    uint8_t fanArrows = 0;
+    float fanArcRadians = 0.0f;
+    // A strike made at its clip's blow: the time the clip took, already part of the member's recovery.
+    float recoverySpent = 0.0f;
+};
+
+// Sweeping Blows (a melee blow also strikes the nearest others in its arc) for the ordinary attack about to hit
+// `target`. (Piercing Arrows rides on the arrows themselves: PartyAttackConfig::pierceCount.)
+template <typename StrikeBlow>
+void strikeFollowUpTalentBlows(GameplayScreenRuntime &runtime, IGameplayWorldRuntime &world,
+    const GameplayPartyAttackFrameInput &attackInput, size_t target, bool bowDrawn, StrikeBlow strike)
+{
+    Party *pParty = world.party();
+    const Character *pMember = pParty != nullptr ? pParty->activeMember() : nullptr;
+    if (pMember == nullptr || !GameMechanics::canTakeGameplayAction(*pMember) || !runtime.soloTalents())
+    {
+        return;
+    }
+    const std::optional<GameplayPartyAttackActorFacts> facts = world.partyAttackActorFacts(target, false);
+    if (!facts)
+    {
+        return;
+    }
+    const GameplayWorldPoint party = attackInput.partyPosition;
+    const float targetDistance = std::max(0.0f,
+        std::hypot(facts->position.x - party.x, facts->position.y - party.y) - float(facts->radius));
+    constexpr float MeleeReach = 407.2f;
+    const SoloTalentTable &table = soloTalentTable();
+    const bool melee = !bowDrawn && targetDistance <= MeleeReach;
+
+    if (const int rank = talentRank(*pMember, "sweeping_blows"); melee && rank > 0)
+    {
+        if (const TalentDefinition *pTalent = table.find("sweeping_blows"))
+        {
+            const size_t extra = size_t(std::max(1, int(pTalent->perRank) * rank));
+            std::vector<size_t> beside = collectTalentTargets(world, attackInput, MeleeReach, pTalent->arc, extra + 1);
+            beside.erase(std::remove(beside.begin(), beside.end(), target), beside.end());
+            const float share = talentSkillShare(*pTalent, *pMember);
+            for (size_t index = 0; index < beside.size() && index < extra; ++index)
+            {
+                strike(TalentBlow{beside[index], share, true, false});
+            }
+        }
+    }
+
+}
+
+GameplayActionController::PartyAttackExecutionResult executePartyAttack(
     GameplayScreenRuntime &runtime,
     GameplaySpellService &spellService,
     const GameplayPartyAttackFrameInput &partyAttackInput,
     const GameplayInteractionController::HoverStateInput &standardHoverInput,
     const GameplaySpellActionController::TargetQueries &targetQueries,
     const GameplayActionController::AttackActionDecision &decision,
-    const GameplayWorldHit &currentHit)
+    const GameplayWorldHit &currentHit,
+    bool viewModelSwingShown = false,
+    const TalentBlow *pTalentBlow = nullptr)
 {
     if (!partyAttackInput.enabled)
     {
-        return;
+        return {};
     }
 
     IGameplayWorldRuntime *pWorldRuntime = runtime.worldRuntime();
 
     if (pWorldRuntime == nullptr)
     {
-        return;
+        return {};
     }
 
     Party *pParty = pWorldRuntime->party();
 
     if (pParty == nullptr)
     {
-        return;
+        return {};
     }
 
     TurnBasedCombatRuntime &turnBasedCombatRuntime = runtime.turnBasedCombatRuntime();
@@ -957,20 +1077,48 @@ void executePartyAttack(
         {
             turnBasedCombatRuntime.finishMovementPhase();
             GAMEPLAY_DEBUG_TRACE("turn_based_attack_finished_movement stage=movement");
-            return;
+            return {};
         }
 
         // Also makes the member whose turn it is the attacker, whoever the player selected.
         if (!turnBasedCombatRuntime.beginPlayerActionOrFinishMovement(*pParty))
         {
-            return;
+            return {};
         }
     }
 
-    const std::optional<size_t> directActorIndex =
-        currentHit.kind == GameplayWorldHitKind::Actor && currentHit.actor
+    const bool bowDrawn = soloBowDrawn(runtime, pParty->activeMember());
+    // A solo run's Piercing Arrows on an ordinary attack: every arrow of a bow shot (a Master bow's two too) flies on
+    // through the next monsters behind what it strikes (the rank's count) at the talent's share.
+    std::pair<uint8_t, float> pierce = {0, 0.0f};
+    if (const Character *pShooter = pParty->activeMember();
+        pTalentBlow == nullptr && runtime.soloTalents() && pShooter != nullptr && pShooter->equipment.bow != 0)
+    {
+        const TalentDefinition *pPiercing = soloTalentTable().find("piercing_arrows");
+        if (const int rank = talentRank(*pShooter, "piercing_arrows"); pPiercing != nullptr && rank > 0)
+        {
+            pierce = {uint8_t(std::clamp(int(pPiercing->perRank) * rank, 0, 16)),
+                talentSkillShare(*pPiercing, *pShooter)};
+        }
+    }
+
+    const std::optional<size_t> directActorIndex = pTalentBlow != nullptr && pTalentBlow->actorIndex
+        ? pTalentBlow->actorIndex
+        : currentHit.kind == GameplayWorldHitKind::Actor && currentHit.actor
             ? std::optional<size_t>(currentHit.actor->actorIndex)
             : std::nullopt;
+    // A solo run's Sweeping Blows and Piercing Arrows: extra blows on the monsters beside or behind the target, struck
+    // before the blow that pays the recovery (a recovering member strikes no more).
+    if (pTalentBlow == nullptr && directActorIndex && runtime.soloTalents() && !turnBasedCombatRuntime.active())
+    {
+        strikeFollowUpTalentBlows(runtime, *pWorldRuntime, partyAttackInput, *directActorIndex, bowDrawn,
+            [&](const TalentBlow &blow)
+            {
+                executePartyAttack(runtime, spellService, partyAttackInput, standardHoverInput, targetQueries, decision,
+                    GameplayWorldHit{}, false, &blow);
+            });
+    }
+
     // Shown in combat messages, in the interface language.
     const std::string directTargetName =
         currentHit.kind == GameplayWorldHitKind::Actor && currentHit.actor
@@ -1038,8 +1186,51 @@ void executePartyAttack(
             .blasterProjectileObjectId = BlasterProjectileObjectId,
             .pressedThisFrame = decision.pressedThisFrame,
             .targetQueries = targetQueries,
+            .blowScreenDirection = viewModelSwingShown ? runtime.viewModelLink().blowDirection : std::nullopt,
+            .swingSoundPlayed = viewModelSwingShown,
+            .recoverySpentSeconds = viewModelSwingShown ? runtime.viewModelLink().swingWaitSeconds
+                : pTalentBlow != nullptr                ? pTalentBlow->recoverySpent
+                                                        : 0.0f,
+            .talentBlow = pTalentBlow != nullptr,
+            .talentShare = pTalentBlow != nullptr ? pTalentBlow->share : 1.0f,
+            .talentExtraBlow = pTalentBlow != nullptr && pTalentBlow->extra,
+            .talentShot = pTalentBlow != nullptr && pTalentBlow->shot,
+            .talentFanArrows = pTalentBlow != nullptr ? pTalentBlow->fanArrows : uint8_t(0),
+            .talentFanArcRadians = pTalentBlow != nullptr ? pTalentBlow->fanArcRadians : 0.0f,
+            .pierceCount = pierce.first,
+            .pierceShare = pierce.second,
+            .preferBow = bowDrawn,
+            .preferMelee = runtime.soloRun() && !bowDrawn,
         });
 
+    // A solo run's ordinary weapon attack shortens the cooldowns that say so (Charge's cooldown_per_attack).
+    if (attackResult.actionPerformed && pTalentBlow == nullptr && runtime.soloTalents()
+        && (attackResult.attack.mode == CharacterAttackMode::Melee
+            || attackResult.attack.mode == CharacterAttackMode::Bow))
+    {
+        if (Character *pAttacker = pParty->member(attackResult.actingMemberIndex))
+        {
+            for (const TalentDefinition &talent : soloTalentTable().talents())
+            {
+                const auto found = pAttacker->talentState.cooldownSeconds.find(talent.id);
+                if (talent.cooldownPerAttack > 0.0f && found != pAttacker->talentState.cooldownSeconds.end())
+                {
+                    found->second = std::max(0.0f, found->second - talent.cooldownPerAttack);
+                }
+            }
+        }
+    }
+    // The view model shows the action: a swing or cast it already played (or a talent's own clip) needs nothing more.
+    if (attackResult.actionPerformed && pTalentBlow == nullptr
+        && !(viewModelSwingShown
+            && (attackResult.attack.mode == CharacterAttackMode::Melee || runtime.viewModelLink().waitIsCast)))
+    {
+        const CharacterAttackMode mode = attackResult.attack.mode;
+        runtime.noteViewModelAction(mode == CharacterAttackMode::Melee
+            ? GameplayScreenRuntime::ViewModelAction::Melee
+            : (mode == CharacterAttackMode::None || mode == CharacterAttackMode::Wand
+                ? GameplayScreenRuntime::ViewModelAction::Cast : GameplayScreenRuntime::ViewModelAction::Shot));
+    }
     if (turnBasedCombatRuntime.active() && attackResult.actionPerformed)
     {
         turnBasedCombatRuntime.applyPlayerAction(
@@ -1052,6 +1243,337 @@ void executePartyAttack(
     {
         runtime.passTurnBasedTurn();
     }
+
+    return attackResult;
+}
+
+// Effects and the sound of a blink-like move (the monster blink's), from where the party left to where it arrived.
+void queueTalentMovePresentation(IGameplayWorldRuntime &world, const std::array<float, 3> &from,
+    const std::array<float, 3> &to)
+{
+    EventRuntimeState *pEvents = world.eventRuntimeState();
+    if (pEvents == nullptr)
+    {
+        return;
+    }
+    for (const std::array<float, 3> &point : {from, to})
+    {
+        EventRuntimeState::WorldEffectRequest effect = {};
+        effect.id = "openyamm:fx/arcane_pulse";
+        effect.position = point;
+        pEvents->worldEffectRequests.push_back(std::move(effect));
+    }
+    EventRuntimeState::PendingSound sound = {};
+    // The solo talents' own Blink sound (engine/audio/solo_talents/), the monsters' blink without it.
+    sound.soundScope = SoundScope::World;
+    sound.soundName = "talent_blink";
+    sound.fallbackSoundName = "monster_blink";
+    sound.x = int32_t(std::lround(to[0]));
+    sound.y = int32_t(std::lround(to[1]));
+    sound.z = int32_t(std::lround(to[2]));
+    sound.positional = true;
+    sound.hasExplicitZ = true;
+    pEvents->pendingSounds.push_back(std::move(sound));
+}
+
+// The living hostiles a sweeping talent strikes (pickTalentTargets over the world's actors near the party).
+std::vector<size_t> collectTalentTargets(IGameplayWorldRuntime &world, const GameplayPartyAttackFrameInput &attackInput,
+    float reach, float arcDegrees, size_t maxCount)
+{
+    const GameplayWorldPoint party = attackInput.partyPosition;
+    std::vector<TalentTargetCandidate> candidates;
+    for (const size_t index : world.collectMapActorIndicesWithinRadius(
+             party.x, party.y, party.z, reach + 512.0f, true, party.x, party.y, party.z))
+    {
+        const std::optional<GameplayPartyAttackActorFacts> facts = world.partyAttackActorFacts(index, false);
+        if (!facts)
+        {
+            continue;
+        }
+        candidates.push_back({index, facts->position.x, facts->position.y, facts->position.z, float(facts->radius),
+            !facts->isDead && facts->currentHp > 0 && facts->hostileToParty && !facts->isInvisible});
+    }
+    return pickTalentTargets(candidates, party.x, party.y, party.z, world.gameplayCameraYawRadians(), reach, arcDegrees,
+        maxCount);
+}
+
+// Uses a talent from the action bar: what the status line says (a refusal or what happened; empty for nothing).
+template <typename PickCurrentHit>
+std::string useSoloTalent(GameplayScreenRuntime &runtime, GameplaySpellService &spellService,
+    const GameplayInteractionController::HoverStateInput &standardHoverInput,
+    const GameplaySpellActionController::TargetQueries &targetQueries,
+    const GameplayWorldPickRequest &pickRequest, uint32_t talentIndex, PickCurrentHit &pickCurrentHit,
+    bool atBlow = false)
+{
+    IGameplayWorldRuntime *pWorld = runtime.worldRuntime();
+    Party *pParty = pWorld != nullptr ? pWorld->party() : nullptr;
+    const SoloTalentTable &table = soloTalentTable();
+    if (pParty == nullptr || !runtime.soloTalents() || talentIndex >= table.talents().size()
+        || runtime.turnBasedCombatRuntime().active())
+    {
+        return {};
+    }
+    const TalentDefinition &talent = table.talents()[talentIndex];
+    Character *pMember = pParty->activeMember();
+    const int rank = pMember != nullptr ? talentRank(*pMember, talent.id) : 0;
+    if (pMember == nullptr || rank <= 0 || talent.kind != TalentKind::Active)
+    {
+        return {};
+    }
+    const std::string name = Engine::tr(talent.name);
+    float &cooldown = pMember->talentState.cooldownSeconds[talent.id];
+    GameplayScreenRuntime::ViewModelLink &viewModel = runtime.viewModelLink();
+    // atBlow: a talent started earlier lands now, at its clip's blow; it was checked and paid for then.
+    if (!atBlow)
+    {
+        if (cooldown > 0.0f)
+        {
+            return Engine::tr("{talent} is ready in {seconds} s",
+                {{"talent", name}, {"seconds", int64_t(std::ceil(cooldown))}});
+        }
+        if (!GameMechanics::canTakeGameplayAction(*pMember) || pMember->recoverySecondsRemaining > 0.0f
+            || viewModel.swingWaiting)
+        {
+            return {};
+        }
+    }
+
+    pickCurrentHit();
+    const GameplayWorldHit crosshair = pWorld->pickPartyAttackTarget(pickRequest);
+    const GameplayPartyAttackFrameInput attackInput = pWorld->buildPartyAttackFrameInput(pickRequest);
+    const GameplayActionController::AttackActionDecision press = {
+        .shouldAttemptAttack = true, .pressedThisFrame = true};
+    const std::optional<size_t> crosshairActor = crosshair.kind == GameplayWorldHitKind::Actor && crosshair.actor
+        ? std::optional<size_t>(crosshair.actor->actorIndex)
+        : std::nullopt;
+    // At the blow the clip's time is already part of the member's recovery: the paying blow takes it off.
+    const float recoverySpent = atBlow ? viewModel.swingWaitSeconds : 0.0f;
+    const auto blow = [&](std::optional<size_t> actor, float share, bool extra, bool shot)
+    {
+        const TalentBlow talentBlow = {actor, share, extra, shot, 0, 0.0f, recoverySpent};
+        return executePartyAttack(runtime, spellService, attackInput, standardHoverInput, targetQueries, press,
+            actor ? GameplayWorldHit{} : crosshair, false, &talentBlow);
+    };
+    const float share = talent.share / 100.0f;
+    const auto startCooldown = [&]() { cooldown = talentCooldownSeconds(talent, rank); };
+    const auto showClip = [&](const char *pClip) { runtime.noteViewModelTalent(pClip); };
+    // With the arms shown, a weapon talent's strike waits for its clip's blow (a bow's: the release) as an ordinary
+    // attack does: the clip and the cooldown start now, the strike runs again with atBlow at the release.
+    const auto waitForBlow = [&](const char *pClip)
+    {
+        viewModel.swingWaiting = true;
+        viewModel.blowReleased = false;
+        viewModel.blowDirection.reset();
+        viewModel.swingWaitSeconds = 0.0f;
+        // The clip plays fitted to the attack's recovery, as a swing's does.
+        viewModel.swingRecoverySeconds =
+            attackRecoverySeconds(runtime, pParty, *pMember, std::string_view(pClip) == "volley");
+        viewModel.waitIsCast = false;
+        viewModel.quickCastWaiting = false;
+        viewModel.talentAtBlow = talentIndex;
+        startCooldown();
+        showClip(pClip);
+    };
+    // A bow talent waits only while the arms hold the bow; with the melee weapon in the arms it does not shoot at all
+    // (draw the bow first). Without the arms it shoots at once.
+    const bool bowShown = viewModel.meleeSwings && soloBowDrawn(runtime, pMember);
+    const bool bowStowed = viewModel.meleeSwings && !bowShown;
+    // A talent's own sound (engine/audio/solo_talents/), from the party.
+    const auto playTalentSound = [&](const char *pSound)
+    {
+        if (GameAudioSystem *pAudio = runtime.audioSystem())
+        {
+            pAudio->playSoundByName(pSound, GameAudioSystem::PlaybackGroup::World, SoundScope::Engine,
+                GameAudioSystem::WorldPosition{pWorld->partyX(), pWorld->partyY(), pWorld->partyFootZ() + 96.0f});
+        }
+    };
+
+    if (talent.id == "cleave")
+    {
+        // A burst: every monster in the arc takes the talent's share (150 %).
+        constexpr float Reach = 407.2f;
+        const size_t limit = size_t(std::max(1, talent.targets));
+        std::vector<size_t> targets = collectTalentTargets(*pWorld, attackInput, Reach, talent.arc, limit);
+        if (crosshairActor)
+        {
+            targets.erase(std::remove(targets.begin(), targets.end(), *crosshairActor), targets.end());
+            targets.insert(targets.begin(), *crosshairActor);
+            targets.resize(std::min(targets.size(), limit));
+        }
+        if (targets.empty())
+        {
+            // At the blow the monsters may have stepped away: the swing whiffs.
+            return atBlow ? std::string() : Engine::tr("Nothing in reach");
+        }
+        if (!atBlow && viewModel.meleeSwings)
+        {
+            // The arms swing first; the burst lands at the clip's blow, against what is in the arc then.
+            waitForBlow("cleave");
+            return {};
+        }
+        // The extra blows first: the one that pays the recovery (and plays the sound) puts the member into recovery,
+        // and a recovering member strikes no more. Each monster struck sounds the cleave where it stands.
+        const auto struck = [&](const GameplayActionController::PartyAttackExecutionResult &result)
+        {
+            GameplayRuntimeActorState state = {};
+            GameAudioSystem *pAudio = runtime.audioSystem();
+            if (result.attacked && result.targetActorIndex && pAudio != nullptr
+                && pWorld->actorRuntimeState(*result.targetActorIndex, state))
+            {
+                pAudio->playSoundByName("talent_cleave", GameAudioSystem::PlaybackGroup::World, SoundScope::Engine,
+                    GameAudioSystem::WorldPosition{state.preciseX, state.preciseY,
+                        state.preciseZ + float(state.height) * 0.5f});
+            }
+        };
+        for (size_t index = 1; index < targets.size(); ++index)
+        {
+            struck(blow(targets[index], share, true, false));
+        }
+        struck(blow(targets[0], share, false, false));
+        if (!atBlow)
+        {
+            startCooldown();
+            showClip("cleave");
+        }
+        return {};
+    }
+    if (talent.id == "multishot")
+    {
+        // 2/3/4 arrows (by rank) fanned evenly over the arc either side of the aim (talent.arc), as one shot: each
+        // flies its own heading and hits the first monster in its line.
+        if (!atBlow && bowStowed)
+        {
+            return Engine::tr("{talent} needs the bow drawn", {{"talent", name}});
+        }
+        if (!atBlow && bowShown)
+        {
+            waitForBlow("volley");
+            return {};
+        }
+        const int arrows = std::clamp(talent.targets + int(talent.perRank) * (rank - 1), 1, 16);
+        const TalentBlow volley = {crosshairActor, share, false, true, uint8_t(arrows),
+            2.0f * talent.arc * std::numbers::pi_v<float> / 180.0f, recoverySpent};
+        executePartyAttack(runtime, spellService, attackInput, standardHoverInput, targetQueries, press,
+            crosshairActor ? GameplayWorldHit{} : crosshair, false, &volley);
+        if (!atBlow)
+        {
+            startCooldown();
+            showClip("volley");
+        }
+        return {};
+    }
+    if (talent.id == "binding_circle")
+    {
+        // Every hostile within the circle is held almost still (MAW's slow at a tenth) for the duration.
+        const std::vector<size_t> held = collectTalentTargets(*pWorld, attackInput, talent.distance, 180.0f, 64);
+        if (held.empty())
+        {
+            return Engine::tr("Nothing in reach");
+        }
+        for (const size_t actor : held)
+        {
+            pWorld->debuffActor(actor, GameplayActorHitDebuff::Slow, talentDurationSeconds(talent, rank), 10.0f);
+        }
+        startCooldown();
+        showClip("binding_circle");
+        return Engine::tr("{name}: Binding Circle", {{"name", pMember->name}});
+    }
+    if (talent.id == "pinning_shot")
+    {
+        if (!atBlow && bowStowed)
+        {
+            return Engine::tr("{talent} needs the bow drawn", {{"talent", name}});
+        }
+        if (!atBlow && bowShown)
+        {
+            waitForBlow("volley");
+            return {};
+        }
+        const GameplayActionController::PartyAttackExecutionResult shot = blow(std::nullopt, 1.0f, false, true);
+        if (shot.targetActorIndex)
+        {
+            pWorld->debuffActor(*shot.targetActorIndex, GameplayActorHitDebuff::Slow,
+                talentDurationSeconds(talent, rank), 2.0f);
+        }
+        if (!atBlow)
+        {
+            startCooldown();
+            showClip("volley");
+        }
+        return {};
+    }
+    if (talent.id == "charge")
+    {
+        // The monster under the crosshair, else the nearest hostile within reach in a narrow cone ahead (a far small
+        // monster is hard to pick).
+        constexpr float ChargeConeDegrees = 12.0f;
+        std::optional<size_t> chargeTarget = crosshairActor;
+        if (!chargeTarget)
+        {
+            const std::vector<size_t> ahead =
+                collectTalentTargets(*pWorld, attackInput, talent.distance, ChargeConeDegrees, 1);
+            if (!ahead.empty())
+            {
+                chargeTarget = ahead.front();
+            }
+        }
+        GameplayRuntimeActorState target = {};
+        if (!chargeTarget || !pWorld->actorRuntimeState(*chargeTarget, target) || target.isDead)
+        {
+            return Engine::tr("Charge needs a target");
+        }
+        const float dx = target.preciseX - pWorld->partyX();
+        const float dy = target.preciseY - pWorld->partyY();
+        const float distance = std::hypot(dx, dy);
+        constexpr float StopShort = 260.0f;
+        if (distance > talent.distance)
+        {
+            return Engine::tr("Out of range");
+        }
+        playTalentSound("talent_charge");
+        if (distance > StopShort)
+        {
+            pWorld->dashParty(dx / distance, dy / distance, distance - StopShort);
+        }
+        blow(chargeTarget, 1.0f, false, false);
+        pWorld->stunActor(*chargeTarget, talentDurationSeconds(talent, rank));
+        startCooldown();
+        showClip("charge");
+        return {};
+    }
+    if (talent.id == "blink")
+    {
+        const float yaw = pWorld->gameplayCameraYawRadians();
+        const std::array<float, 3> from = {pWorld->partyX(), pWorld->partyY(), pWorld->partyFootZ() + 96.0f};
+        if (!pWorld->dashParty(std::cos(yaw), std::sin(yaw), talent.distance))
+        {
+            return Engine::tr("Cannot move there");
+        }
+        queueTalentMovePresentation(*pWorld, from,
+            {from[0] + std::cos(yaw) * talent.distance, from[1] + std::sin(yaw) * talent.distance, from[2]});
+        startCooldown();
+        showClip("blink");
+        return {};
+    }
+    if (talent.id == "shield_wall")
+    {
+        if (pMember->equipment.offHand == 0)
+        {
+            return Engine::tr("Shield Wall needs a shield");
+        }
+        pMember->talentState.shieldWallSeconds = talentDurationSeconds(talent, rank);
+        startCooldown();
+        showClip("shield_wall");
+        return Engine::tr("{name}: Shield Wall", {{"name", pMember->name}});
+    }
+    if (talent.id == "spell_surge")
+    {
+        pMember->talentState.spellSurgeArmed = true;
+        startCooldown();
+        showClip("spell_surge");
+        return Engine::tr("{name}: Spell Surge", {{"name", pMember->name}});
+    }
+    return {};
 }
 
 void clearWorldInteractionFrameState(
@@ -1533,13 +2055,18 @@ GameplayInteractionController::updateWorldInteractionFrame(
     const bool inspectModeActive = pWorldRuntime != nullptr && pWorldRuntime->worldInspectModeActive();
     const bool pendingSpellCancelPressed = input.isScancodeHeld(SDL_SCANCODE_ESCAPE);
     // A click on the quick item ring is its own: Attack on the left button must not attack as well.
+    // So is the solo bar selector's (the Ctrl click that opened it, the click that closed it).
     const bool keyboardUsePressed = input.action(KeyboardAction::Trigger).held
-        && !GameplayQuickItems::takesPointerAction(runtime, KeyboardAction::Trigger);
+        && !GameplayQuickItems::takesPointerAction(runtime, KeyboardAction::Trigger)
+        && !GameplaySoloBarSelector::takesPointerAction(runtime, KeyboardAction::Trigger);
     const bool usePressed = input.action(KeyboardAction::Use).held
-        && !GameplayQuickItems::takesPointerAction(runtime, KeyboardAction::Use);
+        && !GameplayQuickItems::takesPointerAction(runtime, KeyboardAction::Use)
+        && !GameplaySoloBarSelector::takesPointerAction(runtime, KeyboardAction::Use);
     const bool attackPressed = input.action(KeyboardAction::Attack).held
-        && !GameplayQuickItems::takesPointerAction(runtime, KeyboardAction::Attack);
-    const bool leftMousePressed = input.leftMouseButton.held && !GameplayQuickItems::takesPointer(runtime);
+        && !GameplayQuickItems::takesPointerAction(runtime, KeyboardAction::Attack)
+        && !GameplaySoloBarSelector::takesPointerAction(runtime, KeyboardAction::Attack);
+    const bool leftMousePressed = input.leftMouseButton.held && !GameplayQuickItems::takesPointer(runtime)
+        && !GameplaySoloBarSelector::takesPointer(runtime);
     const bool rightMousePressed = input.rightMouseButton.held;
     const bool mouseLookActive = sharedInput.mouseLookPolicy.mouseLookActive;
     const bool cursorModeActive = sharedInput.mouseLookPolicy.cursorModeActive;
@@ -2166,7 +2693,7 @@ GameplayInteractionController::updateWorldInteractionFrame(
                 .fastRepeat = runtime.settingsSnapshot().fastAttackRepeat,
             });
 
-    if (attackActionDecision.shouldAttemptAttack)
+    const auto runPartyAttack = [&](const GameplayActionController::AttackActionDecision &decision, bool swingShown)
     {
         pickCurrentHit();
         const GameplayWorldHit attackHit = pWorldRuntime != nullptr
@@ -2183,8 +2710,182 @@ GameplayInteractionController::updateWorldInteractionFrame(
             partyAttackInput,
             standardHoverInput,
             targetQueries,
-            attackActionDecision,
-            attackHit);
+            decision,
+            attackHit,
+            swingShown);
+    };
+
+    // A solo dragon whose target is out of claw reach breathes at once, as a party dragon does: no swing and no
+    // inhale (devdocs/solo_action/DRAGON.md). Battle orders holding a spell show that cast instead, as below.
+    const auto soloDragonBreathesNow = [&]() -> bool
+    {
+        const Party *pParty = pWorldRuntime != nullptr ? pWorldRuntime->party() : nullptr;
+        const Character *pMember = pParty != nullptr ? pParty->activeMember() : nullptr;
+        if (pMember == nullptr || soloBowDrawn(runtime, pMember)
+            || std::any_of(pMember->battleOrders.begin(), pMember->battleOrders.end(), [](const BattleOrder &order)
+                { return order.enabled && order.kind == BattleOrderKind::Spell; }))
+        {
+            return false;
+        }
+        const CharacterAttackProfile profile = GameMechanics::buildCharacterAttackProfile(
+            *pMember,
+            runtime.itemTable(),
+            runtime.spellTable(),
+            characterAttackTuningFromSettings(runtime.settingsSnapshot()));
+        pickCurrentHit();
+        return soloDragonBreathes(*pWorldRuntime, *pParty, *pMember, profile,
+            pWorldRuntime->pickPartyAttackTarget(currentInteractionPickRequest), currentInteractionPickRequest);
+    };
+
+    // The prototype view model's swing: a melee attack starts it and lands at its blow, against what is in reach
+    // then (GameplayScreenRuntime::ViewModelLink). A swing under way takes further presses.
+    GameplayScreenRuntime::ViewModelLink &viewModel = runtime.viewModelLink();
+    if (attackActionDecision.shouldAttemptAttack)
+    {
+        if (viewModel.swingWaiting)
+        {
+            result.attackAttempted = true;
+        }
+        else if (viewModel.meleeSwings && hasReadyMember && !runtime.turnBasedCombatRuntime().active()
+                 && pWorldRuntime != nullptr && pWorldRuntime->party() != nullptr
+                 && pWorldRuntime->party()->activeMember() != nullptr
+                 && !GameMechanics::canTakeGameplayAction(*pWorldRuntime->party()->activeMember()))
+        {
+            // The active member is still recovering: the press waits (a held key retries), no swing is shown.
+            result.attackAttempted = true;
+        }
+        else if (viewModel.meleeSwings && hasReadyMember && !runtime.turnBasedCombatRuntime().active()
+                 && soloDragonBreathesNow())
+        {
+            runPartyAttack(attackActionDecision, false);
+        }
+        else if (viewModel.meleeSwings && hasReadyMember && !runtime.turnBasedCombatRuntime().active())
+        {
+            viewModel.swingWaiting = true;
+            viewModel.blowReleased = false;
+            viewModel.blowDirection.reset();
+            viewModel.swingWaitSeconds = 0.0f;
+            viewModel.swingRecoverySeconds = 0.0f;
+            viewModel.waitIsCast = false;
+            viewModel.quickCastWaiting = false;
+            result.attackAttempted = true;
+            const Party *pSwingParty = pWorldRuntime != nullptr ? pWorldRuntime->party() : nullptr;
+            const Character *pAttacker = pSwingParty != nullptr ? pSwingParty->activeMember() : nullptr;
+            // An Attack whose battle orders hold a spell shows that spell's cast (the first enabled one; the orders
+            // still decide at the release what is done, as they would at the press).
+            if (pAttacker != nullptr)
+            {
+                for (const BattleOrder &order : pAttacker->battleOrders)
+                {
+                    if (order.enabled && order.kind == BattleOrderKind::Spell
+                        && GameplaySpellActionController::prepareViewModelCast(runtime, *pAttacker, order.spellName))
+                    {
+                        viewModel.waitIsCast = true;
+                        break;
+                    }
+                }
+            }
+            if (pAttacker != nullptr && runtime.itemTable() != nullptr)
+            {
+                // The weapon's strongest element tints the swing's trail.
+                ElementalDamageBonuses elements = ItemEnchantRuntime::characterAttackElementalDamageRange(
+                    *pAttacker, CharacterAttackMode::Melee, runtime.itemTable(), runtime.specialItemEnchantTable())
+                                                      .maximum;
+                elements += ItemEnchantRuntime::characterWeaponDamageElements(
+                    *pAttacker, CharacterAttackMode::Melee, runtime.itemTable());
+                const std::vector<MeleeWeaponElement> weaponElements = meleeWeaponElementsFor(elements);
+                viewModel.weaponElement = uint8_t(weaponElements.empty() ? MeleeWeaponElement::None
+                                                                         : weaponElements.front());
+            }
+            ++viewModel.swingSerial;
+            // The swing (or the drawn bow's shot) fits the member's recovery for it; a swing's whoosh plays now
+            // rather than at the blow, while the bow sounds as the arrow leaves.
+            if (const Character *pMember = viewModel.waitIsCast ? nullptr : pAttacker)
+            {
+                const bool shot = soloBowDrawn(runtime, pMember);
+                viewModel.swingRecoverySeconds = attackRecoverySeconds(runtime, pSwingParty, *pMember, shot);
+                if (!shot)
+                {
+                    GameplayActionController::playMeleeSwingSound(
+                        runtime, *pMember, runtime.itemTable(), pWorldRuntime->partyX(), pWorldRuntime->partyY(),
+                        pWorldRuntime->partyFootZ() + 96.0f);
+                }
+            }
+        }
+        else
+        {
+            runPartyAttack(attackActionDecision, false);
+        }
+    }
+    // A blow the view model never reports (its clip missing, the view model gone) still lands, after two seconds of
+    // game time (the view model counts it).
+    constexpr float SwingTimeoutSeconds = 2.0f;
+    if (viewModel.swingWaiting && !viewModel.quickCastWaiting
+        && (viewModel.blowReleased || viewModel.swingWaitSeconds > SwingTimeoutSeconds))
+    {
+        viewModel.swingWaiting = false;
+        if (const std::optional<uint32_t> talentIndex = std::exchange(viewModel.talentAtBlow, std::nullopt))
+        {
+            const std::string status = useSoloTalent(runtime, spellService, standardHoverInput, targetQueries,
+                currentInteractionPickRequest, *talentIndex, pickCurrentHit, true);
+            if (!status.empty())
+            {
+                runtime.setStatusBarEvent(status);
+            }
+        }
+        else if (viewModel.waitIsCast)
+        {
+            // A cast's recovery counts from the press too: the time the clip took comes off whatever the attack set
+            // (the blow path is told nothing, so a fallback blow is not shortened twice).
+            const float spent = viewModel.swingWaitSeconds;
+            viewModel.swingWaitSeconds = 0.0f;
+            runPartyAttack({.shouldAttemptAttack = true, .pressedThisFrame = true}, true);
+            Party *pCastParty = pWorldRuntime != nullptr ? pWorldRuntime->party() : nullptr;
+            Character *pCaster =
+                pCastParty != nullptr ? pCastParty->member(pCastParty->activeMemberIndex()) : nullptr;
+            if (pCaster != nullptr)
+            {
+                pCaster->recoverySecondsRemaining = std::max(0.0f, pCaster->recoverySecondsRemaining - spent);
+            }
+        }
+        else
+        {
+            runPartyAttack({.shouldAttemptAttack = true, .pressedThisFrame = true}, true);
+        }
+        viewModel.blowDirection.reset();
+    }
+
+    // A solo run's talent from the action bar (devdocs/solo_action/TALENTS.md).
+    if (overlayInteractionState.soloTalentRequested)
+    {
+        const uint32_t talentIndex = *overlayInteractionState.soloTalentRequested;
+        overlayInteractionState.soloTalentRequested.reset();
+        const std::string status = useSoloTalent(runtime, spellService, standardHoverInput, targetQueries,
+            currentInteractionPickRequest, talentIndex, pickCurrentHit);
+        if (!status.empty())
+        {
+            runtime.setStatusBarEvent(status);
+        }
+        result.attackAttempted = true;
+    }
+
+    // A solo run's weapon cycling (its keys or the action bar's swap slot): the arms draw the next of the melee weapon
+    // and the bow (of two weapons the next and the previous are the same one), and with the bow drawn Attack shoots
+    // even at melee range. Not while a swing waits for its blow, nor again within the wheel's guard, nor with the
+    // right button held: the wheel then scrolls the inspected item's text.
+    const bool swapRequested = input.action(KeyboardAction::NextWeapon).pressed
+        || input.action(KeyboardAction::PreviousWeapon).pressed
+        || std::exchange(runtime.interactionState().soloWeaponSwapRequested, false);
+    if (swapRequested && runtime.soloRun() && !viewModel.swingWaiting && !rightMousePressed
+        && pWorldRuntime != nullptr && pWorldRuntime->party() != nullptr
+        && currentTickNanoseconds - viewModel.weaponCycleTickNanoseconds >= WeaponCycleGuardNanoseconds)
+    {
+        const Character *pMember = pWorldRuntime->party()->activeMember();
+        if (pMember != nullptr && pMember->equipment.bow != 0 && !pMember->equipmentRuntime.bow.broken)
+        {
+            viewModel.bowSelected = !viewModel.bowSelected;
+            viewModel.weaponCycleTickNanoseconds = currentTickNanoseconds;
+        }
     }
 
     // MAW's Knight Charge: a lone Knight dashes at the monster under the cursor.
@@ -2210,6 +2911,16 @@ GameplayInteractionController::updateWorldInteractionFrame(
     if (GameplayQuickItems::needsCursor(runtime) || GameplayFormationBuilder::isOpen(runtime))
     {
         runtime.clearWorldStatusBarHoverText();
+        runtime.setWorldItemHoverLabel({}, 0, 0, 0);
+    }
+    // A solo run's bar slot under the free pointer says how to choose what goes on its key.
+    else if (const std::string barHint = !mouseLookActive || cursorModeActive
+                 ? GameplaySoloBarSelector::barHoverText(runtime, input.screenWidth, input.screenHeight,
+                       input.pointerX, input.pointerY)
+                 : std::string();
+             !barHint.empty())
+    {
+        runtime.setStatusBarHoverText(barHint);
         runtime.setWorldItemHoverLabel({}, 0, 0, 0);
     }
     else

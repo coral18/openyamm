@@ -20,6 +20,9 @@
 #include <array>
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
+#include <cstring>
+#include <iostream>
 #include <cstdio>
 #include <cctype>
 #include <functional>
@@ -1363,6 +1366,8 @@ std::optional<GameplayHudTextureHandle> GameplayUiRuntime::ensureSolidHudTexture
     const size_t index = m_hudTextureHandles.size();
     m_hudTextureHandles.push_back(std::move(textureHandle));
     m_hudTextureIndexByName[m_hudTextureHandles.back().textureName] = index;
+    // On the HUD the colour draws from the shared palette (with the palette full, from this texture).
+    m_hudDrawTextures[m_hudTextureHandles.back().textureHandle.idx].paletteColor = ensureHudPaletteColor(abgrColor);
 
     GameplayHudTextureHandle result = {};
     result.textureName = m_hudTextureHandles.back().textureName;
@@ -1819,6 +1824,8 @@ bool GameplayUiRuntime::isOpaqueHudPixelAtPoint(const GameplayRenderedInspectabl
 
 void GameplayUiRuntime::releaseHudGpuResources(bool destroyBgfxResources)
 {
+    // Collected quads name textures that are about to go: the frame's HUD is dropped, not drawn with other art.
+    m_hudDrawList.clear();
     for (bgfx::UniformHandle &uniform : m_previewUniforms)
     {
         if (destroyBgfxResources && bgfx::isValid(uniform))
@@ -1851,7 +1858,7 @@ void GameplayUiRuntime::releaseHudGpuResources(bool destroyBgfxResources)
     }
 
     m_hudTextureHandles.clear();
-    m_hudTextureUvScales.clear();
+    m_hudDrawTextures.clear();
     m_hudTextureIndexByName.clear();
     m_hudFontHandles.clear();
     m_hudTextureColorTextureHandles.clear();
@@ -2018,6 +2025,8 @@ void GameplayUiRuntime::renderActorInspectPreview(const IGameplayWorldRuntime &w
         }
         bgfx::setUniform(m_previewUniforms[i], i == names.size() - 1 ? distances : clear);
     }
+    // This sprite draws with the palette program, not through the draw list: what the list holds comes first.
+    flushHudDrawList();
     float model[16] = {};
     bx::mtxIdentity(model);
     bgfx::setTransform(model);
@@ -2036,7 +2045,8 @@ void GameplayUiRuntime::clearHudRenderBackend()
 
 bool GameplayUiRuntime::hasHudRenderResources() const
 {
-    return bgfx::isValid(m_hudRenderBackend.texturedProgramHandle)
+    return bgfx::isValid(m_hudRenderBackend.drawListProgramHandle)
+        && bgfx::isValid(m_hudRenderBackend.texturedProgramHandle)
         && bgfx::isValid(m_hudRenderBackend.tintedProgramHandle)
         && bgfx::isValid(m_hudRenderBackend.tintUniformHandle)
         && bgfx::isValid(m_hudRenderBackend.textureSamplerHandle);
@@ -2073,15 +2083,193 @@ void GameplayUiRuntime::registerHudTextureUvScales(size_t firstTexture)
         const GameplayHudTextureData &texture = m_hudTextureHandles[index];
         if (texture.uScale != 1.0f || texture.vScale != 1.0f)
         {
-            m_hudTextureUvScales[texture.textureHandle.idx] = {texture.uScale, texture.vScale};
+            HudDrawTexture &drawTexture = m_hudDrawTextures[texture.textureHandle.idx];
+            drawTexture.uScale = texture.uScale;
+            drawTexture.vScale = texture.vScale;
         }
     }
 }
 
 std::array<float, 2> GameplayUiRuntime::hudTextureUvScale(bgfx::TextureHandle textureHandle) const
 {
-    const auto scale = m_hudTextureUvScales.find(textureHandle.idx);
-    return scale != m_hudTextureUvScales.end() ? scale->second : std::array<float, 2>{1.0f, 1.0f};
+    const auto texture = m_hudDrawTextures.find(textureHandle.idx);
+    return texture != m_hudDrawTextures.end()
+        ? std::array<float, 2>{texture->second.uScale, texture->second.vScale} : std::array<float, 2>{1.0f, 1.0f};
+}
+
+namespace
+{
+// The draw list's vertex: HudVertex as bgfx reads it (x, y and the alpha cut as the position).
+const bgfx::VertexLayout &hudDrawListVertexLayout()
+{
+    static const bgfx::VertexLayout layout = []()
+    {
+        bgfx::VertexLayout result;
+        result.begin()
+            .add(bgfx::Attrib::Position, 3, bgfx::AttribType::Float)
+            .add(bgfx::Attrib::TexCoord0, 2, bgfx::AttribType::Float)
+            .add(bgfx::Attrib::Color0, 4, bgfx::AttribType::Uint8, true)
+            .end();
+        return result;
+    }();
+
+    return layout;
+}
+
+static_assert(sizeof(HudVertex) == 24, "HudVertex is the draw list program's vertex, without padding");
+
+constexpr uint32_t HudClampSampler = BGFX_SAMPLER_U_CLAMP | BGFX_SAMPLER_V_CLAMP;
+
+// OPENYAMM_HUD_UNBATCHED=1 draws every HUD call at once, as the HUD did before the draw list. For finding an
+// ordering fault: if a wrong overlap goes away with it, something draws into the HUD view outside the list and
+// needs a flushHudDrawList() before it.
+bool hudDrawListUnbatched()
+{
+    static const bool unbatched = std::getenv("OPENYAMM_HUD_UNBATCHED") != nullptr;
+    return unbatched;
+}
+
+// The cut the HUD's two former programs applied: untinted quads dropped their faintest texels, tinted ones none.
+float hudAlphaCutForTint(uint32_t tintAbgr)
+{
+    return tintAbgr == 0xffffffffu ? HudAlphaCutUntinted : HudAlphaCutNone;
+}
+}
+
+GameplayUiRuntime::HudDrawTarget GameplayUiRuntime::hudDrawTarget(bgfx::TextureHandle textureHandle,
+    TextureFilterProfile filterProfile, uint32_t samplerFlags) const
+{
+    HudDrawTarget target;
+    const auto texture = m_hudDrawTextures.find(textureHandle.idx);
+
+    if (texture != m_hudDrawTextures.end())
+    {
+        target.texture = texture->second;
+    }
+
+    if (target.texture.paletteColor)
+    {
+        target.state.textureIndex = target.texture.paletteColor->textureHandle.idx;
+    }
+    else
+    {
+        target.state.textureIndex = textureHandle.idx;
+    }
+
+    // A palette texel reads the same under any sampler: one sampler for all of them, so they share draws.
+    const bool palette = target.state.textureIndex == m_hudPaletteTextureHandle.idx;
+    target.state.samplerFlags = palette ? textureBindingSamplerFlags(TextureFilterProfile::Ui, HudClampSampler)
+        : textureBindingSamplerFlags(filterProfile, samplerFlags);
+    return target;
+}
+
+void GameplayUiRuntime::hudPrimitivesAdded() const
+{
+    if (hudDrawListUnbatched())
+    {
+        flushHudDrawList();
+    }
+}
+
+void GameplayUiRuntime::flushHudDrawList() const
+{
+    if (m_hudDrawList.empty())
+    {
+        return;
+    }
+
+    const uint32_t vertexCount = uint32_t(m_hudDrawList.vertices().size());
+    const uint32_t indexCount = uint32_t(m_hudDrawList.indices().size());
+    bgfx::TransientVertexBuffer vertices = {};
+    bgfx::TransientIndexBuffer indices = {};
+
+    // Without the program or the room the frame's HUD is dropped whole, never drawn in part or a frame late.
+    if (hasHudRenderResources()
+        && bgfx::allocTransientBuffers(&vertices, hudDrawListVertexLayout(), vertexCount, &indices, indexCount))
+    {
+        std::memcpy(vertices.data, m_hudDrawList.vertices().data(), size_t(vertexCount) * sizeof(HudVertex));
+        std::memcpy(indices.data, m_hudDrawList.indices().data(), size_t(indexCount) * sizeof(uint16_t));
+
+        for (const HudDrawCommand &command : m_hudDrawList.commands())
+        {
+            bgfx::setVertexBuffer(0, &vertices, command.firstVertex, command.vertexCount);
+            bgfx::setIndexBuffer(&indices, command.firstIndex, command.indexCount);
+            bgfx::setTexture(0, m_hudRenderBackend.textureSamplerHandle,
+                bgfx::TextureHandle{command.state.textureIndex}, command.state.samplerFlags);
+
+            if (command.state.clipped)
+            {
+                bgfx::setScissor(command.state.scissorX, command.state.scissorY, command.state.scissorWidth,
+                    command.state.scissorHeight);
+            }
+
+            bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A | BGFX_STATE_BLEND_ALPHA);
+            bgfx::submit(m_hudRenderBackend.viewId, m_hudRenderBackend.drawListProgramHandle);
+        }
+
+        if (m_logNextHudDrawList)
+        {
+            m_logNextHudDrawList = false;
+            logHudDrawList();
+        }
+
+        m_hudDrawListStats.draws += m_hudDrawList.commands().size();
+        m_hudDrawListStats.primitives += m_hudDrawList.primitiveCount();
+        m_hudDrawListStats.vertices += vertexCount;
+    }
+
+    m_hudDrawList.clear();
+}
+
+const GameplayUiRuntime::HudDrawListStats &GameplayUiRuntime::hudDrawListStats() const
+{
+    return m_hudDrawListStats;
+}
+
+void GameplayUiRuntime::logNextHudDrawList() const
+{
+    m_logNextHudDrawList = true;
+}
+
+void GameplayUiRuntime::logHudDrawList() const
+{
+    const auto textureName = [this](uint16_t textureIndex) -> std::string
+    {
+        if (textureIndex == m_hudPaletteTextureHandle.idx)
+        {
+            return "solid colours";
+        }
+
+        for (const GameplayHudTextureData &texture : m_hudTextureHandles)
+        {
+            if (texture.textureHandle.idx == textureIndex)
+            {
+                return texture.textureName;
+            }
+        }
+
+        for (const GameplayHudFontData &font : m_hudFontHandles)
+        {
+            if (font.mainTextureHandle.idx == textureIndex || font.shadowTextureHandle.idx == textureIndex
+                || font.tintTextureHandle.idx == textureIndex)
+            {
+                return "font " + font.fontName + (font.shadowTextureHandle.idx == textureIndex ? " shadow" : "");
+            }
+        }
+
+        return "texture " + std::to_string(textureIndex);
+    };
+
+    std::cout << "[HudDraws] draws=" << m_hudDrawList.commands().size()
+              << " primitives=" << m_hudDrawList.primitiveCount()
+              << " vertices=" << m_hudDrawList.vertices().size() << '\n';
+
+    for (const HudDrawCommand &command : m_hudDrawList.commands())
+    {
+        std::cout << "[HudDraw] vertices=" << command.vertexCount
+                  << (command.state.clipped ? " clipped" : "")
+                  << " texture=" << textureName(command.state.textureIndex) << '\n';
+    }
 }
 
 void GameplayUiRuntime::submitHudTexturedQuad(
@@ -2105,38 +2293,16 @@ void GameplayUiRuntime::submitHudTexturedQuad(
         return;
     }
 
-    bgfx::TransientVertexBuffer vertexBuffer = {};
-    bgfx::TransientIndexBuffer indexBuffer = {};
-
-    if (!bgfx::allocTransientBuffers(
-            &vertexBuffer,
-            gameplayHudQuadVertexLayout(),
-            4,
-            &indexBuffer,
-            6))
-    {
-        return;
-    }
-
-    struct HudQuadVertex
-    {
-        float x;
-        float y;
-        float z;
-        float u;
-        float v;
-    };
-
-    const std::array<float, 2> uvScale = hudTextureUvScale(textureHandle);
-    u0 *= uvScale[0];
-    u1 *= uvScale[0];
-    v0 *= uvScale[1];
-    v1 *= uvScale[1];
-    HudQuadVertex *pVertices = reinterpret_cast<HudQuadVertex *>(vertexBuffer.data);
-    pVertices[0] = {x, y, 0.0f, u0, v0};
-    pVertices[1] = {x + quadWidth, y, 0.0f, u1, v0};
-    pVertices[2] = {x + quadWidth, y + quadHeight, 0.0f, u1, v1};
-    pVertices[3] = {x, y + quadHeight, 0.0f, u0, v1};
+    const HudDrawTarget target = hudDrawTarget(textureHandle, filterProfile, HudClampSampler);
+    u0 = target.u(u0);
+    u1 = target.u(u1);
+    v0 = target.v(v0);
+    v1 = target.v(v1);
+    std::array<HudVertex, 4> corners = {{
+        {x, y, HudAlphaCutUntinted, u0, v0},
+        {x + quadWidth, y, HudAlphaCutUntinted, u1, v0},
+        {x + quadWidth, y + quadHeight, HudAlphaCutUntinted, u1, v1},
+        {x, y + quadHeight, HudAlphaCutUntinted, u0, v1}}};
 
     if (rotationRadians != 0.0f)
     {
@@ -2144,36 +2310,17 @@ void GameplayUiRuntime::submitHudTexturedQuad(
         const float centerY = y + quadHeight * 0.5f;
         const float cosine = std::cos(rotationRadians);
         const float sine = std::sin(rotationRadians);
-        for (size_t i = 0; i < 4; ++i)
+        for (HudVertex &corner : corners)
         {
-            const float dx = pVertices[i].x - centerX;
-            const float dy = pVertices[i].y - centerY;
-            pVertices[i].x = centerX + dx * cosine - dy * sine;
-            pVertices[i].y = centerY + dx * sine + dy * cosine;
+            const float dx = corner.x - centerX;
+            const float dy = corner.y - centerY;
+            corner.x = centerX + dx * cosine - dy * sine;
+            corner.y = centerY + dx * sine + dy * cosine;
         }
     }
 
-    uint16_t *pIndices = reinterpret_cast<uint16_t *>(indexBuffer.data);
-    pIndices[0] = 0;
-    pIndices[1] = 1;
-    pIndices[2] = 2;
-    pIndices[3] = 0;
-    pIndices[4] = 2;
-    pIndices[5] = 3;
-
-    float modelMatrix[16] = {};
-    bx::mtxIdentity(modelMatrix);
-    bgfx::setTransform(modelMatrix);
-    bgfx::setVertexBuffer(0, &vertexBuffer);
-    bgfx::setIndexBuffer(&indexBuffer);
-    bindTexture(
-        0,
-        m_hudRenderBackend.textureSamplerHandle,
-        textureHandle,
-        filterProfile,
-        BGFX_SAMPLER_U_CLAMP | BGFX_SAMPLER_V_CLAMP);
-    bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A | BGFX_STATE_BLEND_ALPHA);
-    bgfx::submit(m_hudRenderBackend.viewId, m_hudRenderBackend.texturedProgramHandle);
+    m_hudDrawList.addQuad(target.state, corners);
+    hudPrimitivesAdded();
 }
 
 void GameplayUiRuntime::submitHudTexturedEllipse(
@@ -2185,41 +2332,26 @@ void GameplayUiRuntime::submitHudTexturedEllipse(
         return;
     }
     constexpr uint16_t segments = 96;
-    bgfx::TransientVertexBuffer vertices = {};
-    bgfx::TransientIndexBuffer indices = {};
-    if (!bgfx::allocTransientBuffers(&vertices, gameplayHudQuadVertexLayout(), segments + 1,
-        &indices, segments * 3))
+    const HudDrawTarget target = hudDrawTarget(textureHandle, TextureFilterProfile::Ui, HudClampSampler);
+    const HudDrawList::Primitive fan = m_hudDrawList.add(target.state, segments + 1, segments * 3);
+    if (fan.pVertices == nullptr)
     {
         return;
     }
-    struct Vertex { float x; float y; float z; float u; float v; };
-    Vertex *pVertices = reinterpret_cast<Vertex *>(vertices.data);
-    uint16_t *pIndices = reinterpret_cast<uint16_t *>(indices.data);
-    const std::array<float, 2> uvScale = hudTextureUvScale(textureHandle);
-    u0 *= uvScale[0];
-    u1 *= uvScale[0];
-    v0 *= uvScale[1];
-    v1 *= uvScale[1];
-    pVertices[0] = {x + width * 0.5f, y + height * 0.5f, 0.0f, (u0 + u1) * 0.5f, (v0 + v1) * 0.5f};
+    fan.pVertices[0] = {x + width * 0.5f, y + height * 0.5f, HudAlphaCutUntinted, target.u((u0 + u1) * 0.5f),
+        target.v((v0 + v1) * 0.5f)};
     for (uint16_t i = 0; i < segments; ++i)
     {
         const float angle = i * 6.28318530718f / segments;
         const float u = 0.5f + 0.5f * std::cos(angle);
         const float v = 0.5f + 0.5f * std::sin(angle);
-        pVertices[i + 1] = {x + width * u, y + height * v, 0.0f, u0 + (u1 - u0) * u, v0 + (v1 - v0) * v};
-        pIndices[i * 3] = 0;
-        pIndices[i * 3 + 1] = i + 1;
-        pIndices[i * 3 + 2] = (i + 1) % segments + 1;
+        fan.pVertices[i + 1] = {x + width * u, y + height * v, HudAlphaCutUntinted, target.u(u0 + (u1 - u0) * u),
+            target.v(v0 + (v1 - v0) * v)};
+        fan.pIndices[i * 3] = fan.firstVertex;
+        fan.pIndices[i * 3 + 1] = uint16_t(fan.firstVertex + i + 1);
+        fan.pIndices[i * 3 + 2] = uint16_t(fan.firstVertex + (i + 1) % segments + 1);
     }
-    float modelMatrix[16] = {};
-    bx::mtxIdentity(modelMatrix);
-    bgfx::setTransform(modelMatrix);
-    bgfx::setVertexBuffer(0, &vertices);
-    bgfx::setIndexBuffer(&indices);
-    bindTexture(0, m_hudRenderBackend.textureSamplerHandle, textureHandle, TextureFilterProfile::Ui,
-        BGFX_SAMPLER_U_CLAMP | BGFX_SAMPLER_V_CLAMP);
-    bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A | BGFX_STATE_BLEND_ALPHA);
-    bgfx::submit(m_hudRenderBackend.viewId, m_hudRenderBackend.texturedProgramHandle);
+    hudPrimitivesAdded();
 }
 
 void GameplayUiRuntime::submitHudTexturedArc(bgfx::TextureHandle textureHandle,
@@ -2232,33 +2364,27 @@ void GameplayUiRuntime::submitHudTexturedArc(bgfx::TextureHandle textureHandle,
     {
         return;
     }
-    bgfx::TransientVertexBuffer vertices = {};
-    bgfx::TransientIndexBuffer indices = {};
-    if (!bgfx::allocTransientBuffers(&vertices, gameplayHudQuadVertexLayout(), 4 * (range.segments + 1),
-        &indices, 18 * range.segments))
+    const HudArcMesh &mesh = m_hudArcMeshCache.get({rect.x, rect.y, rect.width, rect.height,
+        strokeWidth, startDegrees, sweepDegrees, range.begin, range.end});
+    const HudDrawTarget target = hudDrawTarget(textureHandle, TextureFilterProfile::Ui,
+        (uRepeat == 1 ? BGFX_SAMPLER_U_CLAMP : 0) | BGFX_SAMPLER_V_CLAMP);
+    const HudDrawList::Primitive arc = m_hudDrawList.add(target.state, uint32_t(mesh.vertices.size()),
+        uint32_t(mesh.indices.size()));
+    if (arc.pVertices == nullptr)
     {
         return;
     }
-    const HudArcMesh &mesh = m_hudArcMeshCache.get({rect.x, rect.y, rect.width, rect.height,
-        strokeWidth, startDegrees, sweepDegrees, range.begin, range.end});
-    HudArcMeshVertex *pArcVertices = reinterpret_cast<HudArcMeshVertex *>(vertices.data);
-    std::copy(mesh.vertices.begin(), mesh.vertices.end(), pArcVertices);
-    const std::array<float, 2> uvScale = hudTextureUvScale(textureHandle);
     for (size_t index = 0; index < mesh.vertices.size(); ++index)
     {
-        pArcVertices[index].u *= uvScale[0] * uRepeat;
-        pArcVertices[index].v *= uvScale[1];
+        const HudArcMeshVertex &vertex = mesh.vertices[index];
+        arc.pVertices[index] = {vertex.x, vertex.y, HudAlphaCutUntinted, target.u(vertex.u * uRepeat),
+            target.v(vertex.v)};
     }
-    std::copy(mesh.indices.begin(), mesh.indices.end(), reinterpret_cast<uint16_t *>(indices.data));
-    float modelMatrix[16] = {};
-    bx::mtxIdentity(modelMatrix);
-    bgfx::setTransform(modelMatrix);
-    bgfx::setVertexBuffer(0, &vertices);
-    bgfx::setIndexBuffer(&indices);
-    bindTexture(0, m_hudRenderBackend.textureSamplerHandle, textureHandle, TextureFilterProfile::Ui,
-        (uRepeat == 1 ? BGFX_SAMPLER_U_CLAMP : 0) | BGFX_SAMPLER_V_CLAMP);
-    bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A | BGFX_STATE_BLEND_ALPHA);
-    bgfx::submit(m_hudRenderBackend.viewId, m_hudRenderBackend.texturedProgramHandle);
+    for (size_t index = 0; index < mesh.indices.size(); ++index)
+    {
+        arc.pIndices[index] = uint16_t(arc.firstVertex + mesh.indices[index]);
+    }
+    hudPrimitivesAdded();
 }
 
 void GameplayUiRuntime::submitHudTexturedQuadRotatedCounterClockwise(
@@ -2277,199 +2403,77 @@ void GameplayUiRuntime::submitHudTexturedQuadRotatedCounterClockwise(
         return;
     }
 
-    bgfx::TransientVertexBuffer vertexBuffer = {};
-    bgfx::TransientIndexBuffer indexBuffer = {};
-
-    if (!bgfx::allocTransientBuffers(
-            &vertexBuffer,
-            gameplayHudQuadVertexLayout(),
-            4,
-            &indexBuffer,
-            6))
-    {
-        return;
-    }
-
-    struct HudQuadVertex
-    {
-        float x;
-        float y;
-        float z;
-        float u;
-        float v;
-    };
-
-    HudQuadVertex *pVertices = reinterpret_cast<HudQuadVertex *>(vertexBuffer.data);
-    const std::array<float, 2> uvScale = hudTextureUvScale(textureHandle);
-    pVertices[0] = {x, y, 0.0f, uvScale[0], 0.0f};
-    pVertices[1] = {x + quadWidth, y, 0.0f, uvScale[0], uvScale[1]};
-    pVertices[2] = {x + quadWidth, y + quadHeight, 0.0f, 0.0f, uvScale[1]};
-    pVertices[3] = {x, y + quadHeight, 0.0f, 0.0f, 0.0f};
-
-    uint16_t *pIndices = reinterpret_cast<uint16_t *>(indexBuffer.data);
-    pIndices[0] = 0;
-    pIndices[1] = 1;
-    pIndices[2] = 2;
-    pIndices[3] = 0;
-    pIndices[4] = 2;
-    pIndices[5] = 3;
-
-    float modelMatrix[16] = {};
-    bx::mtxIdentity(modelMatrix);
-    bgfx::setTransform(modelMatrix);
-    bgfx::setVertexBuffer(0, &vertexBuffer);
-    bgfx::setIndexBuffer(&indexBuffer);
-    bindTexture(
-        0,
-        m_hudRenderBackend.textureSamplerHandle,
-        textureHandle,
-        filterProfile,
-        BGFX_SAMPLER_U_CLAMP | BGFX_SAMPLER_V_CLAMP);
-    bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A | BGFX_STATE_BLEND_ALPHA);
-    bgfx::submit(m_hudRenderBackend.viewId, m_hudRenderBackend.texturedProgramHandle);
+    const HudDrawTarget target = hudDrawTarget(textureHandle, filterProfile, HudClampSampler);
+    m_hudDrawList.addQuad(target.state, {{
+        {x, y, HudAlphaCutUntinted, target.u(1.0f), target.v(0.0f)},
+        {x + quadWidth, y, HudAlphaCutUntinted, target.u(1.0f), target.v(1.0f)},
+        {x + quadWidth, y + quadHeight, HudAlphaCutUntinted, target.u(0.0f), target.v(1.0f)},
+        {x, y + quadHeight, HudAlphaCutUntinted, target.u(0.0f), target.v(0.0f)}}});
+    hudPrimitivesAdded();
 }
 
 void GameplayUiRuntime::submitHudQuadBatch(
     std::span<const GameplayHudBatchQuad> quads,
     TextureFilterProfile filterProfile) const
 {
-    if (!hasHudRenderResources() || quads.empty())
+    if (!hasHudRenderResources())
     {
         return;
     }
 
-    const auto canBatchRun =
-        [](const GameplayHudBatchQuad &left, const GameplayHudBatchQuad &right) -> bool
-        {
-            if (left.textureHandle.idx != right.textureHandle.idx
-                || left.clipped != right.clipped
-                || left.tintAbgr != right.tintAbgr)
-            {
-                return false;
-            }
-
-            if (!left.clipped)
-            {
-                return true;
-            }
-
-            return left.scissorX == right.scissorX
-                && left.scissorY == right.scissorY
-                && left.scissorWidth == right.scissorWidth
-                && left.scissorHeight == right.scissorHeight;
-        };
-
-    struct HudQuadVertex
+    for (const GameplayHudBatchQuad &quad : quads)
     {
-        float x;
-        float y;
-        float z;
-        float u;
-        float v;
-    };
+        const HudDrawTarget target = hudDrawTarget(quad.textureHandle, filterProfile, HudClampSampler);
+        HudDrawState state = target.state;
 
-    float modelMatrix[16] = {};
-    bx::mtxIdentity(modelMatrix);
-    const uint32_t identityTransform = bgfx::setTransform(modelMatrix);
-    size_t quadIndex = 0;
-
-    while (quadIndex < quads.size())
-    {
-        size_t runEnd = quadIndex + 1;
-
-        while (runEnd < quads.size() && canBatchRun(quads[runEnd - 1], quads[runEnd]))
+        if (quad.clipped)
         {
-            ++runEnd;
+            state.clipped = true;
+            state.scissorX = quad.scissorX;
+            state.scissorY = quad.scissorY;
+            state.scissorWidth = quad.scissorWidth;
+            state.scissorHeight = quad.scissorHeight;
         }
 
-        while (quadIndex < runEnd)
+        const float u0 = target.u(quad.u0);
+        const float u1 = target.u(quad.u1);
+        const float v0 = target.v(quad.v0);
+        const float v1 = target.v(quad.v1);
+        const float cut = hudAlphaCutForTint(quad.tintAbgr);
+        const uint32_t color = quad.tintAbgr;
+
+        if (quad.line)
         {
-            const uint32_t availableVertexCount = bgfx::getAvailTransientVertexBuffer(
-                static_cast<uint32_t>((runEnd - quadIndex) * 6),
-                gameplayHudQuadVertexLayout());
+            const float dx = quad.x2 - quad.x;
+            const float dy = quad.y2 - quad.y;
+            const float length = std::sqrt(dx * dx + dy * dy);
+            float normalX = 0.0f;
+            float normalY = 0.0f;
 
-            if (availableVertexCount < 6)
+            if (length > 0.0001f)
             {
-                return;
+                const float halfThickness = std::max(1.0f, quad.width) * 0.5f;
+                normalX = -dy / length * halfThickness;
+                normalY = dx / length * halfThickness;
             }
 
-            const size_t quadCount = std::min<size_t>(runEnd - quadIndex, availableVertexCount / 6);
-            bgfx::TransientVertexBuffer transientVertexBuffer = {};
-            bgfx::allocTransientVertexBuffer(
-                &transientVertexBuffer,
-                static_cast<uint32_t>(quadCount * 6),
-                gameplayHudQuadVertexLayout());
-            HudQuadVertex *pVertices = reinterpret_cast<HudQuadVertex *>(transientVertexBuffer.data);
-
-            for (size_t localIndex = 0; localIndex < quadCount; ++localIndex)
-            {
-                const GameplayHudBatchQuad &quad = quads[quadIndex + localIndex];
-                HudQuadVertex *pQuadVertices = pVertices + localIndex * 6;
-
-                if (quad.line)
-                {
-                    const float dx = quad.x2 - quad.x;
-                    const float dy = quad.y2 - quad.y;
-                    const float length = std::sqrt(dx * dx + dy * dy);
-                    float normalX = 0.0f;
-                    float normalY = 0.0f;
-
-                    if (length > 0.0001f)
-                    {
-                        const float halfThickness = std::max(1.0f, quad.width) * 0.5f;
-                        normalX = -dy / length * halfThickness;
-                        normalY = dx / length * halfThickness;
-                    }
-
-                    pQuadVertices[0] = {quad.x + normalX, quad.y + normalY, 0.0f, quad.u0, quad.v0};
-                    pQuadVertices[1] = {quad.x2 + normalX, quad.y2 + normalY, 0.0f, quad.u1, quad.v0};
-                    pQuadVertices[2] = {quad.x2 - normalX, quad.y2 - normalY, 0.0f, quad.u1, quad.v1};
-                    pQuadVertices[3] = {quad.x + normalX, quad.y + normalY, 0.0f, quad.u0, quad.v0};
-                    pQuadVertices[4] = {quad.x2 - normalX, quad.y2 - normalY, 0.0f, quad.u1, quad.v1};
-                    pQuadVertices[5] = {quad.x - normalX, quad.y - normalY, 0.0f, quad.u0, quad.v1};
-                }
-                else
-                {
-                    pQuadVertices[0] = {quad.x, quad.y, 0.0f, quad.u0, quad.v0};
-                    pQuadVertices[1] = {quad.x + quad.width, quad.y, 0.0f, quad.u1, quad.v0};
-                    pQuadVertices[2] = {quad.x + quad.width, quad.y + quad.height, 0.0f, quad.u1, quad.v1};
-                    pQuadVertices[3] = {quad.x, quad.y, 0.0f, quad.u0, quad.v0};
-                    pQuadVertices[4] = {quad.x + quad.width, quad.y + quad.height, 0.0f, quad.u1, quad.v1};
-                    pQuadVertices[5] = {quad.x, quad.y + quad.height, 0.0f, quad.u0, quad.v1};
-                }
-
-                const std::array<float, 2> uvScale = hudTextureUvScale(quad.textureHandle);
-                for (size_t vertex = 0; vertex < 6; ++vertex)
-                {
-                    pQuadVertices[vertex].u *= uvScale[0];
-                    pQuadVertices[vertex].v *= uvScale[1];
-                }
-            }
-
-            const GameplayHudBatchQuad &firstQuad = quads[quadIndex];
-            bgfx::setTransform(identityTransform);
-            bgfx::setVertexBuffer(0, &transientVertexBuffer);
-            bindTexture(
-                0,
-                m_hudRenderBackend.textureSamplerHandle,
-                firstQuad.textureHandle,
-                filterProfile,
-                BGFX_SAMPLER_U_CLAMP | BGFX_SAMPLER_V_CLAMP);
-
-            if (firstQuad.clipped)
-            {
-                bgfx::setScissor(
-                    firstQuad.scissorX,
-                    firstQuad.scissorY,
-                    firstQuad.scissorWidth,
-                    firstQuad.scissorHeight);
-            }
-
-            bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A | BGFX_STATE_BLEND_ALPHA);
-            bgfx::submit(m_hudRenderBackend.viewId, hudProgramForTint(firstQuad.tintAbgr));
-            quadIndex += quadCount;
+            m_hudDrawList.addQuad(state, {{
+                {quad.x + normalX, quad.y + normalY, cut, u0, v0, color},
+                {quad.x2 + normalX, quad.y2 + normalY, cut, u1, v0, color},
+                {quad.x2 - normalX, quad.y2 - normalY, cut, u1, v1, color},
+                {quad.x - normalX, quad.y - normalY, cut, u0, v1, color}}});
+        }
+        else
+        {
+            m_hudDrawList.addQuad(state, {{
+                {quad.x, quad.y, cut, u0, v0, color},
+                {quad.x + quad.width, quad.y, cut, u1, v0, color},
+                {quad.x + quad.width, quad.y + quad.height, cut, u1, v1, color},
+                {quad.x, quad.y + quad.height, cut, u0, v1, color}}});
         }
     }
+
+    hudPrimitivesAdded();
 }
 
 bgfx::ProgramHandle GameplayUiRuntime::hudProgramForTint(uint32_t tintAbgr) const
@@ -2551,6 +2555,83 @@ void GameplayUiRuntime::submitWorldHudQuadBatch(std::span<const GameplayHudBatch
     }
 }
 
+namespace
+{
+// A font layer's glyph quads, submitted in bounded batches in the order they were added.
+class HudFontQuadBatch
+{
+public:
+    HudFontQuadBatch(const GameplayUiRuntime &runtime, TextureFilterProfile filter,
+        const GameplayResolvedHudLayoutElement *pClip)
+        : m_runtime(runtime)
+        , m_filter(filter)
+        , m_pClip(pClip)
+    {
+    }
+
+    void add(bgfx::TextureHandle textureHandle, float x, float y, float quadWidth, float quadHeight, float u0,
+        float v0, float u1, float v1, uint32_t tintAbgr)
+    {
+        if (quadWidth <= 0.0f || quadHeight <= 0.0f)
+        {
+            return;
+        }
+        if (m_pClip != nullptr)
+        {
+            const float left = std::max(x, m_pClip->x);
+            const float top = std::max(y, m_pClip->y);
+            const float right = std::min(x + quadWidth, m_pClip->x + m_pClip->width);
+            const float bottom = std::min(y + quadHeight, m_pClip->y + m_pClip->height);
+            if (left >= right || top >= bottom)
+            {
+                return;
+            }
+            const float uSpan = u1 - u0;
+            const float vSpan = v1 - v0;
+            u1 = u0 + uSpan * (right - x) / quadWidth;
+            v1 = v0 + vSpan * (bottom - y) / quadHeight;
+            u0 += uSpan * (left - x) / quadWidth;
+            v0 += vSpan * (top - y) / quadHeight;
+            x = left;
+            y = top;
+            quadWidth = right - left;
+            quadHeight = bottom - top;
+        }
+        GameplayHudBatchQuad &quad = m_quads[m_quadCount++];
+        quad = {};
+        quad.textureHandle = textureHandle;
+        quad.tintAbgr = tintAbgr;
+        quad.x = x;
+        quad.y = y;
+        quad.width = quadWidth;
+        quad.height = quadHeight;
+        quad.u0 = u0;
+        quad.v0 = v0;
+        quad.u1 = u1;
+        quad.v1 = v1;
+        if (m_quadCount == m_quads.size())
+        {
+            flush();
+        }
+    }
+
+    void flush()
+    {
+        // Font quads do not use per-quad scissor overrides.
+        m_runtime.submitHudQuadBatch(std::span<const GameplayHudBatchQuad>(m_quads.data(), m_quadCount), m_filter);
+        m_quadCount = 0;
+    }
+
+private:
+    const GameplayUiRuntime &m_runtime;
+    TextureFilterProfile m_filter;
+    const GameplayResolvedHudLayoutElement *m_pClip = nullptr;
+    // Bound scratch space and preserve glyph/layer order, including unusually long unwrapped lines.
+    std::array<GameplayHudBatchQuad, 128> m_quads;
+    size_t m_quadCount = 0;
+};
+}
+
 void GameplayUiRuntime::renderHudFontLayer(
     const GameplayHudFontHandle &font,
     const GameplayHudFontLayer &layer,
@@ -2567,80 +2648,76 @@ void GameplayUiRuntime::renderHudFontLayer(
         return;
     }
 
-    // Bound scratch space and preserve glyph/layer order, including unusually long unwrapped lines.
-    std::array<GameplayHudBatchQuad, 128> quads;
-    size_t quadCount = 0;
-    const TextureFilterProfile filter = pFont->smooth
-        ? TextureFilterProfile::SmoothText : TextureFilterProfile::Text;
-    const auto flush = [this, &quads, &quadCount, filter]()
+    HudFontQuadBatch batch(*this, pFont->smooth ? TextureFilterProfile::SmoothText : TextureFilterProfile::Text,
+        pClip);
+    GameplayHudCommon::renderHudFontLayer(*pFont, layer, text, textX, textY, fontScale,
+        [&batch](bgfx::TextureHandle textureHandle, float x, float y, float quadWidth, float quadHeight, float u0,
+            float v0, float u1, float v1, TextureFilterProfile, uint32_t tintAbgr)
+        {
+            batch.add(textureHandle, x, y, quadWidth, quadHeight, u0, v0, u1, v1, tintAbgr);
+        });
+    batch.flush();
+}
+
+void GameplayUiRuntime::renderHudFontLayerRuns(
+    const GameplayHudFontHandle &font,
+    const GameplayHudFontLayer &layer,
+    std::span<const GameplayHudTextRun> runs,
+    float fontScale) const
+{
+    const GameplayHudFontData *pFont = hudFontData(font);
+
+    if (pFont == nullptr || !hasHudRenderResources() || !bgfx::isValid(layer.textureHandle))
     {
-        // Font quads do not use per-quad scissor overrides.
-        submitHudQuadBatch(std::span<const GameplayHudBatchQuad>(quads.data(), quadCount), filter);
-        quadCount = 0;
+        return;
+    }
+
+    HudFontQuadBatch batch(*this, pFont->smooth ? TextureFilterProfile::SmoothText : TextureFilterProfile::Text,
+        nullptr);
+
+    // A run that repeats the one before it (an outline's copies) takes that run's glyphs, moved: laid out once.
+    struct Glyph
+    {
+        bgfx::TextureHandle textureHandle;
+        float x;
+        float y;
+        float width;
+        float height;
+        float u0;
+        float v0;
+        float u1;
+        float v1;
+        uint32_t tintAbgr;
     };
 
-    GameplayHudCommon::renderHudFontLayer(
-        *pFont,
-        layer,
-        text,
-        textX,
-        textY,
-        fontScale,
-        [&quads, &quadCount, &flush, pClip](bgfx::TextureHandle submittedTextureHandle,
-               float x,
-               float y,
-               float quadWidth,
-               float quadHeight,
-               float u0,
-               float v0,
-               float u1,
-               float v1,
-               TextureFilterProfile,
-               uint32_t tintAbgr)
+    std::vector<Glyph> glyphs;
+    const GameplayHudTextRun *pLaidOut = nullptr;
+
+    for (const GameplayHudTextRun &run : runs)
+    {
+        if (pLaidOut == nullptr || pLaidOut->text != run.text)
         {
-            if (quadWidth <= 0.0f || quadHeight <= 0.0f)
-            {
-                return;
-            }
-            if (pClip != nullptr)
-            {
-                const float left = std::max(x, pClip->x);
-                const float top = std::max(y, pClip->y);
-                const float right = std::min(x + quadWidth, pClip->x + pClip->width);
-                const float bottom = std::min(y + quadHeight, pClip->y + pClip->height);
-                if (left >= right || top >= bottom)
+            glyphs.clear();
+            pLaidOut = &run;
+            GameplayHudCommon::renderHudFontLayer(*pFont, layer, run.text, run.x, run.y, fontScale,
+                [&glyphs](bgfx::TextureHandle textureHandle, float x, float y, float quadWidth, float quadHeight,
+                    float u0, float v0, float u1, float v1, TextureFilterProfile, uint32_t tintAbgr)
                 {
-                    return;
-                }
-                const float uSpan = u1 - u0;
-                const float vSpan = v1 - v0;
-                u1 = u0 + uSpan * (right - x) / quadWidth;
-                v1 = v0 + vSpan * (bottom - y) / quadHeight;
-                u0 += uSpan * (left - x) / quadWidth;
-                v0 += vSpan * (top - y) / quadHeight;
-                x = left;
-                y = top;
-                quadWidth = right - left;
-                quadHeight = bottom - top;
-            }
-            GameplayHudBatchQuad &quad = quads[quadCount++];
-            quad = {};
-            quad.textureHandle = submittedTextureHandle;
-            quad.tintAbgr = tintAbgr;
-            quad.x = x;
-            quad.y = y;
-            quad.width = quadWidth;
-            quad.height = quadHeight;
-            quad.u0 = u0;
-            quad.v0 = v0;
-            quad.u1 = u1;
-            quad.v1 = v1;
-            if (quadCount == quads.size())
-            {
-                flush();
-            }
-        });
-    flush();
+                    glyphs.push_back({textureHandle, x, y, quadWidth, quadHeight, u0, v0, u1, v1, tintAbgr});
+                });
+        }
+
+        const float moveX = run.x - pLaidOut->x;
+        const float moveY = run.y - pLaidOut->y;
+
+        for (const Glyph &glyph : glyphs)
+        {
+            batch.add(glyph.textureHandle, glyph.x + moveX, glyph.y + moveY, glyph.width, glyph.height, glyph.u0,
+                glyph.v0, glyph.u1, glyph.v1, glyph.tintAbgr);
+        }
+    }
+
+    batch.flush();
 }
 
 bool GameplayUiRuntime::ensurePortraitRuntimeLoaded()
@@ -2923,6 +3000,7 @@ void GameplayUiRuntime::clearPortraitRuntime()
 
 void GameplayUiRuntime::clearHudResources()
 {
+    m_hudDrawList.clear();
     for (bgfx::UniformHandle &uniform : m_previewUniforms)
     {
         if (canUseBgfxResources() && bgfx::isValid(uniform))
@@ -2951,7 +3029,7 @@ void GameplayUiRuntime::clearHudResources()
         }
 
         m_hudTextureHandles.clear();
-    m_hudTextureUvScales.clear();
+    m_hudDrawTextures.clear();
         m_hudTextureIndexByName.clear();
         m_dynamicHudTextureContentSignatures.clear();
         m_hudFontHandles.clear();
@@ -2988,7 +3066,7 @@ void GameplayUiRuntime::clearHudResources()
     }
 
     m_hudTextureHandles.clear();
-    m_hudTextureUvScales.clear();
+    m_hudDrawTextures.clear();
     m_hudTextureIndexByName.clear();
     m_dynamicHudTextureContentSignatures.clear();
     m_hudFontHandles.clear();

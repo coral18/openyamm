@@ -2,6 +2,7 @@
 
 #include "game/app/AppMode.h"
 #include "game/render/ActorModelPreview.h"
+#include "game/render/FirstPersonViewModel.h"
 #include "game/render/CinematicGrading.h"
 #include "game/app/GameInputSystem.h"
 #include "game/app/GameSettings.h"
@@ -183,6 +184,10 @@ private:
     // Builds the active map's actor model bindings on first use and poses the actor models for this frame; false
     // (application quitting) when a model the map needs fails to load.
     bool syncActorModels(IGameplayWorldRuntime &world, float deltaSeconds, float liveDeltaSeconds);
+    // The prototype first-person view model over the rendered world ([debug] view_model_path); nothing without one.
+    void renderFirstPersonViewModel(IGameplayWorldRuntime &world, int width, int height, float deltaSeconds);
+    // The view model the active member shows: a dragon's forelegs, else the arms (the debug console's `viewmodel`).
+    FirstPersonViewModel &activeViewModel();
     void updateDeferredMainMenuChildWarmup();
     void shutdownApplication();
     bool initializeSelectedMapRuntime(bool initializeView);
@@ -333,6 +338,10 @@ private:
     // log goes (empty: none).
     bool applyAiArena(const AiArena &arena, const std::filesystem::path &logPath, std::string &error);
     bool loadAndApplyAiArena(const std::filesystem::path &arenaPath, std::string &message);
+    // The launch directive debug.startup_console_file: its commands run once the first map has loaded.
+    bool runStartupConsoleFile(const std::filesystem::path &path, std::string &message);
+    // The launch directive debug.exit_pose_path: where the party stands, written when the game closes.
+    bool writeExitPoseFile(const std::filesystem::path &path, std::string &message);
     void runTourConsoleLine(const std::string &line, std::string_view logPrefix);
     bool advanceDebugGameMinutes(float minutes);
     bool setDebugClockMinute(int targetMinute);
@@ -345,6 +354,11 @@ private:
     CinematicGrading m_cinematicGrading;
     ActorModelPreview m_actorModelPreview;
     ActorModelPreview m_actorTalkPortrait{ActorPortraitKind::Talk};
+    FirstPersonViewModel m_firstPersonViewModel;
+    // A dragon member's clawed forelegs (devdocs/solo_action/DRAGON.md), and whether they were the last shown (none:
+    // nothing shown yet).
+    FirstPersonViewModel m_dragonViewModel;
+    std::optional<bool> m_dragonViewModelShown;
     GameDataLoader m_gameDataLoader;
     GameDataRepository m_gameDataRepository;
     WorldManifest m_activeWorldManifest;
@@ -356,6 +370,9 @@ private:
     WorldAmbientSoundRuntime m_worldAmbientSounds;
     GameSession m_gameSession;
     GameInputSystem m_gameInputSystem;
+    // The gameplay HUD's screen when the last frame's input was read: a window that opened from play since then is
+    // given the click guard (GameInputSystem::guardClicksAfterWindowOpened).
+    GameplayHudScreenState m_previousHudScreenStateForInput = GameplayHudScreenState::Gameplay;
     SpriteAtlasCache m_spriteAtlasCache;
     NativeSpriteTextureCache m_nativeSpriteCache;
     IndoorRenderer m_indoorRenderer;
@@ -453,6 +470,7 @@ private:
     // shown once its view is up: building the view clears the status bar.
     std::string m_mapStateResetNotice;
     FramePerformanceDiagnostics m_framePerformanceDiagnostics;
+    GameplayUiRuntime::HudDrawListStats m_loggedHudDrawListStats;
     uint32_t m_lastFramePerformanceLogTick = 0;
     DebugConsole m_debugConsole;
     GameImGuiBgfxRenderer m_debugConsoleRenderer;
@@ -478,6 +496,7 @@ private:
     bool m_debugLaunchModelSpawned = false;
     bool m_debugLaunchActorsSpawned = false;
     bool m_debugLaunchAiArenaApplied = false;
+    bool m_debugLaunchStartupConsoleRun = false;
     // The AI arena in play (console `arena`, debug.ai_arena_path, scenario ai_arena) and its decision trace, which the
     // active world runtime is bound to.
     std::optional<AiArena> m_aiArena;

@@ -486,6 +486,8 @@ public:
         std::string progressSelectedMap;
         std::string progressHoveredMap;
         size_t progressScroll = 0;
+        // The map list's scroll bar thumb is held by the mouse.
+        bool progressScrollDragging = false;
         // The aura panel: the chosen aura (spell id), the list's scroll and whether its Move-to menu is open.
         uint32_t auraSelected = 0;
         size_t auraScroll = 0;
@@ -632,6 +634,10 @@ public:
         float awardVisibleFraction = 1;
         float skillScrollOffset = 0;
         std::optional<float> scrollDragOffset;
+        // A MAW solo run's Skills page shows the talents instead (the Skills / Talents switch), and the talent under the
+        // pointer (an index in the talent table) for the detail card. Not saved.
+        bool talentsView = false;
+        std::optional<size_t> talentHover;
         size_t adventurersInnScrollOffset = 0;
         AlchemyBenchState alchemyBench = {};
     };

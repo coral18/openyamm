@@ -26,6 +26,7 @@
 #include "game/ui/GameplayDebugOverlayRenderer.h"
 #include "game/ui/GameplayDialogueRenderer.h"
 #include "game/ui/GameplayFormationBuilder.h"
+#include "game/ui/GameplaySoloBarSelector.h"
 #include "game/ui/GameplayHudOverlaySupport.h"
 #include "game/ui/GameplayUiSkin.h"
 #include "game/gameplay/GameplayScreenRuntime.h"
@@ -1024,6 +1025,8 @@ void IndoorGameView::render(int width, int height, const GameplayInputFrame &inp
     bgfx::UniformHandle invalidUniformHandle = BGFX_INVALID_HANDLE;
     hudRenderBackend.texturedProgramHandle =
         m_pIndoorRenderer != nullptr ? m_pIndoorRenderer->hudTexturedProgramHandle() : invalidProgramHandle;
+    hudRenderBackend.drawListProgramHandle =
+        m_pIndoorRenderer != nullptr ? m_pIndoorRenderer->hudDrawListProgramHandle() : invalidProgramHandle;
     hudRenderBackend.tintedProgramHandle =
         m_pIndoorRenderer != nullptr ? m_pIndoorRenderer->hudTintedProgramHandle() : invalidProgramHandle;
     hudRenderBackend.tintUniformHandle =
@@ -1656,15 +1659,16 @@ void IndoorGameView::presentPendingEventFeedback()
 
     if (pEventRuntimeState != nullptr)
     {
-        for (const std::string &statusMessage : pEventRuntimeState->statusMessages)
+        for (size_t index = 0; index < pEventRuntimeState->statusMessages.size(); ++index)
         {
             setStatusBarEvent(
-                statusMessage,
-                2.0f,
+                pEventRuntimeState->statusMessages[index],
+                statusMessageSeconds(*pEventRuntimeState, index),
                 GameplayUiController::StatusBarEventPriority::High);
         }
 
         pEventRuntimeState->statusMessages.clear();
+        pEventRuntimeState->statusMessageSeconds.clear();
 
         GameplayHeldItemController::applyGrantedEventItemsToHeldInventory(
             m_gameSession.gameplayScreenRuntime(),
@@ -2243,7 +2247,7 @@ void IndoorGameView::updateItemInspectOverlayState(int width, int height, const 
 
     // The loot summary and the formation builder cover the world.
     if (pWorldRuntime == nullptr || screenRuntime.lootSummaryOverlayReadOnly().active
-        || GameplayFormationBuilder::isOpen(screenRuntime))
+        || GameplayFormationBuilder::isOpen(screenRuntime) || GameplaySoloBarSelector::isOpen(screenRuntime))
     {
         return;
     }

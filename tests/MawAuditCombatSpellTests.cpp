@@ -1130,6 +1130,50 @@ TEST_CASE("The leech floor reads the full Speed and keeps whole under dimension 
     rules.setCurrentMap("6d02.blv");
     REQUIRE(rules.mapAffix(MawMapAffix::Leech).has_value());
     CHECK_EQ(healed(), plain);
+
+    // A solo talent's extra blow (Cleave's other monsters, Sweeping Blows) leeches a third, in a solo run only.
+    hit.extraBlow = true;
+    CHECK_EQ(healed(), plain);
+    RulesetOptions soloOptions;
+    soloOptions.soloRun = true;
+    rules.setOptions(soloOptions);
+    hit.extraBlow = false;
+    const int solo = healed();
+    REQUIRE_GT(solo, 3);
+    hit.extraBlow = true;
+    CHECK_LT(healed(), solo);
+    CHECK_GE(healed(), solo / 3 - 1);
+}
+
+TEST_CASE("A dragon's bite gives spell points, a solo talent's extra blow a third (solo runs only)")
+{
+    RulesetOptions soloOptions;
+    soloOptions.soloRun = true;
+    MawRules rules(soloOptions, MawMapLevels{});
+    Character dragon = auditMember("Dragon", 20);
+    dragon.raceId = 5;
+    Party party = auditParty(rules, {dragon});
+    Character &member = *party.member(0);
+    member.maxSpellPoints = 60;
+    const ActorRulesetFacts target;
+    PartyHitOnMonster bite;
+    bite.memberIndex = 0;
+    bite.pTarget = &target;
+    bite.damage = 50;
+    bite.melee = true;
+    member.spellPoints = 0;
+    rules.gameRules().combat.applyPartyHitEffects(party, bite);
+    CHECK_EQ(member.spellPoints, 10);
+    bite.extraBlow = true;
+    member.spellPoints = 0;
+    rules.gameRules().combat.applyPartyHitEffects(party, bite);
+    CHECK_EQ(member.spellPoints, 3);
+
+    // Outside a solo run nothing is cut, even for a blow marked extra.
+    rules.setOptions(RulesetOptions{});
+    member.spellPoints = 0;
+    rules.gameRules().combat.applyPartyHitEffects(party, bite);
+    CHECK_EQ(member.spellPoints, 10);
 }
 
 TEST_CASE("An Assassin's Subtlety stacks speed their spells too (CMB-19)")
@@ -1300,16 +1344,10 @@ TEST_CASE("Ethric's Staff spares the Lich class only; Horn of Ros and Ghost Ring
     }
 }
 
-TEST_CASE("The alchemist's slot follows a leaving member; a broken Lichs' weapon is no faster (ROB-2-3, FITM-2-7)")
+TEST_CASE("A broken Lichs' weapon is no faster (FITM-2-7)")
 {
     MawRules rules(RulesetOptions{}, MawMapLevels{});
-    Party party = auditParty(rules, {auditMember("Knight", 20), auditMember("Knight", 20), auditMember("Knight", 20)});
     const SpellRules &spells = rules.gameRules().spells;
-    rules.state().alchemistMember = 2;
-    spells.memberLeaving(party, 0);
-    CHECK_EQ(rules.state().alchemistMember, 1);
-    spells.memberLeaving(party, 1);
-    CHECK_EQ(rules.state().alchemistMember, -1);
 
     REQUIRE(OpenYAMM::Tests::regressionGameDataLoaded());
     const OpenYAMM::Tests::RegressionGameData &gameData = OpenYAMM::Tests::regressionGameData();

@@ -4,12 +4,14 @@
 #include "game/gameplay/NpcFollowerTypes.h"
 #include "game/items/ItemEnchantTables.h"
 #include "game/outdoor/OutdoorMovementDriver.h"
+#include "game/party/ActionBarSlot.h"
 #include "game/party/BattleOrders.h"
 #include "game/party/CharacterRulesetState.h"
 #include "game/party/CharacterState.h"
 #include "game/party/InventoryItem.h"
 #include "game/party/PlaythroughStatisticsTypes.h"
 #include "game/party/QuickItemSlot.h"
+#include "game/party/SoloTalentState.h"
 #include "game/party/SpeechIds.h"
 #include "game/tables/ClassSkillTable.h"
 #include "game/tables/MonsterShields.h"
@@ -25,6 +27,7 @@
 #include <string_view>
 #include <unordered_map>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 
 namespace OpenYAMM::Game
@@ -140,6 +143,14 @@ struct Character
     std::array<std::string, ExtraQuickSpellSlotCount> extraQuickSpellNames;
     // The potion radial's six slots (QuickItemSlots): a kind of potion or scroll each.
     std::array<QuickItemSlot, QuickItemSlotCount> quickItemSlots = {};
+    // The solo run's action bar (devdocs/solo_action/HUD.md): spells, potion or scroll kinds, the weapon attack, later
+    // special skills. Saved; party games keep it empty and never read it.
+    std::array<ActionBarSlot, ActionBarSlotCount> actionBar = {};
+    // The special skills (talents) learned in a MAW solo run, by talent id: their ranks (devdocs/solo_action/TALENTS.md).
+    // Saved; empty in every other game.
+    std::unordered_map<std::string, uint8_t> talentRanks;
+    // Their cooldowns and timed effects. Not saved.
+    SoloTalentState talentState;
     // Battle orders (game/party/BattleOrders.h): what Attack does, tried in order, then the fallback. Saved; they
     // replace the single attack spell of older saves.
     std::vector<BattleOrder> battleOrders;
@@ -168,6 +179,9 @@ struct Character
     std::unordered_set<uint32_t> awards;
     std::unordered_map<uint16_t, int32_t> eventVariables;
     float recoverySecondsRemaining = 0.0f;
+    // The length of the recovery that recoverySecondsRemaining counts down (the longest applied since the member was
+    // last ready), for the solo HUD's crosshair brackets. Not saved: after a load the brackets start full.
+    float recoveryTotalSeconds = 0.0f;
     int armorClassModifier = 0;
     int levelModifier = 0;
     // Levels that worn items add while equipped ("of Power", +5), rebuilt with the magical bonuses (OY-199).
@@ -283,6 +297,14 @@ struct Character
     std::array<TimedPrimaryStatBonus, 6> timedPrimaryStatBonuses = {};
     CharacterRulesetState rulesetState;
 };
+
+// A new solo run's first action bar: the weapon attack on 1, then the spells the character knows in book order on
+// 2-0 (devdocs/solo_action/HUD.md). Slots already set stay.
+void prefillSoloActionBar(Character &member);
+class Party;
+// A new solo run's party: the first member alone (with the first's character buffs), its action bar filled. Every new
+// game path with RulesetOptions::soloRun calls it once (New Game, the debug start, scenarios).
+void makeSoloRunParty(Party &party);
 
 struct SpellEntry;
 
@@ -546,6 +568,29 @@ public:
         size_t memberIndex = 0;
     };
 
+    // A potion's effect that just entered its last PotionExpiryWarningSeconds (advanceTimedStates): a party or
+    // personal buff applied without a spell, or a ruleset potion effect. The gameplay screen announces it.
+    struct ExpiringPotionEffect
+    {
+        enum class Kind : uint8_t
+        {
+            PartyBuff,
+            CharacterBuff,
+            RulesetEffect,
+        };
+
+        Kind kind = Kind::PartyBuff;
+        // The combatant (CharacterBuff) or member (RulesetEffect); unused for a party buff.
+        size_t memberIndex = 0;
+        PartyBuffId partyBuff = PartyBuffId::TorchLight;
+        CharacterBuffId characterBuff = CharacterBuffId::Bless;
+        TimedPotionEffect::Kind rulesetEffect = TimedPotionEffect::Kind::Immunity;
+        uint32_t rulesetEffectKey = 0;
+    };
+
+    // Ten game minutes (twenty real seconds), as Fly and Wizard Eye blink before they end (OY-508).
+    static constexpr float PotionExpiryWarningSeconds = 600.0f;
+
     static PartySeed createDefaultSeed();
 
     void setItemTable(const ItemTable *pItemTable);
@@ -598,7 +643,10 @@ public:
     // A spell's speed-up of the party's movement, set each frame (MM9's Fleet Foot: fleetFootSpeedMultiplier).
     // 1: none; not saved.
     void setSpellMovementMultiplier(float multiplier);
-    // What the party's walking and running speed is multiplied by: the ruleset's slow and the spell's speed-up.
+    // A solo run talent's speed-up of the party's movement (Quickfoot), set when it changes. 1: none; not saved.
+    void setTalentMovementMultiplier(float multiplier);
+    // What the party's walking and running speed is multiplied by: the ruleset's slow and the spell's and talent's
+    // speed-ups.
     float movementMultiplier() const;
     const GameRules &rules() const;
     // The session's playthrough statistics (devdocs/PLAYTHROUGH_STATISTICS_PLAN.md). A copy of the party does not
@@ -623,6 +671,26 @@ public:
     void applyMovementEffects(const OutdoorMovementEffects &effects);
     void applyEventRuntimeState(const EventRuntimeState &runtimeState, bool grantItemsToInventory = true);
     void setDebugDamageImmune(bool enabled);
+    // The solo HUD's self combat text (GameplaySoloHud): what befell a member, pushed as it happens and taken where
+    // the HUD draws. Transient; at most SelfTextEventLimit wait (a party game never takes them).
+    struct SelfTextEvent
+    {
+        enum class Kind : uint8_t
+        {
+            Damage,
+            Heal,
+            ConditionGained,
+            ConditionCleared,
+        };
+        Kind kind = Kind::Damage;
+        size_t memberIndex = 0;
+        int amount = 0;
+        CharacterCondition condition = CharacterCondition::Weak;
+    };
+    std::vector<SelfTextEvent> takeSelfTextEvents()
+    {
+        return std::exchange(m_selfTextEvents, {});
+    }
     void setDebugUnlimitedMana(bool enabled);
     bool applyDamageToMember(
         size_t memberIndex,
@@ -729,6 +797,13 @@ public:
     const Mm9PartyHireling *activeHireling() const;
     // A member index makes that member active; a hireling's index makes the hireling act. False when out of range.
     bool setActiveCombatantIndex(size_t combatantIndex);
+    // The combatants who take turns and act (0 .. actingCombatantCount() - 1): every combatant, or only the members in
+    // a solo run, whose MM9 hirelings come along but never act (setSoloRun).
+    size_t actingCombatantCount() const;
+    // A solo run (RulesetOptions::soloRun, devdocs/solo_action/README.md), set by the session like the rules: a party
+    // of one that nobody joins, with hirelings who take no combat actions. Not saved.
+    void setSoloRun(bool soloRun);
+    bool soloRun() const;
     bool canSelectCombatantInGameplay(size_t combatantIndex) const;
     // A hireling's recovery after its attack or spell: the row's recovery_seconds less what haste takes off a
     // member's attack (attackRecoveryReductionTicks), at least a melee blow's minimum.
@@ -806,6 +881,7 @@ public:
     int withdrawBankGold(int amount);
     int depositAllGoldToBank();
     int withdrawAllBankGold();
+    // Full at five members, at one in a solo run: nobody joins a solo run (setSoloRun).
     bool isFull() const;
     bool recruitRosterMember(const RosterEntry &rosterEntry);
     bool recruitCharacter(const Character &character);
@@ -1058,6 +1134,8 @@ public:
     const std::string &lastStatus() const;
     const std::vector<PendingAudioRequest> &pendingAudioRequests() const;
     void clearPendingAudioRequests();
+    const std::vector<ExpiringPotionEffect> &expiringPotionEffects() const;
+    void clearExpiringPotionEffects();
     void rebuildMagicalBonusesFromBuffs();
     // The most members a party holds.
     static constexpr size_t MaxMembers = 5;
@@ -1072,6 +1150,7 @@ private:
     void applyWeeklyItemEffects();
     void queueSound(SoundId soundId);
     void queueSpeech(size_t memberIndex, SpeechId speechId);
+    void pushSelfTextEvent(const SelfTextEvent &event);
     SoundId resolveDamageImpactSoundForMember(size_t memberIndex) const;
     // The followers that count in the active world: none where they are off (setNpcFollowersActive).
     std::span<const HiredNpcFollower> activeHiredNpcFollowers() const;
@@ -1166,8 +1245,10 @@ private:
     uint32_t m_arcomageWinCount = 0;
     uint32_t m_arcomageLossCount = 0;
     bool m_debugDamageImmune = false;
+    std::vector<SelfTextEvent> m_selfTextEvents;
     float m_rulesMovementMultiplier = 1.0f;
     float m_spellMovementMultiplier = 1.0f;
+    float m_talentMovementMultiplier = 1.0f;
     bool m_debugUnlimitedMana = false;
     std::unordered_map<uint32_t, HouseStockState> m_houseStockStates;
     std::unordered_map<uint16_t, int32_t> m_eventVariables;
@@ -1181,6 +1262,7 @@ private:
     std::vector<HiredNpcFollower> m_hiredNpcFollowers;
     // World configuration like m_pRules: not saved, not reset.
     bool m_npcFollowersActive = true;
+    bool m_soloRun = false;
     std::vector<Mm9PartyHireling> m_mm9Hirelings;
     // The hirelings while they wait behind (setMm9HirelingsAlong(false)); m_mm9Hirelings is then empty. World
     // configuration like m_npcFollowersActive: the flag is not saved and not reset.
@@ -1207,5 +1289,6 @@ private:
     bool m_floorBurnResisted = false;
     std::vector<uint32_t> m_objectiveQBits;
     std::vector<PendingAudioRequest> m_pendingAudioRequests;
+    std::vector<ExpiringPotionEffect> m_expiringPotionEffects;
 };
 }

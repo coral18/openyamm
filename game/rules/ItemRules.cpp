@@ -215,9 +215,15 @@ std::vector<ItemInspectLine> ItemRules::inspectLines(
     const ItemDefinition &,
     const StandardItemEnchantTable *,
     const SpecialItemEnchantTable *,
-    const Character *) const
+    const Character *,
+    bool) const
 {
     return {};
+}
+
+bool ItemRules::previewsCrafting() const
+{
+    return false;
 }
 
 std::optional<int> ItemRules::merchantValue(const Character &) const
@@ -322,21 +328,6 @@ bool ItemRules::gathersItem(const InventoryItem &) const
 }
 
 std::optional<BagTag> ItemRules::bagTag(const ItemDefinition &) const
-{
-    return std::nullopt;
-}
-
-std::optional<size_t> ItemRules::alchemist(const Party &) const
-{
-    return std::nullopt;
-}
-
-std::optional<std::string> ItemRules::pickAlchemist(Party &, size_t) const
-{
-    return std::nullopt;
-}
-
-std::optional<int> ItemRules::alchemySortRank(const InventoryItem &) const
 {
     return std::nullopt;
 }

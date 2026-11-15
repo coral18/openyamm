@@ -123,6 +123,8 @@ public:
     std::optional<std::string> partyHitStatusText(const PartyHitStatus &status) const override;
 
 private:
+    // rollSpellDamage before a solo run's talents scale it.
+    int rollSpellDamageBeforeTalents(const CharacterSpellCast &cast, bool *pCritical) const;
     // A spell an artifact casts on the monster its wielder struck, cast on the next update.
     struct ArtifactCast
     {
@@ -174,6 +176,8 @@ private:
     // there next.
     mutable float m_gameMinutes = 0;
     mutable std::vector<std::string> m_statusMessages;
+    // Sounds by name the combat rules ask for (a solo's Cheat Death), played with the status messages.
+    mutable std::vector<std::string> m_soundNames;
     mutable float m_poisonSeconds = 0;
     mutable std::mt19937 m_legendaryRng{std::random_device{}()};
     mutable std::vector<ArtifactCast> m_artifactCasts;

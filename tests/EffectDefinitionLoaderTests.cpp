@@ -312,11 +312,11 @@ TEST_CASE("EffectDefinitionLoader composes authored showcase with MM9 for all le
         const auto definitions = loader.load("engine/effects/library.yml", error);
         INFO(world, ": ", error);
         REQUIRE(definitions.has_value());
-        // Eighteen authored recipes (three showcase, three creature hand/staff emitters, the behaviour ward sparks,
-        // five ground item sparkles, two beams, four destructibles breaking), the 122 generated projectile flight, settled, impact and aura
-        // effects, the 63 melee effects (nine blows, three misses, 18 element accents, eleven material contacts in
-        // three strengths), the MM8 wisp stars and the MM9 library.
-        REQUIRE_EQ(definitions->size(), 248);
+        // Nineteen authored recipes (three showcase, three creature hand/staff emitters, the behaviour ward sparks,
+        // six ground item sparkles, two beams, four destructibles breaking), the 122 generated projectile flight, settled, impact and aura
+        // effects, the 73 melee effects (nine blows, three misses, 18 element accents, eleven material contacts in
+        // three strengths, ten dragon claw rakes), the MM8 wisp stars and the MM9 library.
+        REQUIRE_EQ(definitions->size(), 259);
         Game::EffectLibrary library;
         REQUIRE(library.replace(*definitions, error));
         REQUIRE(library.find("mm9:spell_reaver") != nullptr);

@@ -3990,7 +3990,7 @@ void WorldFxSystem::syncItemModels(GameSession &session, float deltaSeconds)
     // By WorldItemSparkle.
     static const std::array<std::string, WorldItemSparkleCount> SparkleEffects = {"",
         "openyamm:fx/item_sparkle/valuable", "openyamm:fx/item_sparkle/precious", "openyamm:fx/item_sparkle/artifact",
-        "openyamm:fx/item_sparkle/quest", "openyamm:fx/item_sparkle/coins"};
+        "openyamm:fx/item_sparkle/quest", "openyamm:fx/item_sparkle/coins", "openyamm:fx/item_sparkle/plain"};
     m_pItemTable = &session.data().itemTable();
     m_itemModelSeconds = std::fmod(m_itemModelSeconds + deltaSeconds, 3600.0f);
     for (auto &[key, model] : m_itemModels)
@@ -4090,7 +4090,8 @@ void WorldFxSystem::syncItemModels(GameSession &session, float deltaSeconds)
 
         const float dx = item.x - pWorld->partyX();
         const float dy = item.y - pWorld->partyY();
-        const bool sparkling = item.sparkle != WorldItemSparkle::None && m_models.isVisible(model.handle)
+        const bool sparkling = item.sparkle != WorldItemSparkle::None
+            && (item.sparkle != WorldItemSparkle::Plain || m_plainItemSparkle) && m_models.isVisible(model.handle)
             && dx * dx + dy * dy < SparkleRange * SparkleRange;
         if (sparkling || model.sparkle != EffectHandle {})
         {

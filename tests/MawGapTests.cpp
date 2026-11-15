@@ -54,6 +54,21 @@ using namespace OpenYAMM::Game;
 // The fixes of devdocs/maw/GAPS.md, by gap id.
 namespace
 {
+// The item's inspect line with this text, or an empty string: MAW lists an item's special among its inspect lines.
+std::string inspectLine(const ItemRules &items, const InventoryItem &item, const ItemDefinition &definition,
+    const Character *pViewer, const std::string &text)
+{
+    for (const ItemInspectLine &line : items.inspectLines(item, definition, nullptr, nullptr, pViewer, false))
+    {
+        if (line.text == text)
+        {
+            return line.text;
+        }
+    }
+
+    return {};
+}
+
 MawItemData installedItemData()
 {
     std::ifstream input(std::filesystem::path(OPENYAMM_SOURCE_DIR) / "assets_dev/engine/rulesets/maw/data/items.yml");
@@ -281,7 +296,7 @@ TEST_CASE("MAW artifact popups show MAW's bonuses, not MMMerge's special powers 
     elderaxe.objectDescriptionId = 504;
     elderaxe.identified = true;
     const std::vector<ItemInspectLine> lines = rules.gameRules().items.inspectLines(
-        elderaxe, *gameData.itemTable.get(504), &gameData.standardItemEnchantTable, nullptr, nullptr);
+        elderaxe, *gameData.itemTable.get(504), &gameData.standardItemEnchantTable, nullptr, nullptr, false);
     const auto hasLine = [&lines](const std::string &text)
     {
         return std::any_of(lines.begin(), lines.end(),
@@ -291,8 +306,24 @@ TEST_CASE("MAW artifact popups show MAW's bonuses, not MMMerge's special powers 
     CHECK(hasLine("Artifact level"));
 
     // The description loses the "(...)" part MMMerge prints its numbers in; Standard keeps it.
-    CHECK_EQ(mawArtifactDescription("(Might +20, Swift) An axe of old."), "An axe of old.");
-    CHECK_EQ(mawArtifactDescription("A sword. (Special Powers: +30 Might)"), "A sword.");
+    const std::string leading = "(Might +20, Swift) An axe of old.";
+    const std::string special = "A sword. (Special Powers: +30 Might)";
+    CHECK_EQ(mawArtifactDescription(leading, leading), "An axe of old.");
+    CHECK_EQ(mawArtifactDescription(special, special), "A sword.");
+    // A translation is cut by the same notes, however it writes and places them.
+    // Chinese writes its notes in full-width parentheses.
+    const std::string chineseAxe = "\xe5\x8f\xa4\xe6\x96\xa7\xe3\x80\x82";
+    CHECK_EQ(mawArtifactDescription(leading,
+            "\xef\xbc\x88\xe5\x8a\x9b\xe9\x87\x8f+20\xef\xbc\x89" + chineseAxe), chineseAxe);
+    CHECK_EQ(mawArtifactDescription(special, "Ein Schwert (Spezialkraft: Macht +30)."), "Ein Schwert.");
+    CHECK_EQ(mawArtifactDescription(special, "(Moc +30) Miecz."), "Miecz.");
+    CHECK_EQ(mawArtifactDescription("An axe (of old) with a note. (Special Powers: Swift)",
+            "Eine Axt (von einst) mit Notiz. (Spezialkraft: Flink)"),
+        "Eine Axt (von einst) mit Notiz.");
+    // A translation with another number of notes is shown whole rather than cut in the wrong place.
+    CHECK_EQ(mawArtifactDescription(special, "Ein Schwert der Macht."), "Ein Schwert der Macht.");
+    CHECK_EQ(mawArtifactDescription(special, "Ein (altes) Schwert (Spezialkraft: Macht)."),
+        "Ein (altes) Schwert (Spezialkraft: Macht).");
     const std::optional<std::string> description = rules.gameRules().items.itemDescription(elderaxe, nullptr);
     REQUIRE(description.has_value());
     CHECK(description->find("(") == std::string::npos);
@@ -334,7 +365,7 @@ TEST_CASE("MAW shows a Celestial item at its viewer's level (audit ITM-4)")
     };
     const std::vector<ItemInspectLine> lines =
         rules.gameRules().items.inspectLines(hat, *table.get(114),
-            &OpenYAMM::Tests::regressionGameData().standardItemEnchantTable, nullptr, &viewer);
+            &OpenYAMM::Tests::regressionGameData().standardItemEnchantTable, nullptr, &viewer, false);
     CHECK(hasLine(lines, "+" + std::to_string(int(std::ceil(scaled.standardEnchantPower * 1.5)))));
 }
 
@@ -357,6 +388,67 @@ TEST_CASE("MAW dragons triple their items' Dodging and Unarmed too (audit FITM-2
     const int human = bonusOf(0);
     REQUIRE(human > 0);
     CHECK_EQ(bonusOf(5), std::min(3 * human, 20));
+}
+
+TEST_CASE("Lone Discipline: a solo character reaches Expert Bodybuilding and Regeneration whatever its class")
+{
+    RulesetOptions soloOptions;
+    soloOptions.soloRun = true;
+    MawRules standard(RulesetOptions{}, MawMapLevels{}, installedItemData());
+    MawRules solo(soloOptions, MawMapLevels{}, installedItemData());
+    Character sorcerer;
+    sorcerer.className = "Sorcerer";
+    // Without the solo option, the class's own cap.
+    CHECK(standard.gameRules().skills.masteryCap(sorcerer, "Bodybuilding", SkillMastery::None) == SkillMastery::None);
+    // In a solo run: at least Expert before any promotion (no class table bound here: promotion step 0), and
+    // Grandmaster through the promotions; other skills keep their cap.
+    CHECK(solo.gameRules().skills.masteryCap(sorcerer, "Bodybuilding", SkillMastery::None) == SkillMastery::Expert);
+    CHECK(solo.gameRules().skills.masteryCap(sorcerer, "Bodybuilding", SkillMastery::Master) == SkillMastery::Master);
+    CHECK(solo.gameRules().skills.promotedMasteryCap(sorcerer, "Bodybuilding", SkillMastery::None)
+        == SkillMastery::Grandmaster);
+    CHECK(solo.gameRules().skills.masteryCap(sorcerer, "Sword", SkillMastery::None) == SkillMastery::None);
+
+    // Regeneration: Expert from the start, Master only with the final promotion; a higher class cap stays.
+    CHECK(standard.gameRules().skills.masteryCap(sorcerer, "Regeneration", SkillMastery::None) == SkillMastery::None);
+    CHECK(solo.gameRules().skills.masteryCap(sorcerer, "Regeneration", SkillMastery::None) == SkillMastery::Expert);
+    CHECK(solo.gameRules().skills.promotedMasteryCap(sorcerer, "Regeneration", SkillMastery::None)
+        == SkillMastery::Master);
+    CHECK(solo.gameRules().skills.masteryCap(sorcerer, "Regeneration", SkillMastery::Grandmaster)
+        == SkillMastery::Grandmaster);
+    CHECK(solo.gameRules().skills.promotedMasteryCap(sorcerer, "Regeneration", SkillMastery::Grandmaster)
+        == SkillMastery::Grandmaster);
+}
+
+TEST_CASE("A MAW dragon's items count three times, in a solo run too")
+{
+    RulesetOptions soloOptions;
+    soloOptions.soloRun = true;
+    MawRules standard(RulesetOptions{}, MawMapLevels{}, installedItemData());
+    MawRules solo(soloOptions, MawMapLevels{}, installedItemData());
+    const auto worn = [](MawRules &rules, int raceId)
+    {
+        Character wearer;
+        wearer.raceId = raceId;
+        wearer.skills["Dodging"] = {"Dodging", 40, SkillMastery::Expert};
+        EquippedItemRuntimeState state;
+        state.standardEnchantId = 1;   // Might
+        state.standardEnchantPower = 10;
+        Character bonuses;
+        rules.gameRules().items.applyEquippedEnchantEffects(
+            itemDefinition(109, "Helm", "Misc"), state, nullptr, nullptr, wearer, bonuses);
+        state.standardEnchantId = 23;  // Dodging
+        state.standardEnchantPower = 4;
+        rules.gameRules().items.applyEquippedEnchantEffects(
+            itemDefinition(109, "Helm", "Misc"), state, nullptr, nullptr, wearer, bonuses);
+        return std::pair{bonuses.magicalBonuses.might, bonuses.itemSkillBonuses["Dodging"]};
+    };
+    const auto [mightHuman, dodgingHuman] = worn(standard, 0);
+    REQUIRE(mightHuman > 0);
+    REQUIRE(dodgingHuman > 0);
+    CHECK_EQ(worn(standard, 5).first, 3 * mightHuman);
+    CHECK_EQ(worn(solo, 5).first, 3 * mightHuman);
+    CHECK_EQ(worn(solo, 5).second, 3 * dodgingHuman);
+    CHECK_EQ(worn(solo, 0).first, mightHuman);
 }
 
 TEST_CASE("MAW hats read hit points after their growth, then x1.5 rounded up (audit ITM-2)")
@@ -470,11 +562,11 @@ TEST_CASE("MAW special enchantments give MAW's stats, scaled by item power (A2.1
     item.specialEnchantId = 42;
     item.rulesetFields.itemPower = 50;
     const ItemDefinition ring = itemDefinition(137, "Ring", "Misc");
-    CHECK_EQ(rules.gameRules().items.enchantDescription(item, ring, nullptr, nullptr, nullptr),
-        " +9 to Seven Stats, HP, SP, Armor, Resistances.");
+    const std::string sevenStats = " +9 to Seven Stats, HP, SP, Armor, Resistances.";
+    CHECK_EQ(inspectLine(rules.gameRules().items, item, ring, nullptr, sevenStats), sevenStats);
     item.specialEnchantId = 30;
     item.rulesetFields.itemPower = 40;
-    CHECK_EQ(rules.gameRules().items.enchantDescription(item, ring, nullptr, nullptr, nullptr), "Fire Magic Skill +15");
+    CHECK_EQ(inspectLine(rules.gameRules().items, item, ring, nullptr, "Fire Magic Skill +15"), "Fire Magic Skill +15");
 }
 
 TEST_CASE("MAW turns the engine's vampiric heal and flat regeneration off and keeps the specials it leaves alone")
@@ -1707,9 +1799,9 @@ TEST_CASE("MAW item popups: Legendary 19 in the range, resistances as reductions
         mawEnchantDamageRange(rules.model(1).weaponLevelDamage(100, false, 0), 3, 4, 0.2, false);
     Character viewer;
     wearLegendary(viewer, 19);
-    CHECK_EQ(items.enchantDescription(blade, longsword, nullptr, nullptr, &viewer),
-        "Adds " + std::to_string(int(std::floor(range.minimum * 1.5))) + "-"
-            + std::to_string(int(std::floor(range.maximum * 1.5))) + " points of Cold damage.");
+    const std::string cold = "Adds " + std::to_string(int(std::floor(range.minimum * 1.5))) + "-"
+        + std::to_string(int(std::floor(range.maximum * 1.5))) + " points of Cold damage.";
+    CHECK_EQ(inspectLine(items, blade, longsword, &viewer, cold), cold);
 
     // A ring's +40 fire resistance: (40 + 10) / 2 = 25 points, a fifth of the damage stopped.
     const ItemDefinition ring = itemDefinition(137, "Ring", "Misc");
@@ -1723,7 +1815,7 @@ TEST_CASE("MAW item popups: Legendary 19 in the range, resistances as reductions
     {
         std::vector<std::string> result;
 
-        for (const ItemInspectLine &line : items.inspectLines(item, ring, nullptr, nullptr, pViewer))
+        for (const ItemInspectLine &line : items.inspectLines(item, ring, nullptr, nullptr, pViewer, false))
         {
             result.push_back(line.text);
         }

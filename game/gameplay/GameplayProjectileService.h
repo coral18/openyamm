@@ -47,6 +47,9 @@ public:
         TargetKind targetKind = TargetKind::Party;
         size_t targetActorIndex = static_cast<size_t>(-1);
         uint32_t targetActorId = 0;
+        // Where on the target actor it homes, above its feet: the height its shot aimed at (raised over a ridge,
+        // OY-463). 0: the world's usual point on the actor. Not saved: a missile in flight across a load uses that.
+        float targetAimHeight = 0.0f;
         float turnRadiansPerSecond = 0.0f;
         // Seconds it homes (0: its whole flight); then it flies straight on or, with expireAfter, expires.
         float maxSeconds = 0.0f;
@@ -122,6 +125,12 @@ public:
         // A party missile or spell whose damage was a critical hit, for the status line and combat log where it
         // lands; not saved.
         bool critical = false;
+        // A solo run's Piercing Arrows: monsters it may still pass through after striking one, the share of its first
+        // damage each takes, and the ones it has struck (it never strikes one twice). Not saved.
+        uint8_t pierceLeft = 0;
+        float pierceShare = 0.0f;
+        int pierceDamage = 0;
+        std::vector<uint32_t> piercedActorIds;
         // An event's missile (evt.FireMissile): it passes the party, whose damage the event deals itself, and bursts
         // at its target when its flight time ends unless it strikes something first; saved.
         bool eventMissile = false;
@@ -216,6 +225,9 @@ public:
         int blastMaximumDamage = 0;
         // Its damage was a critical hit (ProjectileState::critical).
         bool critical = false;
+        // ProjectileState::pierceLeft and pierceShare.
+        uint8_t pierceCount = 0;
+        float pierceShare = 0.0f;
         // An event's missile (ProjectileState::eventMissile), reaching its target in flightSeconds (0: at the
         // object's speed).
         bool eventMissile = false;

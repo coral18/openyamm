@@ -3037,6 +3037,7 @@ bool IndoorRenderer::initialize(
     m_programHandle = loadProgram("vs_cubes", "fs_cubes");
     m_texturedProgramHandle = loadProgram("vs_shadowmaps_texture", "fs_shadowmaps_texture");
     m_hudTintedProgramHandle = loadProgram("vs_shadowmaps_texture", "fs_menu_tint");
+    m_hudDrawListProgramHandle = loadProgram("vs_hud", "fs_hud");
     m_indoorLitProgramHandle = loadProgram("vs_indoor_textured_lit", "fs_indoor_textured_lit");
     // Surface materials (devdocs/SURFACE_MATERIALS_PLAN.md), only for a map loaded with their maps.
     const bool surfaceMaterials = indoorTextureSet && hasSurfaceMaterialMaps(indoorTextureSet->textures);
@@ -4230,6 +4231,7 @@ void IndoorRenderer::render(
     const uint64_t worldFxBeginTickCount = collectRenderDiagnostics ? SDL_GetTicksNS() : 0;
 
     m_worldFxSystem.setShadowsEnabled(settings.shadows);
+    m_worldFxSystem.setPlainItemSparkle(settings.lootSparkle);
     const GameplayInputFrame *pGameplayInputFrame = gameSession.currentGameplayInputFrame();
     const bool rightMouseInspectPauseActive =
         pGameplayInputFrame != nullptr
@@ -4736,6 +4738,33 @@ void IndoorRenderer::render(
             return sectorVisibleForRuntimeBillboard(sectorId, &renderVisibleSectorMask);
         });
     }
+    {
+        // The view model's light: the eye's room as a creature there would take it, with the nearest lights as a
+        // list (its own view has no light grid).
+        m_eyeModelLighting = modelLighting;
+        m_eyeModelLighting.pLightGrid = nullptr;
+        m_eyeModelLighting.pointPositions = highlights.positions;
+        m_eyeModelLighting.pointColors = highlights.colors;
+        m_eyeModelLighting.pointCount = uint32_t(highlights.lightCount);
+        if (m_pSceneRuntime != nullptr && !m_modelLighting.enabled)
+        {
+            const int16_t sector = m_pSceneRuntime->partyRuntime().movementState().eyeSectorId;
+            m_eyeModelLighting.ambient = IndoorLightingRuntime::sectorAmbient(lightingFrame, sector);
+            if (indoorDaylightSector(m_daylight, sector))
+            {
+                m_eyeModelLighting.ambient = indoorDaylightModelAmbient(m_frameDaylight);
+                applyDaylightSun(m_eyeModelLighting, 1.0f);
+            }
+        }
+        m_eyeModelLighting.sector = -1;
+        for (uint32_t light = 0; light < m_eyeModelLighting.pointCount; ++light)
+        {
+            m_eyeModelLighting.pointPositions[light * 4] -= eye.x;
+            m_eyeModelLighting.pointPositions[light * 4 + 1] -= eye.y;
+            m_eyeModelLighting.pointPositions[light * 4 + 2] -= eye.z;
+        }
+        m_hasEyeModelLighting = true;
+    }
     bool modelGeometryCacheReady = false;
     const auto modelSector = [&](Engine::ModelInstanceHandle handle, const bx::Vec3 &center)
     {
@@ -5089,6 +5118,11 @@ bgfx::UniformHandle IndoorRenderer::hudTextureSamplerHandle() const
 bgfx::ProgramHandle IndoorRenderer::hudTintedProgramHandle() const
 {
     return m_hudTintedProgramHandle;
+}
+
+bgfx::ProgramHandle IndoorRenderer::hudDrawListProgramHandle() const
+{
+    return m_hudDrawListProgramHandle;
 }
 
 bgfx::UniformHandle IndoorRenderer::hudTintUniformHandle() const
@@ -6349,7 +6383,9 @@ GameplayWorldHit IndoorRenderer::pickKeyboardGameplayWorldHit(const GameplayWorl
             eventTargetHit.targetIndex = doorIndex;
             eventTargetHit.secondaryIndex = mechanismFaceIndex;
             eventTargetHit.triggeredEventId = binding.linkedEventId;
-            eventTargetHit.name = binding.linkedEventSummary;
+            // The event's hint, as a face shows; the binding's summaries are for the debug inspector.
+            eventTargetHit.name =
+                resolveIndoorLocalEventHintText(m_pSceneRuntime, binding.linkedEventId).value_or("");
             eventTargetHit.hitPoint = center;
             eventTargetHit.distance = vecLength(vecSubtract(center, rayRequest.eye));
             eventTargetHit.contextActionMetadata =
@@ -7182,6 +7218,7 @@ void IndoorRenderer::shutdown()
         m_programHandle = BGFX_INVALID_HANDLE;
         m_texturedProgramHandle = BGFX_INVALID_HANDLE;
         m_hudTintedProgramHandle = BGFX_INVALID_HANDLE;
+        m_hudDrawListProgramHandle = BGFX_INVALID_HANDLE;
         m_indoorLitProgramHandle = BGFX_INVALID_HANDLE;
         m_billboardProgramHandle = BGFX_INVALID_HANDLE;
         m_bloodSplatVertexBufferHandle = BGFX_INVALID_HANDLE;
@@ -7274,6 +7311,12 @@ void IndoorRenderer::shutdown()
     {
         bgfx::destroy(m_hudTintedProgramHandle);
         m_hudTintedProgramHandle = BGFX_INVALID_HANDLE;
+    }
+
+    if (bgfx::isValid(m_hudDrawListProgramHandle))
+    {
+        bgfx::destroy(m_hudDrawListProgramHandle);
+        m_hudDrawListProgramHandle = BGFX_INVALID_HANDLE;
     }
 
     if (bgfx::isValid(m_indoorLitProgramHandle))
@@ -11048,6 +11091,7 @@ void IndoorRenderer::renderWaterReflections(const bx::Vec3 &forward,
         visibilityInput.cameraForward = reflectedForward;
         visibilityInput.cameraUp = {0.0f, 0.0f, -1.0f};
         visibilityInput.startSectorId = reflection.sectorId;
+        visibilityInput.extraStartSectorIds = reflection.waterSectorIds;
         visibilityInput.collectPortalTraces = false;
         visibilityInput.verticalFovDegrees = 2.0f * std::atan(1.0f / reflection.projection[5]) * 180.0f / Pi;
         visibilityInput.aspectRatio = float(width) / float(height);

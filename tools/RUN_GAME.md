@@ -113,6 +113,23 @@ In the debug console, `screenshot coast` saves `output/screenshots/coast.png` re
 working directory. Names allow letters, digits, underscores and hyphens; existing named images are overwritten.
 The command closes the console before capture so its text does not cover the screenshot.
 
+`pin <text>` (debug console) pins a note for the Map Studio: it writes `<date>-<time>-<map stem>.yml` (pins format 1:
+the text, world, map, the pose as `loc` prints it, the time, and the project and revision from a `<stem>.studio.yml`
+beside the map when the studio installed it) and the next frame as the `.png` of the same name into the pin inbox,
+`[debug] pin_inbox_path` (default `pins_inbox` in the user data folder; `--isolated` runs use the repository's
+`pins_inbox/`, not the run folder). A `;` in the text ends the command, as everywhere in the console.
+See `devdocs/map_studio/S5_BROWSER_EDITOR.md` 2.10.
+
+Two more launch directives serve the Map Studio's Play here (S5_BROWSER_EDITOR.md 2.10, D13), one-shot like the
+capture keys (read, never written back): `--set debug.startup_console_file=/absolute/start.console` runs that file's
+console commands once the first map has loaded (one per line, `#` comments, as `exec`), and
+`--set debug.exit_pose_path=/absolute/exit_pose.yml` writes where the party stands when the game closes: the world,
+the map and the pose `loc` prints (`position`, `yaw_radians`, `pitch_degrees`, `heading_yaw_units`, shaped as a pin's
+pose). `tp <x> <y> <z> [yaw-radians [pitch-degrees]]` takes the facing in `loc`'s units, so a start file of one
+`tp` line puts the party at a camera. `--extra-mount <folder>` (isolated runs) reads a development folder in front of
+the asset root, as the game's own option, in the preparation and the run: the studio's mount of builds. Headless
+check: `tests/scenarios/debug/play_here.yml`.
+
 ## Video capture
 
 `video start /absolute/clip.mp4 [fps]` (debug console, default 60 fps) records every frame, HUD included, into an
@@ -133,7 +150,9 @@ scripts (`output/trailer_2_0/`, git-ignored) are a worked example.
 
 `--ruleset <id>[:<option>...]` starts the isolated new game under a ruleset package from `assets_dev/engine/rulesets/`,
 for example `--ruleset maw` (MAW's defaults) or `--ruleset maw:hell:horizontal`. Options are difficulty, progression
-and challenge-mode ids in any order, plus `randomizer`, `friendlyfire` (hits on non-hostile monsters count) and `nobow` (MAW's Bow preference off);
+and challenge-mode ids in any order, plus `randomizer`, `friendlyfire` (hits on non-hostile monsters count), `nobow` (MAW's Bow preference off) and `solo`
+(the augmented solo run: a party of one with the solo HUD and, with `[debug] view_model_path`, the first-person arms;
+devdocs/solo_action/HUD.md);
 unlisted ones keep the package defaults, and an option the package does not offer fails the preparation. It cannot be combined with `--save` (a save keeps its own ruleset) or
 `--menu` (choose the ruleset on the New Game screen). The game binary takes the same `--ruleset` argument for a
 direct start without a save, and headless scenarios accept it as `new_game_flow: {ruleset: maw:hell:horizontal}`.

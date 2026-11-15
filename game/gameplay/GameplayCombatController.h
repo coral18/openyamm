@@ -68,7 +68,6 @@ public:
 
     // A party hit that deals no damage after resistances counts as a miss unless it stuns the target.
     static bool partyHitLands(int appliedDamage, bool stunsTarget);
-
     static std::string formatPartyAttackStatusText(
         const std::string &attackerName,
         const std::string &targetName,

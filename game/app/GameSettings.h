@@ -89,7 +89,7 @@ inline std::optional<CombatLogMode> parseCombatLogModeValue(std::string_view val
     return std::nullopt;
 }
 
-// "off", "hold" or "always" (gameplay.rarity_glow).
+// "off", "hold" or "always" (gameplay.rarity_glow, gameplay.craft_preview).
 inline bool validRarityGlowValue(std::string_view value)
 {
     return value == "off" || value == "hold" || value == "always";
@@ -350,7 +350,16 @@ struct GameSettings
     // 3D actor models instead of sprites ([debug] actor_models); persisted like the other debug toggles. Monsters
     // with a model ship no sprites, so turning it off leaves them without a presentation.
     bool actorModels = true;
+    // Prototype first-person view model ([debug] view_model_path, FirstPersonViewModel): a self-contained GLB on disk
+    // drawn over the world in a solo run in place of the engine's engine/view_model/arms.glb. Empty: the engine's.
+    std::string viewModelPath;
+    // Where the console's `pin <text>` writes pins and their pictures ([debug] pin_inbox_path; game/debug/PinInbox.h);
+    // relative to the user data folder. Persisted, unlike the launch directives below.
+    std::string pinInboxPath = "pins_inbox";
     // Launch-only directives: never persisted by saveGameSettings.
+    // The solo run's HUD and first-person presentation on any game, for captures and tours ([debug] solo_hud); a real
+    // solo run is chosen at new game (RulesetOptions::soloRun).
+    bool soloHudPreview = false;
     std::string actorModelsManifest;
     std::string screenshotPath;
     std::string menuInputTourPath;
@@ -360,6 +369,12 @@ struct GameSettings
     uint32_t screenshotBurstCount = 1;
     float screenshotBurstIntervalMs = 100.0f;
     std::string screenshotTourPath;
+    // A file of debug console commands run once, after the first map has loaded ([debug] startup_console_file): the
+    // Map Studio's Play here puts the party at the browser's camera with it (`tp x y z yaw pitch`), and test switches.
+    std::string startupConsoleFile;
+    // Where the party stood when the game closed, written on exit ([debug] exit_pose_path; game/debug/ExitPose.h):
+    // the Map Studio moves its camera there.
+    std::string exitPosePath;
     // An AI arena (tests/scenarios/mm9/ai/README.md) set up once gameplay starts.
     std::string aiArenaPath;
     // Indoor hole view (tools/indoor_hole_sweep.py): the main view clears to magenta, an open sky's faces draw as faces
@@ -398,6 +413,13 @@ struct GameSettings
     std::string enemyHealthBarMode = "combat";
     std::string enemyHealthBarValues = "target";
     bool enemyHealthBarDamageTrail = true;
+    // The spells on each enemy as icons under its bar, with the time left swept clockwise.
+    bool enemyHealthBarEffects = true;
+    // A potion's effect entering its last ten game minutes is named in the status bar (Party::ExpiringPotionEffect).
+    bool potionExpiryWarnings = true;
+    // The Workbench never uses up carried mixed potions: it brews them from reagents and the basic potions
+    // (AlchemyChainPlanner's keepMixedPotions).
+    bool workbenchKeepMixedPotions = false;
     // On by default; only MM9 marks quest givers, so the other worlds show nothing either way.
     bool questMarkers = true;
     // Maps with a painted map (MM9's) show it on the minimap and the journal map; false shows the MM6-MM8 line map
@@ -427,6 +449,8 @@ struct GameSettings
     bool meleeHitFlash = false;
     // Small camera turn along the blow on critical hits and kills.
     bool meleeCameraKick = false;
+    // A solo run's first-person arms leave a faint trail behind a fast blade (devdocs/solo_action/README.md).
+    bool weaponTrails = true;
     // A held Attack or Quick Cast key repeats after 0.14 s, as before 2026-11-07, instead of the original's key-repeat
     // pause of 0.5 s that lets an ordinary tap act once (OY-189).
     bool fastAttackRepeat = false;
@@ -437,10 +461,16 @@ struct GameSettings
     // The MM6-MM8 shops' buy screens as MM9's merchant list (one row per kind of item, filtered by tabs) instead of the
     // shelf picture (OY-590). MM9's own merchants always use the list.
     bool shopListView = false;
+    // Items on the ground worth nothing special glint faintly white too, so small loot shows in tall grass (OY-618).
+    // Valuable, artifact, quest and coin sparkles do not depend on it.
+    bool lootSparkle = true;
     // A glow in the item's rarity colour around its icon in the inventory, chest and shop grids (rulesets with item
     // rarities, such as MAW; Common items have none; artifacts, relics and special items glow teal): "off", "hold"
     // (while the Show Item Rarity key, Left Alt, is held) or "always".
     std::string rarityGlow = "always";
+    // Item popups show, in grey, what crafting would add to the item next: "off", "hold" (the Show Craftable Stats
+    // key) or "always" (gameplay.craft_preview; rulesets with crafting, such as MAW).
+    std::string craftPreview = "hold";
     // HUD state the game remembers across map loads and saves: the follower panel beside the minimap (shown when the
     // party has followers) and the minimap zoom step (0 zoomed out, 1 default, 2 zoomed in).
     bool followerPanel = true;

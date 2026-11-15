@@ -34,6 +34,8 @@
 #include <bitset>
 #include <cctype>
 #include <cmath>
+#include <filesystem>
+#include <fstream>
 #include <iomanip>
 #include <limits>
 #include <sstream>
@@ -216,6 +218,8 @@ struct ScenarioGameApplicationAccess
         application.m_settings.formationsEverywhere = false;
         // Scenarios check the combat log (the combat_log step) in every ruleset and world.
         application.m_settings.combatLog = CombatLogMode::On;
+        // A scenario's `pin` never lands in the player's pin inbox, which the Map Studio imports.
+        application.m_settings.pinInboxPath = (std::filesystem::temp_directory_path() / "openyamm-scenario-pins").string();
         return true;
     }
 
@@ -287,6 +291,18 @@ struct ScenarioGameApplicationAccess
         }
 
         return success;
+    }
+
+    static bool runStartupConsoleFile(GameApplication &application, const std::filesystem::path &path,
+        std::string &message)
+    {
+        return application.runStartupConsoleFile(path, message);
+    }
+
+    static bool writeExitPoseFile(GameApplication &application, const std::filesystem::path &path,
+        std::string &message)
+    {
+        return application.writeExitPoseFile(path, message);
     }
 
     static OutdoorPartyRuntime *outdoorPartyRuntime(GameApplication &application)
@@ -629,6 +645,11 @@ bool ScenarioRuntimeDriver::startNewGame(
     // As a new game from party creation: the ruleset's own start.
     Party &sessionParty = *session.partyState();
     sessionParty.rules().experience.prepareNewParty(sessionParty);
+    // A solo run (RulesetOptions::soloRun), as from party creation: one member, its action bar filled.
+    if (ruleset.options.soloRun)
+    {
+        makeSoloRunParty(sessionParty);
+    }
     session.setGameMinutes(9.0f * 60.0f);
     static_cast<void>(continentId);
     return loadSelectedMapRuntime(startMapFileName, failure);
@@ -3072,6 +3093,37 @@ bool ScenarioRuntimeDriver::runConsoleLine(const std::string &line, std::string 
         return false;
     }
 
+    return true;
+}
+
+bool ScenarioRuntimeDriver::runStartupConsoleFile(
+    const std::filesystem::path &path,
+    std::string &output,
+    std::string &failure)
+{
+    if (!ScenarioGameApplicationAccess::runStartupConsoleFile(m_application, path, output))
+    {
+        failure = "startup console file: " + output;
+        return false;
+    }
+
+    return true;
+}
+
+bool ScenarioRuntimeDriver::writeExitPose(const std::filesystem::path &path, std::string &output, std::string &failure)
+{
+    std::string message;
+
+    if (!ScenarioGameApplicationAccess::writeExitPoseFile(m_application, path, message))
+    {
+        failure = "exit pose: " + message;
+        return false;
+    }
+
+    std::ifstream file(path, std::ios::binary);
+    std::ostringstream text;
+    text << file.rdbuf();
+    output = text.str();
     return true;
 }
 

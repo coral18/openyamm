@@ -392,28 +392,6 @@ int mapTransitionTravelFoodRequired(
     return std::max(0, transition.travelDays);
 }
 
-int outdoorMapMoveTravelDays(
-    const GameplayDialogController::Context &context,
-    const EventRuntimeState::PendingMapMove &move)
-{
-    if (context.pCurrentMap == nullptr || !move.mapName.has_value())
-    {
-        return 0;
-    }
-
-    const std::string currentMapFileName = toLowerCopy(context.pCurrentMap->fileName);
-    const std::string destinationMapFileName = toLowerCopy(*move.mapName);
-
-    if (currentMapFileName == destinationMapFileName
-        || !isOutdoorMapFileName(currentMapFileName)
-        || !isOutdoorMapFileName(destinationMapFileName))
-    {
-        return 0;
-    }
-
-    return OutdoorMapTravelFoodCost;
-}
-
 const Mm9MapTransition *pendingMm9PositionedTransition(
     const GameplayDialogController::Context &context,
     const EventRuntimeState::PendingDialogueContext &dialogueContext)
@@ -1331,31 +1309,6 @@ bool applyMapTransitionTravelSideEffects(
             context.pWorldRuntime,
             hiredNpcWalkingTravelDays(transition.travelDays, context.eventRuntimeState),
             foodRequired);
-}
-
-bool applyPendingMapMoveTravelSideEffects(
-    GameplayDialogController::Context &context,
-    const EventRuntimeState::PendingMapMove &move)
-{
-    const int travelDays = hiredNpcWalkingTravelDays(
-        outdoorMapMoveTravelDays(context, move), context.eventRuntimeState);
-
-    if (travelDays <= 0)
-    {
-        return false;
-    }
-
-    if (context.pScreenRuntime != nullptr)
-    {
-        context.pScreenRuntime->stopAllAudioPlayback();
-    }
-
-    return context.pParty != nullptr
-        && applyTravelDaysSideEffects(
-            *context.pParty,
-            context.pWorldRuntime,
-            travelDays,
-            OutdoorMapTravelFoodCost);
 }
 
 bool executeMapTransitionHook(
@@ -3407,12 +3360,6 @@ GameplayDialogController::Result GameplayDialogController::executeActiveDialogAc
                     travelDays,
                     regionWalk ? Mm9RegionWalkFood : travelDays);
             }
-            else
-            {
-                travelTimeApplied = applyPendingMapMoveTravelSideEffects(
-                    context,
-                    *context.eventRuntimeState.pendingDialogueContext->transitionMapMove);
-            }
             context.eventRuntimeState.pendingMapMove =
                 *context.eventRuntimeState.pendingDialogueContext->transitionMapMove;
             context.eventRuntimeState.pendingMapMove->travelTimeApplied = travelTimeApplied;
@@ -4002,6 +3949,20 @@ GameplayDialogController::Result GameplayDialogController::executeActiveDialogAc
 
         const EventRuntimeState::DialogueOfferState invite = *context.eventRuntimeState.dialogueState.currentOffer;
         context.eventRuntimeState.dialogueState.currentOffer.reset();
+
+        // A solo run takes nobody in: the companion stays where it is, not sent to the Adventurer's Inn.
+        if (context.pParty->soloRun())
+        {
+            context.eventRuntimeState.messages.push_back(Engine::tr("You travel alone: nobody joins a solo run."));
+            setPendingDialogueContext(
+                context.eventRuntimeState,
+                DialogueContextKind::NpcTalk,
+                invite.npcId,
+                currentDialogueHostHouseId(context.eventRuntimeState));
+            result.shouldOpenPendingEventDialog = true;
+            result.allowNpcFallbackContent = false;
+            return result;
+        }
 
         const auto generatedRecruitIt =
             context.eventRuntimeState.generatedMercenaryRecruitsByNpcId.find(invite.npcId);

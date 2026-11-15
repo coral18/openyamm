@@ -3008,6 +3008,74 @@ TEST_CASE("house service shop standard stock generates and buys")
     CHECK_GT(harness.party().inventoryItemCount(), initialInventoryCount);
 }
 
+TEST_CASE("house service shop sells a stacked slot one item at a time")
+{
+    const OpenYAMM::Tests::RegressionGameData &gameData = requireRegressionGameData();
+    OpenYAMM::Tests::HouseDialogueTestHarness harness(gameData);
+    const OpenYAMM::Game::HouseEntry *pHouseEntry = gameData.houseTable.get(1);
+    REQUIRE(pHouseEntry != nullptr);
+
+    harness.party().addGold(50000);
+    OpenYAMM::Game::HouseServiceRuntime::ensureStock(
+        harness.party(),
+        gameData.itemTable,
+        gameData.standardItemEnchantTable,
+        gameData.specialItemEnchantTable,
+        *pHouseEntry,
+        harness.worldRuntime().gameMinutes(),
+        OpenYAMM::Game::HouseStockMode::ShopStandard);
+    std::vector<OpenYAMM::Game::InventoryItem> &stock = harness.party().ensureHouseStockState(1).standardStock;
+    const auto stockIt =
+        std::find_if(stock.begin(), stock.end(), [](const OpenYAMM::Game::InventoryItem &item)
+    {
+        return item.objectDescriptionId != 0;
+    });
+
+    REQUIRE(stockIt != stock.end());
+    const size_t slotIndex = static_cast<size_t>(std::distance(stock.begin(), stockIt));
+    const uint32_t itemId = stockIt->objectDescriptionId;
+    stockIt->quantity = 2;
+    std::string statusText;
+
+    const auto buy = [&]()
+    {
+        return OpenYAMM::Game::HouseServiceRuntime::tryBuyStockItem(
+            harness.party(),
+            gameData.itemTable,
+            gameData.standardItemEnchantTable,
+            gameData.specialItemEnchantTable,
+            *pHouseEntry,
+            harness.worldRuntime().gameMinutes(),
+            OpenYAMM::Game::HouseStockMode::ShopStandard,
+            slotIndex,
+            statusText);
+    };
+
+    REQUIRE(buy());
+    CHECK_EQ(stock[slotIndex].objectDescriptionId, itemId);
+    CHECK_EQ(stock[slotIndex].quantity, 1u);
+    REQUIRE(buy());
+    CHECK_EQ(stock[slotIndex].objectDescriptionId, 0u);
+    CHECK_FALSE(buy());
+
+    // Two separate items in the party's bags, not one item holding two.
+    size_t bought = 0;
+
+    for (const OpenYAMM::Game::Character &member : harness.party().members())
+    {
+        for (const OpenYAMM::Game::InventoryItem &item : member.inventory)
+        {
+            if (item.objectDescriptionId == itemId)
+            {
+                CHECK_EQ(item.quantity, 1u);
+                ++bought;
+            }
+        }
+    }
+
+    CHECK_EQ(bought, 2u);
+}
+
 TEST_CASE("house service shop stock uses merged house rules")
 {
     const OpenYAMM::Tests::RegressionGameData &gameData = requireRegressionGameData();
@@ -6626,7 +6694,7 @@ TEST_CASE("transport action spends gold advances time and queues map move")
     CHECK_FALSE(pendingMapMove->useMapStartPosition);
 }
 
-TEST_CASE("outdoor transition map move applies travel rest food and temporary reset")
+TEST_CASE("outdoor event map move is a doorway that keeps time, food and temporary effects (OY-642)")
 {
     const OpenYAMM::Tests::RegressionGameData &gameData = requireRegressionGameData();
     OpenYAMM::Tests::HouseDialogueTestHarness harness(gameData);
@@ -6684,17 +6752,16 @@ TEST_CASE("outdoor transition map move applies travel rest food and temporary re
         harness.executeActiveDialogAction(*confirmIndex);
 
     CHECK(result.shouldCloseActiveDialog);
-    CHECK_EQ(harness.worldRuntime().gameMinutes(), doctest::Approx(initialGameMinutes + 5.0f * 24.0f * 60.0f));
-    CHECK_EQ(harness.party().food(), initialFood - 5);
+    CHECK_EQ(harness.worldRuntime().gameMinutes(), doctest::Approx(initialGameMinutes));
+    CHECK_EQ(harness.party().food(), initialFood);
 
     pActiveMember = harness.party().activeMember();
     REQUIRE(pActiveMember != nullptr);
-    CHECK_EQ(pActiveMember->health, pActiveMember->maxHealth);
-    CHECK_EQ(pActiveMember->spellPoints, pActiveMember->maxSpellPoints);
-    CHECK_EQ(pActiveMember->levelModifier, 0);
-    CHECK_EQ(pActiveMember->armorClassModifier, 0);
-    CHECK_FALSE(pActiveMember->conditions.test(static_cast<size_t>(OpenYAMM::Game::CharacterCondition::Weak)));
-    CHECK_FALSE(harness.party().hasPartyBuff(OpenYAMM::Game::PartyBuffId::TorchLight));
+    CHECK_LT(pActiveMember->health, pActiveMember->maxHealth);
+    CHECK_EQ(pActiveMember->levelModifier, 30);
+    CHECK_EQ(pActiveMember->armorClassModifier, 40);
+    CHECK(pActiveMember->conditions.test(static_cast<size_t>(OpenYAMM::Game::CharacterCondition::Weak)));
+    CHECK(harness.party().hasPartyBuff(OpenYAMM::Game::PartyBuffId::TorchLight));
 
     REQUIRE(harness.eventRuntimeState().pendingMapMove.has_value());
     CHECK_EQ(harness.eventRuntimeState().pendingMapMove->mapName, std::optional<std::string>("Out06.odm"));
