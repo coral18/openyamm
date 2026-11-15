@@ -635,3 +635,11 @@ target_link_libraries(openyamm_video_streaming_tests
 )
 
 add_test(NAME openyamm_video_streaming_tests COMMAND openyamm_video_streaming_tests)
+
+if (OPENYAMM_BUILD_ATLAS_CORE)
+    target_sources(openyamm_unit_tests PRIVATE
+        AtlasGeometryPortTests.cpp
+        ../game/world/WorldFloorPlan.cpp
+        ../game/world/WorldMapExploration.cpp
+    )
+endif()

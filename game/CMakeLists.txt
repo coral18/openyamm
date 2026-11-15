@@ -686,3 +686,11 @@ if (NOT CMAKE_CROSSCOMPILING)
 endif()
 
 target_link_libraries(openyamm_game PRIVATE libzstd_static)
+
+# First port slice: pure projection/reveal logic, without a UI or save-format extension.
+if (OPENYAMM_BUILD_ATLAS_CORE)
+    target_sources(openyamm_game PRIVATE
+        world/WorldFloorPlan.cpp
+        world/WorldMapExploration.cpp
+    )
+endif()

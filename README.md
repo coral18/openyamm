@@ -1,5 +1,9 @@
 # OpenYAMM
 
+> **Atlas compatibility branch:** this is an initial port of Atlas geometry and exploration logic to OpenYAMM 2.3.
+> It does not yet provide a playable Atlas UI. See [ATLAS_PORT.md](ATLAS_PORT.md) for the investigation and tests.
+> The complete Atlas on its earlier engine base remains on [extended/atlas-mm8](https://github.com/coral18/openyamm/tree/extended/atlas-mm8).
+
 OpenYAMM is Open Yet Another Might and Magic: a modern C++ reimplementation of
 Might and Magic VI, VII, and VIII, inspired by MMMerge and built on an engine
 that started from Might and Magic VIII.
