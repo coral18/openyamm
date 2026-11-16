@@ -8,16 +8,21 @@ from __future__ import annotations
 
 import argparse
 import collections
+import csv
 import hashlib
 import io
 import json
 import re
+import shutil
+import subprocess
 import sys
+import tempfile
 import wave
 import zipfile
 from pathlib import Path, PurePosixPath
 
 from extract_rez import read_rez_entries, type_to_extension
+from mm9_polish_effects import polish_effect_description
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import l10n
@@ -45,10 +50,10 @@ def voice_path(source: str, extension: str) -> str:
 def read_runtime(assets: Path, language: str) -> dict:
     index = json.loads((assets / "index.json").read_text(encoding="utf-8"))
     store = assets / relative_path(index["store"])
-    result = {"audio": set(), "rude": {}, "release": index.get("release"), "voice_rows": {}}
+    result = {"audio": set(), "rude": {}, "videos": set(), "release": index.get("release"), "voice_rows": {}}
     for pack in index["packs"]:
         relevant = pack["id"] in ("mm9.core", "engine.core", "engine.languages")
-        if not relevant and not pack["id"].startswith("mm9.audio."):
+        if not relevant and not pack["id"].startswith(("mm9.audio.", "mm9.videos.")):
             continue
         with zipfile.ZipFile(store / relative_path(pack["file"])) as archive:
             if pack["id"].startswith("mm9.audio."):
@@ -58,11 +63,15 @@ def read_runtime(assets: Path, language: str) -> dict:
                         if name in result["audio"]:
                             raise ValueError(f"duplicate indexed MM9 voice: {name}")
                         result["audio"].add(name)
+            elif pack["id"].startswith("mm9.videos."):
+                result["videos"].update(name for name in archive.namelist() if name.endswith(".ogv"))
             elif pack["id"] == "mm9.core":
                 for name in archive.namelist():
                     if name.startswith("dialogue/rude/") and name.endswith(".rude"):
                         result["rude"][Path(name).name.lower()] = archive.read(name)
                 result["sounds"] = archive.read("data_tables/pc_voice_sounds.txt").decode("utf-8")
+                result["items"] = archive.read("data_tables/items.txt").decode("utf-8")
+                result["readables"] = archive.read("data_tables/readable_items.txt").decode("utf-8")
             elif pack["id"] == "engine.core":
                 for line in archive.read("data_tables/character_voices.txt").decode("utf-8").splitlines():
                     cells = line.split("\t")
@@ -110,8 +119,6 @@ def select_voices(entries, targets: set[str], sounds: str, voice_rows: dict) -> 
 
 
 def dialogue_pairs(english: dict[str, bytes], localized: dict[str, bytes], encoding: str) -> tuple[dict, dict]:
-    import csv
-
     pairs = collections.defaultdict(set)
     stats = collections.Counter()
     for name, data in sorted(english.items()):
@@ -156,7 +163,119 @@ def dialogue_pairs(english: dict[str, bytes], localized: dict[str, bytes], encod
     return pairs, dict(stats)
 
 
-def translate_catalog(catalog: str, pairs: dict) -> tuple[str, dict]:
+def item_pairs(items: str, readables: str, localized: dict[str, bytes], encoding: str,
+               language: str = "pl") -> tuple[dict, dict, set[str]]:
+    """Join on explicit retail ids retained by the existing MM9 importer, never on translated names or row order."""
+    pairs = collections.defaultdict(set)
+    stats = collections.Counter()
+    adapted_effects = set()
+
+    def retail_rows(name, width):
+        result = {}
+        for row in csv.reader(io.StringIO(localized[name].decode(encoding))):
+            if not row:
+                continue
+            if len(row) != width or not row[0].isdigit() or row[0] in result:
+                raise ValueError(f"invalid or duplicate original item row in {name}: {row[0]!r}")
+            result[row[0]] = row
+        return result
+
+    original_items = retail_rows("masteritemlist.csv", 15)
+    original_books = retail_rows("book and scroll text.csv", 3)
+
+    def add(source, translation):
+        if l10n.is_text(source) and translation.strip():
+            pairs[l10n._mm9_normalized(source)].add(translation.strip())
+
+    item_ids = {}
+    for row in csv.DictReader(io.StringIO(items), delimiter="\t"):
+        if row["package_id"] != "mm9" or not row["canonical_id"].startswith("mm9:item/"):
+            raise ValueError("MM9 item table has an unexpected owner")
+        if row["Item #"] in item_ids:
+            raise ValueError(f"duplicate runtime item id: {row['Item #']}")
+        raw_id = row["source_item_id"]
+        item_ids[row["Item #"]] = raw_id
+        original = original_items.get(raw_id)
+        if original is None:
+            stats["without_retail_item"] += 1
+            continue
+        # The engine reworks these books to teach its shared skills. Their new names and instructions stay intact.
+        if row["use_action"] in ("LearnSkill", "GrantSkillPoints"):
+            stats["reworked_learning_items_kept"] += 1
+            continue
+        add(row["Name"], original[1])
+        add(row["Not identified name"], original[7])
+        # Effects are rewritten from OpenYAMM's final balance values; the retail description would be misleading.
+        if "(Effects:" in row["Notes"]:
+            translated = polish_effect_description(row["Notes"], original[8]) if language == "pl" else None
+            if translated is None:
+                stats["effect_descriptions_kept"] += 1
+            else:
+                add(row["Notes"], translated)
+                adapted_effects.add(l10n._mm9_normalized(row["Notes"]))
+                stats["effect_descriptions_adapted"] += 1
+        else:
+            add(row["Notes"], original[8])
+        stats["matched_items"] += 1
+    for row in csv.DictReader(io.StringIO(readables), delimiter="\t"):
+        original = original_books.get(item_ids.get(row["Item#"]))
+        if original is None:
+            stats["without_retail_book"] += 1
+            continue
+        add(row["message text"], original[2])
+        add(row["Location"], original[1])
+        stats["matched_books"] += 1
+    stats["unique_texts"] = len(pairs)
+    return pairs, dict(stats), adapted_effects
+
+
+MOVIES = {"Cutscenes/MM9Intro.ogv": "Intro.bik", "Cutscenes/MM9Shipwreck.ogv": "Shipwreck.bik",
+          "Cutscenes/MM9LoseGame.ogv": "LoseGame.bik"}
+
+
+def file_digest(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def import_movies(installation: Path, targets: set[str], output: Path, cache: Path) -> list[dict]:
+    script = Path(__file__).resolve().parents[1] / "transcode_bik.sh"
+    version = subprocess.run(["ffmpeg", "-version"], check=True, capture_output=True).stdout.splitlines()[0]
+    result = []
+    for target, source in MOVIES.items():
+        if target not in targets:
+            raise ValueError(f"indexed MM9 content does not use the expected movie: {target}")
+        path = installation / "Movies" / source
+        source_hash = file_digest(path)
+        key = hashlib.sha256((source_hash + file_digest(script)).encode("ascii") + version).hexdigest()
+        folder = cache / key
+        converted = folder / Path(target).name
+        checksum = folder / "sha256.txt"
+        hit = converted.is_file() and checksum.is_file() and file_digest(converted) == checksum.read_text().strip()
+        if not hit:
+            folder.mkdir(parents=True, exist_ok=True)
+            with tempfile.TemporaryDirectory() as directory:
+                renamed = Path(directory) / (Path(target).stem + ".bik")
+                shutil.copyfile(path, renamed)
+                log = folder / "transcode.log"
+                with log.open("wb") as stream:
+                    subprocess.run(["bash", str(script), "-i", directory, "-o", str(folder)], check=True,
+                                   stdout=stream, stderr=subprocess.STDOUT)
+            if not converted.is_file():
+                raise ValueError(f"movie conversion did not produce {converted}")
+            checksum.write_text(file_digest(converted) + "\n", encoding="ascii")
+        relative = Path("worlds/mm9/videos") / relative_path(target)
+        changed = write_file(output / relative, converted.read_bytes())
+        result.append({"path": relative.as_posix(), "source": source, "source_sha256": source_hash,
+                       "sha256": file_digest(converted), "size": converted.stat().st_size, "cache_hit": hit,
+                       "written": changed})
+    return result
+
+
+def translate_catalog(catalog: str, pairs: dict, adapted_effects: set[str] | None = None) -> tuple[str, dict]:
     header, entries = l10n.parse_po(catalog)
     stats = collections.Counter()
     for entry in entries:
@@ -180,7 +299,11 @@ def translate_catalog(catalog: str, pairs: dict) -> tuple[str, dict]:
         stats["official_matches"] += 1
         stats["changed"] += int(entry.msgstr[0] != translation)
         entry.msgstr = [translation]
-        entry.translator = ["Official MM9 retail localization, imported from the user's own installation."]
+        if adapted_effects and l10n._mm9_normalized(entry.msgid) in adapted_effects:
+            entry.translator = ["Official MM9 retail narrative; current OpenYAMM effects translated into Polish."]
+            stats["adapted_effect_entries"] += 1
+        else:
+            entry.translator = ["Official MM9 retail localization, imported from the user's own installation."]
         entry.flags.discard("fuzzy")
     # Use the existing PO serializer; keep every original entry, context and fallback not imported above.
     import tempfile
@@ -200,7 +323,8 @@ def write_file(path: Path, data: bytes) -> bool:
     return True
 
 
-def import_localization(installation: Path, assets: Path, output: Path, language: str, encoding: str) -> dict:
+def import_localization(installation: Path, assets: Path, output: Path, language: str, encoding: str,
+                        video_cache: Path | None = None) -> dict:
     if not re.fullmatch(r"[a-z]{2}(?:-[a-z0-9]+)?", language) or language == "en":
         raise ValueError("choose a non-English language id, for example pl")
     if installation.resolve() == output.resolve() or installation.resolve() in output.resolve().parents:
@@ -209,6 +333,7 @@ def import_localization(installation: Path, assets: Path, output: Path, language
     data_root = installation / "Data"
     voices = data_root / "Voices.rez"
     rude = data_root / "Rude.rez"
+    data_archive = data_root / "Data.rez"
     selected, unavailable = select_voices(
         read_rez_entries(voices), runtime["audio"], runtime["sounds"], runtime["voice_rows"])
     localized = {}
@@ -220,17 +345,23 @@ def import_localization(installation: Path, assets: Path, output: Path, language
     pairs, dialogue_stats = dialogue_pairs(runtime["rude"], localized, encoding)
     if not pairs:
         raise ValueError("no original dialogue rows match the indexed MM9 content")
-    catalog, text_stats = translate_catalog(runtime["catalog"], pairs)
+    tables = {}
+    with data_archive.open("rb") as stream:
+        for entry in read_rez_entries(data_archive):
+            name = Path(entry.path.replace("\\", "/")).name.lower() + "." + type_to_extension(entry.resource_type)
+            if name in ("masteritemlist.csv", "book and scroll text.csv"):
+                tables[name] = read_resource(stream, entry)
+    table_pairs, table_stats, adapted_effects = item_pairs(
+        runtime["items"], runtime["readables"], tables, encoding, language)
+    for key, translations in table_pairs.items():
+        pairs[key].update(translations)
+    catalog, text_stats = translate_catalog(runtime["catalog"], pairs, adapted_effects)
     report = {"schema": 1, "language": language, "release": runtime["release"], "voices": [],
               "unavailable_unused_voices": unavailable, "empty_original_recordings": [],
-              "dialogue": dialogue_stats, "text": text_stats,
+              "dialogue": dialogue_stats, "items_and_books": table_stats, "text": text_stats,
               "written": 0, "unchanged": 0, "source_archives": {}}
-    for archive in (voices, rude):
-        digest = hashlib.sha256()
-        with archive.open("rb") as stream:
-            for chunk in iter(lambda: stream.read(1024 * 1024), b""):
-                digest.update(chunk)
-        report["source_archives"][archive.name] = digest.hexdigest()
+    for archive in (voices, rude, data_archive):
+        report["source_archives"][archive.name] = file_digest(archive)
     with voices.open("rb") as stream:
         for target, entry in selected.items():
             data = read_resource(stream, entry)
@@ -253,6 +384,7 @@ def import_localization(installation: Path, assets: Path, output: Path, language
     for relative, data in (("language.yml", runtime["language_yml"]), ("text/mm9.po", catalog.encode("utf-8"))):
         changed = write_file(output / relative, data)
         report["written" if changed else "unchanged"] += 1
+    report["videos"] = import_movies(installation, runtime["videos"], output, video_cache) if video_cache else []
     return report
 
 
@@ -264,6 +396,7 @@ def main() -> int:
     parser.add_argument("--report", type=Path, required=True, help="JSON audit outside the language folder")
     parser.add_argument("--language", default="pl")
     parser.add_argument("--encoding", default="cp1250")
+    parser.add_argument("--videos", action="store_true", help="convert the three localized BIK cutscenes; needs FFmpeg")
     args = parser.parse_args()
     try:
         report_path = args.report.resolve()
@@ -273,15 +406,17 @@ def main() -> int:
                     raise ValueError("output and report must be outside the original installation and runtime assets")
         if report_path == args.output.resolve() or args.output.resolve() in report_path.parents:
             raise ValueError("put the audit report outside the mounted language folder")
-        report = import_localization(args.installation, args.assets, args.output, args.language, args.encoding)
+        cache = args.report.parent / "video-cache" if args.videos else None
+        report = import_localization(args.installation, args.assets, args.output, args.language, args.encoding, cache)
         args.report.parent.mkdir(parents=True, exist_ok=True)
         args.report.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    except (OSError, ValueError, KeyError, wave.Error, zipfile.BadZipFile) as error:
+    except (OSError, ValueError, KeyError, wave.Error, zipfile.BadZipFile, subprocess.CalledProcessError) as error:
         print(f"MM9 localization: {error}", file=sys.stderr)
         return 1
     print(f"MM9 {args.language}: {len(report['voices'])} original WAVs; "
           f"{len(report['unavailable_unused_voices'])} unavailable unused slots; "
           f"{len(report['empty_original_recordings'])} empty retail recordings; "
+          f"{len(report['videos'])} movies; "
           f"{report['text'].get('changed', 0)} changed translations; "
           f"written={report['written']} unchanged={report['unchanged']}")
     return 0

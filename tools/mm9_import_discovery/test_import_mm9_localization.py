@@ -6,11 +6,14 @@ import io
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from extract_rez import RezEntry
 from import_mm9_localization import (
-    dialogue_pairs, l10n, relative_path, select_voices, translate_catalog, voice_path, write_file,
+    dialogue_pairs, import_movies, item_pairs, l10n, relative_path, select_voices, translate_catalog, voice_path,
+    write_file,
 )
+from mm9_polish_effects import NUMBER, polish_effect_description
 
 
 def rude(rows: list[list[str]], encoding: str) -> bytes:
@@ -21,6 +24,26 @@ def rude(rows: list[list[str]], encoding: str) -> bytes:
 
 def entry(path: str) -> RezEntry:
     return RezEntry(path, 0, 44, 0, 0, int.from_bytes(b"VAW\0", "little"))
+
+
+def item_fixture():
+    headers = ["Item #", "package_id", "canonical_id", "source_item_id", "Name", "Not identified name", "Notes",
+               "use_action"]
+    rows = [["10002", "mm9", "mm9:item/sword", "2", "Poor Sword", "Sword", "Old weapon.", ""],
+            ["10175", "mm9", "mm9:item/artifact", "175", "Artifact", "Sword", "Story. (Effects: +5 Might)", ""],
+            ["10400", "mm9", "mm9:item/manual", "400", "Skill manual", "Book", "Teaches a new skill.", "LearnSkill"],
+            ["10245", "mm9", "mm9:item/letter", "245", "Letter", "Letter", "A letter.", "ReadText"]]
+    stream = io.StringIO()
+    writer = csv.writer(stream, delimiter="\t")
+    writer.writerows([headers, *rows])
+    originals = []
+    for raw, name, desc in (("2", "Miecz", "Stara broń."), ("175", "Artefakt", "Dawne efekty."),
+                             ("400", "Inna księga", "Uczy czegoś innego."), ("245", "List", "List.")):
+        originals.append([raw, name, "", "", "", "", "", name, desc, "", "", "", "", "", ""])
+    local = {"masteritemlist.csv": rude(originals, "cp1250"),
+             "book and scroll text.csv": rude([["245", "List do Kiry", "Droga Kiro,\nBjarni"]], "cp1250")}
+    books = 'Item#\tmessage text\tLocation\tItem Name\n10245\t"Dear Kira,\nBjarni"\tLetter to Kira\tLetter\n'
+    return stream.getvalue(), books, local
 
 
 class Mm9LocalizationImportTests(unittest.TestCase):
@@ -126,6 +149,76 @@ msgstr "Nowy tekst"
             with self.assertRaises(ValueError):
                 write_file(path, b"different content")
             self.assertEqual(path.read_bytes(), b"name: Polski\n")
+
+    def test_item_identity_imports_names_and_books_but_keeps_reworked_effects_and_learning_items(self) -> None:
+        items, books, local = item_fixture()
+        pairs, stats, _ = item_pairs(items, books, local, "cp1250")
+        self.assertEqual(pairs["Poor Sword"], {"Miecz"})
+        self.assertEqual(pairs["Dear Kira, Bjarni"], {"Droga Kiro,\nBjarni"})
+        self.assertEqual(pairs["Letter to Kira"], {"List do Kiry"})
+        self.assertNotIn("Story. (Effects: +5 Might)", pairs)
+        self.assertNotIn("Skill manual", pairs)
+        self.assertEqual(stats["matched_books"], 1)
+        self.assertEqual(stats["effect_descriptions_kept"], 1)
+        self.assertEqual(stats["reworked_learning_items_kept"], 1)
+
+    def test_item_import_rejects_duplicate_retail_ids_and_unexpected_runtime_ownership(self) -> None:
+        items, books, local = item_fixture()
+        with self.assertRaises(ValueError):
+            item_pairs(items.replace("mm9:item/sword", "mm8:item/sword"), books, local, "cp1250")
+        local["masteritemlist.csv"] *= 2
+        with self.assertRaises(ValueError):
+            item_pairs(items, books, local, "cp1250")
+
+    def test_effect_translation_uses_current_values_and_preserves_signs_conditions_and_set_bonuses(self) -> None:
+        current = ("Story. (Effects: +15 Endurance, -5 Accuracy, +50 Luck, "
+                   "40% chance to poison the target at Grandmaster)")
+        original = "Oficjalna opowieść. (Efekty: -5 Wytrzymałość, +99 Moc)"
+        translated = polish_effect_description(current, original)
+        self.assertTrue(translated.startswith("Oficjalna opowieść. (Efekty:"))
+        self.assertEqual(NUMBER.findall(translated), ["+15", "-5", "+50", "40"])
+        self.assertIn("arcymistrza", translated)
+        self.assertNotIn("+99", translated)
+        for label in ("Premia", "Premie"):
+            self.assertIn("pełnym zestawie", polish_effect_description(
+                "Story. (Effects: +2 Light; +2 Speed (+20 to Speed with complete set))",
+                f"Opis. ({label}: stara premia)"))
+        self.assertIsNone(polish_effect_description("Story. (Effects: an unknown new mechanic)", original))
+        self.assertIsNone(polish_effect_description(current, "Opis bez oznaczenia efektów."))
+
+    def test_movie_import_uses_local_intro_caches_conversions_and_rebuilds_corrupt_cache(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            movies = root / "retail/Movies"
+            movies.mkdir(parents=True)
+            for name in ("Intro.bik", "Shipwreck.bik", "LoseGame.bik", "Intro_E.bik"):
+                (movies / name).write_bytes(name.encode("ascii"))
+            converted_inputs = []
+
+            def run(command, **kwargs):
+                import subprocess
+                if command[0] == "ffmpeg":
+                    return subprocess.CompletedProcess(command, 0, stdout=b"ffmpeg test-version\n")
+                source = next(Path(command[command.index("-i") + 1]).glob("*.bik"))
+                target = Path(command[command.index("-o") + 1]) / (source.stem + ".ogv")
+                converted_inputs.append(source.read_bytes())
+                target.write_bytes(b"test-converted-" + source.read_bytes())
+                return subprocess.CompletedProcess(command, 0)
+
+            targets = {"Cutscenes/MM9Intro.ogv", "Cutscenes/MM9Shipwreck.ogv", "Cutscenes/MM9LoseGame.ogv"}
+            with patch("import_mm9_localization.subprocess.run", side_effect=run):
+                first = import_movies(root / "retail", targets, root / "output", root / "cache")
+                self.assertEqual(len(converted_inputs), 3)
+                self.assertIn(b"Intro.bik", converted_inputs)
+                self.assertNotIn(b"Intro_E.bik", converted_inputs)
+                again = import_movies(root / "retail", targets, root / "output", root / "cache")
+                self.assertEqual(len(converted_inputs), 3)
+                self.assertTrue(all(row["cache_hit"] and not row["written"] for row in again))
+                cached = next((root / "cache").rglob("MM9Intro.ogv"))
+                cached.write_bytes(b"corrupted cache")
+                repaired = import_movies(root / "retail", targets, root / "output", root / "cache")
+                self.assertEqual(len(converted_inputs), 4)
+                self.assertEqual(first[0]["sha256"], repaired[0]["sha256"])
 
 
 if __name__ == "__main__":

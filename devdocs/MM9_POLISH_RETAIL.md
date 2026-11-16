@@ -14,12 +14,15 @@ python3 tools/mm9_import_discovery/import_mm9_localization.py \
   --installation '/mnt/c/Program Files (x86)/3DO/Might and Magic IX' \
   --assets /path/to/openyamm/assets \
   --output output/mm9-polish/languages/pl \
-  --report output/mm9-polish/import-report.json
+  --report output/mm9-polish/import-report.json --videos
 ```
 
 `--language pl --encoding cp1250` are the defaults. The importer reads the source archives in place and does not run
 the original executables. It selects content through `assets/index.json`, avoiding stale, unindexed pack versions.
 An identical rerun keeps existing output files; a different existing file causes an error instead of overwriting it.
+`--videos` additionally needs Bash, FFmpeg and ffprobe. Omit it to import only audio and text. Movie conversions use
+the existing `tools/transcode_bik.sh`; their cache beside the report is keyed by source content, converter script and
+FFmpeg version, and verified by SHA-256 before reuse. Repeated imports do not download assets or re-encode movies.
 
 Install the generated `languages/pl/` folder under the OpenYAMM **user data directory**, alongside `settings.ini`.
 Select Polish and restart. With an ordinary portable release the user data directory is the game directory; a launch
@@ -40,7 +43,7 @@ may mount local audio correctly while continuing to use the shipped text. This d
 - A missing active voice fails the import. Missing assets referenced exclusively by `n/u` speech rows are reported
   separately; the importer does not substitute unrelated dialogue.
 - An empty original recording is reported and omitted. The base English asset remains available for that gap.
-- `VOICES/CINEMA` contains audio for the native MM9 scenes. Original BIK movie files are not converted by this tool.
+- `VOICES/CINEMA` contains audio for the native MM9 scenes. Optional BIK conversion is described below.
 
 Checked against the Polish installation supplied on 2026-11-16 and the local OpenYAMM 2.5 asset index:
 
@@ -69,16 +72,51 @@ For the inspected 2.5 installation:
 
 | Text result | Entries |
 |---|---:|
-| Catalog entries matching an unambiguous official translation | 4982 |
-| Actual translation changes | 4087 |
-| Ambiguous matches kept as shipped | 285 |
+| Catalog entries matching official text or an adapted current effect description | 5721 |
+| Actual translation changes | 4710 |
+| Ambiguous matches kept as shipped | 297 |
 | Different human translation kept | 1 |
-| Entries without a matching source text | 1861 |
+| Entries without a matching source text | 1110 |
 
 441 original RUDE files were matched, with 5326 matching rows and 57 unmatched rows. One additional runtime dialogue
-file has no retail counterpart. The 47 fuzzy entries in the shipped catalog remain fuzzy. This is an official-dialogue
-supplement, not a claim that every MM9 text has been replaced: original `Data.rez` tables/books need an original
-English reference before they can be imported safely.
+file has no retail counterpart.
+
+The runtime item table retains explicit `source_item_id` values. Joining these to `Data.rez/MASTERITEMLIST.csv`
+provides 368 original item records; joining readable item ids through that table provides all 115 books and letters
+from `BOOK AND SCROLL TEXT.csv`. Names and ordinary descriptions are imported without needing a loose English retail
+DATA extraction. Runtime item ownership and duplicate ids are checked. The additional names/books import changes 573
+translations; adapted effect descriptions add 50 more, for 623 changes relative to the first dialogue-only overlay,
+without losing any previously imported official translation.
+
+The importer preserves 99 items without a retail counterpart and 23 reworked skill-learning items. Old MM9 effects
+must not replace OpenYAMM's updated mechanics. For Polish, `mm9_polish_effects.py` combines the official narrative with
+a translation of the **current** English effect list. Its explicit vocabulary retains all numbers, signs, chances,
+Grandmaster conditions, party-wide scope and set bonuses. An unknown phrase or missing retail effect marker is refused.
+The numbers and their order must match exactly. Adapted entries have a separate provenance comment in the PO file.
+
+This adapts 50 effect descriptions, including all 47 previously fuzzy and both empty entries, leaving the catalog with
+zero fuzzy and zero empty entries. The other 13 effect descriptions retain their existing translations. This is a
+coverage result, not a claim that every translation has been manually proofread. The 1110 entries without a matching
+retail source generally retain existing translations; ambiguous translations also retain the shipped text.
+
+## Movies
+
+Three paths are declared explicitly, matching the existing runtime packs:
+
+| Retail source | Language overlay path under `worlds/mm9/videos/` |
+|---|---|
+| `Movies/Intro.bik` | `Cutscenes/MM9Intro.ogv` |
+| `Movies/Shipwreck.bik` | `Cutscenes/MM9Shipwreck.ogv` |
+| `Movies/LoseGame.bik` | `Cutscenes/MM9LoseGame.ogv` |
+
+The inspected Polish installation also has `Intro_E.bik`. Its audio envelope matches the English runtime intro
+(correlation 0.99972); the default `Intro.bik` has a different soundtrack (0.52356). The importer uses the default
+localized movie, never the `_E` alternative. Logos are not game cutscene replacements. Movie language still warrants
+manual listening; waveform comparison alone does not identify the spoken language.
+
+The output is Theora/Vorbis OGV, retaining source resolution, frame rate, stereo audio and 44100 Hz sample rate.
+Inspected durations are 96.733, 40.467 and 25.667 seconds. The three files add about 46.4 MiB to the private overlay;
+they are not stored in Git. Source and output hashes are included in the audit.
 
 ## Validation and distribution
 
@@ -92,10 +130,12 @@ The `AssetFileSystemTests.cpp` regression covers same-named local/shipped catalo
 behavior. Runtime verification should mount the overlay with MM6, MM7, MM8 and MM9 active, since MM9 character voices
 can be used across worlds, and decode the actual WAVs with the game's SDL decoder.
 
-Local Windows verification on 2026-11-16 passed: eight importer unit tests, the existing audio-import test, 15 focused
+Local Windows verification on 2026-11-16 passed: 12 importer unit tests, the existing audio-import test, 15 focused
 C++ localization/pack cases (204 assertions), decoding all 1777 WAVs through the engine's native SDL library, and
 eight real-content mount checks (four worlds, English/Polish). A native OpenGL run reached Bootcamp gameplay and
 captured the result without audio decoding errors. Manual listening of the complete voice archive remains outstanding.
+The follow-up fully decoded all three converted movies with FFmpeg, started each through the native game video/audio
+decoder, verified English/Polish movie selection in all four worlds, and exercised movie-cache reuse and repair.
 A broader Windows run had 25 failures involving unavailable loose development audio/table fixtures and pre-existing
 case-sensitive filesystem assumptions; these are not counted as passing validation.
 
