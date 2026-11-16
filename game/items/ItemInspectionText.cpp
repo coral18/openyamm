@@ -1,3 +1,4 @@
+#include "engine/Localization.h"
 #include "game/items/ItemInspectionText.h"
 
 #include "game/items/ItemRuntime.h"
@@ -48,43 +49,38 @@ std::string formatItemInspectDamageText(const std::string &damageDice, int bonus
     return damageDice + (bonus > 0 ? "+" : "") + std::to_string(bonus);
 }
 
-}
+} // namespace
 
 std::string itemInspectTypeText(const InventoryItem *pItemState, const ItemDefinition &itemDefinition)
 {
     if (pItemState != nullptr && !pItemState->identified && ItemRuntime::requiresIdentification(itemDefinition))
     {
-        return "Not identified";
+        return Engine::tr("Not identified");
     }
 
-    if (!itemDefinition.unidentifiedName.empty()
-        && itemDefinition.unidentifiedName != "0"
-        && itemDefinition.unidentifiedName != "N / A")
+    if (!itemDefinition.unidentifiedName.empty() && itemDefinition.unidentifiedName != "0" &&
+        itemDefinition.unidentifiedName != "N / A")
     {
         return itemDefinition.unidentifiedName;
     }
 
-    if (!itemDefinition.skillGroup.empty()
-        && itemDefinition.skillGroup != "0"
-        && itemDefinition.skillGroup != "Misc")
+    if (!itemDefinition.skillGroup.empty() && itemDefinition.skillGroup != "0" && itemDefinition.skillGroup != "Misc")
     {
         return itemDefinition.skillGroup;
     }
 
-    if (!itemDefinition.equipStat.empty()
-        && itemDefinition.equipStat != "0"
-        && itemDefinition.equipStat != "N / A")
+    if (!itemDefinition.equipStat.empty() && itemDefinition.equipStat != "0" && itemDefinition.equipStat != "N / A")
     {
         return itemDefinition.equipStat;
     }
 
-    return "Misc";
+    return Engine::tr("Misc");
 }
 
 std::string itemInspectDetailText(const InventoryItem *pItemState, const ItemDefinition &itemDefinition)
 {
     if (pItemState != nullptr && !pItemState->identified && ItemRuntime::requiresIdentification(itemDefinition))
-        return "Not identified";
+        return Engine::tr("Not identified");
     const bool isBroken = pItemState != nullptr && pItemState->broken;
     const std::string &equipStat = itemDefinition.equipStat;
     int mod1Value = 0;
@@ -94,12 +90,13 @@ std::string itemInspectDetailText(const InventoryItem *pItemState, const ItemDef
 
     if (equipStat == "Bottle" && pItemState != nullptr && pItemState->standardEnchantPower > 0)
     {
-        return "Power: " + std::to_string(pItemState->standardEnchantPower);
+        return Engine::tr("Power: {standardEnchantPower}",
+                          {{"standardEnchantPower", std::to_string(pItemState->standardEnchantPower)}});
     }
 
     if (equipStat == "Reagent" && hasMod1Int && mod1Value > 0)
     {
-        return "Power: " + std::to_string(mod1Value);
+        return Engine::tr("Power: {mod1Value}", {{"mod1Value", std::to_string(mod1Value)}});
     }
 
     if (equipStat == "Weapon" || equipStat == "Weapon2" || equipStat == "Weapon1or2")
@@ -109,12 +106,14 @@ std::string itemInspectDetailText(const InventoryItem *pItemState, const ItemDef
 
         if (damageText.empty())
         {
-            return isBroken ? "Broken" : std::string {};
+            return isBroken ? Engine::tr("Broken") : std::string{};
         }
 
-        const std::string detail = "Attack: " + std::string(attackBonus >= 0 ? "+" : "") + std::to_string(attackBonus)
-            + "   Damage: " + damageText;
-        return isBroken ? "Broken   " + detail : detail;
+        const std::string detail = Engine::tr("Attack: {attackBonus}{attackBonus2}   Damage: {damageText}",
+                                              {{"attackBonus", std::string(attackBonus >= 0 ? "+" : "")},
+                                               {"attackBonus2", std::to_string(attackBonus)},
+                                               {"damageText", damageText}});
+        return isBroken ? Engine::tr("Broken   {detail}", {{"detail", detail}}) : detail;
     }
 
     if (equipStat == "Missile")
@@ -124,57 +123,52 @@ std::string itemInspectDetailText(const InventoryItem *pItemState, const ItemDef
 
         if (damageText.empty())
         {
-            return isBroken ? "Broken" : std::string {};
+            return isBroken ? Engine::tr("Broken") : std::string{};
         }
 
-        const std::string detail = "Shoot: " + std::string(shootBonus >= 0 ? "+" : "") + std::to_string(shootBonus)
-            + "   Damage: " + damageText;
-        return isBroken ? "Broken   " + detail : detail;
+        const std::string detail = Engine::tr("Shoot: {shootBonus}{shootBonus2}   Damage: {damageText}",
+                                              {{"shootBonus", std::string(shootBonus >= 0 ? "+" : "")},
+                                               {"shootBonus2", std::to_string(shootBonus)},
+                                               {"damageText", damageText}});
+        return isBroken ? Engine::tr("Broken   {detail}", {{"detail", detail}}) : detail;
     }
 
     if (equipStat == "WeaponW")
     {
-        const int currentCharges =
-            pItemState != nullptr
-                ? pItemState->currentCharges
-                : (hasMod2Int ? mod2Value : 0);
-        const int maxCharges =
-            pItemState != nullptr && pItemState->maxCharges > 0
-                ? pItemState->maxCharges
-                : (hasMod2Int ? mod2Value : currentCharges);
+        const int currentCharges = pItemState != nullptr ? pItemState->currentCharges : (hasMod2Int ? mod2Value : 0);
+        const int maxCharges = pItemState != nullptr && pItemState->maxCharges > 0
+                                   ? pItemState->maxCharges
+                                   : (hasMod2Int ? mod2Value : currentCharges);
 
         if (maxCharges > 0)
         {
-            const std::string detail =
-                "Charges: " + std::to_string(currentCharges) + "/" + std::to_string(maxCharges);
-            return isBroken ? "Broken   " + detail : detail;
+            const std::string detail = Engine::tr(
+                "Charges: {currentCharges}/{maxCharges}",
+                {{"currentCharges", std::to_string(currentCharges)}, {"maxCharges", std::to_string(maxCharges)}});
+            return isBroken ? Engine::tr("Broken   {detail}", {{"detail", detail}}) : detail;
         }
 
-        return isBroken ? "Broken" : std::string {};
+        return isBroken ? Engine::tr("Broken") : std::string{};
     }
 
-    if (equipStat == "Armor"
-        || equipStat == "Shield"
-        || equipStat == "Helm"
-        || equipStat == "Belt"
-        || equipStat == "Cloak"
-        || equipStat == "Gauntlets"
-        || equipStat == "Boots"
-        || equipStat == "Ring"
-        || equipStat == "Amulet")
+    if (equipStat == "Armor" || equipStat == "Shield" || equipStat == "Helm" || equipStat == "Belt" ||
+        equipStat == "Cloak" || equipStat == "Gauntlets" || equipStat == "Boots" || equipStat == "Ring" ||
+        equipStat == "Amulet")
     {
         const int64_t armorValue = int64_t(hasMod1Int ? mod1Value : 0) + (hasMod2Int ? mod2Value : 0);
 
         if (armorValue != 0)
         {
-            const std::string detail = "Armor: " + std::string(armorValue > 0 ? "+" : "") + std::to_string(armorValue);
-            return isBroken ? "Broken   " + detail : detail;
+            const std::string detail =
+                Engine::tr("Armor: {armorValue}{armorValue2}", {{"armorValue", std::string(armorValue > 0 ? "+" : "")},
+                                                                {"armorValue2", std::to_string(armorValue)}});
+            return isBroken ? Engine::tr("Broken   {detail}", {{"detail", detail}}) : detail;
         }
 
-        return isBroken ? "Broken" : std::string {};
+        return isBroken ? Engine::tr("Broken") : std::string{};
     }
 
-    return isBroken ? "Broken" : std::string {};
+    return isBroken ? Engine::tr("Broken") : std::string{};
 }
 
 } // namespace OpenYAMM::Game

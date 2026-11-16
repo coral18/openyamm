@@ -1,3 +1,4 @@
+#include "engine/Localization.h"
 #include "game/world/WorldMapFeatures.h"
 #include "game/world/WorldFloorPlan.h"
 #include "game/events/ScriptedEventProgram.h"
@@ -22,8 +23,8 @@ bool worldMapFeatureOnFloorLayer(const WorldMapFeature &feature, std::optional<W
     if (feature.kind == WorldMapFeatureKind::Note)
         return !feature.noteElevation || worldFloorPlanLayerMatches(layer, float(*feature.noteElevation));
     if (!feature.components.empty())
-        return std::any_of(feature.components.begin(), feature.components.end(), [&](const WorldInteractionSite &site)
-            { return worldFloorPlanLayerMatches(layer, site.z); });
+        return std::any_of(feature.components.begin(), feature.components.end(),
+                           [&](const WorldInteractionSite &site) { return worldFloorPlanLayerMatches(layer, site.z); });
     return worldFloorPlanLayerMatches(layer, feature.site.z);
 }
 
@@ -31,8 +32,9 @@ bool worldMapFeatureContainsSite(const WorldMapFeature &feature, const std::stri
 {
     const auto matches = [&](const WorldInteractionSite &site)
     {
-        return siteId == site.id || std::any_of(site.faceIds.begin(), site.faceIds.end(), [&](uint32_t face)
-            { return siteId == site.surfacePrefix + "surface/" + std::to_string(face); });
+        return siteId == site.id ||
+               std::any_of(site.faceIds.begin(), site.faceIds.end(), [&](uint32_t face)
+                           { return siteId == site.surfacePrefix + "surface/" + std::to_string(face); });
     };
     return matches(feature.site) || std::any_of(feature.components.begin(), feature.components.end(), matches);
 }
@@ -41,17 +43,26 @@ const char *worldMapFeatureKindName(WorldMapFeatureKind kind)
 {
     switch (kind)
     {
-    case WorldMapFeatureKind::Chest: return "Chest";
-    case WorldMapFeatureKind::Water: return "Well / fountain";
-    case WorldMapFeatureKind::Shrine: return "Shrine";
-    case WorldMapFeatureKind::Obelisk: return "Obelisk";
-    case WorldMapFeatureKind::Connection: return "Passage / teleport";
-    case WorldMapFeatureKind::Monster: return "Monster";
-    case WorldMapFeatureKind::Note: return "Note";
-    case WorldMapFeatureKind::Item: return "Item source";
-    case WorldMapFeatureKind::Decoration: return "Interactive object";
+    case WorldMapFeatureKind::Chest:
+        return Engine::trNoop("Chest").data();
+    case WorldMapFeatureKind::Water:
+        return Engine::trNoop("Well / fountain").data();
+    case WorldMapFeatureKind::Shrine:
+        return Engine::trNoop("Shrine").data();
+    case WorldMapFeatureKind::Obelisk:
+        return Engine::trNoop("Obelisk").data();
+    case WorldMapFeatureKind::Connection:
+        return Engine::trNoop("Passage / teleport").data();
+    case WorldMapFeatureKind::Monster:
+        return Engine::trNoop("Monster").data();
+    case WorldMapFeatureKind::Note:
+        return Engine::trNoop("Note").data();
+    case WorldMapFeatureKind::Item:
+        return Engine::trNoop("Item source").data();
+    case WorldMapFeatureKind::Decoration:
+        return Engine::trNoop("Interactive object").data();
     }
-    return "Site";
+    return Engine::trNoop("Site").data();
 }
 
 std::optional<WorldMapFeatureKind> worldMapFeatureKind(std::string_view action)
@@ -61,20 +72,21 @@ std::optional<WorldMapFeatureKind> worldMapFeatureKind(std::string_view action)
     if (action == "shrine") return WorldMapFeatureKind::Shrine;
     if (action == "obelisk") return WorldMapFeatureKind::Obelisk;
     if (action == "rescue" || action == "stone_to_flesh") return WorldMapFeatureKind::Decoration;
-    if (action == "dimension_door" || action == "teleport" || action == "passage" || action == "travel"
-        || action == "enter_dungeon" || action == "leave_dungeon") return WorldMapFeatureKind::Connection;
+    if (action == "dimension_door" || action == "teleport" || action == "passage" || action == "travel" ||
+        action == "enter_dungeon" || action == "leave_dungeon")
+        return WorldMapFeatureKind::Connection;
     return std::nullopt;
 }
 
 std::vector<WorldMapFeature> buildWorldMapFeatures(const std::string &mapId,
-    const std::vector<WorldInteractionSite> &sites, const ScriptedEventProgram &events)
+                                                   const std::vector<WorldInteractionSite> &sites,
+                                                   const ScriptedEventProgram &events)
 {
     std::vector<WorldMapFeature> features;
     for (const WorldInteractionSite &site : sites)
     {
         const auto metadata = events.getContextActionMetadata(site.eventId);
-        if (!metadata || metadata->hidden)
-            continue;
+        if (!metadata || metadata->hidden) continue;
         const std::optional<WorldMapFeatureKind> kind = worldMapFeatureKind(metadata->kind);
         if (!kind || (*kind == WorldMapFeatureKind::Chest && metadata->chestIds.empty())) continue;
         WorldMapFeature feature;
@@ -83,13 +95,12 @@ std::vector<WorldMapFeature> buildWorldMapFeatures(const std::string &mapId,
         feature.kind = *kind;
         feature.site = site;
         feature.title = events.getHint(site.eventId).value_or(worldMapFeatureKindName(*kind));
-        if (feature.title.empty())
-            feature.title = worldMapFeatureKindName(*kind);
+        if (feature.title.empty()) feature.title = worldMapFeatureKindName(*kind);
         feature.chestIds = metadata->chestIds;
         feature.interactionReference = metadata->interactionReference;
         if (const auto reference = events.siteReferences().find(site.eventId);
             reference != events.siteReferences().end())
-            feature.guideReference = reference->second;
+            feature.guideReference = Engine::localizeKnown(reference->second);
         if (const auto notes = events.autonoteReferences().find(site.eventId);
             notes != events.autonoteReferences().end())
             feature.autonoteIds = notes->second;
@@ -105,11 +116,11 @@ std::vector<WorldMapFeature> buildWorldMapFeatures(const std::string &mapId,
             for (const std::string &id : group)
             {
                 const auto found = std::find_if(features.begin(), features.end(), [&](const WorldMapFeature &feature)
-                    { return feature.site.id == id && feature.site.eventId == event; });
-                if (found == features.end() || (found->kind != WorldMapFeatureKind::Connection
-                    && found->kind != WorldMapFeatureKind::Shrine))
-                    throw std::invalid_argument("Site group has no matching physical passage or shrine: "
-                        + mapId + "/" + id);
+                                                { return feature.site.id == id && feature.site.eventId == event; });
+                if (found == features.end() ||
+                    (found->kind != WorldMapFeatureKind::Connection && found->kind != WorldMapFeatureKind::Shrine))
+                    throw std::invalid_argument("Site group has no matching physical passage or shrine: " + mapId +
+                                                "/" + id);
                 indices.push_back(size_t(found - features.begin()));
             }
             WorldMapFeature &anchor = features[indices.front()];
@@ -124,17 +135,17 @@ std::vector<WorldMapFeature> buildWorldMapFeatures(const std::string &mapId,
     return features;
 }
 
-void WorldDatabase::indexMapInteractionReferences(const MapStatsEntry &map,
-    const ItemTable &items, const SpellTable &spells, const JournalQuestTable &quests)
+void WorldDatabase::indexMapInteractionReferences(const MapStatsEntry &map, const ItemTable &items,
+                                                  const SpellTable &spells, const JournalQuestTable &quests)
 {
     const std::string id = mapId(map);
-    const auto questText = [&](uint32_t qbit) -> const std::string &
+    const auto questText = [&](uint32_t qbit) -> std::string
     {
         const auto quest = std::find_if(quests.entries().begin(), quests.entries().end(),
-            [&](const JournalQuestEntry &entry) { return entry.qbitId == qbit; });
+                                        [&](const JournalQuestEntry &entry) { return entry.qbitId == qbit; });
         if (quest == quests.entries().end() || quest->text.empty() || quest->text == "0")
             throw std::invalid_argument("Unknown interaction quest: " + id + "/" + std::to_string(qbit));
-        return quest->text;
+        return Engine::localize(quest->text, "world:" + map.worldId);
     };
     for (WorldMapFeature &feature : m_features)
     {
@@ -143,15 +154,17 @@ void WorldDatabase::indexMapInteractionReferences(const MapStatsEntry &map,
         if (reference.kind == "dimension_door") continue;
         if (reference.kind == "quest_objective")
         {
-            feature.guideReference = "Requires an active quest:\n" + questText(reference.requiredQBit)
-                + "\n\nOn success: complete this altar's objective and record its quest progress.";
+            feature.guideReference = Engine::tr("Requires an active quest:\n{requiredQBit}\n\nOn success: complete "
+                                                "this altar's objective and record its quest progress.",
+                                                {{"requiredQBit", questText(reference.requiredQBit)}});
             if (reference.objectiveGroupQBit != 0)
-                feature.guideReference += "\nThis location records one objective in a group of "
-                    + std::to_string(reference.otherObjectiveQBits.size() + 1)
-                    + ". The group completes when all of its objectives are recorded."
-                    + "\nNo further effect if this objective or the whole group is already complete.";
+                feature.guideReference +=
+                    Engine::tr("\nThis location records one objective in a group of {size}. The group completes when "
+                               "all of its objectives are recorded.\nNo further effect if this objective or the whole "
+                               "group is already complete.",
+                               {{"size", std::to_string(reference.otherObjectiveQBits.size() + 1)}});
             feature.guideReference +=
-                "\nThis ritual can be completed only once; the final quest turn-in is separate.";
+                Engine::tr("\nThis ritual can be completed only once; the final quest turn-in is separate.");
             continue;
         }
         const ItemDefinition *pItem = items.get(reference.itemId);
@@ -159,34 +172,43 @@ void WorldDatabase::indexMapInteractionReferences(const MapStatsEntry &map,
         std::string text;
         if (reference.kind == "enter_dungeon" || reference.kind == "leave_dungeon")
         {
-            const auto destination = std::find_if(m_records.begin(), m_records.end(), [&](const WorldRecord &record)
-            { return (record.kind == WorldRecordKind::Region || record.kind == WorldRecordKind::Dungeon)
-                && record.map != nullptr && record.map->worldId == map.worldId
-                && toLowerCopy(record.map->fileName) == reference.targetMap; });
+            const auto destination = std::find_if(
+                m_records.begin(), m_records.end(),
+                [&](const WorldRecord &record)
+                {
+                    return (record.kind == WorldRecordKind::Region || record.kind == WorldRecordKind::Dungeon) &&
+                           record.map != nullptr && record.map->worldId == map.worldId &&
+                           toLowerCopy(record.map->fileName) == reference.targetMap;
+                });
             if (destination == m_records.end())
                 throw std::invalid_argument("Unknown interaction destination: " + feature.id);
             const bool reusable = !reference.openedMapFlag.empty() || reference.openedQBit != 0;
-            text = "Destination: " + destination->name() + ".\n";
-            if (reusable) text += "First opening: ";
-            if (reference.itemScope == "each_member") text += "Every party member must carry: ";
-            else if (reference.itemScope == "selected") text += "The selected character must carry: ";
-            else text += "A party member must carry: ";
-            text += pItem->name + ".\nThe item is not consumed.";
+            text = Engine::tr("Destination: {name}.\n", {{"name", Engine::localizeKnown(destination->name())}});
+            if (reusable) text += Engine::tr("First opening: ");
+            if (reference.itemScope == "each_member")
+                text += Engine::tr("Every party member must carry: ");
+            else if (reference.itemScope == "selected")
+                text += Engine::tr("The selected character must carry: ");
+            else
+                text += Engine::tr("A party member must carry: ");
+            text += Engine::tr("{name}.\nThe item is not consumed.", {{"name", Engine::localizeKnown(pItem->name)}});
             if (!reference.openedMapFlag.empty())
-                text += " Once opened, this entrance can be reused without the key"
-                    " while this location retains its open state.";
+                text += Engine::tr(" Once opened, this entrance can be reused without the key"
+                                   " while this location retains its open state.");
             else if (reference.openedQBit != 0)
-                text += " Once unlocked, this passage can be reused without the item"
-                    " while its campaign record remains set.";
+                text += Engine::tr(" Once unlocked, this passage can be reused without the item"
+                                   " while its campaign record remains set.");
         }
         else if (reference.kind == "offering")
         {
-            text = "Requires an active quest:\n" + questText(reference.requiredQBit)
-                + "\n\nA party member must carry: " + pItem->name + ".\n"
-                + (reference.consumesItem ? "The item is consumed only when the offering succeeds.\n"
-                    : "The item is not consumed.\n")
-                + "This shrine accepts its offering only once.\n"
-                + "On success: place the offered item at this shrine and record its quest progress.";
+            text = Engine::tr(
+                "Requires an active quest:\n{requiredQBit}\n\nA party member must carry: {name}.\n{n}This shrine "
+                "accepts its offering only once.\nOn success: place the offered item at this shrine and record its "
+                "quest progress.",
+                {{"requiredQBit", questText(reference.requiredQBit)},
+                 {"name", Engine::localizeKnown(pItem->name)},
+                 {"n", (reference.consumesItem ? Engine::tr("The item is consumed only when the offering succeeds.\n")
+                                               : Engine::tr("The item is not consumed.\n"))}});
         }
         else
         {
@@ -196,44 +218,54 @@ void WorldDatabase::indexMapInteractionReferences(const MapStatsEntry &map,
             {
                 const SpellEntry *pSpell = spells.findById(int(reference.spellId));
                 if (pSpell == nullptr) throw std::invalid_argument("Unknown interaction spell: " + feature.id);
-                text += "Use item: " + pItem->name + ".\nAlternative: cast " + pSpell->name
-                    + " at this object.\n";
-                text += reference.consumesItem ? "The item is consumed when used; casting does not consume it.\n"
-                    : "The item is not consumed.\n";
+                text += Engine::tr(
+                    "Use item: {name}.\nAlternative: cast {name2} at this object.\n",
+                    {{"name", Engine::localizeKnown(pItem->name)}, {"name2", Engine::localizeKnown(pSpell->name)}});
+                text += reference.consumesItem
+                            ? Engine::tr("The item is consumed when used; casting does not consume it.\n")
+                            : Engine::tr("The item is not consumed.\n");
             }
             else
-                text += "Requires carrying: " + pItem->name
-                    + (reference.consumesItem ? ". The item is consumed.\n" : ". The item is not consumed.\n");
-            if (reference.completionQBit != 0) text += "Available only while this person has not been rescued.\n";
-            text += "On success: remove this statue and speak with " + pNpc->name + ".";
-            if (reference.addsFollower) text += " The rescued person joins the followers.";
+                text += Engine::tr("Requires carrying: {name}{n}",
+                                   {{"name", Engine::localizeKnown(pItem->name)},
+                                    {"n", (reference.consumesItem ? Engine::tr(". The item is consumed.\n")
+                                                                  : Engine::tr(". The item is not consumed.\n"))}});
+            if (reference.completionQBit != 0)
+                text += Engine::tr("Available only while this person has not been rescued.\n");
+            text += Engine::tr("On success: remove this statue and speak with {name}.",
+                               {{"name", Engine::localizeKnown(pNpc->name)}});
+            if (reference.addsFollower) text += Engine::tr(" The rescued person joins the followers.");
         }
         feature.guideReference = std::move(text);
     }
 }
 
-void WorldDatabase::indexMapGateReferences(const MapStatsEntry &map, const WorldGateCatalog &gates,
-    const Party *pParty)
+void WorldDatabase::indexMapGateReferences(const MapStatsEntry &map, const WorldGateCatalog &gates, const Party *pParty)
 {
     for (WorldMapFeature &feature : m_features)
     {
-        if (feature.mapId != mapId(map) || !feature.interactionReference
-            || feature.interactionReference->kind != "dimension_door") continue;
+        if (feature.mapId != mapId(map) || !feature.interactionReference ||
+            feature.interactionReference->kind != "dimension_door")
+            continue;
         const WorldGateNetwork *pNetwork = gates.find(feature.interactionReference->network);
         if (pNetwork == nullptr) throw std::invalid_argument("Unknown gate network: " + feature.id);
         feature.title = pNetwork->title;
-        feature.guideReference = pNetwork->unlockDescription + "\nDestinations are chosen at this gateway.\n";
+        feature.guideReference = Engine::tr("{unlockDescription}\nDestinations are chosen at this gateway.\n",
+                                            {{"unlockDescription", pNetwork->unlockDescription}});
         for (const WorldGateChoice &choice : gates.choices(*pNetwork, pParty))
             feature.guideReference += "\n" + choice.pDestination->label + " - " + choice.pLanding->mapLabel;
-        feature.guideReference += "\n\nLanding sites follow the party's current campaign progress.";
+        feature.guideReference += Engine::tr("\n\nLanding sites follow the party's current campaign progress.");
     }
 }
 
 std::vector<WorldGateChoice> WorldDatabase::gateDestinations(const WorldMapFeature &feature,
-    const WorldKnowledge &knowledge, const WorldGateCatalog &gates, const Party *pParty, bool guide) const
+                                                             const WorldKnowledge &knowledge,
+                                                             const WorldGateCatalog &gates, const Party *pParty,
+                                                             bool guide) const
 {
-    if (!feature.interactionReference || feature.interactionReference->kind != "dimension_door"
-        || !featureVisible(feature, knowledge, guide)) return {};
+    if (!feature.interactionReference || feature.interactionReference->kind != "dimension_door" ||
+        !featureVisible(feature, knowledge, guide))
+        return {};
     const WorldGateNetwork *pNetwork = gates.find(feature.interactionReference->network);
     if (pNetwork == nullptr) return {};
     if (guide) return gates.choices(*pNetwork, pParty);
@@ -248,40 +280,44 @@ std::vector<WorldGateChoice> WorldDatabase::gateDestinations(const WorldMapFeatu
 }
 
 std::string WorldDatabase::gateOfferText(const WorldMapFeature &feature, const WorldKnowledge &knowledge,
-    const WorldGateCatalog &gates) const
+                                         const WorldGateCatalog &gates) const
 {
-    if (!feature.interactionReference || feature.interactionReference->kind != "dimension_door"
-        || !featureVisible(feature, knowledge, false)) return {};
+    if (!feature.interactionReference || feature.interactionReference->kind != "dimension_door" ||
+        !featureVisible(feature, knowledge, false))
+        return {};
     const auto found = knowledge.gateOffers.find(feature.mapId);
     if (found == knowledge.gateOffers.end()) return {};
     const WorldGateNetwork *pNetwork = gates.find(feature.interactionReference->network);
-    if (pNetwork == nullptr) return "Recorded gateway network is unavailable.";
+    if (pNetwork == nullptr) return Engine::tr("Recorded gateway network is unavailable.");
     std::string text;
     for (const WorldGateOffer &offer : found->second)
     {
         if (offer.eventId != feature.site.eventId || offer.networkId != pNetwork->id) continue;
         if (const auto choice = gates.match(offer.networkId, offer.choiceId, offer.mapId))
         {
-            if (text.empty()) text = "Previously offered destinations (availability may change):";
-            text += "\n" + choice->pDestination->label + " - " + choice->pLanding->mapLabel + " | Day "
-                + std::to_string(offer.gameMinutes / (24 * 60) + 1);
+            if (text.empty()) text = Engine::tr("Previously offered destinations (availability may change):");
+            text += Engine::tr("\n{label} - {mapLabel} | Day {gameMinutes}",
+                               {{"label", choice->pDestination->label},
+                                {"mapLabel", Engine::localizeKnown(choice->pLanding->mapLabel)},
+                                {"gameMinutes", std::to_string(offer.gameMinutes / (24 * 60) + 1)}});
         }
     }
     return text;
 }
 
-void WorldDatabase::indexInheritedDecorations(const MapStatsEntry &map,
-    const std::vector<WorldDecorationSite> &sites, const ScriptedEventProgram &globalEvents)
+void WorldDatabase::indexInheritedDecorations(const MapStatsEntry &map, const std::vector<WorldDecorationSite> &sites,
+                                              const ScriptedEventProgram &globalEvents)
 {
     const std::string id = mapId(map);
     if (find(id) == nullptr) return;
     std::erase_if(m_features, [&](const WorldMapFeature &feature)
-        { return feature.mapId == id && feature.site.id.starts_with("inherited-decoration/"); });
+                  { return feature.mapId == id && feature.site.id.starts_with("inherited-decoration/"); });
     for (const WorldDecorationSite &decoration : sites)
     {
         WorldMapFeature feature;
         feature.id = id + "/site/" + decoration.site.id;
-        feature.mapId = id; feature.site = decoration.site;
+        feature.mapId = id;
+        feature.site = decoration.site;
         feature.kind = WorldMapFeatureKind::Decoration;
         feature.title = decoration.name;
         for (uint32_t offset = 0; offset < decoration.eventCount; ++offset)
@@ -294,28 +330,30 @@ void WorldDatabase::indexInheritedDecorations(const MapStatsEntry &map,
                 feature.relatedAutonotes.emplace(uint16_t(event), notes->second);
             if (decoration.initialEventId != 0 && event != decoration.initialEventId) continue;
             const auto hint = globalEvents.getHint(uint16_t(event));
-            if (hint && !hint->empty()) feature.guideReference += *hint + "\n";
+            if (hint && !hint->empty()) feature.guideReference += Engine::localizeKnown(*hint) + "\n";
             if (const auto reference = globalEvents.siteReferences().find(uint16_t(event));
                 reference != globalEvents.siteReferences().end())
-                feature.guideReference += reference->second + "\n";
+                feature.guideReference += Engine::localizeKnown(reference->second) + "\n";
             if (notes != globalEvents.autonoteReferences().end())
                 feature.autonoteIds.insert(feature.autonoteIds.end(), notes->second.begin(), notes->second.end());
         }
         if (feature.relatedEventIds.empty()) continue;
         if (decoration.initiallyDepleted)
-            feature.guideReference = "Initially depleted in the authored map; scripts can change remaining contents.";
+            feature.guideReference =
+                Engine::tr("Initially depleted in the authored map; scripts can change remaining contents.");
         else if (!feature.guideReference.empty())
-            feature.guideReference = "Initial interaction reference; remaining contents can change after use.\n\n"
-                + feature.guideReference;
+            feature.guideReference = Engine::tr(
+                "Initial interaction reference; remaining contents can change after use.\n\n{guideReference}",
+                {{"guideReference", feature.guideReference}});
         std::sort(feature.autonoteIds.begin(), feature.autonoteIds.end());
         feature.autonoteIds.erase(std::unique(feature.autonoteIds.begin(), feature.autonoteIds.end()),
-            feature.autonoteIds.end());
+                                  feature.autonoteIds.end());
         m_features.push_back(std::move(feature));
     }
 }
 
 std::vector<const WorldSiteObservation *> WorldDatabase::siteObservations(const WorldMapFeature &feature,
-    const WorldKnowledge &knowledge) const
+                                                                          const WorldKnowledge &knowledge) const
 {
     std::vector<const WorldSiteObservation *> result;
     const WorldRecord *pMap = find(feature.mapId);
@@ -324,16 +362,17 @@ std::vector<const WorldSiteObservation *> WorldDatabase::siteObservations(const 
     if (found == knowledge.siteObservations.end()) return result;
     for (const WorldSiteObservation &observation : found->second)
     {
-        if (observation.eventId != feature.site.eventId
-            && std::find(feature.relatedEventIds.begin(), feature.relatedEventIds.end(), observation.eventId)
-                == feature.relatedEventIds.end()) continue;
+        if (observation.eventId != feature.site.eventId &&
+            std::find(feature.relatedEventIds.begin(), feature.relatedEventIds.end(), observation.eventId) ==
+                feature.relatedEventIds.end())
+            continue;
         if (worldMapFeatureContainsSite(feature, observation.siteId)) result.push_back(&observation);
     }
     return result;
 }
 
 std::vector<const WorldItemSource *> WorldDatabase::siteItemDeliveries(const WorldMapFeature &feature,
-    const WorldKnowledge &knowledge) const
+                                                                       const WorldKnowledge &knowledge) const
 {
     std::vector<const WorldItemSource *> result;
     const WorldRecord *pMap = find(feature.mapId);
@@ -342,23 +381,25 @@ std::vector<const WorldItemSource *> WorldDatabase::siteItemDeliveries(const Wor
     if (sources == knowledge.itemObservations.end()) return result;
     for (const WorldItemSource &source : sources->second)
     {
-        if (!source.observed || source.kind != WorldItemSourceKind::DecorationReward || !source.decorationSlot
-            || !worldMapFeatureContainsSite(feature, "inherited-decoration/" + std::to_string(*source.decorationSlot)))
+        if (!source.observed || source.kind != WorldItemSourceKind::DecorationReward || !source.decorationSlot ||
+            !worldMapFeatureContainsSite(feature, "inherited-decoration/" + std::to_string(*source.decorationSlot)))
             continue;
         result.push_back(&source);
     }
-    std::sort(result.begin(), result.end(), [](const WorldItemSource *a, const WorldItemSource *b)
-    {
-        if (a->itemId != b->itemId) return a->itemId < b->itemId;
-        return a->gameMinutes > b->gameMinutes;
-    });
-    result.erase(std::unique(result.begin(), result.end(), [](const WorldItemSource *a, const WorldItemSource *b)
-        { return a->itemId == b->itemId; }), result.end());
+    std::sort(result.begin(), result.end(),
+              [](const WorldItemSource *a, const WorldItemSource *b)
+              {
+                  if (a->itemId != b->itemId) return a->itemId < b->itemId;
+                  return a->gameMinutes > b->gameMinutes;
+              });
+    result.erase(std::unique(result.begin(), result.end(),
+                             [](const WorldItemSource *a, const WorldItemSource *b) { return a->itemId == b->itemId; }),
+                 result.end());
     return result;
 }
 
 std::string WorldDatabase::siteObservationText(const WorldMapFeature &feature, const WorldKnowledge &knowledge,
-    const SpellTable *pSpells, const ItemTable *pItems) const
+                                               const SpellTable *pSpells, const ItemTable *pItems) const
 {
     std::string result;
     const auto deliveries = siteItemDeliveries(feature, knowledge);
@@ -366,36 +407,40 @@ std::string WorldDatabase::siteObservationText(const WorldMapFeature &feature, c
     {
         if (!result.empty()) result += "\n\n";
         // Confirmed delivery may follow the callback snapshot; do not claim that nothing changed overall.
-        result += describeWorldSiteObservation(*pObservation, pSpells, pItems, knowledge.identifiedItems,
-            deliveries.empty());
+        result +=
+            describeWorldSiteObservation(*pObservation, pSpells, pItems, knowledge.identifiedItems, deliveries.empty());
     }
     if (!deliveries.empty())
     {
         if (!result.empty()) result += "\n\n";
-        result += "Items received here:";
+        result += Engine::tr("Items received here:");
         for (const WorldItemSource *pSource : deliveries)
         {
             const ItemDefinition *pItem = pItems != nullptr ? pItems->get(pSource->itemId) : nullptr;
             InventoryItem item;
             item.objectDescriptionId = pSource->itemId;
-            item.identified = pItem != nullptr && (knowledge.identifiedItems.contains(pSource->itemId)
-                || !ItemRuntime::requiresIdentification(*pItem));
-            const std::string name = pItem != nullptr ? ItemRuntime::displayName(item, *pItem) : "Unknown item";
-            result += "\n" + name + " | Recorded: day "
-                + std::to_string(pSource->gameMinutes / (24 * 60) + 1);
+            item.identified = pItem != nullptr && (knowledge.identifiedItems.contains(pSource->itemId) ||
+                                                   !ItemRuntime::requiresIdentification(*pItem));
+            const std::string name =
+                pItem != nullptr ? ItemRuntime::displayName(item, *pItem) : Engine::tr("Unknown item");
+            result +=
+                Engine::tr("\n{name} | Recorded: day {gameMinutes}",
+                           {{"name", name}, {"gameMinutes", std::to_string(pSource->gameMinutes / (24 * 60) + 1)}});
         }
     }
     return result;
 }
 
-std::string_view WorldDatabase::siteReference(const WorldMapFeature &feature,
-    const WorldKnowledge &knowledge, bool guide) const
+std::string_view WorldDatabase::siteReference(const WorldMapFeature &feature, const WorldKnowledge &knowledge,
+                                              bool guide) const
 {
     return guide && featureVisible(feature, knowledge, true) ? feature.guideReference : std::string_view{};
 }
 
 std::vector<const JournalAutonoteEntry *> WorldDatabase::siteJournalEntries(const WorldMapFeature &feature,
-    const JournalAutonoteTable &notes, const WorldKnowledge &knowledge, bool guide) const
+                                                                            const JournalAutonoteTable &notes,
+                                                                            const WorldKnowledge &knowledge,
+                                                                            bool guide) const
 {
     std::vector<const JournalAutonoteEntry *> result;
     if (!featureVisible(feature, knowledge, guide)) return result;
@@ -413,8 +458,9 @@ std::vector<const JournalAutonoteEntry *> WorldDatabase::siteJournalEntries(cons
     for (uint32_t id : noteIds)
     {
         if (!guide && !knowledge.autonoteIds.contains(id)) continue;
-        const auto note = std::lower_bound(notes.entries().begin(), notes.entries().end(), id,
-            [](const JournalAutonoteEntry &entry, uint32_t value) { return entry.id < value; });
+        const auto note =
+            std::lower_bound(notes.entries().begin(), notes.entries().end(), id,
+                             [](const JournalAutonoteEntry &entry, uint32_t value) { return entry.id < value; });
         if (note == notes.entries().end() || note->id != id || note->text.empty() || note->text == "0")
             throw std::invalid_argument("Unknown site journal reference: " + std::to_string(id));
         result.push_back(&*note);
@@ -429,7 +475,6 @@ std::string worldSiteDiscoveryKey(uint16_t eventId, const std::string &siteId)
 
 void recordWorldSiteDiscovery(EventRuntimeState &state, uint16_t eventId, const std::string &siteId)
 {
-    if (eventId != 0 && !siteId.empty())
-        state.namedMapVars[worldSiteDiscoveryKey(eventId, siteId)] = 1;
+    if (eventId != 0 && !siteId.empty()) state.namedMapVars[worldSiteDiscoveryKey(eventId, siteId)] = 1;
 }
-}
+} // namespace OpenYAMM::Game

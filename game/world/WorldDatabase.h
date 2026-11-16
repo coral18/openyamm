@@ -219,7 +219,7 @@ public:
     std::string_view siteReference(const WorldMapFeature &feature, const WorldKnowledge &knowledge, bool guide) const;
     std::vector<const JournalAutonoteEntry *> siteJournalEntries(const WorldMapFeature &feature,
         const JournalAutonoteTable &notes, const WorldKnowledge &knowledge, bool guide) const;
-    const std::string &featureTitle(const WorldMapFeature &feature,
+    std::string featureTitle(const WorldMapFeature &feature,
         const WorldKnowledge &knowledge, bool guide) const;
     bool featureVisible(const WorldMapFeature &feature, const WorldKnowledge &knowledge, bool guide) const;
     // Discovery filters each physical component before projecting pins, bounds or available heights.

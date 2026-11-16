@@ -1,6 +1,7 @@
 #include "doctest/doctest.h"
 #include "engine/AssetFileSystem.h"
 #include "engine/ImageAssetLoader.h"
+#include "engine/Localization.h"
 #include "game/data/GameDataLoader.h"
 #include "game/maps/MapAssetLoader.h"
 #include "game/world/WorldAtlasPresentation.h"
@@ -25,10 +26,14 @@ TEST_CASE("Atlas port runtime: all MM7 and MM8 programs load with the installed 
         CAPTURE(world);
         Engine::InstalledContentOptions options;
         options.modsRoot = pMods;
+        if (const char *pLanguage = std::getenv("OPENYAMM_ATLAS_LANGUAGE")) options.languageId = pLanguage;
+        if (const char *pLanguages = std::getenv("OPENYAMM_ATLAS_LANGUAGES_ROOT"))
+            options.userLanguagesRoot = pLanguages;
         Engine::AssetFileSystem assets;
         const Engine::AssetScaleProfile scale = Engine::createUniformAssetScaleProfile(Engine::AssetScaleTier::X1);
         REQUIRE(assets.initialize(std::filesystem::current_path(), pRoot, Engine::AssetScaleTier::X1,
             scale, world, options));
+        REQUIRE(Engine::activateLanguage(assets, options.languageId));
         Game::GameDataLoader loader;
         loader.setActiveWorldId(world);
         REQUIRE(loader.loadCommonForGameplay(assets));
@@ -90,5 +95,6 @@ TEST_CASE("Atlas port runtime: all MM7 and MM8 programs load with the installed 
         CHECK(rewards > 0);
         std::cout << "Atlas pack audit: " << world << " maps=" << maps << " site references=" << references
             << " reward events=" << rewards << '\n';
+        REQUIRE(Engine::activateLanguage(assets, "en"));
     }
 }

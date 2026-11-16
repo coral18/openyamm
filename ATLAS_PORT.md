@@ -68,7 +68,7 @@ installation instructions are separate from the engine sources. Stage the owned 
 python3 tools/stage_atlas_overlay.py --output output/atlas-overlay
 ```
 
-The output contains `mods/`, a SHA-256 manifest and this document. Copy its `mods/` contents into an isolated user-data
+The output contains `mods/`, the Polish `languages/` supplement, a SHA-256 manifest and the port/localization documents. Copy its `mods/` contents into an isolated user-data
 directory used by an **Atlas-enabled executable built from this branch**. These script/UI overlays do not turn a stock
 executable into the Atlas build. Keep updater checks disabled for this development executable.
 
@@ -107,6 +107,11 @@ The exporter accepts installed release packs and applies the same namespaced fil
 - The tracked metadata-only regeneration workflow reproduced all **427 generated sidecars** byte for byte.
 
 This port does not add MM6/MM9 Atlas catalogs, a launcher, new gameplay rules, or a public modding contract.
+
+## English and Polish
+
+The localization branch adds the shared display hooks and Polish Atlas catalog. See
+[ATLAS_LOCALIZATION.md](ATLAS_LOCALIZATION.md) for coverage, installation and translation inventory checks.
 
 ## Credits
 

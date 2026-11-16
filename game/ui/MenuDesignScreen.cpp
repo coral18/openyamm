@@ -521,7 +521,13 @@ bool MenuDesignScreen::button(const std::string &id, const Rect &rect, const std
         Rect textRect = rect;
         textRect.x += 5 * designScale();
         textRect.width -= 10 * designScale();
-        textInRect(textRect, text, font, name == "button_square" ? 11.7f : 13.8667f,
+        const float labelSize = name == "button_square" ? 11.7f : 13.8667f;
+        // A button label is one line. A tall plate otherwise lets the paragraph path accept an overlong word
+        // without fitting it; translated labels must shrink or ellipsize inside their own button.
+        const float labelHeight = std::min(textRect.height, labelSize * 1.5f * designScale());
+        textRect.y += (textRect.height - labelHeight) * 0.5f;
+        textRect.height = labelHeight;
+        textInRect(textRect, text, font, labelSize,
                    enabled ? hovered ? 0xffc0f0ffu : 0xffa4d1e8u : 0xff6b777au, true);
     }
     return activated;

@@ -1,3 +1,4 @@
+#include "engine/Localization.h"
 #include "game/world/WorldSiteObservations.h"
 
 #include "game/events/EventAttributeInfo.h"
@@ -28,31 +29,32 @@ std::string prefix(const std::string &siteId, uint16_t eventId)
 
 bool validSite(const std::string &siteId)
 {
-    return !siteId.empty() && siteId.size() <= 256 && siteId.find("/event/") == std::string::npos
-        && siteId.find('\0') == std::string::npos;
+    return !siteId.empty() && siteId.size() <= 256 && siteId.find("/event/") == std::string::npos &&
+           siteId.find('\0') == std::string::npos;
 }
 
-bool recordBuffChanges(WorldSiteObservation &observation,
-    const WorldSiteValueSnapshot &before, const WorldSiteValueSnapshot &after, bool &changed)
+bool recordBuffChanges(WorldSiteObservation &observation, const WorldSiteValueSnapshot &before,
+                       const WorldSiteValueSnapshot &after, bool &changed)
 {
     using Buff = WorldSiteValueSnapshot::Buff;
-    if (!std::isfinite(before.gameMinutes) || !std::isfinite(after.gameMinutes)
-        || before.gameMinutes < 0 || after.gameMinutes < before.gameMinutes) return false;
+    if (!std::isfinite(before.gameMinutes) || !std::isfinite(after.gameMinutes) || before.gameMinutes < 0 ||
+        after.gameMinutes < before.gameMinutes)
+        return false;
     for (const WorldSiteValueSnapshot *pSnapshot : {&before, &after})
     {
         std::set<std::pair<std::optional<size_t>, uint8_t>> slots;
         for (const Buff &buff : pSnapshot->buffs)
-            if ((buff.member && *buff.member >= pSnapshot->members.size())
-                || buff.slot >= (buff.member ? CharacterBuffCount : PartyBuffCount)
-                || !std::isfinite(buff.remainingSeconds) || buff.remainingSeconds <= 0
-                || buff.mastery > uint8_t(SkillMastery::Grandmaster)
-                || !slots.emplace(buff.member, buff.slot).second) return false;
+            if ((buff.member && *buff.member >= pSnapshot->members.size()) ||
+                buff.slot >= (buff.member ? CharacterBuffCount : PartyBuffCount) ||
+                !std::isfinite(buff.remainingSeconds) || buff.remainingSeconds <= 0 ||
+                buff.mastery > uint8_t(SkillMastery::Grandmaster) || !slots.emplace(buff.member, buff.slot).second)
+                return false;
     }
     const double elapsed = (double(after.gameMinutes) - before.gameMinutes) * 60;
     const auto find = [](const std::vector<Buff> &values, const Buff &buff) -> const Buff *
     {
         const auto value = std::find_if(values.begin(), values.end(), [&](const Buff &candidate)
-            { return candidate.member == buff.member && candidate.slot == buff.slot; });
+                                        { return candidate.member == buff.member && candidate.slot == buff.slot; });
         return value == values.end() ? nullptr : &*value;
     };
     const auto record = [&](const Buff &buff, WorldSiteSpellObservation::Action action)
@@ -61,10 +63,11 @@ bool recordBuffChanges(WorldSiteObservation &observation,
         if (buff.spellId == 0) return;
         const bool party = !buff.member;
         const auto value = std::find_if(observation.spells.begin(), observation.spells.end(), [&](const auto &entry)
-            { return entry.spellId == buff.spellId && entry.party == party; });
+                                        { return entry.spellId == buff.spellId && entry.party == party; });
         if (value == observation.spells.end())
             observation.spells.push_back({buff.spellId, party, uint8_t(action)});
-        else value->actions |= action;
+        else
+            value->actions |= action;
         changed = true;
     };
     for (const Buff &buff : before.buffs)
@@ -80,16 +83,16 @@ bool recordBuffChanges(WorldSiteObservation &observation,
         const Buff *pPrevious = find(before.buffs, buff);
         if (pPrevious == nullptr || pPrevious->spellId != buff.spellId || pPrevious->remainingSeconds <= elapsed)
             record(buff, WorldSiteSpellObservation::Applied);
-        else if (pPrevious->power != buff.power || pPrevious->skillLevel != buff.skillLevel
-            || pPrevious->mastery != buff.mastery
-            || std::abs(double(buff.remainingSeconds) - (pPrevious->remainingSeconds - elapsed)) > 0.01)
+        else if (pPrevious->power != buff.power || pPrevious->skillLevel != buff.skillLevel ||
+                 pPrevious->mastery != buff.mastery ||
+                 std::abs(double(buff.remainingSeconds) - (pPrevious->remainingSeconds - elapsed)) > 0.01)
             record(buff, WorldSiteSpellObservation::Updated);
     }
     return true;
 }
 
-bool recordItemChanges(WorldSiteObservation &observation,
-    const WorldSiteValueSnapshot &before, const WorldSiteValueSnapshot &after, bool &changed)
+bool recordItemChanges(WorldSiteObservation &observation, const WorldSiteValueSnapshot &before,
+                       const WorldSiteValueSnapshot &after, bool &changed)
 {
     for (const WorldSiteValueSnapshot *pSnapshot : {&before, &after})
         for (const auto &[id, quantity] : pSnapshot->items)
@@ -106,8 +109,9 @@ bool recordItemChanges(WorldSiteObservation &observation,
     {
         if (delta == 0) continue;
         const auto existing = std::find_if(observation.items.begin(), observation.items.end(),
-            [&](const WorldSiteItemObservation &item) { return item.itemId == id; });
-        if (existing == observation.items.end()) observation.items.push_back({id, delta, delta});
+                                           [&](const WorldSiteItemObservation &item) { return item.itemId == id; });
+        if (existing == observation.items.end())
+            observation.items.push_back({id, delta, delta});
         else
         {
             existing->minDelta = std::min(existing->minDelta, delta);
@@ -133,11 +137,13 @@ WorldSiteObservation readObservation(const EventRuntimeState &state, const std::
     const auto time = field("time"), changed = field("changed"), seen = field("seen");
     if (const auto removed = field("object-removed"))
     {
-        if (*removed != 0 && *removed != 1) result.error = "Invalid recorded object outcome for this site.";
-        else result.objectRemoved = *removed != 0;
+        if (*removed != 0 && *removed != 1)
+            result.error = std::string(Engine::trNoop("Invalid recorded object outcome for this site."));
+        else
+            result.objectRemoved = *removed != 0;
     }
     if (!time || *time < 0 || !changed || (*changed != 0 && *changed != 1) || seen != 1)
-        result.error = "Invalid recorded outcome data for this site.";
+        result.error = std::string(Engine::trNoop("Invalid recorded outcome data for this site."));
     else
     {
         result.gameMinutes = *time;
@@ -150,7 +156,7 @@ WorldSiteObservation readObservation(const EventRuntimeState &state, const std::
         if (!name.starts_with(stats)) continue;
         const size_t separator = name.find('/', stats.size());
         if (separator == std::string::npos)
-            result.error = "Invalid recorded outcome attribute for this site.";
+            result.error = std::string(Engine::trNoop("Invalid recorded outcome attribute for this site."));
         else
             symbols.insert(name.substr(stats.size(), separator - stats.size()));
     }
@@ -160,52 +166,51 @@ WorldSiteObservation readObservation(const EventRuntimeState &state, const std::
         const std::string stat = "stat/" + symbol + "/";
         if (field(stat + "seen") != 1 || pInfo == nullptr || !pInfo->writable)
         {
-            result.error = "Invalid recorded outcome attribute for this site.";
+            result.error = std::string(Engine::trNoop("Invalid recorded outcome attribute for this site."));
             continue;
         }
         const auto minBefore = field(stat + "min-before"), minAfter = field(stat + "min-after");
         const auto maxBefore = field(stat + "max-before"), maxAfter = field(stat + "max-after");
         if (!minBefore || !minAfter || !maxBefore || !maxAfter)
         {
-            result.error = "Incomplete recorded outcome data for this site.";
+            result.error = std::string(Engine::trNoop("Incomplete recorded outcome data for this site."));
             continue;
         }
         const WorldSiteEffectRange range{symbol, *minBefore, *minAfter, *maxBefore, *maxAfter};
-        if (pInfo->kind == EventAttributeValueKind::Condition
-            && (*minBefore < 0 || *minBefore > 1 || *minAfter < 0 || *minAfter > 1
-                || *maxBefore < 0 || *maxBefore > 1 || *maxAfter < 0 || *maxAfter > 1))
-            result.error = "Invalid recorded condition change for this site.";
+        if (pInfo->kind == EventAttributeValueKind::Condition &&
+            (*minBefore < 0 || *minBefore > 1 || *minAfter < 0 || *minAfter > 1 || *maxBefore < 0 || *maxBefore > 1 ||
+             *maxAfter < 0 || *maxAfter > 1))
+            result.error = std::string(Engine::trNoop("Invalid recorded condition change for this site."));
         if (range.minDelta() == 0 || range.maxDelta() == 0 || range.minDelta() > range.maxDelta())
-            result.error = "Invalid recorded outcome range for this site.";
+            result.error = std::string(Engine::trNoop("Invalid recorded outcome range for this site."));
         else
             result.effects.push_back(range);
     }
-    std::sort(result.effects.begin(), result.effects.end(), [](const auto &a, const auto &b)
-    {
-        return a.attribute < b.attribute;
-    });
+    std::sort(result.effects.begin(), result.effects.end(),
+              [](const auto &a, const auto &b) { return a.attribute < b.attribute; });
     const std::string spells = key + "spell/";
     for (const auto &[name, value] : state.namedMapVars)
     {
         if (!name.starts_with(spells)) continue;
         const std::string_view entry(name.data() + spells.size(), name.size() - spells.size());
         const size_t separator = entry.find('/');
-        if (separator == std::string_view::npos || !entry.ends_with("/actions")
-            || (entry.substr(0, separator) != "party" && entry.substr(0, separator) != "character"))
+        if (separator == std::string_view::npos || !entry.ends_with("/actions") ||
+            (entry.substr(0, separator) != "party" && entry.substr(0, separator) != "character"))
         {
-            result.error = "Invalid recorded spell effect for this site.";
+            result.error = std::string(Engine::trNoop("Invalid recorded spell effect for this site."));
             continue;
         }
         const std::string_view number = entry.substr(separator + 1, entry.size() - separator - 9);
         uint32_t spellId = 0;
         const auto parsed = std::from_chars(number.data(), number.data() + number.size(), spellId);
-        if (parsed.ec != std::errc() || parsed.ptr != number.data() + number.size() || spellId == 0
-            || number != std::to_string(spellId) || value <= 0 || value > 7)
-            result.error = "Invalid recorded spell effect for this site.";
-        else result.spells.push_back({spellId, entry.substr(0, separator) == "party", uint8_t(value)});
+        if (parsed.ec != std::errc() || parsed.ptr != number.data() + number.size() || spellId == 0 ||
+            number != std::to_string(spellId) || value <= 0 || value > 7)
+            result.error = std::string(Engine::trNoop("Invalid recorded spell effect for this site."));
+        else
+            result.spells.push_back({spellId, entry.substr(0, separator) == "party", uint8_t(value)});
     }
     std::sort(result.spells.begin(), result.spells.end(), [](const auto &a, const auto &b)
-        { return std::pair{a.party, a.spellId} < std::pair{b.party, b.spellId}; });
+              { return std::pair{a.party, a.spellId} < std::pair{b.party, b.spellId}; });
     const std::string items = key + "item/";
     std::set<uint32_t> itemIds;
     for (const auto &[name, value] : state.namedMapVars)
@@ -217,11 +222,12 @@ WorldSiteObservation readObservation(const EventRuntimeState &state, const std::
         const std::string_view fieldName = separator != std::string_view::npos ? entry.substr(separator + 1) : "";
         uint32_t id = 0;
         const auto parsed = std::from_chars(number.data(), number.data() + number.size(), id);
-        if (parsed.ec != std::errc() || parsed.ptr != number.data() + number.size() || id == 0
-            || number != std::to_string(id) || (fieldName != "min-lo" && fieldName != "min-hi"
-                && fieldName != "max-lo" && fieldName != "max-hi"))
-            result.error = "Invalid recorded item outcome for this site.";
-        else itemIds.insert(id);
+        if (parsed.ec != std::errc() || parsed.ptr != number.data() + number.size() || id == 0 ||
+            number != std::to_string(id) ||
+            (fieldName != "min-lo" && fieldName != "min-hi" && fieldName != "max-lo" && fieldName != "max-hi"))
+            result.error = std::string(Engine::trNoop("Invalid recorded item outcome for this site."));
+        else
+            itemIds.insert(id);
     }
     for (uint32_t id : itemIds)
     {
@@ -234,12 +240,13 @@ WorldSiteObservation readObservation(const EventRuntimeState &state, const std::
         };
         const auto min = read("min"), max = read("max");
         if (!min || !max || *min == 0 || *max == 0 || *min == INT64_MIN || *min > *max)
-            result.error = "Invalid recorded item outcome range for this site.";
-        else result.items.push_back({id, *min, *max});
+            result.error = std::string(Engine::trNoop("Invalid recorded item outcome range for this site."));
+        else
+            result.items.push_back({id, *min, *max});
     }
     return result;
 }
-}
+} // namespace
 
 WorldSiteValueSnapshot captureWorldSiteValues(const EventRuntimeState &state, const Party &party, float gameMinutes)
 {
@@ -247,25 +254,26 @@ WorldSiteValueSnapshot captureWorldSiteValues(const EventRuntimeState &state, co
     result.gameMinutes = gameMinutes;
     result.items = party.carriedItemQuantities();
     for (const Character &member : party.members())
-        result.members.push_back(member.name + "/" + std::to_string(member.rosterId) + "/"
-            + std::to_string(member.characterDataId) + "/" + std::to_string(member.portraitPictureId));
+        result.members.push_back(member.name + "/" + std::to_string(member.rosterId) + "/" +
+                                 std::to_string(member.characterDataId) + "/" +
+                                 std::to_string(member.portraitPictureId));
     for (const EventAttributeInfo &attribute : eventAttributeInfos())
     {
         if (!attribute.writable) continue;
         const EventRuntime::VariableRef variable = EventRuntime::decodeVariable(uint32_t(attribute.variable));
         if (attribute.partyResource)
             result.values.push_back({std::string(attribute.symbol), std::nullopt,
-                EventRuntime::getVariableValue(state, variable, &party, std::nullopt)});
+                                     EventRuntime::getVariableValue(state, variable, &party, std::nullopt)});
         else
             for (size_t i = 0; i < party.memberCount(); ++i)
-                result.values.push_back({std::string(attribute.symbol), i,
-                    EventRuntime::getVariableValue(state, variable, &party, i)});
+                result.values.push_back(
+                    {std::string(attribute.symbol), i, EventRuntime::getVariableValue(state, variable, &party, i)});
     }
     const auto append = [&](std::optional<size_t> member, uint8_t slot, const auto *pBuff)
     {
         if (pBuff != nullptr && pBuff->active())
-            result.buffs.push_back({member, slot, pBuff->spellId, pBuff->remainingSeconds,
-                pBuff->power, pBuff->skillLevel, uint8_t(pBuff->skillMastery)});
+            result.buffs.push_back({member, slot, pBuff->spellId, pBuff->remainingSeconds, pBuff->power,
+                                    pBuff->skillLevel, uint8_t(pBuff->skillMastery)});
     };
     for (uint8_t slot = 0; slot < PartyBuffCount; ++slot)
         append(std::nullopt, slot, party.partyBuff(PartyBuffId(slot)));
@@ -276,36 +284,39 @@ WorldSiteValueSnapshot captureWorldSiteValues(const EventRuntimeState &state, co
 }
 
 WorldSiteInteractionObservation::WorldSiteInteractionObservation(IGameplayWorldRuntime &world,
-    const GameplayWorldHit &hit)
+                                                                 const GameplayWorldHit &hit)
 {
-    if (!hit.hasHit || hit.kind != GameplayWorldHitKind::EventTarget
-        || !hit.eventTarget || !hit.eventTarget->contextActionMetadata
-        || hit.eventTarget->contextActionMetadata->hidden) return;
+    if (!hit.hasHit || hit.kind != GameplayWorldHitKind::EventTarget || !hit.eventTarget ||
+        !hit.eventTarget->contextActionMetadata || hit.eventTarget->contextActionMetadata->hidden)
+        return;
     const GameplayEventTargetHit &target = *hit.eventTarget;
-    if (target.targetIndex == GameplayInvalidWorldIndex
-        || (target.targetKind == GameplayWorldEventTargetKind::Surface && !world.isIndoorMap()
-            && target.secondaryIndex == GameplayInvalidWorldIndex)) return;
-    m_event = target.targetKind == GameplayWorldEventTargetKind::Surface
-        ? target.triggeredEventId : target.eventIdSecondary;
+    if (target.targetIndex == GameplayInvalidWorldIndex ||
+        (target.targetKind == GameplayWorldEventTargetKind::Surface && !world.isIndoorMap() &&
+         target.secondaryIndex == GameplayInvalidWorldIndex))
+        return;
+    m_event =
+        target.targetKind == GameplayWorldEventTargetKind::Surface ? target.triggeredEventId : target.eventIdSecondary;
     if (target.targetKind == GameplayWorldEventTargetKind::Surface)
         m_site = world.isIndoorMap() ? "surface/" + std::to_string(target.targetIndex)
-            : "bmodel/" + std::to_string(target.targetIndex) + "/surface/" + std::to_string(target.secondaryIndex);
+                                     : "bmodel/" + std::to_string(target.targetIndex) + "/surface/" +
+                                           std::to_string(target.secondaryIndex);
     else if (target.targetKind == GameplayWorldEventTargetKind::Entity)
         m_site = "decoration/" + std::to_string(target.targetIndex);
-    else if (target.targetKind == GameplayWorldEventTargetKind::Decoration
-        && target.sourceEntityIndex != GameplayInvalidWorldIndex)
+    else if (target.targetKind == GameplayWorldEventTargetKind::Decoration &&
+             target.sourceEntityIndex != GameplayInvalidWorldIndex)
         m_site = "decoration/" + std::to_string(target.sourceEntityIndex);
     EventRuntimeState *pState = world.eventRuntimeState();
     if (pState == nullptr) return;
     recordWorldSiteDiscovery(*pState, m_event, m_site);
     const auto kind = worldMapFeatureKind(target.contextActionMetadata->kind);
-    if (m_event == 0 || m_site.empty() || world.party() == nullptr || !kind
-        || (*kind != WorldMapFeatureKind::Water && *kind != WorldMapFeatureKind::Shrine
-            && *kind != WorldMapFeatureKind::Obelisk && *kind != WorldMapFeatureKind::Decoration)) return;
+    if (m_event == 0 || m_site.empty() || world.party() == nullptr || !kind ||
+        (*kind != WorldMapFeatureKind::Water && *kind != WorldMapFeatureKind::Shrine &&
+         *kind != WorldMapFeatureKind::Obelisk && *kind != WorldMapFeatureKind::Decoration))
+        return;
     m_before = captureWorldSiteValues(*pState, *world.party(), world.gameMinutes());
     m_map = pState->mapFileName;
-    if (target.contextActionMetadata->interactionReference
-        && target.contextActionMetadata->interactionReference->spriteId == target.eventIdPrimary)
+    if (target.contextActionMetadata->interactionReference &&
+        target.contextActionMetadata->interactionReference->spriteId == target.eventIdPrimary)
     {
         m_sprite = target.contextActionMetadata->interactionReference->spriteId;
         const auto found = pState->spriteOverrides.find(m_sprite);
@@ -320,7 +331,10 @@ void WorldSiteInteractionObservation::finish(IGameplayWorldRuntime &world, bool 
     const Party *pParty = world.party();
     if (pState == nullptr || pParty == nullptr || pState->mapFileName != m_map) return;
     if (!recordWorldSiteObservation(*pState, m_site, m_event, *m_before,
-        captureWorldSiteValues(*pState, *pParty, world.gameMinutes()), world.gameMinutes()) || m_sprite == 0) return;
+                                    captureWorldSiteValues(*pState, *pParty, world.gameMinutes()),
+                                    world.gameMinutes()) ||
+        m_sprite == 0)
+        return;
     const auto found = pState->spriteOverrides.find(m_sprite);
     const bool removed = !m_wasHidden && found != pState->spriteOverrides.end() && found->second.hidden;
     const std::string key = prefix(m_site, m_event);
@@ -334,14 +348,15 @@ void WorldSiteInteractionObservation::finish(IGameplayWorldRuntime &world, bool 
 }
 
 bool recordWorldSiteObservation(EventRuntimeState &state, const std::string &siteId, uint16_t eventId,
-    const WorldSiteValueSnapshot &before, const WorldSiteValueSnapshot &after, float gameMinutes)
+                                const WorldSiteValueSnapshot &before, const WorldSiteValueSnapshot &after,
+                                float gameMinutes)
 {
     const double time = std::floor(double(gameMinutes));
     if (!validSite(siteId) || eventId == 0 || !std::isfinite(time) || time < 0 || time > INT32_MAX) return false;
     const std::string key = prefix(siteId, eventId);
     WorldSiteObservation observation;
-    if (std::any_of(state.namedMapVars.begin(), state.namedMapVars.end(), [&](const auto &field)
-        { return field.first.starts_with(key); }))
+    if (std::any_of(state.namedMapVars.begin(), state.namedMapVars.end(),
+                    [&](const auto &field) { return field.first.starts_with(key); }))
     {
         observation = readObservation(state, siteId, eventId);
         if (!observation.error.empty()) return false;
@@ -353,16 +368,18 @@ bool recordWorldSiteObservation(EventRuntimeState &state, const std::string &sit
         if (pInfo == nullptr || !pInfo->writable || pInfo->partyResource != !value.member.has_value()) return false;
         if (value.member && *value.member >= before.members.size()) return false;
         if (value.member && before.members != after.members) continue;
-        const auto next = std::find_if(after.values.begin(), after.values.end(), [&](const WorldSiteValue &candidate)
-        { return candidate.attribute == value.attribute && candidate.member == value.member; });
+        const auto next =
+            std::find_if(after.values.begin(), after.values.end(), [&](const WorldSiteValue &candidate)
+                         { return candidate.attribute == value.attribute && candidate.member == value.member; });
         if (next == after.values.end()) return false;
-        if (pInfo->kind == EventAttributeValueKind::Condition
-            && (value.value < 0 || value.value > 1 || next->value < 0 || next->value > 1)) return false;
+        if (pInfo->kind == EventAttributeValueKind::Condition &&
+            (value.value < 0 || value.value > 1 || next->value < 0 || next->value > 1))
+            return false;
         if (value.value == next->value) continue;
         changed = true;
         const int64_t delta = int64_t(next->value) - value.value;
-        auto range = std::find_if(observation.effects.begin(), observation.effects.end(), [&](const auto &effect)
-        { return effect.attribute == value.attribute; });
+        auto range = std::find_if(observation.effects.begin(), observation.effects.end(),
+                                  [&](const auto &effect) { return effect.attribute == value.attribute; });
         if (range == observation.effects.end())
             observation.effects.push_back({value.attribute, value.value, next->value, value.value, next->value});
         else
@@ -394,8 +411,8 @@ bool recordWorldSiteObservation(EventRuntimeState &state, const std::string &sit
         state.namedMapVars[stat + "max-after"] = range.maxAfter;
     }
     for (const WorldSiteSpellObservation &spell : observation.spells)
-        state.namedMapVars[key + "spell/" + (spell.party ? "party/" : "character/")
-            + std::to_string(spell.spellId) + "/actions"] = spell.actions;
+        state.namedMapVars[key + "spell/" + (spell.party ? "party/" : "character/") + std::to_string(spell.spellId) +
+                           "/actions"] = spell.actions;
     for (const WorldSiteItemObservation &item : observation.items)
         for (const auto &[endpoint, delta] : {std::pair{"min", item.minDelta}, {"max", item.maxDelta}})
         {
@@ -426,26 +443,22 @@ std::vector<WorldSiteObservation> worldSiteObservations(const EventRuntimeState 
         if (!validSite(siteId) || eventId == 0 || eventId > UINT16_MAX || number != std::to_string(eventId)) continue;
         identities.emplace(siteId, uint16_t(eventId));
     }
-    for (const auto &[siteId, eventId] : identities)
-        result.push_back(readObservation(state, siteId, eventId));
+    for (const auto &[siteId, eventId] : identities) result.push_back(readObservation(state, siteId, eventId));
     std::sort(result.begin(), result.end(), [](const auto &a, const auto &b)
-    {
-        return std::pair{a.siteId, a.eventId} < std::pair{b.siteId, b.eventId};
-    });
+              { return std::pair{a.siteId, a.eventId} < std::pair{b.siteId, b.eventId}; });
     return result;
 }
 
 std::string describeWorldSiteObservation(const WorldSiteObservation &observation, const SpellTable *pSpells,
-    const ItemTable *pItems, const std::unordered_set<uint32_t> &identifiedItems, bool describeUnchangedUse)
+                                         const ItemTable *pItems, const std::unordered_set<uint32_t> &identifiedItems,
+                                         bool describeUnchangedUse)
 {
-    if (!observation.error.empty()) return observation.error;
-    std::string text = "Recorded use: day " + std::to_string(observation.gameMinutes / (24 * 60) + 1) + ".";
-    if (!observation.lastChanged && describeUnchangedUse) text += " No additional changes recorded.";
-    if (observation.objectRemoved == true) text += "\nObserved object removed after interaction.";
-    const auto amount = [](int64_t value)
-    {
-        return (value > 0 ? "+" : "") + std::to_string(value);
-    };
+    if (!observation.error.empty()) return Engine::tr(observation.error);
+    std::string text = Engine::tr("Recorded use: day {gameMinutes}.",
+                                  {{"gameMinutes", std::to_string(observation.gameMinutes / (24 * 60) + 1)}});
+    if (!observation.lastChanged && describeUnchangedUse) text += Engine::tr(" No additional changes recorded.");
+    if (observation.objectRemoved == true) text += Engine::tr("\nObserved object removed after interaction.");
+    const auto amount = [](int64_t value) { return (value > 0 ? "+" : "") + std::to_string(value); };
     for (const bool party : {true, false})
     {
         bool heading = false;
@@ -455,20 +468,22 @@ std::string describeWorldSiteObservation(const WorldSiteObservation &observation
             if (pInfo == nullptr || pInfo->partyResource != party) continue;
             if (!heading)
             {
-                text += party ? "\nParty resources observed:" : "\nCharacter changes observed:";
+                text += party ? Engine::tr("\nParty resources observed:") : Engine::tr("\nCharacter changes observed:");
                 heading = true;
             }
             if (pInfo->kind == EventAttributeValueKind::Condition)
             {
                 const std::string action = range.minDelta() < 0 && range.maxDelta() > 0
-                    ? "Applied and removed: " : range.minDelta() < 0 ? "Removed: " : "Applied: ";
-                text += "\n" + action + std::string(pInfo->label);
+                                               ? Engine::tr("Applied and removed: ")
+                                           : range.minDelta() < 0 ? Engine::tr("Removed: ")
+                                                                  : Engine::tr("Applied: ");
+                text += "\n" + action + Engine::localize(pInfo->label);
             }
             else
             {
-                text += "\n" + std::string(pInfo->label) + " " + amount(range.minDelta());
+                text += "\n" + Engine::localize(pInfo->label) + " " + amount(range.minDelta());
                 if (range.minDelta() != range.maxDelta())
-                    text += " to " + amount(range.maxDelta()) + " (observed range)";
+                    text += Engine::tr(" to {maxDelta} (observed range)", {{"maxDelta", amount(range.maxDelta())}});
             }
         }
     }
@@ -480,29 +495,33 @@ std::string describeWorldSiteObservation(const WorldSiteObservation &observation
             if (spell.party != party) continue;
             if (!heading)
             {
-                text += party ? "\nParty spell effects observed:" : "\nSpell effects on at least one character:";
+                text += party ? Engine::tr("\nParty spell effects observed:")
+                              : Engine::tr("\nSpell effects on at least one character:");
                 heading = true;
             }
-            const SpellEntry *pSpell = pSpells != nullptr && spell.spellId <= INT32_MAX
-                ? pSpells->findById(int(spell.spellId)) : nullptr;
-            const std::string name = pSpell != nullptr ? pSpell->name : "Unknown spell";
-            for (const auto &[action, label] : {std::pair{WorldSiteSpellObservation::Applied, "Applied effect from: "},
-                {WorldSiteSpellObservation::Updated, "Updated effect from: "},
-                {WorldSiteSpellObservation::Removed, "Removed effect from: "}})
-                if (spell.actions & action) text += "\n" + std::string(label) + name;
+            const SpellEntry *pSpell =
+                pSpells != nullptr && spell.spellId <= INT32_MAX ? pSpells->findById(int(spell.spellId)) : nullptr;
+            const std::string name = pSpell != nullptr ? pSpell->name : Engine::tr("Unknown spell");
+            for (const auto &[action, label] :
+                 {std::pair{WorldSiteSpellObservation::Applied, Engine::trNoop("Applied effect from: {spell}").data()},
+                  {WorldSiteSpellObservation::Updated, Engine::trNoop("Updated effect from: {spell}").data()},
+                  {WorldSiteSpellObservation::Removed, Engine::trNoop("Removed effect from: {spell}").data()}})
+                if (spell.actions & action) text += "\n" + Engine::tr(label, {{"spell", Engine::localizeKnown(name)}});
         }
     }
-    if (!observation.items.empty()) text += "\nNet changes in carried items observed:";
+    if (!observation.items.empty()) text += Engine::tr("\nNet changes in carried items observed:");
     for (const WorldSiteItemObservation &item : observation.items)
     {
         const ItemDefinition *pItem = pItems != nullptr ? pItems->get(item.itemId) : nullptr;
-        const bool known = pItem != nullptr
-            && (identifiedItems.contains(item.itemId) || !ItemRuntime::requiresIdentification(*pItem));
-        const std::string name = pItem == nullptr ? "Unknown item" : known ? pItem->name
-            : pItem->unidentifiedName.empty() ? "Unidentified item" : pItem->unidentifiedName;
-        text += "\n" + name + " " + amount(item.minDelta);
+        const bool known =
+            pItem != nullptr && (identifiedItems.contains(item.itemId) || !ItemRuntime::requiresIdentification(*pItem));
+        const std::string name = pItem == nullptr                  ? Engine::tr("Unknown item")
+                                 : known                           ? pItem->name
+                                 : pItem->unidentifiedName.empty() ? Engine::tr("Unidentified item")
+                                                                   : pItem->unidentifiedName;
+        text += "\n" + Engine::localizeKnown(name) + " " + amount(item.minDelta);
         if (item.minDelta != item.maxDelta)
-            text += " to " + amount(item.maxDelta) + " (observed range)";
+            text += Engine::tr(" to {maxDelta} (observed range)", {{"maxDelta", amount(item.maxDelta)}});
     }
     return text;
 }

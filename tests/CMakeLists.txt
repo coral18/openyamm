@@ -664,6 +664,7 @@ if (OPENYAMM_BUILD_ATLAS)
     target_compile_definitions(openyamm_unit_tests PRIVATE OPENYAMM_WITH_ATLAS=1)
     target_sources(openyamm_unit_tests PRIVATE
         AtlasPersistencePortTests.cpp
+        AtlasLocalizationTests.cpp
         AtlasRuntimePortTests.cpp
         WorldGuideTests.cpp
         WorldSiteObservationTests.cpp

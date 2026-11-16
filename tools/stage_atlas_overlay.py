@@ -31,17 +31,25 @@ def main():
     if len(files) < 400 or any(not source.is_file() for source in files):
         parser.error('Atlas sources are incomplete; check out this branch including assets_dev')
     checksums = {}
+    language_files = sorted((assets / 'languages/pl/text').glob('engine-atlas*.po'))
     for source in files:
         relative = Path('mods') / source.relative_to(assets)
         target = destination / relative
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(source, target)
         checksums[relative.as_posix()] = hashlib.sha256(target.read_bytes()).hexdigest()
-    shutil.copyfile(root / 'ATLAS_PORT.md', destination / 'ATLAS_PORT.md')
+    for source in language_files:
+        relative = source.relative_to(assets)
+        target = destination / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(source, target)
+        checksums[relative.as_posix()] = hashlib.sha256(target.read_bytes()).hexdigest()
+    for name in ('ATLAS_PORT.md', 'ATLAS_LOCALIZATION.md'):
+        shutil.copyfile(root / name, destination / name)
     (destination / 'atlas-overlay.json').write_text(json.dumps({
         'project': 'OpenYAMM Atlas', 'upstream': 'v2.5', 'files': checksums,
     }, indent=2) + '\n', encoding='utf-8')
-    print(f'Staged {len(files)} Atlas files in {destination}')
+    print(f'Staged {len(files)} Atlas overlays and {len(language_files)} language catalogs in {destination}')
 
 
 if __name__ == '__main__':
