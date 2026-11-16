@@ -6,6 +6,7 @@
 #include "game/world/WorldGuide.h"
 #include "game/tables/MonsterTable.h"
 #include "game/tables/ItemTable.h"
+#include "game/tables/JournalQuestTable.h"
 #include "game/tables/RosterTable.h"
 #include "game/party/Party.h"
 
@@ -219,4 +220,15 @@ TEST_CASE("Atlas language: item reading text translates without rewriting equipm
     WorldSiteObservation observation;
     observation.items.push_back({1, 1, 1});
     CHECK(describeWorldSiteObservation(observation, nullptr, &items, {1}).find("Żółta włócznia") != std::string::npos);
+    JournalQuestTable quests;
+    REQUIRE(quests.loadFromRows({{"3", "Find the spear", "", ""}}));
+    REQUIRE(quests.loadLocationRows({{"3", "mm7", "objective", "item", "1", "journal"}}));
+    source.pQuests = &quests;
+    const auto questEntries = buildWorldGuide(source, WorldGuideSection::Quests, knowledge, true);
+    REQUIRE(questEntries.size() == 1);
+    CHECK(questEntries.front().details.find("Żółta włócznia") != std::string::npos);
+    REQUIRE(questEntries.front().links.size() == 1);
+    CHECK(questEntries.front().links.front().label.find("Żółta włócznia") != std::string::npos);
+    CHECK(questEntries.front().links.front().target == "1");
+    CHECK(items.get(1)->name == "Atlas Spear");
 }

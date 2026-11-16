@@ -24,7 +24,7 @@ def main():
     )]
     files += sorted((assets / 'engine/world/atlas').glob('*.yml'))
     files += sorted((assets / 'engine/events').glob('Global_00_*.lua'))
-    for world in ('mm7', 'mm8'):
+    for world in ('mm6', 'mm7', 'mm8'):
         maps = assets / 'worlds' / world / 'events/maps'
         files += sorted(maps.glob('*_00_*.lua'))
         files += sorted(maps.glob('*_zz_*.lua'))
@@ -44,7 +44,7 @@ def main():
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(source, target)
         checksums[relative.as_posix()] = hashlib.sha256(target.read_bytes()).hexdigest()
-    for name in ('ATLAS_PORT.md', 'ATLAS_LOCALIZATION.md'):
+    for name in ('ATLAS_PORT.md', 'ATLAS_LOCALIZATION.md', 'ATLAS_MM6_PILOT.md'):
         shutil.copyfile(root / name, destination / name)
     (destination / 'atlas-overlay.json').write_text(json.dumps({
         'project': 'OpenYAMM Atlas', 'upstream': 'v2.5', 'files': checksums,

@@ -632,6 +632,8 @@ std::string WorldDatabase::recordSearchText(const WorldRecord &record, const Wor
 
 bool WorldDatabase::visible(const WorldRecord &record, const WorldKnowledge &knowledge, bool guide) const
 {
+    // Excluding a map also excludes its table-derived residents and services from search and world overviews.
+    if (record.map != nullptr && find(mapId(*record.map)) == nullptr) return false;
     if (record.possibleNpcLocation) return guide;
     if (guide)
     {

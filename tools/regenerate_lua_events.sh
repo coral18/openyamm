@@ -23,7 +23,7 @@ if [[ ${1:-} == --atlas-metadata ]]; then
     if [[ -n ${OPENYAMM_METADATA_MODS_ROOT:-} ]]; then
         input_args+=(--mods-root "$OPENYAMM_METADATA_MODS_ROOT")
     fi
-    for world in mm7 mm8; do
+    for world in mm6 mm7 mm8; do
         if [[ ! -d "reference/mmext-scripts/Decompiled_Scripts/${world}/txt" ]]; then
             echo "Missing exporter reference: reference/mmext-scripts/Decompiled_Scripts/${world}/txt" >&2
             exit 1
@@ -32,10 +32,17 @@ if [[ ${1:-} == --atlas-metadata ]]; then
     for kind in item-rewards npc-locations npc-topic-refs autonote-refs site-refs monster-spawns; do
         "$exporter" "${input_args[@]}" --world mm8 --lua-export-config tools/lua_event_export.mm8.ini \
             --legacy-events-dir worlds/mm8/_legacy/events --map __none__ "--${kind}-only"
-        for world in mm7 mm8; do
-            "$exporter" "${input_args[@]}" --world "$world" \
-                --lua-export-config "tools/lua_event_export.${world}.ini" \
-                --legacy-events-dir "worlds/${world}/_legacy/events" --skip-global "--${kind}-only"
+        for world in mm6 mm7 mm8; do
+            # MM6 is a deliberately bounded New Sorpigal pilot, including its two local dungeons.
+            maps=(__all__)
+            if [[ $world == mm6 ]]; then maps=(oute3 6d01 6d02); fi
+            for map in "${maps[@]}"; do
+                map_args=()
+                if [[ $map != __all__ ]]; then map_args=(--map "$map"); fi
+                "$exporter" "${input_args[@]}" --world "$world" "${map_args[@]}" \
+                    --lua-export-config "tools/lua_event_export.${world}.ini" \
+                    --legacy-events-dir "worlds/${world}/_legacy/events" --skip-global "--${kind}-only"
+            done
         done
     done
     exit 0

@@ -1,0 +1,73 @@
+# MM6 pilot: New Sorpigal and its two local dungeons.
+# No external guide artwork or text; regional art comes from the active game packages.
+# Other MM6 maps remain explicitly out of scope until their Atlas data is verified.
+schema: 1
+world: mm6
+name: Enroth
+maps:
+  - {file: oute3.odm}
+  - {file: 6d01.blv, parent: oute3.odm}
+  - {file: 6d02.blv, parent: oute3.odm}
+  - {file: 6d03.blv, hidden: true}
+  - {file: 6d04.blv, hidden: true}
+  - {file: 6d05.blv, hidden: true}
+  - {file: 6d06.blv, hidden: true}
+  - {file: 6d07.blv, hidden: true}
+  - {file: 6d08.blv, hidden: true}
+  - {file: 6d09.blv, hidden: true}
+  - {file: 6d10.blv, hidden: true}
+  - {file: 6d11.blv, hidden: true}
+  - {file: 6d12.blv, hidden: true}
+  - {file: 6d13.blv, hidden: true}
+  - {file: 6d14.blv, hidden: true}
+  - {file: 6d15.blv, hidden: true}
+  - {file: 6d16.blv, hidden: true}
+  - {file: 6d17.blv, hidden: true}
+  - {file: 6d18.blv, hidden: true}
+  - {file: 6d19.blv, hidden: true}
+  - {file: 6d20.blv, hidden: true}
+  - {file: 6t1.blv, hidden: true}
+  - {file: 6t2.blv, hidden: true}
+  - {file: 6t3.blv, hidden: true}
+  - {file: 6t4.blv, hidden: true}
+  - {file: 6t5.blv, hidden: true}
+  - {file: 6t6.blv, hidden: true}
+  - {file: 6t7.blv, hidden: true}
+  - {file: 6t8.blv, hidden: true}
+  - {file: cd1.blv, hidden: true}
+  - {file: cd2.blv, hidden: true}
+  - {file: cd3.blv, hidden: true}
+  - {file: hive.blv, hidden: true}
+  - {file: oracle.blv, hidden: true}
+  - {file: outa1.odm, hidden: true}
+  - {file: outa2.odm, hidden: true}
+  - {file: outa3.odm, hidden: true}
+  - {file: outb1.odm, hidden: true}
+  - {file: outb2.odm, hidden: true}
+  - {file: outb3.odm, hidden: true}
+  - {file: outc1.odm, hidden: true}
+  - {file: outc2.odm, hidden: true}
+  - {file: outc3.odm, hidden: true}
+  - {file: outd1.odm, hidden: true}
+  - {file: outd2.odm, hidden: true}
+  - {file: outd3.odm, hidden: true}
+  - {file: oute1.odm, hidden: true}
+  - {file: oute2.odm, hidden: true}
+  - {file: pyramid.blv, hidden: true}
+  - {file: sci-fi.blv, hidden: true}
+  - {file: sewer.blv, hidden: true}
+  - {file: zarena.blv, hidden: true}
+  - {file: zddb01.blv, hidden: true}
+  - {file: zddb02.blv, hidden: true}
+  - {file: zddb03.blv, hidden: true}
+  - {file: zddb04.blv, hidden: true}
+  - {file: zddb06.blv, hidden: true}
+  - {file: zddb07.blv, hidden: true}
+  - {file: zddb08.blv, hidden: true}
+  - {file: zddb09.blv, hidden: true}
+  - {file: zddb10.blv, hidden: true}
+  - {file: zdtl01.blv, hidden: true}
+  - {file: zdtl02.blv, hidden: true}
+  - {file: zdwj01.blv, hidden: true}
+  - {file: zdwj02.blv, hidden: true}
+  - {file: znwc.blv, hidden: true}

@@ -62,7 +62,7 @@ struct WorldMapPresentation
     std::string parentFileName;
     int areaId = 0;
     std::optional<std::pair<float, float>> position;
-    // Reserved table rows without playable geography can be explicitly excluded from Atlas presentation.
+    // Excluded from Atlas presentation, including residents and services belonging to that map.
     bool hidden = false;
 };
 

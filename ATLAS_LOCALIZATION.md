@@ -15,7 +15,8 @@ source text and fallback; Polish additions live in `assets_dev/languages/pl/text
   translated in PO, without rewriting Lua or adding runtime text-replacement rules.
 - Long button labels fit inside one line of their own plate. Polish uses the official upstream font pack.
 
-This addition contains **640 entries / 8,407 English source words**, including **124 unique generated paragraphs**.
+The MM7/MM8 addition contains **640 entries / 8,407 English source words**, including **124 unique generated paragraphs**.
+The MM6 New Sorpigal pilot adds three paragraphs, bringing the inventory to **643 entries / 8,547 source words**.
 The count includes shared skill display terms and item-category labels. The game's much larger existing Polish
 catalogs provide names and story content; they are not copied into this file. New or untranslated upstream/mod
 content uses the normal English fallback. This does not claim to complete every translation in upstream itself.

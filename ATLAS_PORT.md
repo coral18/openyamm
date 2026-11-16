@@ -13,7 +13,8 @@ SDL gamepad tests. Physical-controller and Android acceptance remain outstanding
 - `OPENYAMM_BUILD_ATLAS=ON` builds the optional native screen and shared world index. The existing
   `OPENYAMM_BUILD_ATLAS_CORE` option still supports the geometry-only slice.
 - The in-game Map Book exposes Atlas in MM7/MM8. `[atlas] enabled=false` disables the entry. The main menu has no
-  Atlas shortcut. This does not introduce a general mod loader or a stable plugin ABI.
+  Atlas shortcut. The MM6 New Sorpigal pilot also exposes this entry; see [ATLAS_MM6_PILOT.md](ATLAS_MM6_PILOT.md).
+  This does not introduce a general mod loader or a stable plugin ABI.
 - Definitions come from the active upstream tables, scripts and map loader, including scene/ruleset overlays.
   Geographic presentation is separate from gameplay definitions. Typed metadata retains the identity of the
   callback it describes; replacing a callback invalidates its old annotations.
@@ -81,7 +82,8 @@ OPENYAMM_METADATA_MODS_ROOT=/path/to/metadata-inputs \
     tools/regenerate_lua_events.sh --atlas-metadata
 ```
 
-The metadata input root contains `worlds/mm7/_legacy/events` and `worlds/mm8/_legacy/events`. GrayFace reference
+The metadata input root contains `worlds/mm6/_legacy/events`, `worlds/mm7/_legacy/events` and
+`worlds/mm8/_legacy/events`. MM6 regeneration is limited to the three pilot maps. GrayFace reference
 folders named in the exporter configs must be present. Those legacy/reference inputs are not runtime mod contents.
 The exporter accepts installed release packs and applies the same namespaced file overrides as the game.
 
@@ -106,7 +108,8 @@ The exporter accepts installed release packs and applies the same namespaced fil
   been run on this port.
 - The tracked metadata-only regeneration workflow reproduced all **427 generated sidecars** byte for byte.
 
-This port does not add MM6/MM9 Atlas catalogs, a launcher, new gameplay rules, or a public modding contract.
+The MM6 addition is limited to [New Sorpigal and its two local dungeons](ATLAS_MM6_PILOT.md). This port does not add
+a full MM6/MM9 Atlas, a launcher, new gameplay rules, or a public modding contract.
 
 ## English and Polish
 

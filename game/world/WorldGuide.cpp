@@ -509,7 +509,8 @@ std::vector<WorldGuideEntry> buildWorldGuide(const WorldGuideSource &source, Wor
                     const HouseEntry *pHouse = source.pHouses->get(uint32_t(std::stoul(location.target)));
                     if (pHouse != nullptr)
                     {
-                        name = pHouse->name.empty() ? pHouse->buildingName : pHouse->name;
+                        name = Engine::localize(pHouse->name.empty() ? pHouse->buildingName : pHouse->name,
+                            "world:" + source.worldId);
                         target = pHouse->canonicalId.empty() ? source.worldId + ":house/" + location.target
                                                              : pHouse->canonicalId;
                     }
@@ -519,7 +520,7 @@ std::vector<WorldGuideEntry> buildWorldGuide(const WorldGuideSource &source, Wor
                     const ItemDefinition *pItem = source.pItems->get(uint32_t(std::stoul(location.target)));
                     if (pItem != nullptr)
                     {
-                        name = pItem->name;
+                        name = itemName(pItem->itemId);
                         target = location.target;
                         kind = WorldGuideLink::Kind::Item;
                     }

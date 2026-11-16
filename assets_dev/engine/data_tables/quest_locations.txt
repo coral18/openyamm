@@ -1,6 +1,18 @@
 # Shared journal relationships; targets use canonical maps and merged registry IDs.
 # journal: disclosed by the accepted quest; guide: undisclosed source or hint.
 QBit	World	Role	Kind	Target	Visibility	RequiredQBits	ForbiddenQBits
+1105	mm6	objective	npc	786	journal
+1107	mm6	giver	npc	1076	journal
+1107	mm6	objective	map	world.mm6.map.6d01	journal
+1107	mm6	return	npc	1076	journal
+1150	mm6	giver	npc	786	journal
+1150	mm6	objective	item	2069	journal
+1150	mm6	objective	map	world.mm6.map.6d02	journal
+1150	mm6	return	npc	786	journal
+1163	mm6	giver	npc	939	journal
+1163	mm6	objective	map	world.mm6.map.6d02	journal
+1163	mm6	objective	npc	980	guide
+1163	mm6	return	npc	939	journal
 3	mm8	giver	npc	2	journal
 3	mm8	objective	item	741	journal
 3	mm8	objective	map	world.mm8.map.d09	journal

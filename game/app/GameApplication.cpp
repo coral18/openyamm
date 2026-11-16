@@ -13400,7 +13400,8 @@ bool GameApplication::openAtlasScreen(bool paused)
                     for (const TrainerEntry &entry : entries)
                     {
                         const MapStatsEntry *pMap = m_gameDataRepository.mapStats().findById(entry.mapId);
-                        if (pMap == nullptr || (pMap->worldId != "mm7" && pMap->worldId != "mm8")
+                        if (pMap == nullptr || (pMap->worldId != "mm6" && pMap->worldId != "mm7"
+                            && pMap->worldId != "mm8")
                             || entry.npcId == 0 || entry.houseId == 0 || !trainerKnown(entry, party)) continue;
                         const std::string canonicalMap = WorldDatabase::mapId(*pMap);
                         knowledge.variables[worldNpcHouseKey(entry.npcId)] = std::bit_cast<int32_t>(entry.houseId);
@@ -14523,7 +14524,8 @@ void GameApplication::renderFrame(int width, int height, float mouseWheelDelta, 
 #ifdef OPENYAMM_WITH_ATLAS
     m_gameSession.gameplayScreenRuntime().interactionState().interactiveAtlasAvailable =
         m_settings.interactiveAtlas && selectedMap
-        && (selectedMap->map.worldId == "mm7" || selectedMap->map.worldId == "mm8");
+        && (selectedMap->map.worldId == "mm6" || selectedMap->map.worldId == "mm7"
+            || selectedMap->map.worldId == "mm8");
 #endif
 
     if (m_skipGameplayUpdateUntilPromptSubmitKeysReleased)

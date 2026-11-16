@@ -530,8 +530,11 @@ void AtlasScreen::drawScreen(float)
         return;
     }
     textInRect(canvasRect(25, 15, 245, 30), Engine::tr("Interactive Atlas"), "fondamento", 20, 0xffbcddeeu);
+    const float worldCount = float(std::max(size_t(1), m_availableWorlds.size()));
+    const float worldButtonWidth = std::min(105.0f, (230.0f - 10.0f * (worldCount - 1.0f)) / worldCount);
     for (size_t i = 0; i < m_availableWorlds.size(); ++i)
-        if (button("atlas-catalog-" + m_availableWorlds[i], canvasRect(285 + i * 115, 17, 105, 27),
+        if (button("atlas-catalog-" + m_availableWorlds[i],
+                   canvasRect(285 + i * (worldButtonWidth + 10), 17, worldButtonWidth, 27),
                    m_availableWorlds[i], "button", true, m_presentation.worldId == m_availableWorlds[i]))
         {
             selectWorld(m_availableWorlds[i]);
@@ -2418,12 +2421,15 @@ void AtlasScreen::drawDetails()
                                            : Engine::tr(" | Last encountered here");
         if (record->possibleNpcLocation)
             text += Engine::tr(" | Authored possibility; quest conditions may apply. Current presence is not implied.");
-        if (record->actorLocation || record->scriptLocation) text += " | " + record->map->name;
+        if (record->actorLocation || record->scriptLocation)
+            text += " | " + Engine::localize(record->map->name, "world:" + record->map->worldId);
         if (record->scriptLocation) text += Engine::tr(" | No exact position is recorded");
         if (record->house != nullptr)
         {
             const MapStatsEntry *pRecordMap = m_world.recordMap(*record, m_knowledge, m_guide, m_map);
-            if (pRecordMap != nullptr) text += " | " + pRecordMap->name + " | " + record->house->type;
+            if (pRecordMap != nullptr)
+                text += " | " + Engine::localize(pRecordMap->name, "world:" + pRecordMap->worldId)
+                    + " | " + Engine::localize(record->house->type);
             if (record->kind == WorldRecordKind::House)
                 text += Engine::tr(" | Hours {openHour}:00 - {closeHour}:00",
                                    {{"openHour", std::to_string(record->house->openHour)},
