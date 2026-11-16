@@ -1,0 +1,4 @@
+-- generated site references from legacy EVT/STR; load after the base handlers
+SetMapConnectionTargets(90, {"cd1.blv"})
+SetMapSiteReference(100, "Effects apply to the selected character unless the effect concerns party resources.\nHealth and spell point gains stop at their maximum; attribute increases use the game's normal limits.\n\nOutcome 1:\nSet Fire resistance bonus to 20\nSet Air resistance bonus to 20\nSet Water resistance bonus to 20\nSet Earth resistance bonus to 20\nRequirements (all):\n- Fire resistance bonus below 20")
+SetMapSiteReference(101, "Effects apply to the selected character unless the effect concerns party resources.\nHealth and spell point gains stop at their maximum; attribute increases use the game's normal limits.\n\nOutcome 1:\nSet Water resistance bonus to 20\nRequirements (all):\n- Water resistance bonus below 20")

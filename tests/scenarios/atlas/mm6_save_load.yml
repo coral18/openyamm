@@ -1,0 +1,29 @@
+id: atlas.mm6_save_load
+title: MM6 Atlas content preserves campaigns across regions, special maps and save/load
+world: mm6
+mode: faithful
+tags: [atlas, mm6, saves]
+steps:
+  - new_game_flow: {start_map: oute3.odm}
+  - save_game: fresh
+  - load_game: fresh
+  - assert: {map: oute3.odm}
+  - load_map: {map: outc2.odm}
+  - save_game: freehaven
+  - load_game: freehaven
+  - assert: {map: outc2.odm}
+  - load_map: {map: sewer.blv}
+  - set_pose: {map: sewer.blv, x: 7520, y: -4224, z: 256, yaw_degrees: 0}
+  - save_game: sewer
+  - load_game: sewer
+  - assert: {map: sewer.blv}
+  - load_map: {map: sci-fi.blv}
+  - set_pose: {map: sci-fi.blv, x: -9280, y: 4160, z: 196, yaw_degrees: 0}
+  - save_game: control
+  - load_game: control
+  - assert: {map: sci-fi.blv}
+  - load_map: {map: pyramid.blv}
+  - set_pose: {map: pyramid.blv, x: -9728, y: -19200, z: 771, yaw_degrees: 90}
+  - save_game: varn
+  - load_game: varn
+  - assert: {map: pyramid.blv}

@@ -44,7 +44,7 @@ def main():
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(source, target)
         checksums[relative.as_posix()] = hashlib.sha256(target.read_bytes()).hexdigest()
-    for name in ('ATLAS_PORT.md', 'ATLAS_LOCALIZATION.md', 'ATLAS_MM6_PILOT.md'):
+    for name in ('ATLAS_PORT.md', 'ATLAS_LOCALIZATION.md', 'ATLAS_MM6.md', 'ATLAS_MM6_PILOT.md'):
         shutil.copyfile(root / name, destination / name)
     (destination / 'atlas-overlay.json').write_text(json.dumps({
         'project': 'OpenYAMM Atlas', 'upstream': 'v2.5', 'files': checksums,

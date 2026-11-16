@@ -1385,7 +1385,8 @@ void AtlasScreen::drawList()
                                                                  ? record.transport->quote->travelDays
                                                                  : int64_t(record.transport->route.travelDays))}})
                 : Engine::tr(WorldDatabase::kindName(record.kind)) +
-                      (record.house != nullptr ? " - " + pRecordMap->name : "");
+                      (record.house != nullptr
+                          ? " - " + Engine::localize(pRecordMap->name, "world:" + pRecordMap->worldId) : "");
         textInRect(
             {row.x + 7 * designScale(), row.y + 19 * designScale(), row.width - 14 * designScale(), 12 * designScale()},
             subtitle, "menu_lucida", 9, 0xffa9bbb7u);
@@ -2093,8 +2094,8 @@ void AtlasScreen::drawSiteJournal()
     const WorldMapFeature &feature = *m_siteReading;
     const WorldRecord *pMap = m_world.find(feature.mapId);
     textInRect(canvasRect(25, 60, 798, 28),
-               Engine::localizeKnown(m_world.featureTitle(feature, m_knowledge, m_guide) + " - " + pMap->map->name,
-                                     "world:" + m_presentation.worldId),
+               m_world.featureTitle(feature, m_knowledge, m_guide) + " - "
+                   + Engine::localize(pMap->map->name, "world:" + m_presentation.worldId),
                "fondamento", 15);
     textInRect(canvasRect(25, 89, 798, 25),
                m_guide ? Engine::tr("Site reference") : Engine::tr("Party's recorded findings"), "menu_lucida", 11,

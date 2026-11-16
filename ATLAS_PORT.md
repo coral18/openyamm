@@ -4,6 +4,8 @@ This branch ports the native MM7/MM8 Atlas to OpenYAMM **v2.5** (`8de973cc`). Th
 remains on `atlas/port-v2.3`; the earlier complete Atlas remains on `extended/atlas-mm8`. Work uses an isolated
 checkout, installation, campaigns and the official 2.5 runtime packs.
 
+The branch now also includes the [complete MM6 Atlas](ATLAS_MM6.md), using the same runtime and data APIs.
+
 The Windows game compiles and the Atlas opens from the Map Book. This is a development port, not a published
 Windows/Android release. Native GPU checks cover MM7, MM8 and a dungeon; controller routing is covered by virtual
 SDL gamepad tests. Physical-controller and Android acceptance remain outstanding on this base.
@@ -13,7 +15,7 @@ SDL gamepad tests. Physical-controller and Android acceptance remain outstanding
 - `OPENYAMM_BUILD_ATLAS=ON` builds the optional native screen and shared world index. The existing
   `OPENYAMM_BUILD_ATLAS_CORE` option still supports the geometry-only slice.
 - The in-game Map Book exposes Atlas in MM7/MM8. `[atlas] enabled=false` disables the entry. The main menu has no
-  Atlas shortcut. The MM6 New Sorpigal pilot also exposes this entry; see [ATLAS_MM6_PILOT.md](ATLAS_MM6_PILOT.md).
+  Atlas shortcut. MM6 also exposes this entry; see [ATLAS_MM6.md](ATLAS_MM6.md).
   This does not introduce a general mod loader or a stable plugin ABI.
 - Definitions come from the active upstream tables, scripts and map loader, including scene/ruleset overlays.
   Geographic presentation is separate from gameplay definitions. Typed metadata retains the identity of the
@@ -83,7 +85,7 @@ OPENYAMM_METADATA_MODS_ROOT=/path/to/metadata-inputs \
 ```
 
 The metadata input root contains `worlds/mm6/_legacy/events`, `worlds/mm7/_legacy/events` and
-`worlds/mm8/_legacy/events`. MM6 regeneration is limited to the three pilot maps. GrayFace reference
+`worlds/mm8/_legacy/events`. All MM6 maps are selected. GrayFace reference
 folders named in the exporter configs must be present. Those legacy/reference inputs are not runtime mod contents.
 The exporter accepts installed release packs and applies the same namespaced file overrides as the game.
 
@@ -108,8 +110,8 @@ The exporter accepts installed release packs and applies the same namespaced fil
   been run on this port.
 - The tracked metadata-only regeneration workflow reproduced all **427 generated sidecars** byte for byte.
 
-The MM6 addition is limited to [New Sorpigal and its two local dungeons](ATLAS_MM6_PILOT.md). This port does not add
-a full MM6/MM9 Atlas, a launcher, new gameplay rules, or a public modding contract.
+The [MM6 addition](ATLAS_MM6.md) covers Enroth's 55 playable maps. This port does not add an MM9 Atlas, a launcher,
+new gameplay rules, or a public modding contract.
 
 ## English and Polish
 

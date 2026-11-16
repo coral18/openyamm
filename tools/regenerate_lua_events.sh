@@ -33,16 +33,9 @@ if [[ ${1:-} == --atlas-metadata ]]; then
         "$exporter" "${input_args[@]}" --world mm8 --lua-export-config tools/lua_event_export.mm8.ini \
             --legacy-events-dir worlds/mm8/_legacy/events --map __none__ "--${kind}-only"
         for world in mm6 mm7 mm8; do
-            # MM6 is a deliberately bounded New Sorpigal pilot, including its two local dungeons.
-            maps=(__all__)
-            if [[ $world == mm6 ]]; then maps=(oute3 6d01 6d02); fi
-            for map in "${maps[@]}"; do
-                map_args=()
-                if [[ $map != __all__ ]]; then map_args=(--map "$map"); fi
-                "$exporter" "${input_args[@]}" --world "$world" "${map_args[@]}" \
-                    --lua-export-config "tools/lua_event_export.${world}.ini" \
-                    --legacy-events-dir "worlds/${world}/_legacy/events" --skip-global "--${kind}-only"
-            done
+            "$exporter" "${input_args[@]}" --world "$world" \
+                --lua-export-config "tools/lua_event_export.${world}.ini" \
+                --legacy-events-dir "worlds/${world}/_legacy/events" --skip-global "--${kind}-only"
         done
     done
     exit 0

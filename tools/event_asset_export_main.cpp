@@ -742,7 +742,20 @@ bool loadMapStats(const AssetFileSystem &assetFileSystem, const std::string &vir
         return false;
     }
 
-    return mapStats.loadFromRows(rows);
+    if (!mapStats.loadFromRows(rows))
+    {
+        return false;
+    }
+    // Match the runtime's ownership pass: unprefixed MM6 names such as sewer and sci-fi otherwise infer MM8.
+    std::vector<std::pair<std::string, std::string>> worldMapFiles;
+    for (const char *pWorldId : {"mm6", "mm7", "mm8"})
+    {
+        for (const std::string &fileName : assetFileSystem.enumerate(std::string("worlds/") + pWorldId + "/maps"))
+        {
+            worldMapFiles.emplace_back(pWorldId, fileName);
+        }
+    }
+    return mapStats.applyWorldOwnership(worldMapFiles);
 }
 
 std::unordered_map<std::string, std::string> buildMapNameLookup(const MapStats &mapStats)

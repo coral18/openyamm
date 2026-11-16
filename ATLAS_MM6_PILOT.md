@@ -1,5 +1,8 @@
 # MM6 Atlas pilot: New Sorpigal
 
+Historical checkpoint `0ca87a9c`. The [complete MM6 implementation](ATLAS_MM6.md) supersedes this pilot;
+the scope and counts below describe that earlier checkpoint.
+
 This is a bounded addition to the Atlas on the OpenYAMM 2.5 base. It exposes **New Sorpigal, Goblinwatch and the
 Abandoned Temple**. The other MM6 maps are deliberately excluded from navigation and place search until verified.
 It is not a complete MM6 Atlas release.

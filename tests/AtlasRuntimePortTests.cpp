@@ -6,15 +6,19 @@
 #include "game/maps/MapAssetLoader.h"
 #include "game/world/WorldAtlasPresentation.h"
 #include "game/world/WorldDatabase.h"
+#include "game/world/WorldConnectionGraph.h"
+#include "game/world/WorldGuide.h"
+#include <yaml-cpp/yaml.h>
 
 #include <algorithm>
 #include <cstdlib>
 #include <filesystem>
+#include <fstream>
 #include <iostream>
 
 using namespace OpenYAMM;
 
-TEST_CASE("Atlas MM6 pilot: New Sorpigal uses installed geometry and merged data without discovery leaks"
+TEST_CASE("Atlas MM6: New Sorpigal uses installed geometry and merged data without discovery leaks"
     * doctest::skip(std::getenv("OPENYAMM_ATLAS_ASSET_ROOT") == nullptr))
 {
     const char *pRoot = std::getenv("OPENYAMM_ATLAS_ASSET_ROOT");
@@ -50,9 +54,14 @@ TEST_CASE("Atlas MM6 pilot: New Sorpigal uses installed geometry and merged data
         if (entry.worldId != "mm6") continue;
         CAPTURE(entry.fileName);
         const Game::WorldRecord *pRecord = database.find(Game::WorldDatabase::mapId(entry));
+        if (entry.name == "pending")
+        {
+            CHECK(pRecord == nullptr);
+            continue;
+        }
         const bool pilot = entry.fileName == "oute3.odm" || entry.fileName == "6d01.blv"
             || entry.fileName == "6d02.blv";
-        CHECK((pRecord != nullptr) == pilot);
+        REQUIRE(pRecord != nullptr);
         if (!pilot) continue;
         ++playableMaps;
         Game::MapAssetInfo map;
@@ -121,14 +130,14 @@ TEST_CASE("Atlas MM6 pilot: New Sorpigal uses installed geometry and merged data
     REQUIRE(Engine::activateLanguage(assets, "en"));
 }
 
-TEST_CASE("Atlas port runtime: all MM7 and MM8 programs load with the installed release and Atlas overlays"
+TEST_CASE("Atlas port runtime: all MM6 MM7 and MM8 programs load with the installed release and Atlas overlays"
     * doctest::skip(std::getenv("OPENYAMM_ATLAS_ASSET_ROOT") == nullptr))
 {
     const char *pRoot = std::getenv("OPENYAMM_ATLAS_ASSET_ROOT");
     const char *pMods = std::getenv("OPENYAMM_ATLAS_MODS_ROOT");
     REQUIRE(pRoot != nullptr);
     REQUIRE(pMods != nullptr);
-    for (const std::string world : {"mm7", "mm8"})
+    for (const std::string world : {"mm6", "mm7", "mm8"})
     {
         CAPTURE(world);
         Engine::InstalledContentOptions options;
@@ -149,13 +158,23 @@ TEST_CASE("Atlas port runtime: all MM7 and MM8 programs load with the installed 
         CHECK_FALSE(presentation.maps.empty());
         Game::WorldDatabase database(loader.getMapStats(), loader.getHouseTable(), loader.getNpcDialogTable(),
             loader.getMergedTeacherTopicTable(), world, presentation.maps);
+        YAML::Node audit;
+        audit["world"] = world;
+        audit["language"] = options.languageId;
         size_t maps = 0, references = 0, rewards = 0;
         for (const Game::MapStatsEntry &entry : loader.getMapStats().getEntries())
         {
             if (entry.worldId != world) continue;
             CAPTURE(entry.fileName);
+            YAML::Node auditedMap;
             if (std::filesystem::path(entry.fileName).extension() == ".odm")
             {
+                if (world == "mm6")
+                {
+                    const Game::WorldRecord *pRegion = database.find(Game::WorldDatabase::mapId(entry));
+                    REQUIRE(pRegion != nullptr);
+                    CHECK(pRegion->position.has_value());
+                }
                 Engine::DirectoryAssetPathCache directories;
                 Engine::AssetPathLookupCache paths;
                 const std::string directory = "worlds/" + world + "/icons";
@@ -172,15 +191,17 @@ TEST_CASE("Atlas port runtime: all MM7 and MM8 programs load with the installed 
             if (!loaded) continue;
             CHECK(map.localEventProgram.has_value());
             if (!map.localEventProgram) continue;
+            CHECK_NOTHROW(database.indexMapConnections(entry, *map.localEventProgram));
             const auto layout = std::find_if(presentation.maps.begin(), presentation.maps.end(),
                 [&entry](const Game::WorldMapPresentation &value) { return value.fileName == entry.fileName; });
             const bool hidden = layout != presentation.maps.end() && layout->hidden;
+            const bool hasGeometry = Game::MapAssetLoader::findAssetPath(assets, world, entry.fileName).has_value();
             if (hidden)
             {
                 CHECK(database.find(Game::WorldDatabase::mapId(entry)) == nullptr);
-                CHECK_FALSE(Game::MapAssetLoader::findAssetPath(assets, world, entry.fileName).has_value());
             }
-            else
+            else CHECK(hasGeometry);
+            if (hasGeometry)
             {
                 std::optional<Game::MapAssetInfo> geometry = Game::MapAssetLoader().load(assets, entry,
                     loader.getMonsterTable(), loader.getObjectTable(), Game::MapLoadPurpose::HeadlessGameplay,
@@ -189,19 +210,119 @@ TEST_CASE("Atlas port runtime: all MM7 and MM8 programs load with the installed 
                 if (geometry->outdoorMapData)
                     CHECK_NOTHROW(database.indexMapLocations(*geometry->outdoorMapData, *map.localEventProgram));
                 else if (geometry->indoorMapData)
+                {
                     CHECK_NOTHROW(database.indexMapLocations(entry, *geometry->indoorMapData, *map.localEventProgram));
+                    if (const auto &start = geometry->indoorMapData->partyStartPoint; start)
+                    {
+                        auditedMap["party_start"] = std::vector<int>{start->x, start->y, start->z,
+                            start->facingDegrees};
+                    }
+                }
                 else
                     FAIL_CHECK("Atlas map geometry is empty");
             }
+            if (world == "mm6" && !hidden && std::filesystem::path(entry.fileName).extension() == ".blv")
+            {
+                const Game::WorldRecord *pDungeon = database.find(Game::WorldDatabase::mapId(entry));
+                REQUIRE(pDungeon != nullptr);
+                CHECK_FALSE(pDungeon->parentId.empty());
+                CHECK(database.find(pDungeon->parentId) != nullptr);
+            }
+            if (world == "mm6" && (entry.fileName == "sewer.blv" || entry.fileName == "sci-fi.blv"
+                || entry.fileName == "oracle.blv" || entry.fileName == "zarena.blv"))
+                CHECK_FALSE(map.localEventProgram->connectionTargets().empty());
             references += map.localEventProgram->siteReferences().size();
             rewards += map.localEventProgram->itemRewards().size();
+            auditedMap["id"] = Game::WorldDatabase::mapId(entry);
+            auditedMap["file"] = entry.fileName;
+            auditedMap["name"] = entry.name;
+            auditedMap["area"] = entry.areaId;
+            auditedMap["hidden"] = hidden;
+            auditedMap["geometry"] = hasGeometry;
+            auditedMap["references"] = map.localEventProgram->siteReferences().size();
+            auditedMap["rewards"] = map.localEventProgram->itemRewards().size();
+            audit["maps"].push_back(auditedMap);
             ++maps;
         }
         CHECK(maps > 50);
         CHECK(references > 0);
         CHECK(rewards > 0);
+        if (world == "mm6")
+        {
+            CHECK(database.query({}, true, {}, Game::WorldRecordKind::Region).size() == 15);
+            const std::vector<const Game::WorldRecord *> dungeons =
+                database.query({}, true, {}, Game::WorldRecordKind::Dungeon);
+            CHECK(dungeons.size() == 40);
+            for (const Game::WorldRecord *pDungeon : dungeons)
+                CHECK(std::any_of(database.connections().begin(), database.connections().end(),
+                    [&](const Game::WorldConnection &connection)
+                    {
+                        return (connection.sourceId == pDungeon->id && connection.destinationId == pDungeon->parentId)
+                            || (connection.destinationId == pDungeon->id && connection.sourceId == pDungeon->parentId);
+                    }));
+            size_t quests = 0;
+            for (const Game::JournalQuestEntry &quest : loader.getJournalQuestTable().entries())
+            {
+                if (quest.owner != "Enroth" || quest.text.empty() || quest.text == "0") continue;
+                CAPTURE(quest.qbitId);
+                ++quests;
+                CHECK(quest.worldId == "mm6");
+                CHECK_FALSE(quest.locations.empty());
+                for (const Game::JournalQuestLocation &location : quest.locations)
+                {
+                    using Kind = Game::JournalQuestLocation::Kind;
+                    if (location.kind == Kind::Map) CHECK(database.find(location.target) != nullptr);
+                    else if (location.kind == Kind::Npc)
+                        CHECK(loader.getNpcDialogTable().getNpc(uint32_t(std::stoul(location.target))) != nullptr);
+                    else if (location.kind == Kind::House)
+                        CHECK(loader.getHouseTable().get(uint32_t(std::stoul(location.target))) != nullptr);
+                    else if (location.kind == Kind::Item)
+                        CHECK(loader.getItemTable().get(uint32_t(std::stoul(location.target))) != nullptr);
+                }
+            }
+            CHECK(quests == 61);
+            Game::WorldGuideSource source;
+            source.worldId = world;
+            source.pQuests = &loader.getJournalQuestTable();
+            source.pMaps = &loader.getMapStats();
+            source.pNpcs = &loader.getNpcDialogTable();
+            source.pHouses = &loader.getHouseTable();
+            source.pItems = &loader.getItemTable();
+            Game::WorldGuideKnowledge knowledge;
+            knowledge.hasParty = true;
+            knowledge.activeQuests.insert(1110);
+            knowledge.quests.insert(1110);
+            for (const bool guide : {false, true})
+            {
+                const std::vector<Game::WorldGuideEntry> entries =
+                    Game::buildWorldGuide(source, Game::WorldGuideSection::Quests, knowledge, guide);
+                const auto quest = std::find_if(entries.begin(), entries.end(),
+                    [](const Game::WorldGuideEntry &entry) { return entry.id == "1110"; });
+                REQUIRE(quest != entries.end());
+                CHECK(std::any_of(quest->links.begin(), quest->links.end(), [](const Game::WorldGuideLink &link)
+                    { return link.target == "world.mm6.map.outb2"; }) == guide);
+                if (guide) CHECK(entries.size() == 61);
+            }
+        }
         std::cout << "Atlas pack audit: " << world << " maps=" << maps << " site references=" << references
             << " reward events=" << rewards << '\n';
+        if (const char *pOutput = std::getenv("OPENYAMM_ATLAS_AUDIT_DIR"))
+        {
+            for (const Game::WorldConnection &connection : database.connections())
+            {
+                YAML::Node edge;
+                edge["source"] = connection.sourceId;
+                edge["destination"] = connection.destinationId;
+                edge["event"] = connection.eventId;
+                audit["connections"].push_back(edge);
+            }
+            const std::filesystem::path directory(pOutput);
+            std::filesystem::create_directories(directory);
+            std::ofstream output(directory / (world + "-" + options.languageId + ".yml"));
+            REQUIRE(output.is_open());
+            output << audit << '\n';
+            REQUIRE(output.good());
+        }
         REQUIRE(Engine::activateLanguage(assets, "en"));
     }
 }

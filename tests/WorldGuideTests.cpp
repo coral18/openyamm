@@ -896,6 +896,17 @@ TEST_CASE("world guide quest relationships resolve against the current shared co
     REQUIRE(quests.loadLocationRows(guideTableRows("quest_locations.txt")));
     MapStats maps; HouseTable houses; NpcDialogTable npcs; ItemTable items;
     REQUIRE(maps.loadFromRows(guideTableRows("map_stats.txt")));
+    // Match gameplay's ownership pass before resolving unprefixed MM6 maps such as sewer, hive and cd1.
+    std::vector<std::pair<std::string, std::string>> worldMapFiles;
+    for (const std::string world : {"mm6", "mm7", "mm8"})
+    {
+        std::ifstream file(std::string(OPENYAMM_SOURCE_DIR) + "/assets_dev/engine/world/atlas/" + world + ".yml");
+        REQUIRE(file.is_open());
+        const std::string text{std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>()};
+        for (const WorldMapPresentation &map : parseWorldAtlasPresentation(text, world).maps)
+            worldMapFiles.emplace_back(world, map.fileName);
+    }
+    REQUIRE(maps.applyWorldOwnership(worldMapFiles));
     REQUIRE(houses.loadFromRows(guideTableRows("house_data.txt")));
     REQUIRE(npcs.loadNpcRows(guideTableRows("npc.txt")));
     OpenYAMM::Engine::AssetFileSystem assets;
@@ -905,7 +916,7 @@ TEST_CASE("world guide quest relationships resolve against the current shared co
     source.pQuests = &quests; source.pMaps = &maps; source.pHouses = &houses;
     source.pNpcs = &npcs; source.pItems = &items;
     WorldGuideKnowledge knowledge;
-    for (const std::string &world : {"mm7", "mm8"})
+    for (const std::string &world : {"mm6", "mm7", "mm8"})
     {
         source.worldId = world;
         const auto guide = buildWorldGuide(source, WorldGuideSection::Quests, knowledge, true);

@@ -5925,3 +5925,159 @@ msgstr "Efekty dotyczą wybranej postaci, chyba że zmieniają zasoby całej dru
 #: assets_dev/worlds/mm6/events/maps/oute3_00_site_refs.lua:3
 msgid "Routing requirements from this interaction. These describe possible paths, not current availability. Other gameplay effects are not listed.\n\nDestination: Goblinwatch\nAny one of these alternatives:\nAlternative 1\nRequirements (all):\n- Campaign record present: Peter\nAlternative 2\nRequirements (all):\n- Campaign record absent: Peter\n- A party member carries: Key to Goblinwatch"
 msgstr "Warunki podróży wynikające z tej interakcji. Opisują możliwe drogi, a nie ich obecną dostępność. Pozostałe efekty rozgrywki nie są wymienione.\n\nCel: Goblińska Wachta\nDowolny z poniższych wariantów:\nWariant 1\nWymagania (wszystkie):\n- Zapis kampanii obecny: Peter\nWariant 2\nWymagania (wszystkie):\n- Zapis kampanii nieobecny: Peter\n- Członek drużyny niesie: Klucz do Goblińskiej Wachty"
+
+#: assets_dev/worlds/mm6/events/maps/outc1_00_site_refs.lua:7
+msgid "Effects apply to the selected character unless the effect concerns party resources.\nHealth and spell point gains stop at their maximum; attribute increases use the game's normal limits.\n\nOutcome 1:\nCan apply: Eradication\nRequirements (all):\n- Already used by this character\n\nOutcome 2:\nBase Endurance +5\nCan apply: Eradication\nRequirements (all):\n- Not yet used by this character"
+msgstr "Efekty dotyczą wybranej postaci, chyba że zmieniają zasoby całej drużyny.\nPrzyrost punktów życia i magii nie przekracza ich maksimum; zwiększenia atrybutów podlegają zwykłym limitom gry.\n\nWynik 1:\nMoże nałożyć stan: Dezintegracja\nWymagania (wszystkie):\n- Ta postać już skorzystała\n\nWynik 2:\nPodstawowa wytrzymałość +5\nMoże nałożyć stan: Dezintegracja\nWymagania (wszystkie):\n- Ta postać jeszcze z tego nie korzystała"
+
+#: assets_dev/worlds/mm6/events/maps/outc1_00_site_refs.lua:6
+msgid "Effects apply to the selected character unless the effect concerns party resources.\nHealth and spell point gains stop at their maximum; attribute increases use the game's normal limits.\n\nOutcome 1:\nCan apply: Eradication\nRequirements (all):\n- Already used by this character\n\nOutcome 2:\nBase Might +5\nCan apply: Eradication\nRequirements (all):\n- Not yet used by this character"
+msgstr "Efekty dotyczą wybranej postaci, chyba że zmieniają zasoby całej drużyny.\nPrzyrost punktów życia i magii nie przekracza ich maksimum; zwiększenia atrybutów podlegają zwykłym limitom gry.\n\nWynik 1:\nMoże nałożyć stan: Dezintegracja\nWymagania (wszystkie):\n- Ta postać już skorzystała\n\nWynik 2:\nPodstawowa moc +5\nMoże nałożyć stan: Dezintegracja\nWymagania (wszystkie):\n- Ta postać jeszcze z tego nie korzystała"
+
+#: assets_dev/worlds/mm6/events/maps/outb1_00_site_refs.lua:9
+msgid "Effects apply to the selected character unless the effect concerns party resources.\nHealth and spell point gains stop at their maximum; attribute increases use the game's normal limits.\n\nOutcome 1:\nCan apply: Eradication\nRequirements (all):\n- Already used by this character\n\nOutcome 2:\nFire resistance +5\nAir resistance +5\nWater resistance +5\nEarth resistance +5\nCan apply: Eradication\nRequirements (all):\n- Not yet used by this character"
+msgstr "Efekty dotyczą wybranej postaci, chyba że zmieniają zasoby całej drużyny.\nPrzyrost punktów życia i magii nie przekracza ich maksimum; zwiększenia atrybutów podlegają zwykłym limitom gry.\n\nWynik 1:\nMoże nałożyć stan: Dezintegracja\nWymagania (wszystkie):\n- Ta postać już skorzystała\n\nWynik 2:\nOdporność na ogień +5\nOdporność na powietrze +5\nOdporność na wodę +5\nOdporność na ziemię +5\nMoże nałożyć stan: Dezintegracja\nWymagania (wszystkie):\n- Ta postać jeszcze z tego nie korzystała"
+
+#: assets_dev/worlds/mm6/events/maps/outd1_00_site_refs.lua:7
+msgid "Effects apply to the selected character unless the effect concerns party resources.\nHealth and spell point gains stop at their maximum; attribute increases use the game's normal limits.\n\nOutcome 1:\nCan apply: Mild disease"
+msgstr "Efekty dotyczą wybranej postaci, chyba że zmieniają zasoby całej drużyny.\nPrzyrost punktów życia i magii nie przekracza ich maksimum; zwiększenia atrybutów podlegają zwykłym limitom gry.\n\nWynik 1:\nMoże nałożyć stan: Łagodna choroba"
+
+#: assets_dev/worlds/mm6/events/maps/outb2_00_site_refs.lua:6
+msgid "Effects apply to the selected character unless the effect concerns party resources.\nHealth and spell point gains stop at their maximum; attribute increases use the game's normal limits.\n\nOutcome 1:\nCan apply: Unconsciousness\nRequirements (all):\n- Already used by this character\n\nOutcome 2:\nBase Intellect +5\nBase Personality +5\nCan apply: Unconsciousness\nRequirements (all):\n- Not yet used by this character"
+msgstr "Efekty dotyczą wybranej postaci, chyba że zmieniają zasoby całej drużyny.\nPrzyrost punktów życia i magii nie przekracza ich maksimum; zwiększenia atrybutów podlegają zwykłym limitom gry.\n\nWynik 1:\nMoże wywołać: nieprzytomność\nWymagania (wszystkie):\n- Ta postać już skorzystała\n\nWynik 2:\nPodstawowa inteligencja +5\nPodstawowa osobowość +5\nMoże wywołać: nieprzytomność\nWymagania (wszystkie):\n- Ta postać jeszcze z tego nie korzystała"
+
+#: assets_dev/worlds/mm6/events/maps/outb2_00_site_refs.lua:5
+msgid "Effects apply to the selected character unless the effect concerns party resources.\nHealth and spell point gains stop at their maximum; attribute increases use the game's normal limits.\n\nOutcome 1:\nCan apply: Unconsciousness\nRequirements (all):\n- Already used by this character\n\nOutcome 2:\nFire resistance +5\nCan apply: Unconsciousness\nRequirements (all):\n- Not yet used by this character"
+msgstr "Efekty dotyczą wybranej postaci, chyba że zmieniają zasoby całej drużyny.\nPrzyrost punktów życia i magii nie przekracza ich maksimum; zwiększenia atrybutów podlegają zwykłym limitom gry.\n\nWynik 1:\nMoże wywołać: nieprzytomność\nWymagania (wszystkie):\n- Ta postać już skorzystała\n\nWynik 2:\nOdporność na ogień +5\nMoże wywołać: nieprzytomność\nWymagania (wszystkie):\n- Ta postać jeszcze z tego nie korzystała"
+
+#: assets_dev/worlds/mm6/events/maps/outd1_00_site_refs.lua:8
+msgid "Effects apply to the selected character unless the effect concerns party resources.\nHealth and spell point gains stop at their maximum; attribute increases use the game's normal limits.\n\nOutcome 1:\nConsumes one remaining use of this source.\nBase Accuracy +2\nRequirements (all):\n- Base Accuracy below 15\n- At least one use remains at this source"
+msgstr "Efekty dotyczą wybranej postaci, chyba że zmieniają zasoby całej drużyny.\nPrzyrost punktów życia i magii nie przekracza ich maksimum; zwiększenia atrybutów podlegają zwykłym limitom gry.\n\nWynik 1:\nZużywa jedno z pozostałych użyć tego źródła.\nPodstawowa celność +2\nWymagania (wszystkie):\n- Podstawowa celność poniżej 15\n- Pozostało co najmniej jedno użycie tego źródła"
+
+#: assets_dev/worlds/mm6/events/maps/outc3_00_site_refs.lua:5
+msgid "Effects apply to the selected character unless the effect concerns party resources.\nHealth and spell point gains stop at their maximum; attribute increases use the game's normal limits.\n\nOutcome 1:\nConsumes one remaining use of this source.\nBase Endurance +2\nRequirements (all):\n- Base Endurance below 15\n- At least one use remains at this source"
+msgstr "Efekty dotyczą wybranej postaci, chyba że zmieniają zasoby całej drużyny.\nPrzyrost punktów życia i magii nie przekracza ich maksimum; zwiększenia atrybutów podlegają zwykłym limitom gry.\n\nWynik 1:\nZużywa jedno z pozostałych użyć tego źródła.\nPodstawowa wytrzymałość +2\nWymagania (wszystkie):\n- Podstawowa wytrzymałość poniżej 15\n- Pozostało co najmniej jedno użycie tego źródła"
+
+#: assets_dev/worlds/mm6/events/maps/outd2_00_site_refs.lua:8
+msgid "Effects apply to the selected character unless the effect concerns party resources.\nHealth and spell point gains stop at their maximum; attribute increases use the game's normal limits.\n\nOutcome 1:\nConsumes one remaining use of this source.\nBase Intellect +2\nRequirements (all):\n- Base Intellect below 15\n- At least one use remains at this source"
+msgstr "Efekty dotyczą wybranej postaci, chyba że zmieniają zasoby całej drużyny.\nPrzyrost punktów życia i magii nie przekracza ich maksimum; zwiększenia atrybutów podlegają zwykłym limitom gry.\n\nWynik 1:\nZużywa jedno z pozostałych użyć tego źródła.\nPodstawowy intelekt +2\nWymagania (wszystkie):\n- Podstawowa inteligencja poniżej 15\n- Pozostało co najmniej jedno użycie tego źródła"
+
+#: assets_dev/worlds/mm6/events/maps/outc2_00_site_refs.lua:6
+msgid "Effects apply to the selected character unless the effect concerns party resources.\nHealth and spell point gains stop at their maximum; attribute increases use the game's normal limits.\n\nOutcome 1:\nConsumes one remaining use of this source.\nBase Might +2\nRequirements (all):\n- Base Might below 15\n- At least one use remains at this source"
+msgstr "Efekty dotyczą wybranej postaci, chyba że zmieniają zasoby całej drużyny.\nPrzyrost punktów życia i magii nie przekracza ich maksimum; zwiększenia atrybutów podlegają zwykłym limitom gry.\n\nWynik 1:\nZużywa jedno z pozostałych użyć tego źródła.\nPodstawowa moc +2\nWymagania (wszystkie):\n- Podstawowa moc poniżej 15\n- Pozostało co najmniej jedno użycie tego źródła"
+
+#: assets_dev/worlds/mm6/events/maps/outd2_00_site_refs.lua:9
+msgid "Effects apply to the selected character unless the effect concerns party resources.\nHealth and spell point gains stop at their maximum; attribute increases use the game's normal limits.\n\nOutcome 1:\nConsumes one remaining use of this source.\nBase Personality +2\nRequirements (all):\n- Base Personality below 15\n- At least one use remains at this source"
+msgstr "Efekty dotyczą wybranej postaci, chyba że zmieniają zasoby całej drużyny.\nPrzyrost punktów życia i magii nie przekracza ich maksimum; zwiększenia atrybutów podlegają zwykłym limitom gry.\n\nWynik 1:\nZużywa jedno z pozostałych użyć tego źródła.\nPodstawowa osobowość +2\nWymagania (wszystkie):\n- Podstawowa osobowość poniżej 15\n- Pozostało co najmniej jedno użycie tego źródła"
+
+#: assets_dev/worlds/mm6/events/maps/outd1_00_site_refs.lua:9
+msgid "Effects apply to the selected character unless the effect concerns party resources.\nHealth and spell point gains stop at their maximum; attribute increases use the game's normal limits.\n\nOutcome 1:\nConsumes one remaining use of this source.\nBase Speed +2\nRequirements (all):\n- Base Speed below 15\n- At least one use remains at this source"
+msgstr "Efekty dotyczą wybranej postaci, chyba że zmieniają zasoby całej drużyny.\nPrzyrost punktów życia i magii nie przekracza ich maksimum; zwiększenia atrybutów podlegają zwykłym limitom gry.\n\nWynik 1:\nZużywa jedno z pozostałych użyć tego źródła.\nPodstawowa szybkość +2\nWymagania (wszystkie):\n- Podstawowa szybkość poniżej 15\n- Pozostało co najmniej jedno użycie tego źródła"
+
+#: assets_dev/worlds/mm6/events/maps/outd3_00_site_refs.lua:9
+msgid "Effects apply to the selected character unless the effect concerns party resources.\nHealth and spell point gains stop at their maximum; attribute increases use the game's normal limits.\n\nOutcome 1:\nConsumes one remaining use of this source.\nHealth +10\nRequirements (all):\n- At least one use remains at this source"
+msgstr "Efekty dotyczą wybranej postaci, chyba że zmieniają zasoby całej drużyny.\nPrzyrost punktów życia i magii nie przekracza ich maksimum; zwiększenia atrybutów podlegają zwykłym limitom gry.\n\nWynik 1:\nZużywa jedno z pozostałych użyć tego źródła.\nPunkty życia +10\nWymagania (wszystkie):\n- Pozostało co najmniej jedno użycie tego źródła"
+
+#: assets_dev/worlds/mm6/events/maps/6t1_00_site_refs.lua:2
+msgid "Effects apply to the selected character unless the effect concerns party resources.\nHealth and spell point gains stop at their maximum; attribute increases use the game's normal limits.\n\nOutcome 1:\nConsumes one remaining use of this source.\nHealth +20\nRequirements (all):\n- At least one use remains at this source"
+msgstr "Efekty dotyczą wybranej postaci, chyba że zmieniają zasoby całej drużyny.\nPrzyrost punktów życia i magii nie przekracza ich maksimum; zwiększenia atrybutów podlegają zwykłym limitom gry.\n\nWynik 1:\nZużywa jedno z pozostałych użyć tego źródła.\nPunkty życia +20\nWymagania (wszystkie):\n- Pozostało co najmniej jedno użycie tego źródła"
+
+#: assets_dev/worlds/mm6/events/maps/outc2_00_site_refs.lua:7
+msgid "Effects apply to the selected character unless the effect concerns party resources.\nHealth and spell point gains stop at their maximum; attribute increases use the game's normal limits.\n\nOutcome 1:\nConsumes one remaining use of this source.\nHealth +25\nRequirements (all):\n- At least one use remains at this source"
+msgstr "Efekty dotyczą wybranej postaci, chyba że zmieniają zasoby całej drużyny.\nPrzyrost punktów życia i magii nie przekracza ich maksimum; zwiększenia atrybutów podlegają zwykłym limitom gry.\n\nWynik 1:\nZużywa jedno z pozostałych użyć tego źródła.\nPunkty życia +25\nWymagania (wszystkie):\n- Pozostało co najmniej jedno użycie tego źródła"
+
+#: assets_dev/worlds/mm6/events/maps/outb3_00_site_refs.lua:5
+msgid "Effects apply to the selected character unless the effect concerns party resources.\nHealth and spell point gains stop at their maximum; attribute increases use the game's normal limits.\n\nOutcome 1:\nConsumes one remaining use of this source.\nHealth +50\nRequirements (all):\n- At least one use remains at this source"
+msgstr "Efekty dotyczą wybranej postaci, chyba że zmieniają zasoby całej drużyny.\nPrzyrost punktów życia i magii nie przekracza ich maksimum; zwiększenia atrybutów podlegają zwykłym limitom gry.\n\nWynik 1:\nZużywa jedno z pozostałych użyć tego źródła.\nPunkty życia +50\nWymagania (wszystkie):\n- Pozostało co najmniej jedno użycie tego źródła"
+
+#: assets_dev/worlds/mm6/events/maps/oute2_00_site_refs.lua:3
+msgid "Effects apply to the selected character unless the effect concerns party resources.\nHealth and spell point gains stop at their maximum; attribute increases use the game's normal limits.\n\nOutcome 1:\nConsumes one remaining use of this source.\nSpell points +10\nRequirements (all):\n- At least one use remains at this source"
+msgstr "Efekty dotyczą wybranej postaci, chyba że zmieniają zasoby całej drużyny.\nPrzyrost punktów życia i magii nie przekracza ich maksimum; zwiększenia atrybutów podlegają zwykłym limitom gry.\n\nWynik 1:\nZużywa jedno z pozostałych użyć tego źródła.\nPunkty magii +10\nWymagania (wszystkie):\n- Pozostało co najmniej jedno użycie tego źródła"
+
+#: assets_dev/worlds/mm6/events/maps/outa2_00_site_refs.lua:2
+msgid "Effects apply to the selected character unless the effect concerns party resources.\nHealth and spell point gains stop at their maximum; attribute increases use the game's normal limits.\n\nOutcome 1:\nConsumes one remaining use of this source.\nSpell points +100\nHealth +100\nRequirements (all):\n- At least one use remains at this source"
+msgstr "Efekty dotyczą wybranej postaci, chyba że zmieniają zasoby całej drużyny.\nPrzyrost punktów życia i magii nie przekracza ich maksimum; zwiększenia atrybutów podlegają zwykłym limitom gry.\n\nWynik 1:\nZużywa jedno z pozostałych użyć tego źródła.\nPunkty magii +100\nPunkty życia +100\nWymagania (wszystkie):\n- Pozostało co najmniej jedno użycie tego źródła"
+
+#: assets_dev/worlds/mm6/events/maps/outd1_00_site_refs.lua:6
+msgid "Effects apply to the selected character unless the effect concerns party resources.\nHealth and spell point gains stop at their maximum; attribute increases use the game's normal limits.\n\nOutcome 1:\nConsumes one remaining use of this source.\nSpell points +25\nRequirements (all):\n- At least one use remains at this source"
+msgstr "Efekty dotyczą wybranej postaci, chyba że zmieniają zasoby całej drużyny.\nPrzyrost punktów życia i magii nie przekracza ich maksimum; zwiększenia atrybutów podlegają zwykłym limitom gry.\n\nWynik 1:\nZużywa jedno z pozostałych użyć tego źródła.\nPunkty magii +25\nWymagania (wszystkie):\n- Pozostało co najmniej jedno użycie tego źródła"
+
+#: assets_dev/worlds/mm6/events/maps/outb2_00_site_refs.lua:7
+msgid "Effects apply to the selected character unless the effect concerns party resources.\nHealth and spell point gains stop at their maximum; attribute increases use the game's normal limits.\n\nOutcome 1:\nConsumes one remaining use of this source.\nSpell points +50\nRequirements (all):\n- At least one use remains at this source"
+msgstr "Efekty dotyczą wybranej postaci, chyba że zmieniają zasoby całej drużyny.\nPrzyrost punktów życia i magii nie przekracza ich maksimum; zwiększenia atrybutów podlegają zwykłym limitom gry.\n\nWynik 1:\nZużywa jedno z pozostałych użyć tego źródła.\nPunkty magii +50\nWymagania (wszystkie):\n- Pozostało co najmniej jedno użycie tego źródła"
+
+#: assets_dev/worlds/mm6/events/maps/outa1_00_site_refs.lua:4
+msgid "Effects apply to the selected character unless the effect concerns party resources.\nHealth and spell point gains stop at their maximum; attribute increases use the game's normal limits.\n\nOutcome 1:\nDamage: 200 to the selected character.\nCan apply: Paralysis"
+msgstr "Efekty dotyczą wybranej postaci, chyba że zmieniają zasoby całej drużyny.\nPrzyrost punktów życia i magii nie przekracza ich maksimum; zwiększenia atrybutów podlegają zwykłym limitom gry.\n\nWynik 1:\nObrażenia wybranej postaci: 200.\nMoże nałożyć stan: Paraliż"
+
+#: assets_dev/worlds/mm6/events/maps/outd2_00_site_refs.lua:7
+msgid "Effects apply to the selected character unless the effect concerns party resources.\nHealth and spell point gains stop at their maximum; attribute increases use the game's normal limits.\n\nOutcome 1:\nDamage: 40 to the selected character.\nCan apply: Medium poison"
+msgstr "Efekty dotyczą wybranej postaci, chyba że zmieniają zasoby całej drużyny.\nPrzyrost punktów życia i magii nie przekracza ich maksimum; zwiększenia atrybutów podlegają zwykłym limitom gry.\n\nWynik 1:\nObrażenia wybranej postaci: 40.\nMoże nałożyć stan: Średnie zatrucie"
+
+#: assets_dev/worlds/mm6/events/maps/oute1_00_site_refs.lua:3
+msgid "Effects apply to the selected character unless the effect concerns party resources.\nHealth and spell point gains stop at their maximum; attribute increases use the game's normal limits.\n\nOutcome 1:\nSet Fire resistance bonus to 20\nSet Air resistance bonus to 20\nSet Water resistance bonus to 20\nSet Earth resistance bonus to 20\nRequirements (all):\n- Fire resistance bonus below 20"
+msgstr "Efekty dotyczą wybranej postaci, chyba że zmieniają zasoby całej drużyny.\nPrzyrost punktów życia i magii nie przekracza ich maksimum; zwiększenia atrybutów podlegają zwykłym limitom gry.\n\nWynik 1:\nUstaw premię do odporności na ogień na 20\nUstaw premię do odporności na powietrze na 20\nUstaw premię do odporności na wodę na 20\nUstaw premię do odporności na ziemię na 20\nWymagania (wszystkie):\n- Premia do odporności na ogień poniżej 20"
+
+#: assets_dev/worlds/mm6/events/maps/oute2_00_site_refs.lua:5
+msgid "Effects apply to the selected character unless the effect concerns party resources.\nHealth and spell point gains stop at their maximum; attribute increases use the game's normal limits.\n\nOutcome 1:\nSet Fire resistance bonus to 5\nSet Air resistance bonus to 5\nSet Water resistance bonus to 5\nSet Earth resistance bonus to 5\nRequirements (all):\n- Fire resistance bonus below 5"
+msgstr "Efekty dotyczą wybranej postaci, chyba że zmieniają zasoby całej drużyny.\nPrzyrost punktów życia i magii nie przekracza ich maksimum; zwiększenia atrybutów podlegają zwykłym limitom gry.\n\nWynik 1:\nUstaw premię do odporności na ogień na 5\nUstaw premię do odporności na powietrze na 5\nUstaw premię do odporności na wodę na 5\nUstaw premię do odporności na ziemię na 5\nWymagania (wszystkie):\n- Premia do odporności na ogień poniżej 5"
+
+#: assets_dev/worlds/mm6/events/maps/outd3_00_site_refs.lua:8
+msgid "Effects apply to the selected character unless the effect concerns party resources.\nHealth and spell point gains stop at their maximum; attribute increases use the game's normal limits.\n\nOutcome 1:\nSet Temporary Accuracy to 10\nRequirements (all):\n- Temporary Accuracy below 10"
+msgstr "Efekty dotyczą wybranej postaci, chyba że zmieniają zasoby całej drużyny.\nPrzyrost punktów życia i magii nie przekracza ich maksimum; zwiększenia atrybutów podlegają zwykłym limitom gry.\n\nWynik 1:\nUstaw tymczasową celność na 10\nWymagania (wszystkie):\n- Tymczasowa celność poniżej 10"
+
+#: assets_dev/worlds/mm6/events/maps/outc1_00_site_refs.lua:4
+msgid "Effects apply to the selected character unless the effect concerns party resources.\nHealth and spell point gains stop at their maximum; attribute increases use the game's normal limits.\n\nOutcome 1:\nSet Temporary Accuracy to 20\nSet Temporary Speed to 20\nRequirements (all):\n- Temporary Accuracy below 20"
+msgstr "Efekty dotyczą wybranej postaci, chyba że zmieniają zasoby całej drużyny.\nPrzyrost punktów życia i magii nie przekracza ich maksimum; zwiększenia atrybutów podlegają zwykłym limitom gry.\n\nWynik 1:\nUstaw tymczasową celność na 20\nUstaw tymczasową szybkość na 20\nWymagania (wszystkie):\n- Tymczasowa celność poniżej 20"
+
+#: assets_dev/worlds/mm6/events/maps/oute2_00_site_refs.lua:4
+msgid "Effects apply to the selected character unless the effect concerns party resources.\nHealth and spell point gains stop at their maximum; attribute increases use the game's normal limits.\n\nOutcome 1:\nSet Temporary Intellect to 10\nSet Temporary Personality to 10\nRequirements (all):\n- Temporary Intellect below 10"
+msgstr "Efekty dotyczą wybranej postaci, chyba że zmieniają zasoby całej drużyny.\nPrzyrost punktów życia i magii nie przekracza ich maksimum; zwiększenia atrybutów podlegają zwykłym limitom gry.\n\nWynik 1:\nUstaw tymczasową inteligencję na 10\nUstaw tymczasową osobowość na 10\nWymagania (wszystkie):\n- Tymczasowa inteligencja poniżej 10"
+
+#: assets_dev/worlds/mm6/events/maps/outd1_00_site_refs.lua:5
+msgid "Effects apply to the selected character unless the effect concerns party resources.\nHealth and spell point gains stop at their maximum; attribute increases use the game's normal limits.\n\nOutcome 1:\nSet Temporary Intellect to 20\nSet Temporary Personality to 20\nRequirements (all):\n- Temporary Intellect below 20"
+msgstr "Efekty dotyczą wybranej postaci, chyba że zmieniają zasoby całej drużyny.\nPrzyrost punktów życia i magii nie przekracza ich maksimum; zwiększenia atrybutów podlegają zwykłym limitom gry.\n\nWynik 1:\nUstaw tymczasową inteligencję na 20\nUstaw tymczasową osobowość na 20\nWymagania (wszystkie):\n- Tymczasowa inteligencja poniżej 20"
+
+#: assets_dev/worlds/mm6/events/maps/oute2_00_site_refs.lua:6
+msgid "Effects apply to the selected character unless the effect concerns party resources.\nHealth and spell point gains stop at their maximum; attribute increases use the game's normal limits.\n\nOutcome 1:\nSet Temporary Luck to 20\nRequirements (all):\n- Temporary Luck below 20"
+msgstr "Efekty dotyczą wybranej postaci, chyba że zmieniają zasoby całej drużyny.\nPrzyrost punktów życia i magii nie przekracza ich maksimum; zwiększenia atrybutów podlegają zwykłym limitom gry.\n\nWynik 1:\nUstaw tymczasowe szczęście na 20\nWymagania (wszystkie):\n- Tymczasowe szczęście poniżej 20"
+
+#: assets_dev/worlds/mm6/events/maps/outb2_00_site_refs.lua:4
+msgid "Effects apply to the selected character unless the effect concerns party resources.\nHealth and spell point gains stop at their maximum; attribute increases use the game's normal limits.\n\nOutcome 1:\nSet Temporary Luck to 50\nRequirements (all):\n- Temporary Luck below 50"
+msgstr "Efekty dotyczą wybranej postaci, chyba że zmieniają zasoby całej drużyny.\nPrzyrost punktów życia i magii nie przekracza ich maksimum; zwiększenia atrybutów podlegają zwykłym limitom gry.\n\nWynik 1:\nUstaw tymczasowe szczęście na 50\nWymagania (wszystkie):\n- Tymczasowe szczęście poniżej 50"
+
+#: assets_dev/worlds/mm6/events/maps/outd2_00_site_refs.lua:6
+msgid "Effects apply to the selected character unless the effect concerns party resources.\nHealth and spell point gains stop at their maximum; attribute increases use the game's normal limits.\n\nOutcome 1:\nSet Temporary Might to 20\nRequirements (all):\n- Temporary Might below 20"
+msgstr "Efekty dotyczą wybranej postaci, chyba że zmieniają zasoby całej drużyny.\nPrzyrost punktów życia i magii nie przekracza ich maksimum; zwiększenia atrybutów podlegają zwykłym limitom gry.\n\nWynik 1:\nUstaw tymczasową moc na 20\nWymagania (wszystkie):\n- Tymczasowa moc poniżej 20"
+
+#: assets_dev/worlds/mm6/events/maps/outc1_00_site_refs.lua:5
+msgid "Effects apply to the selected character unless the effect concerns party resources.\nHealth and spell point gains stop at their maximum; attribute increases use the game's normal limits.\n\nOutcome 1:\nSet Temporary Might to 30\nRequirements (all):\n- Temporary Might below 30"
+msgstr "Efekty dotyczą wybranej postaci, chyba że zmieniają zasoby całej drużyny.\nPrzyrost punktów życia i magii nie przekracza ich maksimum; zwiększenia atrybutów podlegają zwykłym limitom gry.\n\nWynik 1:\nUstaw tymczasową moc na 30\nWymagania (wszystkie):\n- Tymczasowa moc poniżej 30"
+
+#: assets_dev/worlds/mm6/events/maps/outa1_00_site_refs.lua:6
+msgid "Effects apply to the selected character unless the effect concerns party resources.\nHealth and spell point gains stop at their maximum; attribute increases use the game's normal limits.\n\nOutcome 1:\nSet Temporary Might to 50\nSet Temporary Intellect to 50\nSet Temporary Personality to 50\nSet Temporary Endurance to 50\nSet Temporary Speed to 50\nSet Temporary Accuracy to 50\nSet Temporary Luck to 50\nRequirements (all):\n- Temporary Might below 50"
+msgstr "Efekty dotyczą wybranej postaci, chyba że zmieniają zasoby całej drużyny.\nPrzyrost punktów życia i magii nie przekracza ich maksimum; zwiększenia atrybutów podlegają zwykłym limitom gry.\n\nWynik 1:\nUstaw tymczasową moc na 50\nUstaw tymczasową inteligencję na 50\nUstaw tymczasową osobowość na 50\nUstawia: Tymczasowa wytrzymałość = 50\nUstaw tymczasową szybkość na 50\nUstaw tymczasową celność na 50\nUstaw tymczasowe szczęście na 50\nWymagania (wszystkie):\n- Tymczasowa moc poniżej 50"
+
+#: assets_dev/worlds/mm6/events/maps/outd3_00_site_refs.lua:7
+msgid "Effects apply to the selected character unless the effect concerns party resources.\nHealth and spell point gains stop at their maximum; attribute increases use the game's normal limits.\n\nOutcome 1:\nSet Temporary Speed to 10\nRequirements (all):\n- Temporary Speed below 10"
+msgstr "Efekty dotyczą wybranej postaci, chyba że zmieniają zasoby całej drużyny.\nPrzyrost punktów życia i magii nie przekracza ich maksimum; zwiększenia atrybutów podlegają zwykłym limitom gry.\n\nWynik 1:\nUstaw tymczasową szybkość na 10\nWymagania (wszystkie):\n- Tymczasowa szybkość poniżej 10"
+
+#: assets_dev/worlds/mm6/events/maps/oute1_00_site_refs.lua:4
+msgid "Effects apply to the selected character unless the effect concerns party resources.\nHealth and spell point gains stop at their maximum; attribute increases use the game's normal limits.\n\nOutcome 1:\nSet Water resistance bonus to 20\nRequirements (all):\n- Water resistance bonus below 20"
+msgstr "Efekty dotyczą wybranej postaci, chyba że zmieniają zasoby całej drużyny.\nPrzyrost punktów życia i magii nie przekracza ich maksimum; zwiększenia atrybutów podlegają zwykłym limitom gry.\n\nWynik 1:\nUstaw premię do odporności na wodę na 20\nWymagania (wszystkie):\n- Premia do odporności na wodę poniżej 20"
+
+#: assets_dev/worlds/mm6/events/maps/outb1_00_site_refs.lua:3
+msgid "Routing requirements from this interaction. These describe possible paths, not current availability. Other gameplay effects are not listed.\n\nDestination: Superior Temple of Baa\nRequirements (all):\n- A party member carries: Cloak of Baa"
+msgstr "Warunki tras dostępnych przez tę interakcję. Opisują możliwe przejścia, a nie ich bieżącą dostępność. Nie wymieniono pozostałych efektów rozgrywki.\n\nCel: Wielka Świątynia Baa\nWymagania (wszystkie):\n- Członek drużyny niesie: Peleryna Baa"
+
+#: assets_dev/worlds/mm6/events/maps/outa1_00_site_refs.lua:3
+msgid "Routing requirements from this interaction. These describe possible paths, not current availability. Other gameplay effects are not listed.\n\nDestination: The Hive\nRequirements (all):\n- Campaign record absent: NPC"
+msgstr "Warunki tras dostępnych przez tę interakcję. Opisują możliwe przejścia, a nie ich bieżącą dostępność. Nie wymieniono pozostałych efektów rozgrywki.\n\nCel: Ul\nWymagania (wszystkie):\n- Zapis kampanii nieobecny: NPC"
+
+#: assets_dev/worlds/mm6/events/maps/cd1_00_site_refs.lua:3
+msgid "Routing requirements from this interaction. These describe possible paths, not current availability. Other gameplay effects are not listed.\n\nDestination: Silver Cove\nRequirements (all):\n- Campaign record present: Chris"
+msgstr "Warunki tras dostępnych przez tę interakcję. Opisują możliwe przejścia, a nie ich bieżącą dostępność. Nie wymieniono pozostałych efektów rozgrywki.\n\nCel: Srebrna Zatoka\nWymagania (wszystkie):\n- Zapis kampanii obecny: Chris"
+
+#: assets_dev/worlds/mm6/events/maps/sewer_00_site_refs.lua:10
+msgid "Routing requirements from this interaction. These describe possible paths, not current availability. Other gameplay effects are not listed.\n\nDestination: Supreme Temple of Baa\nRequirements (all):\n- Campaign record present: NPC"
+msgstr "Warunki tras dostępnych przez tę interakcję. Opisują możliwe przejścia, a nie ich bieżącą dostępność. Nie wymieniono pozostałych efektów rozgrywki.\n\nCel: Najwyższa Świątynia Baa\nWymagania (wszystkie):\n- Zapis kampanii obecny: NPC"

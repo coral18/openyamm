@@ -1,6 +1,6 @@
 # Atlas localization: English and Polish
 
-The native MM7/MM8 Atlas on the OpenYAMM 2.5 base uses the upstream language-pack system. English remains the
+The native MM6/MM7/MM8 Atlas on the OpenYAMM 2.5 base uses the upstream language-pack system. English remains the
 source text and fallback; Polish additions live in `assets_dev/languages/pl/text/engine-atlas.po`.
 
 ## Scope and ownership
@@ -16,7 +16,7 @@ source text and fallback; Polish additions live in `assets_dev/languages/pl/text
 - Long button labels fit inside one line of their own plate. Polish uses the official upstream font pack.
 
 The MM7/MM8 addition contains **640 entries / 8,407 English source words**, including **124 unique generated paragraphs**.
-The MM6 New Sorpigal pilot adds three paragraphs, bringing the inventory to **643 entries / 8,547 source words**.
+MM6 adds 42 complete paragraphs, bringing the inventory to **682 entries / 10,456 source words**.
 The count includes shared skill display terms and item-category labels. The game's much larger existing Polish
 catalogs provide names and story content; they are not copied into this file. New or untranslated upstream/mod
 content uses the normal English fallback. This does not claim to complete every translation in upstream itself.
@@ -38,11 +38,11 @@ mismatches. `openyamm_unit_tests` additionally validates each translation with t
 
 Focused coverage:
 
-- **91 cases / 5,001 assertions**: Atlas regressions, the engine localization parser and five Atlas language tests.
+- **91 cases / 5,304 assertions**: Atlas regressions, the engine localization parser and five Atlas language tests.
   New tests cover Polish text and plurals, UTF-8 searches, discovery privacy, stable IDs, original item data,
   untranslated future-text fallback and preservation of player-authored names and notes.
-- Installed-pack and geometry audits pass for both English and Polish: **138 event programs / 137 installed maps**
-  per language, **626 assertions** per audit. The reserved map row remains explicitly excluded.
+- Installed-pack and geometry audits cover English and Polish: **204 event programs / 203 installed geometries**
+  per language, including the complete MM6 world. Reserved test maps remain excluded from player navigation.
 - Native Windows GPU tours cover MM7/MM8 in English and Polish, including Discovery/Guide, item art and descriptions,
   alchemy, quests, class caps, Polish skill searches in the comparison grid and bestiary spell names. Polish font atlases report no missing glyphs in these runs.
 - Android and other languages have not been visually accepted in this localization stage.

@@ -1,9 +1,9 @@
 # OpenYAMM
 
-> **Atlas compatibility branch:** native MM7/MM8 Atlas port to OpenYAMM 2.5, with an optional Map Book entry.
+> **Atlas compatibility branch:** native MM6/MM7/MM8 Atlas on OpenYAMM 2.5, with an optional Map Book entry.
 > Windows builds and focused tests pass; MM7/MM8 GPU checks cover maps, fog, position arrows and guidebook views.
 > English and Polish Atlas views are supported; see [localization coverage](ATLAS_LOCALIZATION.md).
-> The [MM6 pilot](ATLAS_MM6_PILOT.md) adds New Sorpigal, Goblinwatch and the Abandoned Temple in both languages.
+> The [MM6 Atlas](ATLAS_MM6.md) covers all 15 regions and 40 dungeons of Enroth in English and Polish.
 > Android and physical-controller acceptance on this base are still pending.
 > See [ATLAS_PORT.md](ATLAS_PORT.md) for the current scope, save contract and verification.
 > The earlier Atlas remains on [extended/atlas-mm8](https://github.com/coral18/openyamm/tree/extended/atlas-mm8).
