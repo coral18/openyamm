@@ -423,6 +423,9 @@ int runGame(int argc, char **argv, OpenYAMM::Engine::LogFile &logFile)
     av_log_set_level(AV_LOG_ERROR);
 
     OpenYAMM::Engine::ApplicationConfig config = OpenYAMM::Engine::ApplicationConfig::createDefault();
+#ifdef OPENYAMM_WITH_ATLAS
+    config.appName = "OpenYAMM Atlas";
+#endif
     std::vector<std::string> arguments;
     bool worldArgumentProvided = false;
     bool assetScaleArgumentProvided = false;

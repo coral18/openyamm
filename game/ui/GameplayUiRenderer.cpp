@@ -181,18 +181,6 @@ bool isOverlayHudState(GameplayHudScreenState hudScreenState)
         || hudScreenState == GameplayHudScreenState::QuickReference;
 }
 
-int outdoorMinimapArrowIndex(float yawRadians)
-{
-    float normalizedYaw = std::fmod(yawRadians, Pi * 2.0f);
-
-    if (normalizedYaw < 0.0f)
-    {
-        normalizedYaw += Pi * 2.0f;
-    }
-
-    const int octant = static_cast<int>(std::floor((normalizedYaw + Pi * 0.125f) / (Pi * 0.25f))) % 8;
-    return (octant + 7) % 8;
-}
 
 PortraitAggroIndicator classifyPortraitAggroIndicator(
     const Character &member,
@@ -1395,7 +1383,7 @@ void GameplayUiRenderer::renderGameplayHudArt(GameplayScreenRuntime &context, in
                 minimapScissorHeight);
         }
 
-        const int arrowIndex = outdoorMinimapArrowIndex(
+        const int arrowIndex = gameplayMinimapArrowIndex(
             gameplayMinimapDisplayYaw(minimapState, context.gameplayCameraYawRadians()));
         const std::optional<GameplayHudTextureHandle> arrowTexture =
             context.gameplayUiRuntime().ensureHudTextureLoaded("MAPDIR" + std::to_string(arrowIndex + 1));

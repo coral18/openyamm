@@ -286,7 +286,9 @@ void MenuInputTour::update(const std::string &path, uint64_t nowNanoseconds, Gam
             }
             const bool down = step.kind != "key_up";
             input.keyboardHeld[code] = down;
-            input.keyboardPressCounts[code] = down ? 1 : 0;
+            // Gameplay receives this press through the queued SDL event next frame. Counting it here as well
+            // would advance journal focus twice; screen-owned menus consume their event directly below.
+            if (pScreen != nullptr) input.keyboardPressCounts[code] = down ? 1 : 0;
             if (down)
             {
                 holdActionsBoundToKey(input, bindings, code, true);

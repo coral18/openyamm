@@ -5,6 +5,7 @@
 #include "game/events/EvtEnums.h"
 #include "game/indoor/IndoorMapData.h"
 #include "game/tables/MapStats.h"
+#include "game/tables/MergedBaseTables.h"
 #include "tools/EventIr.h"
 #include "tools/EventIrLegacyImport.h"
 #include "tools/LegacyLuaExport.h"
@@ -75,6 +76,17 @@ std::optional<LegacyEventVersion> parseLegacyEventVersion(std::string_view value
     return std::nullopt;
 }
 
+enum class MetadataExport
+{
+    None,
+    ItemRewards,
+    MonsterSpawns,
+    NpcLocations,
+    NpcTopicReferences,
+    AutonoteReferences,
+    SiteReferences
+};
+
 bool parseArguments(
     int argc,
     char **argv,
@@ -83,13 +95,27 @@ bool parseArguments(
     std::optional<std::filesystem::path> &luaExportConfigPath,
     std::optional<std::string> &legacyEventsDir,
     std::optional<LegacyEventVersion> &legacyEventVersion,
-    bool &skipGlobal)
+    bool &skipGlobal,
+    MetadataExport &metadataOnly,
+    OpenYAMM::Engine::InstalledContentOptions &mountOptions)
 {
     bool hasAssetScaleArgument = false;
 
     for (int argumentIndex = 1; argumentIndex < argc; ++argumentIndex)
     {
         const std::string argument = argv[argumentIndex];
+
+        if (argument == "--asset-root" || argument == "--mods-root")
+        {
+            if (argumentIndex + 1 >= argc)
+            {
+                std::cerr << "Missing path for " << argument << '\n';
+                return false;
+            }
+            if (argument == "--asset-root") config.assetRoot = argv[++argumentIndex];
+            else mountOptions.modsRoot = argv[++argumentIndex];
+            continue;
+        }
 
         if (argument == "--asset-scale")
         {
@@ -186,6 +212,24 @@ bool parseArguments(
 
             config.activeWorldId = argv[argumentIndex + 1];
             ++argumentIndex;
+            continue;
+        }
+
+        if (argument == "--item-rewards-only" || argument == "--npc-locations-only"
+            || argument == "--autonote-refs-only" || argument == "--site-refs-only"
+            || argument == "--npc-topic-refs-only" || argument == "--monster-spawns-only")
+        {
+            if (metadataOnly != MetadataExport::None)
+            {
+                std::cerr << "Choose only one metadata-only export mode\n";
+                return false;
+            }
+            metadataOnly = argument == "--item-rewards-only" ? MetadataExport::ItemRewards
+                : argument == "--monster-spawns-only" ? MetadataExport::MonsterSpawns
+                : argument == "--npc-locations-only" ? MetadataExport::NpcLocations
+                : argument == "--npc-topic-refs-only" ? MetadataExport::NpcTopicReferences
+                : argument == "--autonote-refs-only" ? MetadataExport::AutonoteReferences
+                : MetadataExport::SiteReferences;
             continue;
         }
 
@@ -289,6 +333,7 @@ struct LuaExportTablePaths
     std::string monsterData = "engine/data_tables/monster_data.txt";
     std::string placeMon = "engine/data_tables/english/place_mon.txt";
     std::string spells = "engine/data_tables/spells.txt";
+    std::string townPortalSwitch = "engine/data_tables/town_portal_switch.txt";
     std::string npc = "engine/data_tables/npc.txt";
     std::string roster = "engine/data_tables/roster.txt";
     std::string npcGroup = "engine/data_tables/english/npc_group.txt";
@@ -397,6 +442,10 @@ bool loadLuaExportConfig(const std::filesystem::path &path, LuaExportTablePaths 
         else if (key == "spells")
         {
             tablePaths.spells = value;
+        }
+        else if (key == "town_portal_switch")
+        {
+            tablePaths.townPortalSwitch = value;
         }
         else if (key == "npc")
         {
@@ -2156,7 +2205,8 @@ bool exportLegacyProgram(
     const std::string &houseDataPath,
     const MapStatsEntry *pMapEntry,
     bool globalScope,
-    LegacyEventVersion version)
+    LegacyEventVersion version,
+    MetadataExport metadataOnly)
 {
     std::string resolvedEvtPath;
     const std::optional<std::vector<uint8_t>> evtBytes = readFirstExistingBinary(
@@ -2270,6 +2320,93 @@ bool exportLegacyProgram(
         return false;
     }
 
+    const std::filesystem::path rewardPath = globalScope
+        ? scriptsRoot / "Global_00_item_rewards.lua"
+        : scriptsRoot / "maps" / (outputStem + "_00_item_rewards.lua");
+    const LegacyLuaExportScope scope = globalScope ? LegacyLuaExportScope::Global : LegacyLuaExportScope::Map;
+    if (metadataOnly == MetadataExport::None || metadataOnly == MetadataExport::MonsterSpawns)
+    {
+        const std::filesystem::path path = globalScope ? scriptsRoot / "Global_00_monster_spawns.lua"
+            : scriptsRoot / "maps" / (outputStem + "_00_monster_spawns.lua");
+        const std::string spawns = OpenYAMM::Game::generateLegacyEventMonsterSpawnsLuaChunk(
+            evtProgram, strTable, lookups, scope, version);
+        if (spawns.empty()) std::filesystem::remove(path);
+        else if (!writeTextFile(path, spawns))
+        {
+            std::cerr << "Failed to write monster spawn metadata for " << legacyBaseName << '\n';
+            return false;
+        }
+    }
+    if (metadataOnly == MetadataExport::MonsterSpawns) return true;
+    if ((metadataOnly == MetadataExport::None || metadataOnly == MetadataExport::ItemRewards)
+        && !writeTextFile(rewardPath,
+            OpenYAMM::Game::generateLegacyEventItemRewardsLuaChunk(evtProgram, strTable, lookups, scope, version)))
+    {
+        std::cerr << "Failed to write item reward metadata for " << legacyBaseName << '\n';
+        return false;
+    }
+    if (metadataOnly == MetadataExport::ItemRewards) return true;
+    const std::filesystem::path locationPath = globalScope
+        ? scriptsRoot / "Global_00_npc_locations.lua"
+        : scriptsRoot / "maps" / (outputStem + "_00_npc_locations.lua");
+    if (metadataOnly == MetadataExport::None || metadataOnly == MetadataExport::NpcLocations)
+    {
+        const std::string locations = OpenYAMM::Game::generateLegacyEventNpcLocationsLuaChunk(
+            evtProgram, strTable, lookups, scope, version);
+        if (locations.empty())
+            std::filesystem::remove(locationPath);
+        else if (!writeTextFile(locationPath, locations))
+        {
+            std::cerr << "Failed to write NPC location metadata for " << legacyBaseName << '\n';
+            return false;
+        }
+    }
+    if (metadataOnly == MetadataExport::NpcLocations) return true;
+    if (metadataOnly == MetadataExport::None || metadataOnly == MetadataExport::NpcTopicReferences)
+    {
+        const std::filesystem::path path = globalScope ? scriptsRoot / "Global_00_npc_topic_refs.lua"
+            : scriptsRoot / "maps" / (outputStem + "_00_npc_topic_refs.lua");
+        const std::string topics = OpenYAMM::Game::generateLegacyEventNpcTopicRefsLuaChunk(
+            evtProgram, strTable, lookups, scope, version);
+        if (topics.empty()) std::filesystem::remove(path);
+        else if (!writeTextFile(path, topics))
+        {
+            std::cerr << "Failed to write NPC topic references for " << legacyBaseName << '\n';
+            return false;
+        }
+    }
+    if (metadataOnly == MetadataExport::NpcTopicReferences) return true;
+    if (metadataOnly == MetadataExport::None || metadataOnly == MetadataExport::AutonoteReferences)
+    {
+        const std::filesystem::path notePath = globalScope
+            ? scriptsRoot / "Global_00_autonote_refs.lua"
+            : scriptsRoot / "maps" / (outputStem + "_00_autonote_refs.lua");
+        const std::string notes = OpenYAMM::Game::generateLegacyEventAutonoteRefsLuaChunk(
+            evtProgram, strTable, lookups, scope, version);
+        if (notes.empty())
+            std::filesystem::remove(notePath);
+        else if (!writeTextFile(notePath, notes))
+        {
+            std::cerr << "Failed to write journal reference metadata for " << legacyBaseName << '\n';
+            return false;
+        }
+    }
+    if (metadataOnly == MetadataExport::AutonoteReferences) return true;
+    const std::filesystem::path sitePath = globalScope
+        ? scriptsRoot / "Global_00_site_refs.lua" : scriptsRoot / "maps" / (outputStem + "_00_site_refs.lua");
+    {
+        const std::string references = OpenYAMM::Game::generateLegacyEventSiteRefsLuaChunk(
+            evtProgram, strTable, lookups, scope, version);
+        if (references.empty())
+            std::filesystem::remove(sitePath);
+        else if (!writeTextFile(sitePath, references))
+        {
+            std::cerr << "Failed to write site reference metadata for " << legacyBaseName << '\n';
+            return false;
+        }
+    }
+    if (metadataOnly == MetadataExport::SiteReferences) return true;
+
     if (!writeTextFile(luaPath, OpenYAMM::Game::generateLegacyEventLuaChunk(
             evtProgram,
             strTable,
@@ -2295,6 +2432,8 @@ int main(int argc, char **argv)
     std::optional<std::string> legacyEventsDirOverride;
     std::optional<LegacyEventVersion> legacyEventVersionOverride;
     bool skipGlobal = false;
+    MetadataExport metadataOnly = MetadataExport::None;
+    OpenYAMM::Engine::InstalledContentOptions mountOptions;
 
     if (!parseArguments(
             argc,
@@ -2304,7 +2443,8 @@ int main(int argc, char **argv)
             luaExportConfigPath,
             legacyEventsDirOverride,
             legacyEventVersionOverride,
-            skipGlobal))
+            skipGlobal,
+            metadataOnly, mountOptions))
     {
         return 2;
     }
@@ -2345,7 +2485,7 @@ int main(int argc, char **argv)
             config.assetRoot,
             config.assetScaleTier,
             config.assetScaleProfile,
-            config.activeWorldId))
+            config.activeWorldId, mountOptions))
     {
         std::cerr << "Failed to initialize asset file system\n";
         return 1;
@@ -2374,6 +2514,24 @@ int main(int argc, char **argv)
     lookups.monsterNames = loadMonsterNames(assetFileSystem, tablePaths.monsterData);
     lookups.placedMonsterNames = loadPlacedMonsterNames(assetFileSystem, tablePaths.placeMon);
     lookups.spellNames = loadSpellNames(assetFileSystem, tablePaths.spells);
+    std::vector<std::vector<std::string>> portalRows;
+    OpenYAMM::Game::MergedTownPortalSwitchTable portals;
+    if (!loadTextTableRows(assetFileSystem, tablePaths.townPortalSwitch, portalRows)
+        || !portals.loadFromRows(portalRows))
+    {
+        std::cerr << "Failed to load Town Portal destinations: " << tablePaths.townPortalSwitch << '\n';
+        return 1;
+    }
+    for (const OpenYAMM::Game::MergedTownPortalSwitchGroup &group : portals.groups())
+        for (const OpenYAMM::Game::MergedTownPortalDestination &destination : group.destinations)
+        {
+            const MapStatsEntry *pMap = mapStats.findById(destination.mapId);
+            if (pMap == nullptr || destination.qbitIndex == 0 || destination.iconName.empty()
+                || toLowerCopy(destination.iconName) == "none") continue;
+            std::vector<std::string> &names = lookups.townPortalDestinations[destination.qbitIndex];
+            const std::string &name = destination.description.empty() ? pMap->name : destination.description;
+            if (std::find(names.begin(), names.end(), name) == names.end()) names.push_back(name);
+        }
     std::string questNotesError;
     lookups.questNotes = loadQuestNotes(assetFileSystem, tablePaths.quests, questNotesError);
 
@@ -2413,7 +2571,8 @@ int main(int argc, char **argv)
                 tablePaths.houseData,
                 nullptr,
                 true,
-                tablePaths.legacyEventVersion))
+                tablePaths.legacyEventVersion,
+                metadataOnly))
     {
         return 1;
     }
@@ -2448,7 +2607,10 @@ int main(int argc, char **argv)
             continue;
         }
 
-        if (!pathIsInside(*evtPhysicalPath, activeWorldRoot))
+        const std::filesystem::path modWorldRoot = mountOptions.modsRoot / "worlds" / assetFileSystem.getActiveWorldId();
+        if (entry.worldId != assetFileSystem.getActiveWorldId()
+            || (!pathIsInside(*evtPhysicalPath, activeWorldRoot)
+                && (mountOptions.modsRoot.empty() || !pathIsInside(*evtPhysicalPath, modWorldRoot))))
         {
             ++skippedForeignMapCount;
             continue;
@@ -2467,7 +2629,8 @@ int main(int argc, char **argv)
                 tablePaths.houseData,
                 &entry,
                 false,
-                tablePaths.legacyEventVersion))
+                tablePaths.legacyEventVersion,
+                metadataOnly))
         {
             return 1;
         }

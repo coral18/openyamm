@@ -1,3 +1,4 @@
+#include "game/world/WorldItemSources.h"
 #include "game/indoor/IndoorWorldRuntime.h"
 #include "engine/Localization.h"
 
@@ -15877,6 +15878,7 @@ bool IndoorWorldRuntime::actorRuntimeState(size_t actorIndex, GameplayRuntimeAct
         ? std::clamp(pEffectState->shrinkDamageMultiplier, 0.25f, 1.0f) : 1.0f)
         * gameRulesFor(m_pParty).monsters.actorDrawScale(actor.rulesetFacts, true);
     state.monsterId = resolvedMonsterId;
+    state.uniqueNameIndex = actor.uniqueNameIndex;
     state.mm9RudeId = actor.mm9RudeId;
     state.mm9SourceObjectIndex = actor.mm9SourceObjectIndex;
     state.preciseX = pAiState != nullptr ? pAiState->preciseX : static_cast<float>(actor.x);
@@ -16327,6 +16329,9 @@ bool IndoorWorldRuntime::tryStealFromActor(size_t actorIndex, uint32_t successRo
         return true;
     }
 
+#ifdef OPENYAMM_WITH_ATLAS
+    recordWorldActorItem(*this, corpse, stolenItem);
+#endif
     corpse.items.erase(corpse.items.begin());
 
     if (m_pGameplayView != nullptr)
@@ -20937,6 +20942,8 @@ bool IndoorWorldRuntime::worldItemInspectState(size_t worldItemIndex, GameplayWo
     state.item = item;
     state.goldAmount = goldAmount;
     state.isGold = goldAmount > 0;
+    state.position = {{float(spriteObject.x), float(spriteObject.y), float(spriteObject.z)}};
+    state.lootMonsterId = spriteObject.lootMonsterId;
     return true;
 }
 
@@ -21467,6 +21474,10 @@ bool IndoorWorldRuntime::takeActiveChestItem(size_t itemIndex, ChestItemState &i
     }
     removeDepletedSemanticLootContainer(chestId);
 
+#ifdef OPENYAMM_WITH_ATLAS
+    if (EventRuntimeState *pState = eventRuntimeState())
+        recordWorldChestView(*pState, *m_activeChestView, gameMinutes(), m_pParty);
+#endif
     return true;
 }
 
@@ -21485,6 +21496,10 @@ bool IndoorWorldRuntime::takeActiveChestItemAt(uint8_t gridX, uint8_t gridY, Che
     }
     removeDepletedSemanticLootContainer(chestId);
 
+#ifdef OPENYAMM_WITH_ATLAS
+    if (EventRuntimeState *pState = eventRuntimeState())
+        recordWorldChestView(*pState, *m_activeChestView, gameMinutes(), m_pParty);
+#endif
     return true;
 }
 
@@ -21502,6 +21517,10 @@ bool IndoorWorldRuntime::tryPlaceActiveChestItemAt(const ChestItemState &item, u
         m_materializedChestViews[chestId] = *m_activeChestView;
     }
 
+#ifdef OPENYAMM_WITH_ATLAS
+    if (EventRuntimeState *pState = eventRuntimeState())
+        recordWorldChestView(*pState, *m_activeChestView, gameMinutes(), m_pParty);
+#endif
     return true;
 }
 
@@ -21858,6 +21877,9 @@ bool IndoorWorldRuntime::takeActiveCorpseItem(size_t itemIndex, ChestItemState &
     }
 
     item = m_activeCorpseView->items[itemIndex];
+#ifdef OPENYAMM_WITH_ATLAS
+    recordWorldActorItem(*this, *m_activeCorpseView, item);
+#endif
     m_activeCorpseView->items.erase(m_activeCorpseView->items.begin() + itemIndex);
 
     if (m_activeCorpseView->items.empty())
@@ -24263,6 +24285,10 @@ void IndoorWorldRuntime::activateChestView(uint32_t chestId)
     }
 
     m_activeChestView = *m_materializedChestViews[chestId];
+#ifdef OPENYAMM_WITH_ATLAS
+    if (EventRuntimeState *pState = eventRuntimeState())
+        recordWorldChestView(*pState, *m_activeChestView, gameMinutes(), m_pParty);
+#endif
 
     if (EventRuntimeState *pEventRuntimeState = eventRuntimeState())
     {

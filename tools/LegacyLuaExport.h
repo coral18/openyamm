@@ -7,6 +7,7 @@
 #include <optional>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 namespace OpenYAMM::Game
 {
@@ -45,6 +46,7 @@ struct LegacyLuaExportLookups
     std::unordered_map<uint32_t, std::string> actorGroupNames;
     std::unordered_map<uint32_t, std::string> mapEncounterNames;
     std::unordered_map<uint32_t, std::string> spellNames;
+    std::unordered_map<uint32_t, std::vector<std::string>> townPortalDestinations;
     std::unordered_map<uint32_t, std::string> questNotes;
     std::unordered_map<uint32_t, std::string> autonoteTexts;
     std::unordered_map<uint32_t, std::string> awardTexts;
@@ -52,6 +54,39 @@ struct LegacyLuaExportLookups
     std::unordered_map<uint32_t, std::string> inputStringAnswerTexts;
     std::unordered_map<uint32_t, uint32_t> summonObjectTypesByEventStep;
 };
+
+std::string generateLegacyEventItemRewardsLuaChunk(
+    const EvtProgram &evtProgram,
+    const StrTable &strTable,
+    const LegacyLuaExportLookups &lookups,
+    LegacyLuaExportScope scope,
+    LegacyEventVersion version = LegacyEventVersion::Mm8);
+
+std::string generateLegacyEventNpcLocationsLuaChunk(
+    const EvtProgram &evtProgram,
+    const StrTable &strTable,
+    const LegacyLuaExportLookups &lookups,
+    LegacyLuaExportScope scope,
+    LegacyEventVersion version = LegacyEventVersion::Mm8);
+
+std::string generateLegacyEventMonsterSpawnsLuaChunk(
+    const EvtProgram &evtProgram, const StrTable &strTable, const LegacyLuaExportLookups &lookups,
+    LegacyLuaExportScope scope, LegacyEventVersion version = LegacyEventVersion::Mm8);
+
+std::string generateLegacyEventNpcTopicRefsLuaChunk(
+    const EvtProgram &evtProgram, const StrTable &strTable, const LegacyLuaExportLookups &lookups,
+    LegacyLuaExportScope scope, LegacyEventVersion version = LegacyEventVersion::Mm8);
+
+std::string generateLegacyEventAutonoteRefsLuaChunk(
+    const EvtProgram &evtProgram,
+    const StrTable &strTable,
+    const LegacyLuaExportLookups &lookups,
+    LegacyLuaExportScope scope,
+    LegacyEventVersion version = LegacyEventVersion::Mm8);
+
+std::string generateLegacyEventSiteRefsLuaChunk(
+    const EvtProgram &evtProgram, const StrTable &strTable, const LegacyLuaExportLookups &lookups,
+    LegacyLuaExportScope scope, LegacyEventVersion version = LegacyEventVersion::Mm8);
 
 std::string generateLegacyEventLuaChunk(
     const EvtProgram &evtProgram,

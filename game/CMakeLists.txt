@@ -18,6 +18,7 @@ add_library(openyamm_game STATIC
     render/SkyRenderer.cpp
     app/ScreenManager.cpp
     app/GameInputSystem.cpp
+    app/GamepadUiInput.cpp
     app/ProfilingControl.cpp
     arcomage/ArcomageAi.cpp
     arcomage/ArcomageLoader.cpp
@@ -410,6 +411,7 @@ add_library(openyamm_game STATIC
     ui/GameplayUiRuntime.cpp
     ui/KeyboardScreenLayout.cpp
     ui/MenuScreenBase.cpp
+    ui/ControllerPointerOverlay.cpp
     ui/GameplayUiController.cpp
     ui/UiLayoutManager.cpp
     ui/MenuSettingsModel.cpp
@@ -705,5 +707,32 @@ if (OPENYAMM_BUILD_ATLAS_CORE)
     target_sources(openyamm_game PRIVATE
         world/WorldFloorPlan.cpp
         world/WorldMapExploration.cpp
+    )
+endif()
+
+if (OPENYAMM_BUILD_ATLAS)
+    target_compile_definitions(openyamm_game PUBLIC OPENYAMM_WITH_ATLAS=1)
+    target_sources(openyamm_game PRIVATE
+        world/WorldAtlasPresentation.cpp
+        world/WorldConnectionGraph.cpp
+        world/WorldDatabase.cpp
+        world/WorldGateCatalog.cpp
+        world/WorldGuide.cpp
+        world/WorldGuildStockKnowledge.cpp
+        world/WorldInteractionSites.cpp
+        world/WorldItemSources.cpp
+        world/WorldMapFeatures.cpp
+        world/WorldMapKnowledge.cpp
+        world/WorldMapLocations.cpp
+        world/WorldMapNotes.cpp
+        world/WorldMonsterKnowledge.cpp
+        world/WorldNpcKnowledge.cpp
+        world/WorldSiteObservations.cpp
+        world/WorldTransportKnowledge.cpp
+        gameplay/GuildSpellbookRules.cpp
+        gameplay/MapEncounterDefinition.cpp
+        items/ItemInspectionText.cpp
+        ui/screens/AtlasScreen.cpp
+        ui/screens/AtlasConnections.cpp
     )
 endif()

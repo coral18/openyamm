@@ -1005,6 +1005,12 @@ std::optional<GameSettings> parseGameSettingsDocument(const IniDocument &documen
         }
     }
 
+    if (const std::optional<std::string> value = getIniValue(document, "atlas", "enabled"))
+    {
+        bool parsed = settings.interactiveAtlas;
+        if (parseBoolValue(*value, parsed)) settings.interactiveAtlas = parsed;
+    }
+
     if (const std::optional<std::string> value = getIniValue(document, "controls", "show_hits"))
     {
         bool parsed = settings.showHits;
@@ -2609,6 +2615,8 @@ std::vector<SettingsEntry> serializeGameSettings(const GameSettings &settings)
     serializer.add(
         "repeated_voice_line_interval_ms",
         repeatedVoiceLineIntervalValue(settings.repeatedVoiceLineIntervalMs));
+    serializer.section("atlas");
+    serializer.add("enabled", boolValue(settings.interactiveAtlas));
     serializer.section("controls");
     serializer.add("turn_rate", turnRateModeString(settings.turnRate));
     serializer.add("control_scheme", controlSchemeString(settings.controlScheme));

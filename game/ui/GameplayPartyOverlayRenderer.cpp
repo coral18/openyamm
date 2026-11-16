@@ -1,3 +1,4 @@
+#include "game/ui/GameplayJournalNavigation.h"
 #include "game/ui/GameplayPartyOverlayRenderer.h"
 #include "game/ui/GameplayBattleOrders.h"
 #include "engine/Localization.h"
@@ -131,18 +132,6 @@ uint32_t currentAnimationTicks()
     return static_cast<uint32_t>((static_cast<uint64_t>(SDL_GetTicks()) * 128ULL) / 1000ULL);
 }
 
-int outdoorMinimapArrowIndex(float yawRadians)
-{
-    float normalizedYaw = std::fmod(yawRadians, Pi * 2.0f);
-
-    if (normalizedYaw < 0.0f)
-    {
-        normalizedYaw += Pi * 2.0f;
-    }
-
-    const int octant = static_cast<int>(std::floor((normalizedYaw + Pi * 0.125f) / (Pi * 0.25f))) % 8;
-    return (octant + 7) % 8;
-}
 
 enum class ItemTintContext
 {
@@ -895,7 +884,7 @@ void renderJournalVectorMap(
         mapResolved.height,
         journalScreen,
         &minimapState);
-    const int arrowIndex = outdoorMinimapArrowIndex(
+    const int arrowIndex = gameplayMinimapArrowIndex(
         gameplayMinimapDisplayYaw(minimapState, context.gameplayCameraYawRadians()));
     const std::optional<GameplayScreenRuntime::HudTextureHandle> arrowTexture =
         context.gameplayUiRuntime().ensureHudTextureLoaded("MAPDIR" + std::to_string(arrowIndex + 1));
@@ -4504,6 +4493,14 @@ void GameplayPartyOverlayRenderer::renderJournalOverlay(GameplayScreenRuntime &c
                 selected |= id == std::string("JournalNotes") + categories[i] + "Button"
                     && size_t(journalScreen.notesCategory) == i;
             }
+            const GameplayJournalPointerTargetType focus = context.interactionState().journalFocusTarget;
+            if (focus != GameplayJournalPointerTargetType::None)
+            {
+                if (id == "JournalAtlasButton")
+                    selected = focus == GameplayJournalPointerTargetType::InteractiveAtlas;
+                for (const auto &[layoutId, type] : gameplayJournalMenuTargets(journalHasProgressTab(context)))
+                    if (id == layoutId) selected = focus == type;
+            }
             GameplayUiSkin::renderButton(context, id, width, height, selected);
         };
 
@@ -4641,6 +4638,8 @@ void GameplayPartyOverlayRenderer::renderJournalOverlay(GameplayScreenRuntime &c
     }
     else if (journalScreen.view == GameplayUiController::JournalView::Map)
     {
+        if (context.interactionState().interactiveAtlasAvailable)
+            renderInteractiveTextureLayout("JournalAtlasButton");
         renderInteractiveTextureLayout("JournalMapZoomInButton");
         renderInteractiveTextureLayout("JournalMapZoomOutButton");
         const GameplayScreenRuntime::HudLayoutElement *pMapNote =
@@ -4856,7 +4855,7 @@ void GameplayPartyOverlayRenderer::renderJournalOverlay(GameplayScreenRuntime &c
                         journalScreen,
                         hasMinimapState ? &minimapState : nullptr);
                     const float cameraYaw = context.gameplayCameraYawRadians();
-                    const int arrowIndex = outdoorMinimapArrowIndex(
+                    const int arrowIndex = gameplayMinimapArrowIndex(
                         hasMinimapState ? gameplayMinimapDisplayYaw(minimapState, cameraYaw) : cameraYaw);
                     const std::optional<GameplayScreenRuntime::HudTextureHandle> arrowTexture =
                         loadHudTexture("MAPDIR" + std::to_string(arrowIndex + 1));

@@ -208,6 +208,8 @@ add_executable(openyamm_unit_tests
     GameplayScreenRuntimeTestStubs.cpp
     ../game/app/GameSettings.cpp
     ../game/app/GameInputSystem.cpp
+    ../game/app/GamepadUiInput.cpp
+    GamepadUiInputTests.cpp
     ../game/app/KeyboardBindings.cpp
     ../game/app/ScreenManager.cpp
     ../engine/AudioSystem.cpp
@@ -656,4 +658,44 @@ if (OPENYAMM_BUILD_ATLAS_CORE)
         ../game/world/WorldFloorPlan.cpp
         ../game/world/WorldMapExploration.cpp
     )
+endif()
+
+if (OPENYAMM_BUILD_ATLAS)
+    target_compile_definitions(openyamm_unit_tests PRIVATE OPENYAMM_WITH_ATLAS=1)
+    target_sources(openyamm_unit_tests PRIVATE
+        AtlasPersistencePortTests.cpp
+        AtlasRuntimePortTests.cpp
+        WorldGuideTests.cpp
+        WorldSiteObservationTests.cpp
+        ../game/world/WorldAtlasPresentation.cpp
+        ../game/world/WorldConnectionGraph.cpp
+        ../game/world/WorldDatabase.cpp
+        ../game/world/WorldGateCatalog.cpp
+        ../game/world/WorldGuide.cpp
+        ../game/world/WorldGuildStockKnowledge.cpp
+        ../game/world/WorldInteractionSites.cpp
+        ../game/world/WorldItemSources.cpp
+        ../game/world/WorldMapFeatures.cpp
+        ../game/world/WorldMapKnowledge.cpp
+        ../game/world/WorldMapLocations.cpp
+        ../game/world/WorldMapNotes.cpp
+        ../game/world/WorldMonsterKnowledge.cpp
+        ../game/world/WorldNpcKnowledge.cpp
+        ../game/world/WorldSiteObservations.cpp
+        ../game/world/WorldTransportKnowledge.cpp
+        ../game/gameplay/GuildSpellbookRules.cpp
+        ../game/gameplay/MapEncounterDefinition.cpp
+        ../game/items/ItemInspectionText.cpp
+    )
+endif()
+
+if (OPENYAMM_BUILD_ATLAS)
+    add_executable(openyamm_atlas_runtime_tests AtlasRuntimeTestMain.cpp WorldSiteObservationRuntimeTests.cpp)
+    target_include_directories(openyamm_atlas_runtime_tests PRIVATE ${CMAKE_SOURCE_DIR}
+        ${CMAKE_SOURCE_DIR}/third_party/doctest)
+    target_link_libraries(openyamm_atlas_runtime_tests PRIVATE openyamm_game openyamm_bgfx SDL3::SDL3)
+    if (WIN32)
+        target_link_libraries(openyamm_atlas_runtime_tests PRIVATE winhttp bcrypt)
+    endif()
+    add_test(NAME openyamm_atlas_runtime_tests COMMAND openyamm_atlas_runtime_tests)
 endif()

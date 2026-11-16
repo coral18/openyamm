@@ -1,5 +1,7 @@
 #pragma once
 
+#include "game/world/WorldMonsterKnowledge.h"
+
 #include "game/render/SurfaceReflectionBinding.h"
 #include "game/render/SpriteAtlasCache.h"
 #include "game/render/NativeSpriteTextureCache.h"
@@ -215,6 +217,10 @@ public:
     const SpriteFrameTable *actorSpriteFrameTable() const;
 
 private:
+#ifdef OPENYAMM_WITH_ATLAS
+    WorldMonsterSightTracker m_monsterSightTracker;
+#endif
+
     friend struct GameApplicationTestAccess;
     friend class GameplayScreenRuntime;
     friend class GameplayHudRenderer;

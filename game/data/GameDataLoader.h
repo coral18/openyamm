@@ -74,6 +74,8 @@ struct LoadedTableSummary
 class GameDataLoader
 {
 public:
+    static bool loadEventPrograms(const Engine::AssetFileSystem &assetFileSystem,
+        MapAssetInfo &map, std::string &error, const std::string &rulesetRoot = {});
     void setActiveWorldId(const std::string &worldId);
     // (Re)loads the tables only one world has (MM9's RUDE dialogue, hirelings, trainers, routes, ...) for the active
     // world, as the full load does; a world switch calls it after setActiveWorldId and rebinds GameDataRepository.

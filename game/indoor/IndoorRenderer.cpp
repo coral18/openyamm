@@ -1650,6 +1650,7 @@ static GameplayEventTargetContextActionMetadata toGameplayContextActionMetadata(
     gameplayMetadata.targetName = metadata.targetName;
     gameplayMetadata.chestIds = metadata.chestIds;
     gameplayMetadata.hidden = metadata.hidden;
+    gameplayMetadata.interactionReference = metadata.interactionReference;
     return gameplayMetadata;
 }
 
@@ -9151,6 +9152,40 @@ void IndoorRenderer::renderActorPreviewBillboards(
         }
     }
 
+#ifdef OPENYAMM_WITH_ATLAS
+    if (pReflection == nullptr && useRuntimeBillboards && pGameSession != nullptr
+        && !pGameSession->sharedWorldInteractionBlockedThisFrame()
+        && pGameSession->gameplayScreenRuntime().currentHudScreenState() == GameplayHudScreenState::Gameplay)
+    {
+        std::vector<WorldMonsterSightCandidate> candidates;
+        candidates.reserve(drawItems.size());
+        for (const BillboardDrawItem &item : drawItems)
+        {
+            if (item.modelActor)
+            {
+                const float top = m_worldFxSystem.actorModelStandingTop(item.actorIndex).value_or(0.0f);
+                if (top > 0) candidates.push_back({item.actorIndex,
+                    {float(item.x), float(item.y), float(item.z) + top * 0.5f}});
+                continue;
+            }
+            if (item.pFrame == nullptr || item.pTexture == nullptr) continue;
+            const float scale = std::max(item.pFrame->scale * item.heightScale, 0.01f);
+            const bx::Vec3 center = spriteBillboardCenter(float(item.x), float(item.y), float(item.z),
+                cameraRight, cameraUp, *item.pTexture, scale, item.mirrored);
+            const auto opaque = item.pTexture->opacityMask.firstOpaqueNormalized();
+            if (!opaque) continue;
+            const BillboardQuad quad = billboardQuad(center, cameraRight, cameraUp,
+                item.pTexture->width * scale, item.pTexture->height * scale);
+            const bx::Vec3 point = billboardTexturePoint(quad, item.mirrored, *opaque);
+            candidates.push_back({item.actorIndex, {point.x, point.y, point.z}});
+        }
+        m_monsterSightTracker.observeRenderedActors(m_pSceneRuntime->worldRuntime(), candidates,
+            {cameraPosition.x, cameraPosition.y, cameraPosition.z}, SDL_GetTicks());
+    }
+
+#endif
+
+
     for (const BillboardDrawItem &drawItem : drawItems)
     {
         if (drawItem.modelActor)
@@ -14026,6 +14061,11 @@ bool IndoorRenderer::tryActivateInspectEvent(const InspectHit &inspectHit)
             context.currentEventId = eventId;
             context.eventCount = binding->eventCount;
             context.hideWhenCleared = binding->hideWhenCleared;
+            if (inspectHit.index < m_pIndoorMapData->entities.size())
+            {
+                const IndoorEntity &entity = m_pIndoorMapData->entities[inspectHit.index];
+                context.position = {{entity.x, entity.y, entity.z}};
+            }
             decorationContext = context;
         }
     }

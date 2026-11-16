@@ -2872,20 +2872,6 @@ const MapEncounterInfo *mapEncounterInfoBySlot(const MapStatsEntry &map, int enc
     }
 }
 
-int16_t resolveMapDeltaActorMonsterId(const MapDeltaActor &actor)
-{
-    if (actor.monsterInfoId > 0)
-    {
-        return actor.monsterInfoId;
-    }
-
-    if (actor.monsterId > 0)
-    {
-        return actor.monsterId;
-    }
-
-    return 0;
-}
 
 std::array<uint16_t, 8> buildMonsterActionSpriteFrameIndices(
     const SpriteFrameTable &spriteFrameTable,
@@ -5260,5 +5246,12 @@ std::optional<std::string> MapAssetLoader::buildLightingDataFileName(const std::
     }
 
     return normalized.substr(0, normalized.size() - 4) + ".lighting";
+}
+std::optional<DecorationTable> MapAssetLoader::loadDecorationTable(const Engine::AssetFileSystem &assetFileSystem)
+{
+    std::vector<std::vector<std::string>> rows;
+    DecorationTable table;
+    if (!loadDecorationRows(assetFileSystem, rows, nullptr) || !table.loadRows(rows)) return std::nullopt;
+    return table;
 }
 }

@@ -1,3 +1,4 @@
+#include "game/world/WorldItemSources.h"
 #include "game/party/Party.h"
 #include "engine/Localization.h"
 
@@ -2740,6 +2741,7 @@ Party::Snapshot Party::snapshot() const
     snapshot.arcomageWinCount = m_arcomageWinCount;
     snapshot.arcomageLossCount = m_arcomageLossCount;
     snapshot.everOwnedItemIds = m_everOwnedItemIds;
+    snapshot.identifiedItemIds = m_identifiedItemIds;
     snapshot.chosenMm9RudeRows = m_chosenMm9RudeRows;
     snapshot.teacherLedgers = m_teacherLedgers;
     snapshot.explosiveMixes = m_explosiveMixes;
@@ -2800,6 +2802,7 @@ void Party::restoreSnapshot(const Snapshot &snapshot)
     m_arcomageWinCount = snapshot.arcomageWinCount;
     m_arcomageLossCount = snapshot.arcomageLossCount;
     m_everOwnedItemIds = snapshot.everOwnedItemIds;
+    m_identifiedItemIds = snapshot.identifiedItemIds;
     m_chosenMm9RudeRows = snapshot.chosenMm9RudeRows;
     m_teacherLedgers = snapshot.teacherLedgers;
     m_explosiveMixes = snapshot.explosiveMixes;
@@ -2860,6 +2863,7 @@ void Party::restoreSnapshot(const Snapshot &snapshot)
 
     m_lastStatus.clear();
     m_heldItemIdForQueries = 0;
+    m_heldItemQuantityForQueries = 0;
     m_pendingAudioRequests.clear();
     m_expiringPotionEffects.clear();
     recordEverOwnedItemsFromCurrentState();
@@ -2887,6 +2891,7 @@ void Party::seed(const PartySeed &seed)
     m_itemWeeklyEffectSequence = 0;
     m_foundArtifactItems.clear();
     m_everOwnedItemIds.clear();
+    m_identifiedItemIds.clear();
     m_chosenMm9RudeRows.clear();
     m_teacherLedgers.clear();
     m_explosiveMixes.clear();
@@ -3039,6 +3044,7 @@ void Party::seed(const PartySeed &seed)
     m_awakeDayIndex.reset();
     m_lastStatus.clear();
     m_heldItemIdForQueries = 0;
+    m_heldItemQuantityForQueries = 0;
     m_pendingAudioRequests.clear();
     m_expiringPotionEffects.clear();
     normalizeFormationCells();
@@ -3139,15 +3145,19 @@ void Party::applyMovementEffects(const OutdoorMovementEffects &effects)
     }
 }
 
-void Party::applyEventRuntimeState(const EventRuntimeState &runtimeState, bool grantItemsToInventory)
+void Party::applyEventRuntimeState(EventRuntimeState &runtimeState, bool grantItemsToInventory)
 {
-    for (const InventoryItem &item : runtimeState.grantedItems)
+    for (size_t i = 0; i < runtimeState.grantedItems.size(); ++i)
     {
+        const InventoryItem &item = runtimeState.grantedItems[i];
         if (grantItemsToInventory)
         {
             size_t recipientMemberIndex = 0;
             if (tryGrantInventoryItem(item, &recipientMemberIndex))
             {
+#ifdef OPENYAMM_WITH_ATLAS
+                confirmWorldItemReward(runtimeState, true, i);
+#endif
                 queueSound(SoundId::Gold);
                 GAMEPLAY_DEBUG_TRACE(
                     "item_received destination=inventory source=event item_id="
@@ -3164,12 +3174,16 @@ void Party::applyEventRuntimeState(const EventRuntimeState &runtimeState, bool g
         m_lastStatus = "item granted";
     }
 
-    for (uint32_t itemId : runtimeState.grantedItemIds)
+    for (size_t i = 0; i < runtimeState.grantedItemIds.size(); ++i)
     {
+        const uint32_t itemId = runtimeState.grantedItemIds[i];
         if (grantItemsToInventory)
         {
             if (tryGrantItem(itemId))
             {
+#ifdef OPENYAMM_WITH_ATLAS
+                confirmWorldItemReward(runtimeState, false, i);
+#endif
                 queueSound(SoundId::Gold);
                 GAMEPLAY_DEBUG_TRACE(
                     "item_received destination=inventory source=event item_id="
@@ -6097,9 +6111,20 @@ bool Party::castingBlockedFor(const Character &caster) const
     return spellDamagePercentFor(caster) <= 0;
 }
 
+void Party::recordIdentifiedItem(uint32_t objectDescriptionId)
+{
+    if (objectDescriptionId != 0) m_identifiedItemIds.insert(objectDescriptionId);
+}
+
+bool Party::hasIdentifiedItem(uint32_t objectDescriptionId) const
+{
+    return objectDescriptionId != 0 && m_identifiedItemIds.contains(objectDescriptionId);
+}
+
 void Party::setHeldItemForQueries(const InventoryItem &item)
 {
     m_heldItemIdForQueries = item.objectDescriptionId;
+    m_heldItemQuantityForQueries = item.quantity;
     recordEverOwnedItemIfRelevant(item);
 }
 
@@ -6108,9 +6133,27 @@ uint32_t Party::heldItemIdForQueries() const
     return m_heldItemIdForQueries;
 }
 
+std::map<uint32_t, uint64_t> Party::carriedItemQuantities() const
+{
+    std::map<uint32_t, uint64_t> result;
+    const auto append = [&](uint32_t id, uint32_t quantity)
+    {
+        if (id != 0 && quantity != 0) result[id] += quantity;
+    };
+    for (const Character &member : m_members)
+    {
+        for (const InventoryItem &item : member.inventory) append(item.objectDescriptionId, item.quantity);
+        for (uint8_t slot = uint8_t(EquipmentSlot::OffHand); slot <= uint8_t(EquipmentSlot::Ring6); ++slot)
+            append(::OpenYAMM::Game::equippedItemId(member.equipment, EquipmentSlot(slot)), 1);
+    }
+    append(m_heldItemIdForQueries, m_heldItemQuantityForQueries);
+    return result;
+}
+
 void Party::clearHeldItemForQueries()
 {
     m_heldItemIdForQueries = 0;
+    m_heldItemQuantityForQueries = 0;
 }
 
 bool Party::hasItemAnywhere(uint32_t objectDescriptionId) const
@@ -6824,6 +6867,7 @@ bool Party::tryIdentifyMemberInventoryItem(
 
     if (identified)
     {
+        recordIdentifiedItem(pItemDefinition->itemId);
         m_lastStatus = "item identified";
     }
 
@@ -6986,6 +7030,7 @@ bool Party::identifyMemberInventoryItem(
 
     if (identified)
     {
+        recordIdentifiedItem(pItemDefinition->itemId);
         m_lastStatus = "item identified";
     }
 
@@ -7148,6 +7193,7 @@ bool Party::tryIdentifyEquippedItem(
 
     if (identified)
     {
+        recordIdentifiedItem(pItemDefinition->itemId);
         m_lastStatus = "item identified";
     }
 
@@ -7307,6 +7353,7 @@ bool Party::identifyEquippedItem(size_t memberIndex, EquipmentSlot slot, std::st
 
     if (identified)
     {
+        recordIdentifiedItem(pItemDefinition->itemId);
         m_lastStatus = "item identified";
     }
 
@@ -9692,6 +9739,7 @@ void Party::markArtifactItemFoundIfRelevant(const InventoryItem &item)
 
 void Party::recordEverOwnedItemIfRelevant(const InventoryItem &item)
 {
+    if (item.identified) recordIdentifiedItem(item.objectDescriptionId);
     recordEverOwnedItem(item.objectDescriptionId);
 }
 
@@ -9720,8 +9768,9 @@ void Party::recordEverOwnedItemsFromCurrentState()
     PlaythroughStatistics *pStatistics = m_statistics.pStatistics;
     m_statistics.pStatistics = nullptr;
 
-    for (const Character &member : m_members)
+    for (size_t memberIndex = 0; memberIndex < m_members.size(); ++memberIndex)
     {
+        const Character &member = m_members[memberIndex];
         for (const InventoryItem &item : member.inventory)
         {
             recordEverOwnedItemIfRelevant(item);
@@ -9729,7 +9778,8 @@ void Party::recordEverOwnedItemsFromCurrentState()
 
         for (EquipmentSlot slot : EquipmentSlots)
         {
-            recordEverOwnedItem(::OpenYAMM::Game::equippedItemId(member.equipment, slot));
+            if (const std::optional<InventoryItem> item = equippedItem(memberIndex, slot))
+                recordEverOwnedItemIfRelevant(*item);
         }
     }
 

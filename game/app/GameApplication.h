@@ -35,6 +35,7 @@
 #include "game/debug/MenuInputTour.h"
 #include "game/maps/SaveGame.h"
 #include "game/scene/IMapSceneRuntime.h"
+#include "game/ui/ControllerPointerOverlay.h"
 #include "game/ui/screens/LoadGameScreen.h"
 #include "game/ui/screens/LoadingOverlayScreen.h"
 
@@ -189,6 +190,8 @@ private:
     // The view model the active member shows: a dragon's forelegs, else the arms (the debug console's `viewmodel`).
     FirstPersonViewModel &activeViewModel();
     void updateDeferredMainMenuChildWarmup();
+    const void *gamepadUiContext() const;
+    void drawControllerPointer();
     void shutdownApplication();
     bool initializeSelectedMapRuntime(bool initializeView);
     bool buildSelectedMapRuntime(bool initializeView);
@@ -284,6 +287,7 @@ private:
     void openMainMenuScreen();
     void openMenuScreen(bool paused);
     void openPauseMenuScreen();
+    bool openAtlasScreen(bool paused);
     void openSaveGameScreen();
     void resumeMenuGameplay();
     bool applyMenuSettings(const GameSettings &settings, bool persist, std::string &error);
@@ -370,6 +374,8 @@ private:
     WorldAmbientSoundRuntime m_worldAmbientSounds;
     GameSession m_gameSession;
     GameInputSystem m_gameInputSystem;
+    std::unique_ptr<ControllerPointerOverlay> m_pControllerPointer;
+    bool m_controllerPointerHidden = false;
     // The gameplay HUD's screen when the last frame's input was read: a window that opened from play since then is
     // given the click guard (GameInputSystem::guardClicksAfterWindowOpened).
     GameplayHudScreenState m_previousHudScreenStateForInput = GameplayHudScreenState::Gameplay;

@@ -1,3 +1,7 @@
+#include "game/world/WorldDatabase.h"
+#include "game/world/WorldTransportKnowledge.h"
+#include "game/world/WorldMapKnowledge.h"
+#include "game/world/WorldNpcKnowledge.h"
 #include "game/gameplay/GameplayDialogController.h"
 #include "engine/Localization.h"
 
@@ -4997,6 +5001,47 @@ GameplayDialogController::PresentPendingDialogResult GameplayDialogController::p
 
     result.dialogOpened = true;
     result.resolvedContext = *context.eventRuntimeState.pendingDialogueContext;
+#ifdef OPENYAMM_WITH_ATLAS
+    if (result.resolvedContext.kind == DialogueContextKind::HouseService && context.pMapEntries != nullptr)
+        for (const EventDialogAction &action : context.activeEventDialog.actions)
+            if (action.transportOffer)
+                recordWorldTransportObservation(context.eventRuntimeState, result.resolvedContext.sourceId,
+                    *action.transportOffer, *context.pMapEntries);
+    const auto observeHouse = [&](uint32_t houseId)
+    {
+        if (houseId == 0 || context.pCurrentMap == nullptr) return;
+        const HouseEntry *pHouse = context.pHouseTable != nullptr ? context.pHouseTable->get(houseId) : nullptr;
+        const MapStatsEntry *pPrimary = nullptr;
+        if (pHouse != nullptr && context.pMapEntries != nullptr)
+            for (const MapStatsEntry &map : *context.pMapEntries)
+                if (map.id == pHouse->mapId) pPrimary = &map;
+        recordWorldHouseVisit(context.eventRuntimeState, houseId, *context.pCurrentMap, pPrimary);
+    };
+    if (originalContext.kind == DialogueContextKind::HouseService) observeHouse(originalContext.sourceId);
+    observeHouse(originalContext.hostHouseId);
+    const EventRuntimeState::PendingDialogueContext &observed = result.resolvedContext;
+    if (observed.kind == DialogueContextKind::NpcTalk)
+    {
+        std::vector<uint32_t> teacherTopics;
+        for (const EventDialogAction &action : context.activeEventDialog.actions)
+            if (action.kind == EventDialogActionKind::MasteryTeacherOffer) teacherTopics.push_back(action.id);
+        recordWorldNpcObservation(context.eventRuntimeState, observed.sourceId, observed.hostHouseId, teacherTopics);
+        if (context.pCurrentMap != nullptr && context.pWorldRuntime != nullptr)
+        {
+            observeWorldMercenary(context.eventRuntimeState, observed.sourceId, observed.hostHouseId,
+                *context.pCurrentMap, *context.pWorldRuntime);
+            if (observed.hostHouseId == 0 && observed.sourceActorIndex)
+                observeWorldNpcActor(context.eventRuntimeState, observed.sourceId, *observed.sourceActorIndex,
+                    *context.pCurrentMap, *context.pWorldRuntime, teacherTopics);
+            else if (observed.hostHouseId == 0 && originalContext.npcSourceEventId != 0
+                && originalContext.npcSourceMapFileName == context.pCurrentMap->fileName)
+                recordWorldNpcScriptLocation(context.eventRuntimeState, observed.sourceId,
+                    {WorldDatabase::mapId(*context.pCurrentMap), originalContext.npcSourceEventId,
+                        int32_t(std::floor(context.pWorldRuntime->gameMinutes()))});
+        }
+    }
+
+#endif
     playIndoorExitReactionIfNeeded(context, originalContext, result.wasDialogAlreadyActive);
     return result;
 }

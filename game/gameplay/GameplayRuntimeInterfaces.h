@@ -120,6 +120,8 @@ struct GameplayWorldItemInspectState
     InventoryItem item = {};
     uint32_t goldAmount = 0;
     bool isGold = false;
+    std::optional<std::array<float, 3>> position;
+    int16_t lootMonsterId = 0;
 };
 
 enum class ActorAiAnimationState : uint8_t
@@ -203,6 +205,7 @@ struct GameplayRuntimeActorState
     float attackImpactLeadSeconds = 0.0f;
     float visualScale = 1.0f;
     int16_t monsterId = 0;
+    int32_t uniqueNameIndex = 0;
     int32_t mm9RudeId = 0;
     uint32_t mm9SourceObjectIndex = 0;
     float preciseX = 0.0f;
@@ -723,6 +726,7 @@ public:
     virtual ~IGameplayWorldRuntime() = default;
 
     virtual const std::string &mapName() const = 0;
+    virtual bool hasLineOfSight(float, float, float, float, float, float) const { return false; }
     virtual const MonsterTable *monsterTable() const
     {
         return nullptr;

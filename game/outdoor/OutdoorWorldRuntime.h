@@ -508,6 +508,7 @@ public:
 
     struct WorldItemState
     {
+        int16_t lootMonsterId = 0;
         uint32_t worldItemId = 0;
         InventoryItem item = {};
         uint32_t goldAmount = 0;

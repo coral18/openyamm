@@ -1,6 +1,7 @@
 #pragma once
 
 #include "game/app/GameSettings.h"
+#include "game/app/GamepadUiInput.h"
 #include "game/app/MobileJumpDoubleTapGesture.h"
 #include "game/gameplay/GameplayInputFrame.h"
 #include "game/gameplay/GameplayTouchControl.h"
@@ -18,6 +19,11 @@ class GameInputSystem
 {
 public:
     void handleSdlEvent(const SDL_Event &event);
+    std::optional<SDL_Event> handleGamepadEvent(const SDL_Event &event);
+    void setGamepadUiContext(const void *pContext);
+    void shutdownGamepad();
+    bool selectVirtualGamepad(SDL_JoystickID id);
+    bool positionVirtualGamepad(SDL_JoystickID id, float u, float v);
 
     void updateFromEngineInput(
         int screenWidth,
@@ -30,7 +36,9 @@ public:
         bool mobileFlightControlsEnabled = false,
         bool mobileInspectControlEnabled = true,
         bool mobileLongPressInspectEnabled = false,
-        std::span<const GameplayTouchControl> touchControls = {});
+        std::span<const GameplayTouchControl> touchControls = {},
+        float deltaSeconds = 0.0f,
+        SDL_JoystickID virtualTestGamepad = 0);
 
     const GameplayInputFrame &frame() const;
     GameplayInputFrame &frame();
@@ -81,6 +89,10 @@ private:
     };
 
     GameplayInputFrame m_frame = {};
+    GamepadUiInput m_gamepadUi;
+    bool m_gamepadInitializationAttempted = false;
+    bool m_ownsGamepadSubsystem = false;
+    std::array<uint16_t, SDL_SCANCODE_COUNT> m_pendingGamepadPressCounts = {};
     std::optional<std::array<float, 2>> m_mobilePointerPosition;
     std::string m_pendingTextInput;
     std::array<uint16_t, SDL_SCANCODE_COUNT> m_pendingKeyboardPressCounts = {};

@@ -7,6 +7,7 @@
 #include "game/maps/MapDeltaData.h"
 #include "game/events/MechanismAudioProfile.h"
 #include "game/party/Party.h"
+#include "game/world/WorldNpcObservation.h"
 #include "game/tables/PortraitFxEventTable.h"
 
 #include <array>
@@ -191,6 +192,8 @@ struct EventRuntimeState
         // decoration's sprite override key, hidden when the dialogue hires (evt.SetSprite's cog).
         std::optional<uint32_t> sourceDecorationKey;
         uint32_t hostHouseId = 0;
+        uint16_t npcSourceEventId = 0;
+        std::string npcSourceMapFileName;
         uint32_t newsId = 0;
         uint32_t participantPictureId = 0;
         std::optional<std::string> titleOverride;
@@ -351,6 +354,7 @@ struct EventRuntimeState
         uint16_t currentEventId = 0;
         uint8_t eventCount = 0;
         bool hideWhenCleared = false;
+        std::optional<std::array<int32_t, 3>> position;
     };
 
     struct PortraitFxRequest
@@ -729,6 +733,8 @@ struct EventRuntimeState
     std::unordered_map<uint32_t, uint32_t> npcPictureOverrides;
     std::unordered_map<uint32_t, uint32_t> npcProfessionOverrides;
     std::unordered_map<std::string, uint32_t> generatedNpcIdsByActorKey;
+    std::vector<WorldGeneratedNpcObservation> observedGeneratedNpcs;
+    std::vector<WorldMercenaryObservation> observedMercenaries;
     std::unordered_map<uint32_t, GeneratedMercenaryRecruit> generatedMercenaryRecruitsByNpcId;
     std::unordered_map<uint32_t, uint32_t> npcItemOverrides;
     std::unordered_map<uint32_t, uint32_t> actorItemOverrides;

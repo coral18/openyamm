@@ -1,3 +1,5 @@
+#include "game/ui/GameplayJournalNavigation.h"
+#include "game/world/WorldGuildStockKnowledge.h"
 #include "engine/Utf8Text.h"
 #include "engine/Localization.h"
 #include "game/gameplay/GameplayOverlayInputController.h"
@@ -2511,6 +2513,7 @@ bool GameplayOverlayInputController::handleJournalOverlayInput(
 
     if (!journalScreen.active)
     {
+        view.interactionState().journalFocusTarget = GameplayJournalPointerTargetType::None;
         view.interactionState().journalClickLatch = false;
         view.interactionState().journalPressedTarget = {};
         view.interactionState().journalMapKeyZoomLatch = false;
@@ -2719,22 +2722,6 @@ bool GameplayOverlayInputController::handleJournalOverlayInput(
             pJournalMinimapState
         ](float pointerX, float pointerY) -> GameplayJournalPointerTarget
         {
-            static const std::pair<const char *, GameplayJournalPointerTargetType> FourTabs[] = {
-                {"JournalMainViewMap", GameplayJournalPointerTargetType::MainMapView},
-                {"JournalMainViewQuests", GameplayJournalPointerTargetType::MainQuestsView},
-                {"JournalMainViewStory", GameplayJournalPointerTargetType::MainStoryView},
-                {"JournalMainViewNotes", GameplayJournalPointerTargetType::MainNotesView},
-                {"JournalCloseButton", GameplayJournalPointerTargetType::CloseButton},
-            };
-            // MAW's journal: five shorter tabs, the fifth Progress.
-            static const std::pair<const char *, GameplayJournalPointerTargetType> FiveTabs[] = {
-                {"JournalTabs5Map", GameplayJournalPointerTargetType::MainMapView},
-                {"JournalTabs5Quests", GameplayJournalPointerTargetType::MainQuestsView},
-                {"JournalTabs5Story", GameplayJournalPointerTargetType::MainStoryView},
-                {"JournalTabs5Notes", GameplayJournalPointerTargetType::MainNotesView},
-                {"JournalTabs5Progress", GameplayJournalPointerTargetType::MainProgressView},
-                {"JournalCloseButton", GameplayJournalPointerTargetType::CloseButton},
-            };
             const bool progressTab = journalHasProgressTab(view);
 
             // The aura panel: its own rail and Close in place of the tabs.
@@ -2758,6 +2745,7 @@ bool GameplayOverlayInputController::handleJournalOverlayInput(
             }
 
             static const std::pair<const char *, GameplayJournalPointerTargetType> MapTargets[] = {
+                {"JournalAtlasButton", GameplayJournalPointerTargetType::InteractiveAtlas},
                 {"JournalMapZoomInButton", GameplayJournalPointerTargetType::MapZoomInButton},
                 {"JournalMapZoomOutButton", GameplayJournalPointerTargetType::MapZoomOutButton},
             };
@@ -2776,8 +2764,7 @@ bool GameplayOverlayInputController::handleJournalOverlayInput(
                 {"JournalNotesSearch", GameplayJournalPointerTargetType::NotesSearchField},
             };
 
-            for (const auto &[layoutId, targetType] : progressTab ? std::span<const std::pair<const char *, GameplayJournalPointerTargetType>>(FiveTabs)
-                     : std::span<const std::pair<const char *, GameplayJournalPointerTargetType>>(FourTabs))
+            for (const auto &[layoutId, targetType] : gameplayJournalMenuTargets(progressTab))
             {
                 const GameplayJournalPointerTarget target =
                     resolveJournalTarget(layoutId, targetType, pointerX, pointerY);
@@ -2867,6 +2854,8 @@ bool GameplayOverlayInputController::handleJournalOverlayInput(
 
                 for (const auto &[layoutId, targetType] : MapTargets)
                 {
+                if (targetType == GameplayJournalPointerTargetType::InteractiveAtlas
+                    && !view.interactionState().interactiveAtlasAvailable) continue;
                     const GameplayJournalPointerTarget target =
                         resolveJournalTarget(layoutId, targetType, pointerX, pointerY);
 
@@ -3039,6 +3028,11 @@ bool GameplayOverlayInputController::handleJournalOverlayInput(
         {
             switch (target.type)
             {
+            case GameplayJournalPointerTargetType::InteractiveAtlas:
+                if (view.interactionState().interactiveAtlasAvailable)
+                    view.interactionState().interactiveAtlasRequested = true;
+                break;
+
             case GameplayJournalPointerTargetType::TrainerFinder:
                 if (const std::optional<GameplayScreenRuntime::ResolvedHudLayoutElement> page = resolveTrainerPage())
                 {
@@ -3244,6 +3238,47 @@ bool GameplayOverlayInputController::handleJournalOverlayInput(
                 break;
             }
         };
+
+    if (input.pointerCancelled)
+    {
+        view.interactionState().journalClickLatch = false;
+        view.interactionState().journalPressedTarget = {};
+        journalScreen.mapDragActive = false;
+        journalScreen.progressScrollDragging = false;
+        return true;
+    }
+    if (input.gamepadPointerActive || input.leftMouseButton.pressed
+        || input.relativeMouseX != 0 || input.relativeMouseY != 0)
+        view.interactionState().journalFocusTarget = GameplayJournalPointerTargetType::None;
+    if (!journalScreen.mapNoteEditing && !journalScreen.notesSearchActive)
+    {
+        std::vector<GameplayJournalPointerTargetType> available;
+        for (const auto &[layoutId, type] : gameplayJournalMenuTargets(journalHasProgressTab(view)))
+        {
+            if (journalScreen.view == GameplayUiController::JournalView::Auras
+                && type != GameplayJournalPointerTargetType::CloseButton) continue;
+            if (view.findHudLayoutElement(layoutId) == nullptr) continue;
+            if (type == GameplayJournalPointerTargetType::CloseButton
+                && journalScreen.view == GameplayUiController::JournalView::Map
+                && view.interactionState().interactiveAtlasAvailable
+                && view.findHudLayoutElement("JournalAtlasButton") != nullptr)
+                available.push_back(GameplayJournalPointerTargetType::InteractiveAtlas);
+            available.push_back(type);
+        }
+        GameplayJournalPointerTargetType &focus = view.interactionState().journalFocusTarget;
+        if (std::find(available.begin(), available.end(), focus) == available.end())
+            focus = GameplayJournalPointerTargetType::None;
+        for (uint16_t i = 0; i < input.scancodePressCount(SDL_SCANCODE_TAB); ++i)
+            focus = nextJournalMenuFocus(focus, available,
+                input.isScancodeHeld(SDL_SCANCODE_LSHIFT) || input.isScancodeHeld(SDL_SCANCODE_RSHIFT));
+        if (focus != GameplayJournalPointerTargetType::None
+            && (input.scancodePressCount(SDL_SCANCODE_RETURN) != 0
+                || input.scancodePressCount(SDL_SCANCODE_SPACE) != 0))
+        {
+            activateJournalTarget({focus});
+            return true;
+        }
+    }
 
     const auto isImmediateJournalMapTarget =
         [](const GameplayJournalPointerTarget &target) -> bool
@@ -4187,6 +4222,17 @@ void GameplayOverlayInputController::handleDialogueOverlayInput(
                         view.playSpeechReaction(activeMemberIndex, SpeechId::InventoryRoom, true);
                     }
                 });
+#ifdef OPENYAMM_WITH_ATLAS
+            if (*stockMode == HouseStockMode::GuildSpellbooks
+                && view.houseShopOverlay().houseId == pDialogueHouseEntry->id && shelfStart < stock.size())
+            {
+                const size_t end = std::min(stock.size(), shelfStart + slotCount);
+                const std::vector<InventoryItem> visible(stock.begin() + shelfStart, stock.begin() + end);
+                if (EventRuntimeState *pState = view.worldRuntime()->eventRuntimeState())
+                    recordWorldGuildStockObservation(*pState, pDialogueHouseEntry->id, visible,
+                        *view.itemTable(), view.worldRuntime()->gameMinutes());
+            }
+#endif
         }
     }
 

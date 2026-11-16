@@ -1,5 +1,7 @@
 #pragma once
 
+#include "game/gameplay/TransportOffer.h"
+
 #include "game/events/EventRuntime.h"
 #include "game/gameplay/GameplayRuntimeInterfaces.h"
 #include "game/party/SpeechIds.h"
@@ -18,6 +20,9 @@ struct Mm9TransportRoute;
 class Party;
 class ClassSkillTable;
 class NpcDialogTable;
+
+HouseEntry::TransportRoute effectiveTransportRoute(const HouseEntry &houseEntry,
+    const HouseEntry::TransportRoute &baseRoute, const EventRuntimeState *pEventRuntimeState);
 
 enum class HouseServiceType : uint32_t
 {
@@ -104,6 +109,7 @@ struct HouseActionOption
     std::string argument;
     bool enabled = true;
     std::string disabledReason;
+    std::optional<TransportOffer> transportOffer;
 };
 
 struct InnRestRequest

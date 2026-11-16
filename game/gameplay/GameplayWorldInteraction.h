@@ -1,5 +1,7 @@
 #pragma once
 
+#include "game/events/SiteInteractionReference.h"
+
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -113,6 +115,7 @@ struct GameplayEventTargetContextActionMetadata
     std::optional<std::string> targetName;
     std::vector<uint32_t> chestIds;
     bool hidden = false;
+    std::optional<SiteInteractionReference> interactionReference;
 };
 
 struct GameplayEventTargetHit
@@ -138,6 +141,14 @@ struct GameplayEventTargetHit
     bx::Vec3 hitPoint = {0.0f, 0.0f, 0.0f};
     float distance = 0.0f;
     bool hintOnlyEvent = false;
+    size_t sourceEntityIndex = GameplayInvalidWorldIndex;
+    bool isSameTarget(const GameplayEventTargetHit &other) const
+    {
+        return targetKind == other.targetKind && targetIndex == other.targetIndex
+            && secondaryIndex == other.secondaryIndex && sourceEntityIndex == other.sourceEntityIndex
+            && eventIdPrimary == other.eventIdPrimary && eventIdSecondary == other.eventIdSecondary
+            && triggeredEventId == other.triggeredEventId && specialTrigger == other.specialTrigger;
+    }
 };
 
 struct GameplayObjectTargetHit

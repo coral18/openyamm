@@ -1,4 +1,15 @@
 #include "game/app/GameApplication.h"
+#ifdef OPENYAMM_WITH_ATLAS
+#include "game/ui/screens/AtlasScreen.h"
+#include "game/world/WorldMapKnowledge.h"
+#include "game/world/WorldMapExploration.h"
+#include "game/world/WorldNpcKnowledge.h"
+#include "game/gameplay/TrainerDirectory.h"
+#include "game/world/WorldSiteObservations.h"
+#include "game/world/WorldItemSources.h"
+#include "game/world/WorldMonsterKnowledge.h"
+#include "game/maps/MapSnapshotLookup.h"
+#endif
 #include "game/rules/SoloTalents.h"
 
 #include "game/gameplay/BountyHuntRuntime.h"
@@ -9074,6 +9085,10 @@ void GameApplication::handleSdlEvent(const SDL_Event &event)
 
     IScreen *pActiveScreen = m_screenManager.activeScreen();
 
+#ifdef OPENYAMM_WITH_ATLAS
+    m_gameInputSystem.setGamepadUiContext(gamepadUiContext());
+    const std::optional<SDL_Event> gamepadKey = m_gameInputSystem.handleGamepadEvent(event);
+#endif
     m_gameInputSystem.handleSdlEvent(event);
 
 #if defined(__ANDROID__) || defined(OPENYAMM_IOS)
@@ -9102,8 +9117,44 @@ void GameApplication::handleSdlEvent(const SDL_Event &event)
 
     if (pActiveScreen != nullptr)
     {
-        pActiveScreen->handleSdlEvent(event);
+#ifdef OPENYAMM_WITH_ATLAS
+        if (gamepadKey)
+        {
+            if (SDL_GetKeyboardFocus() != nullptr) pActiveScreen->handleSdlEvent(*gamepadKey);
+        }
+        else
+#endif
+            pActiveScreen->handleSdlEvent(event);
     }
+}
+
+const void *GameApplication::gamepadUiContext() const
+{
+    if (m_loadingOverlayActive) return nullptr;
+    if (const IScreen *pScreen = m_screenManager.activeScreen())
+        return dynamic_cast<const MenuScreenBase *>(pScreen);
+    const GameplayUiController::JournalScreenState &journal =
+        m_gameSession.gameplayScreenRuntime().journalScreenStateReadOnly();
+    return journal.active ? &journal : nullptr;
+}
+
+void GameApplication::drawControllerPointer()
+{
+    const bool visible = m_gameInputSystem.frame().gamepadPointerActive && gamepadUiContext() != nullptr
+        && !m_debugConsole.wantsGameplayInputBlocked();
+    if (visible && m_pAssetFileSystem != nullptr)
+    {
+        if (!m_pControllerPointer)
+            m_pControllerPointer = std::make_unique<ControllerPointerOverlay>(*m_pAssetFileSystem);
+        m_pControllerPointer->renderFrame(m_lastFrameWidth, m_lastFrameHeight, m_gameInputSystem.frame(), 0);
+        SDL_HideCursor();
+    }
+    else if (m_controllerPointerHidden)
+    {
+        SDL_Window *pWindow = SDL_GetKeyboardFocus();
+        if (pWindow == nullptr || !SDL_GetWindowRelativeMouseMode(pWindow)) SDL_ShowCursor();
+    }
+    m_controllerPointerHidden = visible;
 }
 
 bool GameApplication::pendingInputPromptActive() const
@@ -9881,6 +9932,8 @@ void GameApplication::shutdownApplication()
     m_pLoadingOverlayScreen.reset();
     m_gameSession.gameplayScreenRuntime().clearSharedUiRuntime();
     shutdownRenderer();
+    m_pControllerPointer.reset();
+    m_gameInputSystem.shutdownGamepad();
     // Menu art and the fonts shared with the HUD live for the whole run.
     MenuScreenBase::shutdownSharedResources();
     m_spriteAtlasCache.clear(Engine::BgfxContext::isBgfxInitialized());
@@ -10605,6 +10658,10 @@ bool GameApplication::buildSelectedMapRuntime(bool initializeView)
         if (EventRuntimeState *pEventRuntimeState = m_pOutdoorWorldRuntime->eventRuntimeState())
         {
             m_gameSession.applyNamedGlobalVarsToRuntime(*pEventRuntimeState);
+#ifdef OPENYAMM_WITH_ATLAS
+            if (outdoorTimedRespawn && pSavedOutdoorState != nullptr && pSavedOutdoorState->eventRuntimeState)
+                restoreWorldMapKnowledgeAfterRefill(*pSavedOutdoorState->eventRuntimeState, *pEventRuntimeState);
+#endif
 
             EventRuntime eventRuntime(&m_gameDataLoader.getHouseTable(), &m_gameDataLoader.getNpcDialogTable());
 
@@ -10890,6 +10947,10 @@ bool GameApplication::buildSelectedMapRuntime(bool initializeView)
         if (EventRuntimeState *pEventRuntimeState = pIndoorSceneRuntime->eventRuntimeState())
         {
             m_gameSession.applyNamedGlobalVarsToRuntime(*pEventRuntimeState);
+#ifdef OPENYAMM_WITH_ATLAS
+            if (indoorTimedRespawn && pSavedIndoorState != nullptr && pSavedIndoorState->eventRuntimeState)
+                restoreWorldMapKnowledgeAfterRefill(*pSavedIndoorState->eventRuntimeState, *pEventRuntimeState);
+#endif
 
             EventRuntime eventRuntime(&m_gameDataLoader.getHouseTable(), &m_gameDataLoader.getNpcDialogTable());
             eventRuntime.executeOnLoadEvents(
@@ -13206,6 +13267,203 @@ void GameApplication::openMenuScreen(bool paused)
     m_screenManager.setActiveScreen(std::move(pScreen));
 }
 
+#ifdef OPENYAMM_WITH_ATLAS
+bool GameApplication::openAtlasScreen(bool paused)
+{
+    if (m_pAssetFileSystem == nullptr || !ensureCommonGameDataLoaded())
+        return false;
+    WorldKnowledge knowledge;
+    if (paused)
+    {
+        std::string generatedNpcError;
+        const auto collectSites = [this, &knowledge, &generatedNpcError](
+            const std::string &file, const EventRuntimeState &state,
+            const std::string &canonicalMapId)
+        {
+            knowledge.monsterObservations[toLowerCopy(file)] = worldMonsterObservations(state);
+            knowledge.itemObservations[toLowerCopy(file)] = worldObservedItemSources(state);
+            knowledge.chestObservations[toLowerCopy(file)] = worldChestObservations(state);
+            // New observations belong to canonical snapshots, never ambiguous legacy filename aliases.
+            if (!canonicalMapId.empty())
+            {
+                knowledge.siteObservations[canonicalMapId] = worldSiteObservations(state);
+                knowledge.gateOffers[canonicalMapId] = worldGateOffers(state);
+                auto &observations = knowledge.generatedNpcs[canonicalMapId];
+                observations.clear(); // The live map supersedes its cached snapshot, including an empty ledger.
+                for (const WorldGeneratedNpcObservation &npc : state.observedGeneratedNpcs)
+                    if (!validWorldGeneratedNpcObservation(npc) || npc.location.mapId != canonicalMapId
+                        || !observations.emplace(npc.actorKey, npc).second)
+                        generatedNpcError = "Invalid generated NPC observations for " + canonicalMapId;
+                auto &mercenaries = knowledge.mercenaries[canonicalMapId];
+                mercenaries.clear();
+                for (const WorldMercenaryObservation &npc : state.observedMercenaries)
+                    if (!validWorldMercenaryObservation(npc) || npc.mapId != canonicalMapId
+                        || !mercenaries.emplace(npc.npcId, npc).second)
+                        generatedNpcError = "Invalid mercenary encounters for " + canonicalMapId;
+            }
+            knowledge.notes[toLowerCopy(file)] = worldMapNotes(m_pMapSceneRuntime->party(), state, file);
+            knowledge.arrivals[canonicalMapId.empty() ? toLowerCopy(file) : canonicalMapId]
+                = worldMapArrivals(state, file);
+            for (const auto &[key, value] : state.namedMapVars)
+                if (value > 0 && key.starts_with("openyamm.discovery.site/"))
+                    knowledge.interactedSites[toLowerCopy(file)].insert(key);
+        };
+        // Party state is the canonical cross-map source; current-map presentation overrides are local.
+        EventRuntimeState npcState;
+        if (m_pMapSceneRuntime != nullptr && m_pMapSceneRuntime->eventRuntimeState() != nullptr)
+        {
+            const EventRuntimeState &live = *m_pMapSceneRuntime->eventRuntimeState();
+            npcState.npcHouseOverrides = live.npcHouseOverrides;
+            npcState.npcTopicOverrides = live.npcTopicOverrides;
+            npcState.npcNameOverrides = live.npcNameOverrides;
+            npcState.unavailableNpcIds = live.unavailableNpcIds;
+            m_pMapSceneRuntime->party().applyGlobalNpcStateTo(npcState);
+            const MapStatsEntry *pCurrent = m_gameDataRepository.mapStats().findByFileName(
+                m_gameSession.currentMapFileName());
+            if (pCurrent != nullptr)
+                knowledge.currentTransport = worldCurrentTransport(m_gameDataRepository.houseTable(),
+                    uint32_t(pCurrent->id), live);
+        }
+        knowledge.currentNpcs = worldCurrentNpcs(m_gameDataRepository.npcDialogTable(), npcState);
+        knowledge.variables = m_gameSession.namedGlobalVars();
+        if (m_pMapSceneRuntime != nullptr && m_pMapSceneRuntime->eventRuntimeState() != nullptr)
+        {
+            for (const auto &[key, value] : m_pMapSceneRuntime->eventRuntimeState()->namedGlobalVars)
+                knowledge.variables[key] = value;
+            for (const JournalAutonoteEntry &note : m_gameDataRepository.journalAutonoteTable().entries())
+                if (m_pMapSceneRuntime->party().hasAutonote(note.id))
+                    knowledge.autonoteIds.insert(note.id);
+        }
+        const auto collectFloorPlan = [&knowledge](const std::string &file, const IndoorSceneRuntime::Snapshot &state)
+        {
+            if (!state.mapDeltaData)
+                return;
+            WorldFloorPlanKnowledge plan;
+            plan.visibleOutlines = state.mapDeltaData->visibleOutlines;
+            plan.faceAttributes = state.mapDeltaData->faceAttributes;
+            if (state.eventRuntimeState)
+                for (size_t i = 0; i < plan.faceAttributes.size(); ++i)
+                    if (state.eventRuntimeState->hasFacetInvisibleOverride(static_cast<uint32_t>(i)))
+                        plan.invisibleFaces.insert(static_cast<uint32_t>(i));
+            knowledge.floorPlans[toLowerCopy(file)] = std::move(plan);
+        };
+        for (const MapStatsEntry &map : m_gameDataRepository.mapStats().getEntries())
+        {
+            if (const auto *pState = findMapSnapshot(m_gameSession.outdoorWorldStates(), map))
+            {
+                knowledge.mapLayoutIdentities[WorldDatabase::mapId(map)] = pState->mapLayoutIdentity;
+                knowledge.visitedMaps.insert(toLowerCopy(map.fileName));
+                if (pState->eventRuntimeState)
+                    collectSites(map.fileName, *pState->eventRuntimeState,
+                        m_gameSession.outdoorWorldStates().contains(WorldDatabase::mapId(map))
+                            ? WorldDatabase::mapId(map) : "");
+                knowledge.regionMaps[toLowerCopy(map.fileName)] =
+                    {pState->fullyRevealedCells, pState->partiallyRevealedCells};
+            }
+            if (const auto *pState = findMapSnapshot(m_gameSession.indoorSceneStates(), map))
+            {
+                knowledge.mapLayoutIdentities[WorldDatabase::mapId(map)] = pState->mapLayoutIdentity;
+                knowledge.visitedMaps.insert(toLowerCopy(map.fileName));
+                if (pState->eventRuntimeState)
+                    collectSites(map.fileName, *pState->eventRuntimeState,
+                        m_gameSession.indoorSceneStates().contains(WorldDatabase::mapId(map))
+                            ? WorldDatabase::mapId(map) : "");
+                collectFloorPlan(map.fileName, *pState);
+            }
+        }
+        if (m_pMapSceneRuntime != nullptr && m_pMapSceneRuntime->eventRuntimeState() != nullptr)
+        {
+            const std::optional<MapAssetInfo> &selectedMap = m_gameDataLoader.getSelectedMap();
+            collectSites(m_gameSession.currentMapFileName(), *m_pMapSceneRuntime->eventRuntimeState(),
+                selectedMap ? WorldDatabase::mapId(selectedMap->map) : "");
+            if (selectedMap)
+                knowledge.mapLayoutIdentities[WorldDatabase::mapId(selectedMap->map)] = selectedMap->layoutIdentity;
+        }
+        if (m_pMapSceneRuntime != nullptr && m_pMapSceneRuntime->kind() == SceneKind::Indoor)
+            collectFloorPlan(m_gameSession.currentMapFileName(),
+                static_cast<IndoorSceneRuntime *>(m_pMapSceneRuntime.get())->snapshot());
+        if (m_pMapSceneRuntime != nullptr && m_pMapSceneRuntime->kind() == SceneKind::Outdoor
+            && m_pOutdoorWorldRuntime != nullptr)
+        {
+            const auto state = m_pOutdoorWorldRuntime->snapshot();
+            knowledge.regionMaps[toLowerCopy(m_gameSession.currentMapFileName())] =
+                {state.fullyRevealedCells, state.partiallyRevealedCells};
+        }
+        if (const auto *runtime = m_gameSession.activeWorldRuntime())
+            knowledge.partyPosition = WorldPartyMapPosition{toLowerCopy(m_gameSession.currentMapFileName()),
+                runtime->partyX(), runtime->partyY(), runtime->gameplayCameraYawRadians(), runtime->partyFootZ()};
+        // Project the current upstream teacher ledger/autonotes without writing inferred visits to campaign state.
+        const Party &party = m_pMapSceneRuntime->party();
+        if (party.trainerDirectory() != nullptr)
+            for (const auto &[skill, masteries] : party.trainerDirectory()->forParty(party).skills())
+                for (const std::vector<TrainerEntry> &entries : masteries)
+                    for (const TrainerEntry &entry : entries)
+                    {
+                        const MapStatsEntry *pMap = m_gameDataRepository.mapStats().findById(entry.mapId);
+                        if (pMap == nullptr || (pMap->worldId != "mm7" && pMap->worldId != "mm8")
+                            || entry.npcId == 0 || entry.houseId == 0 || !trainerKnown(entry, party)) continue;
+                        const std::string canonicalMap = WorldDatabase::mapId(*pMap);
+                        knowledge.variables[worldNpcHouseKey(entry.npcId)] = std::bit_cast<int32_t>(entry.houseId);
+                        knowledge.variables[WorldDatabase::npcDiscoveryKey(entry.npcId)] = 1;
+                        knowledge.variables[worldNpcTeacherKey(entry.npcId, entry.topicId)] = 1;
+                        knowledge.variables[worldHouseAddressVersionKey(entry.houseId)] = 1;
+                        knowledge.variables[worldHouseAddressKey(entry.houseId, canonicalMap)] = 1;
+                        knowledge.informedRecords.insert(canonicalMap);
+                    }
+        knowledge.visitedMaps.insert(toLowerCopy(m_gameSession.currentMapFileName()));
+        if (!generatedNpcError.empty())
+        {
+            std::cerr << "Cannot open Atlas: " << generatedNpcError << '\n';
+            return false;
+        }
+    }
+    try
+    {
+        auto screen = std::make_unique<AtlasScreen>(*m_pAssetFileSystem, m_gameDataRepository, std::move(knowledge),
+            [this, paused]()
+            {
+                if (paused)
+                {
+                    resumeMenuGameplay();
+                    m_gameSession.gameplayScreenRuntime().interactionState().closeOverlayLatch = true;
+                }
+                else
+                {
+                    openMainMenuScreen();
+                }
+            }, paused, &m_gameAudioSystem,
+            paused && m_gameDataLoader.getSelectedMap() ? &*m_gameDataLoader.getSelectedMap() : nullptr,
+            paused && m_pMapSceneRuntime != nullptr ? &m_pMapSceneRuntime->party() : nullptr,
+            paused ? AtlasScreen::NoteWriter{[this](WorldMapNoteEdit &edit, std::string &error)
+            {
+                if (toLowerCopy(edit.mapFileName) == toLowerCopy(m_gameSession.currentMapFileName())
+                    && m_pMapSceneRuntime != nullptr && m_pMapSceneRuntime->eventRuntimeState() != nullptr)
+                    return editWorldMapNote(m_pMapSceneRuntime->party(), *m_pMapSceneRuntime->eventRuntimeState(),
+                                            m_gameSession.currentMapFileName(), edit, error);
+                const MapStatsEntry *pMap = m_gameDataRepository.mapStats().findByFileName(edit.mapFileName);
+                if (pMap != nullptr)
+                {
+                    if (auto *pState = findMapSnapshot(m_gameSession.outdoorWorldStates(), *pMap);
+                        pState != nullptr && pState->eventRuntimeState)
+                        return editWorldMapNote(m_pMapSceneRuntime->party(), *pState->eventRuntimeState, pMap->fileName, edit, error);
+                    if (auto *pState = findMapSnapshot(m_gameSession.indoorSceneStates(), *pMap);
+                        pState != nullptr && pState->eventRuntimeState)
+                        return editWorldMapNote(m_pMapSceneRuntime->party(), *pState->eventRuntimeState, pMap->fileName, edit, error);
+                }
+                error = "Visit this map before adding notes.";
+                return false;
+            }} : AtlasScreen::NoteWriter{}, m_gameDataLoader.activeRulesetRoot());
+        m_screenManager.setActiveScreen(std::move(screen));
+        return true;
+    }
+    catch (const std::exception &error)
+    {
+        std::cerr << "Atlas package could not be loaded: " << error.what() << '\n';
+        return false;
+    }
+}
+#endif
+
 void GameApplication::openSaveGameScreen()
 {
     if (m_pAssetFileSystem == nullptr || m_pMapSceneRuntime == nullptr)
@@ -14064,6 +14322,9 @@ void GameApplication::renderFrame(int width, int height, float mouseWheelDelta, 
         touchControls = m_gameSession.gameplayScreenRuntime().mobileTouchControls(width, height);
     }
 #endif
+#ifdef OPENYAMM_WITH_ATLAS
+    m_gameInputSystem.setGamepadUiContext(gamepadUiContext());
+#endif
     m_gameInputSystem.updateFromEngineInput(
         width,
         height,
@@ -14075,7 +14336,8 @@ void GameApplication::renderFrame(int width, int height, float mouseWheelDelta, 
         mobileFlightControlsEnabled,
         mobileInspectControlEnabled,
         mobileLongPressInspectEnabled,
-        touchControls);
+        touchControls,
+        realDeltaSeconds);
     m_menuInputTourClockNanoseconds += uint64_t(double(realDeltaSeconds) * 1.0e9);
     m_menuInputTour.update(m_settings.menuInputTourPath, m_menuInputTourClockNanoseconds, m_gameInputSystem.frame(),
                            m_screenManager.activeScreen(), m_screenshotCaptureService, m_settings.keyboard.bindings,
@@ -14130,6 +14392,7 @@ void GameApplication::renderFrame(int width, int height, float mouseWheelDelta, 
         const bool renderedMainMenu = pActiveScreen->mode() == AppMode::MainMenu;
         m_screenManager.beginActiveScreenRender();
         pActiveScreen->renderFrame(width, height, m_gameInputSystem.frame(), deltaSeconds);
+        drawControllerPointer();
         m_screenManager.endActiveScreenRender();
         if (renderedMainMenu && m_mainMenuRenderedFrameCount < std::numeric_limits<uint32_t>::max())
         {
@@ -14168,6 +14431,7 @@ void GameApplication::renderFrame(int width, int height, float mouseWheelDelta, 
         if (IScreen *pActiveScreen = m_screenManager.activeScreen())
         {
             pActiveScreen->renderFrame(width, height, m_gameInputSystem.frame(), deltaSeconds);
+            drawControllerPointer();
             handleCompletedPartyDefeatScreen();
             handleCompletedEventMovieScreen();
             handleCompletedWinGameScreen();
@@ -14191,6 +14455,7 @@ void GameApplication::renderFrame(int width, int height, float mouseWheelDelta, 
         if (IScreen *pActiveScreen = m_screenManager.activeScreen())
         {
             pActiveScreen->renderFrame(width, height, m_gameInputSystem.frame(), deltaSeconds);
+            drawControllerPointer();
             handleCompletedEventMovieScreen();
             handleCompletedWinGameScreen();
         }
@@ -14213,6 +14478,7 @@ void GameApplication::renderFrame(int width, int height, float mouseWheelDelta, 
         if (IScreen *pActiveScreen = m_screenManager.activeScreen())
         {
             pActiveScreen->renderFrame(width, height, m_gameInputSystem.frame(), deltaSeconds);
+            drawControllerPointer();
             handleCompletedEventMovieScreen();
             handleCompletedWinGameScreen();
         }
@@ -14235,6 +14501,7 @@ void GameApplication::renderFrame(int width, int height, float mouseWheelDelta, 
         if (IScreen *pActiveScreen = m_screenManager.activeScreen())
         {
             pActiveScreen->renderFrame(width, height, m_gameInputSystem.frame(), deltaSeconds);
+            drawControllerPointer();
         }
 
         recordFrameDiagnostics(m_framePerformanceDiagnostics.pendingStateNanoseconds, pendingStateBeginTickCount);
@@ -14253,6 +14520,11 @@ void GameApplication::renderFrame(int width, int height, float mouseWheelDelta, 
     const std::optional<MapAssetInfo> &selectedMap = m_gameDataLoader.getSelectedMap();
     const bool *pKeyboardState = m_gameInputSystem.frame().keyboardState();
     bool skipGameplayUpdateAfterInputPrompt = false;
+#ifdef OPENYAMM_WITH_ATLAS
+    m_gameSession.gameplayScreenRuntime().interactionState().interactiveAtlasAvailable =
+        m_settings.interactiveAtlas && selectedMap
+        && (selectedMap->map.worldId == "mm7" || selectedMap->map.worldId == "mm8");
+#endif
 
     if (m_skipGameplayUpdateUntilPromptSubmitKeysReleased)
     {
@@ -14397,6 +14669,7 @@ void GameApplication::renderFrame(int width, int height, float mouseWheelDelta, 
         {
             m_gameSession.renderGameplayUi(width, height);
         }
+        drawControllerPointer();
         recordFrameDiagnostics(
             m_framePerformanceDiagnostics.renderGameplayUiNanoseconds,
             renderGameplayUiBeginTickCount);
@@ -14412,6 +14685,16 @@ void GameApplication::renderFrame(int width, int height, float mouseWheelDelta, 
             m_gameInputSystem.resetRelativeMouseMotion();
         }
 
+
+        GameplayScreenRuntime &screenRuntime = m_gameSession.gameplayScreenRuntime();
+#ifdef OPENYAMM_WITH_ATLAS
+        if (screenRuntime.interactionState().interactiveAtlasRequested)
+        {
+            screenRuntime.interactionState().interactiveAtlasRequested = false;
+            if (!openAtlasScreen(true))
+                screenRuntime.setStatusBarEvent(Engine::tr("Could not open the Interactive Atlas."));
+        }
+#endif
         if (m_gameSession.gameplayScreenRuntime().menuScreenState().active)
         {
             openPauseMenuScreen();
@@ -15156,6 +15439,22 @@ bool GameApplication::processPendingMapMove()
         || (!pendingMapMove->useMapStartPosition
             && sameMapFileName(*pendingMapMove->mapName, m_gameSession.currentMapFileName()));
 
+#ifdef OPENYAMM_WITH_ATLAS
+    const MapStatsEntry *pAtlasSource = m_gameDataRepository.mapStats().findByFileName(
+        m_gameSession.currentMapFileName());
+    const std::string atlasSourceId = pAtlasSource != nullptr ? WorldDatabase::mapId(*pAtlasSource) : "";
+    const auto rememberAtlasArrival = [this, &pendingMapMove, &atlasSourceId]()
+    {
+        IGameplayWorldRuntime *pRuntime = m_gameSession.activeWorldRuntime();
+        EventRuntimeState *pState = m_pMapSceneRuntime != nullptr
+            ? m_pMapSceneRuntime->eventRuntimeState() : nullptr;
+        if (pRuntime != nullptr && pState != nullptr)
+            recordWorldMapArrival(*pState, atlasSourceId, pendingMapMove->traceEventId,
+                pRuntime->partyX(), pRuntime->partyY(), pRuntime->partyFootZ(), pRuntime->gameMinutes());
+    };
+
+#endif
+
     // Like the original, autosave on the map being left, before its leave events run. Travel that already spent
     // its days, food or fare autosaves on arrival instead, so the save never holds a paid trip not yet taken, and so
     // does every move in a world that autosaves on arrival (MM9).
@@ -15224,6 +15523,9 @@ bool GameApplication::processPendingMapMove()
                 true,
                 m_gameSession.gameMinutes());
         );
+#ifdef OPENYAMM_WITH_ATLAS
+        rememberAtlasArrival();
+#endif
         return true;
     }
 
@@ -15357,6 +15659,9 @@ bool GameApplication::processPendingMapMove()
         requestAutosave();
     }
 
+#ifdef OPENYAMM_WITH_ATLAS
+    rememberAtlasArrival();
+#endif
     return true;
 }
 

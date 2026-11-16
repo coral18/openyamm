@@ -412,6 +412,13 @@ struct MapAssetLoadSharedCache
 class MapAssetLoader
 {
 public:
+    static std::optional<std::string> findAssetPath(
+        const Engine::AssetFileSystem &assetFileSystem,
+        const std::string &worldId,
+        const std::string &fileName
+    );
+
+    static std::optional<DecorationTable> loadDecorationTable(const Engine::AssetFileSystem &assetFileSystem);
     std::optional<MapAssetInfo> load(
         const Engine::AssetFileSystem &assetFileSystem,
         const MapStatsEntry &map,
@@ -429,11 +436,6 @@ private:
     static std::optional<std::string> findAssetPathInDirectory(
         const Engine::AssetFileSystem &assetFileSystem,
         const std::string &directoryPath,
-        const std::string &fileName
-    );
-    static std::optional<std::string> findAssetPath(
-        const Engine::AssetFileSystem &assetFileSystem,
-        const std::string &worldId,
         const std::string &fileName
     );
     static std::optional<std::string> findCompanionAssetPath(

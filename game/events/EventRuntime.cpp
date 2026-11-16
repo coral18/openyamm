@@ -1,3 +1,6 @@
+#include "game/world/WorldItemSources.h"
+#include "game/world/WorldMapFeatures.h"
+#include "game/world/WorldSiteObservations.h"
 #include "game/events/ISceneEventContext.h"
 #include "game/gameplay/GameplayActorService.h"
 #include "game/events/EventRuntime.h"
@@ -725,6 +728,27 @@ std::optional<SoundId> soundIdForPortraitFxEvent(PortraitFxEventKind kind)
 
     return std::nullopt;
 }
+
+#ifdef OPENYAMM_WITH_ATLAS
+void recordQuestKnowledge(EventRuntimeState &state, const Party *pParty, uint32_t qbitId,
+    int32_t previousValue, int32_t newValue)
+{
+    if (pParty == nullptr || pParty->journalQuestTable() == nullptr)
+    {
+        return;
+    }
+    const JournalQuestKnowledgeChange knowledge = pParty->journalQuestTable()->knowledgeAroundChange(qbitId,
+        previousValue != 0, newValue != 0, [pParty](uint32_t bit) { return pParty->hasQuestBit(bit); });
+    for (uint32_t id : knowledge.quests)
+    {
+        state.namedGlobalVars[JournalQuestTable::discoveryKey(id)] = 1;
+    }
+    for (const std::string &key : knowledge.locations)
+    {
+        state.namedGlobalVars[key] = 1;
+    }
+}
+#endif
 
 bool shouldQueueQuestBitFx(const Party *pParty, uint32_t qbitId, int32_t previousValue, int32_t newValue)
 {
@@ -3546,6 +3570,9 @@ void EventRuntime::setVariableValue(
         if (variable.kind == VariableKind::QBits && pParty != nullptr)
         {
             pParty->setQuestBit(variable.rawId, normalizedValue != 0);
+#ifdef OPENYAMM_WITH_ATLAS
+            recordQuestKnowledge(runtimeState, pParty, variable.rawId, previousValue, normalizedValue);
+#endif
         }
         else
         {
@@ -4149,6 +4176,9 @@ void EventRuntime::addVariableValue(
         if (variable.kind == VariableKind::QBits && pParty != nullptr)
         {
             pParty->setQuestBit(variable.rawId, normalizedValue != 0);
+#ifdef OPENYAMM_WITH_ATLAS
+            recordQuestKnowledge(runtimeState, pParty, variable.rawId, previousValue, normalizedValue);
+#endif
         }
         else
         {
@@ -4650,6 +4680,9 @@ void EventRuntime::setQuestBitValue(
 {
     const bool wasSet = party.hasQuestBit(qbitId);
     party.setQuestBit(qbitId, value);
+#ifdef OPENYAMM_WITH_ATLAS
+    recordQuestKnowledge(runtimeState, &party, qbitId, wasSet ? 1 : 0, value ? 1 : 0);
+#endif
 
     if (shouldQueueQuestBitFx(&party, qbitId, wasSet ? 1 : 0, value ? 1 : 0))
     {
@@ -4707,6 +4740,8 @@ struct LuaExecutionContext
     bool preserveRuntimeOutputsOnBegin = false;
     bool allowStandaloneMapEventDialogueContext = true;
     bool executingGlobalHandler = false;
+    std::optional<bool> currentHandlerGlobalScope;
+    uint16_t currentHandlerEventId = 0;
 };
 
 }
@@ -4802,6 +4837,19 @@ const ISceneEventContext *readonlySceneEventContext(const LuaExecutionContext *p
         ? pExecutionContext->pReadonlySceneEventContext
         : pExecutionContext->pSceneEventContext;
 }
+
+#ifdef OPENYAMM_WITH_ATLAS
+void stageLuaItemReward(lua_State *pLuaState, bool detailed, size_t index)
+{
+    const LuaExecutionContext *pContext = executionContextFromLua(pLuaState);
+    const ISceneEventContext *pScene = readonlySceneEventContext(pContext);
+    if (pContext != nullptr && !pContext->readonly && pContext->pRuntimeState != nullptr && pScene != nullptr)
+        stageWorldItemReward(*pContext->pRuntimeState, detailed, index,
+            pContext->currentHandlerEventId != 0 ? pContext->currentHandlerEventId : pContext->currentEventId,
+            pContext->currentHandlerGlobalScope.value_or(pContext->executingGlobalHandler),
+            pScene->currentGameMinutes());
+}
+#endif
 
 bool sceneEventContextIsIndoorMap(const LuaExecutionContext *pExecutionContext)
 {
@@ -4959,6 +5007,32 @@ int luaBeginEvent(lua_State *pLuaState)
         }
     }
 
+    return 0;
+}
+
+int luaInvokeEventHandler(lua_State *pLuaState)
+{
+    LuaExecutionContext *pContext = executionContextFromLua(pLuaState);
+    const lua_Integer eventId = luaL_checkinteger(pLuaState, 1);
+    const std::string_view scope = luaL_checkstring(pLuaState, 2);
+    luaL_checktype(pLuaState, 3, LUA_TFUNCTION);
+    if (pContext == nullptr || eventId <= 0 || eventId > UINT16_MAX
+        || (scope != LuaScopeMap && scope != LuaScopeGlobal))
+        return luaL_error(pLuaState, "Invalid event handler context");
+    const int argumentCount = lua_gettop(pLuaState) - 3;
+    if (!lua_checkstack(pLuaState, argumentCount + 1))
+        return luaL_error(pLuaState, "Insufficient event handler stack");
+    const uint16_t previousEventId = pContext->currentHandlerEventId;
+    const std::optional<bool> previousScope = pContext->currentHandlerGlobalScope;
+    pContext->currentHandlerEventId = uint16_t(eventId);
+    pContext->currentHandlerGlobalScope = scope == LuaScopeGlobal;
+    lua_pushvalue(pLuaState, 3);
+    for (int i = 0; i < argumentCount; ++i) lua_pushvalue(pLuaState, i + 4);
+    const int status = lua_pcall(pLuaState, argumentCount, 0, 0);
+    // Restore even when a nested callback raises an error that its caller catches with pcall.
+    pContext->currentHandlerEventId = previousEventId;
+    pContext->currentHandlerGlobalScope = previousScope;
+    if (status != LUA_OK) return lua_error(pLuaState);
     return 0;
 }
 
@@ -6025,6 +6099,9 @@ int luaSetHeldItem(lua_State *pLuaState)
     }
 
     pRuntimeState->grantedItems.push_back(*item);
+#ifdef OPENYAMM_WITH_ATLAS
+    stageLuaItemReward(pLuaState, true, pRuntimeState->grantedItems.size() - 1);
+#endif
     pRuntimeState->clearHeldItemRequest = false;
     return 0;
 }
@@ -7247,6 +7324,13 @@ int luaSpeakNpc(lua_State *pLuaState)
     context.kind = DialogueContextKind::NpcTalk;
     context.sourceId = static_cast<uint32_t>(luaL_checkinteger(pLuaState, 1));
     context.hostHouseId = pRuntimeState->dialogueState.hostHouseId;
+    const LuaExecutionContext *pSource = executionContextFromLua(pLuaState);
+    if (pSource != nullptr && !pSource->currentHandlerGlobalScope.value_or(pSource->executingGlobalHandler))
+    {
+        context.npcSourceEventId = pSource->currentHandlerEventId != 0
+            ? pSource->currentHandlerEventId : pSource->currentEventId;
+        if (context.npcSourceEventId != 0) context.npcSourceMapFileName = pRuntimeState->mapFileName;
+    }
     pRuntimeState->pendingDialogueContext = std::move(context);
     return 0;
 }
@@ -7363,7 +7447,9 @@ int luaMoveToMap(lua_State *pLuaState)
     if (pExecutionContext != nullptr)
     {
         move.traceSourceKind = "lua_event";
-        move.traceEventId = pExecutionContext->currentEventId;
+        move.traceEventId = pExecutionContext->currentHandlerGlobalScope.value_or(
+            pExecutionContext->executingGlobalHandler) ? 0 : pExecutionContext->currentHandlerEventId != 0
+            ? pExecutionContext->currentHandlerEventId : pExecutionContext->currentEventId;
         move.traceDestinationName = move.mapName.value_or(std::string("current_map"));
     }
 
@@ -8984,6 +9070,9 @@ int luaAdd(lua_State *pLuaState)
 {
     EventRuntimeState *pRuntimeState = writableRuntimeState(pLuaState);
     const LuaExecutionContext *pExecutionContext = executionContextFromLua(pLuaState);
+#ifdef OPENYAMM_WITH_ATLAS
+    const size_t firstGrant = pRuntimeState->grantedItemIds.size();
+#endif
     EventRuntime::addVariableValue(
         *pRuntimeState,
         EventRuntime::decodeVariable(static_cast<uint64_t>(luaL_checkinteger(pLuaState, 1))),
@@ -8991,6 +9080,10 @@ int luaAdd(lua_State *pLuaState)
         writableParty(pLuaState),
         selectedTargetMemberIndices(pLuaState),
         readonlySceneEventContext(pExecutionContext));
+#ifdef OPENYAMM_WITH_ATLAS
+    for (size_t i = firstGrant; i < pRuntimeState->grantedItemIds.size(); ++i)
+        stageLuaItemReward(pLuaState, false, i);
+#endif
     return 0;
 }
 
@@ -9014,8 +9107,10 @@ int luaSet(lua_State *pLuaState)
 {
     EventRuntimeState *pRuntimeState = writableRuntimeState(pLuaState);
     const LuaExecutionContext *pExecutionContext = executionContextFromLua(pLuaState);
-    const EventRuntime::VariableRef variable =
-        EventRuntime::decodeVariable(static_cast<uint64_t>(luaL_checkinteger(pLuaState, 1)));
+#ifdef OPENYAMM_WITH_ATLAS
+    const size_t firstGrant = pRuntimeState->grantedItemIds.size();
+#endif
+    const EventRuntime::VariableRef variable = EventRuntime::decodeVariable(static_cast<uint64_t>(luaL_checkinteger(pLuaState, 1)));
     EventRuntime::setVariableValue(
         *pRuntimeState,
         variable,
@@ -9023,6 +9118,10 @@ int luaSet(lua_State *pLuaState)
         writableParty(pLuaState),
         selectedTargetMemberIndices(pLuaState, variable.kind == EventRuntime::VariableKind::Inventory),
         readonlySceneEventContext(pExecutionContext));
+#ifdef OPENYAMM_WITH_ATLAS
+    for (size_t i = firstGrant; i < pRuntimeState->grantedItemIds.size(); ++i)
+        stageLuaItemReward(pLuaState, false, i);
+#endif
     return 0;
 }
 
@@ -9577,6 +9676,9 @@ int luaGiveItem(lua_State *pLuaState)
         }
 
         pRuntimeState->grantedItems.push_back(*item);
+#ifdef OPENYAMM_WITH_ATLAS
+    stageLuaItemReward(pLuaState, true, pRuntimeState->grantedItems.size() - 1);
+#endif
     }
 
     return 0;
@@ -10057,6 +10159,25 @@ int luaSetMonGroupBit(lua_State *pLuaState)
     return 0;
 }
 
+int luaRememberQuest(lua_State *pLuaState)
+{
+    EventRuntimeState *pState = writableRuntimeState(pLuaState);
+    if (pState == nullptr) return luaL_error(pLuaState, "RememberQuest requires a writable event");
+    const lua_Integer rawId = luaL_checkinteger(pLuaState, 1);
+    luaL_argcheck(pLuaState, rawId > 0 && rawId <= std::numeric_limits<uint32_t>::max(), 1,
+        "quest id must be a positive 32-bit integer");
+    const uint32_t id = uint32_t(rawId);
+    const Party *pParty = readableParty(pLuaState);
+    const JournalQuestTable *pTable = pParty != nullptr ? pParty->journalQuestTable() : nullptr;
+    if (pTable == nullptr) return luaL_error(pLuaState, "RememberQuest requires a journal registry");
+    const auto quest = std::find_if(pTable->entries().begin(), pTable->entries().end(),
+        [id](const JournalQuestEntry &entry) { return entry.qbitId == id && entry.text != "0"; });
+    if (quest == pTable->entries().end()) return luaL_error(pLuaState, "Unknown quest id: %I", rawId);
+    // Learning a journal reference does not accept/complete a quest or infer conditional destinations.
+    pState->namedGlobalVars[JournalQuestTable::discoveryKey(id)] = 1;
+    return 0;
+}
+
 int luaSetNpcTopic(lua_State *pLuaState)
 {
     EventRuntimeState *pRuntimeState = writableRuntimeState(pLuaState);
@@ -10231,6 +10352,8 @@ void registerEventBindings(LuaSessionCache &session)
     lua_newtable(pLuaState);
 
     registerLuaFunction(pLuaState, "_BeginEvent", luaBeginEvent);
+    registerLuaFunction(pLuaState, "_InvokeEventHandler", luaInvokeEventHandler);
+    registerLuaFunction(pLuaState, "RememberQuest", luaRememberQuest);
     registerLuaFunction(pLuaState, "_BeginCanShowTopic", luaBeginCanShowTopic);
     registerLuaFunction(pLuaState, "Debug", luaDebugPrint);
     registerLuaFunction(pLuaState, "_RandomJump", luaRandomJump);
@@ -10870,6 +10993,9 @@ void clearTransientEventRuntimeState(EventRuntimeState &runtimeState)
     runtimeState.activeEventSpellId = 0;
     runtimeState.grantedItems.clear();
     runtimeState.grantedItemIds.clear();
+#ifdef OPENYAMM_WITH_ATLAS
+    clearWorldItemRewardQueue(runtimeState);
+#endif
     runtimeState.clearHeldItemRequest = false;
     runtimeState.takenHeldItemId = 0;
     runtimeState.removedItemIds.clear();
@@ -11366,7 +11492,35 @@ bool EventRuntime::executeEventById(
             + " event_id=" + std::to_string(eventId)
             + " continue_step="
             + (continueStep.has_value() ? std::to_string(*continueStep) : std::string("none")));
+#ifdef OPENYAMM_WITH_ATLAS
+        std::optional<WorldSiteValueSnapshot> beforeDecoration;
+        std::string decorationSite, observationMap;
+        if (!continueStep && pParty != nullptr && pSceneEventContext != nullptr && runtimeState.activeDecorationContext)
+        {
+            const auto &decoration = *runtimeState.activeDecorationContext;
+            if (decoration.baseEventId != 0 && decoration.decorVarIndex < runtimeState.decorVars.size()
+                && decoration.eventCount != 0
+                && decoration.currentEventId == eventId && eventId >= decoration.baseEventId
+                && uint32_t(eventId) < uint32_t(decoration.baseEventId) + decoration.eventCount)
+            {
+                beforeDecoration = captureWorldSiteValues(runtimeState, *pParty,
+                    pSceneEventContext->currentGameMinutes());
+                decorationSite = "inherited-decoration/" + std::to_string(decoration.decorVarIndex);
+                observationMap = runtimeState.mapFileName;
+            }
+        }
+
+#endif
         const bool invoked = invokeLuaHandler(*this, globalIterator->second, executionContext, continueStep);
+#ifdef OPENYAMM_WITH_ATLAS
+        if (invoked && beforeDecoration && runtimeState.mapFileName == observationMap)
+        {
+            recordWorldSiteDiscovery(runtimeState, eventId, decorationSite);
+            recordWorldSiteObservation(runtimeState, decorationSite, eventId, *beforeDecoration,
+                captureWorldSiteValues(runtimeState, *pParty, pSceneEventContext->currentGameMinutes()),
+                pSceneEventContext->currentGameMinutes());
+        }
+#endif
 
         if (invoked)
         {

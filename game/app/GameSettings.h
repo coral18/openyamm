@@ -208,6 +208,7 @@ struct GameSettings
     // A party member does not say the same voice line again within this many milliseconds; 0 keeps every repeat.
     int repeatedVoiceLineIntervalMs = 0;
     bool showHits = true;
+    bool interactiveAtlas = true;
     bool alwaysRun = true;
     // What the number keys do on the inventory page and in shops and chests when a ruleset gives bags (MAW):
     // "member" selects a party member, as in MAW and the original games, and Shift with the Bag keys opens a bag;

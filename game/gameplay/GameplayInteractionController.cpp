@@ -1,3 +1,6 @@
+#include "game/world/WorldItemSources.h"
+#include "game/world/WorldSiteObservations.h"
+#include "game/world/WorldMonsterKnowledge.h"
 #include "game/gameplay/GameplayInteractionController.h"
 #include "engine/Localization.h"
 
@@ -757,6 +760,10 @@ bool tryActivateWorldItem(
         pParty->requestSound(SoundId::Gold);
         runtime.playSpeechReaction(stored->memberIndex, SpeechId::FoundItem, true);
         runtime.setStatusBarEvent(formatFoundItemStatusText(itemName) + storedPickupOwnerSuffix(*pParty, *stored));
+#ifdef OPENYAMM_WITH_ATLAS
+        if (EventRuntimeState *pState = worldRuntime.eventRuntimeState())
+            recordWorldItemPickup(*pState, removedItemState, worldRuntime.gameMinutes());
+#endif
         recordWorldItemActivationResult(worldRuntime, "picked up " + itemName);
         return true;
     }
@@ -771,6 +778,10 @@ bool tryActivateWorldItem(
     pParty->requestSound(SoundId::Gold);
     runtime.playSpeechReaction(pParty->activeMemberIndex(), SpeechId::FoundItem, true);
     runtime.setStatusBarEvent(formatFoundItemStatusText(itemName));
+#ifdef OPENYAMM_WITH_ATLAS
+    if (EventRuntimeState *pState = worldRuntime.eventRuntimeState())
+        recordWorldItemPickup(*pState, removedItemState, worldRuntime.gameMinutes());
+#endif
     recordWorldItemActivationResult(worldRuntime, "picked up " + itemName + " into hand");
     return true;
 }
@@ -810,7 +821,17 @@ bool tryActivateWorldHit(
             && tryActivateWorldItem(*pRuntime, *pWorldRuntime, hit.worldItem->worldItemIndex);
     }
 
+#ifdef OPENYAMM_WITH_ATLAS
+    if (hit.kind == GameplayWorldHitKind::Actor && hit.actor)
+        recordWorldActorObservation(*pWorldRuntime, hit.actor->actorIndex);
+    const WorldSiteInteractionObservation observation(*pWorldRuntime, hit);
+    const bool activated = pWorldRuntime->activateWorldHit(hit);
+    observation.finish(*pWorldRuntime, activated);
+    return activated;
+#endif
+#ifndef OPENYAMM_WITH_ATLAS
     return pWorldRuntime->activateWorldHit(hit);
+#endif
 }
 
 void clearWorldHover(IGameplayWorldRuntime *pWorldRuntime)
@@ -1660,6 +1681,10 @@ GameplayInteractionController::HoverStateResult GameplayInteractionController::u
     if (shouldRefreshHover)
     {
         payload = pWorldRuntime->refreshWorldHover(input.hoverRequest);
+#ifdef OPENYAMM_WITH_ATLAS
+        if (payload.worldHit.kind == GameplayWorldHitKind::Actor && payload.worldHit.actor)
+            recordWorldActorObservation(*pWorldRuntime, payload.worldHit.actor->actorIndex);
+#endif
         result.refreshed = true;
     }
     else
@@ -2974,15 +2999,8 @@ bool GameplayInteractionController::isSameActivationTarget(
 
     if (lhs.kind == GameplayWorldHitKind::EventTarget)
     {
-        return lhs.eventTarget.has_value()
-            && rhs.eventTarget.has_value()
-            && lhs.eventTarget->targetKind == rhs.eventTarget->targetKind
-            && lhs.eventTarget->targetIndex == rhs.eventTarget->targetIndex
-            && lhs.eventTarget->secondaryIndex == rhs.eventTarget->secondaryIndex
-            && lhs.eventTarget->eventIdPrimary == rhs.eventTarget->eventIdPrimary
-            && lhs.eventTarget->eventIdSecondary == rhs.eventTarget->eventIdSecondary
-            && lhs.eventTarget->triggeredEventId == rhs.eventTarget->triggeredEventId
-            && lhs.eventTarget->specialTrigger == rhs.eventTarget->specialTrigger;
+        return lhs.eventTarget.has_value() && rhs.eventTarget.has_value()
+            && lhs.eventTarget->isSameTarget(*rhs.eventTarget);
     }
 
     if (lhs.kind == GameplayWorldHitKind::Object)

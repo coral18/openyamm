@@ -3057,6 +3057,39 @@ void OutdoorBillboardRenderer::renderActorPreviewBillboards(
         billboardBatchPool.reserve(32);
     }
 
+#ifdef OPENYAMM_WITH_ATLAS
+    if (pReflection == nullptr && view.m_pOutdoorWorldRuntime != nullptr
+        && !view.m_gameSession.sharedWorldInteractionBlockedThisFrame()
+        && view.m_gameSession.gameplayScreenRuntime().currentHudScreenState() == GameplayHudScreenState::Gameplay)
+    {
+        std::vector<WorldMonsterSightCandidate> candidates;
+        candidates.reserve(drawItems.size());
+        for (const BillboardDrawItem &item : drawItems)
+        {
+            if (!item.actor || !item.visible || item.actorIndex == static_cast<size_t>(-1)) continue;
+            if (item.modelActor)
+            {
+                const float top = view.m_worldFxSystem.actorModelStandingTop(item.actorIndex).value_or(0.0f);
+                GameplayRuntimeActorState actor;
+                if (top <= 0 || !view.m_pOutdoorWorldRuntime->actorRuntimeState(item.actorIndex, actor)) continue;
+                const float radius = float(actor.radius);
+                if (!frustum.intersectsBounds({item.x - radius, item.y - radius, item.z},
+                    {item.x + radius, item.y + radius, item.z + top})) continue;
+                candidates.push_back({item.actorIndex, {item.x, item.y, item.z + top * 0.5f}});
+                continue;
+            }
+            if (item.pTexture == nullptr || !bgfx::isValid(item.pTexture->textureHandle)) continue;
+            const auto opaque = item.pTexture->opacityMask.firstOpaqueNormalized();
+            if (!opaque) continue;
+            const bx::Vec3 point = billboardTexturePoint(item.quad, item.mirrored, *opaque);
+            candidates.push_back({item.actorIndex, {point.x, point.y, point.z}});
+        }
+        view.m_monsterSightTracker.observeRenderedActors(*view.m_pOutdoorWorldRuntime, candidates,
+            {cameraPosition.x, cameraPosition.y, cameraPosition.z}, SDL_GetTicks());
+    }
+
+#endif
+
     bool standardBillboardEffectUniformsActive = false;
     const auto ensureStandardBillboardEffectUniforms =
         [&]()

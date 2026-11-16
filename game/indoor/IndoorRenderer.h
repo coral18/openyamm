@@ -1,5 +1,7 @@
 #pragma once
 
+#include "game/world/WorldMonsterKnowledge.h"
+
 #include <deque>
 
 #include "game/render/SurfaceReflectionBinding.h"
@@ -218,6 +220,10 @@ public:
     void shutdown();
 
 private:
+#ifdef OPENYAMM_WITH_ATLAS
+    WorldMonsterSightTracker m_monsterSightTracker;
+#endif
+
     // The camera as drawn and picked: the party's view plus the melee camera kick (GameplayActorHitFeedback).
     float viewYawRadians() const;
     float viewPitchRadians() const;

@@ -43,7 +43,7 @@ inline bool applyMapPresentationToMinimapState(
 inline GameplayMinimapPoint gameplayMinimapWorldToUv(
     const GameplayMinimapState &state,
     float worldX,
-    float worldY)
+    float worldY, bool clamp = true)
 {
     const float worldWidth = std::max(state.worldMaxX - state.worldMinX, 0.000001f);
     const float worldHeight = std::max(state.worldMaxY - state.worldMinY, 0.000001f);
@@ -60,7 +60,8 @@ inline GameplayMinimapPoint gameplayMinimapWorldToUv(
         v = 1.0f - v;
     }
 
-    return {std::clamp(u, 0.0f, 1.0f), std::clamp(v, 0.0f, 1.0f)};
+    return clamp ? GameplayMinimapPoint{std::clamp(u, 0.0f, 1.0f), std::clamp(v, 0.0f, 1.0f)}
+        : GameplayMinimapPoint{u, v};
 }
 
 // The party heading as it appears on the map image, in the convention of the MAPDIR arrows (+X right, +Y up).
@@ -106,5 +107,18 @@ inline GameplayMinimapPoint gameplayMinimapUvToOutdoorRevealUv(
         std::clamp((world.x + 32768.0f) / 65536.0f, 0.0f, 0.999999f),
         std::clamp((32768.0f - world.y) / 65536.0f, 0.0f, 0.999999f)
     };
+}
+inline int gameplayMinimapArrowIndex(float yawRadians)
+{
+    constexpr float Pi = 3.14159265358979323846f;
+    float normalizedYaw = std::fmod(yawRadians, Pi * 2.0f);
+
+    if (normalizedYaw < 0.0f)
+    {
+        normalizedYaw += Pi * 2.0f;
+    }
+
+    const int octant = static_cast<int>(std::floor((normalizedYaw + Pi * 0.125f) / (Pi * 0.25f))) % 8;
+    return (octant + 7) % 8;
 }
 }

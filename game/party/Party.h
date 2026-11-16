@@ -526,6 +526,7 @@ public:
         uint32_t arcomageLossCount = 0;
         std::vector<HouseStockState> houseStockStates;
         std::unordered_set<uint32_t> everOwnedItemIds;
+        std::unordered_set<uint32_t> identifiedItemIds;
         // MM9 talk rows the party has chosen (rude id << 32 | row index): the conversation bar's visited marks.
         std::unordered_set<uint64_t> chosenMm9RudeRows;
         // The continents whose Ledger of Teachers the party bought in a tavern (TrainerDirectory.h).
@@ -669,7 +670,7 @@ public:
     const std::string &lastOutdoorMapFileName() const;
     void setLastOutdoorMapFileName(const std::string &mapFileName);
     void applyMovementEffects(const OutdoorMovementEffects &effects);
-    void applyEventRuntimeState(const EventRuntimeState &runtimeState, bool grantItemsToInventory = true);
+    void applyEventRuntimeState(EventRuntimeState &runtimeState, bool grantItemsToInventory = true);
     void setDebugDamageImmune(bool enabled);
     // The solo HUD's self combat text (GameplaySoloHud): what befell a member, pushed as it happens and taken where
     // the HUD draws. Transient; at most SelfTextEventLimit wait (a party game never takes them).
@@ -901,6 +902,9 @@ public:
     int inventoryItemCount(uint32_t objectDescriptionId, std::optional<size_t> memberIndex = std::nullopt) const;
     void recordEverOwnedItem(uint32_t objectDescriptionId);
     bool hasEverOwnedItem(uint32_t objectDescriptionId) const;
+    void recordIdentifiedItem(uint32_t objectDescriptionId);
+    bool hasIdentifiedItem(uint32_t objectDescriptionId) const;
+    std::map<uint32_t, uint64_t> carriedItemQuantities() const;
     void recordChosenMm9RudeRow(uint32_t rudeId, size_t rowIndex);
     bool hasChosenMm9RudeRow(uint32_t rudeId, size_t rowIndex) const;
     // The continent's Ledger of Teachers, bought in one of its taverns.
@@ -1233,6 +1237,7 @@ private:
     std::vector<WorldCompletionRecord> m_worldCompletions;
     bool m_worldCompletionsUntracked = false;
     std::unordered_set<uint32_t> m_everOwnedItemIds;
+    std::unordered_set<uint32_t> m_identifiedItemIds;
     std::unordered_set<uint64_t> m_chosenMm9RudeRows;
     std::unordered_set<uint32_t> m_teacherLedgers;
     std::unordered_set<uint64_t> m_explosiveMixes;
@@ -1281,6 +1286,7 @@ private:
     bool m_mm9LootInOlderWorlds = false;
     PartyBuffState m_cartographerWizardEye = {};
     uint32_t m_heldItemIdForQueries = 0;
+    uint32_t m_heldItemQuantityForQueries = 0;
     std::vector<uint32_t> m_humQBits;
     std::vector<int> m_humPercents;
     std::optional<int> m_mapHumPercent;

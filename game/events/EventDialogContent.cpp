@@ -1391,6 +1391,7 @@ EventDialogContent buildEventDialogContent(
                 action.id = static_cast<uint32_t>(houseAction.id);
                 action.label = houseAction.label;
                 action.argument = houseAction.argument;
+                action.transportOffer = houseAction.transportOffer;
                 action.enabled = houseAction.enabled;
                 action.disabledReason = houseAction.disabledReason;
                 dialog.actions.push_back(std::move(action));

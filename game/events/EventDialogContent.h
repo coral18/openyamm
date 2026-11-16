@@ -1,5 +1,7 @@
 #pragma once
 
+#include "game/gameplay/TransportOffer.h"
+
 #include "game/tables/ClassSkillTable.h"
 #include "game/events/EventRuntime.h"
 #include "game/events/ScriptedEventProgram.h"
@@ -137,6 +139,7 @@ struct EventDialogAction
     EventDialogChoiceMark choiceMark = EventDialogChoiceMark::None;
     // A service row's tag on the conversation bar ("Shop", "Train · Expert").
     std::string choiceTag;
+    std::optional<TransportOffer> transportOffer;
 };
 
 struct EventDialogContent

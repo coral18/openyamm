@@ -61,6 +61,8 @@ public:
     // The classes of a kind at a promotion step, by class id.
     std::vector<std::string> classNamesOfKind(uint32_t classKind, uint32_t promotionStep) const;
 
+    std::vector<std::string> promotionClassNamesFromMetadata(const std::string &className) const;
+
 private:
     struct RaceSkillRule
     {
@@ -74,7 +76,6 @@ private:
         int32_t exceptionCode = 0;
     };
 
-    std::vector<std::string> promotionClassNamesFromMetadata(const std::string &className) const;
     const ClassMetadataEntry *metadataForClass(const std::string &className) const;
     uint32_t classKindForClass(const std::string &className) const;
     uint32_t manaModeForClass(const std::string &className) const;

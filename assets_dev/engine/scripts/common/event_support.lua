@@ -824,7 +824,7 @@ function support.registerScopeEvent(scopeName, tableName, eventId, title, handle
     if handler ~= nil then
         evt[tableName][eventId] = function(...)
             evt._BeginEvent(eventId)
-            handler(...)
+            evt._InvokeEventHandler(eventId, scopeName, handler, ...)
         end
     end
 end
@@ -901,7 +901,7 @@ function support.appendScopeEvent(scopeName, tableName, eventId, handler)
         end
 
         if handler ~= nil then
-            handler(...)
+            evt._InvokeEventHandler(eventId, scopeName, handler, ...)
         end
     end
 end
@@ -1054,6 +1054,159 @@ end
 function support.setMapContextAction(eventId, metadata)
     local meta = ensureMetaScope("map")
     meta.contextActions[eventId] = metadata
+end
+
+function support.setMapInteractionReference(eventId, reference)
+    local handler = evt.map[eventId]
+    assert(type(handler) == "function", "Interaction reference requires a registered event handler")
+    local meta = ensureMetaScope("map")
+    meta.interactionReferences = meta.interactionReferences or {}
+    meta.interactionReferences[eventId] = {handler = handler, reference = reference}
+end
+
+function support.setMapSiteGroups(eventId, groups)
+    local handler = evt.map[eventId]
+    assert(type(handler) == "function", "Site groups require a registered map callback")
+    local meta = ensureMetaScope("map")
+    meta.siteGroups = meta.siteGroups or {}
+    meta.siteGroups[eventId] = {handler = handler, groups = groups}
+end
+
+function support.setMapConnectionTargets(eventId, maps)
+    local handler = evt.map[eventId]
+    assert(type(handler) == "function", "Connection targets require a registered map callback")
+    local meta = ensureMetaScope("map")
+    meta.connectionTargets = meta.connectionTargets or {}
+    meta.connectionTargets[eventId] = {handler = handler, maps = maps}
+end
+
+function support.setMapMonsterSpawns(eventId, spawns)
+    local handler = evt.map[eventId]
+    assert(type(handler) == "function", "Monster spawn references require a registered map callback")
+    local meta = ensureMetaScope("map")
+    meta.monsterSpawns = meta.monsterSpawns or {}
+    meta.monsterSpawns[eventId] = {handler = handler, spawns = spawns}
+end
+
+local function setItemRewards(scopeName, eventId, items)
+    local handler = evt[scopeName][eventId]
+    assert(type(handler) == "function", "Item reward metadata requires a registered event handler")
+    local meta = ensureMetaScope(scopeName)
+    meta.itemRewards = meta.itemRewards or {}
+    -- Binding to the actual callback prevents an overlay from inheriting stale base rewards.
+    meta.itemRewards[eventId] = {handler = handler, items = items}
+end
+
+function support.setMapItemRewards(eventId, items)
+    setItemRewards("map", eventId, items)
+end
+
+function support.setGlobalItemRewards(eventId, items)
+    setItemRewards("global", eventId, items)
+end
+
+local function setSiteReference(scopeName, eventId, text, kind, dependencies)
+    local handler = evt[scopeName][eventId]
+    assert(type(handler) == "function", "Site reference requires a registered event handler")
+    local meta = ensureMetaScope(scopeName)
+    meta.siteReferences = meta.siteReferences or {}
+    local captured = nil
+    if dependencies ~= nil then
+        assert(scopeName == "map" and type(dependencies) == "table" and #dependencies <= 64,
+            "Site reference dependencies require a dense array of map callbacks")
+        captured = {}
+        local count = 0
+        for index, id in pairs(dependencies) do
+            assert(math.type(index) == "integer" and index >= 1 and index <= #dependencies
+                and math.type(id) == "integer" and id > 0 and id <= 65535 and id ~= eventId
+                and captured[id] == nil, "Invalid site reference dependency")
+            assert(type(evt.map[id]) == "function", "Site reference dependency requires a registered map callback")
+            captured[id] = evt.map[id]
+            count = count + 1
+        end
+        assert(count == #dependencies, "Site reference dependencies must be dense")
+    end
+    meta.siteReferences[eventId] = {handler = handler, text = text, kind = kind, dependencies = captured}
+end
+
+function support.setMapSiteReference(eventId, text, kind, dependencies)
+    setSiteReference("map", eventId, text, kind, dependencies)
+end
+
+function support.setGlobalSiteReference(eventId, text)
+    setSiteReference("global", eventId, text)
+end
+
+local function setAutonoteReferences(scopeName, eventId, notes)
+    local handler = evt[scopeName][eventId]
+    assert(type(handler) == "function", "Autonote metadata requires a registered event handler")
+    local meta = ensureMetaScope(scopeName)
+    meta.autonoteReferences = meta.autonoteReferences or {}
+    meta.autonoteReferences[eventId] = {handler = handler, notes = notes}
+end
+
+function support.setMapAutonoteRefs(eventId, notes)
+    setAutonoteReferences("map", eventId, notes)
+end
+
+function support.setGlobalAutonoteRefs(eventId, notes)
+    setAutonoteReferences("global", eventId, notes)
+end
+
+local function setNpcLocations(scopeName, eventId, locations)
+    local handler = evt[scopeName][eventId]
+    assert(type(handler) == "function", "NPC location metadata requires a registered event handler")
+    local meta = ensureMetaScope(scopeName)
+    meta.npcLocations = meta.npcLocations or {}
+    meta.npcLocations[eventId] = {handler = handler, locations = locations}
+end
+
+function support.setMapNpcLocations(eventId, locations)
+    setNpcLocations("map", eventId, locations)
+end
+
+function support.setGlobalNpcLocations(eventId, locations)
+    setNpcLocations("global", eventId, locations)
+end
+
+local function setQBitGrants(scopeName, eventId, qbits)
+    local handler = evt[scopeName][eventId]
+    assert(type(handler) == "function", "Campaign flag references require a registered event handler")
+    local meta = ensureMetaScope(scopeName)
+    meta.qbitGrants = meta.qbitGrants or {}
+    meta.qbitGrants[eventId] = {handler = handler, qbits = qbits}
+end
+
+function support.setMapQBitGrants(eventId, qbits)
+    setQBitGrants("map", eventId, qbits)
+end
+
+function support.setGlobalQBitGrants(eventId, qbits)
+    setQBitGrants("global", eventId, qbits)
+end
+
+local function setNpcTopicReferences(scopeName, eventId, topics)
+    local handler = evt[scopeName][eventId]
+    assert(type(handler) == "function", "NPC topic references require a registered event handler")
+    local meta = ensureMetaScope(scopeName)
+    meta.npcTopicReferences = meta.npcTopicReferences or {}
+    meta.npcTopicReferences[eventId] = {handler = handler, topics = topics}
+end
+
+function support.setMapNpcTopicRefs(eventId, topics)
+    setNpcTopicReferences("map", eventId, topics)
+end
+
+function support.setMapNpcEncounters(eventId, npcs)
+    local handler = evt.map[eventId]
+    assert(type(handler) == "function", "NPC encounter references require a registered map handler")
+    local meta = ensureMetaScope("map")
+    meta.npcEncounters = meta.npcEncounters or {}
+    meta.npcEncounters[eventId] = {handler = handler, npcs = npcs}
+end
+
+function support.setGlobalNpcTopicRefs(eventId, topics)
+    setNpcTopicReferences("global", eventId, topics)
 end
 
 function support.appendMapOnLoadEvent(eventId)
@@ -1656,6 +1809,23 @@ AskQuestionWithAnswerSteps = support.askQuestionWithAnswerSteps
 AskChoiceWithAnswerSteps = support.askChoiceWithAnswerSteps
 SetMapMetadata = support.setMapMetadata
 SetMapContextAction = support.setMapContextAction
+SetMapInteractionReference = support.setMapInteractionReference
+SetMapSiteGroups = support.setMapSiteGroups
+SetMapConnectionTargets = support.setMapConnectionTargets
+SetMapItemRewards = support.setMapItemRewards
+SetMapMonsterSpawns = support.setMapMonsterSpawns
+SetGlobalItemRewards = support.setGlobalItemRewards
+SetMapSiteReference = support.setMapSiteReference
+SetGlobalSiteReference = support.setGlobalSiteReference
+SetMapAutonoteRefs = support.setMapAutonoteRefs
+SetGlobalAutonoteRefs = support.setGlobalAutonoteRefs
+SetMapNpcLocations = support.setMapNpcLocations
+SetGlobalNpcLocations = support.setGlobalNpcLocations
+SetMapNpcTopicRefs = support.setMapNpcTopicRefs
+SetMapNpcEncounters = support.setMapNpcEncounters
+SetGlobalNpcTopicRefs = support.setGlobalNpcTopicRefs
+SetMapQBitGrants = support.setMapQBitGrants
+SetGlobalQBitGrants = support.setGlobalQBitGrants
 AppendMapOnLoadEvent = support.appendMapOnLoadEvent
 AppendMapOnLeaveEvent = support.appendMapOnLeaveEvent
 RegisterMapOnLoadEvent = support.registerMapOnLoadEvent

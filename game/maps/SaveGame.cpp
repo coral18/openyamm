@@ -1,6 +1,7 @@
 #include "game/maps/SaveGame.h"
 
 #include "game/events/EventRuntime.h"
+#include "game/world/WorldNpcKnowledge.h"
 #include "game/events/EvtEnums.h"
 #include "game/party/PlaythroughStatistics.h"
 #include "game/tables/HouseTable.h"
@@ -6127,12 +6128,398 @@ bool validateRequiredContentPackages(
     return true;
 }
 
+#ifdef OPENYAMM_WITH_ATLAS
+namespace
+{
+constexpr char SaveExtensionMagic[8] = {'O', 'Y', 'E', 'X', 'T', 'S', '1', '\0'};
+const std::string IdentifiedItemsExtension = "openyamm.identified-items";
+const std::string WorldItemOriginsExtension = "openyamm.world-item-origins";
+const std::string GeneratedNpcObservationsExtension = "openyamm.generated-npc-observations";
+const std::string MercenaryObservationsExtension = "openyamm.mercenary-encounters";
+
+// The extension is attached to this exact serialized snapshot. Slot references never survive independently
+// of the core payload, and a legacy engine resave discards the trailer instead of retaining stale slot tags.
+struct SavedWorldItemOrigin
+{
+    uint8_t scene = 0; // Current outdoor, cached outdoor, current indoor, cached indoor.
+    std::string map;
+    uint32_t slot = 0;
+    uint16_t objectId = 0;
+    int16_t monsterId = 0;
+};
+
+bool visitSavedEventStates(const GameSaveData &data, const auto &visitor)
+{
+    if (!visitor(0, "", data.outdoorWorld.eventRuntimeState)) return false;
+    for (const auto &[map, snapshot] : data.outdoorWorldStates)
+        if (!visitor(1, map, snapshot.eventRuntimeState)) return false;
+    if (!visitor(2, "", data.indoorScene.eventRuntimeState)) return false;
+    for (const auto &[map, snapshot] : data.indoorSceneStates)
+        if (!visitor(3, map, snapshot.eventRuntimeState)) return false;
+    return true;
+}
+
+std::optional<EventRuntimeState> *savedEventState(GameSaveData &data, uint8_t scene, const std::string &map)
+{
+    if (scene == 0 && map.empty()) return &data.outdoorWorld.eventRuntimeState;
+    if (scene == 1 && !map.empty())
+    {
+        const auto found = data.outdoorWorldStates.find(map);
+        if (found != data.outdoorWorldStates.end()) return &found->second.eventRuntimeState;
+    }
+    if (scene == 2 && map.empty()) return &data.indoorScene.eventRuntimeState;
+    if (scene == 3 && !map.empty())
+    {
+        const auto found = data.indoorSceneStates.find(map);
+        if (found != data.indoorSceneStates.end()) return &found->second.eventRuntimeState;
+    }
+    return nullptr;
+}
+
+bool writeSaveExtensions(BinaryWriter &writer, const GameSaveData &data, std::string &error)
+{
+    struct NpcPacket
+    {
+        uint8_t scene = 0;
+        std::string map;
+        const std::vector<WorldGeneratedNpcObservation> *pObservations = nullptr;
+    };
+    struct MercenaryPacket
+    {
+        uint8_t scene = 0;
+        std::string map;
+        const std::vector<WorldMercenaryObservation> *pObservations = nullptr;
+    };
+    std::vector<MercenaryPacket> mercenaryPackets;
+    const auto collectMercenaries = [&](uint8_t scene, const std::string &map, const auto &state)
+    {
+        if (!state || state->observedMercenaries.empty()) return true;
+        std::unordered_set<uint32_t> seen;
+        for (const WorldMercenaryObservation &npc : state->observedMercenaries)
+            if (!validWorldMercenaryObservation(npc) || !seen.insert(npc.npcId).second
+                || (map.starts_with("world.") && npc.mapId != map))
+            {
+                error = "invalid mercenary encounter";
+                return false;
+            }
+        mercenaryPackets.push_back({scene, map, &state->observedMercenaries});
+        return true;
+    };
+    std::vector<NpcPacket> npcPackets;
+    const auto collectNpcs = [&](uint8_t scene, const std::string &map, const auto &state)
+    {
+        if (!state || state->observedGeneratedNpcs.empty()) return true;
+        std::unordered_set<std::string> seen;
+        for (const WorldGeneratedNpcObservation &observation : state->observedGeneratedNpcs)
+            if (!validWorldGeneratedNpcObservation(observation)
+                || !seen.insert(worldGeneratedNpcRecordId(observation)).second
+                || (map.starts_with("world.") && observation.location.mapId != map))
+            {
+                error = "invalid generated NPC observation";
+                return false;
+            }
+        npcPackets.push_back({scene, map, &state->observedGeneratedNpcs});
+        return true;
+    };
+    if (!visitSavedEventStates(data, [&](uint8_t scene, const std::string &map, const auto &state)
+        { return collectNpcs(scene, map, state) && collectMercenaries(scene, map, state); })) return false;
+    std::vector<SavedWorldItemOrigin> origins;
+    const auto collect = [&](uint8_t scene, const std::string &map, const auto &objects)
+    {
+        for (size_t i = 0; i < objects.size(); ++i)
+        {
+            if (objects[i].lootMonsterId < 0 || i > UINT32_MAX)
+            {
+                error = "invalid world item origin";
+                return false;
+            }
+            if (objects[i].lootMonsterId > 0)
+                origins.push_back({scene, map, uint32_t(i), objects[i].objectDescriptionId, objects[i].lootMonsterId});
+        }
+        return true;
+    };
+    if (!collect(0, "", data.outdoorWorld.worldItems)) return false;
+    for (const auto &[map, snapshot] : data.outdoorWorldStates)
+        if (!collect(1, map, snapshot.worldItems)) return false;
+    if (data.indoorScene.mapDeltaData && !collect(2, "", data.indoorScene.mapDeltaData->spriteObjects)) return false;
+    for (const auto &[map, snapshot] : data.indoorSceneStates)
+        if (snapshot.mapDeltaData && !collect(3, map, snapshot.mapDeltaData->spriteObjects)) return false;
+    if (origins.empty() && npcPackets.empty() && mercenaryPackets.empty()
+        && data.party.identifiedItemIds.empty()) return true;
+    if (origins.size() > UINT32_MAX)
+    {
+        error = "too many world item origins";
+        return false;
+    }
+    std::sort(origins.begin(), origins.end(), [](const SavedWorldItemOrigin &a, const SavedWorldItemOrigin &b)
+    { return std::tie(a.scene, a.map, a.slot) < std::tie(b.scene, b.map, b.slot); });
+    BinaryWriter payload;
+    payload.write(uint32_t(origins.size()));
+    for (const SavedWorldItemOrigin &origin : origins)
+    {
+        payload.write(origin.scene);
+        payload.write(origin.map);
+        payload.write(origin.slot);
+        payload.write(origin.objectId);
+        payload.write(origin.monsterId);
+    }
+    writer.writeBytes(SaveExtensionMagic, sizeof(SaveExtensionMagic));
+    writer.write(uint32_t(!origins.empty()) + uint32_t(!npcPackets.empty()) + uint32_t(!mercenaryPackets.empty())
+        + uint32_t(!data.party.identifiedItemIds.empty()));
+    if (!data.party.identifiedItemIds.empty())
+    {
+        std::vector<uint32_t> ids(data.party.identifiedItemIds.begin(), data.party.identifiedItemIds.end());
+        if (std::find(ids.begin(), ids.end(), 0) != ids.end())
+        {
+            error = "invalid identified item history";
+            return false;
+        }
+        std::sort(ids.begin(), ids.end());
+        BinaryWriter items;
+        items.write(ids);
+        writer.write(IdentifiedItemsExtension);
+        writer.write(uint32_t(1));
+        writer.write(items.bytes());
+    }
+    if (!origins.empty())
+    {
+        writer.write(WorldItemOriginsExtension);
+        writer.write(uint32_t(1)); // Namespace schema, independent of the upstream save version.
+        writer.write(payload.bytes());
+    }
+    if (!npcPackets.empty())
+    {
+        std::sort(npcPackets.begin(), npcPackets.end(), [](const NpcPacket &a, const NpcPacket &b)
+            { return std::tie(a.scene, a.map) < std::tie(b.scene, b.map); });
+        BinaryWriter npcs;
+        npcs.write(uint32_t(npcPackets.size()));
+        for (const NpcPacket &packet : npcPackets)
+        {
+            npcs.write(packet.scene);
+            npcs.write(packet.map);
+            npcs.write(uint32_t(packet.pObservations->size()));
+            for (const WorldGeneratedNpcObservation &npc : *packet.pObservations)
+            {
+                npcs.write(npc.actorKey);
+                npcs.write(npc.npcId);
+                npcs.write(npc.name);
+                npcs.write(npc.pictureId);
+                npcs.write(npc.professionId);
+                npcs.write(npc.location.mapId);
+                npcs.write(npc.location.actorIndex);
+                npcs.write(npc.location.x);
+                npcs.write(npc.location.y);
+                npcs.write(npc.location.z);
+                npcs.write(npc.location.gameMinutes);
+                npcs.write(npc.teacherTopics);
+            }
+        }
+        writer.write(GeneratedNpcObservationsExtension);
+        writer.write(uint32_t(1));
+        writer.write(npcs.bytes());
+    }
+    if (!mercenaryPackets.empty())
+    {
+        std::sort(mercenaryPackets.begin(), mercenaryPackets.end(),
+            [](const MercenaryPacket &a, const MercenaryPacket &b)
+            { return std::tie(a.scene, a.map) < std::tie(b.scene, b.map); });
+        BinaryWriter mercenaries;
+        mercenaries.write(uint32_t(mercenaryPackets.size()));
+        for (const MercenaryPacket &packet : mercenaryPackets)
+        {
+            mercenaries.write(packet.scene);
+            mercenaries.write(packet.map);
+            mercenaries.write(uint32_t(packet.pObservations->size()));
+            for (const WorldMercenaryObservation &npc : *packet.pObservations)
+            {
+                mercenaries.write(npc.npcId);
+                mercenaries.write(npc.rosterId);
+                mercenaries.write(npc.houseId);
+                mercenaries.write(npc.name);
+                mercenaries.write(npc.pictureId);
+                mercenaries.write(npc.mapId);
+                mercenaries.write(npc.gameMinutes);
+            }
+        }
+        writer.write(MercenaryObservationsExtension);
+        writer.write(uint32_t(1));
+        writer.write(mercenaries.bytes());
+    }
+    return true;
+}
+
+bool readGeneratedNpcObservations(const std::vector<uint8_t> &bytes, GameSaveData &data)
+{
+    BinaryReader reader(bytes);
+    uint32_t packets = 0;
+    if (!reader.read(packets) || packets == 0 || packets > reader.remainingBytes() / 9) return false;
+    std::set<std::pair<uint8_t, std::string>> seenPackets;
+    for (uint32_t i = 0; i < packets; ++i)
+    {
+        uint8_t scene = 0;
+        std::string map;
+        uint32_t count = 0;
+        if (!reader.read(scene) || !reader.read(map) || !reader.read(count) || count == 0
+            || count > reader.remainingBytes() / 48 || !seenPackets.emplace(scene, map).second) return false;
+        std::optional<EventRuntimeState> *pState = savedEventState(data, scene, map);
+        if (pState == nullptr || !*pState || !(*pState)->observedGeneratedNpcs.empty()) return false;
+        std::unordered_set<std::string> seen;
+        for (uint32_t n = 0; n < count; ++n)
+        {
+            WorldGeneratedNpcObservation npc;
+            if (!reader.read(npc.actorKey) || !reader.read(npc.npcId) || !reader.read(npc.name)
+                || !reader.read(npc.pictureId) || !reader.read(npc.professionId) || !reader.read(npc.location.mapId)
+                || !reader.read(npc.location.actorIndex) || !reader.read(npc.location.x) || !reader.read(npc.location.y)
+                || !reader.read(npc.location.z) || !reader.read(npc.location.gameMinutes)
+                || !reader.read(npc.teacherTopics) || !validWorldGeneratedNpcObservation(npc)
+                || (map.starts_with("world.") && npc.location.mapId != map)
+                || !seen.insert(worldGeneratedNpcRecordId(npc)).second) return false;
+            (*pState)->observedGeneratedNpcs.push_back(std::move(npc));
+        }
+    }
+    return !reader.failed() && reader.remainingBytes() == 0;
+}
+
+bool readMercenaryObservations(const std::vector<uint8_t> &bytes, GameSaveData &data)
+{
+    BinaryReader reader(bytes);
+    uint32_t packets = 0;
+    if (!reader.read(packets) || packets == 0 || packets > reader.remainingBytes() / 13) return false;
+    std::set<std::pair<uint8_t, std::string>> seenPackets;
+    for (uint32_t i = 0; i < packets; ++i)
+    {
+        uint8_t scene = 0;
+        std::string map;
+        uint32_t count = 0;
+        if (!reader.read(scene) || !reader.read(map) || !reader.read(count) || count == 0
+            || count > reader.remainingBytes() / 36 || !seenPackets.emplace(scene, map).second) return false;
+        std::optional<EventRuntimeState> *pState = savedEventState(data, scene, map);
+        if (pState == nullptr || !*pState || !(*pState)->observedMercenaries.empty()) return false;
+        std::unordered_set<uint32_t> seen;
+        for (uint32_t n = 0; n < count; ++n)
+        {
+            WorldMercenaryObservation npc;
+            if (!reader.read(npc.npcId) || !reader.read(npc.rosterId) || !reader.read(npc.houseId)
+                || !reader.read(npc.name) || !reader.read(npc.pictureId) || !reader.read(npc.mapId)
+                || !reader.read(npc.gameMinutes) || !validWorldMercenaryObservation(npc)
+                || !seen.insert(npc.npcId).second || (map.starts_with("world.") && npc.mapId != map)) return false;
+            (*pState)->observedMercenaries.push_back(std::move(npc));
+        }
+    }
+    return !reader.failed() && reader.remainingBytes() == 0;
+}
+
+bool readWorldItemOrigins(const std::vector<uint8_t> &bytes, GameSaveData &data)
+{
+    BinaryReader reader(bytes);
+    uint32_t count = 0;
+    if (!reader.read(count) || count > reader.remainingBytes() / 17) return false;
+    std::set<std::tuple<uint8_t, std::string, uint32_t>> seen;
+    for (uint32_t i = 0; i < count; ++i)
+    {
+        SavedWorldItemOrigin origin;
+        if (!reader.read(origin.scene) || !reader.read(origin.map) || !reader.read(origin.slot)
+            || !reader.read(origin.objectId) || !reader.read(origin.monsterId) || origin.monsterId <= 0
+            || !seen.emplace(origin.scene, origin.map, origin.slot).second) return false;
+        const auto apply = [&](auto &objects)
+        {
+            if (origin.slot >= objects.size() || objects[origin.slot].objectDescriptionId != origin.objectId)
+                return false;
+            objects[origin.slot].lootMonsterId = origin.monsterId;
+            return true;
+        };
+        bool applied = false;
+        if (origin.scene == 0 && origin.map.empty()) applied = apply(data.outdoorWorld.worldItems);
+        else if (origin.scene == 1 && !origin.map.empty())
+        {
+            const auto found = data.outdoorWorldStates.find(origin.map);
+            if (found != data.outdoorWorldStates.end()) applied = apply(found->second.worldItems);
+        }
+        else if (origin.scene == 2 && origin.map.empty() && data.indoorScene.mapDeltaData)
+            applied = apply(data.indoorScene.mapDeltaData->spriteObjects);
+        else if (origin.scene == 3 && !origin.map.empty())
+        {
+            const auto found = data.indoorSceneStates.find(origin.map);
+            if (found != data.indoorSceneStates.end() && found->second.mapDeltaData)
+                applied = apply(found->second.mapDeltaData->spriteObjects);
+        }
+        if (!applied) return false;
+    }
+    return !reader.failed() && reader.remainingBytes() == 0;
+}
+
+bool readIdentifiedItems(const std::vector<uint8_t> &bytes, GameSaveData &data)
+{
+    BinaryReader reader(bytes);
+    std::vector<uint32_t> ids;
+    if (!reader.read(ids) || reader.failed() || reader.remainingBytes() != 0
+        || !std::is_sorted(ids.begin(), ids.end())
+        || std::adjacent_find(ids.begin(), ids.end()) != ids.end()
+        || std::find(ids.begin(), ids.end(), 0) != ids.end()) return false;
+    data.party.identifiedItemIds.insert(ids.begin(), ids.end());
+    return true;
+}
+
+bool readSaveExtensions(BinaryReader &reader, GameSaveData &data, std::string &error)
+{
+    if (reader.remainingBytes() == 0) return true; // Legacy saves have no item provenance.
+    char magic[sizeof(SaveExtensionMagic)] = {};
+    uint32_t count = 0;
+    if (!reader.readBytes(magic, sizeof(magic)) || std::memcmp(magic, SaveExtensionMagic, sizeof(magic)) != 0
+        || !reader.read(count) || count > reader.remainingBytes() / 20)
+    {
+        error = "save extension data is corrupted";
+        return false;
+    }
+    std::unordered_set<std::string> seen;
+    for (uint32_t i = 0; i < count; ++i)
+    {
+        std::string name;
+        uint32_t schema = 0;
+        std::vector<uint8_t> payload;
+        if (!reader.read(name) || !reader.read(schema) || !reader.read(payload) || !seen.insert(name).second)
+        {
+            error = "save extension data is corrupted";
+            return false;
+        }
+        if (schema != 1 || (name != WorldItemOriginsExtension && name != GeneratedNpcObservationsExtension
+            && name != MercenaryObservationsExtension && name != IdentifiedItemsExtension))
+        {
+            error = "unsupported save extension '" + name + "' schema " + std::to_string(schema);
+            return false;
+        }
+        const bool items = name == WorldItemOriginsExtension;
+        const bool npcs = name == GeneratedNpcObservationsExtension;
+        const bool identified = name == IdentifiedItemsExtension;
+        const bool valid = identified ? readIdentifiedItems(payload, data) : items ? readWorldItemOrigins(payload, data)
+            : npcs ? readGeneratedNpcObservations(payload, data) : readMercenaryObservations(payload, data);
+        if (!valid)
+        {
+            error = identified ? "identified item history is corrupted" : items ? "world item origin data is corrupted" : npcs ? "generated NPC observation data is corrupted"
+                : "mercenary encounter data is corrupted";
+            return false;
+        }
+    }
+    if (reader.remainingBytes() != 0)
+    {
+        error = "unexpected data after save extensions";
+        return false;
+    }
+    return true;
+}
+}
+
+#endif
+
 bool saveGameDataToPath(const std::filesystem::path &path, const GameSaveData &data, std::string &error)
 {
     BinaryWriter writer;
     writer.writeBytes(SaveMagic, sizeof(SaveMagic));
     writer.write(SaveVersion);
     writer.write(data);
+#ifdef OPENYAMM_WITH_ATLAS
+    if (!writeSaveExtensions(writer, data, error)) return false;
+#endif
 
     std::filesystem::create_directories(path.parent_path());
     std::ofstream output(path, std::ios::binary);
@@ -6210,6 +6597,9 @@ std::optional<GameSaveData> loadGameDataFromPath(const std::filesystem::path &pa
     try
     {
         decoded = reader.read(data);
+#ifdef OPENYAMM_WITH_ATLAS
+        if (decoded && !readSaveExtensions(reader, data, error)) return std::nullopt;
+#endif
     }
     catch (const std::exception &exception)
     {

@@ -38,7 +38,7 @@ public:
     void lift(float height);
     // Adds this horizontal velocity to every movement step for `seconds`, with the world's collision (a charge).
     void requestDash(float velocityX, float velocityY, float seconds);
-    void applyEventRuntimeState(const EventRuntimeState &runtimeState, bool grantItemsToInventory = true);
+    void applyEventRuntimeState(EventRuntimeState &runtimeState, bool grantItemsToInventory = true);
 
     const OutdoorMoveState &movementState() const;
     const OutdoorMovementEvents &movementEvents() const;

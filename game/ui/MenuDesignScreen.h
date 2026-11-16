@@ -29,7 +29,8 @@ class MenuDesignScreen : public MenuScreenBase
     void label(const std::string &id, const std::string &text, uint32_t color = 0, float offsetY = 0,
                float offsetX = 0);
     void textInRect(const Rect &rect, const std::string &text, const std::string &font = "menu_arrus",
-                    float logicalSize = 12, uint32_t color = 0xffc6dfeau, bool centered = false);
+                    float logicalSize = 12, uint32_t color = 0xffc6dfeau, bool centered = false,
+                    bool topAligned = false, float *pContentHeight = nullptr);
     // The height in pixels of text word-wrapped to width (pixels), laid out as textInRect does.
     float textBlockHeight(const std::string &text, const std::string &font, float logicalSize, float width);
     bool action(const std::string &id, bool enabled = true, const std::string &text = {});
@@ -43,7 +44,7 @@ class MenuDesignScreen : public MenuScreenBase
     };
     Hotspot hotspot(const std::string &id, const Rect &rect, bool enabled = true);
     bool button(const std::string &id, const Rect &rect, const std::string &text, const std::string &skin = "button",
-                bool enabled = true, bool selected = false, const std::string &font = "fondamento");
+                bool enabled = true, bool selected = false, const std::string &font = "fondamento", const Rect *pVisualRect = nullptr);
     bool selectBox(const std::string &id, const Rect &rect, const std::string &value, bool enabled = true,
                    float logicalSize = 11.52f, const std::string &font = "menu_lucida");
     void skin(const std::string &name, const Rect &rect, bool sliced = false, float padding = 0);

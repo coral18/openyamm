@@ -1,3 +1,4 @@
+#include "game/world/WorldItemSources.h"
 #include "game/outdoor/OutdoorWorldRuntime.h"
 #include "engine/Localization.h"
 
@@ -104,24 +105,6 @@ int rollImmolationDamage(uint32_t skillLevel, uint32_t seed)
     return damage;
 }
 
-std::string resolveSpawnedMapActorName(
-    const MonsterTable &monsterTable,
-    const MonsterTable::MonsterStatsEntry &stats,
-    uint32_t uniqueNameId)
-{
-    if (uniqueNameId != 0)
-    {
-        const std::optional<std::string> uniqueName =
-            monsterTable.getUniqueName(static_cast<int32_t>(uniqueNameId));
-
-        if (uniqueName && !uniqueName->empty())
-        {
-            return *uniqueName;
-        }
-    }
-
-    return stats.name;
-}
 
 int32_t cookedOutdoorNavigationSourceId(
     const OutdoorMapData &outdoorMapData,
@@ -4738,6 +4721,10 @@ void OutdoorWorldRuntime::activateChestView(uint32_t chestId)
     }
 
     m_activeChestView = *m_materializedChestViews[chestId];
+#ifdef OPENYAMM_WITH_ATLAS
+    if (EventRuntimeState *pState = eventRuntimeState())
+        recordWorldChestView(*pState, *m_activeChestView, gameMinutes(), m_pParty);
+#endif
 
     if (EventRuntimeState *pEventRuntimeState = eventRuntimeState())
     {
@@ -16745,6 +16732,7 @@ bool OutdoorWorldRuntime::actorRuntimeState(size_t actorIndex, GameplayRuntimeAc
 
     state.visualScale = mapActorVisualScale(*pActor);
     state.monsterId = pActor->monsterId;
+    state.uniqueNameIndex = pActor->uniqueNameId <= INT32_MAX ? int32_t(pActor->uniqueNameId) : 0;
     state.mm9RudeId = pActor->mm9RudeId;
     state.mm9SourceObjectIndex = !pActor->spawnedAtRuntime
         && m_pOutdoorMapDeltaData != nullptr
@@ -17439,6 +17427,9 @@ bool OutdoorWorldRuntime::tryStealFromActor(size_t actorIndex, uint32_t successR
         return true;
     }
 
+#ifdef OPENYAMM_WITH_ATLAS
+    recordWorldActorItem(*this, corpse, stolenItem);
+#endif
     corpse.items.erase(corpse.items.begin());
 
     if (m_pInteractionView != nullptr)
@@ -20509,6 +20500,10 @@ bool OutdoorWorldRuntime::takeActiveChestItem(size_t itemIndex, ChestItemState &
     }
     removeDepletedSemanticLootContainer(chestId);
 
+#ifdef OPENYAMM_WITH_ATLAS
+    if (EventRuntimeState *pState = eventRuntimeState())
+        recordWorldChestView(*pState, *m_activeChestView, gameMinutes(), m_pParty);
+#endif
     return true;
 }
 
@@ -20527,6 +20522,10 @@ bool OutdoorWorldRuntime::takeActiveChestItemAt(uint8_t gridX, uint8_t gridY, Ch
     }
     removeDepletedSemanticLootContainer(chestId);
 
+#ifdef OPENYAMM_WITH_ATLAS
+    if (EventRuntimeState *pState = eventRuntimeState())
+        recordWorldChestView(*pState, *m_activeChestView, gameMinutes(), m_pParty);
+#endif
     return true;
 }
 
@@ -20543,6 +20542,10 @@ bool OutdoorWorldRuntime::tryPlaceActiveChestItemAt(const ChestItemState &item, 
         m_materializedChestViews[chestId] = *m_activeChestView;
     }
 
+#ifdef OPENYAMM_WITH_ATLAS
+    if (EventRuntimeState *pState = eventRuntimeState())
+        recordWorldChestView(*pState, *m_activeChestView, gameMinutes(), m_pParty);
+#endif
     return true;
 }
 
@@ -20817,6 +20820,9 @@ bool OutdoorWorldRuntime::takeActiveCorpseItem(size_t itemIndex, ChestItemState 
     }
 
     item = m_activeCorpseView->items[itemIndex];
+#ifdef OPENYAMM_WITH_ATLAS
+    recordWorldActorItem(*this, *m_activeCorpseView, item);
+#endif
     m_activeCorpseView->items.erase(m_activeCorpseView->items.begin() + static_cast<ptrdiff_t>(itemIndex));
 
     if (m_activeCorpseView->items.empty())
@@ -21064,6 +21070,8 @@ bool OutdoorWorldRuntime::worldItemInspectState(size_t worldItemIndex, GameplayW
     state.item = pWorldItem->item;
     state.goldAmount = pWorldItem->goldAmount;
     state.isGold = pWorldItem->isGold;
+    state.position = {{pWorldItem->x, pWorldItem->y, pWorldItem->z}};
+    state.lootMonsterId = pWorldItem->lootMonsterId;
     return true;
 }
 
@@ -21094,6 +21102,8 @@ bool OutdoorWorldRuntime::takeWorldItemInspectState(size_t worldItemIndex, Gamep
     state.goldAmount = pWorldItem->goldAmount;
     state.isGold = pWorldItem->isGold;
 
+    state.position = {{pWorldItem->x, pWorldItem->y, pWorldItem->z}};
+    state.lootMonsterId = pWorldItem->lootMonsterId;
     WorldItemState removedItem = {};
     return takeWorldItem(worldItemIndex, removedItem);
 }

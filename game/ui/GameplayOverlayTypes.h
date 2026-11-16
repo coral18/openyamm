@@ -563,6 +563,7 @@ enum class GameplayJournalPointerTargetType
     NotesTrainerButton,
     NotesArcomageButton,
     NotesSearchField,
+    InteractiveAtlas,
     MapZoomInButton,
     MapZoomOutButton,
     MapNote,
@@ -807,6 +808,8 @@ struct GameplayOverlayInteractionState
     std::string dialogueStatusHint;
     int itemInspectScrollLines = 0;
     uint32_t itemInspectScrollItem = 0;
+    bool interactiveAtlasAvailable = false;
+    bool interactiveAtlasRequested = false;
     bool closeOverlayLatch = false;
     bool restToggleLatch = false;
     bool restClickLatch = false;
@@ -926,6 +929,7 @@ struct GameplayOverlayInteractionState
     bool journalToggleLatch = false;
     bool journalClickLatch = false;
     GameplayJournalPointerTarget journalPressedTarget = {};
+    GameplayJournalPointerTargetType journalFocusTarget = GameplayJournalPointerTargetType::None;
     bool journalMapKeyZoomLatch = false;
     bool quickReferenceToggleLatch = false;
     bool quickReferenceClickLatch = false;

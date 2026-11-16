@@ -1326,6 +1326,13 @@ std::optional<std::string> MenuScreenBase::resolveTexturePath(const std::string 
     {
         return m_pAssetFileSystem->resolveExistingFilePath(textureName);
     }
+    const std::filesystem::path path(textureName);
+    if (path.has_parent_path())
+    {
+        if (path.extension() == ".oytex") return m_pAssetFileSystem->resolveExistingFilePath(textureName);
+        return Engine::findCookedOrImageAssetPath(*m_pAssetFileSystem, path.parent_path().generic_string(),
+            path.filename().string(), s_directoryEntriesByPath, s_resolvedTexturePaths);
+    }
     return Engine::findCookedOrImageAssetPath(
         *m_pAssetFileSystem, "Data/icons", textureName, s_directoryEntriesByPath, s_resolvedTexturePaths);
 }
@@ -1394,4 +1401,28 @@ void MenuScreenBase::drawEllipseOutline(const Rect &rect, float thickness, uint3
     bgfx::submit(m_renderViewId, m_texturedProgramHandle);
 }
 
+void MenuScreenBase::drawLine(float x1, float y1, float x2, float y2, float thickness, uint32_t colorAbgr)
+{
+    const float dx = x2 - x1, dy = y2 - y1;
+    const float length = std::hypot(dx, dy);
+    if (!std::isfinite(length) || length <= 0 || thickness <= 0
+        || bgfx::getAvailTransientVertexBuffer(6, MenuVertex::ms_layout) < 6)
+        return;
+    const float nx = -dy / length * thickness / 2, ny = dx / length * thickness / 2;
+    const bgfx::TextureHandle white = ensureDynamicTexture("menu-white", 1, 1, {255, 255, 255, 255});
+    bgfx::TransientVertexBuffer vertices;
+    bgfx::allocTransientVertexBuffer(&vertices, 6, MenuVertex::ms_layout);
+    MenuVertex *pVertices = reinterpret_cast<MenuVertex *>(vertices.data);
+    const MenuVertex corners[] = {{x1 + nx, y1 + ny, 0, 0.5f, 0.5f},
+        {x2 + nx, y2 + ny, 0, 0.5f, 0.5f}, {x2 - nx, y2 - ny, 0, 0.5f, 0.5f},
+        {x1 - nx, y1 - ny, 0, 0.5f, 0.5f}};
+    for (size_t i = 0; i < 6; ++i)
+        pVertices[i] = corners[std::array{0, 1, 2, 0, 2, 3}[i]];
+    m_drawTint = colorAbgr;
+    bgfx::setVertexBuffer(0, &vertices);
+    bindTexture(0, m_textureUniformHandle, white, TextureFilterProfile::Ui);
+    bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A | BGFX_STATE_BLEND_ALPHA | BGFX_STATE_MSAA);
+    applyClipRect();
+    bgfx::submit(m_renderViewId, m_texturedProgramHandle);
+}
 } // namespace OpenYAMM::Game

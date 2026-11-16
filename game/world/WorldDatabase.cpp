@@ -1,0 +1,752 @@
+#include "game/world/WorldDatabase.h"
+#include "game/gameplay/MercenaryRecruitmentRuntime.h"
+#include "game/world/WorldMapKnowledge.h"
+#include "game/StringUtils.h"
+#include "game/maps/MapIdentity.h"
+#include "game/maps/MapDeltaData.h"
+#include "game/gameplay/TravelRuntime.h"
+#include "game/events/ScriptedEventProgram.h"
+
+#include <algorithm>
+#include <bit>
+#include <cmath>
+#include <stdexcept>
+#include <set>
+
+namespace OpenYAMM::Game
+{
+namespace
+{
+bool discovered(const WorldKnowledge &knowledge, const std::string &key)
+{
+    const auto it = knowledge.variables.find(key);
+    return it != knowledge.variables.end() && it->second > 0;
+}
+
+bool isOutdoor(const MapStatsEntry &map)
+{
+    return toLowerCopy(map.fileName).ends_with(".odm");
+}
+} // namespace
+
+const MapStatsEntry *WorldDatabase::mapDefinition(const std::string &canonicalId) const
+{
+    for (const MapStatsEntry &map : m_pMaps->getEntries())
+        if (mapId(map) == canonicalId) return &map;
+    return nullptr;
+}
+
+std::string WorldDatabase::mapId(const MapStatsEntry &map)
+{
+    return map.canonicalId.empty() ? buildCanonicalMapId(map.worldId, map.fileName) : map.canonicalId;
+}
+std::string WorldDatabase::mapDiscoveryKey(const MapStatsEntry &map)
+{
+    return "openyamm.discovery." + mapId(map);
+}
+std::string WorldDatabase::houseDiscoveryKey(uint32_t id)
+{
+    return "openyamm.discovery.house/" + std::to_string(id);
+}
+std::string WorldDatabase::npcDiscoveryKey(uint32_t id)
+{
+    return "openyamm.discovery.npc/" + std::to_string(id);
+}
+
+std::string WorldRecord::name() const
+{
+    if (kind == WorldRecordKind::Travel)
+    {
+        if (walkingEdge)
+        {
+            const char *direction = "";
+            switch (*walkingEdge)
+            {
+            case MapBoundaryEdge::North: direction = "north"; break;
+            case MapBoundaryEdge::South: direction = "south"; break;
+            case MapBoundaryEdge::East: direction = "east"; break;
+            case MapBoundaryEdge::West: direction = "west"; break;
+            }
+            return std::string("Walk ") + direction + " to " + destination->name;
+        }
+        return house->type + " to " + destination->name;
+    }
+    if (kind == WorldRecordKind::Trainer)
+        return npcName.value_or(npc->name) + " - " + teacher->note;
+    if (kind == WorldRecordKind::Npc)
+        return npcName.value_or(npc->name)
+            + (possibleNpcLocation ? scriptLocation ? " (possible encounter)" : " (possible location)" : "");
+    if (kind == WorldRecordKind::House)
+        return house->name.empty() ? house->buildingName : house->name;
+    return map->name;
+}
+
+std::string WorldRecord::searchText() const
+{
+    std::string text = name() + " " + map->name;
+    if (house != nullptr)
+        text += " " + house->type;
+    if (kind == WorldRecordKind::Travel && house != nullptr)
+        text += " " + (house->name.empty() ? house->buildingName : house->name);
+    return text;
+}
+
+bool WorldKnowledge::knows(const WorldRecord &record) const
+{
+    if (record.possibleNpcLocation) return false;
+    if (record.pMercenary != nullptr)
+    {
+        const auto map = mercenaries.find(record.pMercenary->mapId);
+        if (map == mercenaries.end()) return false;
+        const auto observed = map->second.find(record.pMercenary->npcId);
+        return observed != map->second.end() && observed->second == *record.pMercenary;
+    }
+    if (record.pGeneratedNpc != nullptr)
+    {
+        const WorldGeneratedNpcObservation &npc = *record.pGeneratedNpc;
+        const auto map = generatedNpcs.find(npc.location.mapId);
+        if (map == generatedNpcs.end()) return false;
+        const auto observed = map->second.find(npc.actorKey);
+        return observed != map->second.end() && observed->second == npc
+            && (record.teacher == nullptr || std::binary_search(npc.teacherTopics.begin(), npc.teacherTopics.end(),
+                record.teacher->topicId));
+    }
+    if (!record.actorLocation && !record.scriptLocation && informedRecords.contains(record.id))
+        return true;
+    if (record.kind == WorldRecordKind::Npc || record.kind == WorldRecordKind::Trainer)
+    {
+        const auto house = variables.find(worldNpcHouseKey(record.npc->id));
+        if (house == variables.end()) return false;
+        if (record.actorLocation)
+        {
+            if (house->second != 0 || !worldNpcActorLocationKnown(variables, record.npc->id,
+                *record.actorLocation)) return false;
+        }
+        else if (record.scriptLocation)
+        {
+            if (house->second != 0 || !worldNpcScriptLocationKnown(variables, record.npc->id,
+                *record.scriptLocation)) return false;
+        }
+        else if (record.house == nullptr || std::bit_cast<uint32_t>(house->second) != record.house->id)
+            return false;
+        return discovered(*this, WorldDatabase::npcDiscoveryKey(record.npc->id))
+            && (record.teacher == nullptr
+                || discovered(*this, worldNpcTeacherKey(record.npc->id, record.teacher->topicId)));
+    }
+    if (record.kind == WorldRecordKind::Travel && record.house != nullptr)
+        return record.transport && record.destination != nullptr
+            && discovered(*this, WorldDatabase::houseDiscoveryKey(record.house->id))
+            && worldTransportObservationMatches(record.house->id, *record.transport,
+                WorldDatabase::mapId(*record.destination), variables);
+    if (record.kind == WorldRecordKind::House)
+        return discovered(*this, WorldDatabase::houseDiscoveryKey(record.house->id));
+    return discovered(*this, WorldDatabase::mapDiscoveryKey(*record.map))
+        || visitedMaps.contains(toLowerCopy(record.map->fileName));
+}
+
+WorldDatabase::WorldDatabase(const MapStats &maps, const HouseTable &houses, const NpcDialogTable &npcs,
+    const MergedTeacherTopicTable &teachers, const std::string &worldId,
+    const std::vector<WorldMapPresentation> &presentation, const WorldNpcState &npcsState,
+    const WorldTransportState &transportState)
+    : m_pMaps(&maps), m_pHouses(&houses), m_pNpcs(&npcs), m_pTeachers(&teachers),
+      m_npcsState(npcsState), m_transportState(transportState)
+{
+    std::unordered_map<std::string, const WorldMapPresentation *> layouts;
+    std::unordered_map<int, const MapStatsEntry *> areas;
+    for (const auto &layout : presentation)
+    {
+        const auto *map = maps.findByFileName(layout.fileName);
+        if (map == nullptr || map->worldId != worldId)
+            throw std::invalid_argument("Unknown world map in presentation: " + layout.fileName);
+        if (!layouts.emplace(toLowerCopy(layout.fileName), &layout).second)
+            throw std::invalid_argument("Duplicate world map presentation: " + layout.fileName);
+        if (!layout.parentFileName.empty())
+        {
+            const auto *parent = maps.findByFileName(layout.parentFileName);
+            if (parent == nullptr || parent->worldId != worldId)
+                throw std::invalid_argument("Unknown world map parent: " + layout.parentFileName);
+        }
+        if (layout.areaId != 0 && !areas.emplace(layout.areaId, map).second)
+            throw std::invalid_argument("Duplicate world area in presentation");
+        if (layout.position && (!std::isfinite(layout.position->first) || !std::isfinite(layout.position->second)
+            || layout.position->first < 0 || layout.position->first > 1
+            || layout.position->second < 0 || layout.position->second > 1))
+            throw std::invalid_argument("Invalid world map position: " + layout.fileName);
+    }
+    for (const auto &map : maps.getEntries())
+    {
+        if (map.worldId != worldId)
+            continue;
+        const auto layout = layouts.find(toLowerCopy(map.fileName));
+        if (layout != layouts.end() && layout->second->hidden)
+            continue;
+        WorldRecord record;
+        record.id = mapId(map);
+        record.kind = isOutdoor(map) ? WorldRecordKind::Region : WorldRecordKind::Dungeon;
+        record.map = &map;
+        if (layout != layouts.end())
+        {
+            record.position = layout->second->position;
+            if (!layout->second->parentFileName.empty())
+                record.parentId = mapId(*maps.findByFileName(layout->second->parentFileName));
+        }
+        if (record.parentId.empty() && map.areaId != 0 && areas.contains(map.areaId)
+            && areas.at(map.areaId) != &map)
+            record.parentId = mapId(*areas.at(map.areaId));
+        m_records.push_back(std::move(record));
+        const MapBoundaryEdge edges[] = {MapBoundaryEdge::North, MapBoundaryEdge::South, MapBoundaryEdge::East, MapBoundaryEdge::West};
+        for (int edge = 0; edge < 4; ++edge)
+        {
+            const auto &transition = *map.edgeTransition(edges[edge]);
+            if (!transition)
+                continue;
+            const auto *destination = maps.findByFileName(transition->destinationMapFileName);
+            if (destination == nullptr || destination->worldId != worldId)
+                continue;
+            WorldRecord travel;
+            travel.id = mapId(map) + "/walk/" + std::to_string(edge);
+            travel.parentId = mapId(map);
+            travel.kind = WorldRecordKind::Travel;
+            travel.map = &map;
+            travel.walkingRoute = &*transition;
+            travel.walkingEdge = edges[edge];
+            travel.destination = destination;
+            m_records.push_back(std::move(travel));
+        }
+    }
+    for (const auto &[id, house] : houses.entries())
+    {
+        // Transition cards are presentation for MoveToMap, not enterable houses or shops.
+        if (toLowerCopy(house.type) == "dungeon ent")
+            continue;
+        const auto *map = maps.findById(house.mapId);
+        if (map == nullptr || map->worldId != worldId)
+            continue;
+        appendHouseRecords(house, *map);
+    }
+    for (const auto &[npcId, location] : m_npcsState.actorLocations)
+    {
+        const auto house = m_npcsState.houses.find(npcId);
+        if (house == m_npcsState.houses.end() || house->second != 0) continue;
+        const auto map = std::find_if(maps.getEntries().begin(), maps.getEntries().end(),
+            [&](const MapStatsEntry &entry) { return mapId(entry) == location.mapId; });
+        if (map != maps.getEntries().end() && map->worldId == worldId)
+            appendEncounterNpcRecords(npcId, *map, false, location);
+    }
+    for (const auto &[npcId, location] : m_npcsState.scriptLocations)
+    {
+        const auto house = m_npcsState.houses.find(npcId);
+        if (house == m_npcsState.houses.end() || house->second != 0) continue;
+        const auto map = std::find_if(maps.getEntries().begin(), maps.getEntries().end(),
+            [&](const MapStatsEntry &entry) { return mapId(entry) == location.mapId; });
+        if (map != maps.getEntries().end() && map->worldId == worldId)
+            appendEncounterNpcRecords(npcId, *map, false, {}, location);
+    }
+    for (const WorldGeneratedNpcObservation *pNpc : m_npcsState.generatedNpcs)
+    {
+        if (pNpc == nullptr || !validWorldGeneratedNpcObservation(*pNpc))
+            throw std::invalid_argument("Invalid generated NPC observation");
+        const auto map = std::find_if(maps.getEntries().begin(), maps.getEntries().end(),
+            [&](const MapStatsEntry &entry) { return mapId(entry) == pNpc->location.mapId; });
+        if (map != maps.getEntries().end() && map->worldId == worldId)
+            appendEncounterNpcRecords(pNpc->npcId, *map, false, pNpc->location, {}, pNpc);
+    }
+    for (const WorldMercenaryObservation *pMercenary : m_npcsState.mercenaries)
+    {
+        if (pMercenary == nullptr || !validWorldMercenaryObservation(*pMercenary))
+            throw std::invalid_argument("Invalid mercenary encounter");
+        const auto map = std::find_if(maps.getEntries().begin(), maps.getEntries().end(),
+            [&](const MapStatsEntry &entry) { return mapId(entry) == pMercenary->mapId; });
+        if (map == maps.getEntries().end() || map->worldId != worldId) continue;
+        const NpcEntry *pNpc = npcs.getNpc(pMercenary->npcId);
+        const HouseEntry *pHouse = houses.get(pMercenary->houseId);
+        if (pNpc == nullptr || pHouse == nullptr)
+            throw std::invalid_argument("Unknown NPC or house in mercenary encounter");
+        WorldRecord record;
+        record.id = worldMercenaryRecordId(*pMercenary);
+        record.parentId = pHouse->canonicalId.empty() ? worldId + ":house/" + std::to_string(pHouse->id)
+            : pHouse->canonicalId;
+        record.kind = WorldRecordKind::Npc;
+        record.map = &*map;
+        record.house = pHouse;
+        record.npc = pNpc;
+        record.npcName = pMercenary->name;
+        record.pMercenary = pMercenary;
+        record.lastObservedNpc = true;
+        m_records.push_back(std::move(record));
+    }
+    std::sort(m_records.begin(), m_records.end(), [](const WorldRecord &a, const WorldRecord &b) { return a.id < b.id; });
+    for (size_t i = 0; i < m_records.size(); ++i)
+        if (!m_byId.emplace(m_records[i].id, i).second)
+            throw std::invalid_argument("Duplicate world record: " + m_records[i].id);
+    for (const auto &record : m_records)
+    {
+        std::unordered_set<std::string> ancestors;
+        const WorldRecord *parent = &record;
+        while (parent != nullptr && !parent->parentId.empty())
+        {
+            if (!ancestors.insert(parent->id).second)
+                throw std::invalid_argument("Cycle in world presentation: " + record.id);
+            parent = find(parent->parentId);
+        }
+    }
+    if (!m_npcsState.observedOnly)
+        for (const auto &[houseId, house] : houses.entries())
+            for (uint32_t npcId : npcs.getNpcIdsForHouse(houseId))
+                appendPossibleNpcLocation(npcId, houseId);
+}
+
+void WorldDatabase::appendHouseRecords(const HouseEntry &house, const MapStatsEntry &address)
+{
+    const uint32_t id = house.id;
+    const MapStatsEntry *map = &address;
+    const std::string &worldId = address.worldId;
+    WorldRecord record;
+    record.id = house.canonicalId.empty() ? worldId + ":house/" + std::to_string(id) : house.canonicalId;
+    record.parentId = mapId(*map);
+    record.kind = WorldRecordKind::House;
+    record.map = map;
+    record.house = &house;
+    m_records.push_back(record);
+    std::vector<WorldTransportEntry> routes;
+    if (const auto overrides = m_transportState.houses.find(id); overrides != m_transportState.houses.end())
+        routes = overrides->second;
+    else if (!m_transportState.observedOnly)
+        for (const HouseEntry::TransportRoute &route : house.transportRoutes)
+            routes.push_back({route, {}, false, false});
+    for (const WorldTransportEntry &transport : routes)
+    {
+        const HouseEntry::TransportRoute &route = transport.route;
+        const auto *destination = m_pMaps->findByFileName(route.mapFileName);
+        // Cross-world travel is not presented as a local route.
+        if (destination == nullptr || destination->worldId != worldId)
+            continue;
+        WorldRecord travel = record;
+        travel.id += "/route/" + std::to_string(route.routeIndex);
+        travel.parentId = record.id;
+        travel.kind = WorldRecordKind::Travel;
+        travel.transport = transport;
+        travel.destination = destination;
+        m_records.push_back(std::move(travel));
+    }
+    for (uint32_t npcId : m_pNpcs->getNpcIdsForHouse(id, &m_npcsState.houses))
+    {
+        const NpcEntry *npc = m_pNpcs->getNpc(npcId);
+        if (npc == nullptr || isGeneratedMercenaryNpcId(npcId) || m_npcsState.unavailable.contains(npcId)
+            || (m_npcsState.observedOnly && !m_npcsState.houses.contains(npcId)))
+            continue;
+        WorldRecord resident = record;
+        resident.id = worldId + ":npc/" + std::to_string(npcId);
+        resident.parentId = record.id;
+        resident.kind = WorldRecordKind::Npc;
+        resident.npc = npc;
+        resident.lastObservedNpc = m_npcsState.observedOnly;
+        if (const auto name = m_npcsState.names.find(npcId); name != m_npcsState.names.end())
+            resident.npcName = name->second;
+        const auto topics = m_npcsState.topics.find(npcId);
+        const std::vector<uint32_t> &topicIds = topics != m_npcsState.topics.end() ? topics->second : npc->topicIds;
+        resident.npcTopicIds = topicIds;
+        m_records.push_back(resident);
+        for (uint32_t topicId : topicIds)
+        {
+            if (const auto *teacher = m_pTeachers->get(topicId))
+            {
+                WorldRecord trainer = resident;
+                trainer.id += "/trainer/" + std::to_string(topicId);
+                trainer.parentId = resident.id;
+                trainer.kind = WorldRecordKind::Trainer;
+                trainer.teacher = teacher;
+                m_records.push_back(std::move(trainer));
+            }
+        }
+    }
+}
+
+void WorldDatabase::appendPossibleNpcLocation(uint32_t npcId, uint32_t houseId)
+{
+    if (isGeneratedMercenaryNpcId(npcId)) return;
+    if (m_npcsState.observedOnly) return;
+    const NpcEntry *pNpc = m_pNpcs->getNpc(npcId);
+    const HouseEntry *pHouse = m_pHouses->get(houseId);
+    if (pNpc == nullptr || pHouse == nullptr)
+        throw std::invalid_argument("Unknown NPC location reference: " + std::to_string(npcId)
+            + "/" + std::to_string(houseId));
+    const auto house = std::find_if(m_records.begin(), m_records.end(), [houseId](const WorldRecord &record)
+    { return record.kind == WorldRecordKind::House && record.house->id == houseId; });
+    if (house == m_records.end()) return; // A shared declaration may refer to another mounted world.
+    const std::string npcRecordId = house->map->worldId + ":npc/" + std::to_string(npcId);
+    const WorldRecord *pCurrent = find(npcRecordId);
+    if (pCurrent != nullptr && pCurrent->house != nullptr && pCurrent->house->id == houseId) return;
+    const std::string id = npcRecordId + "/possible-house/" + std::to_string(houseId);
+    if (find(id) != nullptr) return;
+    WorldRecord possible = *house;
+    possible.id = id;
+    possible.parentId = house->id;
+    possible.kind = WorldRecordKind::Npc;
+    possible.npc = pNpc;
+    possible.possibleNpcLocation = true;
+    // A destination does not prove future name, topics, training offers or current availability.
+    m_byId.emplace(id, m_records.size());
+    m_records.push_back(std::move(possible));
+}
+
+void WorldDatabase::appendEncounterNpcRecords(uint32_t npcId, const MapStatsEntry &map, bool authored,
+    std::optional<WorldNpcActorLocation> actor, std::optional<WorldNpcScriptLocation> script,
+    const WorldGeneratedNpcObservation *pGenerated)
+{
+    if (isGeneratedMercenaryNpcId(npcId)) return;
+    if (actor.has_value() == script.has_value())
+        throw std::invalid_argument("NPC encounter requires exactly one source kind");
+    const NpcEntry *pNpc = m_pNpcs->getNpc(npcId);
+    if (pNpc == nullptr || (pGenerated == nullptr && !m_npcsState.observedOnly && !authored
+        && m_npcsState.unavailable.contains(npcId))) return;
+    WorldRecord record;
+    record.id = pGenerated != nullptr ? worldGeneratedNpcRecordId(*pGenerated)
+        : map.worldId + ":npc/" + std::to_string(npcId);
+    if (authored)
+        record.id += actor ? "/possible-actor/" + actor->mapId + "/" + std::to_string(actor->actorIndex)
+            : "/possible-script/" + script->mapId + "/" + std::to_string(script->eventId);
+    record.parentId = mapId(map);
+    record.kind = WorldRecordKind::Npc;
+    record.map = &map;
+    record.npc = pNpc;
+    record.pGeneratedNpc = pGenerated;
+    if (pGenerated != nullptr) record.npcName = pGenerated->name;
+    record.actorLocation = actor;
+    record.scriptLocation = script;
+    record.lastObservedNpc = !authored;
+    record.possibleNpcLocation = authored;
+    const auto topics = m_npcsState.topics.find(npcId);
+    record.npcTopicIds = pGenerated != nullptr ? pGenerated->teacherTopics : authored ? pNpc->topicIds
+        : topics != m_npcsState.topics.end() ? topics->second : std::vector<uint32_t>{};
+    m_records.push_back(record);
+    if (actor)
+        m_locations.push_back({record.id + "/position", actor->mapId, record.id, 0,
+            float(actor->x), float(actor->y), float(actor->z)});
+    for (uint32_t topic : record.npcTopicIds)
+        if (const MergedTeacherTopicEntry *pTeacher = m_pTeachers->get(topic))
+        {
+            WorldRecord trainer = record;
+            trainer.id += "/trainer/" + std::to_string(topic);
+            trainer.parentId = record.id;
+            trainer.kind = WorldRecordKind::Trainer;
+            trainer.teacher = pTeacher;
+            m_records.push_back(std::move(trainer));
+        }
+}
+
+void WorldDatabase::indexMapNpcActors(const MapStatsEntry &map, const MapDeltaData &authoredActors)
+{
+    const std::string owner = mapId(map);
+    const WorldRecord *pSource = find(owner);
+    if (m_npcsState.observedOnly || pSource == nullptr) return;
+    // The caller's MapAssetInfo is a temporary package read. Records borrow the registry, never that copy.
+    const MapStatsEntry *pDefinition = pSource->map;
+    std::erase_if(m_records, [&](const WorldRecord &record)
+        { return record.possibleNpcLocation && record.actorLocation && record.actorLocation->mapId == owner; });
+    std::erase_if(m_locations, [&](const WorldMapLocation &location)
+        { return location.mapId == owner && location.recordId.find("/possible-actor/") != std::string::npos; });
+    for (size_t i = 0; i < authoredActors.actors.size(); ++i)
+    {
+        const MapDeltaActor &actor = authoredActors.actors[i];
+        if (actor.npcId <= 0) continue;
+        appendEncounterNpcRecords(uint32_t(actor.npcId), *pDefinition, true,
+            WorldNpcActorLocation{owner, uint32_t(i), actor.x, actor.y, actor.z, 0});
+    }
+    m_byId.clear();
+    for (size_t i = 0; i < m_records.size(); ++i)
+        if (!m_byId.emplace(m_records[i].id, i).second)
+            throw std::invalid_argument("Duplicate world record: " + m_records[i].id);
+}
+
+void WorldDatabase::indexMapNpcEncounters(const MapStatsEntry &map, const ScriptedEventProgram &events)
+{
+    const std::string owner = mapId(map);
+    const WorldRecord *pSource = find(owner);
+    if (m_npcsState.observedOnly || pSource == nullptr) return;
+    const MapStatsEntry *pDefinition = pSource->map;
+    std::erase_if(m_records, [&](const WorldRecord &record)
+        { return record.possibleNpcLocation && record.scriptLocation && record.scriptLocation->mapId == owner; });
+    for (const auto &[event, npcs] : events.npcEncounters())
+        for (uint32_t npc : npcs)
+        {
+            if (m_pNpcs->getNpc(npc) == nullptr)
+                throw std::invalid_argument("Unknown scripted NPC encounter: " + std::to_string(npc));
+            appendEncounterNpcRecords(npc, *pDefinition, true, {}, WorldNpcScriptLocation{owner, event, 0});
+        }
+    m_byId.clear();
+    for (size_t i = 0; i < m_records.size(); ++i)
+        if (!m_byId.emplace(m_records[i].id, i).second)
+            throw std::invalid_argument("Duplicate world record: " + m_records[i].id);
+}
+
+void WorldDatabase::indexNpcLocations(const ScriptedEventProgram &program)
+{
+    if (m_npcsState.observedOnly) return;
+    std::vector<std::pair<uint32_t, uint32_t>> locations;
+    for (const auto &[eventId, entries] : program.npcLocations())
+        for (const ScriptedEventProgram::NpcLocation &location : entries)
+            locations.emplace_back(location.npcId, location.houseId);
+    std::sort(locations.begin(), locations.end());
+    locations.erase(std::unique(locations.begin(), locations.end()), locations.end());
+    for (const auto &location : locations)
+    {
+        if (std::find(m_declaredNpcLocations.begin(), m_declaredNpcLocations.end(), location)
+            == m_declaredNpcLocations.end()) m_declaredNpcLocations.push_back(location);
+        appendPossibleNpcLocation(location.first, location.second);
+    }
+}
+
+void WorldDatabase::indexMapNpcTopics(const MapStatsEntry &map, const ScriptedEventProgram &program)
+{
+    const std::string owner = mapId(map);
+    // A database belongs to one world. A callback's map is provenance, never the NPC's location.
+    if (m_npcsState.observedOnly || find(owner) == nullptr) return;
+    std::set<std::pair<uint32_t, uint32_t>> references;
+    for (const auto &[event, topics] : program.npcTopicReferences())
+        for (const ScriptedEventProgram::NpcTopicReference &topic : topics)
+            references.emplace(topic.npcId, topic.topicId);
+    std::erase_if(m_npcTopicReferences, [&](const WorldNpcTopicReference &reference)
+        { return reference.mapId == owner; });
+    for (const auto &[npcId, topicId] : references)
+        m_npcTopicReferences.push_back({owner, npcId, topicId});
+}
+
+const std::vector<WorldNpcTopicReference> &WorldDatabase::npcTopicReferences() const
+{
+    return m_npcTopicReferences;
+}
+
+const std::vector<WorldRecord> &WorldDatabase::records() const { return m_records; }
+const std::vector<std::string> &WorldDatabase::transportIssues() const { return m_transportState.issues; }
+const WorldRecord *WorldDatabase::find(const std::string &id) const
+{
+    const auto it = m_byId.find(id);
+    return it == m_byId.end() ? nullptr : &m_records[it->second];
+}
+
+std::string WorldDatabase::recordDisplayName(const WorldRecord &record, const WorldKnowledge &knowledge,
+    bool guide) const
+{
+    const std::string name = record.name();
+    if (record.kind != WorldRecordKind::House) return name;
+    const bool shared = std::any_of(m_locations.begin(), m_locations.end(), [&](const WorldMapLocation &location)
+        { return location.sharedEntrance && location.recordId == record.id; });
+    if (!shared) return name;
+    std::vector<std::string> residents;
+    for (const WorldRecord &candidate : m_records)
+        if (candidate.kind == WorldRecordKind::Npc && candidate.house == record.house && candidate.pMercenary == nullptr
+            && visible(candidate, knowledge, guide))
+            residents.push_back(candidate.npcName.value_or(candidate.npc->name));
+    std::sort(residents.begin(), residents.end());
+    residents.erase(std::unique(residents.begin(), residents.end()), residents.end());
+    std::string result = name;
+    for (size_t i = 0; i < residents.size(); ++i) result += (i == 0 ? " - " : ", ") + residents[i];
+    return result;
+}
+
+const MapStatsEntry *WorldDatabase::recordMap(const WorldRecord &record, const WorldKnowledge &knowledge,
+    bool guide, const std::string &preferredMap) const
+{
+    if (record.pMercenary != nullptr)
+    {
+        const WorldRecord *pSource = find(record.pMercenary->mapId);
+        if (!guide && (!knowledge.knows(record) || pSource == nullptr || !knowledge.knows(*pSource))) return nullptr;
+        return record.map;
+    }
+    if (record.house == nullptr)
+    {
+        if ((record.actorLocation || record.scriptLocation) && !guide)
+        {
+            const WorldRecord *pMap = find(mapId(*record.map));
+            if (!knowledge.knows(record) || pMap == nullptr || !knowledge.knows(*pMap)) return nullptr;
+        }
+        return record.map;
+    }
+    if (!guide && !knowledge.knows(record)) return nullptr;
+    const WorldRecord *pPrimary = find(mapId(*record.map));
+    const MapStatsEntry *pDeclared = m_pMaps->findById(record.house->mapId);
+    const bool declaredAddress = pDeclared != nullptr && mapId(*pDeclared) == mapId(*record.map);
+    const bool legacyAddress = declaredAddress && !worldHouseAddressesRecorded(knowledge.variables, record.house->id);
+    const bool exactAddress = worldHouseAddressKnown(knowledge.variables, record.house->id, mapId(*record.map));
+    const bool primaryKnown = pPrimary != nullptr && (guide || (knowledge.knows(*pPrimary)
+        && (legacyAddress || exactAddress)));
+    if (primaryKnown && (preferredMap.empty() || preferredMap == pPrimary->id)) return record.map;
+    const MapStatsEntry *pFirst = nullptr;
+    for (const WorldMapLocation &location : m_locations)
+    {
+        const WorldRecord *pTarget = find(location.recordId);
+        if (pTarget == nullptr || pTarget->house != record.house
+            || (!guide && !houseLocationKnown(location, knowledge))) continue;
+        const WorldRecord *pSource = find(location.mapId);
+        if (pSource == nullptr) continue;
+        if (preferredMap == location.mapId) return pSource->map;
+        if (pFirst == nullptr) pFirst = pSource->map;
+    }
+    return primaryKnown ? record.map : pFirst;
+}
+
+std::string WorldDatabase::recordSearchText(const WorldRecord &record, const WorldKnowledge &knowledge,
+    bool guide, const std::string &preferredMap) const
+{
+    const MapStatsEntry *pMap = recordMap(record, knowledge, guide, preferredMap);
+    if (pMap == nullptr) return {};
+    WorldRecord located = record;
+    located.map = pMap;
+    std::string text = located.searchText() + " " + recordDisplayName(record, knowledge, guide);
+    if (record.house != nullptr && preferredMap.empty())
+        for (const WorldMapLocation &location : m_locations)
+        {
+            const WorldRecord *pTarget = find(location.recordId);
+            if (pTarget == nullptr || pTarget->house != record.house
+                || (!guide && !houseLocationKnown(location, knowledge))) continue;
+            if (const WorldRecord *pSource = find(location.mapId)) text += " " + pSource->name();
+        }
+    return text;
+}
+
+bool WorldDatabase::visible(const WorldRecord &record, const WorldKnowledge &knowledge, bool guide) const
+{
+    if (record.possibleNpcLocation) return guide;
+    if (guide)
+    {
+        // Once the actual map bindings are indexed, an unused table row is not a physical building.
+        if (record.kind == WorldRecordKind::House && m_indexedLocationMaps.contains(mapId(*record.map)))
+            return std::any_of(m_locations.begin(), m_locations.end(),
+                [&](const WorldMapLocation &location) { return location.recordId == record.id; });
+        return true;
+    }
+    if (!walkingRouteUnlocked(record, knowledge))
+        return false;
+    bool known = knowledge.knows(record);
+    if (!known && record.kind == WorldRecordKind::Dungeon)
+        for (const WorldMapLocation &location : m_locations)
+        {
+            if (location.recordId != record.id)
+                continue;
+            const WorldRecord *pSource = find(location.mapId);
+            const auto exploration = knowledge.regionMaps.find(toLowerCopy(pSource->map->fileName));
+            if (knowledge.knows(*pSource) && exploration != knowledge.regionMaps.end()
+                && worldRegionPointExplored(exploration->second, location.x, location.y))
+                known = true;
+        }
+    if (!known)
+        return false;
+    // A visited dungeon can be known without knowledge of its containing region. For located services,
+    // require knowledge of the containing map so search cannot disclose an undiscovered location.
+    if (record.house != nullptr || record.actorLocation || record.scriptLocation)
+    {
+        if (recordMap(record, knowledge, false) == nullptr) return false;
+    }
+    if (record.destination != nullptr)
+    {
+        const auto *destination = find(mapId(*record.destination));
+        if (destination == nullptr || !knowledge.knows(*destination))
+            return false;
+    }
+    return true;
+}
+
+bool WorldDatabase::walkingRouteUnlocked(const WorldRecord &record, const WorldKnowledge &knowledge) const
+{
+    return record.walkingRoute == nullptr || walkingTravelQuestRequirementsMet(*record.walkingRoute,
+        [&knowledge](uint32_t bit) { return knowledge.questBits.contains(bit); });
+}
+
+std::vector<WorldTravelLink> WorldDatabase::travelLinks(const WorldKnowledge &knowledge, bool guide,
+    const std::string &search) const
+{
+    std::vector<WorldTravelLink> result;
+    const auto anchor = [this](const WorldRecord *pMap) -> const WorldRecord *
+    {
+        // The constructor validates the parent graph; no synthetic map anchors are invented.
+        while (pMap != nullptr && !pMap->position && !pMap->parentId.empty())
+            pMap = find(pMap->parentId);
+        return pMap != nullptr && pMap->position ? pMap : nullptr;
+    };
+    for (const WorldRecord *pRecord : query(knowledge, guide, search, WorldRecordKind::Travel))
+    {
+        const WorldRecord &record = *pRecord;
+        const WorldRecord *pSource = anchor(find(mapId(*record.map)));
+        const WorldRecord *pDestination = anchor(find(mapId(*record.destination)));
+        if (pSource == nullptr || pDestination == nullptr || pSource == pDestination
+            || !visible(*pSource, knowledge, guide) || !visible(*pDestination, knowledge, guide))
+            continue;
+        const WorldTravelKind kind = record.walkingRoute != nullptr ? WorldTravelKind::Walking
+            : toLowerCopy(record.house->type) == "boats" ? WorldTravelKind::Boat : WorldTravelKind::Coach;
+        // A last-offered connection is retained knowledge, not a live availability prediction.
+        const bool locked = !walkingRouteUnlocked(record, knowledge)
+            || (record.transport && !record.transport->observed && record.transport->route.requiredQBit != 0
+                && !knowledge.questBits.contains(record.transport->route.requiredQBit));
+        result.push_back({record.id, pSource->id, pDestination->id, *pSource->position,
+            *pDestination->position, locked, kind});
+    }
+    return result;
+}
+
+std::vector<const WorldRecord *> WorldDatabase::query(const WorldKnowledge &knowledge, bool guide,
+    const std::string &search, std::optional<WorldRecordKind> kind, const std::string &withinMap, bool includeTravel) const
+{
+    std::vector<const WorldRecord *> result;
+    const auto needle = toLowerCopy(search);
+    for (const auto &record : m_records)
+    {
+        if ((!includeTravel && record.kind == WorldRecordKind::Travel)
+            || !visible(record, knowledge, guide) || (kind && record.kind != *kind))
+            continue;
+        if (!guide && record.house != nullptr && !withinMap.empty() && mapId(*record.map) == withinMap)
+        {
+            const WorldRecord *pSource = find(withinMap);
+            if (pSource == nullptr || !knowledge.knows(*pSource)) continue;
+            const MapStatsEntry *pDeclared = m_pMaps->findById(record.house->mapId);
+            const bool legacyAddress = pDeclared != nullptr && mapId(*pDeclared) == withinMap
+                && !worldHouseAddressesRecorded(knowledge.variables, record.house->id);
+            if (!legacyAddress && !worldHouseAddressKnown(knowledge.variables, record.house->id, withinMap)
+                && std::none_of(m_locations.begin(), m_locations.end(), [&](const WorldMapLocation &location)
+                {
+                    const WorldRecord *pTarget = find(location.recordId);
+                    return location.mapId == withinMap && pTarget != nullptr && pTarget->house == record.house
+                        && houseLocationKnown(location, knowledge);
+                })) continue;
+        }
+        if (!withinMap.empty() && mapId(*record.map) != withinMap && record.parentId != withinMap)
+        {
+            const bool locatedHere = std::any_of(m_locations.begin(), m_locations.end(),
+                [&](const WorldMapLocation &location)
+                {
+                    const WorldRecord *pTarget = find(location.recordId);
+                    return pTarget != nullptr && location.mapId == withinMap
+                        && (location.recordId == record.id
+                            || (record.house != nullptr && pTarget->house == record.house))
+                        && (guide || pTarget->house == nullptr || houseLocationKnown(location, knowledge));
+                });
+            if (!locatedHere)
+                continue;
+        }
+        if (!needle.empty()
+            && toLowerCopy(recordSearchText(record, knowledge, guide, withinMap)).find(needle) == std::string::npos)
+            continue;
+        result.push_back(&record);
+    }
+    std::sort(result.begin(), result.end(), [](const WorldRecord *a, const WorldRecord *b)
+    {
+        const auto left = toLowerCopy(a->name()), right = toLowerCopy(b->name());
+        return left == right ? a->id < b->id : left < right;
+    });
+    return result;
+}
+
+const char *WorldDatabase::kindName(WorldRecordKind kind)
+{
+    switch (kind)
+    {
+    case WorldRecordKind::Region: return "Region";
+    case WorldRecordKind::Dungeon: return "Dungeon";
+    case WorldRecordKind::House: return "Building";
+    case WorldRecordKind::Npc: return "NPC";
+    case WorldRecordKind::Trainer: return "Trainer";
+    case WorldRecordKind::Travel: return "Travel";
+    }
+    return "";
+}
+} // namespace OpenYAMM::Game

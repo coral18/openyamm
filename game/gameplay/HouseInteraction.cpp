@@ -678,40 +678,6 @@ const HouseEntry::TransportRoute *findTransportRoute(const HouseEntry &houseEntr
     return nullptr;
 }
 
-HouseEntry::TransportRoute effectiveTransportRoute(
-    const HouseEntry &houseEntry,
-    const HouseEntry::TransportRoute &baseRoute,
-    const EventRuntimeState *pEventRuntimeState)
-{
-    if (pEventRuntimeState == nullptr)
-    {
-        return baseRoute;
-    }
-
-    const uint64_t key = EventRuntime::transportRouteOverrideKey(houseEntry.id, baseRoute.routeIndex);
-    const auto iterator = pEventRuntimeState->transportRouteOverrides.find(key);
-
-    if (iterator == pEventRuntimeState->transportRouteOverrides.end())
-    {
-        return baseRoute;
-    }
-
-    const EventRuntimeState::TransportRouteOverride &overrideRoute = iterator->second;
-    HouseEntry::TransportRoute route = baseRoute;
-    route.destinationName = overrideRoute.destinationName.empty()
-        ? baseRoute.destinationName
-        : overrideRoute.destinationName;
-    route.mapFileName = overrideRoute.mapFileName.empty() ? baseRoute.mapFileName : overrideRoute.mapFileName;
-    route.daysAvailable = overrideRoute.daysAvailable;
-    route.travelDays = overrideRoute.travelDays == 0 ? baseRoute.travelDays : overrideRoute.travelDays;
-    route.x = overrideRoute.x;
-    route.y = overrideRoute.y;
-    route.z = overrideRoute.z;
-    route.directionDegrees = overrideRoute.directionDegrees;
-    route.requiredQBit = overrideRoute.requiredQBit;
-    route.useMapStartPosition = overrideRoute.useMapStartPosition;
-    return route;
-}
 
 float innRestDurationMinutes(uint32_t houseId, float currentGameMinutes)
 {
@@ -1838,6 +1804,7 @@ std::vector<HouseActionOption> buildHouseActionOptions(
                 closedReason
             );
             transport.argument = std::to_string(route.routeIndex);
+            transport.transportOffer = TransportOffer{route, {travelDays, price}};
             options.push_back(std::move(transport));
         }
 
@@ -2801,5 +2768,39 @@ HouseActionResult performHouseAction(
     }
 
     return result;
+}
+HouseEntry::TransportRoute effectiveTransportRoute(
+    const HouseEntry &houseEntry,
+    const HouseEntry::TransportRoute &baseRoute,
+    const EventRuntimeState *pEventRuntimeState)
+{
+    if (pEventRuntimeState == nullptr)
+    {
+        return baseRoute;
+    }
+
+    const uint64_t key = EventRuntime::transportRouteOverrideKey(houseEntry.id, baseRoute.routeIndex);
+    const auto iterator = pEventRuntimeState->transportRouteOverrides.find(key);
+
+    if (iterator == pEventRuntimeState->transportRouteOverrides.end())
+    {
+        return baseRoute;
+    }
+
+    const EventRuntimeState::TransportRouteOverride &overrideRoute = iterator->second;
+    HouseEntry::TransportRoute route = baseRoute;
+    route.destinationName = overrideRoute.destinationName.empty()
+        ? baseRoute.destinationName
+        : overrideRoute.destinationName;
+    route.mapFileName = overrideRoute.mapFileName.empty() ? baseRoute.mapFileName : overrideRoute.mapFileName;
+    route.daysAvailable = overrideRoute.daysAvailable;
+    route.travelDays = overrideRoute.travelDays == 0 ? baseRoute.travelDays : overrideRoute.travelDays;
+    route.x = overrideRoute.x;
+    route.y = overrideRoute.y;
+    route.z = overrideRoute.z;
+    route.directionDegrees = overrideRoute.directionDegrees;
+    route.requiredQBit = overrideRoute.requiredQBit;
+    route.useMapStartPosition = overrideRoute.useMapStartPosition;
+    return route;
 }
 }

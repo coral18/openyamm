@@ -7,5 +7,8 @@
 
 namespace OpenYAMM::Game
 {
+std::string resolveSpawnedMapActorName(const MonsterTable &monsterTable,
+    const MonsterTable::MonsterStatsEntry &stats, uint32_t uniqueNameId);
+int16_t resolveMapDeltaActorMonsterId(const MapDeltaActor &actor);
 std::string resolveMapDeltaActorName(const MonsterTable &monsterTable, const MapDeltaActor &actor);
 }

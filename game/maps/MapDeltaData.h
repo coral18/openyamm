@@ -125,6 +125,7 @@ struct MapDeltaActor
 
 struct MapDeltaSpriteObject
 {
+    int16_t lootMonsterId = 0;
     uint16_t spriteId = 0;
     uint16_t objectDescriptionId = 0;
     int x = 0;

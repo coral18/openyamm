@@ -1677,6 +1677,7 @@ static GameplayEventTargetContextActionMetadata toGameplayContextActionMetadata(
     gameplayMetadata.targetName = metadata.targetName;
     gameplayMetadata.chestIds = metadata.chestIds;
     gameplayMetadata.hidden = metadata.hidden;
+    gameplayMetadata.interactionReference = metadata.interactionReference;
     return gameplayMetadata;
 }
 
@@ -2051,6 +2052,10 @@ GameplayWorldHit OutdoorInteractionController::translateInspectHitToGameplayWorl
     else if (inspectHit.kind == "decoration")
     {
         eventTargetHit.targetKind = GameplayWorldEventTargetKind::Decoration;
+        if (view.m_outdoorDecorationBillboardSet
+            && inspectHit.bModelIndex < view.m_outdoorDecorationBillboardSet->billboards.size())
+            eventTargetHit.sourceEntityIndex =
+                view.m_outdoorDecorationBillboardSet->billboards[inspectHit.bModelIndex].entityIndex;
     }
     else if (inspectHit.kind == "spawn")
     {
@@ -5184,6 +5189,7 @@ bool OutdoorInteractionController::tryActivateEventTargetInspectEvent(
                 context.currentEventId = *interactiveEventId;
                 context.eventCount = pBinding->eventCount;
                 context.hideWhenCleared = pBinding->hideWhenCleared;
+                context.position = {{decoration.x, decoration.y, decoration.z}};
                 decorationContext = context;
             }
         }
@@ -5216,6 +5222,12 @@ bool OutdoorInteractionController::tryActivateEventTargetInspectEvent(
                     context.currentEventId = *interactiveEventId;
                     context.eventCount = pBinding->eventCount;
                     context.hideWhenCleared = pBinding->hideWhenCleared;
+                    if (view.m_pOutdoorMapData != nullptr
+                        && inspectHit.bModelIndex < view.m_pOutdoorMapData->entities.size())
+                    {
+                        const OutdoorEntity &entity = view.m_pOutdoorMapData->entities[inspectHit.bModelIndex];
+                        context.position = {{entity.x, entity.y, entity.z}};
+                    }
                     decorationContext = context;
                 }
             }

@@ -1051,3 +1051,32 @@ elements:
     asset:
       default: obsidian_journal_map_frame
     notes: Transparent frame drawn over the map only. Keep JournalMapViewport and its hit region unchanged.
+  - id: JournalAtlasButton
+    anchor: top_left
+    offset_x: 560
+    offset_y: 397.333333
+    width: 67.2
+    height: 26.666667
+    z_index: 40
+    interactive: true
+    asset:
+      default: obsidian_journal_close_normal
+      highlighted: obsidian_journal_close_hover
+      pressed: obsidian_journal_close_pressed
+      selected: obsidian_journal_close_selected
+      disabled: obsidian_journal_close_disabled
+    children:
+    - id: JournalAtlasButtonLabel
+      anchor: top_left
+      offset_x: 4
+      offset_y: 4.133333
+      width: 59.2
+      height: 18.4
+      z_index: 41
+      text:
+        value: Atlas
+        font: Fondamento
+        scale: 0.5
+        color: '#e8d1a4'
+        align_x: center
+        align_y: middle

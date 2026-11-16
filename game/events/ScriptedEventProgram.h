@@ -1,6 +1,7 @@
 #pragma once
 
 #include "game/events/ScriptedEventTimer.h"
+#include "game/events/SiteInteractionReference.h"
 
 #include <cstdint>
 #include <optional>
@@ -17,15 +18,43 @@ class ScriptedEventProgram
 public:
     using TimerTrigger = ScriptedEventTimerDefinition;
 
+    // Authored relocation possibilities, not a prediction that an event/branch is currently available.
+    struct NpcLocation
+    {
+        uint32_t npcId = 0;
+        uint32_t houseId = 0;
+        bool operator==(const NpcLocation &) const = default;
+    };
+
+    // Authored possible topic assignments; they do not establish current dialogue availability.
+    struct NpcTopicReference
+    {
+        uint32_t npcId = 0;
+        uint32_t topicId = 0;
+        bool operator==(const NpcTopicReference &) const = default;
+    };
+
+    // Possible local SummonMonsters calls, not a live population or branch-eligibility prediction.
+    struct MonsterSpawn
+    {
+        uint32_t encounterSlot = 0, level = 0, count = 0;
+        int32_t x = 0, y = 0, z = 0;
+        uint32_t group = 0, uniqueNameId = 0;
+    };
+
     struct ContextActionMetadata
     {
         std::string kind;
         std::string source;
         std::optional<uint32_t> houseId;
+        // Authored alternatives for a shared entrance; not a prediction of the active branch.
+        std::vector<uint32_t> houseIds;
         std::optional<std::string> targetMap;
         std::optional<std::string> targetName;
+        std::vector<std::string> targetMaps;
         std::vector<uint32_t> chestIds;
         bool hidden = false;
+        std::optional<SiteInteractionReference> interactionReference;
     };
 
     // An effect the event's hover name shows once the party has the autonote that records it.
@@ -65,6 +94,17 @@ public:
     const std::vector<std::string> &spriteNames() const;
     const std::vector<uint32_t> &castSpellIds() const;
     const std::vector<FactionRelation> &factionRelations() const;
+    const std::unordered_map<uint16_t, std::vector<uint32_t>> &itemRewards() const;
+    const std::unordered_map<uint16_t, std::vector<uint32_t>> &autonoteReferences() const;
+    const std::unordered_map<uint16_t, std::string> &siteReferences() const;
+    const std::unordered_map<uint16_t, SiteInteractionReference> &interactionReferences() const;
+    const std::unordered_map<uint16_t, std::vector<std::vector<std::string>>> &siteGroups() const;
+    const std::unordered_map<uint16_t, std::vector<std::string>> &connectionTargets() const;
+    const std::unordered_map<uint16_t, std::vector<NpcLocation>> &npcLocations() const;
+    const std::unordered_map<uint16_t, std::vector<NpcTopicReference>> &npcTopicReferences() const;
+    const std::unordered_map<uint16_t, std::vector<uint32_t>> &npcEncounters() const;
+    const std::unordered_map<uint16_t, std::vector<uint32_t>> &qbitGrants() const;
+    const std::unordered_map<uint16_t, std::vector<MonsterSpawn>> &monsterSpawns() const;
     const std::vector<TimerTrigger> &timerTriggers() const;
     bool hasEvent(uint16_t eventId) const;
     bool isLevitateSensitivePressurePlate(uint16_t eventId, uint32_t faceAttributes) const;
@@ -103,6 +143,18 @@ private:
     std::vector<std::string> m_spriteNames;
     std::vector<uint32_t> m_castSpellIds;
     std::vector<FactionRelation> m_factionRelations;
+    std::unordered_map<uint16_t, std::vector<uint32_t>> m_itemRewards;
+    std::unordered_map<uint16_t, std::vector<uint32_t>> m_autonoteReferences;
+    std::unordered_map<uint16_t, std::string> m_siteReferences;
+    std::unordered_map<uint16_t, std::string> m_siteReferenceKinds;
+    std::unordered_map<uint16_t, SiteInteractionReference> m_interactionReferences;
+    std::unordered_map<uint16_t, std::vector<std::vector<std::string>>> m_siteGroups;
+    std::unordered_map<uint16_t, std::vector<std::string>> m_connectionTargets;
+    std::unordered_map<uint16_t, std::vector<NpcLocation>> m_npcLocations;
+    std::unordered_map<uint16_t, std::vector<NpcTopicReference>> m_npcTopicReferences;
+    std::unordered_map<uint16_t, std::vector<uint32_t>> m_npcEncounters;
+    std::unordered_map<uint16_t, std::vector<uint32_t>> m_qbitGrants;
+    std::unordered_map<uint16_t, std::vector<MonsterSpawn>> m_monsterSpawns;
     uint32_t m_levitateTrapFaceMask = 0;
     std::vector<uint16_t> m_levitateTrapEvents;
     std::vector<TimerTrigger> m_timerTriggers;
