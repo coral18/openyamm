@@ -2186,6 +2186,13 @@ std::vector<std::string> AssetFileSystem::resolveVirtualPathCandidates(const std
         }
     };
 
+    // Player language folders mount at /languages, while shipped catalogs live at /engine/languages.
+    // This explicit namespace must take precedence over the package search, including same-named .po files.
+    if (normalizedPath.starts_with("languages/"))
+    {
+        appendCandidate(normalizedPath);
+    }
+
     const auto appendPackageCandidates =
         [this, &appendCandidate, packageQualified](const std::string &candidate)
     {

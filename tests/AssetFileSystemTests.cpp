@@ -579,6 +579,49 @@ TEST_CASE("AssetFileSystem mounts a language pack's fonts, sounds, videos and ic
     std::filesystem::remove_all(temporaryRoot);
 }
 
+TEST_CASE("A player's language catalog overrides the shipped file and retains other shipped catalogs")
+{
+    using namespace OpenYAMM::Engine;
+    const std::filesystem::path temporaryRoot = makeTemporaryRoot();
+    const std::filesystem::path assetRoot = temporaryRoot / "assets";
+    const AssetScaleProfile profile = createUniformAssetScaleProfile(AssetScaleTier::X1);
+    writeZipFile(assetRoot / "packs/engine.core.zip", {
+        {"languages/ts/language.yml", "name: Shipped\n"},
+        {"languages/ts/text/mm9.po", "msgid \"Greeting\"\nmsgstr \"Shipped greeting\"\n"},
+        {"languages/ts/text/engine.po", "msgid \"Shared\"\nmsgstr \"Shipped shared\"\n"},
+        {"world.yml", "engine-world"}
+    });
+    writeCorePackIndex(assetRoot, {"engine"});
+    writeTextFile(temporaryRoot / "languages/ts/language.yml", "name: Local\n");
+    writeTextFile(temporaryRoot / "languages/ts/text/mm9.po",
+                  "msgid \"Greeting\"\nmsgstr \"Official retail greeting\"\n");
+
+    const auto check = [&](bool local, const std::string &languageId)
+    {
+        InstalledContentOptions options;
+        options.languageId = languageId;
+        if (local)
+        {
+            options.userLanguagesRoot = temporaryRoot / "languages";
+        }
+        AssetFileSystem fs;
+        REQUIRE(fs.initialize(temporaryRoot, assetRoot, AssetScaleTier::X1, profile, "mm7", options));
+        CHECK(fs.readTextFile("languages/ts/language.yml")
+              == std::optional<std::string>(local ? "name: Local\n" : "name: Shipped\n"));
+        CHECK(fs.readTextFile("world.yml") == std::optional<std::string>("engine-world"));
+        REQUIRE(activateLanguage(fs, languageId));
+        const std::string greeting = languageId == "en" ? "Greeting"
+            : local ? "Official retail greeting" : "Shipped greeting";
+        CHECK(localize("Greeting", "world:mm9") == greeting);
+        CHECK(localize("Shared") == (languageId == "en" ? "Shared" : "Shipped shared"));
+        activateLanguage(fs, "en");
+    };
+    check(false, "ts");
+    check(true, "ts");
+    check(true, "en");
+    std::filesystem::remove_all(temporaryRoot);
+}
+
 TEST_CASE("A language's translation is found for a table cell with spaces or line breaks around its text")
 {
     using namespace OpenYAMM::Engine;

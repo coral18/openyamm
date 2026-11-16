@@ -315,6 +315,10 @@ Import keeps only texts the templates know or that wait for C++ (`ui_text.txt`),
 English's codes, takes the most common translation when there are several, and writes everything it could not place
 or chose between to `output/l10n/<lang>-import-review.txt` (outside the pack).
 
+An owned Polish MM9 installation can also supply a private voice and official-dialogue overlay, paired directly with
+an installed release's content index. See [Polish MM9 retail localization](MM9_POLISH_RETAIL.md) for the importer,
+known retail gaps and installation instructions. It does not require a loose English MM9 extraction or replace RUDE graphs.
+
 Sources the extractor reads:
 
 - C++ (`game/`, `engine/`): `tr`, `trc` and `trn` calls with string literals.
