@@ -147,8 +147,8 @@ struct Character
     // special skills. Saved; party games keep it empty and never read it.
     std::array<ActionBarSlot, ActionBarSlotCount> actionBar = {};
     // The special skills (talents) learned in a MAW solo run, by talent id: their ranks (devdocs/solo_action/TALENTS.md).
-    // Saved; empty in every other game.
-    std::unordered_map<std::string, uint8_t> talentRanks;
+    // Saved; empty in every other game. Two bytes: Conditioning has no last rank.
+    std::unordered_map<std::string, uint16_t> talentRanks;
     // Their cooldowns and timed effects. Not saved.
     SoloTalentState talentState;
     // Battle orders (game/party/BattleOrders.h): what Attack does, tried in order, then the fallback. Saved; they
@@ -305,6 +305,9 @@ class Party;
 // A new solo run's party: the first member alone (with the first's character buffs), its action bar filled. Every new
 // game path with RulesetOptions::soloRun calls it once (New Game, the debug start, scenarios).
 void makeSoloRunParty(Party &party);
+// A new solo run's travel scrolls, one each of Water Walk, Jump, Town Portal, Fly and Lloyd's Beacon (user,
+// 2026-11-15). Every new game path that starts a solo run gives them once; turning an existing game solo does not.
+void giveSoloRunStartScrolls(Party &party);
 
 struct SpellEntry;
 
@@ -680,6 +683,8 @@ public:
         {
             Damage,
             Heal,
+            // A regeneration tick (healMember's regeneration flag): the HUD shows these summed, not one by one.
+            Regeneration,
             ConditionGained,
             ConditionCleared,
         };
@@ -1084,7 +1089,8 @@ public:
         size_t memberIndex, CharacterCondition condition, float gameMinutes, float expireGameMinutes);
     bool clearMemberCondition(size_t memberIndex, CharacterCondition condition);
     bool hasMemberConditionImmunity(size_t memberIndex, CharacterCondition condition) const;
-    bool healMember(size_t memberIndex, int amount);
+    // regeneration: a periodic tick rather than a heal, which the solo HUD's self combat text sums over time.
+    bool healMember(size_t memberIndex, int amount, bool regeneration = false);
     // Changes a member's HP outside combat (drains, shared life), up to full: no shields, no speech; conditions follow.
     void adjustMemberHealth(size_t memberIndex, int amount);
     bool reviveMember(size_t memberIndex, int health, bool applyWeak);

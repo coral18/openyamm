@@ -7951,7 +7951,7 @@ void Party::advanceTimedStates(float deltaSeconds)
                 while (buff.periodicAccumulatorSeconds >= OeFiveGameMinuteTickGameSeconds)
                 {
                     buff.periodicAccumulatorSeconds -= OeFiveGameMinuteTickGameSeconds;
-                    healMember(memberIndex, healPerTick);
+                    healMember(memberIndex, healPerTick, true);
                 }
             }
 
@@ -8589,7 +8589,7 @@ void Party::pushSelfTextEvent(const SelfTextEvent &event)
     m_selfTextEvents.push_back(event);
 }
 
-bool Party::healMember(size_t memberIndex, int amount)
+bool Party::healMember(size_t memberIndex, int amount, bool regeneration)
 {
     Character *pMember = combatant(memberIndex);
 
@@ -8620,7 +8620,8 @@ bool Party::healMember(size_t memberIndex, int amount)
         m_gameMinutes);
     if (pMember->health > previousHealth)
     {
-        pushSelfTextEvent({SelfTextEvent::Kind::Heal, memberIndex, pMember->health - previousHealth});
+        pushSelfTextEvent({regeneration ? SelfTextEvent::Kind::Regeneration : SelfTextEvent::Kind::Heal, memberIndex,
+            pMember->health - previousHealth});
     }
     return pMember->health > previousHealth;
 }
@@ -9845,6 +9846,17 @@ void makeSoloRunParty(Party &party)
     if (Character *pMember = party.member(0))
     {
         prefillSoloActionBar(*pMember);
+    }
+}
+
+void giveSoloRunStartScrolls(Party &party)
+{
+    // Water Walk, Jump, Town Portal, Fly and Lloyd's Beacon.
+    constexpr std::array<uint32_t, 5> ScrollItemIds = {326, 315, 330, 320, 332};
+
+    for (uint32_t itemId : ScrollItemIds)
+    {
+        party.tryGrantItem(itemId);
     }
 }
 }

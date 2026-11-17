@@ -2,6 +2,7 @@
 
 #include "game/party/Party.h"
 #include "game/rules/SoloTalents.h"
+#include "game/rules/maw/MawExperienceCurve.h"
 
 #include <algorithm>
 #include <cmath>
@@ -25,8 +26,8 @@ float passivePercent(const Character &member, std::string_view id)
     return pTalent != nullptr ? talentValue(*pTalent, rank) : 0.0f;
 }
 
-// A share of a base stat, rounded; the "+2 %" of Weapon Training and the others reads the character's own base stat
-// (what training and potions raised), not items or buffs, so the passives do not compound with each other.
+// A share of a base stat, rounded; Conditioning's and Steady Aim's percent reads the character's own base stat (what
+// training and potions raised), not items or buffs, so the passives do not compound with each other.
 int share(uint32_t base, float percent)
 {
     return int(std::lround(double(base) * percent / 100.0));
@@ -40,6 +41,17 @@ constexpr double UnbrokenThreshold = 0.30;
 // Cheat Death: what a fatal hit leaves, and the cut that follows.
 constexpr double CheatDeathHealthLeft = 0.05;
 constexpr double CheatDeathDamageTaken = 0.05;
+// Manathirst: an area spell gives SP for at most this many monsters within the window after its first hit (a Fireball
+// lands at once; a Meteor Shower's stones fall within it).
+constexpr int AreaManaLeechMonsters = 3;
+constexpr float AreaManaLeechWindowSeconds = 0.5f;
+
+// Bloodthirst's and Manathirst's leech floor divisor at a rank: ÷5 without it, half a step a rank down to ÷2.5 at the
+// fifth.
+double thirstFloorDivisor(int rank)
+{
+    return 5.0 - 0.5 * std::clamp(rank, 0, 5);
+}
 }
 
 void applyPassives(Character &member)
@@ -50,41 +62,41 @@ void applyPassives(Character &member)
     }
 
     CharacterStatBonuses &bonus = member.magicalBonuses;
-    const float weapon = passivePercent(member, "weapon_training");
-    const float marksman = passivePercent(member, "marksman");
-    const float attunement = passivePercent(member, "attunement");
-    const float resolve = passivePercent(member, "resolve");
+    const float conditioning = passivePercent(member, "conditioning");
+    const float aim = member.talentState.steadyAimOn ? passivePercent(member, "steady_aim") : 0.0f;
 
-    bonus.might += share(member.might, weapon);
-    bonus.endurance += share(member.endurance, weapon + attunement);
-    bonus.speed += share(member.speed, weapon + marksman);
-    bonus.accuracy += share(member.accuracy, marksman);
-    bonus.intellect += share(member.intellect, attunement);
-    bonus.personality += share(member.personality, attunement);
+    bonus.might += share(member.might, conditioning);
+    bonus.intellect += share(member.intellect, conditioning);
+    bonus.personality += share(member.personality, conditioning);
+    bonus.endurance += share(member.endurance, conditioning);
+    bonus.accuracy += share(member.accuracy, conditioning);
+    bonus.speed += share(member.speed, conditioning);
+    bonus.luck += share(member.luck, conditioning + aim);
 
-    if (member.talentState.steadyAimOn)
-    {
-        bonus.luck += share(member.luck, passivePercent(member, "steady_aim"));
-    }
-
-    if (resolve > 0.0f)
+    if (talentRank(member, "resolve") > 0)
     {
         CharacterResistanceSet &res = bonus.resistances;
         const CharacterResistanceSet &base = member.baseResistances;
-        const auto raise = [resolve](int &value, int baseValue)
+        const CharacterResistanceSet &permanent = member.permanentBonuses.resistances;
+        const auto raise = [&member](int &value, int baseValue, int permanentValue)
         {
-            value += int(std::lround(double(std::max(0, value + baseValue)) * resolve / 100.0));
+            value += resolveShare(member, value + baseValue + permanentValue);
         };
-        raise(res.fire, base.fire);
-        raise(res.air, base.air);
-        raise(res.water, base.water);
-        raise(res.earth, base.earth);
-        raise(res.mind, base.mind);
-        raise(res.body, base.body);
-        raise(res.spirit, base.spirit);
-        raise(res.light, base.light);
-        raise(res.dark, base.dark);
+        raise(res.fire, base.fire, permanent.fire);
+        raise(res.air, base.air, permanent.air);
+        raise(res.water, base.water, permanent.water);
+        raise(res.earth, base.earth, permanent.earth);
+        raise(res.mind, base.mind, permanent.mind);
+        raise(res.body, base.body, permanent.body);
+        raise(res.spirit, base.spirit, permanent.spirit);
+        raise(res.light, base.light, permanent.light);
+        raise(res.dark, base.dark, permanent.dark);
     }
+}
+
+int resolveShare(const Character &member, int resistance)
+{
+    return int(std::lround(double(std::max(0, resistance)) * passivePercent(member, "resolve") / 100.0));
 }
 
 void update(Party &party, float partyX, float partyY, bool calm, float deltaSeconds)
@@ -112,6 +124,7 @@ void update(Party &party, float partyX, float partyY, bool calm, float deltaSeco
         state.surgeDamageSeconds = std::max(0.0f, state.surgeDamageSeconds - deltaSeconds);
         state.cheatDeathSeconds = std::max(0.0f, state.cheatDeathSeconds - deltaSeconds);
         state.cheatDeathCooldown = std::max(0.0f, state.cheatDeathCooldown - deltaSeconds);
+        state.areaManaLeechSeconds = std::max(0.0f, state.areaManaLeechSeconds - deltaSeconds);
         state.onslaughtSeconds = std::max(0.0f, state.onslaughtSeconds - deltaSeconds);
 
         if (state.onslaughtSeconds <= 0.0f)
@@ -237,15 +250,9 @@ int cheatDeath(Character &member, int damage, int currentHealth, int maximumHeal
 
 double spellDamageScale(const Character &caster)
 {
-    const double surge = caster.talentState.spellSurgeArmed || caster.talentState.surgeDamageSeconds > 0.0f
+    return caster.talentState.spellSurgeArmed || caster.talentState.surgeDamageSeconds > 0.0f
         ? 1.0 + tablePercent("spell_surge", 50.0f) / 100.0
         : 1.0;
-    return (1.0 + passivePercent(caster, "attunement") / 100.0) * surge;
-}
-
-double healScale(const Character &caster)
-{
-    return 1.0 + passivePercent(caster, "attunement") / 100.0;
 }
 
 double overloadScale(const Character &caster, int monstersNearTarget)
@@ -269,8 +276,41 @@ double leechBonus(const Character &member)
 
 double leechFloorDivisor(const Character &member)
 {
-    constexpr double Divisors[] = {5.0, 4.0, 3.0, 2.5};
-    return Divisors[std::clamp(talentRank(member, "bloodthirst"), 0, 3)];
+    return thirstFloorDivisor(talentRank(member, "bloodthirst"));
+}
+
+double manaLeechShare(const Character &member)
+{
+    return passivePercent(member, "manathirst") / 100.0;
+}
+
+double manaLeechFloorDivisor(const Character &member)
+{
+    return thirstFloorDivisor(talentRank(member, "manathirst"));
+}
+
+bool takeAreaManaLeech(Character &member)
+{
+    SoloTalentState &state = member.talentState;
+
+    if (state.areaManaLeechSeconds <= 0.0f)
+    {
+        state.areaManaLeechHits = 0;
+        state.areaManaLeechSeconds = AreaManaLeechWindowSeconds;
+    }
+
+    if (state.areaManaLeechHits >= AreaManaLeechMonsters)
+    {
+        return false;
+    }
+
+    ++state.areaManaLeechHits;
+    return true;
+}
+
+double nonPhysicalDamageScale(const Character &member)
+{
+    return std::clamp(1.0 - passivePercent(member, "spell_suppression") / 100.0, 0.0, 1.0);
 }
 
 bool nextSpellFree(const Character &caster)
@@ -286,5 +326,12 @@ void spendSurge(Character &caster)
         // A missile rolls its damage when it lands: a few seconds' window keeps the surge on it.
         caster.talentState.surgeDamageSeconds = 3.0f;
     }
+}
+
+double earlyMonsterCut(const Character &member)
+{
+    // MAW's curve: a solo's own surcharge only starts at level 100, after the cut has ended.
+    const double earnedLevel = std::floor(mawLevelForExperience(double(member.experience)));
+    return soloTalentTable().earlyMonsterCut(std::max(double(member.level), earnedLevel));
 }
 }

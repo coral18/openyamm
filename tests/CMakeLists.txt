@@ -21,6 +21,7 @@ add_executable(openyamm_unit_tests
     ContentManifestTests.cpp
     WorldDecorationTests.cpp
     RulesetTests.cpp
+    NamedModsTests.cpp
     MapLayoutIdentityTests.cpp
     PlaythroughStatisticsTests.cpp
     BattleOrdersTests.cpp
@@ -32,6 +33,7 @@ add_executable(openyamm_unit_tests
     SoloTalentTests.cpp
     MonsterModifierTests.cpp
     CinematicRuntimeTests.cpp
+    SceneOverlayTests.cpp
     Mm9ActorRulesTests.cpp
     Mm9MonsterAiTests.cpp
     EffectDefinitionLoaderTests.cpp
@@ -77,6 +79,7 @@ add_executable(openyamm_unit_tests
     GameplayBolsterRuntimeTests.cpp
     GameplaySaveLoadUiSupportTests.cpp
     AlchemyBenchRegressionTests.cpp
+    PotionUpkeepTests.cpp
     GameplayRuleRegressionTests.cpp
     GameInputSystemTests.cpp
     GlUniformCacheTests.cpp
@@ -98,6 +101,7 @@ add_executable(openyamm_unit_tests
     IndoorCollisionPrimitivesTests.cpp
     IndoorMoverFaceTexelTests.cpp
     IndoorMoversTests.cpp
+    IndoorSourceGeometryCompilerTests.cpp
     IndoorActorActivationTests.cpp
     IndoorActorPlacementTests.cpp
     IndoorBakedLightingTests.cpp
@@ -179,7 +183,6 @@ add_executable(openyamm_unit_tests
     ../game/scenario/ScenarioYamlLoader.cpp
     SkyStateTests.cpp
     ../game/render/SkyPresets.cpp
-    ../game/render/SkyState.cpp
     ../game/render/FirstPersonViewModelKit.cpp
     ../game/render/HeldWeapons.cpp
     ../game/outdoor/OutdoorDistantSea.cpp
@@ -213,27 +216,20 @@ add_executable(openyamm_unit_tests
     ../game/app/KeyboardBindings.cpp
     ../game/app/ScreenManager.cpp
     ../engine/AudioSystem.cpp
-    ../engine/AssetFileSystem.cpp
-    ../engine/AssetScaleTier.cpp
     ../engine/UserDataPaths.cpp
     ../engine/LogFile.cpp
-    ../engine/AssetPackIndex.cpp
     ../engine/update/AppInstallation.cpp
     ../engine/update/AppUpdater.cpp
     ../engine/update/HttpTransport.cpp
     ../engine/update/ReleaseManifest.cpp
-    ../engine/update/Sha256.cpp
     ../engine/FontAsset.cpp
     ../engine/ImageAssetLoader.cpp
-    ../engine/ImageAssetPaths.cpp
     ../engine/ImageMipmaps.cpp
     ../engine/ParallelFor.cpp
     ../engine/render/CookedTexture.cpp
-    ../engine/render/CookedTextureHeader.cpp
     ../engine/render/ModelEnvironment.cpp
     ../engine/render/LightGrid.cpp
     ../engine/render/TextureBlockCodec.cpp
-    ../engine/models/CgltfImplementation.cpp
     ../engine/models/GltfModelLoader.cpp
     ${OPENYAMM_BGFX_SOURCE_DIR}/3rdparty/meshoptimizer/src/allocator.cpp
     ${OPENYAMM_BGFX_SOURCE_DIR}/3rdparty/meshoptimizer/src/vcacheoptimizer.cpp
@@ -244,9 +240,6 @@ add_executable(openyamm_unit_tests
     ../game/render/SpriteAtlasMipmaps.cpp
     ../game/render/SpriteAtlasCook.cpp
     ../game/render/NativeSpriteTextureCache.cpp
-    ../engine/TextTable.cpp
-    ../engine/TextCatalog.cpp
-    ../engine/Localization.cpp
     ../game/render/TextureFiltering.cpp
     ../game/arcomage/ArcomageAi.cpp
     ../game/arcomage/ArcomageLoader.cpp
@@ -258,24 +251,21 @@ add_executable(openyamm_unit_tests
     ../game/content/CompletionCertificates.cpp
     ../game/content/ContentManifest.cpp
     ../game/content/ContentTableComposer.cpp
+    ../game/content/NamedMods.cpp
     ../game/content/WorldDecorations.cpp
     ../game/content/RulesetDefinition.cpp
     ../game/content/RulesetOptions.cpp
     ../game/data/ActorNameResolver.cpp
     ../game/data/GameDataLoader.cpp
-    ../game/data/MapScriptSources.cpp
     ../game/debug/GameplayDebugTrace.cpp
     ../game/debug/MawTestParties.cpp
-    ../engine/scripting/LuaStateOwner.cpp
     ../game/events/EventRuntime.cpp
-    ../game/events/MechanismDistance.cpp
     ../game/events/MechanismAudio.cpp
     ../game/events/EventDialogContent.cpp
     ../game/gameplay/Mm9DialogueSpeaker.cpp
     ../game/fx/ActorClipSounds.cpp
     ../game/fx/ActorClipEffects.cpp
     ../game/fx/TalkPortraitFrame.cpp
-    ../game/events/ScriptedEventProgram.cpp
     ../game/events/ScriptedEventTimer.cpp
     ../game/gameplay/ChestRuntime.cpp
     ../game/gameplay/TreasureRuntime.cpp
@@ -290,7 +280,6 @@ add_executable(openyamm_unit_tests
     ../game/gameplay/GameplayActorModifiers.cpp
     ../game/gameplay/CinematicRuntime.cpp
     ../game/gameplay/GameplayMonsterSpawn.cpp
-    ../game/maps/SceneOverlayOperations.cpp
     ../game/gameplay/MeleeContactEffects.cpp
     ../game/gameplay/GameplayActorService.cpp
     ../game/gameplay/GameplayWorldItemPolicy.cpp
@@ -330,42 +319,22 @@ add_executable(openyamm_unit_tests
     ../game/gameplay/GameplayLootFilter.cpp
     ../game/gameplay/MonsterDeathExplosion.cpp
     ../game/gameplay/SavePreviewImage.cpp
-    ../game/maps/MapDeltaData.cpp
     ../game/maps/MapAssetLoader.cpp
-    ../game/maps/SceneOverlayPaths.cpp
     ../game/maps/DecorationModelPlacement.cpp
     ../game/maps/ActorModelManifest.cpp
     ../game/maps/DecorationModelManifest.cpp
     ../game/maps/MapDecorationTextures.cpp
-    ../game/maps/MapIdentity.cpp
     ../game/maps/MapLayoutIdentity.cpp
     ../game/maps/SaveGame.cpp
-    ../game/maps/MapRegistry.cpp
-    ../game/maps/IndoorSceneYml.cpp
-    ../game/maps/MistYml.cpp
     ../game/indoor/IndoorTerrainSurface.cpp
     ../game/render/TerrainMaterialConfig.cpp
-    ../game/maps/MapItemSourceYml.cpp
     ../game/maps/MapPresentation.cpp
-    ../game/maps/MechanismAudioYml.cpp
-    ../game/maps/OutdoorSceneYml.cpp
-    ../game/maps/TerrainTileData.cpp
-    ../game/indoor/IndoorCollisionPrimitives.cpp
-    ../game/indoor/IndoorGeometryUtils.cpp
-    ../game/indoor/IndoorMovers.cpp
-    ../game/indoor/IndoorDaylight.cpp
-    ../game/indoor/IndoorWater.cpp
     ../game/indoor/IndoorFaceDrawGroups.cpp
     ../game/indoor/IndoorLightingRuntime.cpp
-    ../game/indoor/IndoorMapData.cpp
     ../game/indoor/IndoorBakedLighting.cpp
-    ../game/indoor/IndoorMovementController.cpp
     ../game/indoor/IndoorPartyRuntime.cpp
-    ../game/indoor/IndoorPathfindingBuilder.cpp
     ../game/indoor/IndoorLightReach.cpp
-    ../game/indoor/IndoorPortalGraph.cpp
     ../game/indoor/IndoorPortalVisibility.cpp
-    ../game/indoor/IndoorSectorFaceGrid.cpp
     ../game/fx/ParticleRecipes.cpp
     ../game/fx/ProjectileEffectBindings.cpp
     ../game/fx/ProjectileModelBindings.cpp
@@ -377,6 +346,7 @@ add_executable(openyamm_unit_tests
     ../game/fx/ParticleSystem.cpp
     ../game/fx/MistWisps.cpp
     ../game/items/AlchemyBenchRuntime.cpp
+    ../game/items/PotionUpkeep.cpp
     ../game/items/CraftingRuntime.cpp
     ../game/items/InventoryBags.cpp
     ../game/items/ItemSearch.cpp
@@ -416,7 +386,6 @@ add_executable(openyamm_unit_tests
     ../game/tables/MonsterTable.cpp
     ../game/tables/MonsterShields.cpp
     ../game/tables/MonsterModifiers.cpp
-    ../game/tables/Mm9MonsterAi.cpp
     ../game/tables/MonsterRelationAddOns.cpp
     ../game/tables/MonsterProjectileTable.cpp
     ../game/tables/MergedBaseTables.cpp
@@ -496,7 +465,6 @@ add_executable(openyamm_unit_tests
     ../game/tables/SpellFxTable.cpp
     ../game/tables/SpeechReactionTable.cpp
     ../game/tables/TransitionTable.cpp
-    ../game/tables/SpriteTables.cpp
     ../game/tables/LiquidTable.cpp
     ../game/tables/TextureFrameTable.cpp
     ../game/ui/GameplayUiController.cpp
@@ -506,22 +474,16 @@ add_executable(openyamm_unit_tests
     ../game/ui/HouseShopLedger.cpp
     ../game/ui/SpellbookUiLayout.cpp
     ../game/ui/UiLayoutManager.cpp
-    ../game/outdoor/OutdoorGeometryUtils.cpp
     ../game/outdoor/OutdoorMeadow.cpp
     ../game/outdoor/OutdoorLightingRuntime.cpp
     ../game/outdoor/OutdoorLightingData.cpp
     ../game/render/lighting/BakedLightingFormat.cpp
-    ../game/outdoor/OutdoorMapData.cpp
     ../game/outdoor/OutdoorNavigationData.cpp
     ../game/outdoor/OutdoorRenderData.cpp
     ../game/outdoor/OutdoorMechanismRuntime.cpp
-    ../game/outdoor/OutdoorMovementController.cpp
     ../game/outdoor/OutdoorMovementDriver.cpp
-    ../game/outdoor/OutdoorPathfindingBuilder.cpp
     ../game/outdoor/OutdoorPartyRuntime.cpp
     ../game/pathfinding/ActorPathRuntime.cpp
-    ../game/pathfinding/PathMap.cpp
-    ../game/pathfinding/PathPlanner.cpp
     ../tools/LegacyLuaExport.cpp
     ../tools/legacy_events/EvtProgram.cpp
     ../tools/legacy_events/StrTable.cpp
@@ -547,6 +509,8 @@ target_compile_definitions(openyamm_unit_tests
 
 target_link_libraries(openyamm_unit_tests
     PRIVATE
+        openyamm_core_compile
+        openyamm_core
         openyamm_bgfx
         SDL3::SDL3
         physfs-static

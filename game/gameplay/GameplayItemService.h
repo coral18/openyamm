@@ -4,6 +4,7 @@
 #include "game/ui/GameplayOverlayTypes.h"
 
 #include <cstddef>
+#include <string>
 
 namespace OpenYAMM::Game
 {
@@ -23,6 +24,9 @@ public:
         GameplayScreenRuntime &runtime,
         size_t memberIndex,
         bool keepCharacterScreenOpen);
+    // The held item when the rules make it travel (MAW's dimension maps): it is used up and the party goes to the map
+    // it names. False for every other item, which stays in hand.
+    bool tryUseHeldTravelItem(GameplayScreenRuntime &runtime);
     // The member's quick item slot (the potion radial): the matching potion or scroll from the member's bags, else
     // another member's (QuickItemSlots::findPartyItem), used on the member as a held item is (a scroll casts, a potion is drunk under the rules' recovery). What remains goes back
     // where it lay. False, with a status line, when nothing was used.
@@ -46,6 +50,10 @@ public:
     bool mixAlchemyBench(GameplayScreenRuntime &runtime, bool mixAll);
     // Brews the bench's selected recipe, brewing missing ingredients first from known recipes.
     bool brewAlchemyChain(GameplayScreenRuntime &runtime, bool brewAll);
+    // Brews what the upkeep lists' potion stock lacks (PotionUpkeep::restock: the Upkeep key's auto-brew and the
+    // potion popup's Brew button) and says in the status line what it brewed and what it could not; returns that
+    // text. With `quietWhenFull` nothing is said when the stock lacks nothing.
+    std::string restockUpkeepPotions(GameplayScreenRuntime &runtime, bool quietWhenFull);
     // A crafting material held over an item (right-click) opens the Workbench's Crafting tab with both in place; the
     // material goes back to the party. False when the held item is no material or the item takes none.
     bool openWorkbenchForHeldMaterial(GameplayScreenRuntime &runtime, const CraftItemRef &target);

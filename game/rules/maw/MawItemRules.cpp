@@ -419,6 +419,10 @@ std::optional<std::string> mawSpecialText(uint16_t specialId, int itemPower)
             return plus(Engine::trNoop("+{amount} to all Resistances."));
         case 2:
             return plus(Engine::trNoop("+{amount} to all Seven Statistics."));
+        // MAW recomputes every monster hit, so the table's half missile damage never acts: Shielding is x0.85 physical
+        // damage taken, from one item or more (IT:3405-3418), and the Storm keeps only its Air Resistance.
+        case 36:
+            return Engine::tr("Reduces physical damage taken by 15% (does not stack).");
         case 38:
             return Engine::tr("Meditation Skill +{amount}", {{"amount", meditation}});
         case 40:
@@ -456,6 +460,8 @@ std::optional<std::string> mawSpecialText(uint16_t specialId, int itemPower)
             return plus(Engine::trNoop("+{amount} Intellect and Personality."));
         case 66:
             return Engine::tr("Regenerates Hit Points and Meditation Skill +{amount}", {{"amount", meditation}});
+        case 69:
+            return Engine::tr("+20 Air Resistance.");
         case 74:
             return plus(Engine::trNoop("+{amount} Personality and Accuracy."));
         case 75:
@@ -613,7 +619,8 @@ void applyStandardItemEffects(
     bonuses.spellRegenPerSecond = spellRegenPerSecond;
 }
 
-// The artifact powers a tooltip names: the permanent buffs and the immunities its Standard effects give.
+// The artifact powers a tooltip names: the permanent buffs and the immunities its Standard effects give. Their half
+// missile damage (a permanent Shield) is not named: MAW recomputes every monster hit, so it never acts.
 std::vector<std::string> artifactPowerLines(
     const ItemDefinition &itemDefinition,
     const StandardItemEnchantTable *pStandardTable,
@@ -622,11 +629,6 @@ std::vector<std::string> artifactPowerLines(
     Character worn;
     applyStandardItemEffects(itemDefinition, EquippedItemRuntimeState{}, pStandardTable, pSpecialTable, worn);
     std::vector<std::string> lines;
-
-    if (worn.halfMissileDamage)
-    {
-        lines.push_back(Engine::tr("Permanent Shield"));
-    }
 
     if (worn.waterWalking)
     {
@@ -775,13 +777,27 @@ bool mawRegenerationArtifact(uint32_t itemId, bool spellPoints)
                        : std::find(HealthArtifacts.begin(), HealthArtifacts.end(), itemId) != HealthArtifacts.end();
 }
 
-int mawWornRegenerationArtifacts(const Character &character, bool spellPoints)
+int mawWornRegenerationArtifacts(const MawRules &rules, const Character &character, bool spellPoints)
 {
+    const ItemTable *pItemTable = rules.itemTable();
     int count = 0;
 
     for (const EquippedSlot &slot : equippedSlots(character))
     {
-        if (slot.itemId != 0 && !slot.pState->broken && mawRegenerationArtifact(slot.itemId, spellPoints))
+        if (slot.itemId == 0 || slot.pState->broken)
+        {
+            continue;
+        }
+
+        // MM9's artifacts keep their fixed effects under MAW (MM9_BALANCE_DESIGN.md): one that regenerates (the Green
+        // Man, items.txt effect profile) counts as MAW's regeneration artifacts do, the flat rate being dropped as
+        // MAW drops every item's (applyStandardItemEffects).
+        const ItemDefinition *pItem = pItemTable != nullptr ? pItemTable->get(slot.itemId) : nullptr;
+        const float ownRegeneration = pItem == nullptr ? 0.0f
+            : spellPoints ? pItem->contentEffect.spellRegenPerSecond
+                          : pItem->contentEffect.healthRegenPerSecond;
+
+        if (mawRegenerationArtifact(slot.itemId, spellPoints) || ownRegeneration > 0.0f)
         {
             ++count;
         }
@@ -3047,6 +3063,7 @@ std::optional<LootFilterFacts> MawItemRules::lootFilterFacts(
         return std::nullopt;
     }
 
+    facts.type = lootItemType(stat, itemDefinition.skillGroup);
     const MawRarity rarity = mawShownRarity(item, m_rules.itemData());
     facts.rarity = std::min(int(rarity), LootFilterRarityCount);
     facts.itemLevel = item.rulesetFields.dropLevel;

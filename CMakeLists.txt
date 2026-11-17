@@ -32,7 +32,6 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_BUILD_RPATH_USE_ORIGIN ON)
 
-option(OPENYAMM_BUILD_EDITOR "Build the editor target." OFF)
 option(OPENYAMM_BUILD_TOOLS "Build the tools targets." OFF)
 option(OPENYAMM_BUILD_TESTS "Build the unit test target." ON)
 option(OPENYAMM_BUILD_ATLAS "Build the optional native MM7/MM8 Atlas." OFF)
@@ -100,6 +99,10 @@ FetchContent_GetProperties(bimg SOURCE_DIR OPENYAMM_BIMG_SOURCE_DIR)
 openyamm_configure_bgfx_runtime()
 openyamm_configure_runtime_shaders()
 
+# The shared core (core/CMakeLists.txt): compiled once, linked by the engine, the game, the tests and the tools.
+set(OPENYAMM_CORE_LUA_TARGET ${OPENYAMM_LUA_TARGET})
+set(OPENYAMM_CORE_BX_TARGET openyamm_bgfx)
+add_subdirectory(core)
 add_subdirectory(engine)
 add_subdirectory(game)
 
@@ -191,10 +194,6 @@ endif()
 if (OPENYAMM_BUILD_TESTS)
     enable_testing()
     add_subdirectory(tests)
-endif()
-
-if (OPENYAMM_BUILD_EDITOR)
-    add_subdirectory(editor)
 endif()
 
 if (OPENYAMM_BUILD_TOOLS)

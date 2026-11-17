@@ -12,9 +12,12 @@ class Party;
 // (MawRules::options().soloRun) first.
 namespace MawSoloTalents
 {
-// The passives' stat and resistance shares (Weapon Training, Marksman, Attunement, Resolve, Steady Aim while still),
-// added to the magical bonuses after the class bonuses.
+// The passives' stat and resistance shares (Conditioning, Resolve, Steady Aim while still), added to the magical
+// bonuses after the class bonuses.
 void applyPassives(Character &member);
+// Resolve: its share of a resistance (0 without it). applyPassives adds it for the base, permanent and magical
+// resistances; MAW's sheet rows (armour and Shield skills, staves, Luck) add it for theirs.
+int resolveShare(const Character &member, int resistance);
 // Ticks cooldowns and timed effects, Onslaught's stacks, Cheat Death, Steady Aim's stillness and Quickfoot's speed
 // (`calm`: no yellow alert); refreshes the stats when Steady Aim turns on or off.
 void update(Party &party, float partyX, float partyY, bool calm, float deltaSeconds);
@@ -27,17 +30,28 @@ int absorbDamage(const Character &member, int damage, int maximumHealth);
 // Cheat Death, after everything else absorbed what it could: a blow that would kill the member (HP `currentHealth`)
 // leaves 5 % of `maximumHealth` instead, and starts the cut and the cooldown.
 int cheatDeath(Character &member, int damage, int currentHealth, int maximumHealth);
-// Attunement and a surging spell: the damage and healing multipliers.
+// A surging spell: the damage multiplier.
 double spellDamageScale(const Character &caster);
-double healScale(const Character &caster);
 // Overload: an area spell's multiplier for the living monsters near its target (itself included).
 double overloadScale(const Character &caster, int monstersNearTarget);
 // Bloodthirst: the leech share added to melee, bow and spells, and the divisor of the leech floor (5 without it).
 double leechBonus(const Character &member);
 double leechFloorDivisor(const Character &member);
+// Manathirst: the share of the SP bar given back the way leech heals, and its floor divisor (5 without it).
+double manaLeechShare(const Character &member);
+double manaLeechFloorDivisor(const Character &member);
+// Manathirst: whether an area spell's hit on one more monster still gives SP. One cast counts at most three monsters:
+// the hits within a short window after the first.
+bool takeAreaManaLeech(Character &member);
+// Spell Suppression: what is left of a hit that is not physical (1: none), the last cut after armour, resistances and
+// their 90 % cap.
+double nonPhysicalDamageScale(const Character &member);
 // Spell Surge armed: the next spell is free.
 bool nextSpellFree(const Character &caster);
 // A cast spends an armed surge (its damage window opens).
 void spendSurge(Character &caster);
+// The solo run's early monster cut for the character (SoloTalentTable::earlyMonsterCut; not a talent, a rule of the
+// run): by the level its experience has earned, so an untrained character does not keep a larger cut.
+double earlyMonsterCut(const Character &member);
 }
 }

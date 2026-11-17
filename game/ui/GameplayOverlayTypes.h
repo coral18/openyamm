@@ -499,6 +499,10 @@ enum class GameplayAlchemyBenchPointerTargetType
     RecipeRow,
     RecipeSearch,
     Ingredient,
+    // The button under a slot that opens its power list (its index: 1 target, 2 held, 3 result), and a row of
+    // the open list (its index; 0 is Automatic).
+    PowerButton,
+    PowerOption,
     // The Workbench's tab strip and its Crafting tab.
     AlchemyTab,
     CraftingTab,
@@ -851,6 +855,9 @@ struct GameplayOverlayInteractionState
         uint64_t startTicks = 0;
     };
     std::vector<SoloSelfTextLine> soloSelfText;
+    // Regeneration ticks waiting to show as one line: their sum and the SDL tick the first of them came at.
+    int soloRegenerationPending = 0;
+    uint64_t soloRegenerationStartTicks = 0;
     // The solo action bar's slot selector (GameplaySoloBarSelector), open over the paused game. Transient.
     SoloBarSelectorState soloBarSelector;
     std::optional<size_t> personalBuffPopupMember;
@@ -878,6 +885,9 @@ struct GameplayOverlayInteractionState
     size_t quickItemPopupScroll = 0;
     std::optional<size_t> quickItemPopupHovered;
     std::optional<size_t> quickItemPopupKeyEntry;
+    // The potion popup's Upkeep view: the chosen member's upkeep potions with their stock, in place of what the party
+    // carries.
+    bool quickItemPopupUpkeep = false;
     // The MM9 formation builder (GameplayFormationBuilder): open over the paused game while it edits.
     Mm9FormationBuilderState formationBuilder;
     bool formationToggleLatch = false;

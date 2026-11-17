@@ -166,6 +166,14 @@ std::optional<SoloBarSelectorEntry> entryFor(GameplayScreenRuntime &context, con
         return entry;
     }
 
+    if (slot.kind == ActionBarSlotKind::Upkeep)
+    {
+        entry.category = SoloBarSelectorTab::Actions;
+        entry.name = Engine::tr("Upkeep");
+        entry.detail = Engine::tr("Casts or drinks what is due; hold to go on");
+        return entry;
+    }
+
     if (slot.kind == ActionBarSlotKind::Weapon)
     {
         const bool swap = slot.id == ActionBarWeaponSwapId;
@@ -184,8 +192,8 @@ std::optional<SoloBarSelectorEntry> entryFor(GameplayScreenRuntime &context, con
 }
 
 // Everything the key can hold, once, when the selector opens: the known spells in book order, the learned active
-// talents in the table's order, the potions and scrolls carried by name, then the weapon actions. What the key holds
-// now stays listed even when it is no longer known or carried.
+// talents in the table's order, the weapon actions and Upkeep, then the potions and scrolls carried by name. What the
+// key holds now stays listed even when it is no longer known or carried.
 std::vector<SoloBarSelectorEntry> buildEntries(GameplayScreenRuntime &context, const Party &party,
     const Character &member, size_t slot)
 {
@@ -215,8 +223,8 @@ std::vector<SoloBarSelectorEntry> buildEntries(GameplayScreenRuntime &context, c
         for (const QuickItemSlots::PartyItemKind &kind : QuickItemSlots::partyItemKinds(party, *pItemTable,
                  context.mergedPotionSettingTable(), context.mergedReagentSettingTable(), bagCount(party)))
         {
-            const ActionBarSlot itemSlot = {ActionBarSlotKind::Item, 0, {kind.itemId, QuickItemBottleRule::Weakest}};
-            // One entry a kind: its strengths share the slot (it drinks the weakest first).
+            const ActionBarSlot itemSlot = {ActionBarSlotKind::Item, 0, {kind.itemId, QuickItemBottleRule::Strongest}};
+            // One entry a kind: its strengths share the slot (it drinks the strongest first).
             const bool listed = std::any_of(items.begin(), items.end(),
                 [&itemSlot](const SoloBarSelectorEntry &entry) { return soloBarSameEntry(entry.slot, itemSlot); });
 
@@ -238,6 +246,8 @@ std::vector<SoloBarSelectorEntry> buildEntries(GameplayScreenRuntime &context, c
     {
         candidates.push_back({ActionBarSlotKind::Weapon, ActionBarWeaponSwapId, {}});
     }
+
+    candidates.push_back({ActionBarSlotKind::Upkeep, 0, {}});
 
     std::vector<SoloBarSelectorEntry> entries;
 
@@ -520,6 +530,11 @@ bool GameplaySoloBarSelector::takesPointer(const GameplayScreenRuntime &context)
     return state(context).open || state(context).armed || state(context).pointerLatch;
 }
 
+std::optional<size_t> GameplaySoloBarSelector::clickedBarSlot(const GameplayScreenRuntime &context)
+{
+    return state(context).clickedSlot;
+}
+
 bool GameplaySoloBarSelector::takesPointerAction(const GameplayScreenRuntime &context, KeyboardAction action)
 {
     return takesPointer(context)
@@ -536,7 +551,25 @@ bool GameplaySoloBarSelector::handleBarInput(GameplayScreenRuntime &context, con
         selector.pointerLatch = false;
     }
 
+    if (!input.leftMouseButton.held || !allowed || !context.soloHud() || selector.open)
+    {
+        selector.clickedSlot.reset();
+    }
+
     const bool ctrl = input.isScancodeHeld(SDL_SCANCODE_LCTRL) || input.isScancodeHeld(SDL_SCANCODE_RCTRL);
+
+    // A plain click on a key uses it; the click stays the bar's, so the world does not attack or interact as well.
+    if (allowed && pointerAllowed && context.soloHud() && !selector.open && !ctrl && input.leftMouseButton.pressed)
+    {
+        if (const std::optional<size_t> slot =
+                GameplaySoloHud::barSlotAt(context, width, height, input.pointerX, input.pointerY))
+        {
+            selector.pointerLatch = true;
+            selector.clickedSlot = slot;
+            disarm(context);
+            return true;
+        }
+    }
 
     if (!allowed || !context.soloHud() || selector.open || !ctrl || ctrlTaken(context, input))
     {
@@ -970,6 +1003,7 @@ std::string GameplaySoloBarSelector::barHoverText(GameplayScreenRuntime &context
     }
 
     const std::optional<SoloBarSelectorEntry> entry = entryFor(context, *pParty, *pMember, held);
-    return entry ? Engine::tr("{name} (Ctrl+click: change this key)", {{"name", entry->name}}) : std::string();
+    return entry ? Engine::tr("{name} (click: use, Ctrl+click: change this key)", {{"name", entry->name}})
+                 : std::string();
 }
 }
