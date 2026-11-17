@@ -72,9 +72,11 @@ For the inspected 2.5 installation:
 
 | Text result | Entries |
 |---|---:|
-| Catalog entries matching official text or an adapted current effect description | 5721 |
-| Actual translation changes | 4710 |
-| Ambiguous matches kept as shipped | 297 |
+| Catalog entries matching official text or an adapted current effect description | 5914 |
+| Actual translation changes | 4896 |
+| Reviewed ambiguous cases | 297 |
+| Selected retail variants after review | 193 |
+| Existing translations retained after review | 104 |
 | Different human translation kept | 1 |
 | Entries without a matching source text | 1110 |
 
@@ -97,7 +99,37 @@ The numbers and their order must match exactly. Adapted entries have a separate 
 This adapts 50 effect descriptions, including all 47 previously fuzzy and both empty entries, leaving the catalog with
 zero fuzzy and zero empty entries. The other 13 effect descriptions retain their existing translations. This is a
 coverage result, not a claim that every translation has been manually proofread. The 1110 entries without a matching
-retail source generally retain existing translations; ambiguous translations also retain the shipped text.
+retail source generally retain existing translations. Unresolved ambiguous matches retain the shipped text unless a
+private review selects a verified variant.
+
+## Contextual review
+
+The existing runtime context `said by the party` distinguishes a party prompt from an NPC response with the same
+English text. The importer now applies that distinction to candidate selection too. It changes neither RUDE rows nor
+the runtime localization API. All 297 originally ambiguous cases are reported under `review_cases` with their
+candidates, current translation and source file/row, speaker role or original item id.
+
+An optional private review file can select a candidate or explicitly keep the existing text:
+
+```sh
+python3 tools/mm9_import_discovery/import_mm9_localization.py \
+  --installation /path/to/owned-mm9 --assets /path/to/openyamm/assets \
+  --output output/mm9-polish/languages/pl --report output/mm9-polish/import-report.json \
+  --videos --review /path/to/private-review-pl.json
+```
+
+The review JSON uses `schema: 1`, `language: pl` and a `decisions` list. Each decision supplies its case's `id` and
+`source_digest` from the audit, an `action` (`select` or `keep`) and a reason; `select` also supplies a `translation`
+from that context's candidates. The digest binds the English text, current translation, candidates, protected human
+status and source provenance. Changed input, duplicate decisions, wrong speaker context, malformed entries and
+placeholder/code changes fail rather than reusing an outdated selection. Human translations and their attribution
+are preserved. Review files and reports can contain retail text, so they remain outside Git and the mounted pack.
+
+The local 297-case review chose 193 retail variants and retained 104 current translations, producing 186 further
+translation changes. It preserves source-consistent wording where retail variants name a different NPC, omit a
+requirement or disagree on directions. Some gendered lines and location-specific directions cannot be represented
+perfectly by a single global translation; finer per-NPC contexts remain a separate design decision. The current
+review does not invent such an API or claim that every line has been manually proofread by a person.
 
 ## Movies
 
@@ -130,12 +162,14 @@ The `AssetFileSystemTests.cpp` regression covers same-named local/shipped catalo
 behavior. Runtime verification should mount the overlay with MM6, MM7, MM8 and MM9 active, since MM9 character voices
 can be used across worlds, and decode the actual WAVs with the game's SDL decoder.
 
-Local Windows verification on 2026-11-16 passed: 12 importer unit tests, the existing audio-import test, 15 focused
+Local Windows verification on 2026-11-16/17 passed: 14 importer unit tests, the existing audio-import test, 15 focused
 C++ localization/pack cases (204 assertions), decoding all 1777 WAVs through the engine's native SDL library, and
 eight real-content mount checks (four worlds, English/Polish). A native OpenGL run reached Bootcamp gameplay and
 captured the result without audio decoding errors. Manual listening of the complete voice archive remains outstanding.
 The follow-up fully decoded all three converted movies with FFmpeg, started each through the native game video/audio
 decoder, verified English/Polish movie selection in all four worlds, and exercised movie-cache reuse and repair.
+The review was also checked through the native engine in all eight world/language combinations: 2376 lookups for the
+297 reviewed entries, alongside the existing 400 checks of adapted item effect descriptions.
 A broader Windows run had 25 failures involving unavailable loose development audio/table fixtures and pre-existing
 case-sensitive filesystem assumptions; these are not counted as passing validation.
 

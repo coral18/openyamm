@@ -26,6 +26,7 @@ from mm9_polish_effects import polish_effect_description
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import l10n
+from mm9_localization_review import prepare_review
 
 
 def relative_path(value: str) -> Path:
@@ -118,7 +119,8 @@ def select_voices(entries, targets: set[str], sounds: str, voice_rows: dict) -> 
     return {target: sources[target] for target in sorted(targets & sources.keys())}, unavailable
 
 
-def dialogue_pairs(english: dict[str, bytes], localized: dict[str, bytes], encoding: str) -> tuple[dict, dict]:
+def dialogue_pairs(english: dict[str, bytes], localized: dict[str, bytes], encoding: str,
+                   origins: list[dict] | None = None) -> tuple[dict, dict]:
     pairs = collections.defaultdict(set)
     stats = collections.Counter()
     for name, data in sorted(english.items()):
@@ -138,7 +140,7 @@ def dialogue_pairs(english: dict[str, bytes], localized: dict[str, bytes], encod
             if row:
                 keyed[key(row)].append(row)
         seen = collections.Counter()
-        for row in en_rows:
+        for line, row in enumerate(en_rows, 1):
             if not row:
                 continue
             identity = key(row)
@@ -159,12 +161,16 @@ def dialogue_pairs(english: dict[str, bytes], localized: dict[str, bytes], encod
                 source, translation = row[column].strip(), other[column].strip()
                 if l10n.is_text(source) and translation:
                     pairs[l10n._mm9_normalized(source)].add(translation)
+                    if origins is not None:
+                        origins.append({"source": l10n._mm9_normalized(source), "translation": translation,
+                                        "role": "party" if column == 3 else "npc" if column == 4 else "label",
+                                        "file": name, "row": line, "column": column, "ids": row[:3]})
     stats["unique_texts"] = len(pairs)
     return pairs, dict(stats)
 
 
 def item_pairs(items: str, readables: str, localized: dict[str, bytes], encoding: str,
-               language: str = "pl") -> tuple[dict, dict, set[str]]:
+               language: str = "pl", origins: list[dict] | None = None) -> tuple[dict, dict, set[str]]:
     """Join on explicit retail ids retained by the existing MM9 importer, never on translated names or row order."""
     pairs = collections.defaultdict(set)
     stats = collections.Counter()
@@ -183,9 +189,12 @@ def item_pairs(items: str, readables: str, localized: dict[str, bytes], encoding
     original_items = retail_rows("masteritemlist.csv", 15)
     original_books = retail_rows("book and scroll text.csv", 3)
 
-    def add(source, translation):
+    def add(source, translation, identifier, field):
         if l10n.is_text(source) and translation.strip():
             pairs[l10n._mm9_normalized(source)].add(translation.strip())
+            if origins is not None:
+                origins.append({"source": l10n._mm9_normalized(source), "translation": translation.strip(),
+                                "role": "item/book", "source_item_id": identifier, "field": field})
 
     item_ids = {}
     for row in csv.DictReader(io.StringIO(items), delimiter="\t"):
@@ -203,27 +212,27 @@ def item_pairs(items: str, readables: str, localized: dict[str, bytes], encoding
         if row["use_action"] in ("LearnSkill", "GrantSkillPoints"):
             stats["reworked_learning_items_kept"] += 1
             continue
-        add(row["Name"], original[1])
-        add(row["Not identified name"], original[7])
+        add(row["Name"], original[1], raw_id, "name")
+        add(row["Not identified name"], original[7], raw_id, "unidentified name")
         # Effects are rewritten from OpenYAMM's final balance values; the retail description would be misleading.
         if "(Effects:" in row["Notes"]:
             translated = polish_effect_description(row["Notes"], original[8]) if language == "pl" else None
             if translated is None:
                 stats["effect_descriptions_kept"] += 1
             else:
-                add(row["Notes"], translated)
+                add(row["Notes"], translated, raw_id, "adapted effect description")
                 adapted_effects.add(l10n._mm9_normalized(row["Notes"]))
                 stats["effect_descriptions_adapted"] += 1
         else:
-            add(row["Notes"], original[8])
+            add(row["Notes"], original[8], raw_id, "description")
         stats["matched_items"] += 1
     for row in csv.DictReader(io.StringIO(readables), delimiter="\t"):
         original = original_books.get(item_ids.get(row["Item#"]))
         if original is None:
             stats["without_retail_book"] += 1
             continue
-        add(row["message text"], original[2])
-        add(row["Location"], original[1])
+        add(row["message text"], original[2], original[0], "book body")
+        add(row["Location"], original[1], original[0], "book title")
         stats["matched_books"] += 1
     stats["unique_texts"] = len(pairs)
     return pairs, dict(stats), adapted_effects
@@ -275,13 +284,21 @@ def import_movies(installation: Path, targets: set[str], output: Path, cache: Pa
     return result
 
 
-def translate_catalog(catalog: str, pairs: dict, adapted_effects: set[str] | None = None) -> tuple[str, dict]:
+def translate_catalog(catalog: str, pairs: dict, adapted_effects: set[str] | None = None,
+                       candidates: dict | None = None, selections: dict | None = None,
+                       retained: set | None = None) -> tuple[str, dict]:
     header, entries = l10n.parse_po(catalog)
     stats = collections.Counter()
     for entry in entries:
         if entry.obsolete or entry.plural is not None:
             continue
-        translations = pairs.get(l10n._mm9_normalized(entry.msgid))
+        key = (entry.context, l10n._mm9_normalized(entry.msgid))
+        if retained and key in retained:
+            stats["reviewed_kept"] += 1
+            continue
+        translations = candidates.get(key) if candidates is not None else pairs.get(key[1])
+        if selections and key in selections:
+            translations = {selections[key]}
         if not translations:
             stats["without_official_match"] += 1
             continue
@@ -297,11 +314,19 @@ def translate_catalog(catalog: str, pairs: dict, adapted_effects: set[str] | Non
             stats["human_translation_kept"] += 1
             continue
         stats["official_matches"] += 1
+        if entry.translated() and not machine:
+            stats["human_translation_confirmed"] += 1
+            if selections and key in selections:
+                stats["reviewed_selections"] += 1
+            continue
         stats["changed"] += int(entry.msgstr[0] != translation)
         entry.msgstr = [translation]
         if adapted_effects and l10n._mm9_normalized(entry.msgid) in adapted_effects:
             entry.translator = ["Official MM9 retail narrative; current OpenYAMM effects translated into Polish."]
             stats["adapted_effect_entries"] += 1
+        elif selections and key in selections:
+            entry.translator = ["Official MM9 retail variant selected during contextual review."]
+            stats["reviewed_selections"] += 1
         else:
             entry.translator = ["Official MM9 retail localization, imported from the user's own installation."]
         entry.flags.discard("fuzzy")
@@ -324,7 +349,7 @@ def write_file(path: Path, data: bytes) -> bool:
 
 
 def import_localization(installation: Path, assets: Path, output: Path, language: str, encoding: str,
-                        video_cache: Path | None = None) -> dict:
+                        video_cache: Path | None = None, review: dict | None = None) -> dict:
     if not re.fullmatch(r"[a-z]{2}(?:-[a-z0-9]+)?", language) or language == "en":
         raise ValueError("choose a non-English language id, for example pl")
     if installation.resolve() == output.resolve() or installation.resolve() in output.resolve().parents:
@@ -342,7 +367,8 @@ def import_localization(installation: Path, assets: Path, output: Path, language
             if type_to_extension(entry.resource_type) == "rude":
                 name = Path(entry.path.replace("\\", "/")).name.lower() + ".rude"
                 localized[name] = read_resource(stream, entry)
-    pairs, dialogue_stats = dialogue_pairs(runtime["rude"], localized, encoding)
+    origins = []
+    pairs, dialogue_stats = dialogue_pairs(runtime["rude"], localized, encoding, origins)
     if not pairs:
         raise ValueError("no original dialogue rows match the indexed MM9 content")
     tables = {}
@@ -352,13 +378,16 @@ def import_localization(installation: Path, assets: Path, output: Path, language
             if name in ("masteritemlist.csv", "book and scroll text.csv"):
                 tables[name] = read_resource(stream, entry)
     table_pairs, table_stats, adapted_effects = item_pairs(
-        runtime["items"], runtime["readables"], tables, encoding, language)
+        runtime["items"], runtime["readables"], tables, encoding, language, origins)
     for key, translations in table_pairs.items():
         pairs[key].update(translations)
-    catalog, text_stats = translate_catalog(runtime["catalog"], pairs, adapted_effects)
+    candidates, selections, retained, cases = prepare_review(runtime["catalog"], pairs, origins, review, language)
+    catalog, text_stats = translate_catalog(
+        runtime["catalog"], pairs, adapted_effects, candidates, selections, retained)
     report = {"schema": 1, "language": language, "release": runtime["release"], "voices": [],
               "unavailable_unused_voices": unavailable, "empty_original_recordings": [],
               "dialogue": dialogue_stats, "items_and_books": table_stats, "text": text_stats,
+              "review_cases": cases,
               "written": 0, "unchanged": 0, "source_archives": {}}
     for archive in (voices, rude, data_archive):
         report["source_archives"][archive.name] = file_digest(archive)
@@ -397,6 +426,7 @@ def main() -> int:
     parser.add_argument("--language", default="pl")
     parser.add_argument("--encoding", default="cp1250")
     parser.add_argument("--videos", action="store_true", help="convert the three localized BIK cutscenes; needs FFmpeg")
+    parser.add_argument("--review", type=Path, help="private, source-bound decisions for ambiguous translations")
     args = parser.parse_args()
     try:
         report_path = args.report.resolve()
@@ -407,7 +437,9 @@ def main() -> int:
         if report_path == args.output.resolve() or args.output.resolve() in report_path.parents:
             raise ValueError("put the audit report outside the mounted language folder")
         cache = args.report.parent / "video-cache" if args.videos else None
-        report = import_localization(args.installation, args.assets, args.output, args.language, args.encoding, cache)
+        review = json.loads(args.review.read_text(encoding="utf-8")) if args.review else None
+        report = import_localization(
+            args.installation, args.assets, args.output, args.language, args.encoding, cache, review)
         args.report.parent.mkdir(parents=True, exist_ok=True)
         args.report.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     except (OSError, ValueError, KeyError, wave.Error, zipfile.BadZipFile, subprocess.CalledProcessError) as error:

@@ -14,6 +14,7 @@ from import_mm9_localization import (
     write_file,
 )
 from mm9_polish_effects import NUMBER, polish_effect_description
+from mm9_localization_review import prepare_review
 
 
 def rude(rows: list[list[str]], encoding: str) -> bytes:
@@ -47,6 +48,61 @@ def item_fixture():
 
 
 class Mm9LocalizationImportTests(unittest.TestCase):
+    def test_party_and_npc_homonyms_use_the_existing_speaker_context(self) -> None:
+        catalog = ('# machine translation\nmsgid "Goodbye"\nmsgstr "Do widzenia"\n\n'
+                   '# machine translation\nmsgctxt "said by the party"\nmsgid "Goodbye"\nmsgstr "Do widzenia"\n')
+        pairs = {"Goodbye": {"Bywaj", "Bywajcie"}}
+        origins = [{"source": "Goodbye", "translation": "Bywaj", "role": "party", "ids": ["1", "0", "1"]},
+                   {"source": "Goodbye", "translation": "Bywajcie", "role": "npc", "ids": ["1", "0", "1"]}]
+        candidates, selected, retained, cases = prepare_review(catalog, pairs, origins)
+        result, _ = translate_catalog(catalog, pairs, candidates=candidates)
+        _, entries = l10n.parse_po(result)
+        self.assertEqual({e.context: e.msgstr[0] for e in entries},
+                         {"": "Bywajcie", "said by the party": "Bywaj"})
+        self.assertTrue(all(case["status"] == "context-resolved" for case in cases))
+        decision = {"id": cases[0]["id"], "source_digest": cases[0]["source_digest"], "action": "select",
+                    "translation": "Bywaj", "reason": "Wrong role must be refused"}
+        with self.assertRaises(ValueError):
+            prepare_review(catalog, pairs, origins, {"schema": 1, "language": "pl", "decisions": [decision]})
+
+    def test_review_selection_is_bound_to_candidates_existing_text_and_source_provenance(self) -> None:
+        catalog = '# machine translation\nmsgid "Hello"\nmsgstr "Cześć"\n'
+        pairs = {"Hello": {"Witaj", "Witajcie"}}
+        origins = [{"source": "Hello", "translation": "Witaj", "role": "npc", "ids": ["1"]},
+                   {"source": "Hello", "translation": "Witajcie", "role": "npc", "ids": ["2"]}]
+        _, _, _, cases = prepare_review(catalog, pairs, origins)
+        decision = {"id": cases[0]["id"], "source_digest": cases[0]["source_digest"], "action": "select",
+                    "translation": "Witajcie", "reason": "Use the party plural"}
+        review = {"schema": 1, "language": "pl", "decisions": [decision]}
+        candidates, selected, retained, _ = prepare_review(catalog, pairs, origins, review)
+        result, stats = translate_catalog(catalog, pairs, candidates=candidates, selections=selected, retained=retained)
+        self.assertEqual(l10n.parse_po(result)[1][0].msgstr, ["Witajcie"])
+        self.assertEqual(stats["reviewed_selections"], 1)
+        for changed_catalog, changed_pairs, changed_origins in (
+            (catalog.replace("Cześć", "Hej"), pairs, origins),
+            (catalog, {"Hello": {"Witaj", "Witajcie", "Hej"}}, origins),
+            (catalog, pairs, [{**origin, "ids": ["3"]} for origin in origins]),
+        ):
+            with self.assertRaises(ValueError):
+                prepare_review(changed_catalog, changed_pairs, changed_origins, review)
+        with self.assertRaises(ValueError):
+            prepare_review(catalog, pairs, origins, {**review, "decisions": [decision, decision]})
+        protected = catalog.replace("# machine translation", "# Author reviewed")
+        _, _, _, human_cases = prepare_review(protected, pairs, origins)
+        human_decision = {**decision, "source_digest": human_cases[0]["source_digest"]}
+        with self.assertRaisesRegex(ValueError, "human translation"):
+            prepare_review(protected, pairs, origins, {**review, "decisions": [human_decision]})
+        confirmed, _ = translate_catalog(protected, {"Hello": {"Cześć"}})
+        self.assertEqual(l10n.parse_po(confirmed)[1][0].translator, ["Author reviewed"])
+        for invalid in ([], {"schema": 1, "language": "de", "decisions": []},
+                        {**review, "decisions": ["invalid"]}):
+            with self.assertRaises(ValueError):
+                prepare_review(catalog, pairs, origins, invalid)
+        keep = {**decision, "action": "keep", "reason": "Retail alternatives change the required location"}
+        candidates, selected, retained, _ = prepare_review(catalog, pairs, origins, {**review, "decisions": [keep]})
+        result, _ = translate_catalog(catalog, pairs, candidates=candidates, selections=selected, retained=retained)
+        self.assertEqual(l10n.parse_po(result)[1][0].msgstr, ["Cześć"])
+
     def test_uses_exact_runtime_paths_without_flattening_npc_subfolders(self) -> None:
         self.assertEqual(voice_path("VOICES/PC/HALF ORC LICH FEMALE/HalfOrcLichF01a", "wav"),
                          "voices/pc/halforclichfemale/halforclichf01a.wav")
