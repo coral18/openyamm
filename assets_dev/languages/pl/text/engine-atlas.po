@@ -7,6 +7,14 @@ msgstr ""
 "Language: pl\n"
 "Plural-Forms: nplurals=3; plural=(n==1 ? 0 : n%10>=2 && n%10<=4 && (n%100<12 || n%100>14) ? 1 : 2);\n"
 
+#: game/ui/screens/MainMenuScreen.cpp
+msgid "Interactive Atlas: On"
+msgstr "Atlas interaktywny: WŁ."
+
+#: game/ui/screens/MainMenuScreen.cpp
+msgid "Interactive Atlas: Off"
+msgstr "Atlas interaktywny: WYŁ."
+
 #: game/world/WorldGuide.cpp:639
 msgid ""
 "\n"

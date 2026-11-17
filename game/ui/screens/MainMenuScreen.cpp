@@ -513,11 +513,37 @@ void MainMenuScreen::drawHome()
         {
             quit();
         }
+#ifdef OPENYAMM_WITH_ATLAS
+        const std::string atlasLabel = m_committed.interactiveAtlas
+            ? Engine::tr("Interactive Atlas: On") : Engine::tr("Interactive Atlas: Off");
+        if (button("MainMenuAtlasToggle", canvasRect(563.2f, 434, 231.4667f, 28.8f), atlasLabel, "button_quiet"))
+        {
+            GameSettings settings = m_committed;
+            settings.interactiveAtlas = !settings.interactiveAtlas;
+            std::string error;
+            if (m_actions.applySettings(settings, true, error))
+            {
+                m_committed.interactiveAtlas = settings.interactiveAtlas;
+                m_draft.interactiveAtlas = settings.interactiveAtlas;
+                m_status.clear();
+            }
+            else
+            {
+                m_status = error;
+            }
+        }
+#endif
         drawUpdates();
     }
     if (!m_status.empty())
     {
-        const Rect status = m_paused ? canvasRect(310, 416, 420, 35) : canvasRect(563.2f, 438, 231.4667f, 28);
+        Rect status = m_paused ? canvasRect(310, 416, 420, 35) : canvasRect(563.2f, 438, 231.4667f, 28);
+#ifdef OPENYAMM_WITH_ATLAS
+        if (!m_paused)
+        {
+            status = canvasRect(300, 438, 240, 28);
+        }
+#endif
         textInRect(status, m_status, "menu_lucida", 11);
     }
 }
