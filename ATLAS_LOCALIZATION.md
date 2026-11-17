@@ -1,6 +1,6 @@
 # Atlas localization: English and Polish
 
-The native MM6/MM7/MM8 Atlas on the OpenYAMM 2.5 base uses the upstream language-pack system. English remains the
+The native MM6/MM7/MM8 Atlas on the OpenYAMM 2.6 base uses the upstream language-pack system. English remains the
 source text and fallback; Polish additions live in `assets_dev/languages/pl/text/engine-atlas.po`.
 
 ## Scope and ownership
@@ -17,11 +17,12 @@ source text and fallback; Polish additions live in `assets_dev/languages/pl/text
 
 The MM7/MM8 addition contains **640 entries / 8,407 English source words**, including **124 unique generated paragraphs**.
 MM6 adds 42 complete paragraphs, bringing the inventory to **682 entries / 10,456 source words**.
+Two additional catalog entries translate the main-menu on/off button. The display-inventory count above excludes those menu-owned strings.
 The count includes shared skill display terms and item-category labels. The game's much larger existing Polish
 catalogs provide names and story content; they are not copied into this file. New or untranslated upstream/mod
 content uses the normal English fallback. This does not claim to complete every translation in upstream itself.
 
-English needs no separate translation file. To use Polish, install the official 2.5 Polish language packs and put
+English needs no separate translation file. To use Polish, install the official 2.6 Polish language packs and put
 this branch's `languages/pl/text/engine-atlas.po` under the user-data directory's `languages/` folder. Select Polish
 in Settings or set `[gameplay] language=pl`, then restart the game. English uses `language=en`.
 
@@ -37,6 +38,8 @@ item-category column actually presented by the Atlas. It reports missing/fuzzy/e
 mismatches. `openyamm_unit_tests` additionally validates each translation with the engine's actual PO/format parser.
 
 Focused coverage:
+
+The 91-case suite and both installed-content audits passed again on 2.6. The main-menu switch has native English/Polish and restart checks. Earlier reference-page GPU tours remain evidence for the preceding 2.5 localization checkpoint.
 
 - **91 cases / 5,304 assertions**: Atlas regressions, the engine localization parser and five Atlas language tests.
   New tests cover Polish text and plurals, UTF-8 searches, discovery privacy, stable IDs, original item data,

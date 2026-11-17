@@ -1,81 +1,52 @@
-# Atlas port to OpenYAMM 2.5
+# Atlas port to OpenYAMM 2.6
 
-This branch ports the native MM7/MM8 Atlas to OpenYAMM **v2.5** (`8de973cc`). The previous 2.3 geometry checkpoint
-remains on `atlas/port-v2.3`; the earlier complete Atlas remains on `extended/atlas-mm8`. Work uses an isolated
-checkout, installation, campaigns and the official 2.5 runtime packs.
+The current source ports the native MM6/MM7/MM8 Atlas to OpenYAMM **v2.6** (`2b09864b`). [Atlas 0.3.0](ATLAS_RELEASE.md) is a Windows x64 preview. The previous 2.5 source remains on `atlas/port-v2.5`; the earlier implementation and Mod Loader history remain on `extended/atlas-mm8`.
 
-The branch now also includes the [complete MM6 Atlas](ATLAS_MM6.md), using the same runtime and data APIs.
-
-The Windows game compiles and the Atlas opens from the Map Book. This is a development port, not a published
-Windows/Android release. Native GPU checks cover MM7, MM8 and a dungeon; controller routing is covered by virtual
-SDL gamepad tests. Physical-controller and Android acceptance remain outstanding on this base.
+The game, tests and runtime checks use isolated installations and copies of QA saves. Original installations and campaigns are not modified.
 
 ## Integration
 
-- `OPENYAMM_BUILD_ATLAS=ON` builds the optional native screen and shared world index. The existing
-  `OPENYAMM_BUILD_ATLAS_CORE` option still supports the geometry-only slice.
-- The in-game Map Book exposes Atlas in MM7/MM8. `[atlas] enabled=false` disables the entry. The main menu has no
-  Atlas shortcut. MM6 also exposes this entry; see [ATLAS_MM6.md](ATLAS_MM6.md).
-  This does not introduce a general mod loader or a stable plugin ABI.
-- Definitions come from the active upstream tables, scripts and map loader, including scene/ruleset overlays.
-  Geographic presentation is separate from gameplay definitions. Typed metadata retains the identity of the
-  callback it describes; replacing a callback invalidates its old annotations.
-- Discovery uses party observations, native outdoor exploration masks, indoor outlines, actual NPC encounters,
-  quest information and the current upstream trainer directory/teacher ledger. Guide is an explicit separate mode.
-- Map indexing remains incremental. The selected map is prioritized; Guide does not synchronously index every map
-  before drawing its first frame. Dungeon geometry is cached for the selected map and uses current scene loading.
-- Controller UI support retains the left-stick pointer, right-stick scrolling, confirm/back and Map Book shortcut.
-  D-pad focus includes the Atlas button and preserves upstream's optional Progress tab and trainer finder.
-- Personal notes use the upstream Party journal. Atlas only adds optional floor-height metadata. Native map-layout
-  identities invalidate stale local projections; party journal entries remain under upstream ownership.
-- Actor observations cover sprites and 3D models from the main view, with frustum and line-of-sight checks and a
-  bounded ray budget. Hover/interactions, opened chests, displayed guild shelves and successful item delivery have
-  separate observation hooks. Opening Guide does not record a visit or advance gameplay RNG.
+- `OPENYAMM_BUILD_ATLAS=ON` builds the native screen and shared world index. `OPENYAMM_BUILD_ATLAS_CORE` still supports the geometry-only slice.
+- The main-menu **Interactive Atlas: On / Off** button persists `[atlas] enabled`. The Atlas opens from the Map Book in MM6/MM7/MM8. Turning it off hides that entry and keeps discoveries and notes.
+- The screen uses upstream menus, active tables, scripts, scene/ruleset overlays and map geometry. Typed metadata retains callback ownership; replaced callbacks do not inherit stale annotations.
+- Discovery uses party observations, outdoor exploration masks, indoor outlines, NPC encounters, disclosed quest information and the upstream teacher directory/ledger. Guide is a separate view and does not grant discoveries or advance gameplay RNG.
+- Guide indexing is incremental and prioritizes the selected map. Dungeon geometry is cached for that map using the existing loader.
+- Controller routing retains pointer/scrolling, confirm/back, Map Book shortcuts and D-pad focus. Upstream's optional Progress tab and trainer finder remain available. Physical-controller acceptance on this base is pending.
+- Personal notes use the upstream Party journal, with optional floor-height metadata. Native layout identities invalidate stale projections while journal ownership remains upstream.
+- Actor observations cover sprites and 3D models with frustum/line-of-sight checks and a bounded ray budget. Chests, guild shelves, item delivery and interactions have their own observation hooks.
 
-The old fork's custom Gate Network is not installed in this port. Its annotations are not attached to unrelated
-upstream callbacks. Similarly, a former Tularean spawn annotation depended on a helper removed by upstream; that
-obsolete annotation is omitted rather than changing 2.5's battle logic. Declared transitions and actual arrivals
-remain available independently of that old module. The reserved `pending` map row `zddb05.blv` has no geometry
-in the official release; its Atlas presentation explicitly excludes it without editing gameplay tables.
+This port uses OpenYAMM 2.6's existing content mounting and its support for legacy overlay roots. It does not carry the old fork's Mod Loader API or promise a stable plugin ABI. The old custom Gate Network is not installed, and obsolete spawn annotations do not modify upstream battle logic. Reserved maps without installed geometry remain excluded from player navigation.
 
 ## Saves
 
-The upstream **version 184 core layout is unchanged**. Atlas writes a length-delimited trailer with independent
-schema versions for identified-item history, generated NPC encounters, mercenary encounters and ground-loot origins.
-Vanilla saves need no trailer. Invalid or unsupported Atlas payloads fail explicitly; they are not silently loaded
-as a partly decoded campaign.
+The **upstream version-191 core layout is unchanged**. Atlas attaches a length-delimited trailer with separately versioned identified-item history, generated NPC encounters, mercenary encounters and ground-loot origins. Vanilla saves need no trailer. Invalid or unsupported Atlas payloads fail explicitly.
 
-Isolated MM7/MM8 save exchanges with the official 2.5 executable confirm that it reads these saves and drops the
-supplemental trailer on resave; the Atlas build loads those stock resaves. This is not a promise
-of compatibility with future releases. The old Extended version-84 format diverged from upstream's version history;
-**do not import those campaigns as ordinary upstream version-84 saves**. No old campaign or official user installation
-was modified during this port.
+A test save migrated from 2.5 version 184 to 2.6 version 191 while retaining its identified-item history. The 2.6 game also passed save/load through New Sorpigal, Free Haven, the sewers, Control Center and Tomb of VARN.
+
+Save exchange with the official 2.6 executable passed in both directions. Its resave drops the supplemental trailer: the probe had 23 recorded identified items before the exchange, zero in the stock resave, and the Atlas reconstructed 21 from inventory. This does not preserve the whole extension or promise compatibility with future releases. Back up campaigns before switching builds.
+
+The old Extended version-84 format diverged from upstream's version history. Do not import those campaigns as ordinary upstream version-84 saves.
 
 ## Runtime content and build
 
-Use the official 2.5 Windows package and all packs from its embedded index. The isolated test installation verifies
-all **252** packs; **219** unchanged packs were reused from the verified 2.3 cache. Multi-gigabyte payloads are not
-committed to Git. `OPENYAMM_COOK_ON_BUILD=OFF` is appropriate when testing against these already cooked release packs.
+Use the official **2.6 desktop content index** and matching packs. The validation installation used 252 base packs and five Polish language packs; 247 files were reused from cache, with ten changed/missing packs downloaded and verified. Multi-gigabyte runtime content is not committed to Git.
 
 ```sh
-cmake -S . -B build -DOPENYAMM_BUILD_ATLAS=ON -DOPENYAMM_BUILD_TESTS=ON -DOPENYAMM_COOK_ON_BUILD=OFF
+cmake -S . -B build -DOPENYAMM_BUILD_ATLAS=ON -DOPENYAMM_BUILD_TESTS=ON -DOPENYAMM_COOK_ON_BUILD=OFF -DOPENYAMM_USE_VULKAN=OFF
 cmake --build build --target openyamm openyamm_unit_tests openyamm_atlas_runtime_tests -j25
 ```
 
-Atlas overlays mirror the supported upstream `mods/engine/` and `mods/worlds/<world>/` roots. They consist of the
-Atlas presentation YAML, `quest_locations.txt`, the shared event-support additions, the journal layout and Atlas
-metadata sidecars. Do not copy an entire old engine/world package over 2.5. A distributable overlay bundle and its
-installation instructions are separate from the engine sources. Stage the owned files into a new directory with:
+Upstream 2.6 moved shared loading/localization/map code into `core/`. The port incorporates that structure. A Windows compiler-tool fix uses `relativePath.generic_string()` for a narrow prefix check in `core/compile/EditorDocument.cpp`; Windows `native()` returns a wide string.
+
+Stage only the owned overlays:
 
 ```sh
 python3 tools/stage_atlas_overlay.py --output output/atlas-overlay
 ```
 
-The output contains `mods/`, the Polish `languages/` supplement, a SHA-256 manifest and the port/localization documents. Copy its `mods/` contents into an isolated user-data
-directory used by an **Atlas-enabled executable built from this branch**. These script/UI overlays do not turn a stock
-executable into the Atlas build. Keep updater checks disabled for this development executable.
+The stage contains 679 overlay files, the Polish Atlas catalog, a SHA-256 manifest and documentation. Install `mods` and `languages` under the user-data root used by the Atlas-enabled executable. The metadata, journal layout and event support are overlays; never copy a complete old engine/world package over 2.6. The [Windows package](ATLAS_RELEASE.md) includes the staged files.
 
-To regenerate only Atlas metadata without replacing gameplay handlers:
+To regenerate Atlas annotations without replacing gameplay handlers:
 
 ```sh
 OPENYAMM_BUILD_DIR=build \
@@ -84,44 +55,29 @@ OPENYAMM_METADATA_MODS_ROOT=/path/to/metadata-inputs \
     tools/regenerate_lua_events.sh --atlas-metadata
 ```
 
-The metadata input root contains `worlds/mm6/_legacy/events`, `worlds/mm7/_legacy/events` and
-`worlds/mm8/_legacy/events`. All MM6 maps are selected. GrayFace reference
-folders named in the exporter configs must be present. Those legacy/reference inputs are not runtime mod contents.
-The exporter accepts installed release packs and applies the same namespaced file overrides as the game.
+The metadata root supplies the per-world `_legacy/events` inputs and the configured GrayFace reference folders. Shared global export is owned by MM8/default. Those reference inputs do not ship as runtime mods. Generated sidecars must not be edited by hand.
 
-## Verification checkpoint
+## Verified on 2.6
 
-- Native Windows Release: game, standard unit target, exporter and the focused runtime test executable compile.
-- Atlas geometry, Guide/discovery privacy, notes, layout reset and save-extension checks: **77 cases / 2,287
-  assertions passed**. The other unit cases were not claimed as passing.
-- Real 2.5 installed-pack audit: **76 MM7 + 62 MM8 map programs** load with Atlas overlays. Callback-owned site
-  references and reward metadata are indexed without resurrecting old gameplay patches. All **137 installed map
-  geometries** validate their Atlas site bindings; the one explicitly reserved row remains excluded (**622 assertions**).
-- Input/controller checks: **25 cases / 278 assertions passed**, including virtual-device isolation, focus, pointer
-  cancellation, Map Book routing and preservation of mobile input behavior.
-- Shared activation test: **25 assertions passed**, covering successful, rejected, hidden and map-changing actions.
-- Both the stock 2.5 executable and the Atlas executable passed isolated MM7/MM8 new-game → save → load scenarios.
-- Native GPU tours cover Map Book → Atlas via keyboard focus, Discovery/Guide, item art/details, alchemy, quests and
-  return to gameplay in MM8 and Castle Harmondale in MM7. Regional fog/position arrows and dungeon outlines render
-  correctly. Package-qualified map-texture lookup and an obsolete Ravenshore site grouping were corrected.
-- Valid GPU captures were obtained on a separate, non-input Windows desktop (AMD, OpenGL 3.3), without displaying
-  the game over the user's work. Earlier transparent minimized captures were excluded.
-- Disabling `[atlas] enabled` hides the native Map Book entry. Android and physical-controller tests have not
-  been run on this port.
-- The tracked metadata-only regeneration workflow reproduced all **427 generated sidecars** byte for byte.
+| Check | Result |
+| --- | --- |
+| Atlas, geometry, save extensions, localization and discovery logic | 91 cases / 5,304 assertions passed |
+| Input/controller regression | 25 cases / 278 assertions passed |
+| Real installed MM6/MM7/MM8 maps, English | 2 audit cases / 4,146 assertions passed |
+| Real installed MM6/MM7/MM8 maps, Polish | 2 audit cases / 4,149 assertions passed |
+| Map audit scope | 204 event programs and 203 installed geometries in each language; reserved geometry-less row excluded |
+| Native Windows | MM6/MM7/MM8 Map Book, Discovery, Guide, fog/arrow and return to gameplay; AMD/OpenGL 3.3 |
+| Save migration and exchange | 2.5 migration, five MM6 map save/load cycle and official-2.6 exchange passed |
+| Main-menu toggle | 34 focused cases / 4,394 assertions; mouse, Space, restart persistence, PL/EN labels and Atlas availability checked natively |
 
-The [MM6 addition](ATLAS_MM6.md) covers Enroth's 55 playable maps. This port does not add an MM9 Atlas, a launcher,
-new gameplay rules, or a public modding contract.
+The menu checks left the copied campaign save byte-identical. These checks are not full campaign playthroughs or hardware benchmarks. Android and physical-controller testing have not been performed for this release.
 
-## English and Polish
+## English, Polish and MM6
 
-The localization branch adds the shared display hooks and Polish Atlas catalog. See
-[ATLAS_LOCALIZATION.md](ATLAS_LOCALIZATION.md) for coverage, installation and translation inventory checks.
+See [ATLAS_LOCALIZATION.md](ATLAS_LOCALIZATION.md) and [ATLAS_MM6.md](ATLAS_MM6.md). The shared data APIs serve all three Atlases. No MM9 Atlas, gameplay overhaul, VCMI-style launcher or public modding contract is added by this release.
+
+The repository also contains the independent [Polish MM9 retail importer](devdocs/MM9_POLISH_RETAIL.md) and local-catalog precedence fix. Its generated media and private review decisions are not public release assets.
 
 ## Credits
 
-Maintained by Karol, on [OpenYAMM by pjasicek and contributors](https://github.com/pjasicek/openyamm).
-Inspired by [u/hulululuh](https://www.reddit.com/user/hulululuh/)'s
-[MM7 guide](https://www.reddit.com/r/MightAndMagic/comments/1ww8pq0/i_made_an_interactive_world_map_guide_for_might/)
-and [MM8 guide](https://www.reddit.com/r/MightAndMagic/comments/1x7x7ok/simon_found_a_map_of_jadame_i_made_it_clickable/).
-Their HTML, JavaScript, guide text and artwork are not bundled.
+Maintained by Karol on [OpenYAMM by pjasicek and contributors](https://github.com/pjasicek/openyamm). Inspired by [u/hulululuh](https://www.reddit.com/user/hulululuh/)'s [MM7 guide](https://www.reddit.com/r/MightAndMagic/comments/1ww8pq0/i_made_an_interactive_world_map_guide_for_might/) and [MM8 guide](https://www.reddit.com/r/MightAndMagic/comments/1x7x7ok/simon_found_a_map_of_jadame_i_made_it_clickable/). Their HTML, JavaScript, guide text and artwork are not bundled.

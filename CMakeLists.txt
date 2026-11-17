@@ -34,7 +34,7 @@ set(CMAKE_BUILD_RPATH_USE_ORIGIN ON)
 
 option(OPENYAMM_BUILD_TOOLS "Build the tools targets." OFF)
 option(OPENYAMM_BUILD_TESTS "Build the unit test target." ON)
-option(OPENYAMM_BUILD_ATLAS "Build the optional native MM7/MM8 Atlas." OFF)
+option(OPENYAMM_BUILD_ATLAS "Build the optional native MM6/MM7/MM8 Atlas." OFF)
 if (OPENYAMM_BUILD_ATLAS)
     set(OPENYAMM_BUILD_ATLAS_CORE ON CACHE BOOL "Build Atlas geometry" FORCE)
 endif()
