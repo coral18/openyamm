@@ -10,6 +10,7 @@
 #include <cstring>
 #include <cstdio>
 #include <filesystem>
+#include <fstream>
 #include <sstream>
 
 namespace OpenYAMM::Game
@@ -357,6 +358,16 @@ bool DebugConsole::freezesGameplay() const
     return m_enabled && m_freezeGameplay;
 }
 
+const std::vector<DebugConsole::Message> &DebugConsole::messages() const
+{
+    return m_messages;
+}
+
+size_t DebugConsole::totalMessageCount() const
+{
+    return m_totalMessageCount;
+}
+
 void DebugConsole::addMessage(MessageKind kind, const std::string &message)
 {
     if (message.empty())
@@ -365,6 +376,7 @@ void DebugConsole::addMessage(MessageKind kind, const std::string &message)
     }
 
     m_messages.push_back({kind, message});
+    ++m_totalMessageCount;
 
     if (m_messages.size() > MaxMessages)
     {
@@ -416,31 +428,88 @@ void DebugConsole::executeLine(const std::string &line)
 
     for (const std::string &commandLine : commandLines)
     {
-        const std::vector<std::string> tokens = tokenize(commandLine);
+        dispatchCommand(commandLine, true);
+    }
+}
 
-        if (tokens.empty())
+void DebugConsole::setCommandObserver(CommandObserver observer)
+{
+    m_commandObserver = std::move(observer);
+}
+
+bool DebugConsole::dispatchCommand(const std::string &commandLine, bool reportSuccess)
+{
+    const std::vector<std::string> tokens = tokenize(commandLine);
+
+    if (tokens.empty())
+    {
+        return true;
+    }
+
+    const auto commandIt = m_commands.find(normalizeCommandName(tokens.front()));
+
+    if (commandIt == m_commands.end())
+    {
+        addMessage(MessageKind::Error, "Unknown command: " + tokens.front());
+        return false;
+    }
+
+    CommandContext context = {};
+    context.args.assign(tokens.begin() + 1, tokens.end());
+    const CommandResult result = commandIt->second.callback(context);
+
+    const CommandDefinition &command = commandIt->second;
+    const bool readOnly = command.readOnly || (command.readOnlyWith && command.readOnlyWith(context.args));
+
+    if (result.success && !readOnly && m_commandObserver)
+    {
+        m_commandObserver(command);
+    }
+
+    if (!result.message.empty() && (reportSuccess || !result.success))
+    {
+        addMessage(result.success ? MessageKind::Success : MessageKind::Error, result.message);
+    }
+
+    return result.success;
+}
+
+DebugConsole::CommandResult DebugConsole::executeFile(const std::string &path)
+{
+    std::ifstream file(path);
+
+    if (!file)
+    {
+        return {false, "Cannot open " + path};
+    }
+
+    size_t commands = 0;
+    size_t failed = 0;
+    std::string line;
+
+    while (std::getline(file, line))
+    {
+        const size_t first = line.find_first_not_of(" \t\r");
+
+        if (first == std::string::npos || line[first] == '#')
         {
             continue;
         }
 
-        const std::string commandName = normalizeCommandName(tokens.front());
-        const auto commandIt = m_commands.find(commandName);
-
-        if (commandIt == m_commands.end())
+        for (const std::string &commandLine : splitCommandLine(line))
         {
-            addMessage(MessageKind::Error, "Unknown command: " + tokens.front());
-            continue;
-        }
+            if (tokenize(commandLine).empty())
+            {
+                continue;
+            }
 
-        CommandContext context = {};
-        context.args.assign(tokens.begin() + 1, tokens.end());
-        const CommandResult result = commandIt->second.callback(context);
-
-        if (!result.message.empty())
-        {
-            addMessage(result.success ? MessageKind::Success : MessageKind::Error, result.message);
+            ++commands;
+            failed += dispatchCommand(commandLine, false) ? 0 : 1;
         }
     }
+
+    return {failed == 0, "Ran " + std::to_string(commands) + " commands from " + path
+        + (failed > 0 ? ", " + std::to_string(failed) + " failed" : std::string())};
 }
 
 void DebugConsole::render(int width, int height)
@@ -727,7 +796,7 @@ int DebugConsole::mapOptionSearchScore(const MapOption &map, const std::string &
 
 void DebugConsole::renderConsoleWindow(int width, int height)
 {
-#if defined(__ANDROID__)
+#if defined(__ANDROID__) || defined(OPENYAMM_IOS)
     renderMobileConsoleWindow(width, height);
     return;
 #endif
@@ -1137,7 +1206,6 @@ void DebugConsole::renderMobileQuickActions()
     commandButton("Map Info", "map");
     commandButton("Full Heal", "hp full");
     commandButton("Next Day", "time advance 1");
-    commandButton("Set up Breach", "setup breach");
 
     if (ImGui::Button("Clear Log", ImVec2(-1.0f, 0.0f)))
     {
@@ -1288,13 +1356,6 @@ void DebugConsole::renderQuickActions()
     if (ImGui::SmallButton("Next Day"))
     {
         executeLine("time advance 1");
-    }
-
-    ImGui::SameLine();
-
-    if (ImGui::SmallButton("Set up Breach"))
-    {
-        executeLine("setup breach");
     }
 
     ImGui::SameLine();
@@ -1732,7 +1793,8 @@ void DebugConsole::renderHelpText() const
     ImGui::TextDisabled("Common commands");
     ImGui::BulletText("help");
     ImGui::BulletText("map");
-    ImGui::BulletText("time [advance [days]]");
+    ImGui::BulletText("time [advance [days]] | time set HH:MM");
+    ImGui::BulletText("sky [weather|name|fog|rain|clear ...]");
     ImGui::BulletText("event <id>");
     ImGui::BulletText("qbit get|set|clear <id>");
     ImGui::BulletText("qbit dump [active|all|filter]");

@@ -1,4 +1,6 @@
+#include "game/world/WorldItemSources.h"
 #include "game/gameplay/GameplayHeldItemController.h"
+#include "engine/Localization.h"
 
 #include "game/audio/SoundIds.h"
 #include "game/events/EventRuntime.h"
@@ -7,6 +9,8 @@
 #include "game/items/ItemGenerator.h"
 #include "game/items/ItemRuntime.h"
 #include "game/party/Party.h"
+#include "game/rules/GameRules.h"
+#include "game/rules/ItemRules.h"
 #include "game/tables/ItemTable.h"
 
 #include <optional>
@@ -31,19 +35,7 @@ std::string eventGrantedItemStatusName(const InventoryItem &item, const ItemTabl
 {
     const ItemDefinition *pItemDefinition = itemTable.get(item.objectDescriptionId);
 
-    if (pItemDefinition == nullptr)
-    {
-        return "item";
-    }
-
-    if (!pItemDefinition->unidentifiedName.empty()
-        && pItemDefinition->unidentifiedName != "0"
-        && pItemDefinition->unidentifiedName != "N / A")
-    {
-        return pItemDefinition->unidentifiedName;
-    }
-
-    return !pItemDefinition->name.empty() ? pItemDefinition->name : "item";
+    return pItemDefinition != nullptr ? ItemRuntime::foundItemName(*pItemDefinition) : "item";
 }
 
 void notifyEventGrantedItemReceived(
@@ -58,7 +50,8 @@ void notifyEventGrantedItemReceived(
         pParty->requestSound(SoundId::Gold);
     }
 
-    runtime.setStatusBarEvent("You found something (" + eventGrantedItemStatusName(item, itemTable) + ")!");
+    runtime.setStatusBarEvent(Engine::tr("You found something ({item})!",
+        {{"item", eventGrantedItemStatusName(item, itemTable)}}));
 }
 } // namespace
 
@@ -120,7 +113,10 @@ bool GameplayHeldItemController::tryDisplaceHeldInventoryItem(
     const ItemDefinition *pItemDefinition =
         pItemTable != nullptr ? pItemTable->get(heldInventoryItem.item.objectDescriptionId) : nullptr;
 
-    if (pWorldRuntime == nullptr || (pItemDefinition != nullptr && !ItemRuntime::canDrop(*pItemDefinition)))
+    const bool droppable = pItemDefinition == nullptr
+        || gameRulesFor(runtime.partyReadOnly()).items.canDropToWorld(heldInventoryItem.item, *pItemDefinition);
+
+    if (pWorldRuntime == nullptr || !droppable)
     {
         return false;
     }
@@ -154,7 +150,8 @@ void GameplayHeldItemController::applyGrantedEventItemsToHeldInventory(
 {
     if (eventRuntimeState.grantedItems.empty()
         && eventRuntimeState.grantedItemIds.empty()
-        && !eventRuntimeState.clearHeldItemRequest)
+        && !eventRuntimeState.clearHeldItemRequest
+        && eventRuntimeState.takenHeldItemId == 0)
     {
         return;
     }
@@ -166,6 +163,18 @@ void GameplayHeldItemController::applyGrantedEventItemsToHeldInventory(
 
     GameplayUiController::HeldInventoryItemState &heldInventoryItem = runtime.heldInventoryItem();
 
+    // An item the event took from the cursor (EventRuntimeState::takenHeldItemId).
+    if (eventRuntimeState.takenHeldItemId != 0)
+    {
+        if (heldInventoryItem.active && heldInventoryItem.item.objectDescriptionId == eventRuntimeState.takenHeldItemId)
+        {
+            clearHeldInventoryItem(heldInventoryItem);
+            runtime.party()->clearHeldItemForQueries();
+        }
+
+        eventRuntimeState.takenHeldItemId = 0;
+    }
+
     if (eventRuntimeState.clearHeldItemRequest)
     {
         clearHeldInventoryItem(heldInventoryItem);
@@ -174,11 +183,11 @@ void GameplayHeldItemController::applyGrantedEventItemsToHeldInventory(
     }
 
     const auto receiveGrantedItem =
-        [&runtime, &itemTable, &heldInventoryItem](InventoryItem grantedItem)
+        [&runtime, &itemTable, &heldInventoryItem](InventoryItem grantedItem) -> bool
         {
             forceEventGrantedItemIdentificationState(grantedItem, itemTable);
 
-#if defined(__ANDROID__)
+#if defined(__ANDROID__) || defined(OPENYAMM_IOS)
             Party *pParty = runtime.party();
             size_t recipientMemberIndex = 0;
 
@@ -190,13 +199,13 @@ void GameplayHeldItemController::applyGrantedEventItemsToHeldInventory(
                     + std::to_string(grantedItem.objectDescriptionId)
                     + gameplayDebugTraceItemSummary(grantedItem.objectDescriptionId, &itemTable)
                     + " member_index=" + std::to_string(recipientMemberIndex));
-                return;
+                return true;
             }
 #endif
 
             if (!GameplayHeldItemController::tryDisplaceHeldInventoryItem(runtime))
             {
-                return;
+                return false;
             }
 
             GameplayHeldItemController::setHeldInventoryItem(heldInventoryItem, grantedItem);
@@ -206,27 +215,42 @@ void GameplayHeldItemController::applyGrantedEventItemsToHeldInventory(
                 "item_received destination=held source=event item_id="
                 + std::to_string(grantedItem.objectDescriptionId)
                 + gameplayDebugTraceItemSummary(grantedItem.objectDescriptionId, &itemTable));
+            return true;
         };
 
-    for (const InventoryItem &item : eventRuntimeState.grantedItems)
+    for (size_t i = 0; i < eventRuntimeState.grantedItems.size(); ++i)
     {
+        const InventoryItem &item = eventRuntimeState.grantedItems[i];
         if (item.objectDescriptionId == 0)
         {
             continue;
         }
 
-        receiveGrantedItem(item);
+        const bool received = receiveGrantedItem(item);
+#ifdef OPENYAMM_WITH_ATLAS
+        if (received) confirmWorldItemReward(eventRuntimeState, true, i);
+#else
+        (void)received;
+#endif
     }
 
-    for (uint32_t itemId : eventRuntimeState.grantedItemIds)
+    for (size_t i = 0; i < eventRuntimeState.grantedItemIds.size(); ++i)
     {
+        const uint32_t itemId = eventRuntimeState.grantedItemIds[i];
         if (itemId == 0)
         {
             continue;
         }
 
         InventoryItem item = ItemGenerator::makeInventoryItem(itemId, itemTable, ItemGenerationMode::Generic);
-        receiveGrantedItem(std::move(item));
+        // A fixed item that an event gives comes identified, as in the originals (OY-182).
+        item.identified = true;
+        const bool received = receiveGrantedItem(std::move(item));
+#ifdef OPENYAMM_WITH_ATLAS
+        if (received) confirmWorldItemReward(eventRuntimeState, false, i);
+#else
+        (void)received;
+#endif
     }
 
     eventRuntimeState.grantedItems.clear();
@@ -249,7 +273,7 @@ bool GameplayHeldItemController::tryAutoPlaceHeldInventoryItemOnPartyMember(
     if (!party.tryAutoPlaceItemInMemberInventory(memberIndex, heldInventoryItem.item))
     {
         failureStatus = party.lastStatus().empty() || party.lastStatus() == "inventory full"
-            ? "Pack is Full!"
+            ? Engine::tr("Pack is Full!")
             : party.lastStatus();
         return false;
     }

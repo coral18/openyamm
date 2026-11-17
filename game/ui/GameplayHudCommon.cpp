@@ -1,6 +1,9 @@
 #include "game/ui/GameplayHudCommon.h"
 
+#include "engine/AssetScaleTier.h"
 #include "engine/ImageAssetLoader.h"
+#include "engine/ParallelFor.h"
+#include "engine/Utf8Text.h"
 #include "game/maps/MapIdentity.h"
 #include "game/render/TextureFiltering.h"
 #include "game/StringUtils.h"
@@ -8,10 +11,14 @@
 #include <yaml-cpp/yaml.h>
 
 #include <algorithm>
+#include <cctype>
+#include <optional>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
 #include <iostream>
+#include <memory>
+#include <stdexcept>
 #include <string_view>
 
 namespace OpenYAMM::Game
@@ -72,12 +79,14 @@ bgfx::TextureHandle ensureHudTextureColorWithMode(
         }
     }
 
-    if (texture.bgraPixels.empty() || texture.physicalWidth <= 0 || texture.physicalHeight <= 0)
+    const std::vector<uint8_t> &sourcePixels = GameplayHudCommon::hudTexturePixels(texture);
+
+    if (sourcePixels.empty() || texture.physicalWidth <= 0 || texture.physicalHeight <= 0)
     {
         return BGFX_INVALID_HANDLE;
     }
 
-    std::vector<uint8_t> tintedPixels = texture.bgraPixels;
+    std::vector<uint8_t> tintedPixels = sourcePixels;
     const uint8_t red = static_cast<uint8_t>(colorAbgr & 0xff);
     const uint8_t green = static_cast<uint8_t>((colorAbgr >> 8) & 0xff);
     const uint8_t blue = static_cast<uint8_t>((colorAbgr >> 16) & 0xff);
@@ -134,6 +143,43 @@ struct ColumnSeparatedGlyphRun
     int startX = 0;
     int width = 0;
 };
+
+// Tinting multiplies the atlas, so coloured or black glyphs need one white copy; most atlases already are white.
+void assignHudFontTintTexture(GameplayHudFontData &font, TextureFilterProfile filter, uint64_t samplerFlags = 0)
+{
+    const std::vector<uint8_t> &pixels = font.mainAtlasPixels;
+    bool whiteGlyphs = true;
+
+    for (size_t pixelIndex = 0; pixelIndex + 3 < pixels.size() && whiteGlyphs; pixelIndex += 4)
+    {
+        whiteGlyphs = pixels[pixelIndex + 3] == 0
+            || (pixels[pixelIndex] == 255 && pixels[pixelIndex + 1] == 255 && pixels[pixelIndex + 2] == 255);
+    }
+
+    font.tintTextureHandle = font.mainTextureHandle;
+
+    if (whiteGlyphs)
+    {
+        return;
+    }
+
+    std::vector<uint8_t> whitePixels = pixels;
+
+    for (size_t pixelIndex = 0; pixelIndex + 3 < whitePixels.size(); pixelIndex += 4)
+    {
+        whitePixels[pixelIndex] = 255;
+        whitePixels[pixelIndex + 1] = 255;
+        whitePixels[pixelIndex + 2] = 255;
+    }
+
+    font.tintTextureHandle = createBgraTexture2D(
+        static_cast<uint16_t>(font.atlasWidth),
+        static_cast<uint16_t>(font.atlasHeight),
+        whitePixels.data(),
+        static_cast<uint32_t>(whitePixels.size()),
+        filter,
+        samplerFlags);
+}
 
 std::optional<GameplayHudFontData> buildColumnSeparatedHudFont(
     const Engine::ImagePixelsBgra &image,
@@ -242,8 +288,11 @@ std::optional<GameplayHudFontData> buildColumnSeparatedHudFont(
         return std::nullopt;
     }
 
+    assignHudFontTintTexture(font, TextureFilterProfile::Text, BGFX_SAMPLER_U_CLAMP | BGFX_SAMPLER_V_CLAMP);
+    font.mainAtlasPixels = std::vector<uint8_t>();
     return font;
 }
+
 } // namespace
 
 GameplayUiViewportRect GameplayHudCommon::computeUiViewportRect(int screenWidth, int screenHeight)
@@ -856,6 +905,208 @@ const GameplayHudTextureData *GameplayHudCommon::findHudTexture(
     return &textures[iterator->second];
 }
 
+namespace
+{
+std::shared_ptr<const Engine::CookedTexture> readCookedHudTexture(
+    const Engine::AssetFileSystem &assetFileSystem, const std::string &path)
+{
+    const std::optional<std::vector<uint8_t>> bytes = assetFileSystem.readBinaryFile(path);
+    if (!bytes || bytes->empty())
+    {
+        throw std::runtime_error("Cannot read cooked HUD texture " + path);
+    }
+    try
+    {
+        return std::make_shared<const Engine::CookedTexture>(Engine::decodeCookedTexture(*bytes));
+    }
+    catch (const std::exception &exception)
+    {
+        throw std::runtime_error("Cannot load cooked HUD texture " + path + ": " + exception.what());
+    }
+}
+
+// One HUD texture from a block-aligned cell of a cooked texture whose content is contentWidth x contentHeight.
+GameplayHudTextureData cookedHudTextureData(
+    const std::string &textureName,
+    const std::shared_ptr<const Engine::CookedTexture> &cooked,
+    int cellX,
+    int cellY,
+    int cellWidth,
+    int cellHeight,
+    int contentWidth,
+    int contentHeight,
+    Engine::AssetScaleTier tier,
+    TextureFilterProfile profile)
+{
+    GameplayHudTextureData texture = {};
+    texture.textureName = textureName;
+    texture.physicalWidth = contentWidth;
+    texture.physicalHeight = contentHeight;
+    texture.width = Engine::scalePhysicalPixelsToLogical(contentWidth, tier);
+    texture.height = Engine::scalePhysicalPixelsToLogical(contentHeight, tier);
+    texture.assetScaleTier = tier;
+    texture.uScale = float(contentWidth) / float(cellWidth);
+    texture.vScale = float(contentHeight) / float(cellHeight);
+    texture.cookedSource = cooked;
+    texture.cookedCellX = cellX;
+    texture.cookedCellY = cellY;
+    texture.cookedCellWidth = cellWidth;
+    texture.cookedCellHeight = cellHeight;
+    if (cellX == 0 && cellY == 0 && cellWidth == cooked->width && cellHeight == cooked->height)
+    {
+        texture.textureHandle = createCookedTexture2D(*cooked, profile, BGFX_SAMPLER_U_CLAMP | BGFX_SAMPLER_V_CLAMP);
+    }
+    else
+    {
+        Engine::CookedTexture cell = {};
+        cell.codec = cooked->codec;
+        cell.width = uint16_t(cellWidth);
+        cell.height = uint16_t(cellHeight);
+        cell.blocks = Engine::cookedTextureRegionBlocks(*cooked, cellX, cellY, cellWidth, cellHeight);
+        texture.textureHandle = createCookedTexture2D(cell, profile, BGFX_SAMPLER_U_CLAMP | BGFX_SAMPLER_V_CLAMP);
+    }
+    if (!bgfx::isValid(texture.textureHandle))
+    {
+        throw std::runtime_error("Cannot create cooked HUD texture " + textureName);
+    }
+    return texture;
+}
+}
+
+const std::vector<uint8_t> &GameplayHudCommon::hudTexturePixels(const GameplayHudTextureData &texture)
+{
+    if (!texture.bgraPixels.empty())
+    {
+        return texture.bgraPixels;
+    }
+    std::shared_ptr<const Engine::CookedTexture> source = texture.cookedSource;
+    if (source == nullptr && texture.pCookedAssetFileSystem != nullptr)
+    {
+        try
+        {
+            source = readCookedHudTexture(*texture.pCookedAssetFileSystem, texture.cookedPath);
+        }
+        catch (const std::exception &exception)
+        {
+            std::cout << "HUD texture pixels unavailable: " << exception.what() << '\n';
+        }
+    }
+    if (source == nullptr)
+    {
+        return texture.bgraPixels;
+    }
+    const std::vector<uint8_t> cell = Engine::decodeCookedTextureRegionBgra(*source,
+        texture.cookedCellX, texture.cookedCellY, texture.cookedCellWidth, texture.cookedCellHeight);
+    texture.bgraPixels.resize(size_t(texture.physicalWidth) * texture.physicalHeight * 4);
+    for (int y = 0; y < texture.physicalHeight; ++y)
+    {
+        std::memcpy(texture.bgraPixels.data() + size_t(y) * texture.physicalWidth * 4,
+            cell.data() + size_t(y) * texture.cookedCellWidth * 4, size_t(texture.physicalWidth) * 4);
+    }
+    return texture.bgraPixels;
+}
+
+bool GameplayHudCommon::loadCookedFaceSet(
+    const Engine::AssetFileSystem &assetFileSystem,
+    GameplayAssetLoadCache &cache,
+    const std::string &normalizedName,
+    std::vector<GameplayHudTextureData> &textures,
+    std::unordered_map<std::string, size_t> &textureIndexByName)
+{
+    // Portrait frames are <set>NN or <set>-NN ("girla05", "pc01-05"); their set is faces_<set>.yml/.oytex.
+    const size_t length = normalizedName.size();
+    if (length < 3 || !std::isdigit(static_cast<unsigned char>(normalizedName[length - 1]))
+        || !std::isdigit(static_cast<unsigned char>(normalizedName[length - 2])))
+    {
+        return false;
+    }
+    std::string set = normalizedName.substr(0, length - 2);
+    if (set.ends_with('-'))
+    {
+        set.pop_back();
+    }
+    const std::optional<std::string> manifestPath = Engine::findAssetPathCaseInsensitive(assetFileSystem,
+        "Data/icons", "faces_" + set + ".yml", cache.directoryAssetPathsByPath, cache.assetPathByKey);
+    if (set.empty() || !manifestPath)
+    {
+        return false;
+    }
+    const std::optional<std::string> manifestText = assetFileSystem.readTextFile(*manifestPath);
+    const YAML::Node manifest = manifestText ? YAML::Load(*manifestText) : YAML::Node();
+    if (!manifest || manifest["schema_version"].as<int>(0) != 1 || !manifest["frames"].IsSequence())
+    {
+        throw std::runtime_error("Invalid portrait set manifest " + *manifestPath);
+    }
+    const std::vector<std::string> frames = manifest["frames"].as<std::vector<std::string>>();
+    if (std::find(frames.begin(), frames.end(), normalizedName) == frames.end())
+    {
+        return false;
+    }
+    const int frameWidth = manifest["frame_width"].as<int>();
+    const int frameHeight = manifest["frame_height"].as<int>();
+    const int columns = manifest["columns"].as<int>();
+    const int cellWidth = (frameWidth + 3) / 4 * 4;
+    const int cellHeight = (frameHeight + 3) / 4 * 4;
+    const std::string atlasPath = manifestPath->substr(0, manifestPath->size() - 4) + ".oytex";
+    const std::shared_ptr<const Engine::CookedTexture> atlas = readCookedHudTexture(assetFileSystem, atlasPath);
+    const int rows = (int(frames.size()) + columns - 1) / columns;
+    if (frameWidth <= 0 || frameHeight <= 0 || columns <= 0 || atlas->width < std::min(columns, int(frames.size()))
+            * cellWidth || atlas->height < rows * cellHeight)
+    {
+        throw std::runtime_error("Portrait set atlas " + atlasPath + " does not match its manifest");
+    }
+    const std::optional<std::string> resolvedAtlasPath = assetFileSystem.resolveExistingFilePath(atlasPath);
+    const Engine::AssetScaleTier tier = Engine::assetScaleTierFromResolvedPath(resolvedAtlasPath.value_or(atlasPath));
+    for (size_t index = 0; index < frames.size(); ++index)
+    {
+        if (findHudTexture(textures, textureIndexByName, frames[index]) != nullptr)
+        {
+            continue;
+        }
+        textures.push_back(cookedHudTextureData(frames[index], atlas, int(index % columns) * cellWidth,
+            int(index / columns) * cellHeight, cellWidth, cellHeight, frameWidth, frameHeight, tier,
+            TextureFilterProfile::Ui));
+        textureIndexByName[frames[index]] = textures.size() - 1;
+    }
+    return true;
+}
+
+bool GameplayHudCommon::loadCookedHudImage(
+    const Engine::AssetFileSystem &assetFileSystem,
+    GameplayAssetLoadCache &cache,
+    const std::string &textureName,
+    std::vector<GameplayHudTextureData> &textures,
+    std::unordered_map<std::string, size_t> &textureIndexByName)
+{
+    std::string directoryPath = "Data/icons";
+    std::string fileName = textureName;
+    const size_t separator = textureName.find_last_of('/');
+    if (separator != std::string::npos)
+    {
+        directoryPath = textureName.substr(0, separator);
+        fileName = textureName.substr(separator + 1);
+    }
+    const std::optional<std::string> path = Engine::findCookedOrImageAssetPath(
+        assetFileSystem, directoryPath, fileName, cache.directoryAssetPathsByPath, cache.assetPathByKey);
+    if (!path || !toLowerCopy(*path).ends_with(".oytex"))
+    {
+        return false;
+    }
+    const std::shared_ptr<const Engine::CookedTexture> cooked = readCookedHudTexture(assetFileSystem, *path);
+    const std::string normalizedName = toLowerCopy(textureName);
+    textures.push_back(cookedHudTextureData(normalizedName, cooked, 0, 0, cooked->width, cooked->height,
+        cooked->contentWidth != 0 ? cooked->contentWidth : cooked->width,
+        cooked->contentHeight != 0 ? cooked->contentHeight : cooked->height,
+        Engine::assetScaleTierFromResolvedPath(*path),
+        normalizedName.starts_with("obsidian_") ? TextureFilterProfile::UiIllustration : TextureFilterProfile::Ui));
+    // The GPU has the blocks; the rare CPU use (tints, opaque bounds, hover tests) reads the file again.
+    textures.back().cookedSource = nullptr;
+    textures.back().cookedPath = *path;
+    textures.back().pCookedAssetFileSystem = &assetFileSystem;
+    textureIndexByName[normalizedName] = textures.size() - 1;
+    return true;
+}
+
 bool GameplayHudCommon::loadHudTexture(
     const Engine::AssetFileSystem *pAssetFileSystem,
     GameplayAssetLoadCache &cache,
@@ -872,6 +1123,14 @@ bool GameplayHudCommon::loadHudTexture(
     if (findHudTexture(textures, textureIndexByName, textureName) != nullptr)
     {
         return true;
+    }
+
+    // Cooked art (tools/cook_ui_textures.py) was prepared with the colour-key decode.
+    if (pAssetFileSystem != nullptr && transparencyMode == GameplayHudBitmapTransparencyMode::HudColorKey
+        && (loadCookedFaceSet(*pAssetFileSystem, cache, toLowerCopy(textureName), textures, textureIndexByName)
+            || loadCookedHudImage(*pAssetFileSystem, cache, textureName, textures, textureIndexByName)))
+    {
+        return findHudTexture(textures, textureIndexByName, textureName) != nullptr;
     }
 
     int width = 0;
@@ -1009,11 +1268,19 @@ const GameplayHudFontData *GameplayHudCommon::findHudFont(
     const std::vector<GameplayHudFontData> &fonts,
     const std::string &fontName)
 {
-    const std::string normalizedFontName = toLowerCopy(fontName);
+    // Stored names are lower case; this runs for every text line drawn, so compare in place.
+    const auto sameName = [&fontName](const std::string &stored)
+    {
+        return stored.size() == fontName.size()
+            && std::equal(stored.begin(), stored.end(), fontName.begin(), [](char left, char right)
+               {
+                   return left == char(std::tolower(static_cast<unsigned char>(right)));
+               });
+    };
 
     for (const GameplayHudFontData &fontHandle : fonts)
     {
-        if (fontHandle.fontName == normalizedFontName)
+        if (sameName(fontHandle.fontName))
         {
             return &fontHandle;
         }
@@ -1022,147 +1289,469 @@ const GameplayHudFontData *GameplayHudCommon::findHudFont(
     return nullptr;
 }
 
-bool GameplayHudCommon::loadHudFont(
-    const Engine::AssetFileSystem *pAssetFileSystem,
-    GameplayAssetLoadCache &cache,
-    const std::string &fontName,
-    std::vector<GameplayHudFontData> &fonts,
-    const Engine::FontSettings &settings)
+namespace
 {
-    if (fontName.empty())
-    {
-        return true;
-    }
-
-    if (findHudFont(fonts, fontName) != nullptr)
-    {
-        return true;
-    }
-
-    std::string error;
-    std::optional<Engine::FontAtlasImage> image;
+// Where a font comes from. A column-separated PCX font (dialogue) is complete once decoded.
+struct FontSource
+{
+    std::string fontName;
+    int pixelHeight = 0;
     bool independentFont = false;
+    // A Unicode face's atlas, shared by the sizes and faces that raster the same font file and characters at the same
+    // height; empty for other faces.
+    std::string unicodeAtlasKey;
+    // The face's baseline at that raster height: faces sharing an atlas differ only in it.
+    int unicodeBaseline = 0;
+    int displayHeight = 0;
+    std::optional<std::vector<uint8_t>> fntBytes;
+    std::optional<GameplayHudFontData> bitmapFont;
+};
+
+// A font's atlas and its textures' CPU work (mip chains, the white tint copy), ready to upload.
+struct PreparedFont
+{
+    std::string fontName;
+    int pixelHeight = 0;
+    bool independentFont = false;
+    std::string unicodeAtlasKey;
+    int unicodeBaseline = 0;
+    std::optional<Engine::FontAtlasImage> image;
+    std::string error;
+    PreparedBgraTexture main;
+    PreparedBgraTexture shadow;
+    std::optional<PreparedBgraTexture> tint;
+};
+
+std::string sharedFontKey(const std::string &fontName, int pixelHeight)
+{
+    const std::string name = toLowerCopy(fontName);
+    return pixelHeight > 0 ? name + "|pixels:" + std::to_string(pixelHeight) : name;
+}
+
+struct SharedFontStore
+{
+    std::unordered_map<std::string, std::unique_ptr<GameplayHudFontData>> fonts;
+    // The atlases of Unicode faces, owning their textures; the fonts that draw from one copy its handles.
+    std::unordered_map<std::string, std::unique_ptr<GameplayHudFontData>> unicodeAtlases;
+    std::unordered_set<std::string> failed;
+};
+
+SharedFontStore &sharedFontStore()
+{
+    static SharedFontStore store;
+    return store;
+}
+
+void destroyFontTextures(const GameplayHudFontData &font)
+{
+    if (font.sharedTextures)
+    {
+        return;
+    }
+    if (bgfx::isValid(font.tintTextureHandle) && font.tintTextureHandle.idx != font.mainTextureHandle.idx)
+    {
+        bgfx::destroy(font.tintTextureHandle);
+    }
+    if (bgfx::isValid(font.shadowTextureHandle) && font.shadowTextureHandle.idx != font.mainTextureHandle.idx)
+    {
+        bgfx::destroy(font.shadowTextureHandle);
+    }
+    if (bgfx::isValid(font.mainTextureHandle))
+    {
+        bgfx::destroy(font.mainTextureHandle);
+    }
+}
+
+// Reads the font's descriptor and its FNT or PCX; runs on the loading thread.
+std::optional<FontSource> resolveFontSource(
+    const Engine::AssetFileSystem &assetFileSystem,
+    const std::string &fontName,
+    int pixelHeight)
+{
+    FontSource source;
+    source.fontName = fontName;
+    source.pixelHeight = pixelHeight;
     const std::optional<std::string> descriptorText =
-        pAssetFileSystem->readTextFile("fonts/truetype/" + toLowerCopy(fontName) + ".yml");
+        assetFileSystem.readTextFile("fonts/truetype/" + toLowerCopy(fontName) + ".yml");
     if (descriptorText)
     {
         try
         {
             const YAML::Node descriptor = YAML::Load(*descriptorText);
-            independentFont = descriptor["metrics"].as<std::string>("legacy") == "freetype";
+            source.independentFont = descriptor["metrics"].as<std::string>("legacy") == "freetype";
+            if (source.independentFont && descriptor["encoding"].as<std::string>("") == "utf-8")
+            {
+                const int logicalHeight = descriptor["logical_height"].as<int>(0);
+                const int rasterHeight = Engine::unicodeRasterHeight(
+                    pixelHeight, logicalHeight, descriptor["max_raster_height"].as<int>(0));
+                source.displayHeight = pixelHeight > 0 ? pixelHeight : logicalHeight;
+                source.unicodeBaseline = logicalHeight > 0
+                    ? int(std::lround(float(descriptor["baseline"].as<int>(0)) * rasterHeight / logicalHeight))
+                    : 0;
+                // The atlas's pixels depend on the font file, its characters and weight and the raster height, not
+                // on the face (a CJK pack draws every face with one font). Logical and display sizes are released
+                // apart (releaseRasterSizes), so they never share an atlas.
+                source.unicodeAtlasKey = descriptor["file"].as<std::string>("") + "|"
+                    + descriptor["characters_file"].as<std::string>("") + "|"
+                    + descriptor["weight"].as<std::string>("") + "|"
+                    + descriptor["glyph_scale"].as<std::string>("1") + (pixelHeight > 0 ? "|pixels|" : "|logical|")
+                    + std::to_string(rasterHeight);
+            }
         }
         catch (const YAML::Exception &exception)
         {
-            std::cout << "HUD font load failed: font=\"" << fontName
+            std::cout << "Font load failed: font=\"" << fontName
                       << "\" reason=invalid-descriptor: " << exception.what() << '\n';
-            return false;
+            return std::nullopt;
         }
     }
-    if (independentFont)
+    if (source.independentFont)
     {
-        image = Engine::loadTrueTypeFontAtlas(*pAssetFileSystem, fontName, error);
+        return source;
     }
-    else
+
+    Engine::DirectoryAssetPathCache directoryAssetPaths;
+    Engine::AssetPathLookupCache assetPaths;
+    // A legacy face's FNT carries its layout metrics (engine/fonts/english_text).
+    const std::optional<std::string> fontPath = Engine::findAssetPathCaseInsensitive(
+        assetFileSystem, "Data/EnglishT", fontName + ".fnt", directoryAssetPaths, assetPaths);
+
+    if (!fontPath)
     {
-        std::optional<std::string> fontPath =
-            findCachedAssetPath(pAssetFileSystem, cache, "Data/icons", fontName + ".fnt");
-
-        if (!fontPath)
+        const std::optional<std::string> pcxFontPath = Engine::findAssetPathCaseInsensitive(
+            assetFileSystem, "ui/dialogue", fontName + ".pcx", directoryAssetPaths, assetPaths);
+        if (pcxFontPath)
         {
-            fontPath = findCachedAssetPath(pAssetFileSystem, cache, "Data/EnglishT", fontName + ".fnt");
-        }
-
-        if (!fontPath)
-        {
-            const std::optional<std::string> pcxFontPath =
-                findCachedAssetPath(pAssetFileSystem, cache, "ui/dialogue", fontName + ".pcx");
-            if (pcxFontPath)
+            Engine::ImageDecodeOptions decodeOptions = {};
+            decodeOptions.applyTealTransparencyKey = true;
+            Engine::BinaryAssetCache binaryFiles;
+            const std::optional<Engine::ImagePixelsBgra> image =
+                Engine::loadImageAssetPixelsBgra(assetFileSystem, *pcxFontPath, binaryFiles, decodeOptions);
+            source.bitmapFont = image ? buildColumnSeparatedHudFont(*image, fontName) : std::nullopt;
+            if (source.bitmapFont)
             {
-                Engine::ImageDecodeOptions decodeOptions = {};
-                decodeOptions.applyTealTransparencyKey = true;
-                const std::optional<Engine::ImagePixelsBgra> image = Engine::loadImageAssetPixelsBgra(
-                    *pAssetFileSystem,
-                    *pcxFontPath,
-                    cache.binaryFilesByPath,
-                    decodeOptions);
-                const std::optional<GameplayHudFontData> bitmapFont = image
-                    ? buildColumnSeparatedHudFont(*image, fontName)
-                    : std::nullopt;
-                if (bitmapFont)
-                {
-                    fonts.push_back(*bitmapFont);
-                    return true;
-                }
-
-                std::cout << "HUD font load failed: font=\"" << fontName << "\" path=\"" << *pcxFontPath
-                          << "\" reason=column-separated-pcx-parse-failed\n";
-                return false;
+                return source;
             }
 
-            std::cout << "HUD font load failed: font=\"" << fontName << "\" reason=path-not-found\n";
-            return false;
+            std::cout << "Font load failed: font=\"" << fontName << "\" path=\"" << *pcxFontPath
+                      << "\" reason=column-separated-pcx-parse-failed\n";
+            return std::nullopt;
         }
 
-        const std::optional<std::vector<uint8_t>> fontBytes = readCachedBinaryFile(pAssetFileSystem, cache, *fontPath);
-
-        if (!fontBytes || fontBytes->empty())
-        {
-            std::cout << "HUD font load failed: font=\"" << fontName << "\" path=\"" << *fontPath
-                      << "\" reason=read-failed\n";
-            return false;
-        }
-
-        image = Engine::loadFontAtlas(*pAssetFileSystem, *fontBytes, fontName, settings, error);
+        std::cout << "Font load failed: font=\"" << fontName << "\" reason=path-not-found\n";
+        return std::nullopt;
     }
-    if (!image)
+
+    source.fntBytes = assetFileSystem.readBinaryFile(*fontPath);
+
+    if (!source.fntBytes || source.fntBytes->empty())
     {
-        std::cout << "HUD font load failed: font=\"" << fontName << "\" reason=" << error << '\n';
-        return false;
+        std::cout << "Font load failed: font=\"" << fontName << "\" path=\"" << *fontPath
+                  << "\" reason=read-failed\n";
+        return std::nullopt;
+    }
+
+    return source;
+}
+
+TextureFilterProfile fontFilter(const Engine::FontAtlas &atlas, bool independentFont)
+{
+    return atlas.atlasScale > 1 || independentFont ? TextureFilterProfile::SmoothText : TextureFilterProfile::Text;
+}
+
+// The CPU part of a font load; safe on any thread.
+PreparedFont prepareFont(const Engine::AssetFileSystem &assetFileSystem, const FontSource &source)
+{
+    PreparedFont font;
+    font.fontName = source.fontName;
+    font.pixelHeight = source.pixelHeight;
+    font.independentFont = source.independentFont;
+    font.unicodeAtlasKey = source.unicodeAtlasKey;
+    font.unicodeBaseline = source.unicodeBaseline;
+    font.image = source.independentFont
+        ? Engine::loadTrueTypeFontAtlas(assetFileSystem, source.fontName, font.error, source.pixelHeight)
+        : Engine::loadFontAtlas(assetFileSystem, *source.fntBytes, source.fontName, font.error);
+    if (!font.image)
+    {
+        return font;
+    }
+
+    Engine::FontAtlas &atlas = font.image->atlas;
+    const TextureFilterProfile filter = fontFilter(atlas, font.independentFont);
+    const uint16_t width = static_cast<uint16_t>(atlas.atlasWidth);
+    const uint16_t height = static_cast<uint16_t>(atlas.atlasHeight);
+    std::vector<uint8_t> &mainPixels = atlas.mainAtlasPixels;
+
+    // Tinting multiplies the atlas, so coloured or black glyphs need one white copy; most atlases already are white.
+    bool whiteGlyphs = true;
+    for (size_t pixelIndex = 0; pixelIndex + 3 < mainPixels.size() && whiteGlyphs; pixelIndex += 4)
+    {
+        whiteGlyphs = mainPixels[pixelIndex + 3] == 0
+            || (mainPixels[pixelIndex] == 255 && mainPixels[pixelIndex + 1] == 255
+                && mainPixels[pixelIndex + 2] == 255);
+    }
+    if (!whiteGlyphs)
+    {
+        std::vector<uint8_t> whitePixels = mainPixels;
+        for (size_t pixelIndex = 0; pixelIndex + 3 < whitePixels.size(); pixelIndex += 4)
+        {
+            whitePixels[pixelIndex] = 255;
+            whitePixels[pixelIndex + 1] = 255;
+            whitePixels[pixelIndex + 2] = 255;
+        }
+        font.tint = prepareBgraTexture2D(width, height, std::move(whitePixels), filter);
+    }
+    // The atlas pixels only feed these textures (the outline atlases are 10-40 MB each), so they move into them.
+    font.main = prepareBgraTexture2D(width, height, std::move(mainPixels), filter);
+    // A Unicode atlas's shadow mask is the glyph itself, offset when drawn: it draws from the main texture.
+    if (!atlas.unicode)
+    {
+        font.shadow = prepareBgraTexture2D(width, height, std::move(font.image->shadowPixels), filter);
+    }
+    return font;
+}
+
+std::optional<GameplayHudFontData> finishFont(PreparedFont &prepared)
+{
+    const std::string &fontName = prepared.fontName;
+    if (!prepared.image)
+    {
+        std::cout << "Font load failed: font=\"" << fontName << "\" reason=" << prepared.error << '\n';
+        return std::nullopt;
     }
 
     GameplayHudFontData fontHandle = {};
-    static_cast<Engine::FontAtlas &>(fontHandle) = std::move(image->atlas);
+    static_cast<Engine::FontAtlas &>(fontHandle) = std::move(prepared.image->atlas);
     fontHandle.fontName = toLowerCopy(fontName);
-    fontHandle.smooth = fontHandle.atlasScale > 1 || independentFont;
-    const int atlasWidth = fontHandle.atlasWidth;
-    const int atlasHeight = fontHandle.atlasHeight;
-    const std::vector<uint8_t> &mainPixels = fontHandle.mainAtlasPixels;
-    const std::vector<uint8_t> &shadowPixels = image->shadowPixels;
-    const TextureFilterProfile filter = fontHandle.smooth
-        ? TextureFilterProfile::SmoothText : TextureFilterProfile::Text;
+    fontHandle.rasterPixelHeight = prepared.pixelHeight;
+    fontHandle.smooth = fontHandle.atlasScale > 1 || prepared.independentFont;
+    const TextureFilterProfile filter = fontFilter(fontHandle, prepared.independentFont);
+    fontHandle.mainTextureHandle = createPreparedBgraTexture2D(std::move(prepared.main), filter);
+    fontHandle.shadowTextureHandle = fontHandle.unicode
+        ? fontHandle.mainTextureHandle : createPreparedBgraTexture2D(std::move(prepared.shadow), filter);
+    fontHandle.unicodeBaseline = prepared.unicodeBaseline;
+    fontHandle.tintTextureHandle = prepared.tint
+        ? createPreparedBgraTexture2D(std::move(*prepared.tint), filter) : fontHandle.mainTextureHandle;
 
-    fontHandle.mainTextureHandle = createBgraTexture2D(
-        static_cast<uint16_t>(atlasWidth),
-        static_cast<uint16_t>(atlasHeight),
-        mainPixels.data(),
-        static_cast<uint32_t>(mainPixels.size()),
-        filter);
-    fontHandle.shadowTextureHandle = createBgraTexture2D(
-        static_cast<uint16_t>(atlasWidth),
-        static_cast<uint16_t>(atlasHeight),
-        shadowPixels.data(),
-        static_cast<uint32_t>(shadowPixels.size()),
-        filter);
-
-    if (!bgfx::isValid(fontHandle.mainTextureHandle) || !bgfx::isValid(fontHandle.shadowTextureHandle))
+    if (!bgfx::isValid(fontHandle.mainTextureHandle) || !bgfx::isValid(fontHandle.shadowTextureHandle)
+        || !bgfx::isValid(fontHandle.tintTextureHandle))
     {
-        if (bgfx::isValid(fontHandle.mainTextureHandle))
-        {
-            bgfx::destroy(fontHandle.mainTextureHandle);
-        }
-
-        if (bgfx::isValid(fontHandle.shadowTextureHandle))
-        {
-            bgfx::destroy(fontHandle.shadowTextureHandle);
-        }
-
-        std::cout << "HUD font load failed: font=\"" << fontName << "\" atlas=" << atlasWidth << "x" << atlasHeight
-                  << " reason=texture-create-failed\n";
-        return false;
+        destroyFontTextures(fontHandle);
+        std::cout << "Font load failed: font=\"" << fontName << "\" atlas=" << fontHandle.atlasWidth << "x"
+                  << fontHandle.atlasHeight << " reason=texture-create-failed\n";
+        return std::nullopt;
     }
 
-    fonts.push_back(std::move(fontHandle));
-    return true;
+    return fontHandle;
+}
+}
+
+// A font that draws from a Unicode atlas at its own size and baseline: the atlas's glyphs, laid out at displayHeight.
+std::unique_ptr<GameplayHudFontData> unicodeFontFromAtlas(
+    const GameplayHudFontData &atlas,
+    const FontSource &source)
+{
+    const std::string &fontName = source.fontName;
+    const int pixelHeight = source.pixelHeight;
+    const int displayHeight = source.displayHeight;
+    auto pFont = std::make_unique<GameplayHudFontData>(atlas);
+    // Another face of the same font sits its glyphs lower or higher on the line by its baseline.
+    const int baselineShift = source.unicodeBaseline - atlas.unicodeBaseline;
+    for (Engine::FontGlyphPlacement &placement : pFont->unicodeGlyphPlacements)
+    {
+        placement.top += baselineShift;
+    }
+    pFont->unicodeBaseline = source.unicodeBaseline;
+    pFont->fontName = toLowerCopy(fontName);
+    pFont->rasterPixelHeight = pixelHeight;
+    pFont->fontHeight = displayHeight;
+    pFont->layoutScale = float(displayHeight) / float(pFont->rasterHeight);
+    pFont->sharedTextures = true;
+    return pFont;
+}
+
+void SharedFontCache::ensure(const Engine::AssetFileSystem &assetFileSystem, const std::vector<Request> &requests)
+{
+    SharedFontStore &store = sharedFontStore();
+    std::vector<FontSource> sources;
+    std::unordered_set<std::string> pending;
+    // Unicode fonts waiting for an atlas this call loads, by its key.
+    std::unordered_map<std::string, std::vector<FontSource>> unicodeWaiting;
+    for (const Request &request : requests)
+    {
+        const std::string key = sharedFontKey(request.fontName, request.pixelHeight);
+        if (request.fontName.empty() || store.fonts.contains(key) || store.failed.contains(key)
+            || !pending.insert(key).second)
+        {
+            continue;
+        }
+        std::optional<FontSource> source = resolveFontSource(assetFileSystem, request.fontName, request.pixelHeight);
+        if (!source)
+        {
+            store.failed.insert(key);
+            continue;
+        }
+        if (source->bitmapFont)
+        {
+            store.fonts.emplace(key, std::make_unique<GameplayHudFontData>(std::move(*source->bitmapFont)));
+            continue;
+        }
+        if (!source->unicodeAtlasKey.empty())
+        {
+            const auto atlas = store.unicodeAtlases.find(source->unicodeAtlasKey);
+            if (atlas != store.unicodeAtlases.end())
+            {
+                store.fonts.emplace(key, unicodeFontFromAtlas(*atlas->second, *source));
+                continue;
+            }
+            std::vector<FontSource> &waiting = unicodeWaiting[source->unicodeAtlasKey];
+            waiting.push_back(*source);
+            if (waiting.size() > 1)
+            {
+                continue;
+            }
+        }
+        sources.push_back(std::move(*source));
+    }
+
+    // Rasterized and mip-filtered together on the load workers, then uploaded here.
+    std::vector<PreparedFont> prepared(sources.size());
+    Engine::parallelFor(sources.size(), [&](size_t index)
+    {
+        prepared[index] = prepareFont(assetFileSystem, sources[index]);
+    });
+    for (PreparedFont &font : prepared)
+    {
+        const std::string key = sharedFontKey(font.fontName, font.pixelHeight);
+        std::optional<GameplayHudFontData> finished = finishFont(font);
+        if (font.unicodeAtlasKey.empty())
+        {
+            if (finished)
+            {
+                store.fonts.emplace(key, std::make_unique<GameplayHudFontData>(std::move(*finished)));
+            }
+            else
+            {
+                store.failed.insert(key);
+            }
+            continue;
+        }
+        for (const FontSource &waiting : unicodeWaiting[font.unicodeAtlasKey])
+        {
+            const std::string waitingKey = sharedFontKey(waiting.fontName, waiting.pixelHeight);
+            if (finished)
+            {
+                store.fonts.emplace(waitingKey,
+                    unicodeFontFromAtlas(*finished, waiting));
+            }
+            else
+            {
+                store.failed.insert(waitingKey);
+            }
+        }
+        if (finished)
+        {
+            store.unicodeAtlases.emplace(font.unicodeAtlasKey, std::make_unique<GameplayHudFontData>(std::move(*finished)));
+        }
+    }
+}
+
+const GameplayHudFontData *SharedFontCache::find(const std::string &fontName, int pixelHeight)
+{
+    const SharedFontStore &store = sharedFontStore();
+    const auto found = store.fonts.find(sharedFontKey(fontName, pixelHeight));
+    return found != store.fonts.end() ? found->second.get() : nullptr;
+}
+
+void SharedFontCache::releaseRasterSizes()
+{
+    std::erase_if(sharedFontStore().fonts, [](const auto &entry)
+    {
+        if (entry.second->rasterPixelHeight == 0)
+        {
+            return false;
+        }
+        destroyFontTextures(*entry.second);
+        return true;
+    });
+    std::erase_if(sharedFontStore().unicodeAtlases, [](const auto &entry)
+    {
+        if (entry.second->rasterPixelHeight == 0)
+        {
+            return false;
+        }
+        destroyFontTextures(*entry.second);
+        return true;
+    });
+}
+
+void SharedFontCache::release(bool destroyGpu)
+{
+    SharedFontStore &store = sharedFontStore();
+    if (destroyGpu)
+    {
+        for (const auto &[key, pFont] : store.fonts)
+        {
+            destroyFontTextures(*pFont);
+        }
+        for (const auto &[key, pAtlas] : store.unicodeAtlases)
+        {
+            destroyFontTextures(*pAtlas);
+        }
+    }
+    store.fonts.clear();
+    store.unicodeAtlases.clear();
+    store.failed.clear();
+}
+
+bool GameplayHudCommon::loadHudFont(
+    const Engine::AssetFileSystem *pAssetFileSystem,
+    const std::string &fontName,
+    std::vector<GameplayHudFontData> &fonts)
+{
+    // Asked for every text line drawn: a font already loaded needs no request list.
+    if (!fontName.empty() && findHudFont(fonts, fontName) != nullptr)
+    {
+        return true;
+    }
+
+    return loadHudFonts(pAssetFileSystem, {fontName}, fonts);
+}
+
+bool GameplayHudCommon::loadHudFonts(
+    const Engine::AssetFileSystem *pAssetFileSystem,
+    const std::vector<std::string> &fontNames,
+    std::vector<GameplayHudFontData> &fonts)
+{
+    std::vector<SharedFontCache::Request> requests;
+    for (const std::string &fontName : fontNames)
+    {
+        if (!fontName.empty() && findHudFont(fonts, fontName) == nullptr)
+        {
+            requests.push_back({fontName, 0});
+        }
+    }
+    if (requests.empty())
+    {
+        return true;
+    }
+    SharedFontCache::ensure(*pAssetFileSystem, requests);
+    bool loaded = true;
+    for (const SharedFontCache::Request &request : requests)
+    {
+        if (findHudFont(fonts, request.fontName) != nullptr)
+        {
+            continue;
+        }
+        const GameplayHudFontData *pFont = SharedFontCache::find(request.fontName);
+        if (pFont == nullptr)
+        {
+            loaded = false;
+            continue;
+        }
+        fonts.push_back(*pFont);
+    }
+    return loaded;
 }
 
 bool GameplayHudCommon::tryGetOpaqueHudTextureBounds(
@@ -1175,7 +1764,9 @@ bool GameplayHudCommon::tryGetOpaqueHudTextureBounds(
     int &opaqueMaxX,
     int &opaqueMaxY)
 {
-    if (texture.physicalWidth <= 0 || texture.physicalHeight <= 0 || texture.bgraPixels.empty())
+    const std::vector<uint8_t> &pixels = hudTexturePixels(texture);
+
+    if (texture.physicalWidth <= 0 || texture.physicalHeight <= 0 || pixels.empty())
     {
         return false;
     }
@@ -1194,7 +1785,7 @@ bool GameplayHudCommon::tryGetOpaqueHudTextureBounds(
             const size_t pixelOffset =
                 (static_cast<size_t>(y) * static_cast<size_t>(texture.physicalWidth) + static_cast<size_t>(x)) * 4;
 
-            if (pixelOffset + 3 >= texture.bgraPixels.size() || texture.bgraPixels[pixelOffset + 3] == 0)
+            if (pixelOffset + 3 >= pixels.size() || pixels[pixelOffset + 3] == 0)
             {
                 continue;
             }
@@ -1241,90 +1832,95 @@ bgfx::TextureHandle GameplayHudCommon::ensureHudTextureColorModulated(
         colorTextures);
 }
 
-bgfx::TextureHandle GameplayHudCommon::ensureHudFontMainTextureColor(
-    const GameplayHudFontData &font,
-    uint32_t colorAbgr,
-    std::vector<GameplayHudFontColorTextureData> &colorTextures)
+GameplayHudFontLayer GameplayHudCommon::hudFontMainLayer(const GameplayHudFontData &font, uint32_t colorAbgr)
 {
-    if (colorAbgr == 0xffffffffu)
+    // Text ignores the colour's alpha, as tinted atlases always did.
+    return colorAbgr == 0xffffffffu
+        ? GameplayHudFontLayer(font.mainTextureHandle)
+        : GameplayHudFontLayer(font.tintTextureHandle, colorAbgr | 0xff000000u);
+}
+
+bool GameplayHudCommon::readTextColorCode(const std::string &text, size_t index, std::optional<uint32_t> &colorAbgr)
+{
+    if (index + TextColorCodeLength > text.size() || text[index] != '\f')
     {
-        return font.mainTextureHandle;
+        return false;
     }
 
-    for (const GameplayHudFontColorTextureData &textureHandle : colorTextures)
+    uint32_t value = 0;
+
+    for (size_t digit = index + 1; digit < index + TextColorCodeLength; ++digit)
     {
-        if (textureHandle.fontName == font.fontName && textureHandle.colorAbgr == colorAbgr)
+        if (!std::isdigit(static_cast<unsigned char>(text[digit])))
         {
-            return textureHandle.textureHandle;
+            return false;
         }
+
+        value = value * 10 + uint32_t(text[digit] - '0');
     }
 
-    if (font.mainAtlasPixels.empty() || font.atlasWidth <= 0 || font.atlasHeight <= 0)
+    if (value == 0)
     {
-        return BGFX_INVALID_HANDLE;
+        colorAbgr.reset();
+        return true;
     }
 
-    std::vector<uint8_t> tintedPixels = font.mainAtlasPixels;
-    const uint8_t red = static_cast<uint8_t>(colorAbgr & 0xff);
-    const uint8_t green = static_cast<uint8_t>((colorAbgr >> 8) & 0xff);
-    const uint8_t blue = static_cast<uint8_t>((colorAbgr >> 16) & 0xff);
+    const uint32_t red = ((value >> 11) & 31u) * 255u / 31u;
+    const uint32_t green = ((value >> 5) & 63u) * 255u / 63u;
+    const uint32_t blue = (value & 31u) * 255u / 31u;
+    colorAbgr = 0xff000000u | (blue << 16) | (green << 8) | red;
+    return true;
+}
 
-    for (size_t pixelIndex = 0; pixelIndex + 3 < tintedPixels.size(); pixelIndex += 4)
+namespace
+{
+// Walks a line of text to its first line break, character by character in UTF-8 with colour codes skipped: draw gets
+// each glyph the font has with its pen position (the glyph's origin) and colour run, in the font's raster pixels. A
+// character with no glyph advances a cell. Returns the line's advance.
+template <typename DrawGlyph>
+float walkHudLine(const GameplayHudFontData &font, const std::string &text, const DrawGlyph &drawGlyph)
+{
+    float pen = 0.0f;
+    uint32_t previous = 0;
+    std::optional<uint32_t> runColor;
+
+    for (size_t index = 0; index < text.size();)
     {
-        if (tintedPixels[pixelIndex + 3] == 0 && !font.smooth)
+        if (GameplayHudCommon::readTextColorCode(text, index, runColor))
         {
+            index += GameplayHudCommon::TextColorCodeLength;
             continue;
         }
 
-        tintedPixels[pixelIndex + 0] = blue;
-        tintedPixels[pixelIndex + 1] = green;
-        tintedPixels[pixelIndex + 2] = red;
-    }
+        const uint32_t character = Engine::Utf8::next(text, index);
 
-    const bgfx::TextureHandle textureHandle = createBgraTexture2D(
-        static_cast<uint16_t>(font.atlasWidth),
-        static_cast<uint16_t>(font.atlasHeight),
-        tintedPixels.data(),
-        static_cast<uint32_t>(tintedPixels.size()),
-        font.smooth ? TextureFilterProfile::SmoothText : TextureFilterProfile::Text);
-
-    if (!bgfx::isValid(textureHandle))
-    {
-        return BGFX_INVALID_HANDLE;
-    }
-
-    GameplayHudFontColorTextureData tintedTextureHandle = {};
-    tintedTextureHandle.fontName = font.fontName;
-    tintedTextureHandle.colorAbgr = colorAbgr;
-    tintedTextureHandle.textureHandle = textureHandle;
-    colorTextures.push_back(std::move(tintedTextureHandle));
-    return colorTextures.back().textureHandle;
-}
-
-float GameplayHudCommon::measureHudTextWidth(const GameplayHudFontData &font, const std::string &text)
-{
-    float widthPixels = 0.0f;
-    uint8_t previous = 0;
-
-    for (unsigned char character : text)
-    {
         if (character == '\r' || character == '\n')
         {
             break;
         }
 
-        if (character < font.firstChar || character > font.lastChar)
+        const int glyph = font.glyphIndex(character);
+
+        if (glyph < 0)
         {
-            widthPixels += static_cast<float>(font.atlasCellWidth);
+            pen += static_cast<float>(font.atlasCellWidth);
             continue;
         }
 
-        const GameplayHudFontGlyphMetricsData &glyphMetrics = font.glyphMetrics[character];
-        widthPixels += font.kerning(previous, character) + glyphMetrics.advance();
+        pen += font.kerning(previous, character);
+        drawGlyph(glyph, pen, runColor);
+        pen += font.glyph(glyph).advance();
         previous = character;
     }
 
-    return std::max(0.0f, widthPixels);
+    return pen;
+}
+}
+
+float GameplayHudCommon::measureHudTextWidth(const GameplayHudFontData &font, const std::string &text)
+{
+    const float width = walkHudLine(font, text, [](int, float, const std::optional<uint32_t> &) {});
+    return std::max(0.0f, width * font.layoutScale);
 }
 
 std::string GameplayHudCommon::clampHudTextToWidth(
@@ -1336,7 +1932,7 @@ std::string GameplayHudCommon::clampHudTextToWidth(
 
     while (!clampedText.empty() && measureHudTextWidth(font, clampedText) > maxWidth)
     {
-        clampedText.pop_back();
+        Engine::Utf8::popBack(clampedText);
     }
 
     return clampedText;
@@ -1347,151 +1943,84 @@ std::vector<std::string> GameplayHudCommon::wrapHudTextToWidth(
     const std::string &text,
     float maxWidth)
 {
-    if (text.empty())
-    {
-        return {""};
-    }
-
-    if (maxWidth <= 0.0f)
-    {
-        return {text};
-    }
-
-    std::vector<std::string> lines;
-    std::string currentLine;
-    std::string currentWord;
-
-    const auto flushLine =
-        [&lines, &currentLine]()
+    std::vector<std::string> lines = Engine::Utf8::wrap(text, maxWidth,
+        [&font](const std::string &line)
         {
-            lines.push_back(currentLine);
-            currentLine.clear();
-        };
-
-    const auto appendWord =
-        [&font, &currentLine, &flushLine, maxWidth](const std::string &word)
-        {
-            if (word.empty())
-            {
-                return;
-            }
-
-            if (currentLine.empty())
-            {
-                currentLine = word;
-                return;
-            }
-
-            const std::string candidate = currentLine + " " + word;
-
-            if (measureHudTextWidth(font, candidate) <= maxWidth)
-            {
-                currentLine = candidate;
-            }
-            else
-            {
-                flushLine();
-                currentLine = word;
-            }
-        };
-
-    for (char character : text)
-    {
-        if (character == '\r')
-        {
-            continue;
-        }
-
-        if (character == '\n')
-        {
-            appendWord(currentWord);
-            currentWord.clear();
-            flushLine();
-            continue;
-        }
-
-        if (character == ' ')
-        {
-            appendWord(currentWord);
-            currentWord.clear();
-            continue;
-        }
-
-        currentWord.push_back(character);
-    }
-
-    appendWord(currentWord);
-
-    if (!currentLine.empty() || lines.empty())
-    {
-        lines.push_back(currentLine);
-    }
-
+            return measureHudTextWidth(font, line);
+        });
+    carryTextColorsAcrossLines(lines);
     return lines;
+}
+
+void GameplayHudCommon::carryTextColorsAcrossLines(std::vector<std::string> &lines)
+{
+    std::optional<uint32_t> openColor;
+    std::string openCode;
+
+    for (std::string &line : lines)
+    {
+        if (!openCode.empty())
+        {
+            line.insert(0, openCode);
+        }
+
+        for (size_t index = 0; index < line.size(); ++index)
+        {
+            if (readTextColorCode(line, index, openColor))
+            {
+                openCode = openColor ? line.substr(index, TextColorCodeLength) : std::string();
+                index += TextColorCodeLength - 1;
+            }
+        }
+    }
 }
 
 void GameplayHudCommon::renderHudFontLayer(
     const GameplayHudFontData &font,
-    bgfx::TextureHandle textureHandle,
+    const GameplayHudFontLayer &layer,
     const std::string &text,
     float textX,
     float textY,
     float fontScale,
     const SubmitTexturedQuadFn &submitTexturedQuad)
 {
-    if (!bgfx::isValid(textureHandle))
+    if (!bgfx::isValid(layer.textureHandle))
     {
         return;
     }
 
-    float penX = textX;
-    uint8_t previous = 0;
+    // Glyph geometry is in raster pixels; a Unicode face's raster differs from its layout height.
+    const float scale = fontScale * font.layoutScale;
+    const float atlasWidth = static_cast<float>(font.atlasWidth / font.atlasScale);
+    const float atlasHeight = static_cast<float>(font.atlasHeight / font.atlasScale);
+    // Colour codes recolour the main layer through the tint atlas; the shadow stays as it is.
+    const bool shadow = layer.textureHandle.idx == font.shadowTextureHandle.idx;
 
-    for (unsigned char character : text)
-    {
-        if (character == '\r' || character == '\n')
+    walkHudLine(font, text,
+        [&](int glyph, float pen, const std::optional<uint32_t> &runColor)
         {
-            break;
-        }
+            const GameplayHudFontGlyphMetricsData &metrics = font.glyph(glyph);
 
-        if (character < font.firstChar || character > font.lastChar)
-        {
-            penX += static_cast<float>(font.atlasCellWidth) * fontScale;
-            continue;
-        }
+            if (metrics.width <= 0)
+            {
+                return;
+            }
 
-        const GameplayHudFontGlyphMetricsData &glyphMetrics = font.glyphMetrics[character];
-        penX += (font.kerning(previous, character) + glyphMetrics.leftSpacing) * fontScale;
-
-        if (glyphMetrics.width > 0)
-        {
-            const int cellX = (character % 16) * (font.atlasCellWidth + 2 * font.atlasPadding);
-            const int cellY = (character / 16) * (font.fontHeight + 2 * font.atlasPadding);
-            const float u0 = static_cast<float>(cellX) / static_cast<float>(font.atlasWidth / font.atlasScale);
-            const float v0 = static_cast<float>(cellY) / static_cast<float>(font.atlasHeight / font.atlasScale);
-            const float u1 = static_cast<float>(cellX + glyphMetrics.width + 2 * font.atlasPadding)
-                / static_cast<float>(font.atlasWidth / font.atlasScale);
-            const float v1 = static_cast<float>(cellY + font.fontHeight + 2 * font.atlasPadding)
-                / static_cast<float>(font.atlasHeight / font.atlasScale);
-            const float glyphWidth = static_cast<float>(glyphMetrics.width + 2 * font.atlasPadding) * fontScale;
-            const float glyphHeight = static_cast<float>(font.fontHeight + 2 * font.atlasPadding) * fontScale;
-
+            const Engine::FontGlyphPlacement place = font.placement(glyph);
+            const bool recolored = runColor && !shadow && bgfx::isValid(font.tintTextureHandle);
             submitTexturedQuad(
-                textureHandle,
-                penX - font.atlasPadding * fontScale,
-                textY - font.atlasPadding * fontScale,
-                glyphWidth,
-                glyphHeight,
-                u0,
-                v0,
-                u1,
-                v1,
-                font.smooth ? TextureFilterProfile::SmoothText : TextureFilterProfile::Text);
-        }
-
-        penX += (glyphMetrics.advance() - glyphMetrics.leftSpacing) * fontScale;
-        previous = character;
-    }
+                recolored ? font.tintTextureHandle : layer.textureHandle,
+                textX + (pen + metrics.leftSpacing - font.atlasPadding) * scale,
+                textY + place.top * scale,
+                static_cast<float>(place.width) * scale,
+                static_cast<float>(place.height) * scale,
+                static_cast<float>(place.x) / atlasWidth,
+                static_cast<float>(place.y) / atlasHeight,
+                static_cast<float>(place.x + place.width) / atlasWidth,
+                static_cast<float>(place.y + place.height) / atlasHeight,
+                font.smooth ? TextureFilterProfile::SmoothText : TextureFilterProfile::Text,
+                recolored ? *runColor : layer.tintAbgr);
+        });
 }
 
 void GameplayHudCommon::renderLayoutLabel(
@@ -1499,7 +2028,6 @@ void GameplayHudCommon::renderLayoutLabel(
     const GameplayResolvedHudLayoutElement &resolved,
     const std::string &label,
     const FindHudFontFn &findHudFontFn,
-    const EnsureHudFontColorFn &ensureHudFontColorFn,
     const RenderHudFontLayerFn &renderHudFontLayerFn)
 {
     if (label.empty())
@@ -1587,14 +2115,8 @@ void GameplayHudCommon::renderLayoutLabel(
     textX = std::round(textX);
     textY = std::round(textY);
 
-    bgfx::TextureHandle coloredMainTextureHandle = ensureHudFontColorFn(*pFont, layout.textColorAbgr);
-
-    if (!bgfx::isValid(coloredMainTextureHandle))
-    {
-        coloredMainTextureHandle = pFont->mainTextureHandle;
-    }
-
     renderHudFontLayerFn(*pFont, pFont->shadowTextureHandle, clampedLabel, textX, textY, fontScale);
-    renderHudFontLayerFn(*pFont, coloredMainTextureHandle, clampedLabel, textX, textY, fontScale);
+    renderHudFontLayerFn(*pFont, hudFontMainLayer(*pFont, layout.textColorAbgr), clampedLabel, textX, textY,
+        fontScale);
 }
 } // namespace OpenYAMM::Game

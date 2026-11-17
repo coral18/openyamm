@@ -221,11 +221,25 @@ TEST_CASE("baked lighting settings validate input atomically and round trip thro
     REQUIRE(legacy);
     CHECK(legacy->lightmaps);
     CHECK(legacy->bakedSunStrength == 1.0f);
-    CHECK(legacy->bakedSkyStrength == 3.0f);
+    CHECK(legacy->bakedSkyStrength == 2.0f);
     CHECK(legacy->bakedSkyColor[0] == doctest::Approx(0.8f));
     CHECK(legacy->bakedSkyColor[1] == doctest::Approx(0.9f));
     CHECK(legacy->bakedSkyColor == GameSettings{}.bakedSkyColor);
     CHECK(legacy->cinematicGrading);
     CHECK(legacy->cinematicStrength == 60);
     std::filesystem::remove(path);
+}
+
+TEST_CASE("outdoor baked lighting tint changes hue but keeps luminance")
+{
+    std::array<std::array<float, 4>, 2> colors = {{{0.5f, 0.5f, 0.5f, 0.0f}, {0.3f, 0.3f, 0.3f, 0.0f}}};
+    applyOutdoorBakedLightingTint(colors, {1.0f, 0.6f, 0.3f}, {0.82f, 0.88f, 1.0f});
+    const auto luminance = [](const std::array<float, 4> &color)
+    {
+        return 0.2126f * color[0] + 0.7152f * color[1] + 0.0722f * color[2];
+    };
+    CHECK(luminance(colors[0]) == doctest::Approx(0.5f));
+    CHECK(luminance(colors[1]) == doctest::Approx(0.3f));
+    CHECK(colors[0][0] > colors[0][2]);
+    CHECK(colors[1][2] > colors[1][0]);
 }

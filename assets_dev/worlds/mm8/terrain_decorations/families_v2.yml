@@ -1,14 +1,126 @@
+# Plant families of the grass decorations (level_generation/terrain/MEADOW.md, GRASS_LOD.md). Atlas cells:
+# 0-1 short meadow grass, 2 mid grass, 3 dry grass, 4-5 reeds, 6-7 tropical low plants, 8-9 dead tufts,
+# 10 purple flowers, 11 fern, 12-13 tall seed-head grass, 14 buttercups, 15 daisies and yarrow.
+# meadow: tint, density and height by the ground moisture (dry crests, lush hollows and shores).
+# flowers: single-species clusters in families with flowers: true. verges: tall grass along walls,
+# buildings, decorations and grass edges. undergrowth: ferns and tall grass around tree decorations.
+# tall_variants: the uncut grass of tall patches and verges.
 version: 2
-tuft_texture: plants_v2.png
+tuft_texture: plants_v4.png
 tuft_atlas_grid:
 - 4
-- 3
+- 4
+meadow:
+  dry_tint:
+  - 1.12
+  - 1.02
+  - 0.72
+  lush_tint:
+  - 0.84
+  - 0.97
+  - 0.86
+  density: 0.35
+  height: 0.3
+# The short grass (cells 0-1) fades out between these heights of the camera above the ground under it (flying only),
+# saving its cost; the ground under it has its colour. Over the same heights the ground takes the plants' colour
+# (foliage map) with strength ground, so uncut patches and flower clusters read as areas from high above.
+overhead_fade:
+  layers: [0, 1]
+  start: 600
+  end: 1400
+  ground: 0.8
+# How much darker the ground is under dense grass near the camera (the tufts' shade between them).
+ground_shade: 0.2
+# The short grass (cells 0-1) is drawn as clumps: cards in a star about the tuft, each leaning outward by lean
+# degrees, at card_scale of the tuft's size. They read as tufts from the side, a raised angle and above. Past
+# distance only the first card remains (the others thin out over the last quarter).
+clump:
+  layers: [0, 1]
+  cards: 5
+  lean: 25
+  card_scale: 0.75
+  distance: 1500
+# Low 3D bushes (level_generation/decorations/meadow_bushes): groups at tree lines (around the undergrowth
+# decorations, edge_chance per tree), along buildings and walls (verge_chance), in lush hollows (lush_chance below
+# lush_below) and rarely on open grass (meadow_chance), on a jittered grid of spacing. Grass grows all around each
+# bush; no collision. They dissolve out over fade_distance.
+bushes:
+  models:
+  - {model: engine/models/meadow_bush01.glb, height: 125, weight: 3}
+  - {model: engine/models/meadow_bush02.glb, height: 105, weight: 3}
+  - {model: engine/models/meadow_bush03.glb, height: 180, weight: 1.5}
+  - {model: engine/models/meadow_bush04.glb, height: 78, weight: 3}
+  height_jitter: 0.2
+  spacing: 640
+  meadow_chance: 0.02
+  lush_chance: 0.3
+  lush_below: -0.3
+  verge_chance: 0.3
+  verge_distance: 260
+  edge_chance: 0.45
+  edge_radius: [300, 650]
+  group_max: 3
+  group_spread: 150
+  radius: 90
+  clearance: 60
+  minimum_normal_z: 0.8
+  max_count: 600
+  fade_distance: [5000, 6500]
+flowers:
+  coverage: 0.3
+  cluster_size: 1050
+  chance: 0.35
+  tint:
+  - 0.92
+  - 0.98
+  - 0.9
+  variants:
+  - layer: 14
+    weight: 1
+    width_scale: 1.0
+    height_scale: 0.8
+  - layer: 15
+    weight: 1
+    width_scale: 1.0
+    height_scale: 0.8
+  - layer: 10
+    weight: 0.6
+    width_scale: 1.0
+    height_scale: 1.0
+verges:
+  distance: 108
+  tall_chance: 0.55
+undergrowth:
+  decorations:
+  - tree
+  - snotre
+  - stump
+  inner_radius: 135
+  outer_radius: 390
+  candidates: 10
+  variants:
+  - layer: 11
+    weight: 4
+    width_scale: 1.0
+    height_scale: 1.1
+  - layer: 2
+    weight: 2
+    width_scale: 1.0
+    height_scale: 1.2
+  - layer: 12
+    weight: 1
+    width_scale: 1.0
+    height_scale: 1.35
+  - layer: 10
+    weight: 0.5
+    width_scale: 1.0
+    height_scale: 1.0
 families:
   meadow:
     kind: grass
-    candidates: 50
-    width: 40
-    height: 30
+    candidates: 60
+    width: 120
+    height: 90
     tint:
     - 0.72
     - 0.85
@@ -16,27 +128,41 @@ families:
     variants:
     - layer: 0
       weight: 45
-      width_scale: 1
-      height_scale: 1
+      width_scale: 1.0
+      height_scale: 1.0
     - layer: 1
-      weight: 35
-      width_scale: 1
+      weight: 40
+      width_scale: 1.0
       height_scale: 0.9
     - layer: 2
-      weight: 15
-      width_scale: 1
+      weight: 3
+      width_scale: 1.0
       height_scale: 1.35
     - layer: 3
-      weight: 5
+      weight: 3
       width_scale: 0.85
       height_scale: 0.85
     full_footprint: false
     wind_strength: 2.5
+    tall_variants:
+    - layer: 12
+      weight: 3
+      width_scale: 1.0
+      height_scale: 1.45
+    - layer: 13
+      weight: 2
+      width_scale: 1.0
+      height_scale: 1.5
+    - layer: 2
+      weight: 2
+      width_scale: 1.0
+      height_scale: 1.3
+    flowers: true
   coastal_grass:
     kind: grass
-    candidates: 50
-    width: 36
-    height: 24
+    candidates: 72
+    width: 108
+    height: 72
     tint:
     - 0.72
     - 0.85
@@ -51,20 +177,33 @@ families:
       width_scale: 1
       height_scale: 0.9
     - layer: 2
-      weight: 35
+      weight: 3
       width_scale: 1
       height_scale: 1.35
     - layer: 3
-      weight: 10
+      weight: 3
       width_scale: 0.85
       height_scale: 0.85
     full_footprint: false
     wind_strength: 2.5
+    tall_variants:
+    - layer: 12
+      weight: 3
+      width_scale: 1.0
+      height_scale: 1.45
+    - layer: 13
+      weight: 2
+      width_scale: 1.0
+      height_scale: 1.5
+    - layer: 2
+      weight: 2
+      width_scale: 1.0
+      height_scale: 1.3
   woodland_grass:
     kind: grass
-    candidates: 50
-    width: 40
-    height: 28
+    candidates: 72
+    width: 120
+    height: 84
     tint:
     - 0.72
     - 0.85
@@ -79,7 +218,7 @@ families:
       width_scale: 1
       height_scale: 0.9
     - layer: 2
-      weight: 12
+      weight: 3
       width_scale: 1
       height_scale: 1.35
     - layer: 3
@@ -88,11 +227,25 @@ families:
       height_scale: 0.85
     full_footprint: false
     wind_strength: 2.5
+    tall_variants:
+    - layer: 12
+      weight: 3
+      width_scale: 1.0
+      height_scale: 1.45
+    - layer: 13
+      weight: 2
+      width_scale: 1.0
+      height_scale: 1.5
+    - layer: 2
+      weight: 2
+      width_scale: 1.0
+      height_scale: 1.3
+    flowers: true
   dry_meadow:
     kind: grass
     candidates: 50
-    width: 36
-    height: 24
+    width: 108
+    height: 72
     tint:
     - 0.72
     - 0.85
@@ -116,11 +269,21 @@ families:
       height_scale: 0.85
     full_footprint: false
     wind_strength: 2.5
+    tall_variants:
+    - layer: 3
+      weight: 3
+      width_scale: 1.0
+      height_scale: 1.35
+    - layer: 12
+      weight: 1
+      width_scale: 1.0
+      height_scale: 1.3
+    flowers: true
   dry_tuft:
     kind: grass
     candidates: 8
-    width: 28
-    height: 18
+    width: 84
+    height: 54
     tint:
     - 0.87
     - 0.78
@@ -135,8 +298,8 @@ families:
   dead_tuft:
     kind: grass
     candidates: 8
-    width: 24
-    height: 18
+    width: 72
+    height: 54
     tint:
     - 0.6
     - 0.58
@@ -167,8 +330,8 @@ families:
   tropical_low:
     kind: grass
     candidates: 24
-    width: 40
-    height: 26
+    width: 120
+    height: 78
     tint:
     - 0.65
     - 0.8

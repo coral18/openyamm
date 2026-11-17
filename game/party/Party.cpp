@@ -1,20 +1,30 @@
+#include "game/world/WorldItemSources.h"
 #include "game/party/Party.h"
+#include "engine/Localization.h"
 
 #include "game/events/EventRuntime.h"
 #include "game/debug/GameplayDebugTrace.h"
 #include "game/gameplay/GameMechanics.h"
 #include "game/gameplay/NpcFollowerRuntime.h"
+#include "game/party/PlaythroughStatistics.h"
 #include "game/gameplay/ReputationRuntime.h"
 #include "game/items/ItemEnchantRuntime.h"
+#include "game/items/InventoryBags.h"
 #include "game/items/ItemEnchantTables.h"
 #include "game/items/ItemGenerator.h"
 #include "game/items/ItemRuntime.h"
+#include "game/mm9/Mm9HirelingServices.h"
+#include "game/mm9/Mm9HirelingTable.h"
 #include "game/tables/ItemTable.h"
 #include "game/tables/CharacterDollTable.h"
 #include "game/tables/JournalQuestTable.h"
+#include "game/tables/MonsterTable.h"
 #include "game/tables/RosterTable.h"
+#include "game/tables/SpellTable.h"
 #include "game/party/SpellSchool.h"
+#include "game/rules/GameRules.h"
 #include "game/party/SpellIds.h"
+#include "game/party/WorldSpells.h"
 #include "game/StringUtils.h"
 
 #include <algorithm>
@@ -26,16 +36,134 @@
 #include <limits>
 #include <optional>
 #include <random>
+#include <string_view>
+#include <tuple>
 #include <unordered_map>
 #include <unordered_set>
+#include <numeric>
+#include <utility>
 
 namespace OpenYAMM::Game
 {
 namespace
 {
-constexpr uint32_t OeMaxCharacterExperience = 4000000000u;
+// A timed potion effect entered its last minutes this step and still runs (a long rest that ends it says nothing).
+bool potionExpiryWarningStarts(float previousRemainingSeconds, float remainingSeconds)
+{
+    return previousRemainingSeconds > Party::PotionExpiryWarningSeconds && remainingSeconds > 0.0f
+        && remainingSeconds <= Party::PotionExpiryWarningSeconds;
+}
+
+// An implant's family (no two of a family add up): its set id `family:<name>`, else its canonical id's name without the
+// tier (dermal_2 -> dermal).
+std::string implantFamily(const ItemDefinition &item)
+{
+    if (item.setId.rfind("family:", 0) == 0)
+    {
+        return item.setId.substr(7);
+    }
+    std::string name = item.canonicalId.substr(item.canonicalId.rfind('/') + 1);
+    const size_t separator = name.rfind('_');
+    if (separator != std::string::npos && separator + 1 < name.size()
+        && std::all_of(name.begin() + separator + 1, name.end(), [](char c) { return c >= '0' && c <= '9'; }))
+    {
+        name.resize(separator);
+    }
+    return name;
+}
+
+// A numbered flag (Coupler30) with its number scaled; other flags unchanged.
+std::string scaledImplantFlag(const std::string &flag, float scale)
+{
+    for (const char *pPrefix : {"Coupler", "Resonator"})
+    {
+        const std::string prefix = pPrefix;
+        if (flag.size() > prefix.size() && flag.rfind(prefix, 0) == 0)
+        {
+            return prefix + std::to_string(int(std::lround(float(std::stoi(flag.substr(prefix.size()))) * scale)));
+        }
+    }
+    return flag;
+}
+
+// The installed implants' effects, the better of each family only, each bonus +5 % per Cybernetics rank.
+void applyImplants(Character &member, const ItemTable &itemTable)
+{
+    std::unordered_map<std::string, const ItemDefinition *> bestOfFamily;
+    for (uint32_t itemId : member.implants)
+    {
+        const ItemDefinition *pItem = itemId != 0 ? itemTable.get(itemId) : nullptr;
+        if (pItem == nullptr)
+        {
+            continue;
+        }
+        const ItemDefinition *&pBest = bestOfFamily[implantFamily(*pItem)];
+        if (pBest == nullptr || pItem->itemId > pBest->itemId)
+        {
+            pBest = pItem;
+        }
+    }
+    const CharacterSkill *pCybernetics = member.findSkill("Cybernetics");
+    const float scale = 1.0f + 0.05f * float(pCybernetics != nullptr ? pCybernetics->level : 0);
+    const auto scaled = [scale](int value)
+    {
+        return int(std::lround(float(value) * scale));
+    };
+    for (const auto &[family, pItem] : bestOfFamily)
+    {
+        ItemContentEffect effect = pItem->contentEffect;
+        for (int *pValue : {&effect.might, &effect.intellect, &effect.personality, &effect.endurance, &effect.speed,
+                 &effect.accuracy, &effect.luck, &effect.maxHealth, &effect.maxSpellPoints, &effect.armorClass,
+                 &effect.meleeAttack, &effect.rangedAttack, &effect.meleeDamage, &effect.rangedDamage,
+                 &effect.allResistances, &effect.fireResistance, &effect.airResistance, &effect.waterResistance,
+                 &effect.earthResistance, &effect.mindResistance, &effect.bodyResistance, &effect.spiritResistance,
+                 &effect.weaponDamage, &effect.recoveryReductionTicks, &effect.energyResistance,
+                 &effect.personalShield, &effect.humPoints, &effect.rangedDamagePercent, &effect.meleeDamagePercent,
+                 &effect.spellDamagePercent, &effect.energyDamageTakenPercent, &effect.gunRecoveryReductionTicks,
+                 &effect.meleeRecoveryReductionTicks})
+        {
+            *pValue = scaled(*pValue);
+        }
+        effect.shieldRegenDelaySeconds *= scale;
+        effect.healthRegenPerSecond *= scale;
+        effect.spellRegenPerSecond *= scale;
+        ItemEnchantRuntime::applyContentEffect(effect, member);
+        member.armorShieldPoints += effect.personalShield;
+        for (const std::string &flag : pItem->contentFlags)
+        {
+            member.equippedItemEffectFlags.insert(scaledImplantFlag(flag, scale));
+        }
+    }
+}
+
+constexpr std::array<CharacterBuffId, 24> DispellableCharacterBuffs = {
+    CharacterBuffId::Bless,
+    CharacterBuffId::Fate,
+    CharacterBuffId::Preservation,
+    CharacterBuffId::Regeneration,
+    CharacterBuffId::Hammerhands,
+    CharacterBuffId::PainReflection,
+    CharacterBuffId::Haste,
+    CharacterBuffId::Heroism,
+    CharacterBuffId::Shield,
+    CharacterBuffId::Stoneskin,
+    CharacterBuffId::WaterBreathing,
+    CharacterBuffId::TempMight,
+    CharacterBuffId::TempIntellect,
+    CharacterBuffId::TempPersonality,
+    CharacterBuffId::TempEndurance,
+    CharacterBuffId::TempSpeed,
+    CharacterBuffId::TempAccuracy,
+    CharacterBuffId::TempLuck,
+    CharacterBuffId::FireResistance,
+    CharacterBuffId::AirResistance,
+    CharacterBuffId::WaterResistance,
+    CharacterBuffId::EarthResistance,
+    CharacterBuffId::MindResistance,
+    CharacterBuffId::BodyResistance,
+};
+
 constexpr uint32_t ArcomageChampionAwardId = 41;
-constexpr size_t ArcomageTavernCount = 11;
 constexpr uint32_t Mm8ArcomageChampionQBit = 174;
 constexpr uint32_t FirstMm8ArcomageHouseId = 228;
 constexpr uint32_t LastMm8ArcomageHouseId = 238;
@@ -43,7 +171,6 @@ constexpr uint32_t Mm7ArcomageChampionQBit = 750;
 constexpr uint32_t FirstMm7ArcomageHouseId = 240;
 constexpr uint32_t LastMm7ArcomageHouseId = 252;
 constexpr uint32_t RosterNpcPortraitBaseId = 2901;
-constexpr float OeFiveGameMinuteTickRealSeconds = 10.0f;
 constexpr float OeFiveGameMinuteTickGameSeconds = 5.0f * 60.0f;
 constexpr uint32_t FirstRegularItemId = 1;
 constexpr uint32_t LastRegularItemId = 134;
@@ -233,10 +360,16 @@ void applyMagicalPrimaryStatResourceBonuses(
     Character &member,
     const ClassMultiplierTable *pClassMultiplierTable)
 {
+    // The stats HP and SP grow with count permanent bonuses (black potions) as well as magical ones (SKL-2).
     Character adjustedMember = member;
-    adjustedMember.intellect = primaryStatWithMagicalBonus(member.intellect, member.magicalBonuses.intellect);
-    adjustedMember.personality = primaryStatWithMagicalBonus(member.personality, member.magicalBonuses.personality);
-    adjustedMember.endurance = primaryStatWithMagicalBonus(member.endurance, member.magicalBonuses.endurance);
+    adjustedMember.intellect = primaryStatWithMagicalBonus(
+        member.intellect, member.magicalBonuses.intellect + member.permanentBonuses.intellect);
+    adjustedMember.personality = primaryStatWithMagicalBonus(
+        member.personality, member.magicalBonuses.personality + member.permanentBonuses.personality);
+    adjustedMember.endurance = primaryStatWithMagicalBonus(
+        member.endurance, member.magicalBonuses.endurance + member.permanentBonuses.endurance);
+    // Worn levels ("of Power") count as levels for HP and SP, as the original's level attribute does.
+    adjustedMember.level = uint32_t(std::max<int64_t>(1, int64_t(member.level) + member.equippedLevelBonus));
 
     const int baseMaxHealth = GameMechanics::calculateBaseCharacterMaxHealth(member, pClassMultiplierTable);
     const int adjustedMaxHealth = GameMechanics::calculateBaseCharacterMaxHealth(adjustedMember, pClassMultiplierTable);
@@ -248,42 +381,11 @@ void applyMagicalPrimaryStatResourceBonuses(
     member.magicalBonuses.maxSpellPoints += adjustedMaxSpellPoints - baseMaxSpellPoints;
 }
 
+// Negative HP stays: an unconscious member wakes only when healed above 0 (SKL-1).
 void clampCurrentResourcesToMaximum(Character &member)
 {
-    member.health = std::clamp(member.health, 0, currentMaximumHealth(member));
+    member.health = std::min(member.health, currentMaximumHealth(member));
     member.spellPoints = std::clamp(member.spellPoints, 0, currentMaximumSpellPoints(member));
-}
-
-int regenerationSkillMultiplier(SkillMastery mastery)
-{
-    switch (mastery)
-    {
-        case SkillMastery::Normal:
-            return 1;
-        case SkillMastery::Expert:
-            return 2;
-        case SkillMastery::Master:
-            return 3;
-        case SkillMastery::Grandmaster:
-            return 4;
-        case SkillMastery::None:
-        default:
-            return 0;
-    }
-}
-
-float regenerationSkillHealthPerSecond(const Character &member)
-{
-    const CharacterSkill *pSkill = member.findSkill("Regeneration");
-
-    if (pSkill == nullptr || pSkill->level == 0)
-    {
-        return 0.0f;
-    }
-
-    const int multiplier = regenerationSkillMultiplier(pSkill->mastery);
-    const float healthPerFiveGameMinutes = static_cast<float>(pSkill->level * multiplier);
-    return healthPerFiveGameMinutes / OeFiveGameMinuteTickRealSeconds;
 }
 
 void grantSeedSkill(Character &character, const std::string &skillName, uint32_t level = 1)
@@ -338,7 +440,11 @@ void grantAllSkills(Character &character, uint32_t level, SkillMastery mastery)
 
     for (const std::string &skillName : skillNames)
     {
-        grantSeedSkill(character, skillName, level, mastery);
+        // The home-world test party keeps the classic skills; `skill set` grants technology and ruleset skills.
+        if (!isTechnologySkill(skillName) && !isRulesetSkill(skillName))
+        {
+            grantSeedSkill(character, skillName, level, mastery);
+        }
     }
 }
 
@@ -525,6 +631,7 @@ void breakPotionExplosionItems(Character &member, uint8_t count)
         return;
     }
 
+    // Eradication breaks everything, hardened or not.
     if (count == 0)
     {
         for (InventoryItem *pItem : candidates)
@@ -540,7 +647,12 @@ void breakPotionExplosionItems(Character &member, uint8_t count)
 
     for (uint8_t index = 0; index < count; ++index)
     {
-        candidates[distribution(rng)]->broken = true;
+        InventoryItem *pItem = candidates[distribution(rng)];
+
+        if (!pItem->hardened)
+        {
+            pItem->broken = true;
+        }
     }
 }
 
@@ -722,6 +834,55 @@ std::optional<std::pair<uint8_t, uint8_t>> findFirstFreeInventorySlot(
     return std::nullopt;
 }
 
+// Sort group of an item: weapons, armour pieces, jewelry, then consumables and the rest.
+int inventorySortGroup(const ItemDefinition *pItemDefinition)
+{
+    static const std::array<std::string_view, 21> EquipStatOrder = {
+        "Weapon", "Weapon1or2", "Weapon2", "Bow", "Missile", "WeaponW",
+        "Armor", "Shield", "Helm", "Cloak", "Belt", "Gauntlets", "Boots", "Amulet", "Ring",
+        "Bottle", "Reagent", "Herb", "Gem", "Sscroll", "Mscroll"};
+
+    if (pItemDefinition == nullptr)
+    {
+        return static_cast<int>(EquipStatOrder.size()) + 1;
+    }
+
+    for (size_t index = 0; index < EquipStatOrder.size(); ++index)
+    {
+        if (pItemDefinition->equipStat == EquipStatOrder[index])
+        {
+            return static_cast<int>(index);
+        }
+    }
+
+    return static_cast<int>(EquipStatOrder.size());
+}
+
+// Repacks items column by column in the given order; fails when any item no longer fits.
+std::optional<std::vector<InventoryItem>> packInventoryItems(const std::vector<InventoryItem> &orderedItems)
+{
+    std::vector<InventoryItem> packed;
+    packed.reserve(orderedItems.size());
+
+    for (const InventoryItem &item : orderedItems)
+    {
+        const std::optional<std::pair<uint8_t, uint8_t>> placement =
+            findFirstFreeInventorySlot(packed, item.width, item.height);
+
+        if (!placement)
+        {
+            return std::nullopt;
+        }
+
+        InventoryItem placedItem = item;
+        placedItem.gridX = placement->first;
+        placedItem.gridY = placement->second;
+        packed.push_back(placedItem);
+    }
+
+    return packed;
+}
+
 bool inventoryItemContainsCell(const InventoryItem &item, uint8_t gridX, uint8_t gridY)
 {
     return gridX >= item.gridX
@@ -795,21 +956,6 @@ void logItemInteractionResult(
     std::cout << '\n';
 }
 
-constexpr uint32_t AttackPreferenceKnight = 0x0001;
-constexpr uint32_t AttackPreferencePaladin = 0x0002;
-constexpr uint32_t AttackPreferenceArcher = 0x0004;
-constexpr uint32_t AttackPreferenceDruid = 0x0008;
-constexpr uint32_t AttackPreferenceCleric = 0x0010;
-constexpr uint32_t AttackPreferenceSorcerer = 0x0020;
-constexpr uint32_t AttackPreferenceRanger = 0x0040;
-constexpr uint32_t AttackPreferenceThief = 0x0080;
-constexpr uint32_t AttackPreferenceMonk = 0x0100;
-constexpr uint32_t AttackPreferenceMale = 0x0200;
-constexpr uint32_t AttackPreferenceFemale = 0x0400;
-constexpr uint32_t AttackPreferenceHuman = 0x0800;
-constexpr uint32_t AttackPreferenceElf = 0x1000;
-constexpr uint32_t AttackPreferenceDwarf = 0x2000;
-constexpr uint32_t AttackPreferenceGoblin = 0x4000;
 constexpr uint32_t CharacterSexMale = 0;
 constexpr uint32_t CharacterSexFemale = 1;
 constexpr uint32_t CharacterRaceHuman = 0;
@@ -957,10 +1103,6 @@ void applyLichState(Character &member)
     member.baseResistances.air = std::max(member.baseResistances.air, 20);
     member.baseResistances.water = std::max(member.baseResistances.water, 20);
     member.baseResistances.earth = std::max(member.baseResistances.earth, 20);
-    member.baseResistances.light = std::max(member.baseResistances.light, 65000);
-    member.baseResistances.dark = std::max(member.baseResistances.dark, 65000);
-    member.permanentImmunities.light = true;
-    member.permanentImmunities.dark = true;
     refundAndClearSkill(member, "ChainArmor");
     refundAndClearSkill(member, "RepairItem");
 }
@@ -984,40 +1126,40 @@ bool matchesMonsterAttackPreference(const Character &member, uint32_t preference
 
     switch (preferenceFlag)
     {
-        case AttackPreferenceKnight:
+        case MonsterAttackPreferenceKnight:
             return className == "Knight";
 
-        case AttackPreferencePaladin:
+        case MonsterAttackPreferencePaladin:
             return className == "Paladin";
 
-        case AttackPreferenceArcher:
+        case MonsterAttackPreferenceArcher:
             return className == "Archer";
 
-        case AttackPreferenceDruid:
+        case MonsterAttackPreferenceDruid:
             return className == "Druid";
 
-        case AttackPreferenceCleric:
+        case MonsterAttackPreferenceCleric:
             return className == "Cleric";
 
-        case AttackPreferenceSorcerer:
+        case MonsterAttackPreferenceSorcerer:
             return className == "Sorcerer";
 
-        case AttackPreferenceRanger:
+        case MonsterAttackPreferenceRanger:
             return className == "Ranger";
 
-        case AttackPreferenceThief:
+        case MonsterAttackPreferenceThief:
             return className == "Thief";
 
-        case AttackPreferenceMonk:
+        case MonsterAttackPreferenceMonk:
             return className == "Monk";
 
-        case AttackPreferenceMale:
+        case MonsterAttackPreferenceMale:
             return hasCharacterIdentity ? member.sexId == CharacterSexMale : false;
 
-        case AttackPreferenceFemale:
+        case MonsterAttackPreferenceFemale:
             return hasCharacterIdentity ? member.sexId == CharacterSexFemale : false;
 
-        case AttackPreferenceHuman:
+        case MonsterAttackPreferenceHuman:
             return hasCharacterIdentity
                 ? member.raceId == CharacterRaceHuman
                 : className == "Knight"
@@ -1030,16 +1172,18 @@ bool matchesMonsterAttackPreference(const Character &member, uint32_t preference
                 || className == "Thief"
                 || className == "Monk";
 
-        case AttackPreferenceElf:
+        case MonsterAttackPreferenceElf:
             return hasCharacterIdentity
                 ? member.raceId == CharacterRaceDarkElf || member.raceId == CharacterRaceElf
                 : className == "DarkElf";
 
-        case AttackPreferenceDwarf:
-            return normalizedClassName.find("dwarf") != std::string::npos
-                || normalizedRole.find("dwarf") != std::string::npos;
+        case MonsterAttackPreferenceDwarf:
+            return hasCharacterIdentity
+                ? member.raceId == CharacterRaceDwarf
+                : normalizedClassName.find("dwarf") != std::string::npos
+                    || normalizedRole.find("dwarf") != std::string::npos;
 
-        case AttackPreferenceGoblin:
+        case MonsterAttackPreferenceGoblin:
             return hasCharacterIdentity
                 ? member.raceId == CharacterRaceGoblin
                 : className == "Goblin";
@@ -1062,7 +1206,8 @@ bool hasConditionImmunity(const Character &member, CharacterCondition condition)
     return conditionIndex < CharacterConditionCount
         && (ameliorationBlocksCondition
             || member.permanentConditionImmunities.test(conditionIndex)
-            || member.magicalConditionImmunities.test(conditionIndex));
+            || member.magicalConditionImmunities.test(conditionIndex)
+            || member.rulesetState.potionEffect(TimedPotionEffect::Kind::Immunity, uint32_t(conditionIndex)) > 0);
 }
 
 bool conditionAffectedByProtectionFromMagic(CharacterCondition condition)
@@ -1092,38 +1237,22 @@ bool conditionRequiresGrandmasterProtectionFromMagic(CharacterCondition conditio
     return condition == CharacterCondition::Dead || condition == CharacterCondition::Eradicated;
 }
 
-uint64_t experienceRequiredForNextLevel(uint32_t currentLevel)
-{
-    return 1000ull * currentLevel * (currentLevel + 1) / 2;
-}
-
+// MM8 multiplies only the trained level by mastery; item and follower bonuses add once, and any nonzero total
+// (even from bonuses alone) earns the flat 9 percent.
 int learningPercentForExperienceGain(const Character &member)
 {
     const CharacterSkill *pSkill = member.findSkill("Learning");
+    const bool trained = pSkill != nullptr && pSkill->level > 0 && pSkill->mastery != SkillMastery::None;
+    const int baseLevel = trained ? static_cast<int>(pSkill->level) : 0;
+    const int bonusLevel = member.skillBonus("Learning");
 
-    if (pSkill == nullptr || pSkill->level == 0)
+    if (baseLevel + bonusLevel <= 0)
     {
         return 0;
     }
 
-    switch (pSkill->mastery)
-    {
-        case SkillMastery::Normal:
-            return 9 + static_cast<int>(pSkill->level);
-
-        case SkillMastery::Expert:
-            return 9 + 2 * static_cast<int>(pSkill->level);
-
-        case SkillMastery::Master:
-            return 9 + 3 * static_cast<int>(pSkill->level);
-
-        case SkillMastery::Grandmaster:
-            return 9 + 5 * static_cast<int>(pSkill->level);
-
-        case SkillMastery::None:
-        default:
-            return 0;
-    }
+    const int multiplier = trained ? utilitySkillMasteryMultiplier(pSkill->mastery) : 1;
+    return std::max(0, 9 + multiplier * baseLevel + bonusLevel);
 }
 
 bool canReceiveSharedExperience(const Character &member)
@@ -1170,8 +1299,72 @@ std::optional<size_t> firstActingMemberIndex(const std::vector<Character> &membe
     return std::nullopt;
 }
 
-void updateMemberIncapacitatedCondition(Character &member, bool preservationActive)
+// Only a revival (Raise Dead, Resurrection) brings the dead back: a heal leaves them as they are (OE Character::Heal).
+bool isDeadOrEradicated(const Character &member)
 {
+    return member.conditions.test(static_cast<size_t>(CharacterCondition::Dead))
+        || member.conditions.test(static_cast<size_t>(CharacterCondition::Eradicated));
+}
+
+// Clears what the buffs, items and followers give, before rebuildMagicalBonusesFromBuffs applies them again.
+void resetMagicalState(Character &member)
+{
+    member.magicalBonuses = member.temporaryEventBonuses;
+    member.magicalImmunities = {};
+    member.magicalConditionImmunities = {};
+    member.merchantBonus = 0;
+    member.glamourPower = 0;
+    member.glamourMastery = SkillMastery::None;
+    member.meleeWeaponDamageBonus = 0;
+    member.rangedWeaponDamageBonus = 0;
+    member.vampiricHealFraction = 0.0f;
+    member.physicalAttackDisabled = false;
+    member.physicalDamageImmune = false;
+    member.halfMissileDamage = false;
+    member.meleeArmorClassBonus = 0;
+    member.missileArmorClassBonus = 0;
+    member.magicArmorClassBonus = 0;
+    member.physicalDamageTakenMultiplier = 1.0f;
+    member.itemResistanceEnchants = {};
+    member.mistFormPhysicalShare = 1.0f;
+    member.manaDrainImmune = false;
+    member.agingImmune = false;
+    member.experienceGainMultiplier = 1.0f;
+    member.randomEncounterChanceMultiplier = 1.0f;
+    member.waterWalking = false;
+    member.featherFalling = false;
+    member.healthRegenPerSecond = 0.0f;
+    member.spellRegenPerSecond = 0.0f;
+    member.armorShieldPoints = 0;
+    member.emitterShieldPoints = 0;
+    member.energyResistance = 0;
+    member.meleeWeaponEnchant = {};
+    member.rangedWeaponEnchant = {};
+    member.shieldRegenDelaySeconds = 0.0f;
+    member.humPoints = 0;
+    member.rangedDamagePercent = 0;
+    member.meleeDamagePercent = 0;
+    member.spellDamagePercent = 0;
+    member.energyDamageTakenPercent = 0;
+    member.gunRecoveryReductionTicks = 0;
+    member.meleeRecoveryReductionTicks = 0;
+    member.healthRegenAccumulator = 0.0f;
+    member.spellRegenAccumulator = 0.0f;
+    member.attackRecoveryReductionTicks = 0;
+    member.recoveryProgressMultiplier = 1.0f;
+    member.itemSkillBonuses.clear();
+    member.equippedItemEffectFlags.clear();
+    member.equippedLevelBonus = 0;
+}
+
+void updateMemberIncapacitatedCondition(Character &member, bool preservationActive, float gameMinutes)
+{
+    // HP never lifts Dead or Eradicated; only a revival or an explicit cure does.
+    if (isDeadOrEradicated(member))
+    {
+        return;
+    }
+
     if (member.health > 0)
     {
         member.conditions.reset(static_cast<size_t>(CharacterCondition::Unconscious));
@@ -1186,7 +1379,7 @@ void updateMemberIncapacitatedCondition(Character &member, bool preservationActi
         const size_t unconsciousIndex = static_cast<size_t>(CharacterCondition::Unconscious);
         if (!member.conditions.test(unconsciousIndex))
         {
-            member.conditionStartGameMinutes[unconsciousIndex] = 0.0f;
+            member.conditionStartGameMinutes[unconsciousIndex] = std::max(0.0f, gameMinutes);
         }
         member.conditions.set(unconsciousIndex);
         member.conditions.reset(static_cast<size_t>(CharacterCondition::Dead));
@@ -1197,7 +1390,7 @@ void updateMemberIncapacitatedCondition(Character &member, bool preservationActi
         const size_t deadIndex = static_cast<size_t>(CharacterCondition::Dead);
         if (!member.conditions.test(deadIndex))
         {
-            member.conditionStartGameMinutes[deadIndex] = 0.0f;
+            member.conditionStartGameMinutes[deadIndex] = std::max(0.0f, gameMinutes);
         }
         member.conditions.set(deadIndex);
         member.conditions.reset(static_cast<size_t>(CharacterCondition::Unconscious));
@@ -1472,6 +1665,7 @@ InventoryItem makeInventoryItem(
     item.identified = runtimeState.identified;
     item.broken = runtimeState.broken;
     item.stolen = runtimeState.stolen;
+    item.hardened = runtimeState.hardened;
     item.standardEnchantId = runtimeState.standardEnchantId;
     item.standardEnchantPower = runtimeState.standardEnchantPower;
     item.specialEnchantId = runtimeState.specialEnchantId;
@@ -1480,6 +1674,8 @@ InventoryItem makeInventoryItem(
     item.currentCharges = runtimeState.currentCharges;
     item.maxCharges = runtimeState.maxCharges;
     item.temporaryBonusRemainingSeconds = runtimeState.temporaryBonusRemainingSeconds;
+    item.rulesetFields = runtimeState.rulesetFields;
+    item.workshopModId = runtimeState.workshopModId;
 
     if (pItemTable != nullptr)
     {
@@ -1598,6 +1794,7 @@ void copyItemToEquippedRuntimeState(const InventoryItem &item, EquippedItemRunti
     runtimeState.identified = item.identified;
     runtimeState.broken = item.broken;
     runtimeState.stolen = item.stolen;
+    runtimeState.hardened = item.hardened;
     runtimeState.standardEnchantId = item.standardEnchantId;
     runtimeState.standardEnchantPower = item.standardEnchantPower;
     runtimeState.specialEnchantId = item.specialEnchantId;
@@ -1606,6 +1803,8 @@ void copyItemToEquippedRuntimeState(const InventoryItem &item, EquippedItemRunti
     runtimeState.currentCharges = item.currentCharges;
     runtimeState.maxCharges = item.maxCharges;
     runtimeState.temporaryBonusRemainingSeconds = item.temporaryBonusRemainingSeconds;
+    runtimeState.rulesetFields = item.rulesetFields;
+    runtimeState.workshopModId = item.workshopModId;
 }
 
 void grantRosterInventoryToCharacter(
@@ -1686,12 +1885,12 @@ bool identifyInventoryItemInstance(InventoryItem &item, const ItemDefinition &it
 {
     if (item.identified || !ItemRuntime::requiresIdentification(itemDefinition))
     {
-        statusText = "Already identified.";
+        statusText = Engine::tr("Already identified.");
         return false;
     }
 
     item.identified = true;
-    statusText = "Identified " + ItemRuntime::displayName(item, itemDefinition) + ".";
+    statusText = Engine::tr("Identified {item}.", {{"item", ItemRuntime::displayName(item, itemDefinition)}});
     return true;
 }
 
@@ -1699,13 +1898,13 @@ bool repairInventoryItemInstance(InventoryItem &item, const ItemDefinition &item
 {
     if (!item.broken)
     {
-        statusText = "Nothing to repair.";
+        statusText = Engine::tr("Nothing to repair.");
         return false;
     }
 
     item.broken = false;
     item.identified = true;
-    statusText = "Repaired " + ItemRuntime::displayName(item, itemDefinition) + ".";
+    statusText = Engine::tr("Repaired {item}.", {{"item", ItemRuntime::displayName(item, itemDefinition)}});
     return true;
 }
 
@@ -1713,7 +1912,7 @@ bool identifyEquippedItemInstance(EquippedItemRuntimeState &runtimeState, const 
 {
     if (runtimeState.identified || !ItemRuntime::requiresIdentification(itemDefinition))
     {
-        statusText = "Already identified.";
+        statusText = Engine::tr("Already identified.");
         return false;
     }
 
@@ -1727,7 +1926,7 @@ bool identifyEquippedItemInstance(EquippedItemRuntimeState &runtimeState, const 
     displayItem.specialEnchantId = runtimeState.specialEnchantId;
     displayItem.artifactId = runtimeState.artifactId;
     displayItem.rarity = runtimeState.rarity;
-    statusText = "Identified " + ItemRuntime::displayName(displayItem, itemDefinition) + ".";
+    statusText = Engine::tr("Identified {item}.", {{"item", ItemRuntime::displayName(displayItem, itemDefinition)}});
     return true;
 }
 
@@ -1735,7 +1934,7 @@ bool repairEquippedItemInstance(EquippedItemRuntimeState &runtimeState, const It
 {
     if (!runtimeState.broken)
     {
-        statusText = "Nothing to repair.";
+        statusText = Engine::tr("Nothing to repair.");
         return false;
     }
 
@@ -1750,9 +1949,70 @@ bool repairEquippedItemInstance(EquippedItemRuntimeState &runtimeState, const It
     displayItem.specialEnchantId = runtimeState.specialEnchantId;
     displayItem.artifactId = runtimeState.artifactId;
     displayItem.rarity = runtimeState.rarity;
-    statusText = "Repaired " + ItemRuntime::displayName(displayItem, itemDefinition) + ".";
+    statusText = Engine::tr("Repaired {item}.", {{"item", ItemRuntime::displayName(displayItem, itemDefinition)}});
     return true;
 }
+}
+
+bool Party::fitImplant(size_t memberIndex, size_t socket, const InventoryItem &item,
+    std::optional<InventoryItem> &heldReplacement)
+{
+    Character *pMember = member(memberIndex);
+    const ItemDefinition *pItem = m_pItemTable != nullptr ? m_pItemTable->get(item.objectDescriptionId) : nullptr;
+
+    if (pMember == nullptr || pItem == nullptr || pItem->equipStat != "Implant"
+        || socket >= pMember->implantSocketCount())
+    {
+        return false;
+    }
+
+    heldReplacement.reset();
+
+    if (pMember->implants[socket] != 0)
+    {
+        heldReplacement =
+            ItemGenerator::makeInventoryItem(pMember->implants[socket], *m_pItemTable, ItemGenerationMode::Generic);
+    }
+
+    pMember->implants[socket] = item.objectDescriptionId;
+    rebuildMagicalBonusesFromBuffs();
+    return true;
+}
+
+bool Party::takeImplant(size_t memberIndex, size_t socket, InventoryItem &item)
+{
+    Character *pMember = member(memberIndex);
+
+    if (pMember == nullptr || socket >= pMember->implants.size() || pMember->implants[socket] == 0)
+    {
+        return false;
+    }
+
+    if (m_pItemTable == nullptr)
+    {
+        return false;
+    }
+
+    item = ItemGenerator::makeInventoryItem(pMember->implants[socket], *m_pItemTable, ItemGenerationMode::Generic);
+    pMember->implants[socket] = 0;
+    rebuildMagicalBonusesFromBuffs();
+    return true;
+}
+
+bool Character::showsImplantSockets() const
+{
+    return findSkill("Cybernetics") != nullptr
+        || std::any_of(implants.begin(), implants.end(), [](uint32_t itemId) { return itemId != 0; });
+}
+
+size_t Character::implantSocketCount() const
+{
+    const CharacterSkill *pCybernetics = findSkill("Cybernetics");
+    if (pCybernetics == nullptr || pCybernetics->level == 0)
+    {
+        return 0;
+    }
+    return std::min<size_t>(implants.size(), size_t(std::max<int>(1, int(pCybernetics->mastery))));
 }
 
 bool Character::addInventoryItem(const InventoryItem &item)
@@ -1927,17 +2187,30 @@ bool Character::hasCanonicalSkill(const std::string &canonicalSkillName) const
 
 int Character::skillBonus(const std::string &skillName) const
 {
+    // Item bonuses are kept under canonical skill names.
     const std::string canonicalName = canonicalSkillName(skillName);
-    int bonus = 0;
-    for (const auto &[name, amount] : itemSkillBonuses)
+    const auto itemBonus = itemSkillBonuses.find(canonicalName);
+    const auto followerBonus = hiredNpcSkillBonuses.find(canonicalName);
+    return (itemBonus != itemSkillBonuses.end() ? itemBonus->second : 0)
+        + (followerBonus != hiredNpcSkillBonuses.end() ? followerBonus->second : 0);
+}
+
+uint32_t Character::pointsForRaisingSkill(const std::string &skillName) const
+{
+    return isTechnologySkill(skillName) ? techPoints : skillPoints;
+}
+
+bool Character::hasTechnologySkill() const
+{
+    for (const std::string &skillName : skillSheetGroupSkillNames(SkillSheetGroup::Technology))
     {
-        if (canonicalSkillName(name) == canonicalName)
+        if (findSkillByCanonicalName(skillName) != nullptr)
         {
-            bonus += amount;
+            return true;
         }
     }
-    const auto followerBonus = hiredNpcSkillBonuses.find(canonicalName);
-    return bonus + (followerBonus != hiredNpcSkillBonuses.end() ? followerBonus->second : 0);
+
+    return false;
 }
 
 const CharacterSkill *Character::findSkill(const std::string &skillName) const
@@ -2036,6 +2309,24 @@ void Character::synchronizeInnateAbilitySpells()
             learnSpell(spellRange->first + spellOffset);
         }
     }
+}
+
+const std::string &Party::lastOutdoorMapFileName() const
+{
+    return m_lastOutdoorMapFileName;
+}
+
+void Party::setLastOutdoorMapFileName(const std::string &mapFileName)
+{
+    m_lastOutdoorMapFileName = mapFileName;
+}
+
+std::function<bool(const SpellEntry &)> spellKnownBy(const Character &character)
+{
+    return [&character](const SpellEntry &entry)
+    {
+        return character.knowsSpell(uint32_t(entry.id));
+    };
 }
 
 bool Character::knowsSpell(uint32_t spellId) const
@@ -2389,11 +2680,24 @@ void Party::setClassSkillTable(const ClassSkillTable *pClassSkillTable)
             member.portraitPictureId,
             m_pCharacterDollTable);
     }
+
+    // The members' base hit and spell points changed: what items, buffs and the rules add on top follows them.
+    rebuildMagicalBonusesFromBuffs();
 }
 
 const ClassSkillTable *Party::classSkillTable() const
 {
     return m_pClassSkillTable;
+}
+
+void Party::setTrainerDirectory(const TrainerDirectory *pTrainerDirectory)
+{
+    m_pTrainerDirectory = pTrainerDirectory;
+}
+
+const TrainerDirectory *Party::trainerDirectory() const
+{
+    return m_pTrainerDirectory;
 }
 
 void Party::setClassMultiplierTable(const ClassMultiplierTable *pClassMultiplierTable)
@@ -2417,6 +2721,8 @@ Party::Snapshot Party::snapshot() const
     snapshot.gold = m_gold;
     snapshot.bankGold = m_bankGold;
     snapshot.food = m_food;
+    snapshot.daysWithoutRest = m_daysWithoutRest;
+    snapshot.awakeDayIndex = m_awakeDayIndex;
     snapshot.fineGold = m_fineGold;
     snapshot.waterDamageTicks = m_waterDamageTicks;
     snapshot.burningDamageTicks = m_burningDamageTicks;
@@ -2425,16 +2731,25 @@ Party::Snapshot Party::snapshot() const
     snapshot.hardLandingSoundCount = m_hardLandingSoundCount;
     snapshot.monsterTargetSelectionCounter = m_monsterTargetSelectionCounter;
     snapshot.houseStockSeed = m_houseStockSeed;
-    snapshot.itemEffectElapsedGameSeconds = m_itemEffectElapsedGameSeconds;
+    snapshot.itemEffectElapsedGameSeconds = m_periodicEffectElapsedGameSeconds;
     snapshot.itemWeeklyEffectSequence = m_itemWeeklyEffectSequence;
     snapshot.lastFallDamageDistance = m_lastFallDamageDistance;
     snapshot.foundArtifactItems = m_foundArtifactItems;
     snapshot.arcomageWonHouseIds = m_arcomageWonHouseIds;
+    snapshot.worldCompletions = m_worldCompletions;
+    snapshot.worldCompletionsUntracked = m_worldCompletionsUntracked;
     snapshot.arcomageWinCount = m_arcomageWinCount;
     snapshot.arcomageLossCount = m_arcomageLossCount;
     snapshot.everOwnedItemIds = m_everOwnedItemIds;
+    snapshot.identifiedItemIds = m_identifiedItemIds;
+    snapshot.chosenMm9RudeRows = m_chosenMm9RudeRows;
+    snapshot.teacherLedgers = m_teacherLedgers;
+    snapshot.explosiveMixes = m_explosiveMixes;
     snapshot.continentReputations = m_continentReputations;
     snapshot.questBits = m_questBits;
+    snapshot.autonotes = m_autonotes;
+    snapshot.historyEventTimesByContinent = m_historyEventTimesByContinent;
+    snapshot.journalMapNotes = m_journalMapNotes;
     snapshot.eventVariables = m_eventVariables;
     snapshot.npcTopicOverrides = m_npcTopicOverrides;
     snapshot.npcGroupNews = m_npcGroupNews;
@@ -2444,6 +2759,9 @@ Party::Snapshot Party::snapshot() const
     snapshot.npcItemOverrides = m_npcItemOverrides;
     snapshot.unavailableNpcIds = m_unavailableNpcIds;
     snapshot.hiredNpcFollowers = m_hiredNpcFollowers;
+    snapshot.mm9Hirelings = m_mm9HirelingsAlong ? m_mm9Hirelings : m_mm9HirelingsBehind;
+    snapshot.memberFormationCells = m_memberFormationCells;
+    snapshot.lastOutdoorMapFileName = m_lastOutdoorMapFileName;
 
     for (const auto &[houseId, state] : m_houseStockStates)
     {
@@ -2464,6 +2782,8 @@ void Party::restoreSnapshot(const Snapshot &snapshot)
     m_gold = snapshot.gold;
     m_bankGold = snapshot.bankGold;
     m_food = snapshot.food;
+    m_daysWithoutRest = snapshot.daysWithoutRest;
+    m_awakeDayIndex = snapshot.awakeDayIndex;
     m_fineGold = snapshot.fineGold;
     m_waterDamageTicks = snapshot.waterDamageTicks;
     m_burningDamageTicks = snapshot.burningDamageTicks;
@@ -2472,16 +2792,25 @@ void Party::restoreSnapshot(const Snapshot &snapshot)
     m_hardLandingSoundCount = snapshot.hardLandingSoundCount;
     m_monsterTargetSelectionCounter = snapshot.monsterTargetSelectionCounter;
     m_houseStockSeed = snapshot.houseStockSeed;
-    m_itemEffectElapsedGameSeconds = snapshot.itemEffectElapsedGameSeconds;
+    m_periodicEffectElapsedGameSeconds = snapshot.itemEffectElapsedGameSeconds;
     m_itemWeeklyEffectSequence = snapshot.itemWeeklyEffectSequence;
     m_lastFallDamageDistance = snapshot.lastFallDamageDistance;
     m_foundArtifactItems = snapshot.foundArtifactItems;
     m_arcomageWonHouseIds = snapshot.arcomageWonHouseIds;
+    m_worldCompletions = snapshot.worldCompletions;
+    m_worldCompletionsUntracked = snapshot.worldCompletionsUntracked;
     m_arcomageWinCount = snapshot.arcomageWinCount;
     m_arcomageLossCount = snapshot.arcomageLossCount;
     m_everOwnedItemIds = snapshot.everOwnedItemIds;
+    m_identifiedItemIds = snapshot.identifiedItemIds;
+    m_chosenMm9RudeRows = snapshot.chosenMm9RudeRows;
+    m_teacherLedgers = snapshot.teacherLedgers;
+    m_explosiveMixes = snapshot.explosiveMixes;
     m_continentReputations = snapshot.continentReputations;
     m_questBits = snapshot.questBits;
+    m_autonotes = snapshot.autonotes;
+    m_historyEventTimesByContinent = snapshot.historyEventTimesByContinent;
+    m_journalMapNotes = snapshot.journalMapNotes;
     m_eventVariables = snapshot.eventVariables;
     m_npcTopicOverrides = snapshot.npcTopicOverrides;
     m_npcGroupNews = snapshot.npcGroupNews;
@@ -2491,6 +2820,13 @@ void Party::restoreSnapshot(const Snapshot &snapshot)
     m_npcItemOverrides = snapshot.npcItemOverrides;
     m_unavailableNpcIds = snapshot.unavailableNpcIds;
     m_hiredNpcFollowers = snapshot.hiredNpcFollowers;
+    m_mm9Hirelings.clear();
+    m_mm9HirelingsBehind.clear();
+    (m_mm9HirelingsAlong ? m_mm9Hirelings : m_mm9HirelingsBehind) = snapshot.mm9Hirelings;
+    m_activeHirelingIndex.reset();
+    m_memberFormationCells = snapshot.memberFormationCells;
+    m_lastOutdoorMapFileName = snapshot.lastOutdoorMapFileName;
+    normalizeFormationCells();
     m_houseStockStates.clear();
 
     for (const HouseStockState &state : snapshot.houseStockStates)
@@ -2527,7 +2863,9 @@ void Party::restoreSnapshot(const Snapshot &snapshot)
 
     m_lastStatus.clear();
     m_heldItemIdForQueries = 0;
+    m_heldItemQuantityForQueries = 0;
     m_pendingAudioRequests.clear();
+    m_expiringPotionEffects.clear();
     recordEverOwnedItemsFromCurrentState();
     rebuildMagicalBonusesFromBuffs();
     ++m_dialogueEligibilityRevision;
@@ -2535,6 +2873,9 @@ void Party::restoreSnapshot(const Snapshot &snapshot)
 
 void Party::seed(const PartySeed &seed)
 {
+    // A new party plays by Standard rules until its owner installs a ruleset's; the rules of a party it replaces may
+    // already be gone.
+    m_pRules = nullptr;
     m_members = seed.members;
     m_adventurersInnMembers.clear();
     m_activeMemberIndex = 0;
@@ -2546,12 +2887,19 @@ void Party::seed(const PartySeed &seed)
     m_fineGold = 0;
     m_monsterTargetSelectionCounter = 0;
     m_houseStockSeed = generateHouseStockSeed();
-    m_itemEffectElapsedGameSeconds = 0.0f;
+    m_periodicEffectElapsedGameSeconds = 0.0f;
     m_itemWeeklyEffectSequence = 0;
     m_foundArtifactItems.clear();
     m_everOwnedItemIds.clear();
+    m_identifiedItemIds.clear();
+    m_chosenMm9RudeRows.clear();
+    m_teacherLedgers.clear();
+    m_explosiveMixes.clear();
     m_continentReputations.clear();
     m_questBits.clear();
+    m_autonotes.clear();
+    m_historyEventTimesByContinent.clear();
+    m_journalMapNotes.clear();
     m_eventVariables.clear();
     m_npcTopicOverrides.clear();
     m_npcGroupNews.clear();
@@ -2561,6 +2909,11 @@ void Party::seed(const PartySeed &seed)
     m_npcItemOverrides.clear();
     m_unavailableNpcIds.clear();
     m_hiredNpcFollowers.clear();
+    m_mm9Hirelings.clear();
+    m_mm9HirelingsBehind.clear();
+    m_activeHirelingIndex.reset();
+    m_memberFormationCells.clear();
+    m_lastOutdoorMapFileName.clear();
     m_houseStockStates.clear();
     ++m_dialogueEligibilityRevision;
 
@@ -2587,12 +2940,15 @@ void Party::seed(const PartySeed &seed)
             resolvedItem.identified = seededItem.identified;
             resolvedItem.broken = seededItem.broken;
             resolvedItem.stolen = seededItem.stolen;
+            resolvedItem.hardened = seededItem.hardened;
             resolvedItem.standardEnchantId = seededItem.standardEnchantId;
             resolvedItem.standardEnchantPower = seededItem.standardEnchantPower;
             resolvedItem.specialEnchantId = seededItem.specialEnchantId;
             resolvedItem.artifactId = seededItem.artifactId;
             resolvedItem.rarity = seededItem.rarity;
             resolvedItem.temporaryBonusRemainingSeconds = seededItem.temporaryBonusRemainingSeconds;
+            resolvedItem.rulesetFields = seededItem.rulesetFields;
+            resolvedItem.workshopModId = seededItem.workshopModId;
 
             if (seededItem.currentCharges != 0 || seededItem.maxCharges != 0)
             {
@@ -2684,9 +3040,14 @@ void Party::seed(const PartySeed &seed)
     m_landingSoundCount = 0;
     m_hardLandingSoundCount = 0;
     m_lastFallDamageDistance = 0.0f;
+    m_daysWithoutRest = 0;
+    m_awakeDayIndex.reset();
     m_lastStatus.clear();
     m_heldItemIdForQueries = 0;
+    m_heldItemQuantityForQueries = 0;
     m_pendingAudioRequests.clear();
+    m_expiringPotionEffects.clear();
+    normalizeFormationCells();
     recordEverOwnedItemsFromCurrentState();
     rebuildMagicalBonusesFromBuffs();
 }
@@ -2697,12 +3058,14 @@ void Party::applyMovementEffects(const OutdoorMovementEffects &effects)
     {
         for (size_t memberIndex = 0; memberIndex < m_members.size(); ++memberIndex)
         {
-            if (m_members[memberIndex].waterWalking)
+            // A Wetsuit keeps its wearer from drowning, as in MM7 (OY-309).
+            if (m_members[memberIndex].waterWalking || GameMechanics::hasWetsuitEquipped(m_members[memberIndex]))
             {
                 continue;
             }
 
-            const int damage = std::max(1, m_members[memberIndex].maxHealth / 10);
+            const int damage = rules().combat.environmentDamage(*this, memberIndex,
+                std::max(1, m_members[memberIndex].maxHealth / 10), CombatDamageType::Water, effects.indoor);
             applyDamageToMember(memberIndex, damage, "");
         }
 
@@ -2714,7 +3077,22 @@ void Party::applyMovementEffects(const OutdoorMovementEffects &effects)
     {
         for (size_t memberIndex = 0; memberIndex < m_members.size(); ++memberIndex)
         {
-            const int damage = std::max(1, m_members[memberIndex].maxHealth / 10);
+            const Character &member = m_members[memberIndex];
+            const CombatDamageType burnType = m_floorBurnType.value_or(CombatDamageType::Fire);
+            int damage = rules().combat.environmentDamage(*this, memberIndex,
+                std::max(1, member.maxHealth / 10), burnType, effects.indoor);
+
+            if (m_floorBurnResisted)
+            {
+                static thread_local std::mt19937 rng(std::random_device{}());
+                damage = GameMechanics::resolveCharacterIncomingDamage(member, m_pItemTable,
+                    m_pStandardItemEnchantTable, m_pSpecialItemEnchantTable, damage, burnType, rng);
+            }
+            else if (burnType == CombatDamageType::Fire && member.equippedItemEffectFlags.contains("FireImmune"))
+            {
+                damage = 0;
+            }
+
             applyDamageToMember(memberIndex, damage, "");
         }
 
@@ -2739,7 +3117,9 @@ void Party::applyMovementEffects(const OutdoorMovementEffects &effects)
                 std::min<int64_t>(
                     std::numeric_limits<int>::max(),
                     static_cast<int64_t>(fallDistance) * healthFactor / 256));
-            applyDamageToMember(memberIndex, damage, "falling");
+            const int taken =
+                rules().combat.environmentDamage(*this, memberIndex, damage, CombatDamageType::Physical, effects.indoor);
+            applyDamageToMember(memberIndex, taken, "falling");
         }
 
         m_lastStatus = "fall damage";
@@ -2765,15 +3145,19 @@ void Party::applyMovementEffects(const OutdoorMovementEffects &effects)
     }
 }
 
-void Party::applyEventRuntimeState(const EventRuntimeState &runtimeState, bool grantItemsToInventory)
+void Party::applyEventRuntimeState(EventRuntimeState &runtimeState, bool grantItemsToInventory)
 {
-    for (const InventoryItem &item : runtimeState.grantedItems)
+    for (size_t i = 0; i < runtimeState.grantedItems.size(); ++i)
     {
+        const InventoryItem &item = runtimeState.grantedItems[i];
         if (grantItemsToInventory)
         {
             size_t recipientMemberIndex = 0;
             if (tryGrantInventoryItem(item, &recipientMemberIndex))
             {
+#ifdef OPENYAMM_WITH_ATLAS
+                confirmWorldItemReward(runtimeState, true, i);
+#endif
                 queueSound(SoundId::Gold);
                 GAMEPLAY_DEBUG_TRACE(
                     "item_received destination=inventory source=event item_id="
@@ -2790,12 +3174,16 @@ void Party::applyEventRuntimeState(const EventRuntimeState &runtimeState, bool g
         m_lastStatus = "item granted";
     }
 
-    for (uint32_t itemId : runtimeState.grantedItemIds)
+    for (size_t i = 0; i < runtimeState.grantedItemIds.size(); ++i)
     {
+        const uint32_t itemId = runtimeState.grantedItemIds[i];
         if (grantItemsToInventory)
         {
             if (tryGrantItem(itemId))
             {
+#ifdef OPENYAMM_WITH_ATLAS
+                confirmWorldItemReward(runtimeState, false, i);
+#endif
                 queueSound(SoundId::Gold);
                 GAMEPLAY_DEBUG_TRACE(
                     "item_received destination=inventory source=event item_id="
@@ -2834,7 +3222,8 @@ void Party::applyEventRuntimeState(const EventRuntimeState &runtimeState, bool g
     bool followersChanged = false;
     for (const HiredNpcFollower &follower : runtimeState.hiredNpcFollowers)
     {
-        if (follower.npcId == 0)
+        // A world without followers (MM9) never takes new ones from its events.
+        if (follower.npcId == 0 || !m_npcFollowersActive)
         {
             continue;
         }
@@ -2950,6 +3339,15 @@ bool Party::applyDamageToMember(
     const std::string &status,
     bool allowUnconscious)
 {
+    // The source the combat controller named for this hit only (setIncomingDamageSource).
+    const std::optional<std::pair<StatDamageTakenKind, std::string>> incomingSource = m_incomingDamageSource;
+    m_incomingDamageSource.reset();
+
+    if (damage > 0 && isHirelingCombatant(memberIndex))
+    {
+        return applyDamageToHireling(memberIndex, damage, status);
+    }
+
     if (damage <= 0 || memberIndex >= m_members.size())
     {
         return false;
@@ -2957,6 +3355,7 @@ bool Party::applyDamageToMember(
 
     Character &member = m_members[memberIndex];
     const int previousHealth = member.health;
+    const bool couldActBeforeDamage = GameMechanics::canAct(member);
     const size_t actingMembersBeforeDamage = countActingMembers(m_members);
 
     if (member.health <= 0 && (!allowUnconscious || !canReceiveUnconsciousAoeDamage(member)))
@@ -2964,12 +3363,43 @@ bool Party::applyDamageToMember(
         return false;
     }
 
+    // The rules' shields take their share of every hit first (MAW's Mana Shield and lethal-damage saves).
+    damage = rules().combat.absorbCharacterDamage(*this, memberIndex, damage);
+
+    if (damage <= 0)
+    {
+        return true;
+    }
+
     if (!m_debugDamageImmune)
     {
+        const bool wasDead = member.conditions.test(static_cast<size_t>(CharacterCondition::Dead));
+        const bool wasUnconscious = member.conditions.test(static_cast<size_t>(CharacterCondition::Unconscious));
         member.health -= damage;
+        pushSelfTextEvent({SelfTextEvent::Kind::Damage, memberIndex, damage});
         const bool preservationActive =
             m_characterBuffs[memberIndex][static_cast<size_t>(CharacterBuffId::Preservation)].active();
-        updateMemberIncapacitatedCondition(member, preservationActive);
+        updateMemberIncapacitatedCondition(member, preservationActive, m_gameMinutes);
+
+        if (m_statistics.pStatistics != nullptr)
+        {
+            const StatDamageTakenKind kind =
+                status.empty() && incomingSource ? incomingSource->first : StatDamageTakenKind::Environment;
+            const std::string cause = !status.empty() ? status : incomingSource ? incomingSource->second : "";
+            const StatMemberRef ref = statsMember(memberIndex);
+            m_statistics.pStatistics->recordDamageTaken(ref, kind, uint64_t(damage), cause);
+            m_lastDamageCause[ref.id] = cause;
+
+            if (!wasDead && member.conditions.test(static_cast<size_t>(CharacterCondition::Dead)))
+            {
+                m_statistics.pStatistics->recordDeath(ref, false, cause);
+            }
+            else if (!wasUnconscious && member.conditions.test(static_cast<size_t>(CharacterCondition::Unconscious)))
+            {
+                m_statistics.pStatistics->recordKnockout(ref);
+            }
+        }
+        rules().combat.characterDamaged(*this, memberIndex);
 
         if (preservationActive && previousHealth > 0 && member.health <= 0)
         {
@@ -2985,14 +3415,18 @@ bool Party::applyDamageToMember(
 
     if (status == "falling")
     {
-        queueSpeech(memberIndex, SpeechId::Falling);
+        if (couldActBeforeDamage)
+        {
+            queueSpeech(memberIndex, SpeechId::Falling);
+        }
     }
     else if (GameMechanics::canAct(member))
     {
         queueSpeech(memberIndex, SpeechId::DamageMinor);
     }
 
-    if (member.health <= 0)
+    // Only the blow that takes the member down: an unconscious one finished off by area damage stays silent.
+    if (member.health <= 0 && previousHealth > 0)
     {
         queueSpeech(memberIndex, SpeechId::Dying);
     }
@@ -3019,6 +3453,56 @@ bool Party::applyDamageToMember(
     return true;
 }
 
+void Party::updateHirelingKnockOut(Character &hireling) const
+{
+    if (isDeadOrEradicated(hireling))
+    {
+        return;
+    }
+
+    const size_t unconsciousIndex = size_t(CharacterCondition::Unconscious);
+
+    if (hireling.health > 0)
+    {
+        hireling.conditions.reset(unconsciousIndex);
+        hireling.conditionStartGameMinutes[unconsciousIndex] = 0.0f;
+        return;
+    }
+
+    hireling.health = 0;
+
+    if (!hireling.conditions.test(unconsciousIndex))
+    {
+        hireling.conditionStartGameMinutes[unconsciousIndex] = std::max(0.0f, m_gameMinutes);
+    }
+
+    hireling.conditions.set(unconsciousIndex);
+}
+
+bool Party::applyDamageToHireling(size_t combatantIndex, int damage, const std::string &status)
+{
+    Character *pHireling = combatant(combatantIndex);
+
+    // The shields, the ruleset's absorption and the voices are the members'; a hireling has none of them.
+    if (pHireling == nullptr || damage <= 0 || pHireling->health <= 0 || isDeadOrEradicated(*pHireling))
+    {
+        return false;
+    }
+
+    if (!m_debugDamageImmune)
+    {
+        pHireling->health = std::max(0, pHireling->health - damage);
+        updateHirelingKnockOut(*pHireling);
+    }
+
+    if (!status.empty())
+    {
+        m_lastStatus = status;
+    }
+
+    return true;
+}
+
 bool Party::applyDamageToAllLivingMembers(int damage, const std::string &status)
 {
     if (damage <= 0 || m_members.empty())
@@ -3029,9 +3513,12 @@ bool Party::applyDamageToAllLivingMembers(int damage, const std::string &status)
     bool applied = false;
     size_t appliedCount = 0;
 
-    for (size_t memberIndex = 0; memberIndex < m_members.size(); ++memberIndex)
+    // The whole party: the hirelings too (MM9).
+    for (size_t memberIndex = 0; memberIndex < combatantCount(); ++memberIndex)
     {
-        if (m_members[memberIndex].health <= 0 && !canReceiveUnconsciousAoeDamage(m_members[memberIndex]))
+        const Character &member = *combatant(memberIndex);
+
+        if (member.health <= 0 && !canReceiveUnconsciousAoeDamage(member))
         {
             continue;
         }
@@ -3056,7 +3543,7 @@ bool Party::applyDamageToAllLivingMembers(int damage, const std::string &status)
     return applied;
 }
 
-uint32_t Party::addExperienceToMember(size_t memberIndex, int64_t amount)
+uint64_t Party::addExperienceToMember(size_t memberIndex, int64_t amount, ExperienceReason reason)
 {
     Character *pMember = member(memberIndex);
 
@@ -3065,15 +3552,22 @@ uint32_t Party::addExperienceToMember(size_t memberIndex, int64_t amount)
         return 0;
     }
 
-    const int64_t clampedExperience = std::clamp<int64_t>(
-        static_cast<int64_t>(pMember->experience) + amount,
-        0,
-        static_cast<int64_t>(OeMaxCharacterExperience));
-    pMember->experience = static_cast<uint32_t>(clampedExperience);
+    // The cap stays far below int64_t's range, so the sum cannot overflow.
+    const uint64_t previousExperience = pMember->experience;
+    const int64_t maximum = int64_t(rules().experience.maximumExperience());
+    pMember->experience = uint64_t(std::clamp<int64_t>(int64_t(pMember->experience) + amount, 0, maximum));
+
+    if (m_statistics.pStatistics != nullptr && pMember->experience > previousExperience)
+    {
+        const ExperienceReason countedReason = reason != ExperienceReason::Other ? reason : m_experienceReasonScope;
+        m_statistics.pStatistics->recordExperience(
+            statsMember(memberIndex), countedReason, pMember->experience - previousExperience);
+    }
+
     return pMember->experience;
 }
 
-uint32_t Party::setMemberExperience(size_t memberIndex, uint32_t experience)
+uint64_t Party::setMemberExperience(size_t memberIndex, uint64_t experience)
 {
     Character *pMember = member(memberIndex);
 
@@ -3082,11 +3576,116 @@ uint32_t Party::setMemberExperience(size_t memberIndex, uint32_t experience)
         return 0;
     }
 
-    pMember->experience = std::min(experience, OeMaxCharacterExperience);
+    pMember->experience = std::min(experience, rules().experience.maximumExperience());
     return pMember->experience;
 }
 
-uint32_t Party::grantSharedExperience(uint32_t totalExperience)
+void Party::setRules(const GameRules *pRules)
+{
+    m_pRules = pRules;
+}
+
+void Party::setStatistics(PlaythroughStatistics *pStatistics)
+{
+    m_statistics.pStatistics = pStatistics;
+}
+
+PlaythroughStatistics *Party::statistics() const
+{
+    return m_statistics.pStatistics;
+}
+
+void Party::assignStatsMemberIds()
+{
+    for (Character &member : m_members)
+    {
+        if (member.statsMemberId == 0)
+        {
+            std::random_device device;
+            member.statsMemberId = ((uint64_t(device()) << 32) ^ device()) | 1u;
+        }
+    }
+}
+
+StatMemberRef Party::statsMember(size_t memberIndex) const
+{
+    const Character *pMember = memberIndex < m_members.size() ? &m_members[memberIndex] : nullptr;
+
+    if (pMember == nullptr)
+    {
+        return {};
+    }
+
+    return {pMember->statsMemberId, pMember->name, pMember->className};
+}
+
+void Party::setIncomingDamageSource(StatDamageTakenKind kind, const std::string &cause)
+{
+    m_incomingDamageSource = std::make_pair(kind, cause);
+}
+
+void Party::recordConditionStatistics(size_t memberIndex, CharacterCondition condition)
+{
+    if (m_statistics.pStatistics == nullptr || memberIndex >= m_members.size())
+    {
+        return;
+    }
+
+    const StatMemberRef ref = statsMember(memberIndex);
+    const auto cause = m_lastDamageCause.find(ref.id);
+    const std::string causeName = cause != m_lastDamageCause.end() ? cause->second : std::string();
+
+    if (condition == CharacterCondition::Dead || condition == CharacterCondition::Eradicated)
+    {
+        m_statistics.pStatistics->recordDeath(ref, condition == CharacterCondition::Eradicated, causeName);
+    }
+    else if (condition == CharacterCondition::Petrified)
+    {
+        m_statistics.pStatistics->recordStoned();
+    }
+}
+
+void Party::setRulesMovementMultiplier(float multiplier)
+{
+    m_rulesMovementMultiplier = std::clamp(multiplier, 0.0f, 1.0f);
+}
+
+float Party::rulesMovementMultiplier() const
+{
+    return m_rulesMovementMultiplier;
+}
+
+void Party::setSpellMovementMultiplier(float multiplier)
+{
+    m_spellMovementMultiplier = std::max(multiplier, 1.0f);
+}
+
+void Party::setTalentMovementMultiplier(float multiplier)
+{
+    m_talentMovementMultiplier = std::max(multiplier, 1.0f);
+}
+
+float Party::movementMultiplier() const
+{
+    return m_rulesMovementMultiplier * m_spellMovementMultiplier * m_talentMovementMultiplier;
+}
+
+const GameRules &Party::rules() const
+{
+    return m_pRules != nullptr ? *m_pRules : standardGameRules();
+}
+
+uint32_t Party::grantMonsterKillExperience(const MonsterKillReward &kill)
+{
+    // Every gain the rules make for the kill counts as monster experience.
+    const ExperienceReason previousScope = m_experienceReasonScope;
+    m_experienceReasonScope = ExperienceReason::Monster;
+    const uint32_t experience = rules().experience.grantKillExperience(*this, kill);
+    m_experienceReasonScope = previousScope;
+    return experience;
+}
+
+uint32_t Party::grantSharedExperience(uint32_t totalExperience, ExperienceReason reason)
 {
     if (totalExperience == 0)
     {
@@ -3108,6 +3707,13 @@ uint32_t Party::grantSharedExperience(uint32_t totalExperience)
         return 0;
     }
 
+    // Cleirach A'Lyrae: the award times 1.1 before it is split (object@0x10054c60).
+    const int hirelingPercent = mm9HirelingPassives().experiencePercent;
+    if (hirelingPercent > 0)
+    {
+        totalExperience += uint32_t(uint64_t(totalExperience) * uint32_t(hirelingPercent) / 100u);
+    }
+
     const uint32_t experiencePerEligibleMember = totalExperience / eligibleMemberCount;
     uint32_t totalGrantedExperience = 0;
 
@@ -3120,16 +3726,20 @@ uint32_t Party::grantSharedExperience(uint32_t totalExperience)
             continue;
         }
 
-        const int learningPercent = learningPercentForExperienceGain(member)
-            + hiredNpcSkillBonus(m_hiredNpcFollowers, "Learning");
+        const int learningPercent =
+            rules().experience.learningGrantsExperience() ? learningPercentForExperienceGain(member) : 0;
         const uint32_t learnedExperience =
-            experiencePerEligibleMember
-            + experiencePerEligibleMember * std::max(0, learningPercent) / 100;
+            experiencePerEligibleMember + experiencePerEligibleMember * learningPercent / 100;
         const uint32_t grantedExperience = static_cast<uint32_t>(std::max(
             0.0f,
             std::floor(static_cast<float>(learnedExperience) * member.experienceGainMultiplier)));
-        addExperienceToMember(memberIndex, grantedExperience);
+        addExperienceToMember(memberIndex, grantedExperience, reason);
         totalGrantedExperience += grantedExperience;
+    }
+
+    if (m_statistics.pStatistics != nullptr && reason == ExperienceReason::Event)
+    {
+        m_statistics.pStatistics->recordExperienceAward(totalGrantedExperience);
     }
 
     return totalGrantedExperience;
@@ -3137,25 +3747,34 @@ uint32_t Party::grantSharedExperience(uint32_t totalExperience)
 
 std::optional<size_t> Party::chooseMonsterAttackTarget(uint32_t attackPreferences, uint32_t seedHint)
 {
+    // MM9's formation (the MM9 world): the blow picks a combatant by rank; MM9 monsters have no preferences.
+    if (m_formationTargetingActive)
+    {
+        const uint32_t selectionSeed =
+            seedHint * 1103515245u + m_monsterTargetSelectionCounter * 2654435761u + 12345u;
+        ++m_monsterTargetSelectionCounter;
+        return chooseFormationAttackTarget(selectionSeed);
+    }
+
     std::vector<size_t> candidates;
     candidates.reserve(m_members.size());
 
     static constexpr std::array<uint32_t, 15> PreferenceFlags = {{
-        AttackPreferenceKnight,
-        AttackPreferencePaladin,
-        AttackPreferenceArcher,
-        AttackPreferenceDruid,
-        AttackPreferenceCleric,
-        AttackPreferenceSorcerer,
-        AttackPreferenceRanger,
-        AttackPreferenceThief,
-        AttackPreferenceMonk,
-        AttackPreferenceMale,
-        AttackPreferenceFemale,
-        AttackPreferenceHuman,
-        AttackPreferenceElf,
-        AttackPreferenceDwarf,
-        AttackPreferenceGoblin,
+        MonsterAttackPreferenceKnight,
+        MonsterAttackPreferencePaladin,
+        MonsterAttackPreferenceArcher,
+        MonsterAttackPreferenceDruid,
+        MonsterAttackPreferenceCleric,
+        MonsterAttackPreferenceSorcerer,
+        MonsterAttackPreferenceRanger,
+        MonsterAttackPreferenceThief,
+        MonsterAttackPreferenceMonk,
+        MonsterAttackPreferenceMale,
+        MonsterAttackPreferenceFemale,
+        MonsterAttackPreferenceHuman,
+        MonsterAttackPreferenceElf,
+        MonsterAttackPreferenceDwarf,
+        MonsterAttackPreferenceGoblin,
     }};
 
     if (attackPreferences != 0)
@@ -3203,7 +3822,7 @@ std::optional<size_t> Party::chooseMonsterAttackTarget(uint32_t attackPreference
     return candidates[selectionSeed % candidates.size()];
 }
 
-void Party::addGold(int amount)
+void Party::addGold(int amount, GoldReason reason)
 {
     const int previousGold = m_gold;
     m_gold = std::max(0, m_gold + amount);
@@ -3212,6 +3831,11 @@ void Party::addGold(int amount)
     {
         ++m_dialogueEligibilityRevision;
         queueSound(SoundId::Gold);
+
+        if (m_statistics.pStatistics != nullptr)
+        {
+            m_statistics.pStatistics->recordGold(int64_t(m_gold) - int64_t(previousGold), reason);
+        }
     }
 }
 
@@ -3235,6 +3859,63 @@ void Party::requestSpeech(size_t memberIndex, SpeechId speechId)
     queueSpeech(memberIndex, speechId);
 }
 
+namespace
+{
+// Into the member's open bag, else another of their bags (a ruleset with several, MAW); the open bag stays open.
+bool addToAnyBag(Character &member, const InventoryItem &item, int bagCount)
+{
+    if (member.addInventoryItem(item))
+    {
+        return true;
+    }
+
+    const uint8_t openBag = member.rulesetState.currentBag;
+    bool added = false;
+
+    for (int bag = 0; bag < bagCount && !added; ++bag)
+    {
+        added = InventoryBags::openBag(member, uint8_t(bag), bagCount) && member.addInventoryItem(item);
+    }
+
+    InventoryBags::openBag(member, openBag, bagCount);
+    return added;
+}
+
+// One of the item out of the member's open bag, else out of their other bags (MAW); the open bag stays open.
+bool removeFromAnyBag(Character &member, uint32_t objectDescriptionId)
+{
+    if (member.removeInventoryItem(objectDescriptionId))
+    {
+        return true;
+    }
+
+    for (auto &[bag, items] : member.rulesetState.storedBags)
+    {
+        const auto found = std::find_if(items.begin(), items.end(),
+            [objectDescriptionId](const InventoryItem &item)
+            {
+                return item.objectDescriptionId == objectDescriptionId;
+            });
+
+        if (found != items.end())
+        {
+            if (found->quantity > 1)
+            {
+                --found->quantity;
+            }
+            else
+            {
+                items.erase(found);
+            }
+
+            return true;
+        }
+    }
+
+    return false;
+}
+}
+
 bool Party::tryGrantItem(uint32_t objectDescriptionId, uint32_t quantity)
 {
     if (objectDescriptionId == 0 || quantity == 0)
@@ -3250,9 +3931,13 @@ bool Party::tryGrantItem(uint32_t objectDescriptionId, uint32_t quantity)
         return false;
     }
 
+    const int bagCount = rules().items.bagCount(*this);
+
     for (uint32_t itemCount = 0; itemCount < quantity; ++itemCount)
     {
         InventoryItem item = makeInventoryItem(m_pItemTable, objectDescriptionId);
+        // A fixed item that an event, a quest or a start gives comes identified, as in the originals (OY-182).
+        item.identified = true;
 
         bool added = false;
 
@@ -3262,7 +3947,7 @@ bool Party::tryGrantItem(uint32_t objectDescriptionId, uint32_t quantity)
         {
             Character &member = testMembers[(firstIndex + offset) % testMembers.size()];
 
-            if (member.addInventoryItem(item))
+            if (addToAnyBag(member, item, bagCount))
             {
                 added = true;
                 break;
@@ -3276,7 +3961,13 @@ bool Party::tryGrantItem(uint32_t objectDescriptionId, uint32_t quantity)
         }
     }
 
-    m_members = std::move(testMembers);
+    // Member by member, so pointers to the members stay valid: an attack holds its attacker while a kill's reward
+    // (MAW's map completion) reaches the party.
+    for (size_t memberIndex = 0; memberIndex < testMembers.size(); ++memberIndex)
+    {
+        m_members[memberIndex] = std::move(testMembers[memberIndex]);
+    }
+
     const InventoryItem recordedItem = makeInventoryItem(m_pItemTable, objectDescriptionId);
     markArtifactItemFoundIfRelevant(recordedItem);
     recordEverOwnedItemIfRelevant(recordedItem);
@@ -3301,6 +3992,28 @@ bool Party::tryGrantInventoryItemToMember(size_t memberIndex, const InventoryIte
     return true;
 }
 
+bool Party::canGrantInventoryItem(const InventoryItem &item) const
+{
+    if (item.objectDescriptionId == 0 || item.quantity == 0)
+    {
+        return false;
+    }
+
+    const int bagCount = rules().items.bagCount(*this);
+
+    for (const Character &member : m_members)
+    {
+        Character testMember = member;
+
+        if (addToAnyBag(testMember, item, bagCount))
+        {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 bool Party::tryGrantInventoryItemStartingAt(
     size_t firstMemberIndex,
     const InventoryItem &item,
@@ -3320,15 +4033,17 @@ bool Party::tryGrantInventoryItemStartingAt(
     }
 
     const size_t firstIndex = std::min(firstMemberIndex, testMembers.size() - 1);
+    const int bagCount = rules().items.bagCount(*this);
 
     for (size_t offset = 0; offset < testMembers.size(); ++offset)
     {
         const size_t memberIndex = (firstIndex + offset) % testMembers.size();
         Character &member = testMembers[memberIndex];
 
-        if (member.addInventoryItem(item))
+        if (addToAnyBag(member, item, bagCount))
         {
-            m_members = std::move(testMembers);
+            // Only the member who took it, so pointers to the members stay valid (see tryGrantItem).
+            m_members[memberIndex] = std::move(member);
             markArtifactItemFoundIfRelevant(item);
             recordEverOwnedItemIfRelevant(item);
 
@@ -3371,6 +4086,17 @@ bool Party::removeItem(uint32_t objectDescriptionId, uint32_t quantity)
                 availableCount += item.quantity;
             }
         }
+
+        for (const auto &[bag, items] : member.rulesetState.storedBags)
+        {
+            for (const InventoryItem &item : items)
+            {
+                if (item.objectDescriptionId == objectDescriptionId)
+                {
+                    availableCount += item.quantity;
+                }
+            }
+        }
     }
 
     if (availableCount < quantity)
@@ -3382,7 +4108,7 @@ bool Party::removeItem(uint32_t objectDescriptionId, uint32_t quantity)
 
     for (Character &member : m_members)
     {
-        while (removedCount < quantity && member.removeInventoryItem(objectDescriptionId))
+        while (removedCount < quantity && removeFromAnyBag(member, objectDescriptionId))
         {
             removedCount += 1;
         }
@@ -3399,6 +4125,24 @@ int Party::effectiveMaximumHealth(const Character &member)
 int Party::effectiveMaximumSpellPoints(const Character &member)
 {
     return GameMechanics::calculateEffectiveCharacterMaxSpellPoints(member);
+}
+
+int Party::reachableMaximumHealth(size_t memberIndex) const
+{
+    // A hireling has no auras to reserve HP.
+    if (const Mm9PartyHireling *pHireling = hirelingCombatant(memberIndex))
+    {
+        return std::max(1, effectiveMaximumHealth(pHireling->character));
+    }
+
+    return std::max(1,
+        effectiveMaximumHealth(m_members[memberIndex]) - rules().spells.reservedHitPoints(*this, memberIndex));
+}
+
+int Party::reachableMaximumSpellPoints(size_t memberIndex) const
+{
+    return std::max(0,
+        effectiveMaximumSpellPoints(m_members[memberIndex]) - rules().spells.reservedSpellPoints(*this, memberIndex));
 }
 
 bool Party::needsHealing() const
@@ -3440,10 +4184,18 @@ void Party::reviveAndRestoreAll()
 
     m_partyBuffs = {};
     m_characterBuffs = {};
+
+    for (Mm9PartyHireling &hireling : m_mm9Hirelings)
+    {
+        hireling.buffs = {};
+    }
+
     rebuildMagicalBonusesFromBuffs();
 
-    for (Character &member : m_members)
+    // The hirelings too.
+    for (size_t combatantIndex = 0; combatantIndex < combatantCount(); ++combatantIndex)
     {
+        Character &member = *combatant(combatantIndex);
         member.conditions.reset();
         member.conditionStartGameMinutes.fill(0.0f);
         member.recoverySecondsRemaining = 0.0f;
@@ -3469,10 +4221,19 @@ void Party::restAndHealAll()
 
     m_partyBuffs = {};
     m_characterBuffs = {};
+
+    for (Mm9PartyHireling &hireling : m_mm9Hirelings)
+    {
+        hireling.buffs = {};
+    }
+
     rebuildMagicalBonusesFromBuffs();
 
-    for (Character &member : m_members)
+    // The hirelings rest with the party: a knocked-out one wakes; the dead stay for a temple or a spell.
+    for (size_t combatantIndex = 0; combatantIndex < combatantCount(); ++combatantIndex)
     {
+        Character &member = *combatant(combatantIndex);
+
         if (member.conditions.test(static_cast<size_t>(CharacterCondition::Dead))
             || member.conditions.test(static_cast<size_t>(CharacterCondition::Petrified))
             || member.conditions.test(static_cast<size_t>(CharacterCondition::Eradicated)))
@@ -3524,6 +4285,132 @@ void Party::restAndHealAll()
             member.spellPoints = 0;
         }
     }
+
+    clearDaysWithoutRest();
+}
+
+int Party::daysWithoutRest() const
+{
+    return m_daysWithoutRest;
+}
+
+void Party::clearDaysWithoutRest()
+{
+    m_daysWithoutRest = 0;
+    m_awakeDayIndex.reset();
+}
+
+void Party::addDayWithoutRest()
+{
+    ++m_daysWithoutRest;
+}
+
+void Party::setGameMinutes(float gameMinutes)
+{
+    m_gameMinutes = std::max(0.0f, gameMinutes);
+    // The calendar's year: 12 months of 28 days (OY-349).
+    constexpr float MinutesPerYear = 12.0f * 28.0f * 24.0f * 60.0f;
+    const uint32_t playedYears = uint32_t(m_gameMinutes / MinutesPerYear);
+
+    // Timed conditions (a monster spell's duration) wear off once the clock passes them; a time left on a condition
+    // that something else cleared is dropped.
+    for (size_t combatantIndex = 0; combatantIndex < combatantCount(); ++combatantIndex)
+    {
+        Character &member = *combatant(combatantIndex);
+        member.playedYears = playedYears;
+
+        for (size_t index = 0; index < CharacterConditionCount; ++index)
+        {
+            float &expire = member.conditionExpireGameMinutes[index];
+
+            if (expire <= 0.0f)
+            {
+                continue;
+            }
+
+            if (!member.conditions.test(index))
+            {
+                expire = 0.0f;
+            }
+            else if (m_gameMinutes >= expire)
+            {
+                member.conditions.reset(index);
+                member.conditionStartGameMinutes[index] = 0.0f;
+                expire = 0.0f;
+            }
+        }
+    }
+}
+
+float Party::gameMinutes() const
+{
+    return m_gameMinutes;
+}
+
+void Party::updateDaysWithoutRest(float gameMinutes)
+{
+    // A new day dawns at 3 AM.
+    constexpr float DawnMinuteOfDay = 3.0f * 60.0f;
+    constexpr float MinutesPerDay = 24.0f * 60.0f;
+    const int dayIndex = static_cast<int>(std::floor((gameMinutes - DawnMinuteOfDay) / MinutesPerDay));
+
+    if (!m_awakeDayIndex || *m_awakeDayIndex >= dayIndex)
+    {
+        m_awakeDayIndex = dayIndex;
+        return;
+    }
+
+    // Like the original timed effects, one time step passes at most one dawn, however many days it skips.
+    m_awakeDayIndex = dayIndex;
+    ++m_daysWithoutRest;
+
+    if (m_daysWithoutRest <= 1)
+    {
+        return;
+    }
+
+    const bool starving = m_food <= 0;
+
+    if (!starving)
+    {
+        addFood(-1);
+    }
+
+    static thread_local std::mt19937 rng(std::random_device{}());
+    std::uniform_int_distribution<int> percent(0, 99);
+
+    for (size_t memberIndex = 0; memberIndex < m_members.size(); ++memberIndex)
+    {
+        Character &member = m_members[memberIndex];
+        applyMemberCondition(memberIndex, CharacterCondition::Weak, gameMinutes);
+
+        if (member.conditions.test(static_cast<size_t>(CharacterCondition::Dead))
+            || member.conditions.test(static_cast<size_t>(CharacterCondition::Petrified))
+            || member.conditions.test(static_cast<size_t>(CharacterCondition::Eradicated)))
+        {
+            continue;
+        }
+
+        if (starving)
+        {
+            member.health = member.health / (m_daysWithoutRest + 1) + 1;
+        }
+
+        if (m_daysWithoutRest > 3)
+        {
+            clearTemporaryEventBonuses(member);
+
+            if (percent(rng) < 5 * m_daysWithoutRest)
+            {
+                applyMemberCondition(memberIndex, CharacterCondition::Dead, gameMinutes);
+            }
+
+            if (percent(rng) < 10 * m_daysWithoutRest)
+            {
+                applyMemberCondition(memberIndex, CharacterCondition::Insane, gameMinutes);
+            }
+        }
+    }
 }
 
 void Party::restoreActiveMember()
@@ -3560,7 +4447,7 @@ bool Party::trainLeader(uint32_t maxLevel, uint32_t &newLevel, uint32_t &skillPo
         return false;
     }
 
-    if (leader.experience < experienceRequiredForNextLevel(leader.level))
+    if (leader.experience < rules().experience.experienceForNextLevel(leader.level))
     {
         return false;
     }
@@ -3590,13 +4477,18 @@ bool Party::trainActiveMember(uint32_t maxLevel, uint32_t &newLevel, uint32_t &s
         return false;
     }
 
-    if (pMember->experience < experienceRequiredForNextLevel(pMember->level))
+    if (pMember->experience < rules().experience.experienceForNextLevel(pMember->level))
     {
         return false;
     }
 
     pMember->level += 1;
     skillPointsEarned = 5 + pMember->level / 10;
+
+    if (m_statistics.pStatistics != nullptr)
+    {
+        m_statistics.pStatistics->recordLevelsGained(statsMember(m_activeMemberIndex), 1);
+    }
     pMember->skillPoints += skillPointsEarned;
     GameMechanics::refreshCharacterBaseResources(*pMember, true, m_pClassMultiplierTable);
     newLevel = pMember->level;
@@ -3613,7 +4505,8 @@ bool Party::canMemberLearnSkill(size_t memberIndex, const std::string &skillName
         return false;
     }
 
-    return m_pClassSkillTable->getEffectiveCap(pMember->className, pMember->raceId, canonicalSkill)
+    return rules().skills.masteryCap(*pMember, canonicalSkill,
+               m_pClassSkillTable->getEffectiveCap(pMember->className, pMember->raceId, canonicalSkill))
         != SkillMastery::None;
 }
 
@@ -3661,14 +4554,7 @@ bool Party::canIncreaseActiveMemberSkillLevel(const std::string &skillName) cons
         return false;
     }
 
-    const CharacterSkill *pSkill = pMember->findSkill(canonicalSkill);
-
-    if (pSkill == nullptr)
-    {
-        return false;
-    }
-
-    return pMember->skillPoints > pSkill->level;
+    return rules().skills.canRaiseSkill(*pMember, canonicalSkill);
 }
 
 bool Party::increaseActiveMemberSkillLevel(const std::string &skillName)
@@ -3692,10 +4578,50 @@ bool Party::increaseActiveMemberSkillLevel(const std::string &skillName)
         return false;
     }
 
-    const uint32_t newSkillLevel = pSkill->level + 1;
-    pSkill->level = newSkillLevel;
-    pMember->skillPoints -= newSkillLevel;
+    const std::string canonicalSkill = canonicalSkillName(skillName);
+    const uint32_t cost = rules().skills.skillRaiseCost(*pMember, canonicalSkill);
+    pSkill->level += 1;
+    uint32_t &points = isTechnologySkill(skillName) ? pMember->techPoints : pMember->skillPoints;
+    points -= cost;
+    m_lastStatus = rules().skills.afterSkillRaised(*pMember, canonicalSkill, m_pClassSkillTable);
+
     GameMechanics::refreshCharacterBaseResources(*pMember, false, m_pClassMultiplierTable);
+    return true;
+}
+
+std::optional<int> Party::activeMemberSkillResetCost() const
+{
+    const Character *pMember = activeMember();
+    return pMember != nullptr ? rules().skills.skillResetCost(*pMember) : std::nullopt;
+}
+
+bool Party::resetActiveMemberSkills()
+{
+    Character *pMember = activeMember();
+    const std::optional<int> cost = activeMemberSkillResetCost();
+
+    if (pMember == nullptr || !cost)
+    {
+        m_lastStatus = Engine::tr("No skills can be reset.");
+        return false;
+    }
+
+    if (m_gold < *cost)
+    {
+        m_lastStatus = Engine::tr("Not enough gold.");
+        return false;
+    }
+
+    if (!rules().skills.resetSkills(*pMember))
+    {
+        m_lastStatus = Engine::tr("No skills can be reset.");
+        return false;
+    }
+
+    addGold(-*cost, GoldReason::Guild);
+    GameMechanics::refreshCharacterBaseResources(*pMember, false, m_pClassMultiplierTable);
+    m_lastStatus = Engine::tr("{name}'s skills were reset: {points} skill points.",
+        {{"name", pMember->name}, {"points", pMember->skillPoints}});
     return true;
 }
 
@@ -3708,7 +4634,7 @@ int Party::depositGoldToBank(int amount)
         return 0;
     }
 
-    addGold(-transferableGold);
+    addGold(-transferableGold, GoldReason::Bank);
     m_bankGold += transferableGold;
     return transferableGold;
 }
@@ -3723,7 +4649,7 @@ int Party::withdrawBankGold(int amount)
     }
 
     m_bankGold -= transferableGold;
-    addGold(transferableGold);
+    addGold(transferableGold, GoldReason::Bank);
     return transferableGold;
 }
 
@@ -3739,7 +4665,7 @@ int Party::withdrawAllBankGold()
 
 bool Party::isFull() const
 {
-    return m_members.size() >= MaxMembers;
+    return m_members.size() >= (m_soloRun ? 1 : MaxMembers);
 }
 
 bool Party::recruitRosterMember(const RosterEntry &rosterEntry)
@@ -3757,6 +4683,8 @@ bool Party::recruitRosterMember(const RosterEntry &rosterEntry)
         m_pItemTable,
         m_pStandardItemEnchantTable,
         m_pSpecialItemEnchantTable);
+    rules().experience.prepareRosterCharacter(m_members.back());
+    normalizeFormationCells();
 
     m_lastStatus = "party member recruited";
     return true;
@@ -3784,6 +4712,7 @@ bool Party::recruitCharacter(const Character &character)
 
     GameMechanics::refreshCharacterBaseResources(m_members.back(), true, m_pClassMultiplierTable);
     initializePortraitRuntimeState(m_members.back());
+    normalizeFormationCells();
     m_lastStatus = "party member recruited";
     return true;
 }
@@ -3797,6 +4726,7 @@ bool Party::addAdventurersInnMember(const RosterEntry &rosterEntry, uint32_t por
         m_pItemTable,
         m_pStandardItemEnchantTable,
         m_pSpecialItemEnchantTable);
+    rules().experience.prepareRosterCharacter(character);
     const uint32_t resolvedPortraitPictureId = resolveAdventurersInnPortraitPictureId(
         character,
         portraitPictureId,
@@ -3840,6 +4770,7 @@ bool Party::hireAdventurersInnMember(size_t innIndex)
     m_members.push_back(m_adventurersInnMembers[innIndex].character);
     applyCharacterIdentityFromDollTable(m_members.back(), m_pCharacterDollTable);
     m_adventurersInnMembers.erase(m_adventurersInnMembers.begin() + innIndex);
+    normalizeFormationCells();
     m_lastStatus = "adventurer hired from inn";
     return true;
 }
@@ -3862,7 +4793,13 @@ bool Party::dismissMemberToAdventurersInn(size_t memberIndex)
         return false;
     }
 
+    rules().spells.memberLeaving(*this, memberIndex);
     m_members.erase(m_members.begin() + memberIndex);
+
+    if (memberIndex < m_memberFormationCells.size())
+    {
+        m_memberFormationCells.erase(m_memberFormationCells.begin() + std::ptrdiff_t(memberIndex));
+    }
 
     for (size_t index = memberIndex; index + 1 < m_characterBuffs.size(); ++index)
     {
@@ -3922,6 +4859,7 @@ bool Party::dismissMemberToAdventurersInn(size_t memberIndex)
         m_activeMemberIndex = m_members.size() - 1;
     }
 
+    normalizeFormationCells();
     rebuildMagicalBonusesFromBuffs();
     m_lastStatus = "party member dismissed";
     return true;
@@ -3943,6 +4881,7 @@ bool Party::replaceMemberWithRosterEntry(size_t memberIndex, const RosterEntry &
         m_pItemTable,
         m_pStandardItemEnchantTable,
         m_pSpecialItemEnchantTable);
+    rules().experience.prepareRosterCharacter(m_members[memberIndex]);
 
     rebuildMagicalBonusesFromBuffs();
     m_lastStatus = "party member replaced from roster";
@@ -4007,6 +4946,102 @@ void Party::setQuestBit(uint32_t questBitId, bool value)
     }
 }
 
+bool Party::hasAutonote(uint32_t autonoteId) const
+{
+    return autonoteId != 0 && m_autonotes.contains(autonoteId);
+}
+
+void Party::setAutonote(uint32_t autonoteId, bool value)
+{
+    if (autonoteId == 0)
+    {
+        return;
+    }
+
+    if (value)
+    {
+        m_autonotes.insert(autonoteId);
+    }
+    else
+    {
+        m_autonotes.erase(autonoteId);
+    }
+}
+
+const std::unordered_map<uint32_t, int32_t> &Party::historyEventTimes(uint32_t continentId) const
+{
+    static const std::unordered_map<uint32_t, int32_t> EmptyHistory;
+    const auto continentIt = m_historyEventTimesByContinent.find(continentId);
+    return continentIt != m_historyEventTimesByContinent.end() ? continentIt->second : EmptyHistory;
+}
+
+void Party::recordHistoryEvent(uint32_t continentId, uint32_t historyId, int32_t gameMinutes)
+{
+    if (historyId != 0)
+    {
+        m_historyEventTimesByContinent[continentId].try_emplace(historyId, gameMinutes);
+    }
+}
+
+void Party::clearHistoryEvent(uint32_t continentId, uint32_t historyId)
+{
+    const auto continentIt = m_historyEventTimesByContinent.find(continentId);
+
+    if (continentIt != m_historyEventTimesByContinent.end())
+    {
+        continentIt->second.erase(historyId);
+    }
+}
+
+const std::vector<JournalMapNote> &Party::journalMapNotes() const
+{
+    return m_journalMapNotes;
+}
+
+const JournalMapNote *Party::findJournalMapNote(const std::string &mapFileName, uint32_t noteId) const
+{
+    for (const JournalMapNote &note : m_journalMapNotes)
+    {
+        if (note.id == noteId && note.mapFileName == mapFileName)
+        {
+            return &note;
+        }
+    }
+
+    return nullptr;
+}
+
+void Party::setJournalMapNote(const JournalMapNote &note)
+{
+    for (JournalMapNote &existing : m_journalMapNotes)
+    {
+        if (existing.id == note.id && existing.mapFileName == note.mapFileName)
+        {
+            existing = note;
+            return;
+        }
+    }
+
+    m_journalMapNotes.push_back(note);
+}
+
+bool Party::removeJournalMapNote(const std::string &mapFileName, uint32_t noteId)
+{
+    const auto note = std::find_if(m_journalMapNotes.begin(), m_journalMapNotes.end(),
+        [&mapFileName, noteId](const JournalMapNote &existing)
+        {
+            return existing.id == noteId && existing.mapFileName == mapFileName;
+        });
+
+    if (note == m_journalMapNotes.end())
+    {
+        return false;
+    }
+
+    m_journalMapNotes.erase(note);
+    return true;
+}
+
 uint64_t Party::dialogueEligibilityRevision() const
 {
     return m_dialogueEligibilityRevision;
@@ -4014,10 +5049,12 @@ uint64_t Party::dialogueEligibilityRevision() const
 
 void Party::applyGlobalNpcStateTo(EventRuntimeState &runtimeState) const
 {
+    // Where followers do not count (MM9) the map's events, dialogue, HUD and gold see none; the party keeps its own.
+    const std::span<const HiredNpcFollower> followers = activeHiredNpcFollowers();
     std::unordered_set<uint32_t> partyFollowerIds;
-    partyFollowerIds.reserve(m_hiredNpcFollowers.size());
+    partyFollowerIds.reserve(followers.size());
 
-    for (const HiredNpcFollower &follower : m_hiredNpcFollowers)
+    for (const HiredNpcFollower &follower : followers)
     {
         if (follower.npcId != 0)
         {
@@ -4028,20 +5065,12 @@ void Party::applyGlobalNpcStateTo(EventRuntimeState &runtimeState) const
     const auto staleFollowerIt = std::remove_if(
         runtimeState.hiredNpcFollowers.begin(),
         runtimeState.hiredNpcFollowers.end(),
-        [&partyFollowerIds](const HiredNpcFollower &follower)
+        [this, &partyFollowerIds](const HiredNpcFollower &follower)
         {
-            return follower.npcId != 0 && !partyFollowerIds.contains(follower.npcId);
+            return !m_npcFollowersActive || (follower.npcId != 0 && !partyFollowerIds.contains(follower.npcId));
         });
 
-    if (staleFollowerIt != runtimeState.hiredNpcFollowers.end())
-    {
-        for (auto iterator = staleFollowerIt; iterator != runtimeState.hiredNpcFollowers.end(); ++iterator)
-        {
-            runtimeState.unavailableNpcIds.erase(iterator->npcId);
-        }
-
-        runtimeState.hiredNpcFollowers.erase(staleFollowerIt, runtimeState.hiredNpcFollowers.end());
-    }
+    runtimeState.hiredNpcFollowers.erase(staleFollowerIt, runtimeState.hiredNpcFollowers.end());
 
     for (const auto &[npcId, topicOverrides] : m_npcTopicOverrides)
     {
@@ -4076,12 +5105,11 @@ void Party::applyGlobalNpcStateTo(EventRuntimeState &runtimeState) const
         runtimeState.npcItemOverrides[npcId] = itemId;
     }
 
-    for (uint32_t npcId : m_unavailableNpcIds)
-    {
-        runtimeState.unavailableNpcIds.insert(npcId);
-    }
+    // The party's set replaces the map's: a map's saved state can keep an NPC unavailable after the party let them go
+    // elsewhere (Sir Charles Quixote, hidden from his residence after the Crusader promotion in Wromthrax's cave).
+    runtimeState.unavailableNpcIds = m_unavailableNpcIds;
 
-    for (const HiredNpcFollower &follower : m_hiredNpcFollowers)
+    for (const HiredNpcFollower &follower : followers)
     {
         const auto existingFollowerIt = std::find_if(
             runtimeState.hiredNpcFollowers.begin(),
@@ -4234,6 +5262,546 @@ void Party::setHiredNpcFollowerAbilityUsedDay(uint32_t npcId, uint32_t day)
     }
 }
 
+void Party::setNpcFollowersActive(bool active)
+{
+    if (m_npcFollowersActive != active)
+    {
+        m_npcFollowersActive = active;
+        rebuildMagicalBonusesFromBuffs();
+    }
+}
+
+bool Party::npcFollowersActive() const
+{
+    return m_npcFollowersActive;
+}
+
+std::span<const HiredNpcFollower> Party::activeHiredNpcFollowers() const
+{
+    return m_npcFollowersActive ? std::span<const HiredNpcFollower>(m_hiredNpcFollowers)
+                                : std::span<const HiredNpcFollower>();
+}
+
+void Party::setMm9HirelingsAlong(bool along)
+{
+    if (m_mm9HirelingsAlong == along)
+    {
+        return;
+    }
+
+    // One of the two lists is empty: the hirelings change places. Those who rejoin take free formation cells.
+    m_mm9HirelingsAlong = along;
+    m_mm9Hirelings.swap(m_mm9HirelingsBehind);
+    m_activeHirelingIndex.reset();
+    normalizeFormationCells();
+    rebuildMagicalBonusesFromBuffs();
+}
+
+bool Party::mm9HirelingsAlong() const
+{
+    return m_mm9HirelingsAlong;
+}
+
+const std::vector<Mm9PartyHireling> &Party::hirelings() const
+{
+    return m_mm9Hirelings;
+}
+
+const Mm9PartyHireling *Party::findHireling(uint32_t rudeId) const
+{
+    for (const Mm9PartyHireling &hireling : m_mm9Hirelings)
+    {
+        if (hireling.rudeId == rudeId)
+        {
+            return &hireling;
+        }
+    }
+
+    return nullptr;
+}
+
+Mm9PartyHireling *Party::findHireling(uint32_t rudeId)
+{
+    for (Mm9PartyHireling &hireling : m_mm9Hirelings)
+    {
+        if (hireling.rudeId == rudeId)
+        {
+            return &hireling;
+        }
+    }
+
+    return nullptr;
+}
+
+size_t Party::paidHirelingCount() const
+{
+    return size_t(std::count_if(m_mm9Hirelings.begin(), m_mm9Hirelings.end(),
+        [](const Mm9PartyHireling &hireling)
+        {
+            return hireling.kind == Mm9HirelingKind::Paid;
+        }));
+}
+
+bool Party::canAddHireling(const Mm9Hireling &row) const
+{
+    return row.rudeId != 0 && findHireling(row.rudeId) == nullptr && m_mm9Hirelings.size() < MaxMm9Hirelings
+        && (row.kind != Mm9HirelingKind::Paid || paidHirelingCount() < MaxPaidMm9Hirelings);
+}
+
+bool Party::addHireling(const Mm9Hireling &row)
+{
+    if (!canAddHireling(row))
+    {
+        return false;
+    }
+
+    Mm9PartyHireling hireling = {};
+    hireling.rudeId = row.rudeId;
+    hireling.kind = row.kind;
+    Character &character = hireling.character;
+    character.name = row.name;
+    character.portraitTextureName = row.portrait;
+    character.level = row.level;
+    character.maxHealth = row.hitPoints;
+    character.health = row.hitPoints;
+    character.armorClassModifier = row.armorClass;
+    character.baseResistances = row.resistances;
+    character.might = Mm9HirelingPrimaryStat;
+    character.intellect = Mm9HirelingPrimaryStat;
+    character.personality = Mm9HirelingPrimaryStat;
+    character.endurance = Mm9HirelingPrimaryStat;
+    character.speed = Mm9HirelingPrimaryStat;
+    character.accuracy = Mm9HirelingPrimaryStat;
+    character.luck = Mm9HirelingPrimaryStat;
+    hireling.hireDay = uint32_t(std::max(0.0f, m_gameMinutes) / (24.0f * 60.0f));
+    hireling.nextWageGameMinutes =
+        row.kind == Mm9HirelingKind::Paid ? m_gameMinutes + Mm9HirelingWagePeriodGameMinutes : 0.0f;
+    m_mm9Hirelings.push_back(std::move(hireling));
+    normalizeFormationCells();
+    rebuildMagicalBonusesFromBuffs();
+    return true;
+}
+
+bool Party::removeHireling(uint32_t rudeId)
+{
+    const auto found = std::find_if(m_mm9Hirelings.begin(), m_mm9Hirelings.end(),
+        [rudeId](const Mm9PartyHireling &hireling)
+        {
+            return hireling.rudeId == rudeId;
+        });
+
+    if (found == m_mm9Hirelings.end())
+    {
+        return false;
+    }
+
+    const size_t removedIndex = size_t(found - m_mm9Hirelings.begin());
+    m_mm9Hirelings.erase(found);
+
+    if (m_activeHirelingIndex && *m_activeHirelingIndex == removedIndex)
+    {
+        m_activeHirelingIndex.reset();
+    }
+    else if (m_activeHirelingIndex && *m_activeHirelingIndex > removedIndex)
+    {
+        --*m_activeHirelingIndex;
+    }
+
+    // Its passives (skill bonuses) leave with it.
+    rebuildMagicalBonusesFromBuffs();
+    return true;
+}
+
+bool Party::addHirelingByRudeId(uint32_t rudeId)
+{
+    const Mm9Hireling *pRow = m_pMm9HirelingTable != nullptr ? m_pMm9HirelingTable->find(rudeId) : nullptr;
+    return pRow != nullptr && addHireling(*pRow);
+}
+
+void Party::setMm9HirelingTable(const Mm9HirelingTable *pTable)
+{
+    m_pMm9HirelingTable = pTable;
+    rebuildMagicalBonusesFromBuffs();
+}
+
+const Mm9HirelingTable *Party::mm9HirelingTable() const
+{
+    return m_pMm9HirelingTable;
+}
+
+Mm9HirelingPassives Party::mm9HirelingPassives() const
+{
+    if (m_pMm9HirelingTable == nullptr || m_mm9Hirelings.empty())
+    {
+        return {};
+    }
+
+    return mm9PartyHirelingPassives(*this, *m_pMm9HirelingTable);
+}
+
+size_t Party::combatantCount() const
+{
+    return m_members.size() + m_mm9Hirelings.size();
+}
+
+const Character *Party::combatant(size_t combatantIndex) const
+{
+    if (combatantIndex < m_members.size())
+    {
+        return &m_members[combatantIndex];
+    }
+
+    const size_t hirelingIndex = combatantIndex - m_members.size();
+    return hirelingIndex < m_mm9Hirelings.size() ? &m_mm9Hirelings[hirelingIndex].character : nullptr;
+}
+
+Character *Party::combatant(size_t combatantIndex)
+{
+    return const_cast<Character *>(std::as_const(*this).combatant(combatantIndex));
+}
+
+bool Party::isHirelingCombatant(size_t combatantIndex) const
+{
+    return combatantIndex >= m_members.size() && combatantIndex < combatantCount();
+}
+
+const Mm9PartyHireling *Party::hirelingCombatant(size_t combatantIndex) const
+{
+    return isHirelingCombatant(combatantIndex) ? &m_mm9Hirelings[combatantIndex - m_members.size()] : nullptr;
+}
+
+std::array<CharacterBuffState, CharacterBuffCount> *Party::combatantBuffs(size_t combatantIndex)
+{
+    return const_cast<std::array<CharacterBuffState, CharacterBuffCount> *>(
+        std::as_const(*this).combatantBuffs(combatantIndex));
+}
+
+const std::array<CharacterBuffState, CharacterBuffCount> *Party::combatantBuffs(size_t combatantIndex) const
+{
+    if (combatantIndex < m_members.size())
+    {
+        return combatantIndex < m_characterBuffs.size() ? &m_characterBuffs[combatantIndex] : nullptr;
+    }
+
+    const Mm9PartyHireling *pHireling = hirelingCombatant(combatantIndex);
+    return pHireling != nullptr ? &pHireling->buffs : nullptr;
+}
+
+size_t Party::activeCombatantIndex() const
+{
+    if (m_activeHirelingIndex && *m_activeHirelingIndex < m_mm9Hirelings.size())
+    {
+        return m_members.size() + *m_activeHirelingIndex;
+    }
+
+    return activeMemberIndex();
+}
+
+const Mm9PartyHireling *Party::activeHireling() const
+{
+    return m_activeHirelingIndex && *m_activeHirelingIndex < m_mm9Hirelings.size()
+        ? &m_mm9Hirelings[*m_activeHirelingIndex]
+        : nullptr;
+}
+
+bool Party::setActiveCombatantIndex(size_t combatantIndex)
+{
+    if (combatantIndex < m_members.size())
+    {
+        return setActiveMemberIndex(combatantIndex);
+    }
+
+    if (combatantIndex >= actingCombatantCount())
+    {
+        return false;
+    }
+
+    m_activeHirelingIndex = combatantIndex - m_members.size();
+    return true;
+}
+
+size_t Party::actingCombatantCount() const
+{
+    return m_soloRun ? m_members.size() : combatantCount();
+}
+
+void Party::setSoloRun(bool soloRun)
+{
+    m_soloRun = soloRun;
+
+    if (m_soloRun)
+    {
+        m_activeHirelingIndex.reset();
+    }
+}
+
+bool Party::soloRun() const
+{
+    return m_soloRun;
+}
+
+bool Party::canSelectCombatantInGameplay(size_t combatantIndex) const
+{
+    const Character *pCombatant = combatant(combatantIndex);
+    return pCombatant != nullptr && GameMechanics::canSelectInGameplay(*pCombatant);
+}
+
+float Party::hirelingRecoverySeconds(const Character &hireling, float rowRecoverySeconds)
+{
+    // MM9 adds its haste/slow modifier to the row's recovery (MM9_HIRELINGS.md 9.2); here the members' haste ticks,
+    // down to a blow's minimum (GameMechanics' 30 ticks).
+    constexpr int MinimumRecoveryTicks = 30;
+    return std::max(ticksToRecoverySeconds(MinimumRecoveryTicks),
+        rowRecoverySeconds - ticksToRecoverySeconds(hireling.attackRecoveryReductionTicks));
+}
+
+void Party::setFormationTargetingActive(bool active)
+{
+    m_formationTargetingActive = active;
+}
+
+bool Party::formationTargetingActive() const
+{
+    return m_formationTargetingActive;
+}
+
+void Party::setFleetFootWorld(bool active)
+{
+    m_fleetFootWorld = active;
+
+    if (!active)
+    {
+        m_partyBuffs[size_t(PartyBuffId::FleetFoot)] = {};
+        m_spellMovementMultiplier = 1.0f;
+        return;
+    }
+
+    // A Fly the party brings into MM9 (a Town Portal, Lloyd's Beacon or dimensional travel from MM6-MM8) becomes Fleet
+    // Foot for the time it has left, at its caster's mastery's speed (the user, 2026-11-09).
+    PartyBuffState &fly = m_partyBuffs[size_t(PartyBuffId::Fly)];
+
+    if (fly.active())
+    {
+        PartyBuffState &fleetFoot = m_partyBuffs[size_t(PartyBuffId::FleetFoot)];
+        const float remainingSeconds = std::max(fleetFoot.remainingSeconds, fly.remainingSeconds);
+        fleetFoot = fly;
+        fleetFoot.remainingSeconds = remainingSeconds;
+        fleetFoot.power = fleetFootSpeedPercent(fly.skillMastery);
+        fly = {};
+        rebuildMagicalBonusesFromBuffs();
+    }
+}
+
+bool Party::fleetFootWorld() const
+{
+    return m_fleetFootWorld;
+}
+
+void Party::setMm9LootInOlderWorlds(bool active)
+{
+    m_mm9LootInOlderWorlds = active;
+}
+
+bool Party::mm9LootInOlderWorlds() const
+{
+    return m_mm9LootInOlderWorlds;
+}
+
+int32_t Party::formationCell(size_t combatantIndex) const
+{
+    if (combatantIndex < m_members.size())
+    {
+        return combatantIndex < m_memberFormationCells.size() ? m_memberFormationCells[combatantIndex] : -1;
+    }
+
+    const Mm9PartyHireling *pHireling = hirelingCombatant(combatantIndex);
+    return pHireling != nullptr ? pHireling->formationCell : -1;
+}
+
+bool Party::setFormationCell(size_t combatantIndex, int32_t cell)
+{
+    if (combatantIndex >= combatantCount() || cell < 0 || cell >= Mm9FormationCellCount)
+    {
+        return false;
+    }
+
+    for (size_t otherIndex = 0; otherIndex < combatantCount(); ++otherIndex)
+    {
+        if (otherIndex != combatantIndex && formationCell(otherIndex) == cell)
+        {
+            return false;
+        }
+    }
+
+    if (combatantIndex < m_members.size())
+    {
+        m_memberFormationCells.resize(m_members.size(), -1);
+        m_memberFormationCells[combatantIndex] = cell;
+    }
+    else
+    {
+        m_mm9Hirelings[combatantIndex - m_members.size()].formationCell = cell;
+    }
+
+    return true;
+}
+
+std::vector<int32_t> Party::formationCells() const
+{
+    std::vector<int32_t> cells;
+    cells.reserve(combatantCount());
+
+    for (size_t combatantIndex = 0; combatantIndex < combatantCount(); ++combatantIndex)
+    {
+        cells.push_back(formationCell(combatantIndex));
+    }
+
+    return cells;
+}
+
+bool Party::setFormationCells(const std::vector<int32_t> &cells)
+{
+    if (cells.size() != combatantCount())
+    {
+        return false;
+    }
+
+    std::array<bool, Mm9FormationCellCount> taken = {};
+
+    for (const int32_t cell : cells)
+    {
+        if (cell < 0 || cell >= Mm9FormationCellCount || taken[size_t(cell)])
+        {
+            return false;
+        }
+
+        taken[size_t(cell)] = true;
+    }
+
+    m_memberFormationCells.assign(cells.begin(), cells.begin() + std::ptrdiff_t(m_members.size()));
+
+    for (size_t hireling = 0; hireling < m_mm9Hirelings.size(); ++hireling)
+    {
+        m_mm9Hirelings[hireling].formationCell = cells[m_members.size() + hireling];
+    }
+
+    return true;
+}
+
+void Party::normalizeFormationCells()
+{
+    m_memberFormationCells.resize(m_members.size(), -1);
+    std::array<bool, Mm9FormationCellCount> taken = {};
+    std::vector<int32_t *> cells;
+    cells.reserve(combatantCount());
+
+    for (int32_t &cell : m_memberFormationCells)
+    {
+        cells.push_back(&cell);
+    }
+
+    for (Mm9PartyHireling &hireling : m_mm9Hirelings)
+    {
+        cells.push_back(&hireling.formationCell);
+    }
+
+    // Cells already held stay; a duplicate or an invalid cell is given up and refilled below.
+    for (int32_t *pCell : cells)
+    {
+        if (*pCell >= 0 && *pCell < Mm9FormationCellCount && !taken[size_t(*pCell)])
+        {
+            taken[size_t(*pCell)] = true;
+        }
+        else
+        {
+            *pCell = -1;
+        }
+    }
+
+    // MM9's default: the lowest free cell, members first, then the hirelings (section 10.3).
+    for (int32_t *pCell : cells)
+    {
+        if (*pCell >= 0)
+        {
+            continue;
+        }
+
+        for (int32_t cell = 0; cell < Mm9FormationCellCount; ++cell)
+        {
+            if (!taken[size_t(cell)])
+            {
+                taken[size_t(cell)] = true;
+                *pCell = cell;
+                break;
+            }
+        }
+    }
+}
+
+std::optional<size_t> Party::chooseFormationAttackTarget(uint32_t selectionSeed) const
+{
+    // MM9 (object@0x10054ea0, MM9_HIRELINGS.md 9.3 and 10.2): a d10 picks the rank, 1 the rear, 2-3 the middle,
+    // 4-10 the front; a d3 a cell of it, rolled again while it is empty; a rank without anyone, or a pick that cannot
+    // be hit, starts the whole choice again. Nobody is chosen once every member is down, hirelings standing or not.
+    const bool anyMemberStanding = std::any_of(m_members.begin(), m_members.end(),
+        [](const Character &member)
+        {
+            return isValidMonsterAttackTarget(member);
+        });
+
+    if (!anyMemberStanding)
+    {
+        return std::nullopt;
+    }
+
+    std::array<std::optional<size_t>, Mm9FormationCellCount> occupants = {};
+
+    for (size_t combatantIndex = 0; combatantIndex < combatantCount(); ++combatantIndex)
+    {
+        const int32_t cell = formationCell(combatantIndex);
+
+        if (cell >= 0 && cell < Mm9FormationCellCount)
+        {
+            occupants[size_t(cell)] = combatantIndex;
+        }
+    }
+
+    std::mt19937 rng(selectionSeed);
+    std::uniform_int_distribution<int> rankRoll(1, 10);
+    std::uniform_int_distribution<int> cellRoll(0, Mm9FormationRankSize - 1);
+    // A generous bound on the retries: a standing member is found long before (the odds of the rarest rank are 10 %).
+    constexpr int MaximumChoices = 256;
+
+    for (int choice = 0; choice < MaximumChoices; ++choice)
+    {
+        const int rankDie = rankRoll(rng);
+        const int rank = rankDie == 1 ? 2 : rankDie <= 3 ? 1 : 0;
+        const size_t firstCell = size_t(rank * Mm9FormationRankSize);
+        const bool rankOccupied = occupants[firstCell] || occupants[firstCell + 1] || occupants[firstCell + 2];
+
+        if (!rankOccupied)
+        {
+            continue;
+        }
+
+        std::optional<size_t> picked;
+
+        while (!picked)
+        {
+            picked = occupants[firstCell + size_t(cellRoll(rng))];
+        }
+
+        const Character *pPicked = combatant(*picked);
+
+        if (pPicked != nullptr && isValidMonsterAttackTarget(*pPicked))
+        {
+            return picked;
+        }
+    }
+
+    return std::nullopt;
+}
+
 bool Party::hasAward(uint32_t awardId) const
 {
     if (awardId == 0)
@@ -4370,6 +5938,18 @@ int Party::inventoryItemCount(uint32_t objectDescriptionId, std::optional<size_t
             }
         }
 
+        // MAW's other bags count too: the inventory shows all four, unlike MAW's one bag at a time.
+        for (const auto &[bag, items] : member.rulesetState.storedBags)
+        {
+            for (const InventoryItem &item : items)
+            {
+                if (item.objectDescriptionId == objectDescriptionId)
+                {
+                    totalCount += static_cast<int>(item.quantity);
+                }
+            }
+        }
+
         for (EquipmentSlot slot : EquipmentSlots)
         {
             if (::OpenYAMM::Game::equippedItemId(member.equipment, slot) == objectDescriptionId)
@@ -4406,7 +5986,17 @@ void Party::recordEverOwnedItem(uint32_t objectDescriptionId)
         return;
     }
 
-    m_everOwnedItemIds.insert(objectDescriptionId);
+    const bool firstTime = m_everOwnedItemIds.insert(objectDescriptionId).second;
+
+    if (firstTime && m_statistics.pStatistics != nullptr && m_pItemTable != nullptr)
+    {
+        const ItemDefinition *pItem = m_pItemTable->get(objectDescriptionId);
+
+        if (pItem != nullptr && (pItem->rarity == ItemRarity::Artifact || pItem->rarity == ItemRarity::Relic))
+        {
+            m_statistics.pStatistics->recordArtifactFound(objectDescriptionId, pItem->name);
+        }
+    }
 }
 
 bool Party::hasEverOwnedItem(uint32_t objectDescriptionId) const
@@ -4414,9 +6004,127 @@ bool Party::hasEverOwnedItem(uint32_t objectDescriptionId) const
     return objectDescriptionId != 0 && m_everOwnedItemIds.contains(objectDescriptionId);
 }
 
+void Party::recordChosenMm9RudeRow(uint32_t rudeId, size_t rowIndex)
+{
+    m_chosenMm9RudeRows.insert((uint64_t(rudeId) << 32) | uint32_t(rowIndex));
+}
+
+bool Party::hasChosenMm9RudeRow(uint32_t rudeId, size_t rowIndex) const
+{
+    return m_chosenMm9RudeRows.contains((uint64_t(rudeId) << 32) | uint32_t(rowIndex));
+}
+
+bool Party::hasTeacherLedger(uint32_t continent) const
+{
+    return m_teacherLedgers.contains(continent);
+}
+
+void Party::addTeacherLedger(uint32_t continent)
+{
+    m_teacherLedgers.insert(continent);
+}
+
+const std::unordered_map<uint32_t, std::unordered_map<uint32_t, uint32_t>> &Party::npcTopicOverrides() const
+{
+    return m_npcTopicOverrides;
+}
+
+const std::unordered_map<uint32_t, uint32_t> &Party::npcHouseOverrides() const
+{
+    return m_npcHouseOverrides;
+}
+
+const std::unordered_set<uint32_t> &Party::unavailableNpcIds() const
+{
+    return m_unavailableNpcIds;
+}
+
+void Party::recordExplosiveMix(uint32_t targetItemId, uint32_t heldItemId)
+{
+    m_explosiveMixes.insert((static_cast<uint64_t>(targetItemId) << 32) | heldItemId);
+}
+
+bool Party::isExplosiveMixKnown(uint32_t targetItemId, uint32_t heldItemId) const
+{
+    return m_explosiveMixes.contains((static_cast<uint64_t>(targetItemId) << 32) | heldItemId);
+}
+
+void Party::setSpellField(std::vector<uint32_t> humQBits, std::vector<int> humPercents,
+    std::optional<int> mapPercent)
+{
+    m_humQBits = std::move(humQBits);
+    m_humPercents = std::move(humPercents);
+    m_mapHumPercent = mapPercent;
+}
+
+void Party::setFloorBurn(CombatDamageType type, bool resisted)
+{
+    m_floorBurnType = type;
+    m_floorBurnResisted = resisted;
+}
+
+void Party::setObjectiveQBits(std::vector<uint32_t> qbits)
+{
+    m_objectiveQBits = std::move(qbits);
+}
+
+size_t Party::objectivesDone() const
+{
+    return size_t(std::count_if(m_objectiveQBits.begin(), m_objectiveQBits.end(),
+        [this](uint32_t qbit)
+        {
+            return hasQuestBit(qbit);
+        }));
+}
+
+int Party::spellDamagePercentFor(const Character &caster) const
+{
+    int percent = 100;
+
+    if (m_mapHumPercent)
+    {
+        percent = *m_mapHumPercent;
+    }
+    else if (!m_humPercents.empty())
+    {
+        size_t down = 0;
+
+        for (const uint32_t qbit : m_humQBits)
+        {
+            down += hasQuestBit(qbit) ? 1 : 0;
+        }
+
+        percent = m_humPercents[std::min(down, m_humPercents.size() - 1)];
+    }
+
+    // A null field: only a Null Damper II casts there, at half power.
+    if (percent <= 0)
+    {
+        return caster.equippedItemEffectFlags.contains("NullFieldCasting50") ? 50 : 0;
+    }
+
+    return std::min(100, percent + std::max(0, caster.humPoints));
+}
+
+bool Party::castingBlockedFor(const Character &caster) const
+{
+    return spellDamagePercentFor(caster) <= 0;
+}
+
+void Party::recordIdentifiedItem(uint32_t objectDescriptionId)
+{
+    if (objectDescriptionId != 0) m_identifiedItemIds.insert(objectDescriptionId);
+}
+
+bool Party::hasIdentifiedItem(uint32_t objectDescriptionId) const
+{
+    return objectDescriptionId != 0 && m_identifiedItemIds.contains(objectDescriptionId);
+}
+
 void Party::setHeldItemForQueries(const InventoryItem &item)
 {
     m_heldItemIdForQueries = item.objectDescriptionId;
+    m_heldItemQuantityForQueries = item.quantity;
     recordEverOwnedItemIfRelevant(item);
 }
 
@@ -4425,9 +6133,27 @@ uint32_t Party::heldItemIdForQueries() const
     return m_heldItemIdForQueries;
 }
 
+std::map<uint32_t, uint64_t> Party::carriedItemQuantities() const
+{
+    std::map<uint32_t, uint64_t> result;
+    const auto append = [&](uint32_t id, uint32_t quantity)
+    {
+        if (id != 0 && quantity != 0) result[id] += quantity;
+    };
+    for (const Character &member : m_members)
+    {
+        for (const InventoryItem &item : member.inventory) append(item.objectDescriptionId, item.quantity);
+        for (uint8_t slot = uint8_t(EquipmentSlot::OffHand); slot <= uint8_t(EquipmentSlot::Ring6); ++slot)
+            append(::OpenYAMM::Game::equippedItemId(member.equipment, EquipmentSlot(slot)), 1);
+    }
+    append(m_heldItemIdForQueries, m_heldItemQuantityForQueries);
+    return result;
+}
+
 void Party::clearHeldItemForQueries()
 {
     m_heldItemIdForQueries = 0;
+    m_heldItemQuantityForQueries = 0;
 }
 
 bool Party::hasItemAnywhere(uint32_t objectDescriptionId) const
@@ -4473,7 +6199,24 @@ bool Party::removeItemFromMember(size_t memberIndex, uint32_t objectDescriptionI
 
     for (uint32_t itemIndex = 0; itemIndex < quantity; ++itemIndex)
     {
-        if (!pMember->removeInventoryItem(objectDescriptionId))
+        if (removeFromAnyBag(*pMember, objectDescriptionId))
+        {
+            continue;
+        }
+
+        // Not in a bag: a worn or wielded one goes, as the originals take it from the character too and as the item
+        // checks count it (the Emerald Island judge's longbow: OY-172).
+        bool removedEquipped = false;
+
+        for (uint8_t slotIndex = 0; slotIndex <= uint8_t(EquipmentSlot::Ring6) && !removedEquipped; ++slotIndex)
+        {
+            const EquipmentSlot slot = EquipmentSlot(slotIndex);
+            InventoryItem removedItem = {};
+            removedEquipped = ::OpenYAMM::Game::equippedItemId(pMember->equipment, slot) == objectDescriptionId
+                && takeEquippedItemFromMember(memberIndex, slot, removedItem);
+        }
+
+        if (!removedEquipped)
         {
             return false;
         }
@@ -4510,7 +6253,7 @@ bool Party::tryAutoPlaceItemInMemberInventory(size_t memberIndex, const Inventor
         return false;
     }
 
-    if (!pMember->addInventoryItem(item))
+    if (!addToAnyBag(*pMember, item, rules().items.bagCount(*this)))
     {
         m_lastStatus = "inventory full";
         return false;
@@ -4518,6 +6261,79 @@ bool Party::tryAutoPlaceItemInMemberInventory(size_t memberIndex, const Inventor
 
     recordEverOwnedItemIfRelevant(item);
     m_lastStatus = "item moved";
+    return true;
+}
+
+bool Party::sortMemberInventory(size_t memberIndex)
+{
+    Character *pMember = member(memberIndex);
+
+    if (pMember == nullptr)
+    {
+        return false;
+    }
+
+    std::vector<InventoryItem> items = pMember->inventory;
+
+    for (InventoryItem &item : items)
+    {
+        item.width = std::max<uint8_t>(1, item.width);
+        item.height = std::max<uint8_t>(1, item.height);
+    }
+
+    const auto itemDefinition =
+        [this](const InventoryItem &item) -> const ItemDefinition *
+        {
+            return m_pItemTable != nullptr ? m_pItemTable->get(item.objectDescriptionId) : nullptr;
+        };
+    const auto sizeAndIdentityKey =
+        [](const InventoryItem &item)
+        {
+            return std::tuple(-int(item.height), -int(item.width), item.objectDescriptionId, item.gridX, item.gridY);
+        };
+
+    // Grouped by type for readability; tall items lead each group so columns fill cleanly.
+    std::vector<InventoryItem> groupedItems = items;
+    std::stable_sort(
+        groupedItems.begin(),
+        groupedItems.end(),
+        [&itemDefinition, &sizeAndIdentityKey](const InventoryItem &left, const InventoryItem &right)
+        {
+            const int leftGroup = inventorySortGroup(itemDefinition(left));
+            const int rightGroup = inventorySortGroup(itemDefinition(right));
+
+            if (leftGroup != rightGroup)
+            {
+                return leftGroup < rightGroup;
+            }
+
+            return sizeAndIdentityKey(left) < sizeAndIdentityKey(right);
+        });
+
+    std::optional<std::vector<InventoryItem>> packed = packInventoryItems(groupedItems);
+
+    if (!packed)
+    {
+        // A crowded inventory may only fit when packed purely by size.
+        std::vector<InventoryItem> sizedItems = items;
+        std::stable_sort(
+            sizedItems.begin(),
+            sizedItems.end(),
+            [&sizeAndIdentityKey](const InventoryItem &left, const InventoryItem &right)
+            {
+                return sizeAndIdentityKey(left) < sizeAndIdentityKey(right);
+            });
+        packed = packInventoryItems(sizedItems);
+    }
+
+    if (!packed)
+    {
+        m_lastStatus = "not enough room to sort";
+        return false;
+    }
+
+    pMember->inventory = std::move(*packed);
+    m_lastStatus = "inventory sorted";
     return true;
 }
 
@@ -4571,6 +6387,42 @@ bool Party::takeEquippedItemFromMember(size_t memberIndex, EquipmentSlot slot, I
     return true;
 }
 
+bool Party::replaceEquippedItem(size_t memberIndex, EquipmentSlot slot, const InventoryItem &item)
+{
+    Character *pMember = member(memberIndex);
+
+    if (pMember == nullptr || ::OpenYAMM::Game::equippedItemId(pMember->equipment, slot) == 0)
+    {
+        return false;
+    }
+
+    ::OpenYAMM::Game::equippedItemId(pMember->equipment, slot) = item.objectDescriptionId;
+    copyItemToEquippedRuntimeState(item, equippedItemRuntimeState(pMember->equipmentRuntime, slot));
+    rebuildMagicalBonusesFromBuffs();
+    return true;
+}
+
+bool Party::forceEquippedItem(size_t memberIndex, EquipmentSlot slot, const InventoryItem &item)
+{
+    Character *pMember = member(memberIndex);
+
+    if (pMember == nullptr)
+    {
+        return false;
+    }
+
+    ::OpenYAMM::Game::equippedItemId(pMember->equipment, slot) = item.objectDescriptionId;
+    equippedItemRuntimeState(pMember->equipmentRuntime, slot) = {};
+
+    if (item.objectDescriptionId != 0)
+    {
+        copyItemToEquippedRuntimeState(item, equippedItemRuntimeState(pMember->equipmentRuntime, slot));
+    }
+
+    rebuildMagicalBonusesFromBuffs();
+    return true;
+}
+
 bool Party::tryEquipItemOnMember(
     size_t memberIndex,
     EquipmentSlot targetSlot,
@@ -4594,7 +6446,23 @@ bool Party::tryEquipItemOnMember(
         || !ItemRuntime::characterMeetsClassRestriction(*pMember, *pItemDefinition)
         || !ItemRuntime::characterMeetsRaceRestriction(*pMember, *pItemDefinition))
     {
-        m_lastStatus = "cannot equip";
+        m_lastStatus = pItemDefinition != nullptr
+            ? ItemRuntime::wearRequirementText(*pItemDefinition).value_or(Engine::tr("cannot equip"))
+            : Engine::tr("cannot equip");
+        return false;
+    }
+
+    if (const std::optional<std::string> refusal = rules().items.wearRefusal(item))
+    {
+        m_lastStatus = *refusal;
+        return false;
+    }
+
+    const int requiredLevel = rules().items.levelRequirement(*pItemDefinition, item.rulesetFields);
+
+    if (requiredLevel > 0 && pMember->level < uint32_t(requiredLevel))
+    {
+        m_lastStatus = Engine::tr("Level {level} required", {{"level", requiredLevel}});
         return false;
     }
 
@@ -4617,7 +6485,7 @@ bool Party::tryEquipItemOnMember(
             item.objectDescriptionId,
             displacedSlot))
     {
-        m_lastStatus = "cannot equip";
+        m_lastStatus = Engine::tr("cannot equip");
         return false;
     }
 
@@ -4651,6 +6519,7 @@ bool Party::tryEquipItemOnMember(
     targetRuntimeState.identified = item.identified;
     targetRuntimeState.broken = item.broken;
     targetRuntimeState.stolen = item.stolen;
+    targetRuntimeState.hardened = item.hardened;
     targetRuntimeState.standardEnchantId = item.standardEnchantId;
     targetRuntimeState.standardEnchantPower = item.standardEnchantPower;
     targetRuntimeState.specialEnchantId = item.specialEnchantId;
@@ -4659,6 +6528,8 @@ bool Party::tryEquipItemOnMember(
     targetRuntimeState.currentCharges = item.currentCharges;
     targetRuntimeState.maxCharges = item.maxCharges;
     targetRuntimeState.temporaryBonusRemainingSeconds = item.temporaryBonusRemainingSeconds;
+    targetRuntimeState.rulesetFields = item.rulesetFields;
+    targetRuntimeState.workshopModId = item.workshopModId;
 
     if (targetRuntimeState.rarity == ItemRarity::Common && ItemRuntime::isRareItem(*pItemDefinition))
     {
@@ -4724,6 +6595,65 @@ uint32_t Party::equippedItemId(size_t memberIndex, EquipmentSlot slot) const
     return pMember != nullptr ? ::OpenYAMM::Game::equippedItemId(pMember->equipment, slot) : 0;
 }
 
+bool Party::memberCanWearArmor(size_t memberIndex) const
+{
+    const Character *pMember = member(memberIndex);
+    const CharacterDollEntry *pDollEntry = pMember != nullptr && m_pCharacterDollTable != nullptr
+        ? m_pCharacterDollTable->getCharacter(pMember->characterDataId)
+        : nullptr;
+    const CharacterDollTypeEntry *pDollType =
+        pDollEntry != nullptr ? m_pCharacterDollTable->getDollType(pDollEntry->dollTypeId) : nullptr;
+    return pDollType == nullptr || pDollType->canEquipArmor;
+}
+
+namespace
+{
+constexpr std::array<EquipmentSlot, 16> WorkshopModSlots = {EquipmentSlot::MainHand, EquipmentSlot::Bow,
+    EquipmentSlot::OffHand, EquipmentSlot::Armor, EquipmentSlot::Helm, EquipmentSlot::Cloak, EquipmentSlot::Belt,
+    EquipmentSlot::Gauntlets, EquipmentSlot::Boots, EquipmentSlot::Amulet, EquipmentSlot::Ring1, EquipmentSlot::Ring2,
+    EquipmentSlot::Ring3, EquipmentSlot::Ring4, EquipmentSlot::Ring5, EquipmentSlot::Ring6};
+}
+
+uint32_t Party::workshopModTarget(size_t memberIndex, uint16_t modId) const
+{
+    const WorkshopModDefinition *pMod = m_pItemTable != nullptr ? m_pItemTable->workshopMod(modId) : nullptr;
+
+    if (pMod == nullptr)
+    {
+        return 0;
+    }
+
+    for (const EquipmentSlot slot : WorkshopModSlots)
+    {
+        const uint32_t itemId = equippedItemId(memberIndex, slot);
+        const ItemDefinition *pItem = itemId != 0 ? m_pItemTable->get(itemId) : nullptr;
+
+        if (pItem != nullptr && m_pItemTable->workshopModFits(*pMod, *pItem))
+        {
+            return itemId;
+        }
+    }
+
+    return 0;
+}
+
+uint32_t Party::fitWorkshopMod(size_t memberIndex, uint16_t modId)
+{
+    const uint32_t itemId = workshopModTarget(memberIndex, modId);
+
+    for (const EquipmentSlot slot : WorkshopModSlots)
+    {
+        if (itemId != 0 && equippedItemId(memberIndex, slot) == itemId)
+        {
+            equippedItemRuntimeMutable(memberIndex, slot)->workshopModId = modId;
+            rebuildMagicalBonusesFromBuffs();
+            break;
+        }
+    }
+
+    return itemId;
+}
+
 const EquippedItemRuntimeState *Party::equippedItemRuntime(size_t memberIndex, EquipmentSlot slot) const
 {
     const Character *pMember = member(memberIndex);
@@ -4774,7 +6704,8 @@ bool Party::isPartyWideUtilitySkill(std::string_view skillName)
         || canonical == "IdentifyItem"
         || canonical == "IdentifyMonster"
         || canonical == "Alchemy"
-        || canonical == "Perception";
+        || canonical == "Perception"
+        || canonical == "Hacking";
 }
 
 std::optional<size_t> Party::bestPartyWideUtilitySkillMemberIndex(
@@ -4833,7 +6764,8 @@ int Party::bestPartyWideUtilitySkillValue(std::string_view skillName, bool requi
 
 bool Party::canIdentifyItem(const ItemDefinition &itemDefinition) const
 {
-    if (hiredNpcHasProfession(m_hiredNpcFollowers, 4))
+    // MM9's Cleirach A'Lyrae: Identify Item never fails for lack of skill (cshell@0x10011970).
+    if (hiredNpcHasProfession(activeHiredNpcFollowers(), 4) || mm9HirelingPassives().identifyAlways)
     {
         return true;
     }
@@ -4844,7 +6776,9 @@ bool Party::canIdentifyItem(const ItemDefinition &itemDefinition) const
 
 bool Party::canRepairItem(const ItemDefinition &itemDefinition) const
 {
-    if (hiredNpcCanRepairItemKind(m_hiredNpcFollowers, itemDefinition.equipStat))
+    // MM9's Alvar the Clumsy: Repair Item never fails for lack of skill (cshell@0x10011aa0).
+    if (hiredNpcCanRepairItemKind(activeHiredNpcFollowers(), itemDefinition.equipStat)
+        || mm9HirelingPassives().repairAlways)
     {
         return true;
     }
@@ -4873,7 +6807,7 @@ bool Party::tryIdentifyMemberInventoryItem(
 
     if (pItem == nullptr)
     {
-        statusText = "No item there.";
+        statusText = Engine::tr("No item there.");
         logItemInteractionResult(
             "identify",
             pInspector,
@@ -4889,7 +6823,7 @@ bool Party::tryIdentifyMemberInventoryItem(
 
     if (pItemDefinition == nullptr)
     {
-        statusText = "Unavailable.";
+        statusText = Engine::tr("Unavailable.");
         logItemInteractionResult(
             "identify",
             pInspector,
@@ -4903,7 +6837,7 @@ bool Party::tryIdentifyMemberInventoryItem(
 
     if (pItem->identified || !ItemRuntime::requiresIdentification(*pItemDefinition))
     {
-        statusText = "Already identified.";
+        statusText = Engine::tr("Already identified.");
         logItemInteractionResult(
             "identify",
             pInspector,
@@ -4917,7 +6851,7 @@ bool Party::tryIdentifyMemberInventoryItem(
 
     if (!canIdentifyItem(*pItemDefinition))
     {
-        statusText = "Identify Failed";
+        statusText = Engine::tr("Identify Failed");
         logItemInteractionResult(
             "identify",
             pInspector,
@@ -4933,6 +6867,7 @@ bool Party::tryIdentifyMemberInventoryItem(
 
     if (identified)
     {
+        recordIdentifiedItem(pItemDefinition->itemId);
         m_lastStatus = "item identified";
     }
 
@@ -4969,7 +6904,7 @@ bool Party::tryRepairMemberInventoryItem(
 
     if (pItem == nullptr)
     {
-        statusText = "No item there.";
+        statusText = Engine::tr("No item there.");
         logItemInteractionResult(
             "repair",
             pInspector,
@@ -4985,7 +6920,7 @@ bool Party::tryRepairMemberInventoryItem(
 
     if (pItemDefinition == nullptr)
     {
-        statusText = "Unavailable.";
+        statusText = Engine::tr("Unavailable.");
         logItemInteractionResult(
             "repair",
             pInspector,
@@ -4999,7 +6934,7 @@ bool Party::tryRepairMemberInventoryItem(
 
     if (!pItem->broken)
     {
-        statusText = "Nothing to repair.";
+        statusText = Engine::tr("Nothing to repair.");
         logItemInteractionResult(
             "repair",
             pInspector,
@@ -5013,7 +6948,7 @@ bool Party::tryRepairMemberInventoryItem(
 
     if (!canRepairItem(*pItemDefinition))
     {
-        statusText = "Repair Failed";
+        statusText = Engine::tr("Repair Failed");
         logItemInteractionResult(
             "repair",
             pInspector,
@@ -5063,7 +6998,7 @@ bool Party::identifyMemberInventoryItem(
 
     if (pItem == nullptr)
     {
-        statusText = "No item there.";
+        statusText = Engine::tr("No item there.");
         logItemInteractionResult(
             "identify",
             nullptr,
@@ -5079,7 +7014,7 @@ bool Party::identifyMemberInventoryItem(
 
     if (pItemDefinition == nullptr)
     {
-        statusText = "Unavailable.";
+        statusText = Engine::tr("Unavailable.");
         logItemInteractionResult(
             "identify",
             nullptr,
@@ -5095,6 +7030,7 @@ bool Party::identifyMemberInventoryItem(
 
     if (identified)
     {
+        recordIdentifiedItem(pItemDefinition->itemId);
         m_lastStatus = "item identified";
     }
 
@@ -5128,7 +7064,7 @@ bool Party::repairMemberInventoryItem(
 
     if (pItem == nullptr)
     {
-        statusText = "No item there.";
+        statusText = Engine::tr("No item there.");
         logItemInteractionResult(
             "repair",
             nullptr,
@@ -5144,7 +7080,7 @@ bool Party::repairMemberInventoryItem(
 
     if (pItemDefinition == nullptr)
     {
-        statusText = "Unavailable.";
+        statusText = Engine::tr("Unavailable.");
         logItemInteractionResult(
             "repair",
             nullptr,
@@ -5196,7 +7132,7 @@ bool Party::tryIdentifyEquippedItem(
 
     if (itemId == 0)
     {
-        statusText = "No item there.";
+        statusText = Engine::tr("No item there.");
         logItemInteractionResult(
             "identify",
             pInspector,
@@ -5213,7 +7149,7 @@ bool Party::tryIdentifyEquippedItem(
 
     if (pItemDefinition == nullptr)
     {
-        statusText = "Unavailable.";
+        statusText = Engine::tr("Unavailable.");
         logItemInteractionResult(
             "identify",
             pInspector,
@@ -5227,7 +7163,7 @@ bool Party::tryIdentifyEquippedItem(
 
     if (runtimeState.identified || !ItemRuntime::requiresIdentification(*pItemDefinition))
     {
-        statusText = "Already identified.";
+        statusText = Engine::tr("Already identified.");
         logItemInteractionResult(
             "identify",
             pInspector,
@@ -5241,7 +7177,7 @@ bool Party::tryIdentifyEquippedItem(
 
     if (!canIdentifyItem(*pItemDefinition))
     {
-        statusText = "Identify Failed";
+        statusText = Engine::tr("Identify Failed");
         logItemInteractionResult(
             "identify",
             pInspector,
@@ -5257,6 +7193,7 @@ bool Party::tryIdentifyEquippedItem(
 
     if (identified)
     {
+        recordIdentifiedItem(pItemDefinition->itemId);
         m_lastStatus = "item identified";
     }
 
@@ -5292,7 +7229,7 @@ bool Party::tryRepairEquippedItem(
 
     if (itemId == 0)
     {
-        statusText = "No item there.";
+        statusText = Engine::tr("No item there.");
         logItemInteractionResult(
             "repair",
             pInspector,
@@ -5309,7 +7246,7 @@ bool Party::tryRepairEquippedItem(
 
     if (pItemDefinition == nullptr)
     {
-        statusText = "Unavailable.";
+        statusText = Engine::tr("Unavailable.");
         logItemInteractionResult(
             "repair",
             pInspector,
@@ -5323,7 +7260,7 @@ bool Party::tryRepairEquippedItem(
 
     if (!runtimeState.broken)
     {
-        statusText = "Nothing to repair.";
+        statusText = Engine::tr("Nothing to repair.");
         logItemInteractionResult(
             "repair",
             pInspector,
@@ -5337,7 +7274,7 @@ bool Party::tryRepairEquippedItem(
 
     if (!canRepairItem(*pItemDefinition))
     {
-        statusText = "Repair Failed";
+        statusText = Engine::tr("Repair Failed");
         logItemInteractionResult(
             "repair",
             pInspector,
@@ -5383,7 +7320,7 @@ bool Party::identifyEquippedItem(size_t memberIndex, EquipmentSlot slot, std::st
 
     if (itemId == 0)
     {
-        statusText = "No item there.";
+        statusText = Engine::tr("No item there.");
         logItemInteractionResult(
             "identify",
             nullptr,
@@ -5400,7 +7337,7 @@ bool Party::identifyEquippedItem(size_t memberIndex, EquipmentSlot slot, std::st
 
     if (pItemDefinition == nullptr)
     {
-        statusText = "Unavailable.";
+        statusText = Engine::tr("Unavailable.");
         logItemInteractionResult(
             "identify",
             nullptr,
@@ -5416,6 +7353,7 @@ bool Party::identifyEquippedItem(size_t memberIndex, EquipmentSlot slot, std::st
 
     if (identified)
     {
+        recordIdentifiedItem(pItemDefinition->itemId);
         m_lastStatus = "item identified";
     }
 
@@ -5445,7 +7383,7 @@ bool Party::repairEquippedItem(size_t memberIndex, EquipmentSlot slot, std::stri
 
     if (itemId == 0)
     {
-        statusText = "No item there.";
+        statusText = Engine::tr("No item there.");
         logItemInteractionResult(
             "repair",
             nullptr,
@@ -5462,7 +7400,7 @@ bool Party::repairEquippedItem(size_t memberIndex, EquipmentSlot slot, std::stri
 
     if (pItemDefinition == nullptr)
     {
-        statusText = "Unavailable.";
+        statusText = Engine::tr("Unavailable.");
         logItemInteractionResult(
             "repair",
             nullptr,
@@ -5494,7 +7432,7 @@ bool Party::repairEquippedItem(size_t memberIndex, EquipmentSlot slot, std::stri
     return repaired;
 }
 
-bool Party::setMemberClassName(size_t memberIndex, const std::string &className)
+bool Party::setMemberClassName(size_t memberIndex, const std::string &className, bool classOnly)
 {
     Character *pMember = member(memberIndex);
 
@@ -5506,15 +7444,145 @@ bool Party::setMemberClassName(size_t memberIndex, const std::string &className)
     pMember->className = canonicalClassName(className);
     pMember->role = normalizeRoleName(pMember->className);
 
-    if (pMember->className == "Lich")
+    if (pMember->className == "Lich" && !classOnly)
     {
         applyLichIdentity(*pMember, m_pCharacterDollTable);
         applyLichState(*pMember);
     }
 
+    rules().skills.afterClassChanged(*pMember, m_pClassSkillTable);
     GameMechanics::refreshCharacterBaseResources(*pMember, false, m_pClassMultiplierTable);
     m_lastStatus = "class changed";
     return true;
+}
+
+void Party::grantClassChangeMasteries()
+{
+    for (Character &member : m_members)
+    {
+        rules().skills.afterClassChanged(member, m_pClassSkillTable);
+        GameMechanics::refreshCharacterBaseResources(member, false, m_pClassMultiplierTable);
+    }
+
+    for (AdventurersInnMember &member : m_adventurersInnMembers)
+    {
+        rules().skills.afterClassChanged(member.character, m_pClassSkillTable);
+    }
+}
+
+void Party::assignSpecialItemEnchants()
+{
+    if (m_pItemTable == nullptr)
+    {
+        return;
+    }
+
+    const auto assignItem =
+        [this](InventoryItem &item)
+        {
+            if (const ItemDefinition *pDefinition = m_pItemTable->get(item.objectDescriptionId))
+            {
+                ItemGenerator::assignSpecialItemEnchants(item, *pDefinition);
+            }
+        };
+    const auto assignCharacter =
+        [this, &assignItem](Character &character)
+        {
+            for (InventoryItem &item : character.inventory)
+            {
+                assignItem(item);
+            }
+
+            for (auto &[bag, items] : character.rulesetState.storedBags)
+            {
+                for (InventoryItem &item : items)
+                {
+                    assignItem(item);
+                }
+            }
+
+            static constexpr std::array<std::pair<uint32_t CharacterEquipment::*,
+                EquippedItemRuntimeState CharacterEquipmentRuntimeState::*>, 16> Slots = {{
+                {&CharacterEquipment::offHand, &CharacterEquipmentRuntimeState::offHand},
+                {&CharacterEquipment::mainHand, &CharacterEquipmentRuntimeState::mainHand},
+                {&CharacterEquipment::bow, &CharacterEquipmentRuntimeState::bow},
+                {&CharacterEquipment::armor, &CharacterEquipmentRuntimeState::armor},
+                {&CharacterEquipment::helm, &CharacterEquipmentRuntimeState::helm},
+                {&CharacterEquipment::belt, &CharacterEquipmentRuntimeState::belt},
+                {&CharacterEquipment::cloak, &CharacterEquipmentRuntimeState::cloak},
+                {&CharacterEquipment::gauntlets, &CharacterEquipmentRuntimeState::gauntlets},
+                {&CharacterEquipment::boots, &CharacterEquipmentRuntimeState::boots},
+                {&CharacterEquipment::amulet, &CharacterEquipmentRuntimeState::amulet},
+                {&CharacterEquipment::ring1, &CharacterEquipmentRuntimeState::ring1},
+                {&CharacterEquipment::ring2, &CharacterEquipmentRuntimeState::ring2},
+                {&CharacterEquipment::ring3, &CharacterEquipmentRuntimeState::ring3},
+                {&CharacterEquipment::ring4, &CharacterEquipmentRuntimeState::ring4},
+                {&CharacterEquipment::ring5, &CharacterEquipmentRuntimeState::ring5},
+                {&CharacterEquipment::ring6, &CharacterEquipmentRuntimeState::ring6},
+            }};
+
+            for (const auto &[pItemId, pState] : Slots)
+            {
+                EquippedItemRuntimeState &state = character.equipmentRuntime.*pState;
+                const ItemDefinition *pDefinition = m_pItemTable->get(character.equipment.*pItemId);
+
+                if (pDefinition == nullptr || state.standardEnchantId != 0 || state.specialEnchantId != 0)
+                {
+                    continue;
+                }
+
+                InventoryItem item = {};
+                ItemGenerator::assignSpecialItemEnchants(item, *pDefinition);
+                state.standardEnchantId = item.standardEnchantId;
+                state.standardEnchantPower = item.standardEnchantPower;
+                state.specialEnchantId = item.specialEnchantId;
+            }
+        };
+
+    for (Character &member : m_members)
+    {
+        assignCharacter(member);
+    }
+
+    for (AdventurersInnMember &member : m_adventurersInnMembers)
+    {
+        assignCharacter(member.character);
+    }
+}
+
+void Party::arrangeDefaultFormationByHealth()
+{
+    normalizeFormationCells();
+
+    for (size_t memberIndex = 0; memberIndex < m_members.size(); ++memberIndex)
+    {
+        if (m_memberFormationCells[memberIndex] != int32_t(memberIndex))
+        {
+            return;
+        }
+    }
+
+    // The same cells (0 .. members - 1), so the hirelings' cells after them stay free of the members.
+    std::vector<size_t> order(m_members.size());
+    std::iota(order.begin(), order.end(), size_t{0});
+    std::stable_sort(order.begin(), order.end(),
+        [this](size_t left, size_t right)
+        {
+            return effectiveMaximumHealth(m_members[left]) > effectiveMaximumHealth(m_members[right]);
+        });
+
+    for (size_t rank = 0; rank < order.size(); ++rank)
+    {
+        m_memberFormationCells[order[rank]] = int32_t(rank);
+    }
+}
+
+void Party::refreshMemberResources(size_t memberIndex)
+{
+    if (Character *pMember = member(memberIndex))
+    {
+        GameMechanics::refreshCharacterBaseResources(*pMember, false, m_pClassMultiplierTable);
+    }
 }
 
 bool Party::applyLichTransformation(size_t memberIndex)
@@ -5530,6 +7598,7 @@ bool Party::applyLichTransformation(size_t memberIndex)
     pMember->role = normalizeRoleName(pMember->className);
     applyLichIdentity(*pMember, m_pCharacterDollTable);
     applyLichState(*pMember);
+    rules().skills.afterClassChanged(*pMember, m_pClassSkillTable);
     GameMechanics::refreshCharacterBaseResources(*pMember, false, m_pClassMultiplierTable);
     m_lastStatus = "lich transformation applied";
     return true;
@@ -5681,6 +7750,7 @@ bool Party::setActiveMemberIndex(size_t memberIndex)
     }
 
     m_activeMemberIndex = memberIndex;
+    m_activeHirelingIndex.reset();
     return true;
 }
 
@@ -5759,13 +7829,13 @@ void Party::applyWeeklyItemEffects()
             applyDamageToMember(
                 memberIndex,
                 std::max(1, currentMaximumHealth(member) / 10),
-                "An equipped relic exacts its weekly price");
+                Engine::tr("An equipped relic exacts its weekly price"));
         }
     }
 
     if (grantWeeklyGold)
     {
-        addGold(1000);
+        addGold(1000, GoldReason::Other);
     }
 }
 
@@ -5779,11 +7849,36 @@ void Party::advanceTimedStates(float deltaSeconds)
     bool buffsChanged = false;
     bool itemsChanged = false;
     constexpr float GameSecondsPerWeek = 7.0f * 24.0f * 60.0f * 60.0f;
-    m_itemEffectElapsedGameSeconds += deltaSeconds;
+    const float previousRegenerationTick =
+        std::floor(m_periodicEffectElapsedGameSeconds / OeFiveGameMinuteTickGameSeconds);
+    m_periodicEffectElapsedGameSeconds += deltaSeconds;
+    // The saved periodic clock preserves the five-minute tick phase; a week contains whole ticks.
+    const int regenerationTicks = static_cast<int>(
+        std::floor(m_periodicEffectElapsedGameSeconds / OeFiveGameMinuteTickGameSeconds) - previousRegenerationTick);
 
-    while (m_itemEffectElapsedGameSeconds >= GameSecondsPerWeek)
+    if (regenerationTicks > 0)
     {
-        m_itemEffectElapsedGameSeconds -= GameSecondsPerWeek;
+        for (size_t memberIndex = 0; memberIndex < m_members.size(); ++memberIndex)
+        {
+            Character &member = m_members[memberIndex];
+            const int spellPointsPerTick = rules().skills.meditationSpellPointsPerTick(member);
+
+            if (spellPointsPerTick <= 0
+                || member.conditions.test(static_cast<size_t>(CharacterCondition::Dead))
+                || member.conditions.test(static_cast<size_t>(CharacterCondition::Petrified))
+                || member.conditions.test(static_cast<size_t>(CharacterCondition::Eradicated)))
+            {
+                continue;
+            }
+
+            member.spellPoints = std::min(std::max(member.spellPoints, reachableMaximumSpellPoints(memberIndex)),
+                member.spellPoints + regenerationTicks * spellPointsPerTick);
+        }
+    }
+
+    while (m_periodicEffectElapsedGameSeconds >= GameSecondsPerWeek)
+    {
+        m_periodicEffectElapsedGameSeconds -= GameSecondsPerWeek;
         applyWeeklyItemEffects();
     }
 
@@ -5797,24 +7892,39 @@ void Party::advanceTimedStates(float deltaSeconds)
         const float previousRemainingSeconds = buff.remainingSeconds;
         buff.remainingSeconds = std::max(0.0f, buff.remainingSeconds - deltaSeconds);
 
+        if (buff.spellId == 0 && potionExpiryWarningStarts(previousRemainingSeconds, buff.remainingSeconds))
+        {
+            ExpiringPotionEffect expiring;
+            expiring.kind = ExpiringPotionEffect::Kind::PartyBuff;
+            expiring.partyBuff = PartyBuffId(&buff - m_partyBuffs.data());
+            m_expiringPotionEffects.push_back(expiring);
+        }
+
         if (previousRemainingSeconds > 0.0f && buff.remainingSeconds <= 0.0f)
         {
             buffsChanged = true;
 
+            // The hirelings share the party's haste and its weakness.
             if (isSpellId(buff.spellId, SpellId::Haste))
             {
-                for (Character &member : m_members)
+                for (size_t memberIndex = 0; memberIndex < combatantCount(); ++memberIndex)
                 {
-                    const size_t memberIndex = static_cast<size_t>(&member - m_members.data());
                     applyMemberCondition(memberIndex, CharacterCondition::Weak);
                 }
             }
         }
     }
 
-    for (size_t memberIndex = 0; memberIndex < m_members.size() && memberIndex < m_characterBuffs.size(); ++memberIndex)
+    for (size_t memberIndex = 0; memberIndex < combatantCount(); ++memberIndex)
     {
-        for (CharacterBuffState &buff : m_characterBuffs[memberIndex])
+        std::array<CharacterBuffState, CharacterBuffCount> *pBuffs = combatantBuffs(memberIndex);
+
+        if (pBuffs == nullptr)
+        {
+            continue;
+        }
+
+        for (CharacterBuffState &buff : *pBuffs)
         {
             if (!buff.active())
             {
@@ -5824,6 +7934,15 @@ void Party::advanceTimedStates(float deltaSeconds)
             const float previousRemainingSeconds = buff.remainingSeconds;
             buff.remainingSeconds = std::max(0.0f, buff.remainingSeconds - deltaSeconds);
 
+            if (buff.spellId == 0 && potionExpiryWarningStarts(previousRemainingSeconds, buff.remainingSeconds))
+            {
+                ExpiringPotionEffect expiring;
+                expiring.kind = ExpiringPotionEffect::Kind::CharacterBuff;
+                expiring.memberIndex = memberIndex;
+                expiring.characterBuff = CharacterBuffId(&buff - pBuffs->data());
+                m_expiringPotionEffects.push_back(expiring);
+            }
+
             if (isSpellId(buff.spellId, SpellId::Regeneration))
             {
                 buff.periodicAccumulatorSeconds += deltaSeconds;
@@ -5832,7 +7951,7 @@ void Party::advanceTimedStates(float deltaSeconds)
                 while (buff.periodicAccumulatorSeconds >= OeFiveGameMinuteTickGameSeconds)
                 {
                     buff.periodicAccumulatorSeconds -= OeFiveGameMinuteTickGameSeconds;
-                    healMember(memberIndex, healPerTick);
+                    healMember(memberIndex, healPerTick, true);
                 }
             }
 
@@ -5840,6 +7959,12 @@ void Party::advanceTimedStates(float deltaSeconds)
             {
                 buffsChanged = true;
                 buff.periodicAccumulatorSeconds = 0.0f;
+
+                // A Haste potion leaves its drinker weak, like the spell.
+                if (&buff == &(*pBuffs)[static_cast<size_t>(CharacterBuffId::Haste)])
+                {
+                    applyMemberCondition(memberIndex, CharacterCondition::Weak);
+                }
             }
         }
     }
@@ -5887,6 +8012,30 @@ void Party::advanceTimedStates(float deltaSeconds)
 
     for (Character &member : m_members)
     {
+        // Potions' immunities, skill levels and auras run out.
+        const size_t potionEffectsBefore = member.rulesetState.potionEffects.size();
+        const size_t memberIndex = size_t(&member - m_members.data());
+        std::erase_if(
+            member.rulesetState.potionEffects,
+            [this, deltaSeconds, memberIndex](TimedPotionEffect &effect)
+            {
+                const float previousRemainingSeconds = effect.remainingSeconds;
+                effect.remainingSeconds -= deltaSeconds;
+
+                if (potionExpiryWarningStarts(previousRemainingSeconds, effect.remainingSeconds))
+                {
+                    ExpiringPotionEffect expiring;
+                    expiring.kind = ExpiringPotionEffect::Kind::RulesetEffect;
+                    expiring.memberIndex = memberIndex;
+                    expiring.rulesetEffect = effect.kind;
+                    expiring.rulesetEffectKey = effect.key;
+                    m_expiringPotionEffects.push_back(expiring);
+                }
+
+                return effect.remainingSeconds <= 0;
+            });
+        buffsChanged = buffsChanged || member.rulesetState.potionEffects.size() != potionEffectsBefore;
+
         for (TimedPrimaryStatBonus &bonus : member.timedPrimaryStatBonuses)
         {
             if (bonus.remainingSeconds <= 0.0f)
@@ -5944,7 +8093,7 @@ void Party::advanceTimedStates(float deltaSeconds)
         rebuildMagicalBonusesFromBuffs();
     }
 
-    if (!canSelectMemberInGameplay(m_activeMemberIndex))
+    if (!canSelectCombatantInGameplay(activeCombatantIndex()))
     {
         switchToNextReadyMember();
     }
@@ -5965,16 +8114,52 @@ void Party::updateRecovery(float deltaSeconds, float progressScale)
         const float recoveryDelta =
             deltaSeconds * clampedProgressScale * std::max(0.0f, member.recoveryProgressMultiplier);
         member.recoverySecondsRemaining = std::max(0.0f, member.recoverySecondsRemaining - recoveryDelta);
+    }
 
-        if (member.healthRegenPerSecond != 0.0f)
+    // The hirelings recover as the members do (haste and slow through recoveryProgressMultiplier).
+    for (Mm9PartyHireling &hireling : m_mm9Hirelings)
+    {
+        Character &character = hireling.character;
+        const float recoveryDelta =
+            deltaSeconds * clampedProgressScale * std::max(0.0f, character.recoveryProgressMultiplier);
+        character.recoverySecondsRemaining = std::max(0.0f, character.recoverySecondsRemaining - recoveryDelta);
+    }
+
+    updateRegeneration(deltaSeconds);
+}
+
+void Party::updateRegeneration(float deltaSeconds)
+{
+    if (deltaSeconds <= 0.0f)
+    {
+        return;
+    }
+
+    updatePersonalShields(deltaSeconds);
+
+    for (size_t memberIndex = 0; memberIndex < m_members.size(); ++memberIndex)
+    {
+        Character &member = m_members[memberIndex];
+
+        // The dead, the eradicated and stone do not regenerate (OE Engine::_regenerateHp, MMerge MiscTweaks).
+        const bool regenerationBlocked = isDeadOrEradicated(member)
+            || member.conditions.test(static_cast<size_t>(CharacterCondition::Petrified));
+
+        if (regenerationBlocked)
+        {
+            member.healthRegenAccumulator = 0.0f;
+        }
+        else if (member.healthRegenPerSecond != 0.0f)
         {
             member.healthRegenAccumulator += member.healthRegenPerSecond * deltaSeconds;
             const int healthAmount = static_cast<int>(member.healthRegenAccumulator);
 
+            // Regeneration stops at what the auras leave, or the next reservation clamp would take it back.
             if (healthAmount > 0)
             {
                 member.healthRegenAccumulator -= static_cast<float>(healthAmount);
-                member.health = std::min(currentMaximumHealth(member), member.health + healthAmount);
+                member.health = std::min(
+                    std::max(member.health, reachableMaximumHealth(memberIndex)), member.health + healthAmount);
             }
             else if (healthAmount < 0)
             {
@@ -5991,7 +8176,9 @@ void Party::updateRecovery(float deltaSeconds, float progressScale)
             if (spellAmount > 0)
             {
                 member.spellRegenAccumulator -= static_cast<float>(spellAmount);
-                member.spellPoints = std::min(currentMaximumSpellPoints(member), member.spellPoints + spellAmount);
+                member.spellPoints = std::min(
+                    std::max(member.spellPoints, reachableMaximumSpellPoints(memberIndex)),
+                    member.spellPoints + spellAmount);
             }
             else if (spellAmount < 0)
             {
@@ -6004,14 +8191,17 @@ void Party::updateRecovery(float deltaSeconds, float progressScale)
 
 bool Party::applyRecoveryToMember(size_t memberIndex, float recoverySeconds)
 {
-    Character *pMember = member(memberIndex);
+    Character *pMember = combatant(memberIndex);
 
     if (pMember == nullptr)
     {
         return false;
     }
 
-    pMember->recoverySecondsRemaining = std::max(pMember->recoverySecondsRemaining, std::max(0.0f, recoverySeconds));
+    const float applied = std::max(0.0f, recoverySeconds);
+    pMember->recoveryTotalSeconds = pMember->recoverySecondsRemaining > 0.0f
+        ? std::max(pMember->recoveryTotalSeconds, applied) : applied;
+    pMember->recoverySecondsRemaining = std::max(pMember->recoverySecondsRemaining, applied);
     return true;
 }
 
@@ -6027,17 +8217,19 @@ bool Party::switchToNextReadyMember()
         return false;
     }
 
-    const size_t currentIndex = std::min(m_activeMemberIndex, m_members.size() - 1);
+    // The members, then the hirelings (MM9's rotation runs over every slot); without hirelings, the members only.
+    const size_t count = actingCombatantCount();
+    const size_t currentIndex = activeCombatantIndex();
 
-    for (size_t offset = 1; offset <= m_members.size(); ++offset)
+    for (size_t offset = 1; offset <= count; ++offset)
     {
-        const size_t candidateIndex = (currentIndex + offset) % m_members.size();
+        const size_t candidateIndex = (currentIndex + offset) % count;
 
-        const Character *pCandidate = member(candidateIndex);
+        const Character *pCandidate = combatant(candidateIndex);
 
         if (pCandidate != nullptr && GameMechanics::canTakeGameplayAction(*pCandidate))
         {
-            m_activeMemberIndex = candidateIndex;
+            setActiveCombatantIndex(candidateIndex);
             return true;
         }
     }
@@ -6054,6 +8246,15 @@ void Party::applyPartyBuff(
     SkillMastery skillMastery,
     uint32_t casterMemberIndex)
 {
+    // MM9 has no Fly: whatever grants it there (the Dragon's Flight, a scroll, a potion, an event's buff) grants Fleet
+    // Foot, with MM9's speed and, from a skill, MM9's duration (the user, 2026-11-09; game/party/WorldSpells.h).
+    if (buffId == PartyBuffId::Fly && m_fleetFootWorld)
+    {
+        buffId = PartyBuffId::FleetFoot;
+        durationSeconds = skillLevel > 0 ? fleetFootDurationSeconds(skillLevel, skillMastery) : durationSeconds;
+        power = fleetFootSpeedPercent(skillMastery);
+    }
+
     PartyBuffState &buff = m_partyBuffs[static_cast<size_t>(buffId)];
     buff.remainingSeconds = std::max(buff.remainingSeconds, std::max(0.0f, durationSeconds));
     buff.spellId = spellId;
@@ -6074,12 +8275,14 @@ void Party::applyCharacterBuff(
     SkillMastery skillMastery,
     uint32_t casterMemberIndex)
 {
-    if (memberIndex >= m_members.size() || memberIndex >= m_characterBuffs.size())
+    std::array<CharacterBuffState, CharacterBuffCount> *pBuffs = combatantBuffs(memberIndex);
+
+    if (pBuffs == nullptr)
     {
         return;
     }
 
-    CharacterBuffState &buff = m_characterBuffs[memberIndex][static_cast<size_t>(buffId)];
+    CharacterBuffState &buff = (*pBuffs)[static_cast<size_t>(buffId)];
     buff.remainingSeconds = std::max(buff.remainingSeconds, std::max(0.0f, durationSeconds));
     buff.spellId = spellId;
     buff.skillLevel = skillLevel;
@@ -6113,12 +8316,14 @@ void Party::clearPartyBuff(PartyBuffId buffId)
 
 void Party::clearCharacterBuff(size_t memberIndex, CharacterBuffId buffId)
 {
-    if (memberIndex >= m_members.size() || memberIndex >= m_characterBuffs.size())
+    std::array<CharacterBuffState, CharacterBuffCount> *pBuffs = combatantBuffs(memberIndex);
+
+    if (pBuffs == nullptr)
     {
         return;
     }
 
-    m_characterBuffs[memberIndex][static_cast<size_t>(buffId)] = {};
+    (*pBuffs)[static_cast<size_t>(buffId)] = {};
     rebuildMagicalBonusesFromBuffs();
 }
 
@@ -6133,6 +8338,7 @@ bool Party::clearDispellableBuffs()
              PartyBuffId::DetectLife,
              PartyBuffId::WaterWalk,
              PartyBuffId::Fly,
+             PartyBuffId::FleetFoot,
              PartyBuffId::Invisibility,
              PartyBuffId::Stoneskin,
              PartyBuffId::DayOfGods,
@@ -6155,13 +8361,7 @@ bool Party::clearDispellableBuffs()
 
     for (size_t memberIndex = 0; memberIndex < m_members.size(); ++memberIndex)
     {
-        for (CharacterBuffId buffId : {
-                 CharacterBuffId::Bless,
-                 CharacterBuffId::Fate,
-                 CharacterBuffId::Preservation,
-                 CharacterBuffId::Regeneration,
-                 CharacterBuffId::Hammerhands,
-                 CharacterBuffId::PainReflection})
+        for (CharacterBuffId buffId : DispellableCharacterBuffs)
         {
             const size_t buffIndex = static_cast<size_t>(buffId);
             cleared = m_characterBuffs[memberIndex][buffIndex].active() || cleared;
@@ -6186,6 +8386,7 @@ bool Party::hasDispellableBuffs() const
              PartyBuffId::DetectLife,
              PartyBuffId::WaterWalk,
              PartyBuffId::Fly,
+             PartyBuffId::FleetFoot,
              PartyBuffId::Invisibility,
              PartyBuffId::Stoneskin,
              PartyBuffId::DayOfGods,
@@ -6209,13 +8410,7 @@ bool Party::hasDispellableBuffs() const
 
     for (size_t memberIndex = 0; memberIndex < m_members.size(); ++memberIndex)
     {
-        for (CharacterBuffId buffId : {
-                 CharacterBuffId::Bless,
-                 CharacterBuffId::Fate,
-                 CharacterBuffId::Preservation,
-                 CharacterBuffId::Regeneration,
-                 CharacterBuffId::Hammerhands,
-                 CharacterBuffId::PainReflection})
+        for (CharacterBuffId buffId : DispellableCharacterBuffs)
         {
             if (m_characterBuffs[memberIndex][static_cast<size_t>(buffId)].active())
             {
@@ -6250,12 +8445,14 @@ const PartyBuffState *Party::partyBuff(PartyBuffId buffId) const
 
 const CharacterBuffState *Party::characterBuff(size_t memberIndex, CharacterBuffId buffId) const
 {
-    if (memberIndex >= m_members.size() || memberIndex >= m_characterBuffs.size())
+    const std::array<CharacterBuffState, CharacterBuffCount> *pBuffs = combatantBuffs(memberIndex);
+
+    if (pBuffs == nullptr)
     {
         return nullptr;
     }
 
-    const CharacterBuffState &buff = m_characterBuffs[memberIndex][static_cast<size_t>(buffId)];
+    const CharacterBuffState &buff = (*pBuffs)[static_cast<size_t>(buffId)];
     return buff.active() ? &buff : nullptr;
 }
 
@@ -6292,21 +8489,37 @@ bool Party::blockConditionWithProtectionFromMagic(CharacterCondition condition)
 
 bool Party::clearMemberCondition(size_t memberIndex, CharacterCondition condition)
 {
-    Character *pMember = member(memberIndex);
+    Character *pMember = combatant(memberIndex);
 
     if (pMember == nullptr)
     {
         return false;
     }
 
+    if (pMember->conditions.test(static_cast<size_t>(condition)))
+    {
+        pushSelfTextEvent({SelfTextEvent::Kind::ConditionCleared, memberIndex, 0, condition});
+    }
     pMember->conditions.reset(static_cast<size_t>(condition));
     pMember->conditionStartGameMinutes[static_cast<size_t>(condition)] = 0.0f;
+    pMember->conditionExpireGameMinutes[static_cast<size_t>(condition)] = 0.0f;
     return true;
+}
+
+bool Party::applyMemberCondition(size_t memberIndex, CharacterCondition condition)
+{
+    return applyMemberCondition(memberIndex, condition, m_gameMinutes);
 }
 
 bool Party::applyMemberCondition(size_t memberIndex, CharacterCondition condition, float gameMinutes)
 {
-    Character *pMember = member(memberIndex);
+    return applyMemberCondition(memberIndex, condition, gameMinutes, 0.0f);
+}
+
+bool Party::applyMemberCondition(
+    size_t memberIndex, CharacterCondition condition, float gameMinutes, float expireGameMinutes)
+{
+    Character *pMember = combatant(memberIndex);
 
     if (pMember == nullptr || hasConditionImmunity(*pMember, condition))
     {
@@ -6315,10 +8528,22 @@ bool Party::applyMemberCondition(size_t memberIndex, CharacterCondition conditio
 
     const bool alreadyHadCondition = pMember->conditions.test(static_cast<size_t>(condition));
     pMember->conditions.set(static_cast<size_t>(condition));
+    float &expire = pMember->conditionExpireGameMinutes[static_cast<size_t>(condition)];
+
+    if (!alreadyHadCondition)
+    {
+        expire = std::max(0.0f, expireGameMinutes);
+    }
+    else if (expire > 0.0f)
+    {
+        expire = expireGameMinutes > 0.0f ? std::max(expire, expireGameMinutes) : 0.0f;
+    }
 
     if (!alreadyHadCondition)
     {
         pMember->conditionStartGameMinutes[static_cast<size_t>(condition)] = std::max(0.0f, gameMinutes);
+        recordConditionStatistics(memberIndex, condition);
+        pushSelfTextEvent({SelfTextEvent::Kind::ConditionGained, memberIndex, 0, condition});
 
         switch (condition)
         {
@@ -6343,36 +8568,96 @@ bool Party::applyMemberCondition(size_t memberIndex, CharacterCondition conditio
         }
     }
 
+    rules().combat.characterConditionApplied(*this, memberIndex, condition);
     return true;
 }
 
 bool Party::hasMemberConditionImmunity(size_t memberIndex, CharacterCondition condition) const
 {
-    const Character *pMember = member(memberIndex);
+    const Character *pMember = combatant(memberIndex);
     return pMember != nullptr && hasConditionImmunity(*pMember, condition);
 }
 
-bool Party::healMember(size_t memberIndex, int amount)
+void Party::pushSelfTextEvent(const SelfTextEvent &event)
 {
-    Character *pMember = member(memberIndex);
+    // A party game never takes them: the oldest go so the queue stays small.
+    constexpr size_t SelfTextEventLimit = 16;
+    if (m_selfTextEvents.size() >= SelfTextEventLimit)
+    {
+        m_selfTextEvents.erase(m_selfTextEvents.begin());
+    }
+    m_selfTextEvents.push_back(event);
+}
 
-    if (pMember == nullptr || amount <= 0)
+bool Party::healMember(size_t memberIndex, int amount, bool regeneration)
+{
+    Character *pMember = combatant(memberIndex);
+
+    if (pMember == nullptr || amount <= 0 || isDeadOrEradicated(*pMember))
     {
         return false;
     }
 
-    const int maxHealth = effectiveMaximumHealth(*pMember);
+    // MM9: any heal wakes a knocked-out hireling (MM9_HIRELINGS.md 9.3).
+    if (isHirelingCombatant(memberIndex))
+    {
+        const int previousHealth = pMember->health;
+        pMember->health =
+            std::min(pMember->health + amount, std::max(previousHealth, reachableMaximumHealth(memberIndex)));
+        updateHirelingKnockOut(*pMember);
+        return pMember->health > previousHealth;
+    }
+
+    // A heal keeps negative HP: a member knocked below zero wakes only once the whole deficit is healed, as in the
+    // original games (SKL-1, FSPS-2-2).
+    // Up to what the member's auras leave (MAW's legendary 32), never lowering HP the clamp has not caught up with.
     const int previousHealth = pMember->health;
-    pMember->health = std::clamp(pMember->health + amount, 0, maxHealth);
+    pMember->health =
+        std::min(pMember->health + amount, std::max(previousHealth, reachableMaximumHealth(memberIndex)));
     updateMemberIncapacitatedCondition(
         *pMember,
-        m_characterBuffs[memberIndex][static_cast<size_t>(CharacterBuffId::Preservation)].active());
+        m_characterBuffs[memberIndex][static_cast<size_t>(CharacterBuffId::Preservation)].active(),
+        m_gameMinutes);
+    if (pMember->health > previousHealth)
+    {
+        pushSelfTextEvent({regeneration ? SelfTextEvent::Kind::Regeneration : SelfTextEvent::Kind::Heal, memberIndex,
+            pMember->health - previousHealth});
+    }
     return pMember->health > previousHealth;
+}
+
+void Party::adjustMemberHealth(size_t memberIndex, int amount)
+{
+    Character *pMember = combatant(memberIndex);
+
+    if (pMember == nullptr || amount == 0 || (amount > 0 && isDeadOrEradicated(*pMember)))
+    {
+        return;
+    }
+
+    pMember->health = std::min(pMember->health + amount, effectiveMaximumHealth(*pMember));
+
+    if (isHirelingCombatant(memberIndex))
+    {
+        updateHirelingKnockOut(*pMember);
+        return;
+    }
+
+    const bool wasDead = pMember->conditions.test(static_cast<size_t>(CharacterCondition::Dead));
+    updateMemberIncapacitatedCondition(
+        *pMember,
+        m_characterBuffs[memberIndex][static_cast<size_t>(CharacterBuffId::Preservation)].active(),
+        m_gameMinutes);
+
+    if (!wasDead && pMember->conditions.test(static_cast<size_t>(CharacterCondition::Dead)))
+    {
+        recordConditionStatistics(memberIndex, CharacterCondition::Dead);
+    }
 }
 
 bool Party::reviveMember(size_t memberIndex, int health, bool applyWeak)
 {
-    Character *pMember = member(memberIndex);
+    Character *pMember = combatant(memberIndex);
 
     if (pMember == nullptr)
     {
@@ -6486,6 +8771,11 @@ void Party::clearFoundArtifactItems()
     m_foundArtifactItems.clear();
 }
 
+bool Party::arcomageTavernCountsForChampion(uint32_t houseId)
+{
+    return houseId <= LastMm8ArcomageHouseId || houseId >= FirstMm7ArcomageHouseId;
+}
+
 bool Party::hasArcomageWinAt(uint32_t houseId) const
 {
     return houseId != 0 && m_arcomageWonHouseIds.contains(houseId);
@@ -6499,7 +8789,7 @@ void Party::recordArcomageWin(uint32_t houseId, int goldReward, uint32_t firstWi
     {
         if (goldReward > 0)
         {
-            addGold(goldReward);
+            addGold(goldReward, GoldReason::Event);
         }
 
         if (firstWinAwardId != 0)
@@ -6507,17 +8797,21 @@ void Party::recordArcomageWin(uint32_t houseId, int goldReward, uint32_t firstWi
             addAward(firstWinAwardId);
         }
 
-        if (m_arcomageWonHouseIds.size() >= ArcomageTavernCount)
+        const bool wonAllMm8Taverns = hasWonAllMm8ArcomageTaverns(m_arcomageWonHouseIds);
+        const bool wonAllMm7Taverns = hasWonAllMm7ArcomageTaverns(m_arcomageWonHouseIds);
+
+        // Every tavern of one continent, not wins counted across continents.
+        if (wonAllMm8Taverns || wonAllMm7Taverns)
         {
             addAward(ArcomageChampionAwardId);
         }
 
-        if (hasWonAllMm8ArcomageTaverns(m_arcomageWonHouseIds))
+        if (wonAllMm8Taverns)
         {
             setQuestBit(Mm8ArcomageChampionQBit, true);
         }
 
-        if (hasWonAllMm7ArcomageTaverns(m_arcomageWonHouseIds))
+        if (wonAllMm7Taverns)
         {
             setQuestBit(Mm7ArcomageChampionQBit, true);
         }
@@ -6532,6 +8826,42 @@ void Party::recordArcomageLoss()
 uint32_t Party::arcomageWinCount() const
 {
     return m_arcomageWinCount;
+}
+
+const std::vector<WorldCompletionRecord> &Party::worldCompletions() const
+{
+    return m_worldCompletions;
+}
+
+const WorldCompletionRecord *Party::findWorldCompletion(const std::string &certificateId) const
+{
+    for (const WorldCompletionRecord &record : m_worldCompletions)
+    {
+        if (record.certificateId == certificateId)
+        {
+            return &record;
+        }
+    }
+
+    return nullptr;
+}
+
+void Party::addWorldCompletion(const WorldCompletionRecord &record)
+{
+    if (findWorldCompletion(record.certificateId) == nullptr)
+    {
+        m_worldCompletions.push_back(record);
+    }
+}
+
+bool Party::worldCompletionsUntracked() const
+{
+    return m_worldCompletionsUntracked;
+}
+
+void Party::clearWorldCompletionsUntracked()
+{
+    m_worldCompletionsUntracked = false;
 }
 
 uint32_t Party::arcomageLossCount() const
@@ -6644,6 +8974,16 @@ void Party::clearPendingAudioRequests()
     m_pendingAudioRequests.clear();
 }
 
+const std::vector<Party::ExpiringPotionEffect> &Party::expiringPotionEffects() const
+{
+    return m_expiringPotionEffects;
+}
+
+void Party::clearExpiringPotionEffects()
+{
+    m_expiringPotionEffects.clear();
+}
+
 void Party::queueSound(SoundId soundId)
 {
     if (soundId == SoundId::None)
@@ -6723,10 +9063,218 @@ SoundId Party::resolveDamageImpactSoundForMember(size_t memberIndex) const
     return pickRandomSoundId(DullArmorSounds);
 }
 
+void Party::applyPartyBuffBonuses(Character &member) const
+{
+    const auto applyResistanceBonus =
+        [this, &member](PartyBuffId buffId, auto CharacterResistanceSet::*field)
+        {
+            const PartyBuffState &buff = m_partyBuffs[static_cast<size_t>(buffId)];
+
+            if (!buff.active())
+            {
+                return;
+            }
+
+            member.magicalBonuses.resistances.*field += buff.power;
+        };
+
+    applyResistanceBonus(PartyBuffId::FireResistance, &CharacterResistanceSet::fire);
+    applyResistanceBonus(PartyBuffId::WaterResistance, &CharacterResistanceSet::water);
+    applyResistanceBonus(PartyBuffId::AirResistance, &CharacterResistanceSet::air);
+    applyResistanceBonus(PartyBuffId::EarthResistance, &CharacterResistanceSet::earth);
+    applyResistanceBonus(PartyBuffId::MindResistance, &CharacterResistanceSet::mind);
+    applyResistanceBonus(PartyBuffId::BodyResistance, &CharacterResistanceSet::body);
+
+    if (const PartyBuffState *pBuff = partyBuff(PartyBuffId::Stoneskin))
+    {
+        member.magicalBonuses.armorClass += pBuff->power;
+    }
+
+    // Heroism strengthens melee blows only: MM8 adds it to the melee damage stat alone (MM8-Rel.exe 0x490b48).
+    if (const PartyBuffState *pBuff = partyBuff(PartyBuffId::Heroism))
+    {
+        member.magicalBonuses.meleeDamage += pBuff->power;
+    }
+
+    if (partyBuff(PartyBuffId::Haste) != nullptr)
+    {
+        member.attackRecoveryReductionTicks += 25;
+    }
+
+    if (partyBuff(PartyBuffId::Shield) != nullptr)
+    {
+        member.halfMissileDamage = true;
+    }
+
+    if (const PartyBuffState *pBuff = partyBuff(PartyBuffId::DayOfGods))
+    {
+        member.magicalBonuses.might += pBuff->power;
+        member.magicalBonuses.intellect += pBuff->power;
+        member.magicalBonuses.personality += pBuff->power;
+        member.magicalBonuses.endurance += pBuff->power;
+        member.magicalBonuses.speed += pBuff->power;
+        member.magicalBonuses.accuracy += pBuff->power;
+        member.magicalBonuses.luck += pBuff->power;
+    }
+
+    if (const PartyBuffState *pBuff = partyBuff(PartyBuffId::ProtectionFromMagic);
+        pBuff != nullptr && rules().spells.protectionFromMagicRaisesResistances())
+    {
+        member.magicalBonuses.resistances.fire += pBuff->power;
+        member.magicalBonuses.resistances.air += pBuff->power;
+        member.magicalBonuses.resistances.water += pBuff->power;
+        member.magicalBonuses.resistances.earth += pBuff->power;
+        member.magicalBonuses.resistances.mind += pBuff->power;
+        member.magicalBonuses.resistances.body += pBuff->power;
+        member.magicalBonuses.resistances.spirit += pBuff->power;
+    }
+
+    if (const PartyBuffState *pBuff = partyBuff(PartyBuffId::Glamour))
+    {
+        member.merchantBonus += pBuff->power;
+        member.glamourPower = pBuff->power;
+        member.glamourMastery = pBuff->skillMastery;
+    }
+}
+
+void Party::applyCharacterBuffBonuses(
+    Character &member,
+    const std::array<CharacterBuffState, CharacterBuffCount> &buffs) const
+{
+    const auto activeBuff = [&buffs](CharacterBuffId buffId) -> const CharacterBuffState *
+    {
+        const CharacterBuffState &buff = buffs[static_cast<size_t>(buffId)];
+        return buff.active() ? &buff : nullptr;
+    };
+
+    if (const CharacterBuffState *pBuff = activeBuff(CharacterBuffId::Bless))
+    {
+        member.magicalBonuses.meleeAttack += pBuff->power;
+        member.magicalBonuses.rangedAttack += pBuff->power;
+    }
+
+    if (const CharacterBuffState *pBuff = activeBuff(CharacterBuffId::Fate))
+    {
+        member.magicalBonuses.meleeAttack += pBuff->power;
+        member.magicalBonuses.rangedAttack += pBuff->power;
+    }
+
+    if (const CharacterBuffState *pBuff = activeBuff(CharacterBuffId::Hammerhands))
+    {
+        member.magicalBonuses.meleeDamage += pBuff->power;
+    }
+
+    if (const CharacterBuffState *pBuff = activeBuff(CharacterBuffId::Mistform))
+    {
+        static_cast<void>(pBuff);
+        member.physicalAttackDisabled = true;
+        const float share = rules().combat.mistFormPhysicalShare();
+        member.physicalDamageImmune = share <= 0.0f;
+        member.mistFormPhysicalShare = share;
+    }
+
+    if (const CharacterBuffState *pBuff = activeBuff(CharacterBuffId::Glamour))
+    {
+        member.merchantBonus += pBuff->power;
+
+        // With an event's party Glamour as well, the stronger one is the member's Glamour; the other adds plainly.
+        if (pBuff->skillMastery > member.glamourMastery
+            || (pBuff->skillMastery == member.glamourMastery && pBuff->power > member.glamourPower))
+        {
+            member.glamourPower = pBuff->power;
+            member.glamourMastery = pBuff->skillMastery;
+        }
+    }
+
+    if (activeBuff(CharacterBuffId::Haste) != nullptr && partyBuff(PartyBuffId::Haste) == nullptr)
+    {
+        member.attackRecoveryReductionTicks += 25;
+    }
+
+    if (const CharacterBuffState *pBuff = activeBuff(CharacterBuffId::Heroism))
+    {
+        member.magicalBonuses.meleeDamage += pBuff->power;
+    }
+
+    if (activeBuff(CharacterBuffId::Shield) != nullptr)
+    {
+        member.halfMissileDamage = true;
+    }
+
+    if (const CharacterBuffState *pBuff = activeBuff(CharacterBuffId::Stoneskin))
+    {
+        member.magicalBonuses.armorClass += pBuff->power;
+    }
+
+    if (activeBuff(CharacterBuffId::WaterBreathing) != nullptr)
+    {
+        member.waterWalking = true;
+    }
+
+    const std::array<std::pair<CharacterBuffId, int CharacterStatBonuses::*>, 7> tempStatBuffs = {{
+        {CharacterBuffId::TempMight, &CharacterStatBonuses::might},
+        {CharacterBuffId::TempIntellect, &CharacterStatBonuses::intellect},
+        {CharacterBuffId::TempPersonality, &CharacterStatBonuses::personality},
+        {CharacterBuffId::TempEndurance, &CharacterStatBonuses::endurance},
+        {CharacterBuffId::TempSpeed, &CharacterStatBonuses::speed},
+        {CharacterBuffId::TempAccuracy, &CharacterStatBonuses::accuracy},
+        {CharacterBuffId::TempLuck, &CharacterStatBonuses::luck},
+    }};
+
+    for (const auto &[buffId, field] : tempStatBuffs)
+    {
+        if (const CharacterBuffState *pBuff = activeBuff(buffId))
+        {
+            member.magicalBonuses.*field += pBuff->power;
+        }
+    }
+
+    const std::array<std::pair<CharacterBuffId, int CharacterResistanceSet::*>, 6> resistanceBuffs = {{
+        {CharacterBuffId::FireResistance, &CharacterResistanceSet::fire},
+        {CharacterBuffId::AirResistance, &CharacterResistanceSet::air},
+        {CharacterBuffId::WaterResistance, &CharacterResistanceSet::water},
+        {CharacterBuffId::EarthResistance, &CharacterResistanceSet::earth},
+        {CharacterBuffId::MindResistance, &CharacterResistanceSet::mind},
+        {CharacterBuffId::BodyResistance, &CharacterResistanceSet::body},
+    }};
+
+    for (const auto &[buffId, field] : resistanceBuffs)
+    {
+        if (const CharacterBuffState *pBuff = activeBuff(buffId))
+        {
+            member.magicalBonuses.resistances.*field += pBuff->power;
+        }
+    }
+}
+
+void Party::applyBuffBonusesToHirelings()
+{
+    // The party's buffs and their own reach the hirelings as the members' (MM9's party spells cover every slot); they
+    // have no items, followers, skills or class to add.
+    for (Mm9PartyHireling &hireling : m_mm9Hirelings)
+    {
+        Character &character = hireling.character;
+        character.hiredNpcSkillBonuses.clear();
+        resetMagicalState(character);
+        applyPartyBuffBonuses(character);
+        applyCharacterBuffBonuses(character, hireling.buffs);
+        // A hireling has no primary stats (Mm9HirelingPrimaryStat): Day of the Gods and the stat buffs give it nothing,
+        // else they would leak into the derived armour class (speed), saves (luck) and the rest.
+        character.magicalBonuses.might = 0;
+        character.magicalBonuses.intellect = 0;
+        character.magicalBonuses.personality = 0;
+        character.magicalBonuses.endurance = 0;
+        character.magicalBonuses.speed = 0;
+        character.magicalBonuses.accuracy = 0;
+        character.magicalBonuses.luck = 0;
+    }
+}
+
 void Party::rebuildMagicalBonusesFromBuffs()
 {
     m_cartographerWizardEye = {};
-    if (hiredNpcHasProfession(m_hiredNpcFollowers, 38))
+    const std::span<const HiredNpcFollower> followers = activeHiredNpcFollowers();
+    if (hiredNpcHasProfession(followers, 38))
     {
         m_cartographerWizardEye.remainingSeconds = std::numeric_limits<float>::infinity();
         m_cartographerWizardEye.spellId = spellIdValue(SpellId::WizardEye);
@@ -6735,11 +9283,12 @@ void Party::rebuildMagicalBonusesFromBuffs()
         m_cartographerWizardEye.power = 2;
     }
     std::unordered_map<std::string, int> followerSkills;
-    if (!m_hiredNpcFollowers.empty())
+    if (!followers.empty())
     {
         for (const std::string &skillName : allCanonicalSkillNames())
         {
-            const int bonus = hiredNpcSkillBonus(m_hiredNpcFollowers, skillName);
+            const int bonus = hiredNpcSkillBonus(
+                followers, skillName, !rules().skills.followerSkillBonusesStack(), &rules().skills);
             if (bonus != 0)
             {
                 followerSkills[skillName] = bonus;
@@ -6747,39 +9296,41 @@ void Party::rebuildMagicalBonusesFromBuffs()
         }
     }
 
+    // MM9's Alberik (+6 Merchant) and Beagan (+4 Disarm Traps, Perception): only on a skill the member has
+    // (cshell@0x1004dd3c), through the members' skill bonus as the followers'.
+    const std::vector<Mm9HirelingSkillBonus> hirelingSkills = mm9HirelingPassives().skillBonuses;
+
     for (Character &member : m_members)
     {
         member.hiredNpcSkillBonuses = followerSkills;
-        member.magicalBonuses = member.temporaryEventBonuses;
-        member.magicalBonuses.luck += hiredNpcPrimaryStatBonus(m_hiredNpcFollowers, "Luck");
-        member.magicalBonuses.resistances.fire += hiredNpcResistanceBonus(m_hiredNpcFollowers, "Fire");
-        member.magicalBonuses.resistances.air += hiredNpcResistanceBonus(m_hiredNpcFollowers, "Air");
-        member.magicalBonuses.resistances.water += hiredNpcResistanceBonus(m_hiredNpcFollowers, "Water");
-        member.magicalBonuses.resistances.earth += hiredNpcResistanceBonus(m_hiredNpcFollowers, "Earth");
-        member.magicalImmunities = {};
-        member.magicalConditionImmunities = {};
-        member.merchantBonus = 0;
-        member.weaponEnchantmentDamageBonus = 0;
-        member.vampiricHealFraction = 0.0f;
-        member.physicalAttackDisabled = false;
-        member.physicalDamageImmune = false;
-        member.halfMissileDamage = false;
-        member.meleeArmorClassBonus = 0;
-        member.missileArmorClassBonus = 0;
-        member.magicArmorClassBonus = 0;
-        member.physicalDamageTakenMultiplier = 1.0f;
-        member.experienceGainMultiplier = 1.0f;
-        member.randomEncounterChanceMultiplier = 1.0f;
-        member.waterWalking = false;
-        member.featherFalling = false;
-        member.healthRegenPerSecond = 0.0f;
-        member.spellRegenPerSecond = 0.0f;
-        member.healthRegenAccumulator = 0.0f;
-        member.spellRegenAccumulator = 0.0f;
-        member.attackRecoveryReductionTicks = 0;
-        member.recoveryProgressMultiplier = 1.0f;
-        member.itemSkillBonuses.clear();
-        member.equippedItemEffectFlags.clear();
+        std::erase_if(member.hiredNpcSkillBonuses,
+            [this, &member](const std::pair<const std::string, int> &bonus)
+            { return rules().skills.followerSkillBonusNeedsSkill(bonus.first) && !member.hasSkill(bonus.first); });
+
+        for (const Mm9HirelingSkillBonus &bonus : hirelingSkills)
+        {
+            if (member.hasSkill(bonus.skillName))
+            {
+                member.hiredNpcSkillBonuses[canonicalSkillName(bonus.skillName)] += bonus.amount;
+            }
+        }
+        resetMagicalState(member);
+        member.magicalBonuses.luck += hiredNpcPrimaryStatBonus(followers, "Luck");
+        member.magicalBonuses.resistances.fire += hiredNpcResistanceBonus(followers, "Fire");
+        member.magicalBonuses.resistances.air += hiredNpcResistanceBonus(followers, "Air");
+        member.magicalBonuses.resistances.water += hiredNpcResistanceBonus(followers, "Water");
+        member.magicalBonuses.resistances.earth += hiredNpcResistanceBonus(followers, "Earth");
+
+        // Potions that add skill levels for a while (MAW's Meditation potion).
+        for (const TimedPotionEffect &effect : member.rulesetState.potionEffects)
+        {
+            const std::optional<std::string> skillName = skillNameForSkillId(effect.key);
+
+            if (effect.kind == TimedPotionEffect::Kind::SkillBonus && effect.remainingSeconds > 0 && skillName)
+            {
+                member.itemSkillBonuses[canonicalSkillName(*skillName)] += effect.amount;
+            }
+        }
 
         const std::array<int CharacterStatBonuses::*, 6> primaryStats = {
             &CharacterStatBonuses::might,
@@ -6801,133 +9352,17 @@ void Party::rebuildMagicalBonusesFromBuffs()
 
     for (Character &member : m_members)
     {
-        member.healthRegenPerSecond += regenerationSkillHealthPerSecond(member);
+        member.healthRegenPerSecond += rules().skills.regenerationHealthPerSecond(member);
     }
 
-    const auto applyResistanceBonus =
-        [this](PartyBuffId buffId, auto CharacterResistanceSet::*field)
-        {
-            const PartyBuffState &buff = m_partyBuffs[static_cast<size_t>(buffId)];
-
-            if (!buff.active())
-            {
-                return;
-            }
-
-            for (Character &member : m_members)
-            {
-                member.magicalBonuses.resistances.*field += buff.power;
-            }
-        };
-
-    applyResistanceBonus(PartyBuffId::FireResistance, &CharacterResistanceSet::fire);
-    applyResistanceBonus(PartyBuffId::WaterResistance, &CharacterResistanceSet::water);
-    applyResistanceBonus(PartyBuffId::AirResistance, &CharacterResistanceSet::air);
-    applyResistanceBonus(PartyBuffId::EarthResistance, &CharacterResistanceSet::earth);
-    applyResistanceBonus(PartyBuffId::MindResistance, &CharacterResistanceSet::mind);
-    applyResistanceBonus(PartyBuffId::BodyResistance, &CharacterResistanceSet::body);
-
-    if (const PartyBuffState *pBuff = partyBuff(PartyBuffId::Stoneskin))
+    for (Character &member : m_members)
     {
-        for (Character &member : m_members)
-        {
-            member.magicalBonuses.armorClass += pBuff->power;
-        }
-    }
-
-    if (const PartyBuffState *pBuff = partyBuff(PartyBuffId::Heroism))
-    {
-        for (Character &member : m_members)
-        {
-            member.magicalBonuses.meleeDamage += pBuff->power;
-            member.magicalBonuses.rangedDamage += pBuff->power;
-        }
-    }
-
-    if (partyBuff(PartyBuffId::Haste) != nullptr)
-    {
-        for (Character &member : m_members)
-        {
-            member.attackRecoveryReductionTicks += 25;
-        }
-    }
-
-    if (partyBuff(PartyBuffId::Shield) != nullptr)
-    {
-        for (Character &member : m_members)
-        {
-            member.halfMissileDamage = true;
-        }
-    }
-
-    if (const PartyBuffState *pBuff = partyBuff(PartyBuffId::DayOfGods))
-    {
-        for (Character &member : m_members)
-        {
-            member.magicalBonuses.might += pBuff->power;
-            member.magicalBonuses.intellect += pBuff->power;
-            member.magicalBonuses.personality += pBuff->power;
-            member.magicalBonuses.endurance += pBuff->power;
-            member.magicalBonuses.speed += pBuff->power;
-            member.magicalBonuses.accuracy += pBuff->power;
-            member.magicalBonuses.luck += pBuff->power;
-        }
-    }
-
-    if (const PartyBuffState *pBuff = partyBuff(PartyBuffId::ProtectionFromMagic))
-    {
-        for (Character &member : m_members)
-        {
-            member.magicalBonuses.resistances.fire += pBuff->power;
-            member.magicalBonuses.resistances.air += pBuff->power;
-            member.magicalBonuses.resistances.water += pBuff->power;
-            member.magicalBonuses.resistances.earth += pBuff->power;
-            member.magicalBonuses.resistances.mind += pBuff->power;
-            member.magicalBonuses.resistances.body += pBuff->power;
-            member.magicalBonuses.resistances.spirit += pBuff->power;
-        }
-    }
-
-    if (const PartyBuffState *pBuff = partyBuff(PartyBuffId::Glamour))
-    {
-        for (Character &member : m_members)
-        {
-            member.merchantBonus += pBuff->power;
-        }
+        applyPartyBuffBonuses(member);
     }
 
     for (size_t memberIndex = 0; memberIndex < m_members.size() && memberIndex < m_characterBuffs.size(); ++memberIndex)
     {
-        Character &member = m_members[memberIndex];
-
-        if (const CharacterBuffState *pBuff = characterBuff(memberIndex, CharacterBuffId::Bless))
-        {
-            member.magicalBonuses.meleeAttack += pBuff->power;
-            member.magicalBonuses.rangedAttack += pBuff->power;
-        }
-
-        if (const CharacterBuffState *pBuff = characterBuff(memberIndex, CharacterBuffId::Fate))
-        {
-            member.magicalBonuses.meleeAttack += pBuff->power;
-            member.magicalBonuses.rangedAttack += pBuff->power;
-        }
-
-        if (const CharacterBuffState *pBuff = characterBuff(memberIndex, CharacterBuffId::Hammerhands))
-        {
-            member.magicalBonuses.meleeDamage += pBuff->power;
-        }
-
-        if (const CharacterBuffState *pBuff = characterBuff(memberIndex, CharacterBuffId::Mistform))
-        {
-            static_cast<void>(pBuff);
-            member.physicalAttackDisabled = true;
-            member.physicalDamageImmune = true;
-        }
-
-        if (const CharacterBuffState *pBuff = characterBuff(memberIndex, CharacterBuffId::Glamour))
-        {
-            member.merchantBonus += pBuff->power;
-        }
+        applyCharacterBuffBonuses(m_members[memberIndex], m_characterBuffs[memberIndex]);
     }
 
     const auto applyEquippedItemEnchant =
@@ -6945,12 +9380,21 @@ void Party::rebuildMagicalBonusesFromBuffs()
                 return;
             }
 
-            ItemEnchantRuntime::applyEquippedEnchantEffects(
+            rules().items.applyEquippedEnchantEffects(
                 *pItemDefinition,
                 runtimeState,
                 m_pStandardItemEnchantTable,
                 m_pSpecialItemEnchantTable,
+                member,
                 member);
+
+            // Its Workshop mod's effect, as the item's own (personal shield to the armour's pool).
+            if (const WorkshopModDefinition *pMod = runtimeState.workshopModId != 0
+                    ? m_pItemTable->workshopMod(runtimeState.workshopModId) : nullptr)
+            {
+                ItemEnchantRuntime::applyContentEffect(pMod->effect, member);
+                member.armorShieldPoints += pMod->effect.personalShield;
+            }
         };
 
     if (m_pItemTable != nullptr)
@@ -7030,6 +9474,11 @@ void Party::rebuildMagicalBonusesFromBuffs()
             }
         }
 
+        for (Character &member : m_members)
+        {
+            applyImplants(member, *m_pItemTable);
+        }
+
         for (const Character &owner : m_members)
         {
             for (const InventoryItem &item : owner.inventory)
@@ -7071,8 +9520,175 @@ void Party::rebuildMagicalBonusesFromBuffs()
 
     for (Character &member : m_members)
     {
+        rules().skills.applyStatBonuses(member);
         applyMagicalPrimaryStatResourceBonuses(member, m_pClassMultiplierTable);
+        rules().classes.applyClassBonuses(member);
+        rules().skills.applyResourceBonuses(member);
         clampCurrentResourcesToMaximum(member);
+        // Emitters grow by a share per Shield Tech rank; armour, belts and implants add as they are.
+        const CharacterSkill *pShieldTech = member.findSkill("ShieldTech");
+        const float emitterScale =
+            1.0f + float(pShieldTech != nullptr ? pShieldTech->level : 0) * personalShieldRules().emitterBonusPerRank;
+        member.personalShieldCapacity = member.armorShieldPoints
+            + int(std::lround(float(member.emitterShieldPoints) * emitterScale)) + member.temporaryShieldPoints;
+        member.personalShield = std::min(member.personalShield, float(member.personalShieldCapacity));
+    }
+
+    applyBuffBonusesToHirelings();
+}
+
+void Party::setPersonalShieldRules(const PartyShieldRules *pRules)
+{
+    m_pPersonalShieldRules = pRules;
+}
+
+const PartyShieldRules &Party::personalShieldRules() const
+{
+    static const PartyShieldRules defaults;
+    return m_pPersonalShieldRules != nullptr ? *m_pPersonalShieldRules : defaults;
+}
+
+Party::PersonalShieldHit Party::absorbPersonalShieldHit(size_t memberIndex, int damage)
+{
+    PersonalShieldHit result;
+    result.passedDamage = damage;
+    Character *pMember = member(memberIndex);
+
+    if (pMember == nullptr || damage <= 0 || pMember->personalShieldCapacity <= 0)
+    {
+        return result;
+    }
+
+    pMember->personalShieldSecondsSinceDamage = 0.0f;
+
+    if (pMember->personalShield <= 0.0f)
+    {
+        return result;
+    }
+
+    // Unlike a monster's shield, what the hit carries beyond the pool reaches the body: a weak shield does not stop
+    // a cannon strike (COMBAT.md, Ion cannons).
+    result.absorbed = true;
+    const float taken = std::min(float(damage), pMember->personalShield);
+    pMember->personalShield -= taken;
+    result.passedDamage = damage - int(std::lround(taken));
+
+    if (pMember->personalShield <= 0.5f)
+    {
+        pMember->personalShield = 0.0f;
+        pMember->personalShieldSecondsSinceBreak = 0.0f;
+        result.broke = true;
+    }
+
+    return result;
+}
+
+bool Party::chargePersonalShield(size_t memberIndex)
+{
+    Character *pMember = member(memberIndex);
+
+    if (pMember == nullptr)
+    {
+        return false;
+    }
+
+    if (pMember->personalShieldCapacity - pMember->temporaryShieldPoints <= 0)
+    {
+        // No shield of its own: the cell's temporary one (renewed if it already has one).
+        const PartyShieldRules &rules = personalShieldRules();
+
+        if (rules.shieldCellPoints <= 0)
+        {
+            return false;
+        }
+
+        pMember->temporaryShieldPoints = rules.shieldCellPoints;
+        pMember->temporaryShieldSecondsRemaining = rules.shieldCellSeconds;
+        pMember->personalShieldCapacity = rules.shieldCellPoints;
+    }
+
+    pMember->personalShieldInitialized = true;
+    pMember->personalShield = float(pMember->personalShieldCapacity);
+    pMember->personalShieldSecondsSinceBreak = -1.0f;
+    return true;
+}
+
+bool Party::burstPersonalShields()
+{
+    const float fraction = personalShieldRules().shieldBurstFraction;
+    bool charged = false;
+
+    for (Character &member : m_members)
+    {
+        if (member.personalShieldCapacity > 0)
+        {
+            member.personalShieldInitialized = true;
+            member.personalShield = std::min(float(member.personalShieldCapacity),
+                member.personalShield + float(member.personalShieldCapacity) * fraction);
+            member.personalShieldSecondsSinceBreak = -1.0f;
+            charged = true;
+        }
+    }
+
+    return charged;
+}
+
+void Party::updatePersonalShields(float deltaSeconds)
+{
+    const PartyShieldRules &rules = personalShieldRules();
+
+    for (Character &member : m_members)
+    {
+        if (member.temporaryShieldPoints > 0)
+        {
+            member.temporaryShieldSecondsRemaining -= deltaSeconds;
+
+            if (member.temporaryShieldSecondsRemaining <= 0.0f)
+            {
+                // The cell's shield fades: its points leave the pool.
+                member.personalShieldCapacity =
+                    std::max(0, member.personalShieldCapacity - member.temporaryShieldPoints);
+                member.personalShield = std::min(member.personalShield, float(member.personalShieldCapacity));
+                member.temporaryShieldPoints = 0;
+                member.temporaryShieldSecondsRemaining = 0.0f;
+            }
+        }
+
+        if (member.personalShieldCapacity <= 0)
+        {
+            member.personalShield = 0.0f;
+            member.personalShieldInitialized = true;
+            continue;
+        }
+
+        if (!member.personalShieldInitialized)
+        {
+            // A loaded game or a fresh party: shields start full.
+            member.personalShieldInitialized = true;
+            member.personalShield = float(member.personalShieldCapacity);
+            member.personalShieldSecondsSinceDamage = rules.regenDelaySeconds;
+        }
+
+        if (member.personalShieldSecondsSinceBreak >= 0.0f)
+        {
+            member.personalShieldSecondsSinceBreak = std::min(member.personalShieldSecondsSinceBreak + deltaSeconds,
+                60.0f);
+        }
+
+        const CharacterSkill *pShieldTech = member.findSkill("ShieldTech");
+        const float delay = std::max(0.0f, rules.regenDelaySeconds + member.shieldRegenDelaySeconds
+            - (pShieldTech != nullptr && pShieldTech->mastery >= SkillMastery::Expert
+                ? rules.shieldTechExpertDelayReduction : 0.0f));
+        const float regenerating =
+            std::min(deltaSeconds, member.personalShieldSecondsSinceDamage + deltaSeconds - delay);
+        member.personalShieldSecondsSinceDamage = std::min(member.personalShieldSecondsSinceDamage + deltaSeconds,
+            3600.0f);
+
+        if (regenerating > 0.0f && member.personalShield < float(member.personalShieldCapacity) && member.health > 0)
+        {
+            member.personalShield = std::min(float(member.personalShieldCapacity), member.personalShield
+                + float(member.personalShieldCapacity) / std::max(rules.regenSeconds, 0.05f) * regenerating);
+        }
     }
 }
 
@@ -7124,6 +9740,7 @@ void Party::markArtifactItemFoundIfRelevant(const InventoryItem &item)
 
 void Party::recordEverOwnedItemIfRelevant(const InventoryItem &item)
 {
+    if (item.identified) recordIdentifiedItem(item.objectDescriptionId);
     recordEverOwnedItem(item.objectDescriptionId);
 }
 
@@ -7148,8 +9765,13 @@ void Party::recordEverOwnedItemsFromCurrentState()
         EquipmentSlot::Ring6,
     };
 
-    for (const Character &member : m_members)
+    // Items the party already holds (a restored save, a new party's kit) were not found now: no statistics.
+    PlaythroughStatistics *pStatistics = m_statistics.pStatistics;
+    m_statistics.pStatistics = nullptr;
+
+    for (size_t memberIndex = 0; memberIndex < m_members.size(); ++memberIndex)
     {
+        const Character &member = m_members[memberIndex];
         for (const InventoryItem &item : member.inventory)
         {
             recordEverOwnedItemIfRelevant(item);
@@ -7157,8 +9779,84 @@ void Party::recordEverOwnedItemsFromCurrentState()
 
         for (EquipmentSlot slot : EquipmentSlots)
         {
-            recordEverOwnedItem(::OpenYAMM::Game::equippedItemId(member.equipment, slot));
+            if (const std::optional<InventoryItem> item = equippedItem(memberIndex, slot))
+                recordEverOwnedItemIfRelevant(*item);
         }
+    }
+
+    m_statistics.pStatistics = pStatistics;
+}
+
+void prefillSoloActionBar(Character &member)
+{
+    std::vector<uint32_t> spells(member.knownSpellIds.begin(), member.knownSpellIds.end());
+    std::sort(spells.begin(), spells.end());
+    size_t next = 0;
+    const auto place = [&member, &next](const ActionBarSlot &slot)
+    {
+        while (next < ActionBarSlotCount / 2 && member.actionBar[next].kind != ActionBarSlotKind::Empty)
+        {
+            ++next;
+        }
+
+        if (next < ActionBarSlotCount / 2)
+        {
+            member.actionBar[next++] = slot;
+        }
+    };
+
+    if (std::none_of(member.actionBar.begin(), member.actionBar.end(),
+            [](const ActionBarSlot &slot) { return slot.kind == ActionBarSlotKind::Weapon; }))
+    {
+        place({ActionBarSlotKind::Weapon, 0, {}});
+    }
+
+    // A member with a bow gets the swap between the melee weapon and the bow on the next key.
+    if (member.equipment.bow != 0
+        && std::none_of(member.actionBar.begin(), member.actionBar.end(), [](const ActionBarSlot &slot)
+            { return slot.kind == ActionBarSlotKind::Weapon && slot.id == ActionBarWeaponSwapId; }))
+    {
+        place({ActionBarSlotKind::Weapon, ActionBarWeaponSwapId, {}});
+    }
+
+    for (const uint32_t spellId : spells)
+    {
+        const bool onBar = std::any_of(member.actionBar.begin(), member.actionBar.end(),
+            [spellId](const ActionBarSlot &slot) { return slot.kind == ActionBarSlotKind::Spell && slot.id == spellId; });
+
+        if (!onBar)
+        {
+            place({ActionBarSlotKind::Spell, spellId, {}});
+        }
+    }
+}
+
+void makeSoloRunParty(Party &party)
+{
+    Party::Snapshot snapshot = party.snapshot();
+
+    if (snapshot.members.size() > 1)
+    {
+        snapshot.members.resize(1);
+        snapshot.activeMemberIndex = 0;
+        snapshot.memberFormationCells.clear();
+        party.restoreSnapshot(snapshot);
+    }
+
+    if (Character *pMember = party.member(0))
+    {
+        prefillSoloActionBar(*pMember);
+    }
+}
+
+void giveSoloRunStartScrolls(Party &party)
+{
+    // Water Walk, Jump, Town Portal, Fly and Lloyd's Beacon.
+    constexpr std::array<uint32_t, 5> ScrollItemIds = {326, 315, 330, 320, 332};
+
+    for (uint32_t itemId : ScrollItemIds)
+    {
+        party.tryGrantItem(itemId);
     }
 }
 }

@@ -12,6 +12,7 @@ namespace OpenYAMM::Game
 class MergedNpcProfessionTable;
 class NpcDialogTable;
 class Party;
+class SkillRules;
 
 struct HiredNpcFollowerView
 {
@@ -22,6 +23,15 @@ struct HiredNpcFollowerView
     uint32_t portraitPictureId = 0;
     std::string name;
     std::string profession;
+};
+
+// Gold the party finds in the world, chests or corpses: follower find bonuses apply, then hired followers
+// take their share.
+struct FoundGold
+{
+    uint32_t amount = 0;
+    uint32_t followerShare = 0;
+    uint32_t partyAmount = 0;
 };
 
 std::vector<HiredNpcFollowerView> buildHiredNpcFollowerViews(
@@ -37,18 +47,23 @@ std::vector<HiredNpcFollowerView> buildHiredNpcFollowerViews(
     const MergedNpcProfessionTable &npcProfessionTable
 );
 
-uint32_t totalHiredNpcFollowerFeePercent(const EventRuntimeState &eventRuntimeState);
-uint32_t hiredNpcFollowerGoldShare(uint32_t goldAmount, const EventRuntimeState &eventRuntimeState);
 bool hiredNpcHasProfession(std::span<const HiredNpcFollower> followers, uint32_t professionId);
 int hiredNpcTransportDayReduction(const EventRuntimeState &eventRuntimeState, bool stable);
 int hiredNpcCrossMapDayReduction(const EventRuntimeState &eventRuntimeState);
 int hiredNpcWalkingTravelDays(int baseDays, const EventRuntimeState &eventRuntimeState);
 int hiredNpcRestFoodReduction(const EventRuntimeState &eventRuntimeState);
 int hiredNpcCampingFoodCost(int baseCost, const EventRuntimeState &eventRuntimeState);
-int hiredNpcSkillBonus(std::span<const HiredNpcFollower> followers, const std::string &skillName);
+// The followers' bonus to a skill: every follower's added up, or the strongest only; a ruleset may change a
+// profession's amount (SkillRules::followerSkillBonus).
+int hiredNpcSkillBonus(
+    std::span<const HiredNpcFollower> followers,
+    const std::string &skillName,
+    bool strongestOnly = false,
+    const SkillRules *pRules = nullptr);
 int hiredNpcPrimaryStatBonus(std::span<const HiredNpcFollower> followers, const std::string &statName);
 int hiredNpcResistanceBonus(std::span<const HiredNpcFollower> followers, const std::string &resistanceName);
-uint32_t hiredNpcGoldFindBonusPercent(const EventRuntimeState &eventRuntimeState);
-uint32_t hiredNpcGoldAfterBonusAndFees(uint32_t goldAmount, const EventRuntimeState &eventRuntimeState);
+// pParty: MM9's Edina A'Mor adds 20 % to found gold (Party::mm9HirelingPassives); nullptr without a party.
+FoundGold resolveFoundGold(uint32_t goldAmount, const EventRuntimeState *pEventRuntimeState, const Party *pParty);
+std::string foundGoldStatusText(const FoundGold &foundGold);
 bool hiredNpcCanRepairItemKind(std::span<const HiredNpcFollower> followers, const std::string &equipStat);
 }

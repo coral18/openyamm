@@ -13,7 +13,16 @@ struct RegressionMapLoader
     Game::GameDataLoader gameDataLoader = {};
 };
 
+// The shared loader keeps PhysFS (one per process) initialized, so tests that mount their own AssetFileSystem cannot
+// run while it is alive. Files that use it put their tests in this doctest suite (TEST_SUITE_BEGIN/END); a listener
+// releases the loader before any other test starts, and the next suite test loads it again.
+constexpr const char *SharedRegressionMapSuite = "shared regression map";
+
+// The development tree's surface tiers (cooked x4 surface textures, x2 terrain; the x1 originals are source art).
+Engine::AssetScaleProfile developmentAssetScaleProfile();
+
 bool regressionMapLoaderLoaded();
 const std::string &regressionMapLoaderFailure();
 const RegressionMapLoader &regressionMapLoader();
+void releaseRegressionMapLoader();
 }

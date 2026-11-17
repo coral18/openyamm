@@ -56,6 +56,12 @@ public:
     std::optional<std::string> classNameForId(uint32_t classId) const;
     bool classIdIsAtLeast(uint32_t currentClassId, uint32_t minimumClassId) const;
     bool hasClass(const std::string &className) const;
+    // A class's id, kind and promotion step from class_extra.txt; null for a class it does not list.
+    const ClassMetadataEntry *classMetadata(const std::string &className) const;
+    // The classes of a kind at a promotion step, by class id.
+    std::vector<std::string> classNamesOfKind(uint32_t classKind, uint32_t promotionStep) const;
+
+    std::vector<std::string> promotionClassNamesFromMetadata(const std::string &className) const;
 
 private:
     struct RaceSkillRule
@@ -65,11 +71,11 @@ private:
         bool hasClassKind = false;
         std::string skillName;
         SkillMastery minMastery = SkillMastery::None;
+        std::optional<SkillMastery> maxMastery;
         int32_t add = 0;
         int32_t exceptionCode = 0;
     };
 
-    std::vector<std::string> promotionClassNamesFromMetadata(const std::string &className) const;
     const ClassMetadataEntry *metadataForClass(const std::string &className) const;
     uint32_t classKindForClass(const std::string &className) const;
     uint32_t manaModeForClass(const std::string &className) const;
@@ -85,5 +91,6 @@ private:
     std::unordered_map<std::string, ClassMetadataEntry> m_classMetadata;
     std::unordered_map<uint32_t, std::string> m_classNamesById;
     std::vector<RaceSkillRule> m_raceSkillRules;
+    bool m_raceShiftWithoutClassCap = false;
 };
 }

@@ -1,10 +1,13 @@
 #pragma once
 
+#include "game/tables/PotionEffectTable.h"
+
 #include <array>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 #include <vector>
 
@@ -130,6 +133,8 @@ struct MergedRaceSkillOverride
     std::string skillName;
     std::string rawToken;
     uint32_t minMastery = 0;
+    // The highest mastery the race allows (0 forbids the skill); nothing for no limit.
+    std::optional<uint32_t> maxMastery;
     int32_t add = 0;
     int32_t exceptionCode = 0;
     std::string exception;
@@ -207,6 +212,8 @@ struct MergedCharacterVoiceEntry
 {
     std::string soundType;
     std::vector<uint32_t> soundIdsByVoiceSetId;
+    // The row's cells as written, by voice set: the sets' properties (Name, World, Man, Woman, Undead Man, ...).
+    std::vector<std::string> cellsByVoiceSetId;
 };
 
 struct MergedClassStartingStatEntry
@@ -392,9 +399,14 @@ public:
     const std::vector<std::string> *allowedClassesForRaceId(uint32_t raceId) const;
     const std::vector<MergedCharacterSelectionContinent> &continents() const;
     std::optional<std::string> raceNameForId(uint32_t raceId) const;
+    const std::unordered_map<uint32_t, std::string> &raceNames() const;
     size_t raceCount() const;
+    // MAW's free selection (`free_selection: true`): every portrait is offered at start, whatever its "available at
+    // start" mark, and the continent does not turn Clerics into Priests or Sorcerers into Necromancers.
+    bool freeSelection() const;
 
 private:
+    bool m_freeSelection = false;
     std::unordered_map<uint32_t, std::vector<std::string>> m_characterSelectionAllowedClassesByRaceId;
     std::unordered_map<uint32_t, std::string> m_characterSelectionRaceNamesById;
     std::vector<MergedCharacterSelectionContinent> m_characterSelectionContinents;
@@ -407,9 +419,13 @@ public:
     bool loadFromYaml(const std::string &yamlText, std::string &errorMessage);
     const std::vector<MergedRaceSkillOverride> &overrides() const;
     size_t overrideCount() const;
+    // MAW's Race Skillz rules (`shift_without_class_cap: true`): the race's shift applies even when the class cannot
+    // learn the skill, and the maximum and minimum clamp after it. MMMerge adds the shift only to a class cap.
+    bool shiftWithoutClassCap() const;
 
 private:
     std::vector<MergedRaceSkillOverride> m_overrides;
+    bool m_shiftWithoutClassCap = false;
 };
 
 class MergedTeacherTopicTable
@@ -444,6 +460,8 @@ public:
     bool loadFromRows(const std::vector<std::vector<std::string>> &rows);
     const MergedNpcProfessionEntry *get(uint32_t professionId) const;
     const std::vector<MergedNpcProfessionEntry> &entries() const;
+    // "Name the Profession", as the original NameAndTitle; the plain name when the NPC has no profession.
+    std::string nameAndTitle(const std::string &name, uint32_t professionId) const;
 
 private:
     std::vector<MergedNpcProfessionEntry> m_entries;
@@ -518,10 +536,15 @@ public:
     uint32_t emptyBottleItemId() const;
     uint32_t catalystPotionItemId() const;
     const std::vector<MergedPotionSettingEntry> &entries() const;
+    // What the same potion items do when drunk or applied (potion_effects.yml); the drink and mix code reach both
+    // through this table.
+    void setEffects(PotionEffectTable effects);
+    const PotionEffectTable &effects() const;
 
 private:
     std::vector<MergedPotionSettingEntry> m_entries;
     std::unordered_map<uint32_t, size_t> m_entryIndicesByItemId;
+    PotionEffectTable m_effects;
 };
 
 class MergedReagentSettingTable
@@ -585,6 +608,10 @@ public:
     bool loadFromRows(const std::vector<std::vector<std::string>> &rows);
     const std::vector<MergedCharacterVoiceEntry> &entries() const;
     std::vector<uint32_t> soundIdsForTypes(uint32_t voiceSetId, const std::vector<std::string> &soundTypes) const;
+    // A voice set's cell in the named property row (Name, World, Man, Woman, Undead Man, Undead Woman), or empty.
+    std::string voiceSetProperty(uint32_t voiceSetId, std::string_view rowName) const;
+    // The voice sets whose World row names the world (MM9's own voices).
+    std::vector<uint32_t> voiceSetsOfWorld(std::string_view worldId) const;
 
 private:
     std::vector<MergedCharacterVoiceEntry> m_entries;

@@ -18,6 +18,8 @@ namespace OpenYAMM::Game
 namespace
 {
 constexpr float Pi = 3.14159265358979323846f;
+constexpr float FlyWheelHeightStep = 64.0f;
+constexpr float MaxFlyWheelStepsPerFrame = 4.0f;
 } // namespace
 
 void OutdoorGameplayInputController::updateCameraFromInput(
@@ -35,6 +37,8 @@ void OutdoorGameplayInputController::updateCameraFromInput(
     {
         deltaSeconds = std::min(deltaSeconds, 0.05f);
     }
+
+    const float cameraDeltaSeconds = std::min(input.cameraDeltaSeconds.value_or(deltaSeconds), 0.05f);
 
     const bool *pKeyboardState = input.keyboardState();
 
@@ -118,6 +122,13 @@ void OutdoorGameplayInputController::updateCameraFromInput(
     const bool jumpPressed = input.action(KeyboardAction::Jump).held;
     const bool flyUpPressed = input.action(KeyboardAction::FlyUp).held;
     const bool flyDownPressed = input.action(KeyboardAction::FlyDown).held;
+    const InputBindingKind wheelKind = mouseWheelInputBinding(input.mouseWheelDelta).kind;
+    const bool wheelFlyUp = flyUpPressed
+        && view.m_gameSettings.keyboard.binding(KeyboardAction::FlyUp).kind == wheelKind;
+    const bool wheelFlyDown = flyDownPressed
+        && view.m_gameSettings.keyboard.binding(KeyboardAction::FlyDown).kind == wheelKind;
+    const float flyWheelSteps = std::min(std::abs(input.mouseWheelDelta), MaxFlyWheelStepsPerFrame);
+    const float flyHeightDelta = FlyWheelHeightStep * flyWheelSteps * (int(wheelFlyUp) - int(wheelFlyDown));
     const bool lookUpPressed = input.action(KeyboardAction::LookUp).held;
     const bool lookDownPressed = input.action(KeyboardAction::LookDown).held;
     const bool centerViewPressed = input.action(KeyboardAction::CenterView).held;
@@ -130,12 +141,12 @@ void OutdoorGameplayInputController::updateCameraFromInput(
     {
         if (leftPressed)
         {
-            view.m_cameraYawRadians += keyboardYawSpeed * deltaSeconds;
+            view.m_cameraYawRadians += keyboardYawSpeed * cameraDeltaSeconds;
         }
 
         if (rightPressed)
         {
-            view.m_cameraYawRadians -= keyboardYawSpeed * deltaSeconds;
+            view.m_cameraYawRadians -= keyboardYawSpeed * cameraDeltaSeconds;
         }
     }
 
@@ -145,22 +156,25 @@ void OutdoorGameplayInputController::updateCameraFromInput(
         {
             if (allowWorldSimulation)
             {
+                // Named fields: a positional list put the wheel's flight step into partySpeedMultiplier when that
+                // field was added before it, and the party runtime overwrote it (wheel flight did nothing).
                 const OutdoorMovementInput movementInput = {
-                    allowCameraMovementInput && moveForwardPressed,
-                    allowCameraMovementInput && moveBackwardPressed,
-                    allowCameraMovementInput && strafeLeftPressed,
-                    allowCameraMovementInput && strafeRightPressed,
-                    allowCameraMovementInput && jumpPressed,
-                    allowCameraMovementInput && flyUpPressed,
-                    allowCameraMovementInput && flyDownPressed,
-                    runWalkModifier,
-                    turboSpeed,
-                    view.m_cameraYawRadians,
-                    view.m_cameraPitchRadians,
-                    !classicControls,
-                    input.turnBasedMovementStep,
-                    input.turnBasedPhysicsStep,
-                    input.movementSpeedScale
+                    .forward = allowCameraMovementInput && moveForwardPressed,
+                    .backward = allowCameraMovementInput && moveBackwardPressed,
+                    .left = allowCameraMovementInput && strafeLeftPressed,
+                    .right = allowCameraMovementInput && strafeRightPressed,
+                    .jump = allowCameraMovementInput && jumpPressed,
+                    .flyUp = allowCameraMovementInput && flyUpPressed && !wheelFlyUp,
+                    .flyDown = allowCameraMovementInput && flyDownPressed && !wheelFlyDown,
+                    .runWalkModifier = runWalkModifier,
+                    .turbo = turboSpeed,
+                    .yawRadians = view.m_cameraYawRadians,
+                    .pitchRadians = view.m_cameraPitchRadians,
+                    .usePitchForFlyingMovement = !classicControls,
+                    .turnBasedMovementStep = input.turnBasedMovementStep,
+                    .turnBasedPhysicsStep = input.turnBasedPhysicsStep,
+                    .movementSpeedScale = input.movementSpeedScale,
+                    .flyHeightDelta = allowCameraMovementInput ? flyHeightDelta : 0.0f,
                 };
                 if (view.m_pOutdoorSceneRuntime != nullptr)
                 {
@@ -177,15 +191,16 @@ void OutdoorGameplayInputController::updateCameraFromInput(
 
                     if (pEventRuntimeState != nullptr)
                     {
-                        for (const std::string &statusMessage : pEventRuntimeState->statusMessages)
+                        for (size_t index = 0; index < pEventRuntimeState->statusMessages.size(); ++index)
                         {
                             view.setStatusBarEvent(
-                                statusMessage,
-                                2.0f,
+                                pEventRuntimeState->statusMessages[index],
+                                statusMessageSeconds(*pEventRuntimeState, index),
                                 GameplayUiController::StatusBarEventPriority::High);
                         }
 
                         pEventRuntimeState->statusMessages.clear();
+                        pEventRuntimeState->statusMessageSeconds.clear();
                     }
 
                     if (view.m_pOutdoorWorldRuntime != nullptr)
@@ -249,26 +264,27 @@ void OutdoorGameplayInputController::updateCameraFromInput(
 
     const float keyboardPitchSpeed = 1.25f;
 
+    // Positive pitch looks up.
     if (!gameplayMouseLookState.cursorModeActive && lookUpPressed)
     {
-        view.m_cameraPitchRadians -= keyboardPitchSpeed * deltaSeconds;
+        view.m_cameraPitchRadians += keyboardPitchSpeed * cameraDeltaSeconds;
     }
 
     if (!gameplayMouseLookState.cursorModeActive && lookDownPressed)
     {
-        view.m_cameraPitchRadians += keyboardPitchSpeed * deltaSeconds;
+        view.m_cameraPitchRadians -= keyboardPitchSpeed * cameraDeltaSeconds;
     }
 
     if (!gameplayMouseLookState.cursorModeActive && centerViewPressed)
     {
-        view.m_cameraPitchRadians *= std::max(0.0f, 1.0f - deltaSeconds * 8.0f);
+        view.m_cameraPitchRadians *= std::max(0.0f, 1.0f - cameraDeltaSeconds * 8.0f);
     }
 
     if (view.m_pOutdoorPartyRuntime)
     {
         if (input.action(KeyboardAction::Land).pressed && view.m_pOutdoorPartyRuntime->partyMovementState().flying)
         {
-            view.m_pOutdoorPartyRuntime->toggleFlying();
+            view.m_pOutdoorPartyRuntime->requestLanding();
         }
     }
 

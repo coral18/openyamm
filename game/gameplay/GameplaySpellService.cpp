@@ -1,13 +1,18 @@
 #include "game/gameplay/GameplaySpellService.h"
 
+#include "engine/Localization.h"
+
 #include "game/app/GameSession.h"
 #include "game/audio/GameAudioSystem.h"
 #include "game/gameplay/GameMechanics.h"
 #include "game/gameplay/GameplayHeldItemController.h"
+#include "game/gameplay/GameplayRuntimeInterfaces.h"
 #include "game/gameplay/GameplayScreenRuntime.h"
 #include "game/gameplay/TurnBasedCombatRuntime.h"
 #include "game/party/LloydsBeaconRuntime.h"
 #include "game/party/SpellIds.h"
+#include "game/rules/GameRules.h"
+#include "game/rules/SpellRules.h"
 
 namespace OpenYAMM::Game
 {
@@ -43,7 +48,9 @@ GameplaySpellService::GameplaySpellService(GameSession &session)
 
 GameplaySpellService::QuickSpellStartResolution GameplaySpellService::tryStartQuickSpellCast(
     GameplayScreenRuntime &runtime,
-    const TargetQueries &targetQueries)
+    const TargetQueries &targetQueries,
+    std::optional<size_t> extraSlot,
+    const std::string &barSpellName)
 {
     QuickSpellStartResolution resolution = {};
 
@@ -69,7 +76,7 @@ GameplaySpellService::QuickSpellStartResolution GameplaySpellService::tryStartQu
         || runtime.activeEventDialog().isActive
         || hasActiveLootView)
     {
-        runtime.setStatusBarEvent("Finish current action");
+        runtime.setStatusBarEvent(Engine::tr("Finish current action"));
         return resolution;
     }
 
@@ -87,7 +94,11 @@ GameplaySpellService::QuickSpellStartResolution GameplaySpellService::tryStartQu
         return resolution;
     }
 
-    if (pCaster->quickSpellName.empty())
+    const std::string &quickSpellName = !barSpellName.empty() ? barSpellName
+        : extraSlot && *extraSlot < ExtraQuickSpellSlotCount ? pCaster->extraQuickSpellNames[*extraSlot]
+        : pCaster->quickSpellName;
+
+    if (quickSpellName.empty())
     {
         resolution.disposition = QuickSpellStartDisposition::AttackFallback;
         return resolution;
@@ -100,21 +111,45 @@ GameplaySpellService::QuickSpellStartResolution GameplaySpellService::tryStartQu
         return resolution;
     }
 
-    const SpellEntry *pSpellEntry = pSpellTable->findByName(pCaster->quickSpellName);
+    const SpellEntry *pSpellEntry = pSpellTable->findByName(quickSpellName, spellKnownBy(*pCaster));
 
     if (pSpellEntry == nullptr)
     {
-        runtime.setStatusBarEvent("Unknown quick spell");
+        runtime.setStatusBarEvent(Engine::tr("Unknown quick spell"));
         return resolution;
     }
 
-    if (tryCastSpellFromMember(
-            runtime,
-            pParty->activeMemberIndex(),
-            uint32_t(pSpellEntry->id),
-            pSpellEntry->name,
-            true,
-            &targetQueries))
+    const size_t casterMemberIndex = pParty->activeMemberIndex();
+    const uint32_t spellId = uint32_t(pSpellEntry->id);
+
+    if (!pCaster->knowsSpell(spellId))
+    {
+        runtime.setStatusBarEvent(Engine::tr("Spell not learned"));
+        return resolution;
+    }
+
+    // A caster without the mana, the rules' other means (an Assassin's combo points) or a target for the quick spell
+    // attacks instead, so the character is never stuck; attacking is how an Assassin builds combo points.
+    const std::optional<uint32_t> manaCost = PartySpellSystem::manaCost(*pParty, *pCaster, *pSpellTable, spellId);
+
+    if ((manaCost && !pParty->canSpendSpellPoints(casterMemberIndex, int(*manaCost)))
+        || pParty->rules().spells.castRefusal(*pParty, casterMemberIndex, spellId))
+    {
+        resolution.disposition = QuickSpellStartDisposition::AttackFallback;
+        return resolution;
+    }
+
+    PartySpellCastRequest request = {};
+    request.casterMemberIndex = casterMemberIndex;
+    request.spellId = spellId;
+
+    if (!tryPrepareQuickCastRequest(runtime, request, pSpellEntry->name, targetQueries))
+    {
+        resolution.disposition = QuickSpellStartDisposition::AttackFallback;
+        return resolution;
+    }
+
+    if (runtime.tryCastSpellRequest(request, pSpellEntry->name))
     {
         resolution.disposition = QuickSpellStartDisposition::CastStarted;
     }
@@ -139,7 +174,7 @@ GameplaySpellService::MemberSpellCastResolution GameplaySpellService::castSpellF
 
         if (pCaster == nullptr || !pCaster->knowsSpell(spellId))
         {
-            runtime.setStatusBarEvent("Spell not learned");
+            runtime.setStatusBarEvent(Engine::tr("Spell not learned"));
             return resolution;
         }
     }
@@ -152,6 +187,7 @@ GameplaySpellService::MemberSpellCastResolution GameplaySpellService::castSpellF
         && pTargetQueries != nullptr
         && !tryPrepareQuickCastRequest(runtime, request, spellName, *pTargetQueries))
     {
+        resolution.noTarget = true;
         return resolution;
     }
 
@@ -184,6 +220,21 @@ bool GameplaySpellService::tryPrepareQuickCastRequest(
     const std::string &spellName,
     const TargetQueries &targetQueries) const
 {
+    // A spell the rules hold as an aura (MAW's Meditation on Telepathy's id, Bless) toggles without a target.
+    const Party *pParty = runtime.partyReadOnly();
+
+    if (pParty != nullptr && pParty->rules().spells.castsAsAura(*pParty, request.casterMemberIndex, request.spellId))
+    {
+        return true;
+    }
+
+    if (targetQueries.characterTargetIndex)
+    {
+        request.quickCast = true;
+        request.targetCharacterIndex = targetQueries.characterTargetIndex;
+        return true;
+    }
+
     if (spellIdFromValue(request.spellId) == SpellId::Fear)
     {
         request.quickCast = true;
@@ -199,13 +250,7 @@ bool GameplaySpellService::tryPrepareQuickCastRequest(
             PartySpellCastEffectKind::ActorEffect
         };
 
-        if (tryResolveQuickCastRequest(runtime, request, fearTargetDescriptor, targetQueries))
-        {
-            return true;
-        }
-
-        runtime.setStatusBarEvent("No valid target exists!", 3.0f);
-        return false;
+        return tryResolveQuickCastRequest(runtime, request, fearTargetDescriptor, targetQueries);
     }
 
     const std::optional<PartySpellDescriptor> descriptor = PartySpellSystem::describeSpell(request.spellId);
@@ -216,14 +261,7 @@ bool GameplaySpellService::tryPrepareQuickCastRequest(
     }
 
     request.quickCast = true;
-
-    if (tryResolveQuickCastRequest(runtime, request, *descriptor, targetQueries))
-    {
-        return true;
-    }
-
-    runtime.setStatusBarEvent("No valid target exists!", 3.0f);
-    return false;
+    return tryResolveQuickCastRequest(runtime, request, *descriptor, targetQueries);
 }
 
 bool GameplaySpellService::tryResolveQuickCastRequest(
@@ -239,15 +277,57 @@ bool GameplaySpellService::tryResolveQuickCastRequest(
         return true;
     }
 
+    if (descriptor.targetKind == PartySpellCastTargetKind::Character)
+    {
+        const Party *pParty = runtime.partyReadOnly();
+        if (pParty == nullptr)
+        {
+            return false;
+        }
+
+        request.targetCharacterIndex = PartySpellSystem::quickCastCharacterTarget(
+            *pParty, request.casterMemberIndex, request.spellId, runtime.spellTable());
+        return request.targetCharacterIndex.has_value();
+    }
+
     if (descriptor.targetKind == PartySpellCastTargetKind::Actor)
     {
         if (pWorldRuntime != nullptr)
         {
-            request.targetActorIndex = pWorldRuntime->spellActionHoveredActorIndex();
-
-            if (!request.targetActorIndex)
+            // The attack's own target, else the hovered actor, else the game's pick; every one a living hostile
+            // within spell reach, whether or not it has noticed the party.
+            const auto usable = [pWorldRuntime](const std::optional<size_t> &actorIndex)
             {
-                request.targetActorIndex = pWorldRuntime->spellActionClosestVisibleHostileActorIndex();
+                return actorIndex && PartySpellSystem::isUsableSpellActorTarget(*pWorldRuntime, *actorIndex, true);
+            };
+            request.targetActorIndex = targetQueries.preferredActorIndex;
+
+            if (!usable(request.targetActorIndex))
+            {
+                request.targetActorIndex = pWorldRuntime->spellActionHoveredActorIndex();
+            }
+
+            // A missile spell with no actor under the crosshair flies at a standing destructible there rather than
+            // at the game's pick (devdocs/INDOOR_DESTRUCTIBLES.md "Aiming").
+            if (!usable(request.targetActorIndex) && descriptor.effectKind == PartySpellCastEffectKind::Projectile)
+            {
+                if (const std::optional<bx::Vec3> point = resolveCursorDestructiblePoint(targetQueries, *pWorldRuntime))
+                {
+                    request.targetActorIndex.reset();
+                    request.hasTargetPoint = true;
+                    request.targetX = point->x;
+                    request.targetY = point->y;
+                    request.targetZ = point->z;
+                    return true;
+                }
+            }
+
+            if (!usable(request.targetActorIndex))
+            {
+                const Party *pParty = runtime.partyReadOnly();
+                const SpellRules &spellRules = pParty != nullptr ? pParty->rules().spells : standardSpellRules();
+                request.targetActorIndex =
+                    PartySpellSystem::quickCastActorTarget(*pWorldRuntime, spellRules, request.spellId);
             }
         }
 
@@ -329,6 +409,26 @@ std::optional<bx::Vec3> GameplaySpellService::resolveCursorTargetPoint(
     return pWorldRuntime->spellActionGroundTargetPoint(targetQueries.cursorX, targetQueries.cursorY);
 }
 
+std::optional<bx::Vec3> GameplaySpellService::resolveCursorDestructiblePoint(
+    const TargetQueries &targetQueries,
+    IGameplayWorldRuntime &worldRuntime)
+{
+    if (targetQueries.screenWidth <= 0.0f || targetQueries.screenHeight <= 0.0f)
+    {
+        return std::nullopt;
+    }
+
+    const GameplayWorldPickRequest pickRequest = worldRuntime.buildWorldPickRequest(
+        GameplayWorldPickRequestInput{
+            .screenX = targetQueries.useCrosshairTarget ? targetQueries.screenWidth * 0.5f : targetQueries.cursorX,
+            .screenY = targetQueries.useCrosshairTarget ? targetQueries.screenHeight * 0.5f : targetQueries.cursorY,
+            .screenWidth = int(targetQueries.screenWidth),
+            .screenHeight = int(targetQueries.screenHeight),
+            .includeRay = true,
+        });
+    return standingDestructibleHitPoint(worldRuntime, worldRuntime.pickPartyAttackTarget(pickRequest));
+}
+
 GameplaySpellService::SpellRequestResolution GameplaySpellService::resolveSpellRequest(
     GameplayScreenRuntime &runtime,
     const PartySpellCastRequest &initialRequest,
@@ -345,7 +445,6 @@ GameplaySpellService::SpellRequestResolution GameplaySpellService::resolveSpellR
         request.skillMasteryOverride = selection.skillMasteryOverride;
         request.bypassRequiredMastery = selection.bypassRequiredMastery;
         request.bypassGameplayCasterValidation = selection.bypassGameplayCasterValidation;
-        request.bypassTownPortalFailureChecks = selection.bypassTownPortalFailureChecks;
         request.spendMana = selection.spendMana;
         request.applyRecovery = selection.applyRecovery;
     }
@@ -359,6 +458,19 @@ GameplaySpellService::SpellRequestResolution GameplaySpellService::resolveSpellR
     }
 
     resolution.castResult = castSpell(runtime, request);
+
+    // A solo run has one character: a heal, cure or buff that wants a character goes to the hero without asking.
+    // MM9 hirelings, which come along but never act, are not picked this way.
+    if (resolution.castResult.status == PartySpellCastStatus::NeedCharacterTarget)
+    {
+        const Party *pParty = runtime.partyReadOnly();
+
+        if (pParty != nullptr && pParty->soloRun() && pParty->member(request.casterMemberIndex) != nullptr)
+        {
+            request.targetCharacterIndex = request.casterMemberIndex;
+            resolution.castResult = castSpell(runtime, request);
+        }
+    }
 
     if (resolution.castResult.succeeded())
     {
@@ -378,7 +490,6 @@ GameplaySpellService::SpellRequestResolution GameplaySpellService::resolveSpellR
             overlay.skillMasteryOverride = request.skillMasteryOverride;
             overlay.bypassRequiredMastery = request.bypassRequiredMastery;
             overlay.bypassGameplayCasterValidation = request.bypassGameplayCasterValidation;
-            overlay.bypassTownPortalFailureChecks = request.bypassTownPortalFailureChecks;
             overlay.spendMana = request.spendMana;
             overlay.applyRecovery = request.applyRecovery;
         }
@@ -399,7 +510,7 @@ GameplaySpellService::SpellRequestResolution GameplaySpellService::resolveSpellR
         if (isSpellId(request.spellId, SpellId::Telekinesis)
             && !GameplayHeldItemController::tryDisplaceHeldInventoryItem(runtime))
         {
-            runtime.setStatusBarEvent("Finish current action");
+            runtime.setStatusBarEvent(Engine::tr("Finish current action"));
             return resolution;
         }
 
@@ -466,48 +577,46 @@ std::string GameplaySpellService::pendingTargetSelectionPromptText(bool includeC
     const GameplayScreenState::PendingSpellTargetState &pendingTargetState =
         m_session.gameplayScreenState().pendingSpellTarget();
 
+    const std::string spellName = Engine::localizeKnown(pendingTargetState.spellName, "spell");
     std::string prompt =
         pendingTargetState.targetKind == PartySpellCastTargetKind::Actor
-            ? "Select actor for "
+            ? Engine::tr("Select actor for {spell}", {{"spell", spellName}})
             : pendingTargetState.targetKind == PartySpellCastTargetKind::Character
-            ? "Select character for "
+            ? Engine::tr("Select character for {spell}", {{"spell", spellName}})
             : pendingTargetState.targetKind == PartySpellCastTargetKind::GroundPoint
-            ? "Select ground point for "
-            : pendingTargetState.targetKind == PartySpellCastTargetKind::TelekinesisTarget
-            ? "Select target for "
-            : "Select target for ";
-    prompt += pendingTargetState.spellName;
+            ? Engine::tr("Select ground point for {spell}", {{"spell", spellName}})
+            : Engine::tr("Select target for {spell}", {{"spell", spellName}});
 
     if (includeControls)
     {
-#if defined(__ANDROID__)
+#if defined(__ANDROID__) || defined(OPENYAMM_IOS)
         const bool mobileGroundTargetConfirmSpell =
             isSpellId(pendingTargetState.spellId, SpellId::MeteorShower)
             || isSpellId(pendingTargetState.spellId, SpellId::Starburst);
 
         if (mobileGroundTargetConfirmSpell)
         {
-            prompt += "  Drag target  Spell button cast  Pause cancel";
+            prompt += Engine::tr("  Drag target  Spell button cast  Pause cancel");
         }
         else if (pendingTargetState.targetKind == PartySpellCastTargetKind::Character)
         {
-            prompt += "  Tap portrait  Pause cancel";
+            prompt += Engine::tr("  Tap portrait  Pause cancel");
         }
         else if (pendingTargetState.targetKind == PartySpellCastTargetKind::CharacterOrWorldTarget)
         {
-            prompt += "  Tap target  Pause cancel";
+            prompt += Engine::tr("  Tap target  Pause cancel");
         }
         else if (pendingTargetState.targetKind == PartySpellCastTargetKind::Actor
             || pendingTargetState.targetKind == PartySpellCastTargetKind::ActorOrCharacter)
         {
-            prompt += "  Tap target  Pause cancel";
+            prompt += Engine::tr("  Tap target  Pause cancel");
         }
         else
         {
-            prompt += "  Tap target  Pause cancel";
+            prompt += Engine::tr("  Tap target  Pause cancel");
         }
 #else
-        prompt += "  LMB cast  Esc cancel";
+        prompt += Engine::tr("  LMB cast  Esc cancel");
 #endif
     }
 
@@ -676,6 +785,11 @@ bool GameplaySpellService::isQuickCastable(const PartySpellDescriptor &descripto
         return true;
     }
 
+    if (descriptor.targetKind == PartySpellCastTargetKind::Character)
+    {
+        return PartySpellSystem::hasQuickCastCharacterTarget(descriptor.spellId);
+    }
+
     if (descriptor.targetKind == PartySpellCastTargetKind::Actor)
     {
         return descriptor.effectKind == PartySpellCastEffectKind::Projectile
@@ -721,7 +835,8 @@ bool GameplaySpellService::tryOpenSelectionUi(
             GameplayUiController::UtilitySpellOverlayMode::InventoryTarget,
             request.spellId,
             request.casterMemberIndex);
-        runtime.setStatusBarEvent("Select item for " + spellName, 4.0f);
+        runtime.setStatusBarEvent(
+            Engine::tr("Select item for {spell}", {{"spell", Engine::localizeKnown(spellName, "spell")}}), 4.0f);
         return true;
     }
 
@@ -734,18 +849,9 @@ bool GameplaySpellService::tryOpenSelectionUi(
 
     if (isSpellId(request.spellId, SpellId::TownPortal))
     {
-        if (runtime.shouldTownPortalCastOpenDimensionDoor())
-        {
-            runtime.openDimensionDoorOverlay(
-                request.casterMemberIndex,
-                request.spellId,
-                "You feel high magic presence here.");
-            return true;
-        }
-
         if (!runtime.ensureTownPortalDestinationsLoaded())
         {
-            runtime.setStatusBarEvent("Town Portal data missing");
+            runtime.setStatusBarEvent(Engine::tr("Town Portal data missing"));
             return true;
         }
 
@@ -754,7 +860,7 @@ bool GameplaySpellService::tryOpenSelectionUi(
             request.spellId,
             request.casterMemberIndex);
         runtime.resetUtilitySpellOverlayInteractionState();
-        runtime.setStatusBarEvent("Choose Town Portal destination", 4.0f);
+        runtime.setStatusBarEvent(Engine::tr("Choose Town Portal destination"), 4.0f);
         return true;
     }
 
@@ -769,7 +875,7 @@ bool GameplaySpellService::tryOpenSelectionUi(
             request.casterMemberIndex,
             lloydsBeaconHasRecallableBeacon(pCaster));
         runtime.resetUtilitySpellOverlayInteractionState();
-        runtime.setStatusBarEvent("Set or recall beacon", 4.0f);
+        runtime.setStatusBarEvent(Engine::tr("Set or recall beacon"), 4.0f);
         return true;
     }
 
@@ -821,10 +927,27 @@ void GameplaySpellService::applySuccessFeedback(
         }
     }
 
-    if (!spellName.empty() && result.effectKind != PartySpellCastEffectKind::Telekinesis)
+    const std::string statusText = successStatusText(spellName, result);
+
+    if (!statusText.empty())
     {
-        runtime.setStatusBarEvent("Cast " + spellName);
+        runtime.setStatusBarEvent(statusText);
     }
+}
+
+std::string GameplaySpellService::successStatusText(const std::string &spellName, const PartySpellCastResult &result)
+{
+    if (!result.statusText.empty())
+    {
+        return result.statusText;
+    }
+
+    if (spellName.empty() || result.effectKind == PartySpellCastEffectKind::Telekinesis)
+    {
+        return {};
+    }
+
+    return Engine::tr("Cast {spell}", {{"spell", Engine::localizeKnown(spellName, "spell")}});
 }
 
 void GameplaySpellService::applyFailureFeedback(

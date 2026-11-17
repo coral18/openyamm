@@ -2,6 +2,7 @@
 
 #include "engine/AssetFileSystem.h"
 #include "engine/FontAsset.h"
+#include "game/ui/GameplayHudCommon.h"
 #include "game/ui/IScreen.h"
 
 #include <bgfx/bgfx.h>
@@ -69,7 +70,6 @@ public:
     ~MenuScreenBase() override;
 
     static void shutdownSharedResources();
-    void setFontSettings(const Engine::FontSettings &settings);
 
     void renderFrame(
         int width,
@@ -132,6 +132,7 @@ protected:
     void preloadFont(const std::string &fontName);
     void preloadLayoutAssets(const UiLayoutManager &layoutManager);
     void setClipRect(const std::optional<Rect> &rect);
+    void drawLine(float x1, float y1, float x2, float y2, float thickness, uint32_t colorAbgr);
     void drawSolidRect(const Rect &rect, uint32_t colorAbgr);
     void drawEllipseOutline(const Rect &rect, float thickness, uint32_t colorAbgr);
 
@@ -156,8 +157,13 @@ protected:
         int height = 0;
         int physicalWidth = 0;
         int physicalHeight = 0;
+        // Empty for cooked art, whose blocks go straight to the GPU.
         std::vector<uint8_t> bgraPixels;
         bgfx::TextureHandle handle = BGFX_INVALID_HANDLE;
+        // Cooked art is padded to whole blocks (and power-of-two sides when mipped); UVs cover the content only.
+        float uScale = 1.0f;
+        float vScale = 1.0f;
+        TextureFilterProfile filterProfile = TextureFilterProfile::Ui;
     };
 
     struct DynamicTextureHandle
@@ -170,13 +176,8 @@ protected:
 
     using FontGlyphMetrics = Engine::FontGlyphMetrics;
 
-    struct FontHandle : Engine::FontAtlas
-    {
-        std::string normalizedFontName;
-        int rasterPixelHeight = 0;
-        bgfx::TextureHandle mainTextureHandle = BGFX_INVALID_HANDLE;
-        bgfx::TextureHandle shadowTextureHandle = BGFX_INVALID_HANDLE;
-    };
+    // Fonts are shared with the gameplay HUD (SharedFontCache).
+    using FontHandle = GameplayHudFontData;
 
     virtual void drawScreen(float deltaSeconds) = 0;
 
@@ -184,8 +185,8 @@ protected:
     void destroyRendererResources();
     const TextureHandle *findTexture(const std::string &textureName) const;
     const TextureHandle *ensureTexture(const std::string &textureName);
-    Engine::FontSettings m_fontSettings;
-    std::string fontCacheKey(const std::string &fontName, int pixelHeight) const;
+    const TextureHandle *ensureCookedTexture(
+        const std::string &textureName, const std::string &resolvedPath, const std::vector<uint8_t> &bytes);
     const FontHandle *findFont(const std::string &fontName, int pixelHeight) const;
     const FontHandle *ensureFont(const std::string &fontName, int pixelHeight = 0);
     const FontHandle *ensureTextFont(const std::string &fontName, float &scale);
@@ -196,7 +197,9 @@ protected:
         int height,
         const std::vector<uint8_t> &pixelsBgra);
     std::optional<std::string> resolveTexturePath(const std::string &textureName);
-    std::optional<std::string> resolveFontPath(const std::string &fontName);
+    // Releases the shared textures when the mounted assets changed since they were loaded.
+    void releaseTexturesIfAssetsChanged();
+    static void releaseSharedTextures();
 
     const Engine::AssetFileSystem *m_pAssetFileSystem = nullptr;
     const GameplayInputFrame *m_pInputFrame = nullptr;
@@ -220,13 +223,11 @@ protected:
     uint32_t m_drawTint = 0xffffffffu;
     static std::vector<TextureHandle> s_textureHandles;
     static std::vector<DynamicTextureHandle> s_dynamicTextureHandles;
-    static std::vector<FontHandle> s_fontHandles;
     static std::unordered_map<std::string, size_t> s_textureIndexByName;
-    static std::unordered_map<std::string, size_t> s_fontIndexByName;
     static int s_fontFrameWidth;
     static int s_fontFrameHeight;
     static std::unordered_map<std::string, std::unordered_map<std::string, std::string>> s_directoryEntriesByPath;
     static std::unordered_map<std::string, std::optional<std::string>> s_resolvedTexturePaths;
-    static std::unordered_map<std::string, std::optional<std::string>> s_resolvedFontPaths;
+    static uint64_t s_assetContentGeneration;
 };
 }

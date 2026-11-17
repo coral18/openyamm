@@ -6,12 +6,14 @@
 #include "game/tables/PortraitEnums.h"
 
 #include <cstdint>
+#include <memory>
 #include <optional>
 #include <string>
 #include <vector>
 
 namespace OpenYAMM::Game
 {
+class CombatRules;
 class GameplayScreenRuntime;
 class IGameplayWorldRuntime;
 
@@ -40,6 +42,10 @@ public:
         bool affectsAllParty = false;
         bool hit = false;
         bool killed = false;
+        // A party missile's or spell's damage was a critical hit.
+        bool critical = false;
+        // A solo run's ordinary bow attack's shared credit (ProjectileState::hitCredit).
+        std::shared_ptr<bool> hitCredit;
     };
 
     struct PendingCombatEventContext
@@ -63,12 +69,24 @@ public:
         bool targetStrongEnemy = false;
     };
 
+    // A party hit that deals no damage after resistances counts as a miss unless it stuns the target.
+    static bool partyHitLands(int appliedDamage, bool stunsTarget);
     static std::string formatPartyAttackStatusText(
         const std::string &attackerName,
         const std::string &targetName,
         const CharacterAttackResult &attack,
         bool killed,
-        std::optional<int> appliedDamage = std::nullopt);
+        std::optional<int> appliedDamage = std::nullopt,
+        const CombatRules *pRules = nullptr);
+
+    // With rules, an area spell's `monstersHit` and `totalDamage` sum what its explosion did this frame.
+    static std::string formatPartyProjectileActorImpactStatusText(
+        const std::string &sourceName,
+        const std::string &targetName,
+        const CombatEvent &event,
+        const CombatRules *pRules = nullptr,
+        int monstersHit = 1,
+        int totalDamage = 0);
 
     static void handlePartyAttackPresentation(
         GameplayScreenRuntime *pRuntime,
@@ -118,7 +136,9 @@ public:
         int damage,
         int spellId,
         bool hit,
-        bool killed);
+        bool killed,
+        bool critical = false,
+        std::shared_ptr<bool> hitCredit = nullptr);
     const std::vector<CombatEvent> &pendingCombatEvents() const;
     void clearPendingCombatEvents();
     void handleAndClearPendingCombatEvents(PendingCombatEventContext &context);
@@ -149,7 +169,9 @@ private:
         int damage,
         int spellId,
         bool hit,
-        bool killed);
+        bool killed,
+        bool critical = false,
+        std::shared_ptr<bool> hitCredit = nullptr);
     static void handlePendingCombatEvents(
         PendingCombatEventContext &context,
         const std::vector<CombatEvent> &events);

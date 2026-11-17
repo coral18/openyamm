@@ -17,7 +17,8 @@ TEST_CASE("screenshot tour loads ordered poses and relative output with per-shot
         output << "output_dir: screenshots\nsettle_seconds: 2\nexit: true\nshots:\n"
                   "  - name: coast\n    position: [1370.718, -8612.107, 974.502]\n"
                   "    yaw: 0.322\n    pitch: -0.371493\n"
-                  "  - name: sea\n    position: [1400, -8600, 975]\n    settle_seconds: 0\n";
+                  "  - name: sea\n    position: [1400, -8600, 975]\n    settle_seconds: 0\n"
+                  "    time: \"20:45\"\n    commands: [\"sky weather 5\", \"sky rain heavy\"]\n";
     }
     std::string error = "previous error";
     const std::optional<ScreenshotTour> tour = loadScreenshotTour(path, error);
@@ -33,6 +34,11 @@ TEST_CASE("screenshot tour loads ordered poses and relative output with per-shot
     CHECK(tour->shots[0].settleSeconds == -1.0f);
     CHECK(tour->shots[1].name == "sea");
     CHECK(tour->shots[1].settleSeconds == 0.0f);
+    CHECK_FALSE(tour->shots[0].clockMinutes);
+    REQUIRE(tour->shots[1].clockMinutes);
+    CHECK(*tour->shots[1].clockMinutes == 20 * 60 + 45);
+    REQUIRE(tour->shots[1].commands.size() == 2);
+    CHECK(tour->shots[1].commands[1] == "sky rain heavy");
     std::filesystem::remove(path);
 }
 
@@ -48,6 +54,10 @@ TEST_CASE("screenshot tour rejects malformed poses paths and non-finite values")
         "shots: [{name: coast, position: [0, 0, 0], yaw: .inf}]",
         "shots: [{name: coast, position: [0, 0, 0], pitch: 2}]",
         "shots: [{name: coast, position: [0, 0, 0], settle_seconds: -1}]",
+        "shots: [{name: coast, position: [0, 0, 0], time: \"24:00\"}]",
+        "shots: [{name: coast, position: [0, 0, 0], time: \"9:5\"}]",
+        "shots: [{name: coast, position: [0, 0, 0], commands: \"sky clear\"}]",
+        "shots: [{name: coast, position: [0, 0, 0], commands: [\"\"]}]",
         "settle_seconds: 601\nshots: [{name: coast, position: [0, 0, 0]}]",
         "exit: perhaps\nshots: [{name: coast, position: [0, 0, 0]}]",
         "output_dir: []\nshots: [{name: coast, position: [0, 0, 0]}]"})
@@ -119,7 +129,7 @@ TEST_CASE("screenshot launch directives are read but never persisted")
     CHECK(reloaded->effectSpawnId.empty());
     CHECK_EQ(reloaded->effectSpawnCount, 1u);
     CHECK_EQ(reloaded->effectStatsDelaySeconds, doctest::Approx(-1.0f));
-    CHECK_FALSE(reloaded->actorModels);
+    CHECK(reloaded->actorModels);    // a persisted toggle, unlike the launch directives
     CHECK(reloaded->actorModelsManifest.empty());
     CHECK_EQ(reloaded->actorSpawnId, 0);
     CHECK(reloaded->modelSpawnPath.empty());
@@ -138,26 +148,26 @@ TEST_CASE("screenshot launch directives are read but never persisted")
     std::filesystem::remove(path);
 }
 
-TEST_CASE("melee hit blood effects setting is opt-in and persists")
+TEST_CASE("melee hit blood effects setting defaults on as shipped and persists when turned off")
 {
-    CHECK_FALSE(GameSettings{}.meleeHitBloodEffects);
+    CHECK(GameSettings{}.meleeHitBloodEffects);
 
     const std::filesystem::path path =
         std::filesystem::temp_directory_path() / "openyamm-melee-hit-blood-settings-test.ini";
     {
         std::ofstream output(path);
-        output << "[gameplay]\nmelee_hit_blood_effects=true\n";
+        output << "[gameplay]\nmelee_hit_blood_effects=false\n";
     }
 
     std::string error;
     const std::optional<GameSettings> settings = loadGameSettings(path, error);
     REQUIRE(settings);
-    CHECK(settings->meleeHitBloodEffects);
+    CHECK_FALSE(settings->meleeHitBloodEffects);
     REQUIRE(saveGameSettings(path, *settings, error));
 
     const std::optional<GameSettings> reloaded = loadGameSettings(path, error);
     REQUIRE(reloaded);
-    CHECK(reloaded->meleeHitBloodEffects);
+    CHECK_FALSE(reloaded->meleeHitBloodEffects);
 
     std::filesystem::remove(path);
 }

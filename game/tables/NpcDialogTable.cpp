@@ -640,6 +640,39 @@ const NpcGreetingEntry *NpcDialogTable::getGreetingForNpc(uint32_t npcId) const
     return getGreeting(pNpc->greetId);
 }
 
+std::vector<uint32_t> NpcDialogTable::getTopicIdsForNpc(uint32_t npcId,
+    const std::unordered_map<uint32_t, uint32_t> *pTopicOverrides) const
+{
+    std::map<uint32_t, uint32_t> slots;
+    if (const NpcEntry *pNpc = getNpc(npcId))
+    {
+        for (size_t i = 0; i < pNpc->topicIds.size(); ++i)
+        {
+            slots[uint32_t(i)] = pNpc->topicIds[i];
+        }
+    }
+    else
+    {
+        return {};
+    }
+    if (pTopicOverrides != nullptr)
+    {
+        for (const auto &[slot, topic] : *pTopicOverrides)
+        {
+            slots[slot] = topic;
+        }
+    }
+    std::vector<uint32_t> result;
+    for (const auto &[slot, topic] : slots)
+    {
+        if (topic != 0)
+        {
+            result.push_back(topic);
+        }
+    }
+    return result;
+}
+
 std::vector<NpcDialogTable::ResolvedTopic> NpcDialogTable::getTopicsForNpc(
     uint32_t npcId,
     const std::unordered_map<uint32_t, uint32_t> *pTopicOverrides
@@ -653,37 +686,8 @@ std::vector<NpcDialogTable::ResolvedTopic> NpcDialogTable::getTopicsForNpc(
         return resolvedTopics;
     }
 
-    size_t topicSlotCount = pNpc->topicIds.size();
-
-    if (pTopicOverrides != nullptr)
+    for (uint32_t topicId : getTopicIdsForNpc(npcId, pTopicOverrides))
     {
-        for (const auto &[topicSlotIndex, overriddenTopicId] : *pTopicOverrides)
-        {
-            (void)overriddenTopicId;
-            topicSlotCount = std::max(topicSlotCount, static_cast<size_t>(topicSlotIndex) + 1);
-        }
-    }
-
-    for (size_t topicSlotIndex = 0; topicSlotIndex < topicSlotCount; ++topicSlotIndex)
-    {
-        uint32_t topicId = topicSlotIndex < pNpc->topicIds.size() ? pNpc->topicIds[topicSlotIndex] : 0;
-
-        if (pTopicOverrides != nullptr)
-        {
-            const std::unordered_map<uint32_t, uint32_t>::const_iterator overrideIt =
-                pTopicOverrides->find(static_cast<uint32_t>(topicSlotIndex));
-
-            if (overrideIt != pTopicOverrides->end())
-            {
-                topicId = overrideIt->second;
-            }
-        }
-
-        if (topicId == 0)
-        {
-            continue;
-        }
-
         const std::unordered_map<uint32_t, NpcTopicEntry>::const_iterator topicIt = m_topicsById.find(topicId);
 
         if (topicIt == m_topicsById.end())
@@ -743,7 +747,11 @@ std::vector<uint32_t> NpcDialogTable::getNpcIdsForHouse(
             }
         }
 
-        if (effectiveHouseId == houseId)
+        const auto extraIt = m_extraHouses.find(npcId);
+
+        if (effectiveHouseId == houseId
+            || (extraIt != m_extraHouses.end()
+                && std::find(extraIt->second.begin(), extraIt->second.end(), houseId) != extraIt->second.end()))
         {
             npcIds.push_back(npcId);
         }
@@ -751,6 +759,16 @@ std::vector<uint32_t> NpcDialogTable::getNpcIdsForHouse(
 
     std::sort(npcIds.begin(), npcIds.end());
     return npcIds;
+}
+
+void NpcDialogTable::setExtraHouses(std::unordered_map<uint32_t, std::vector<uint32_t>> extraHouses)
+{
+    m_extraHouses = std::move(extraHouses);
+}
+
+const std::unordered_map<uint32_t, std::vector<uint32_t>> &NpcDialogTable::extraHouses() const
+{
+    return m_extraHouses;
 }
 
 std::optional<std::string> NpcDialogTable::getNewsText(uint32_t newsId) const

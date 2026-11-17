@@ -79,6 +79,7 @@ std::optional<GameplayTreasureSpawnResult> generateTreasureSpawnItem(
     const StandardItemEnchantTable &standardItemEnchantTable,
     const SpecialItemEnchantTable &specialItemEnchantTable,
     Party *pParty,
+    const std::string &worldId,
     const std::function<bool(const ItemDefinition &)> &filter)
 {
     const int treasureLevel = std::clamp(spawnTreasureLevel, RandomTreasureMinLevel, RandomTreasureMaxLevel);
@@ -90,6 +91,7 @@ std::optional<GameplayTreasureSpawnResult> generateTreasureSpawnItem(
 
     if (resolvedTreasureLevel != RandomTreasureMaxLevel)
     {
+        // 20% nothing, 40% a gold heap, 40% an item, as MM6-MM8 (MM9 too: the user, 2026-11-09).
         const int roll = std::uniform_int_distribution<int>(0, 99)(rng);
 
         if (roll < 20)
@@ -99,7 +101,11 @@ std::optional<GameplayTreasureSpawnResult> generateTreasureSpawnItem(
 
         if (roll < 60)
         {
-            result.goldAmount = uint32_t(std::max(0, generateGoldAmount(treasureLevel, rng)));
+            // By the marker's own level, as MM6-MM8; world.yml groundGoldByItemTier: by its item's tier.
+            const int goldLevel = itemTable.groundGoldByItemTier(worldId)
+                ? std::min(resolvedTreasureLevel, SpawnableItemTreasureLevels)
+                : treasureLevel;
+            result.goldAmount = uint32_t(std::max(0, generateGoldAmount(goldLevel, rng)));
             const uint32_t goldHeapItemId =
                 result.goldAmount <= 200 ? GoldHeapSmallItemId : GoldHeapLargeItemId;
             result.item = ItemGenerator::makeInventoryItem(goldHeapItemId, itemTable, ItemGenerationMode::ChestLoot);
@@ -110,6 +116,7 @@ std::optional<GameplayTreasureSpawnResult> generateTreasureSpawnItem(
         ItemGenerationRequest request = {};
         request.treasureLevel = std::min(resolvedTreasureLevel, SpawnableItemTreasureLevels);
         request.mode = ItemGenerationMode::ChestLoot;
+        request.worldId = worldId;
         const std::optional<InventoryItem> generatedItem =
             ItemGenerator::generateRandomInventoryItem(
                 itemTable,
@@ -134,6 +141,7 @@ std::optional<GameplayTreasureSpawnResult> generateTreasureSpawnItem(
     request.mode = ItemGenerationMode::ChestLoot;
     request.allowRareItems = true;
     request.rareItemsOnly = true;
+    request.worldId = worldId;
     const std::optional<InventoryItem> generatedItem =
         ItemGenerator::generateRandomInventoryItem(
             itemTable,

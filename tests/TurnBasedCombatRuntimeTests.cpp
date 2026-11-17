@@ -26,6 +26,18 @@ OpenYAMM::Game::Party makeTurnBasedParty(size_t memberCount = 2)
     party.seed(seed);
     return party;
 }
+
+OpenYAMM::Game::GameplayRuntimeActorState makeNearbyHostileActor()
+{
+    OpenYAMM::Game::GameplayRuntimeActorState actor = {};
+    actor.monsterId = 1;
+    actor.hostileToParty = true;
+    actor.preciseX = 128.0f;
+    actor.preciseY = 0.0f;
+    actor.preciseZ = 0.0f;
+    actor.radius = 32;
+    return actor;
+}
 } // namespace
 
 TEST_CASE("turn based runtime enters attack after OE wait and exposes first character action")
@@ -87,7 +99,7 @@ TEST_CASE("turn based runtime keeps recovering characters queued until their tur
     CHECK_EQ(pMember->recoverySecondsRemaining, doctest::Approx(0.0f));
 }
 
-TEST_CASE("turn based runtime does not enter movement just because actors are ready after wait")
+TEST_CASE("turn based runtime grants a ready actor its attack stage action before a recovering member")
 {
     OpenYAMM::Game::Party party = makeTurnBasedParty(1);
     OpenYAMM::Game::Character *pMember = party.member(0);
@@ -97,24 +109,106 @@ TEST_CASE("turn based runtime does not enter movement just because actors are re
     OpenYAMM::Tests::PartySpellTestWorldRuntime world = {};
     world.bindParty(&party);
     world.setPartyPosition(0.0f, 0.0f, 0.0f);
-
-    OpenYAMM::Game::GameplayRuntimeActorState actor = {};
-    actor.monsterId = 1;
-    actor.hostileToParty = true;
-    actor.preciseX = 128.0f;
-    actor.preciseY = 0.0f;
-    actor.preciseZ = 0.0f;
-    actor.radius = 32;
-    world.addActor(actor);
+    world.addActor(makeNearbyHostileActor());
 
     OpenYAMM::Game::TurnBasedCombatRuntime runtime = {};
 
     REQUIRE(runtime.begin(party, &world));
+    CHECK(runtime.actorMode() == OpenYAMM::Game::ActorTurnBasedMode::MoveOnly);
     runtime.update(&party, &world, 0.6f);
 
     CHECK(runtime.stage() == OpenYAMM::Game::TurnBasedCombatStage::Attack);
-    CHECK(runtime.canBeginPlayerAction(party));
+    CHECK(runtime.actorMode() == OpenYAMM::Game::ActorTurnBasedMode::Hold);
     CHECK_EQ(runtime.movementActionPoints(), 0);
+    CHECK_FALSE(runtime.canBeginPlayerAction(party));
+    CHECK(runtime.shouldUpdateActorAi(&party));
+    CHECK_EQ(world.consumeTurnBasedActorActionGrants(), std::vector<size_t>{0});
+
+    runtime.update(&party, &world, 0.016f);
+
+    CHECK(runtime.stage() == OpenYAMM::Game::TurnBasedCombatStage::Attack);
+    CHECK(runtime.canBeginPlayerAction(party));
+    CHECK_FALSE(runtime.shouldUpdateActorAi(&party));
+}
+
+TEST_CASE("turn based runtime waits for a granted actor attack to finish")
+{
+    OpenYAMM::Game::Party party = makeTurnBasedParty(1);
+    OpenYAMM::Tests::PartySpellTestWorldRuntime world = {};
+    world.bindParty(&party);
+    world.setPartyPosition(0.0f, 0.0f, 0.0f);
+    world.addActor(makeNearbyHostileActor());
+
+    OpenYAMM::Game::TurnBasedCombatRuntime runtime = {};
+    REQUIRE(runtime.begin(party, &world));
+    runtime.update(&party, &world, 0.6f);
+    REQUIRE_EQ(world.consumeTurnBasedActorActionGrants(), std::vector<size_t>{0});
+
+    world.setTurnBasedActorActionInProgress(true);
+    runtime.update(&party, &world, 0.5f);
+    CHECK_FALSE(runtime.canBeginPlayerAction(party));
+    CHECK(runtime.shouldUpdateActorAi(&party));
+
+    world.setTurnBasedActorActionInProgress(false);
+    runtime.update(&party, &world, 0.016f);
+    CHECK(runtime.canBeginPlayerAction(party));
+}
+
+TEST_CASE("turn based runtime schedules actors by their own monster recovery")
+{
+    constexpr float HundredTickRecoverySeconds = 100.0f / 128.0f * 2.133333333333333f;
+
+    OpenYAMM::Game::Party party = makeTurnBasedParty(1);
+    OpenYAMM::Tests::PartySpellTestWorldRuntime world = {};
+    world.bindParty(&party);
+    world.setPartyPosition(0.0f, 0.0f, 0.0f);
+    world.setTurnBasedActorRecoveryTicks(90);
+    world.addActor(makeNearbyHostileActor());
+
+    OpenYAMM::Game::TurnBasedCombatRuntime runtime = {};
+    REQUIRE(runtime.begin(party, &world));
+    runtime.update(&party, &world, 0.6f);
+
+    // The actor starts at initiative 1, ahead of the ready member at 2.
+    REQUIRE_EQ(world.consumeTurnBasedActorActionGrants(), std::vector<size_t>{0});
+    runtime.update(&party, &world, 0.016f);
+    REQUIRE(runtime.canBeginPlayerAction(party));
+
+    // Member waits 100 ticks, the actor 90: the actor acts again within the first 100-tick turn.
+    REQUIRE(runtime.applyPlayerAction(party, 0, HundredTickRecoverySeconds));
+    runtime.update(&party, &world, 0.016f);
+    CHECK(runtime.stage() == OpenYAMM::Game::TurnBasedCombatStage::Attack);
+    CHECK_EQ(world.consumeTurnBasedActorActionGrants(), std::vector<size_t>{0});
+
+    runtime.update(&party, &world, 0.016f);
+    CHECK(runtime.stage() == OpenYAMM::Game::TurnBasedCombatStage::Movement);
+    CHECK_FALSE(world.turnBasedActorActionGrantPending());
+}
+
+TEST_CASE("turn based runtime carries actor initiative into realtime recovery on exit")
+{
+    OpenYAMM::Game::Party party = makeTurnBasedParty(1);
+    OpenYAMM::Tests::PartySpellTestWorldRuntime world = {};
+    world.bindParty(&party);
+    world.setPartyPosition(0.0f, 0.0f, 0.0f);
+    world.setTurnBasedActorRecoveryTicks(90);
+    world.addActor(makeNearbyHostileActor());
+
+    OpenYAMM::Game::TurnBasedCombatRuntime runtime = {};
+    REQUIRE(runtime.begin(party, &world));
+    runtime.update(&party, &world, 0.6f);
+    REQUIRE_EQ(world.consumeTurnBasedActorActionGrants(), std::vector<size_t>{0});
+    runtime.update(&party, &world, 0.016f);
+    REQUIRE(runtime.canBeginPlayerAction(party));
+
+    REQUIRE(runtime.toggle(party, &world));
+    CHECK_FALSE(runtime.active());
+    CHECK(world.turnBasedActorMode() == OpenYAMM::Game::ActorTurnBasedMode::RealTime);
+
+    // 90 recovery ticks less the 1-tick step that readied the member.
+    const std::optional<float> cooldownSeconds = world.actorAttackCooldownSeconds(0);
+    REQUIRE(cooldownSeconds.has_value());
+    CHECK_EQ(*cooldownSeconds, doctest::Approx(89.0f / 128.0f * 2.133333333333333f));
 }
 
 TEST_CASE("turn based runtime keeps actor AI live while resolving already-started monster attacks")
@@ -160,10 +254,8 @@ TEST_CASE("turn based runtime pending actions block player actions until resolve
     CHECK(runtime.beginPlayerActionOrFinishMovement(party));
 }
 
-TEST_CASE("turn based runtime spends OE movement actions only while movement is held")
+TEST_CASE("turn based runtime spends the movement budget by walking time while movement is held")
 {
-    constexpr float MovementStepSeconds = 26.0f / 128.0f;
-
     OpenYAMM::Game::Party party = makeTurnBasedParty(1);
     OpenYAMM::Game::TurnBasedCombatRuntime runtime = {};
 
@@ -177,49 +269,83 @@ TEST_CASE("turn based runtime spends OE movement actions only while movement is 
     CHECK_EQ(runtime.movementActionPoints(), 130);
 
     OpenYAMM::Game::GameplayInputFrame input = {};
-    input.actions[OpenYAMM::Game::keyboardActionIndex(OpenYAMM::Game::KeyboardAction::Forward)].held = true;
-    input.keyboardHeld[SDL_SCANCODE_W] = true;
+    const auto holdForward = [&input](bool held)
+    {
+        input.actions[OpenYAMM::Game::keyboardActionIndex(OpenYAMM::Game::KeyboardAction::Forward)].held = held;
+        input.keyboardHeld[SDL_SCANCODE_W] = held;
+    };
 
-    CHECK(runtime.noteMovementInput(input));
-    CHECK_EQ(runtime.movementActionPoints(), 104);
-    CHECK_EQ(runtime.movementDeltaSecondsForFrame(0.016f), doctest::Approx(MovementStepSeconds));
+    // A held key walks for each frame's time and spends one point per tick.
+    holdForward(true);
+    CHECK(runtime.noteMovementInput(input, 0.25f));
+    CHECK_EQ(runtime.movementActionPoints(), 98);
+    CHECK_EQ(runtime.movementDeltaSecondsForFrame(0.25f), doctest::Approx(0.25f));
     CHECK(input.turnBasedMovementStep);
 
-    input.actions[OpenYAMM::Game::keyboardActionIndex(OpenYAMM::Game::KeyboardAction::Forward)].held = true;
-    input.keyboardHeld[SDL_SCANCODE_W] = true;
-    CHECK(runtime.noteMovementInput(input));
-    CHECK_EQ(runtime.movementActionPoints(), 78);
-    CHECK_EQ(runtime.movementDeltaSecondsForFrame(0.016f), doctest::Approx(MovementStepSeconds));
+    holdForward(true);
+    CHECK(runtime.noteMovementInput(input, 0.25f));
+    CHECK_EQ(runtime.movementActionPoints(), 66);
 
-    input.actions[OpenYAMM::Game::keyboardActionIndex(OpenYAMM::Game::KeyboardAction::Forward)].held = false;
-    input.keyboardHeld[SDL_SCANCODE_W] = false;
-    CHECK_FALSE(runtime.noteMovementInput(input));
-    CHECK_EQ(runtime.movementActionPoints(), 78);
+    holdForward(false);
+    CHECK_FALSE(runtime.noteMovementInput(input, 0.25f));
+    CHECK_EQ(runtime.movementActionPoints(), 66);
+    CHECK_EQ(runtime.movementDeltaSecondsForFrame(0.25f), doctest::Approx(0.0f));
     runtime.update(&party, nullptr, 0.016f);
     CHECK(runtime.stage() == OpenYAMM::Game::TurnBasedCombatStage::Movement);
 
-    input.actions[OpenYAMM::Game::keyboardActionIndex(OpenYAMM::Game::KeyboardAction::Forward)].held = true;
-    input.keyboardHeld[SDL_SCANCODE_W] = true;
-    CHECK(runtime.noteMovementInput(input));
-    CHECK_EQ(runtime.movementActionPoints(), 52);
-    CHECK_EQ(runtime.movementDeltaSecondsForFrame(0.016f), doctest::Approx(MovementStepSeconds));
-
-    input.actions[OpenYAMM::Game::keyboardActionIndex(OpenYAMM::Game::KeyboardAction::Forward)].held = true;
-    input.keyboardHeld[SDL_SCANCODE_W] = true;
-    CHECK(runtime.noteMovementInput(input));
-    CHECK_EQ(runtime.movementActionPoints(), 26);
-    CHECK_EQ(runtime.movementDeltaSecondsForFrame(0.016f), doctest::Approx(MovementStepSeconds));
-
-    input.actions[OpenYAMM::Game::keyboardActionIndex(OpenYAMM::Game::KeyboardAction::Forward)].held = true;
-    input.keyboardHeld[SDL_SCANCODE_W] = true;
-    CHECK(runtime.noteMovementInput(input));
+    // The last step is clamped to the remaining budget, then the movement stage ends.
+    holdForward(true);
+    CHECK(runtime.noteMovementInput(input, 1.0f));
     CHECK_EQ(runtime.movementActionPoints(), 0);
-    CHECK_EQ(runtime.movementDeltaSecondsForFrame(0.016f), doctest::Approx(MovementStepSeconds));
+    CHECK_EQ(runtime.movementDeltaSecondsForFrame(1.0f), doctest::Approx(66.0f / 128.0f));
 
+    holdForward(true);
+    CHECK_FALSE(runtime.noteMovementInput(input, 0.016f));
     runtime.update(&party, nullptr, 0.016f);
 
     CHECK(runtime.stage() == OpenYAMM::Game::TurnBasedCombatStage::Wait);
     CHECK_EQ(runtime.movementActionPoints(), 0);
+}
+
+TEST_CASE("turn based runtime lets classic turn keys turn freely in every stage")
+{
+    using OpenYAMM::Game::KeyboardAction;
+    using OpenYAMM::Game::keyboardActionIndex;
+
+    OpenYAMM::Game::Party party = makeTurnBasedParty(1);
+    OpenYAMM::Game::TurnBasedCombatRuntime runtime = {};
+
+    REQUIRE(runtime.begin(party, nullptr));
+    REQUIRE(runtime.stage() != OpenYAMM::Game::TurnBasedCombatStage::Movement);
+
+    OpenYAMM::Game::GameplayInputFrame input = {};
+    input.actions[keyboardActionIndex(KeyboardAction::Left)].held = true;
+    input.actions[keyboardActionIndex(KeyboardAction::Forward)].held = true;
+
+    // Outside the movement stage walking is blocked, but turning stays available.
+    CHECK_FALSE(runtime.noteMovementInput(input, 0.25f, true));
+    CHECK(input.action(KeyboardAction::Left).held);
+    CHECK_FALSE(input.action(KeyboardAction::Forward).held);
+
+    runtime.update(&party, nullptr, 0.6f);
+    REQUIRE(runtime.canBeginPlayerAction(party));
+    CHECK(runtime.applyPlayerAction(party, 0, 5.0f));
+    runtime.update(&party, nullptr, 0.016f);
+    REQUIRE(runtime.stage() == OpenYAMM::Game::TurnBasedCombatStage::Movement);
+
+    // Turning alone costs no movement points; the A key (Attack in the classic scheme) is not a strafe.
+    input = {};
+    input.actions[keyboardActionIndex(KeyboardAction::Right)].held = true;
+    input.keyboardHeld[SDL_SCANCODE_A] = true;
+    CHECK_FALSE(runtime.noteMovementInput(input, 0.25f, true));
+    CHECK(input.action(KeyboardAction::Right).held);
+    CHECK_EQ(runtime.movementActionPoints(), 130);
+
+    // The modern scheme still treats Left/Right as strafing movement.
+    input = {};
+    input.actions[keyboardActionIndex(KeyboardAction::Right)].held = true;
+    CHECK(runtime.noteMovementInput(input, 0.25f));
+    CHECK_EQ(runtime.movementActionPoints(), 98);
 }
 
 TEST_CASE("turn based runtime cycles party actions before OE movement phase")
@@ -272,31 +398,28 @@ TEST_CASE("turn based runtime advances OE game time once when a combat turn reac
     CHECK_EQ(runtime.consumePendingGameTimeAdvanceMinutes(), doctest::Approx(0.0f));
 }
 
-TEST_CASE("turn based runtime yields to movement when actors become ready before character recovery")
+TEST_CASE("turn based runtime adds actors that arrive during combat at the next turn")
 {
     OpenYAMM::Game::Party party = makeTurnBasedParty(1);
     OpenYAMM::Tests::PartySpellTestWorldRuntime world = {};
     world.bindParty(&party);
     world.setPartyPosition(0.0f, 0.0f, 0.0f);
 
-    OpenYAMM::Game::GameplayRuntimeActorState actor = {};
-    actor.monsterId = 1;
-    actor.hostileToParty = true;
-    actor.preciseX = 128.0f;
-    actor.preciseY = 0.0f;
-    actor.preciseZ = 0.0f;
-    actor.radius = 32;
-    world.addActor(actor);
-
     OpenYAMM::Game::TurnBasedCombatRuntime runtime = {};
     REQUIRE(runtime.begin(party, &world));
     runtime.update(&party, &world, 0.6f);
-    REQUIRE(runtime.stage() == OpenYAMM::Game::TurnBasedCombatStage::Attack);
     REQUIRE(runtime.canBeginPlayerAction(party));
+    REQUIRE(runtime.applyPlayerAction(party, 0, 5.0f));
+    REQUIRE(runtime.stage() == OpenYAMM::Game::TurnBasedCombatStage::Movement);
 
-    CHECK(runtime.applyPlayerAction(party, 0, 5.0f));
-    CHECK(runtime.stage() == OpenYAMM::Game::TurnBasedCombatStage::Movement);
-    CHECK_EQ(runtime.movementActionPoints(), 130);
+    world.addActor(makeNearbyHostileActor());
+    REQUIRE(runtime.finishMovementPhase());
+    runtime.update(&party, &world, 0.016f);
+    REQUIRE(runtime.stage() == OpenYAMM::Game::TurnBasedCombatStage::Wait);
+    runtime.update(&party, &world, 0.6f);
+
+    CHECK(runtime.stage() == OpenYAMM::Game::TurnBasedCombatStage::Attack);
+    CHECK_EQ(world.consumeTurnBasedActorActionGrants(), std::vector<size_t>{0});
 }
 
 TEST_CASE("turn based runtime blocks movement input until OE movement phase")
@@ -310,7 +433,7 @@ TEST_CASE("turn based runtime blocks movement input until OE movement phase")
     input.actions[OpenYAMM::Game::keyboardActionIndex(OpenYAMM::Game::KeyboardAction::Forward)].held = true;
     input.keyboardHeld[SDL_SCANCODE_W] = true;
 
-    CHECK_FALSE(runtime.noteMovementInput(input));
+    CHECK_FALSE(runtime.noteMovementInput(input, 0.016f));
     CHECK(runtime.stage() == OpenYAMM::Game::TurnBasedCombatStage::Wait);
 
     input.actions[OpenYAMM::Game::keyboardActionIndex(OpenYAMM::Game::KeyboardAction::Forward)].held = true;
@@ -318,7 +441,7 @@ TEST_CASE("turn based runtime blocks movement input until OE movement phase")
     runtime.update(&party, nullptr, 0.6f);
     REQUIRE(runtime.stage() == OpenYAMM::Game::TurnBasedCombatStage::Attack);
 
-    CHECK_FALSE(runtime.noteMovementInput(input));
+    CHECK_FALSE(runtime.noteMovementInput(input, 0.016f));
     CHECK(runtime.stage() == OpenYAMM::Game::TurnBasedCombatStage::Attack);
     CHECK_EQ(runtime.movementActionPoints(), 0);
     CHECK_FALSE(input.turnBasedMovementStep);
@@ -344,5 +467,31 @@ TEST_CASE("turn based runtime keeps movement phase open until explicit movement 
     CHECK(runtime.finishMovementPhase());
     runtime.update(&party, nullptr, 0.016f);
     CHECK(runtime.stage() == OpenYAMM::Game::TurnBasedCombatStage::Wait);
+}
+
+TEST_CASE("turn based pass spends the ready member's action and ends movement")
+{
+    OpenYAMM::Game::Party party = makeTurnBasedParty(2);
+    OpenYAMM::Game::TurnBasedCombatRuntime runtime = {};
+
+    CHECK_FALSE(runtime.canPassTurn(party));
+    REQUIRE(runtime.begin(party, nullptr));
+    runtime.update(&party, nullptr, 0.6f);
+    REQUIRE(runtime.stage() == OpenYAMM::Game::TurnBasedCombatStage::Attack);
+
+    CHECK(runtime.canPassTurn(party));
+    CHECK(runtime.passTurn(party, 5.0f));
+    runtime.update(&party, nullptr, 0.016f);
+    CHECK_EQ(party.activeMemberIndex(), 1);
+
+    CHECK(runtime.passTurn(party, 5.0f));
+    runtime.update(&party, nullptr, 0.016f);
+    REQUIRE(runtime.stage() == OpenYAMM::Game::TurnBasedCombatStage::Movement);
+
+    CHECK(runtime.canPassTurn(party));
+    CHECK(runtime.passTurn(party, 5.0f));
+    runtime.update(&party, nullptr, 0.016f);
+    CHECK(runtime.stage() == OpenYAMM::Game::TurnBasedCombatStage::Wait);
+    CHECK_FALSE(runtime.canPassTurn(party));
 }
 } // namespace OpenYAMM::Tests

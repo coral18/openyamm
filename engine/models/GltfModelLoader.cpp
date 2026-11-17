@@ -2,12 +2,16 @@
 #include "engine/models/ModelAnimation.h"
 
 #include "engine/AssetFileSystem.h"
+#include "engine/render/CookedTexture.h"
 
 #include <cgltf/cgltf.h>
+#include <meshoptimizer/src/meshoptimizer.h>
+#include <yaml-cpp/yaml.h>
 
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
@@ -61,6 +65,10 @@ cgltf_result readAssetFile(
 )
 {
     const AssetFileContext *pContext = static_cast<const AssetFileContext *>(pFileOptions->user_data);
+    if (pContext->pAssetFileSystem == nullptr)
+    {
+        return cgltf_result_file_not_found;
+    }
     const std::optional<std::vector<uint8_t>> bytes = pContext->pAssetFileSystem->readBinaryFile(pPath);
     if (!bytes)
     {
@@ -264,7 +272,7 @@ bool buildHierarchy(ModelAsset &asset, std::string &error)
 }
 
 bool loadImages(
-    const AssetFileSystem &assetFileSystem,
+    const AssetFileSystem *pAssetFileSystem,
     const std::string &virtualPath,
     const cgltf_data &data,
     ModelAsset &asset,
@@ -290,33 +298,47 @@ bool loadImages(
                 error = "embedded model image " + std::to_string(imageIndex) + " has no buffer data";
                 return false;
             }
-            image.pngBytes.assign(pBytes, pBytes + source.buffer_view->size);
+            image.bytes.assign(pBytes, pBytes + source.buffer_view->size);
             image.sourcePath = virtualPath + "#image" + std::to_string(imageIndex);
         }
         else if (source.uri != nullptr)
         {
             if (!isSafeRelativeUri(source.uri) || std::string_view(source.uri).starts_with("data:"))
             {
-                error = "model image URI must be a package-relative PNG path: " + std::string(source.uri);
+                error = "model image URI must be a package-relative PNG or .oytex path: " + std::string(source.uri);
+                return false;
+            }
+            if (pAssetFileSystem == nullptr)
+            {
+                error = "a standalone model must embed its images: " + std::string(source.uri);
                 return false;
             }
             image.sourcePath = joinedVirtualPath(virtualPath, source.uri);
-            const std::optional<std::vector<uint8_t>> bytes = assetFileSystem.readBinaryFile(image.sourcePath);
-            if (!bytes)
+            std::unique_ptr<AssetReadStream> pStream = pAssetFileSystem->openReadStream(image.sourcePath);
+            if (pStream == nullptr || !pStream->isOpen())
             {
                 error = "model image was not found: " + image.sourcePath;
                 return false;
             }
-            image.pngBytes = *bytes;
+            // Only the signature is read here; the renderer reads the rest when it uploads the texture.
+            std::vector<uint8_t> signature(8);
+            signature.resize(size_t(std::max<int64_t>(pStream->read(signature.data(), signature.size()), 0)));
+            image.cooked = hasCookedTextureSignature(signature);
+            if (!image.cooked && !hasPngSignature(signature))
+            {
+                error = "model image is neither a PNG nor a cooked texture: " + image.sourcePath;
+                return false;
+            }
+            image.pFileSystem = pAssetFileSystem;
         }
         else
         {
             error = "model image " + std::to_string(imageIndex) + " has neither URI nor buffer view";
             return false;
         }
-        if (!hasPngSignature(image.pngBytes))
+        if (image.pFileSystem == nullptr && !hasPngSignature(image.bytes))
         {
-            error = "model image is not a PNG: " + image.sourcePath;
+            error = "model image is neither a PNG nor a cooked texture: " + image.sourcePath;
             return false;
         }
         asset.images.push_back(std::move(image));
@@ -372,8 +394,72 @@ bool loadMaterialTexture(const cgltf_data &data, const cgltf_texture_view &view,
     return true;
 }
 
-bool loadMaterials(const cgltf_data &data, ModelAsset &asset, std::string &error)
+bool loadColorRegions(const cgltf_data &data, const YAML::Node &extras, ModelMaterial &material, std::string &error)
 {
+    const YAML::Node mask = extras["openyamm_region_mask"];
+    const YAML::Node ramps = extras["openyamm_region_ramps"];
+    if (!mask && !ramps)
+    {
+        return true;
+    }
+    if (!mask || !ramps || !ramps.IsSequence() || ramps.size() == 0 || ramps.size() > ModelMaxColorRegions)
+    {
+        error = "colour regions need a region mask and one to four ramps";
+        return false;
+    }
+    const int textureIndex = mask["index"] ? mask["index"].as<int>() : -1;
+    if (textureIndex < 0 || size_t(textureIndex) >= data.textures_count)
+    {
+        error = "region mask names no texture";
+        return false;
+    }
+    cgltf_texture_view view = {};
+    view.texture = &data.textures[textureIndex];
+    if (!loadMaterialTexture(data, view, material.regionMaskImageIndex, material.regionMaskSampler, error))
+    {
+        return false;
+    }
+    const auto unitValue = [](float value) { return std::isfinite(value) && value >= 0.0f && value <= 1.0f; };
+    for (const YAML::Node &node : ramps)
+    {
+        const std::vector<float> range = node["range"].as<std::vector<float>>();
+        const std::vector<std::vector<float>> colors = node["colors"].as<std::vector<std::vector<float>>>();
+        if (range.size() != 2 || !unitValue(range[0]) || !unitValue(range[1]) || range[0] >= range[1]
+            || colors.size() != ModelColorRampStops)
+        {
+            error = "colour ramp needs a luminance range lo < hi in 0..1 and 16 colours";
+            return false;
+        }
+        ModelColorRamp ramp;
+        ramp.luminanceRange = {range[0], range[1]};
+        for (size_t stop = 0; stop < ModelColorRampStops; ++stop)
+        {
+            if (colors[stop].size() != 3 || !std::all_of(colors[stop].begin(), colors[stop].end(), unitValue))
+            {
+                error = "colour ramp colours must be linear RGB in 0..1";
+                return false;
+            }
+            std::copy_n(colors[stop].begin(), 3, ramp.colors[stop].begin());
+        }
+        material.regionRamps.push_back(ramp);
+    }
+    return true;
+}
+
+bool loadMaterials(const cgltf_data &data, ModelAsset &asset, std::vector<bool> &authoredEdgeDarkening,
+    std::string &error)
+{
+    authoredEdgeDarkening.assign(data.materials_count, false);
+    for (size_t index = 0; index < data.variants_count; ++index)
+    {
+        const char *pName = data.variants[index].name;
+        if (pName == nullptr || *pName == '\0' || asset.findMaterialVariant(pName))
+        {
+            error = "material variants require nonempty unique names";
+            return false;
+        }
+        asset.materialVariants.emplace_back(pName);
+    }
     asset.materials.reserve(data.materials_count);
     for (size_t materialIndex = 0; materialIndex < data.materials_count; ++materialIndex)
     {
@@ -397,7 +483,211 @@ bool loadMaterials(const cgltf_data &data, ModelAsset &asset, std::string &error
         {
             return false;
         }
+        if (!loadMaterialTexture(data, source.emissive_texture, material.emissiveImageIndex,
+                material.emissiveSampler, error))
+        {
+            error = "material " + std::to_string(materialIndex) + " emissive texture: " + error;
+            return false;
+        }
+        material.bloom = material.emissiveImageIndex >= 0;
         material.normalScale = source.normal_texture.scale;
+        cgltf_size materialExtrasSize = 0;
+        cgltf_copy_extras_json(&data, &source.extras, nullptr, &materialExtrasSize);
+        if (materialExtrasSize > 1)
+        {
+            std::string json(materialExtrasSize, '\0');
+            if (cgltf_copy_extras_json(&data, &source.extras, json.data(), &materialExtrasSize) != cgltf_result_success)
+            {
+                error = "cannot read material " + std::to_string(materialIndex) + " extras";
+                return false;
+            }
+            try
+            {
+                const YAML::Node extras = YAML::Load(json.c_str());
+                if (!loadColorRegions(data, extras, material, error))
+                {
+                    error = "material " + std::to_string(materialIndex) + " " + error;
+                    return false;
+                }
+                if (const YAML::Node burnMap = extras["openyamm_burn_map"])
+                {
+                    const int textureIndex = burnMap["index"] ? burnMap["index"].as<int>() : -1;
+                    if (textureIndex < 0 || size_t(textureIndex) >= data.textures_count)
+                    {
+                        error = "material " + std::to_string(materialIndex) + " burn map names no texture";
+                        return false;
+                    }
+                    cgltf_texture_view view = {};
+                    view.texture = &data.textures[textureIndex];
+                    if (!loadMaterialTexture(data, view, material.burnMapImageIndex, material.burnMapSampler, error))
+                    {
+                        error = "material " + std::to_string(materialIndex) + " burn map: " + error;
+                        return false;
+                    }
+                }
+                if (extras["openyamm_wind"])
+                {
+                    material.wind = extras["openyamm_wind"].as<float>();
+                    if (!std::isfinite(material.wind) || material.wind < 0.0f || material.wind > 4.0f)
+                    {
+                        error = "material " + std::to_string(materialIndex) + " wind must be 0..4 metres";
+                        return false;
+                    }
+                }
+                if (extras["openyamm_billboard"])
+                {
+                    const std::string mode = extras["openyamm_billboard"].as<std::string>();
+                    if (mode == "card")
+                    {
+                        material.billboard = true;
+                        material.billboardCard = true;
+                    }
+                    else
+                    {
+                        material.billboard = extras["openyamm_billboard"].as<bool>();
+                    }
+                }
+                if (extras["openyamm_additive"])
+                {
+                    material.additive = extras["openyamm_additive"].as<bool>();
+                }
+                if (extras["openyamm_bloom"])
+                {
+                    material.bloom = extras["openyamm_bloom"].as<bool>();
+                }
+                if (extras["openyamm_uv_scroll"])
+                {
+                    const std::vector<float> scroll = extras["openyamm_uv_scroll"].as<std::vector<float>>();
+                    if (scroll.size() != 2 || !std::isfinite(scroll[0]) || !std::isfinite(scroll[1]))
+                    {
+                        error = "material " + std::to_string(materialIndex) + " uv_scroll needs two finite values";
+                        return false;
+                    }
+                    std::copy_n(scroll.begin(), 2, material.uvScroll.begin());
+                }
+                if (extras["openyamm_flipbook"])
+                {
+                    const std::vector<float> flipbook = extras["openyamm_flipbook"].as<std::vector<float>>();
+                    if (flipbook.size() != 3 || !(flipbook[0] >= 1.0f && flipbook[0] <= 64.0f)
+                        || !(flipbook[1] >= 1.0f && flipbook[1] <= 64.0f) || !(flipbook[2] > 0.0f && flipbook[2] <= 120.0f)
+                        || flipbook[0] != std::floor(flipbook[0]) || flipbook[1] != std::floor(flipbook[1]))
+                    {
+                        error = "material " + std::to_string(materialIndex)
+                            + " flipbook needs integer columns and rows (1..64) and frames per second (0..120]";
+                        return false;
+                    }
+                    std::copy_n(flipbook.begin(), 3, material.flipbook.begin());
+                }
+                if (extras["openyamm_flutter"])
+                {
+                    material.flutter = extras["openyamm_flutter"].as<float>();
+                    if (!std::isfinite(material.flutter) || material.flutter < 0.0f || material.flutter > 4.0f)
+                    {
+                        error = "material " + std::to_string(materialIndex) + " flutter must be 0..4 model units";
+                        return false;
+                    }
+                }
+                if (extras["openyamm_pulse"])
+                {
+                    const std::vector<float> pulse = extras["openyamm_pulse"].as<std::vector<float>>();
+                    if (pulse.size() != 2 || !(pulse[0] > 0.0f && pulse[0] <= 1.0f)
+                        || !(pulse[1] >= 0.1f && pulse[1] <= 60.0f))
+                    {
+                        error = "material " + std::to_string(materialIndex)
+                            + " pulse needs an amplitude (0..1] and a period of 0.1..60 seconds";
+                        return false;
+                    }
+                    std::copy_n(pulse.begin(), 2, material.pulse.begin());
+                }
+                if (extras["openyamm_flicker"])
+                {
+                    const std::vector<float> flicker = extras["openyamm_flicker"].as<std::vector<float>>();
+                    if (extras["openyamm_pulse"] || flicker.size() != 2 || !(flicker[0] > 0.0f && flicker[0] <= 1.0f)
+                        || !(flicker[1] >= 0.5f && flicker[1] <= 30.0f))
+                    {
+                        error = "material " + std::to_string(materialIndex)
+                            + " flicker needs an amplitude (0..1] and 0.5..30 changes per second, and no pulse";
+                        return false;
+                    }
+                    material.pulse = {flicker[0], -1.0f / flicker[1]};
+                }
+                if (extras["openyamm_specular"])
+                {
+                    material.specular = extras["openyamm_specular"].as<float>();
+                    if (!std::isfinite(material.specular) || material.specular < 0.0f || material.specular > 1.0f)
+                    {
+                        error = "material " + std::to_string(materialIndex) + " specular must be 0..1";
+                        return false;
+                    }
+                }
+                if (extras["openyamm_edge_darkening"])
+                {
+                    material.edgeDarkening = extras["openyamm_edge_darkening"].as<float>();
+                    if (!std::isfinite(material.edgeDarkening) || material.edgeDarkening < 0.0f
+                        || material.edgeDarkening > 1.0f)
+                    {
+                        error = "material " + std::to_string(materialIndex) + " edge darkening must be 0..1";
+                        return false;
+                    }
+                    authoredEdgeDarkening[materialIndex] = true;
+                }
+                if (extras["openyamm_specular_mask"])
+                {
+                    material.specularMask = extras["openyamm_specular_mask"].as<bool>();
+                    if (material.specularMask
+                        && source.pbr_metallic_roughness.metallic_roughness_texture.texture == nullptr)
+                    {
+                        error = "material " + std::to_string(materialIndex)
+                            + " specular mask needs a metallic-roughness texture";
+                        return false;
+                    }
+                }
+                if (extras["openyamm_specular_occlusion"])
+                {
+                    const std::string occlusion = extras["openyamm_specular_occlusion"].as<std::string>();
+                    if (occlusion == "orm" && !material.specularMask
+                        && source.pbr_metallic_roughness.metallic_roughness_texture.texture != nullptr)
+                    {
+                        material.specularOcclusion = ModelMaterial::SpecularOcclusion::Orm;
+                    }
+                    else if (occlusion == "color0")
+                    {
+                        material.specularOcclusion = ModelMaterial::SpecularOcclusion::Color0;
+                    }
+                    else
+                    {
+                        error = "material " + std::to_string(materialIndex)
+                            + " specular occlusion must be orm (with a metallic-roughness texture and no specular"
+                              " mask) or color0";
+                        return false;
+                    }
+                    material.specularOcclusionReference =
+                        extras["openyamm_specular_occlusion_reference"].as<float>(1.0f);
+                    if (!std::isfinite(material.specularOcclusionReference)
+                        || material.specularOcclusionReference <= 0.0f)
+                    {
+                        error = "material " + std::to_string(materialIndex)
+                            + " specular occlusion reference must be positive";
+                        return false;
+                    }
+                }
+                if (extras["openyamm_translucency"])
+                {
+                    material.translucency = extras["openyamm_translucency"].as<float>();
+                    if (!std::isfinite(material.translucency) || material.translucency < 0.0f
+                        || material.translucency > 1.0f)
+                    {
+                        error = "material " + std::to_string(materialIndex) + " translucency must be 0..1";
+                        return false;
+                    }
+                }
+            }
+            catch (const YAML::Exception &exception)
+            {
+                error = "material " + std::to_string(materialIndex) + " extras: " + exception.what();
+                return false;
+            }
+        }
         material.alphaCutoff = source.alpha_cutoff;
         switch (source.alpha_mode)
         {
@@ -438,19 +728,105 @@ bool loadMaterials(const cgltf_data &data, ModelAsset &asset, std::string &error
             error = "material " + std::to_string(materialIndex) + " has invalid colour or surface factors";
             return false;
         }
+        if (source.has_emissive_strength)
+        {
+            // KHR_materials_emissive_strength: brighter than the 0..1 factor allows (a stronger bloom).
+            const float strength = source.emissive_strength.emissive_strength;
+            if (!std::isfinite(strength) || strength < 0.0f || strength > 16.0f)
+            {
+                error = "material " + std::to_string(materialIndex) + " emissive strength must be 0..16";
+                return false;
+            }
+            for (float &channel : material.emissive)
+            {
+                channel *= strength;
+            }
+        }
         asset.materials.push_back(std::move(material));
     }
     return true;
 }
 
+// The model cook (tools/cook_models.py) records its geometry passes in asset.extras.openyamm_cooked.geometry.
+bool cookedForVertexCache(const cgltf_data &data)
+{
+    cgltf_size size = 0;
+    cgltf_copy_extras_json(&data, &data.asset.extras, nullptr, &size);
+    if (size <= 1)
+    {
+        return false;
+    }
+    std::string json(size, '\0');
+    if (cgltf_copy_extras_json(&data, &data.asset.extras, json.data(), &size) != cgltf_result_success)
+    {
+        return false;
+    }
+    try
+    {
+        const YAML::Node geometry = YAML::Load(json.c_str())["openyamm_cooked"]["geometry"];
+        return geometry && geometry["vertex_cache"] && geometry["vertex_cache"].as<bool>();
+    }
+    catch (const YAML::Exception &)
+    {
+        return false;
+    }
+}
+
 bool loadMeshes(const cgltf_data &data, ModelAsset &asset, std::string &error)
 {
     asset.meshes.reserve(data.meshes_count);
+    const bool vertexCacheOrdered = cookedForVertexCache(data);
     for (size_t meshIndex = 0; meshIndex < data.meshes_count; ++meshIndex)
     {
         const cgltf_mesh &sourceMesh = data.meshes[meshIndex];
         ModelMesh mesh;
         mesh.name = sourceMesh.name != nullptr ? sourceMesh.name : "";
+        cgltf_size extrasSize = 0;
+        cgltf_copy_extras_json(&data, &sourceMesh.extras, nullptr, &extrasSize);
+        if (extrasSize > 1)
+        {
+            try
+            {
+                std::string json(extrasSize, '\0');
+                if (cgltf_copy_extras_json(&data, &sourceMesh.extras, json.data(), &extrasSize)
+                    != cgltf_result_success)
+                {
+                    error = "cannot read model mesh LOD metadata";
+                    return false;
+                }
+                const YAML::Node extras = YAML::Load(json.c_str());
+                for (const char *pKey : {"openyamm_lods", "openyamm_shadow_lods"})
+                {
+                    if (!extras[pKey])
+                    {
+                        continue;
+                    }
+                    std::vector<uint32_t> &indices = std::string_view(pKey) == "openyamm_lods"
+                        ? mesh.lodMeshes : mesh.shadowMeshes;
+                    indices = extras[pKey].as<std::vector<uint32_t>>();
+                    const size_t maximum = std::string_view(pKey) == "openyamm_lods" ? 3 : 4;
+                    if (indices.empty() || indices.size() > maximum)
+                    {
+                        error = "model mesh LOD chain must contain at most four levels";
+                        return false;
+                    }
+                    std::unordered_set<uint32_t> unique;
+                    for (uint32_t index : indices)
+                    {
+                        if (index >= data.meshes_count || index == meshIndex || !unique.insert(index).second)
+                        {
+                            error = "model mesh LOD reference is invalid or duplicated";
+                            return false;
+                        }
+                    }
+                }
+            }
+            catch (const YAML::Exception &exception)
+            {
+                error = std::string("invalid model mesh LOD metadata: ") + exception.what();
+                return false;
+            }
+        }
         const size_t targetCount = sourceMesh.primitives_count != 0 ? sourceMesh.primitives[0].targets_count : 0;
         mesh.weights.resize(targetCount, 0.0f);
         if (sourceMesh.weights_count != 0)
@@ -499,8 +875,20 @@ bool loadMeshes(const cgltf_data &data, ModelAsset &asset, std::string &error)
             }
 
             ModelPrimitive primitive;
-            primitive.materialIndex = source.material != nullptr
-                ? static_cast<int>(cgltf_material_index(&data, source.material)) : -1;
+            primitive.materialIndices.assign(data.variants_count + 1, source.material != nullptr
+                ? int(cgltf_material_index(&data, source.material)) : -1);
+            std::vector<bool> mapped(data.variants_count, false);
+            for (size_t mappingIndex = 0; mappingIndex < source.mappings_count; ++mappingIndex)
+            {
+                const cgltf_material_mapping &mapping = source.mappings[mappingIndex];
+                if (mapping.variant >= mapped.size() || mapped[mapping.variant] || mapping.material == nullptr)
+                {
+                    error = "material variant mapping is invalid or duplicated";
+                    return false;
+                }
+                mapped[mapping.variant] = true;
+                primitive.materialIndices[mapping.variant + 1] = int(cgltf_material_index(&data, mapping.material));
+            }
             primitive.vertices.resize(pPosition->count);
             for (size_t vertexIndex = 0; vertexIndex < pPosition->count; ++vertexIndex)
             {
@@ -511,6 +899,55 @@ bool loadMeshes(const cgltf_data &data, ModelAsset &asset, std::string &error)
                 {
                     error = "mesh " + std::to_string(meshIndex) + " contains unreadable vertex data";
                     return false;
+                }
+            }
+            for (size_t attributeIndex = 0; attributeIndex < source.attributes_count; ++attributeIndex)
+            {
+                const cgltf_attribute &attribute = source.attributes[attributeIndex];
+                if (attribute.type != cgltf_attribute_type_custom || attribute.name == nullptr
+                    || std::string_view(attribute.name) != "_BURN_ORDER")
+                {
+                    continue;
+                }
+                if (attribute.data == nullptr || attribute.data->type != cgltf_type_scalar
+                    || attribute.data->count != pPosition->count)
+                {
+                    error = "mesh " + std::to_string(meshIndex) + " has an invalid _BURN_ORDER attribute";
+                    return false;
+                }
+                primitive.burnOrder.resize(pPosition->count);
+                for (size_t vertexIndex = 0; vertexIndex < pPosition->count; ++vertexIndex)
+                {
+                    if (!readAccessor(*attribute.data, vertexIndex, 1, &primitive.burnOrder[vertexIndex]))
+                    {
+                        error = "mesh " + std::to_string(meshIndex) + " contains an unreadable burn order";
+                        return false;
+                    }
+                }
+            }
+            if (const cgltf_accessor *pColor = findAttribute(source, cgltf_attribute_type_color))
+            {
+                if ((pColor->type != cgltf_type_vec3 && pColor->type != cgltf_type_vec4)
+                    || pColor->count != pPosition->count)
+                {
+                    error = "mesh " + std::to_string(meshIndex) + " has an invalid COLOR_0 attribute";
+                    return false;
+                }
+                const size_t components = pColor->type == cgltf_type_vec4 ? 4 : 3;
+                primitive.colors.resize(pPosition->count);
+                for (size_t vertexIndex = 0; vertexIndex < pPosition->count; ++vertexIndex)
+                {
+                    float color[4] = {1.0f, 1.0f, 1.0f, 1.0f};
+                    if (!readAccessor(*pColor, vertexIndex, components, color))
+                    {
+                        error = "mesh " + std::to_string(meshIndex) + " contains unreadable vertex colours";
+                        return false;
+                    }
+                    for (size_t channel = 0; channel < 4; ++channel)
+                    {
+                        primitive.colors[vertexIndex][channel] =
+                            uint8_t(std::lround(std::clamp(color[channel], 0.0f, 1.0f) * 255.0f));
+                    }
                 }
             }
 
@@ -630,11 +1067,134 @@ bool loadMeshes(const cgltf_data &data, ModelAsset &asset, std::string &error)
                 }
                 primitive.indices.push_back(static_cast<uint32_t>(vertexIndex));
             }
+            // Triangle order for the GPU's post-transform vertex cache. Exported meshes reuse a transformed vertex
+            // poorly (about 1.46 vertex shader runs per vertex over all models; a creature crowd's largest GPU cost
+            // after the depth prepass); this brings it to about 1.03. The FIFO variant is three times faster than the
+            // full optimizer for 0.01 more (every model in the game: about 70 ms). Blended materials keep their
+            // authored order, which is also their draw order. Cooked models were ordered by the cook already.
+            if (!vertexCacheOrdered
+                && (source.material == nullptr || source.material->alpha_mode != cgltf_alpha_mode_blend))
+            {
+                meshopt_optimizeVertexCacheFifo(primitive.indices.data(), primitive.indices.data(),
+                    primitive.indices.size(), primitive.vertices.size(), 16);
+            }
             mesh.primitives.push_back(std::move(primitive));
         }
         asset.meshes.push_back(std::move(mesh));
     }
     return true;
+}
+
+// A "card" material turns each primitive about its own centre (ModelMaterial::billboardCard). Exporters often put
+// all of a model's flame cards in one primitive (MM9's chandeliers: eight cards for four candles), which would turn
+// them all about the model's centre; each connected group of triangles (vertices joined by index or by position)
+// becomes a primitive of its own, in the authored triangle order. Static primitives only.
+void splitCardPrimitives(ModelAsset &asset)
+{
+    for (ModelMesh &mesh : asset.meshes)
+    {
+        std::vector<ModelPrimitive> primitives;
+        for (ModelPrimitive &primitive : mesh.primitives)
+        {
+            const int material = primitive.materialIndices.empty() ? -1 : primitive.materialIndices.front();
+            const bool card = material >= 0 && size_t(material) < asset.materials.size()
+                && asset.materials[size_t(material)].billboardCard;
+            if (!card || !primitive.influences.empty() || !primitive.morphTargets.empty()
+                || primitive.indices.size() < 6)
+            {
+                primitives.push_back(std::move(primitive));
+                continue;
+            }
+            const size_t vertexCount = primitive.vertices.size();
+            std::vector<uint32_t> parents(vertexCount);
+            for (uint32_t index = 0; index < vertexCount; ++index)
+            {
+                parents[index] = index;
+            }
+            const auto root = [&parents](uint32_t index)
+            {
+                while (parents[index] != index)
+                {
+                    parents[index] = parents[parents[index]];
+                    index = parents[index];
+                }
+                return index;
+            };
+            const auto join = [&](uint32_t a, uint32_t b)
+            {
+                parents[root(a)] = root(b);
+            };
+            for (size_t index = 0; index + 2 < primitive.indices.size(); index += 3)
+            {
+                join(primitive.indices[index], primitive.indices[index + 1]);
+                join(primitive.indices[index], primitive.indices[index + 2]);
+            }
+            // Vertices at one position (a quad exported as two unshared triangles) belong together.
+            std::vector<uint32_t> order(vertexCount);
+            for (uint32_t index = 0; index < vertexCount; ++index)
+            {
+                order[index] = index;
+            }
+            std::sort(order.begin(), order.end(), [&primitive](uint32_t a, uint32_t b)
+            {
+                return primitive.vertices[a].position < primitive.vertices[b].position;
+            });
+            for (size_t index = 1; index < order.size(); ++index)
+            {
+                if (primitive.vertices[order[index]].position == primitive.vertices[order[index - 1]].position)
+                {
+                    join(order[index], order[index - 1]);
+                }
+            }
+            // The groups in the order of their first triangle.
+            std::vector<int> groupOfRoot(vertexCount, -1);
+            std::vector<std::vector<uint32_t>> groupTriangles;
+            for (size_t index = 0; index + 2 < primitive.indices.size(); index += 3)
+            {
+                const uint32_t group = root(primitive.indices[index]);
+                if (groupOfRoot[group] < 0)
+                {
+                    groupOfRoot[group] = int(groupTriangles.size());
+                    groupTriangles.emplace_back();
+                }
+                groupTriangles[size_t(groupOfRoot[group])].push_back(uint32_t(index));
+            }
+            if (groupTriangles.size() <= 1)
+            {
+                primitives.push_back(std::move(primitive));
+                continue;
+            }
+            for (const std::vector<uint32_t> &triangles : groupTriangles)
+            {
+                ModelPrimitive part;
+                part.materialIndices = primitive.materialIndices;
+                std::vector<uint32_t> remap(vertexCount, std::numeric_limits<uint32_t>::max());
+                for (uint32_t triangle : triangles)
+                {
+                    for (uint32_t corner = 0; corner < 3; ++corner)
+                    {
+                        const uint32_t vertex = primitive.indices[triangle + corner];
+                        if (remap[vertex] == std::numeric_limits<uint32_t>::max())
+                        {
+                            remap[vertex] = uint32_t(part.vertices.size());
+                            part.vertices.push_back(primitive.vertices[vertex]);
+                            if (!primitive.colors.empty())
+                            {
+                                part.colors.push_back(primitive.colors[vertex]);
+                            }
+                            if (!primitive.burnOrder.empty())
+                            {
+                                part.burnOrder.push_back(primitive.burnOrder[vertex]);
+                            }
+                        }
+                        part.indices.push_back(remap[vertex]);
+                    }
+                }
+                primitives.push_back(std::move(part));
+            }
+        }
+        mesh.primitives = std::move(primitives);
+    }
 }
 
 bool loadNodes(const cgltf_data &data, ModelAsset &asset, std::string &error)
@@ -739,21 +1299,107 @@ bool loadSkins(const cgltf_data &data, ModelAsset &asset, std::string &error)
         {
             continue;
         }
-        for (const ModelPrimitive &primitive : asset.meshes[node.meshIndex].primitives)
+        std::vector<uint32_t> meshes = {uint32_t(node.meshIndex)};
+        const ModelMesh &mesh = asset.meshes[node.meshIndex];
+        meshes.insert(meshes.end(), mesh.lodMeshes.begin(), mesh.lodMeshes.end());
+        meshes.insert(meshes.end(), mesh.shadowMeshes.begin(), mesh.shadowMeshes.end());
+        for (uint32_t meshIndex : meshes)
         {
-            if (primitive.influences.empty())
+            for (const ModelPrimitive &primitive : asset.meshes[meshIndex].primitives)
             {
-                error = "skinned primitive has no joint influences";
-                return false;
-            }
-            for (const ModelVertexInfluences &influences : primitive.influences)
-            {
-                for (size_t i = 0; i < influences.joints.size(); ++i)
+                if (primitive.influences.empty())
                 {
-                    if (influences.weights[i] > 0 && influences.joints[i] >= asset.skins[node.skinIndex].joints.size())
+                    error = "skinned primitive has no joint influences";
+                    return false;
+                }
+                for (const ModelVertexInfluences &influences : primitive.influences)
+                {
+                    for (size_t i = 0; i < influences.joints.size(); ++i)
                     {
-                        error = "vertex joint index exceeds its skin";
+                        if (influences.weights[i] > 0
+                            && influences.joints[i] >= asset.skins[node.skinIndex].joints.size())
+                        {
+                            error = "vertex joint index exceeds its skin";
+                            return false;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    return true;
+}
+
+// Materials drawn on skinned meshes (creatures) without an authored value get the creature edge darkening; the
+// corpse stand-in copies them, so the contour stays when an actor dies.
+void applyCreatureEdgeDarkening(ModelAsset &asset, const std::vector<bool> &authoredEdgeDarkening)
+{
+    for (const ModelNode &node : asset.nodes)
+    {
+        if (node.skinIndex < 0 || node.meshIndex < 0)
+        {
+            continue;
+        }
+        std::vector<uint32_t> meshes = {uint32_t(node.meshIndex)};
+        const ModelMesh &mesh = asset.meshes[node.meshIndex];
+        meshes.insert(meshes.end(), mesh.lodMeshes.begin(), mesh.lodMeshes.end());
+        for (uint32_t meshIndex : meshes)
+        {
+            for (const ModelPrimitive &primitive : asset.meshes[meshIndex].primitives)
+            {
+                for (int materialIndex : primitive.materialIndices)
+                {
+                    if (materialIndex >= 0 && !authoredEdgeDarkening[materialIndex])
+                    {
+                        asset.materials[materialIndex].edgeDarkening = DefaultCreatureEdgeDarkening;
+                    }
+                }
+            }
+        }
+    }
+}
+
+bool validateMeshLods(const ModelAsset &asset, std::string &error)
+{
+    for (const ModelMesh &mesh : asset.meshes)
+    {
+        if ((!mesh.lodMeshes.empty() || !mesh.shadowMeshes.empty()) && !mesh.weights.empty())
+        {
+            error = "mesh LODs require skeletal or static geometry, not morph targets";
+            return false;
+        }
+        for (const std::vector<uint32_t> *pChain : {&mesh.lodMeshes, &mesh.shadowMeshes})
+        {
+            for (uint32_t index : *pChain)
+            {
+                const ModelMesh &lower = asset.meshes[index];
+                if (lower.primitives.empty() || !lower.weights.empty()
+                    || !lower.lodMeshes.empty() || !lower.shadowMeshes.empty())
+                {
+                    error = "LOD meshes must not contain morph targets or nested LOD chains";
+                    return false;
+                }
+                for (const ModelNode &node : asset.nodes)
+                {
+                    if (node.meshIndex == int(index))
+                    {
+                        error = "LOD meshes must be referenced only by their owning mesh";
                         return false;
+                    }
+                }
+                if (pChain == &mesh.shadowMeshes)
+                {
+                    for (const ModelPrimitive &primitive : lower.primitives)
+                    {
+                        for (int materialIndex : primitive.materialIndices)
+                        {
+                            if (materialIndex >= 0
+                                && asset.materials[materialIndex].alphaMode != ModelAlphaMode::Opaque)
+                            {
+                                error = "dedicated shadow LODs require opaque geometry";
+                                return false;
+                            }
+                        }
                     }
                 }
             }
@@ -932,26 +1578,249 @@ void calculateStaticBounds(ModelAsset &asset)
 }
 }
 
+namespace
+{
+// A glTF file's JSON alone, parsed without its buffers. binChunkOffset: where a binary glTF's BIN chunk data starts
+// (0 for a text glTF or a binary one without that chunk).
+struct GltfJson
+{
+    std::unique_ptr<cgltf_data, CgltfDeleter> data;
+    uint64_t binChunkOffset = 0;
+};
+
+std::optional<GltfJson> readGltfJson(AssetReadStream &stream)
+{
+    // A binary glTF: the 12-byte header, then the JSON chunk (its length and type, then the text), then the BIN chunk
+    // (its length and type, then the data). Only the JSON is read; a text glTF is all JSON.
+    std::vector<char> json;
+    uint32_t header[5] = {};
+    const int64_t headerBytes = stream.read(header, sizeof(header));
+    constexpr uint32_t GlbMagic = 0x46546c67;
+    constexpr uint32_t JsonChunkType = 0x4e4f534a;
+    constexpr uint32_t BinChunkType = 0x004e4942;
+    const bool binary = headerBytes == int64_t(sizeof(header)) && header[0] == GlbMagic;
+    if (binary)
+    {
+        if (header[4] != JsonChunkType || header[3] == 0 || header[3] > uint32_t(stream.length()))
+        {
+            return std::nullopt;
+        }
+        json.resize(header[3]);
+    }
+    else
+    {
+        if (stream.length() <= 0 || !stream.seek(0))
+        {
+            return std::nullopt;
+        }
+        json.resize(size_t(stream.length()));
+    }
+    if (stream.read(json.data(), json.size()) != int64_t(json.size()))
+    {
+        return std::nullopt;
+    }
+    GltfJson result;
+    uint32_t binHeader[2] = {};
+    if (binary && stream.read(binHeader, sizeof(binHeader)) == int64_t(sizeof(binHeader))
+        && binHeader[1] == BinChunkType)
+    {
+        result.binChunkOffset = sizeof(header) + json.size() + sizeof(binHeader);
+    }
+    cgltf_options options = {};
+    options.type = cgltf_file_type_gltf;
+    cgltf_data *pParsedData = nullptr;
+    if (cgltf_parse(&options, json.data(), json.size(), &pParsedData) != cgltf_result_success
+        || pParsedData == nullptr)
+    {
+        return std::nullopt;
+    }
+    result.data.reset(pParsedData);
+    return result;
+}
+
+// Column-major 4x4 matrices, as glTF stores them.
+std::array<float, 16> multiplyColumnMajor(const std::array<float, 16> &left, const std::array<float, 16> &right)
+{
+    std::array<float, 16> result = {};
+    for (size_t column = 0; column < 4; ++column)
+    {
+        for (size_t row = 0; row < 4; ++row)
+        {
+            float sum = 0.0f;
+            for (size_t index = 0; index < 4; ++index)
+            {
+                sum += left[index * 4 + row] * right[column * 4 + index];
+            }
+            result[column * 4 + row] = sum;
+        }
+    }
+    return result;
+}
+
+// The bind pose's lowest and highest point (readGltfModelSummary); stream reads the inverse bind matrix it needs.
+std::optional<std::array<float, 2>> gltfBindPoseHeightRange(const GltfJson &gltf, AssetReadStream &stream)
+{
+    const cgltf_data &data = *gltf.data;
+    float minY = std::numeric_limits<float>::max();
+    float maxY = std::numeric_limits<float>::lowest();
+    for (size_t nodeIndex = 0; nodeIndex < data.nodes_count; ++nodeIndex)
+    {
+        const cgltf_node &node = data.nodes[nodeIndex];
+        if (node.mesh == nullptr)
+        {
+            continue;
+        }
+        std::array<float, 16> matrix = {};
+        cgltf_node_transform_world(&node, matrix.data());
+        // A skinned mesh ignores its node: its bind pose is any joint's world matrix times that joint's inverse bind
+        // matrix (one shared transform in a rest pose), read from the BIN chunk for the first joint alone.
+        const cgltf_skin *pSkin = node.skin;
+        const cgltf_accessor *pInverseBind = pSkin != nullptr ? pSkin->inverse_bind_matrices : nullptr;
+        if (pSkin != nullptr && pSkin->joints_count > 0 && pInverseBind != nullptr
+            && pInverseBind->buffer_view != nullptr && pInverseBind->component_type == cgltf_component_type_r_32f
+            && pInverseBind->type == cgltf_type_mat4 && data.buffers_count > 0
+            && pInverseBind->buffer_view->buffer == &data.buffers[0] && data.buffers[0].uri == nullptr
+            && gltf.binChunkOffset != 0)
+        {
+            std::array<float, 16> inverseBind = {};
+            const uint64_t offset =
+                gltf.binChunkOffset + pInverseBind->buffer_view->offset + pInverseBind->offset;
+            if (!stream.seek(offset)
+                || stream.read(inverseBind.data(), sizeof(inverseBind)) != int64_t(sizeof(inverseBind)))
+            {
+                return std::nullopt;
+            }
+            std::array<float, 16> jointWorld = {};
+            cgltf_node_transform_world(pSkin->joints[0], jointWorld.data());
+            matrix = multiplyColumnMajor(jointWorld, inverseBind);
+        }
+        for (size_t primitiveIndex = 0; primitiveIndex < node.mesh->primitives_count; ++primitiveIndex)
+        {
+            const cgltf_primitive &primitive = node.mesh->primitives[primitiveIndex];
+            for (size_t attributeIndex = 0; attributeIndex < primitive.attributes_count; ++attributeIndex)
+            {
+                const cgltf_attribute &attribute = primitive.attributes[attributeIndex];
+                const cgltf_accessor *pPositions = attribute.data;
+                if (attribute.type != cgltf_attribute_type_position || attribute.index != 0 || pPositions == nullptr
+                    || !pPositions->has_min || !pPositions->has_max)
+                {
+                    continue;
+                }
+                // The accessor's box, its eight corners through the matrix: the height of its bind pose.
+                for (uint32_t corner = 0; corner < 8; ++corner)
+                {
+                    const float x = (corner & 1) != 0 ? pPositions->max[0] : pPositions->min[0];
+                    const float y = (corner & 2) != 0 ? pPositions->max[1] : pPositions->min[1];
+                    const float z = (corner & 4) != 0 ? pPositions->max[2] : pPositions->min[2];
+                    const float worldY = matrix[1] * x + matrix[5] * y + matrix[9] * z + matrix[13];
+                    minY = std::min(minY, worldY);
+                    maxY = std::max(maxY, worldY);
+                }
+            }
+        }
+    }
+    if (!(maxY > minY) || !std::isfinite(minY) || !std::isfinite(maxY))
+    {
+        return std::nullopt;
+    }
+    return std::array<float, 2>{minY, maxY};
+}
+
+std::unordered_map<std::string, float> gltfClipDurations(const cgltf_data &data)
+{
+    std::unordered_map<std::string, float> durations;
+    for (size_t animationIndex = 0; animationIndex < data.animations_count; ++animationIndex)
+    {
+        const cgltf_animation &animation = data.animations[animationIndex];
+        float duration = 0.0f;
+        for (size_t samplerIndex = 0; samplerIndex < animation.samplers_count; ++samplerIndex)
+        {
+            const cgltf_accessor *pInput = animation.samplers[samplerIndex].input;
+            if (pInput != nullptr && pInput->has_max && std::isfinite(pInput->max[0]))
+            {
+                duration = std::max(duration, pInput->max[0]);
+            }
+        }
+        // Named as the loader names them.
+        durations[animation.name != nullptr && animation.name[0] != '\0'
+            ? std::string(animation.name) : "clip_" + std::to_string(animationIndex)] = duration;
+    }
+    return durations;
+}
+}
+
+std::optional<GltfModelSummary> readGltfModelSummary(
+    const AssetFileSystem &assetFileSystem, const std::string &virtualPath)
+{
+    std::unique_ptr<AssetReadStream> pStream = assetFileSystem.openReadStream(virtualPath);
+    if (pStream == nullptr || !pStream->isOpen())
+    {
+        return std::nullopt;
+    }
+    const std::optional<GltfJson> gltf = readGltfJson(*pStream);
+    if (!gltf)
+    {
+        return std::nullopt;
+    }
+    GltfModelSummary summary;
+    summary.clipDurations = gltfClipDurations(*gltf->data);
+    summary.bindPoseHeightRange = gltfBindPoseHeightRange(*gltf, *pStream);
+    return summary;
+}
+
 ModelLoadResult GltfModelLoader::load(
     const AssetFileSystem &assetFileSystem,
     const std::string &virtualPath
 ) const
 {
-    ModelLoadResult result;
     const std::optional<std::vector<uint8_t>> sourceBytes = assetFileSystem.readBinaryFile(virtualPath);
     if (!sourceBytes)
     {
+        ModelLoadResult result;
         result.error = "model asset was not found: " + virtualPath;
         return result;
     }
+    return loadBytes(*sourceBytes, virtualPath, &assetFileSystem);
+}
 
-    AssetFileContext fileContext = {&assetFileSystem};
+ModelLoadResult GltfModelLoader::loadStandaloneFile(const std::filesystem::path &path) const
+{
+    std::error_code errorCode;
+    const uintmax_t size = std::filesystem::file_size(path, errorCode);
+    FILE *pFile = errorCode ? nullptr : std::fopen(path.string().c_str(), "rb");
+    if (pFile == nullptr)
+    {
+        ModelLoadResult result;
+        result.error = "standalone model was not found: " + path.string();
+        return result;
+    }
+    const size_t byteCount = size;
+    std::vector<uint8_t> bytes(byteCount);
+    const size_t read = bytes.empty() ? 0 : std::fread(bytes.data(), 1, bytes.size(), pFile);
+    std::fclose(pFile);
+    if (read != bytes.size())
+    {
+        ModelLoadResult result;
+        result.error = "could not read standalone model: " + path.string();
+        return result;
+    }
+    return loadBytes(bytes, path.generic_string(), nullptr);
+}
+
+ModelLoadResult GltfModelLoader::loadBytes(
+    const std::vector<uint8_t> &sourceBytes,
+    const std::string &virtualPath,
+    const AssetFileSystem *pAssetFileSystem
+) const
+{
+    ModelLoadResult result;
+    AssetFileContext fileContext = {pAssetFileSystem};
     cgltf_options options = {};
     options.file.read = readAssetFile;
     options.file.release = releaseAssetFile;
     options.file.user_data = &fileContext;
     cgltf_data *pParsedData = nullptr;
-    cgltf_result parseResult = cgltf_parse(&options, sourceBytes->data(), sourceBytes->size(), &pParsedData);
+    cgltf_result parseResult = cgltf_parse(&options, sourceBytes.data(), sourceBytes.size(), &pParsedData);
     if (parseResult != cgltf_result_success || pParsedData == nullptr)
     {
         result.error = "could not parse model " + virtualPath + ": " + cgltfResultName(parseResult);
@@ -959,11 +1828,14 @@ ModelLoadResult GltfModelLoader::load(
     }
     std::unique_ptr<cgltf_data, CgltfDeleter> data(pParsedData);
 
-    if (data->extensions_required_count != 0)
+    for (size_t index = 0; index < data->extensions_required_count; ++index)
     {
-        result.error = "model " + virtualPath + " requires unsupported glTF extension " +
-            std::string(data->extensions_required[0]);
-        return result;
+        if (std::string_view(data->extensions_required[index]) != "KHR_materials_variants")
+        {
+            result.error = "model " + virtualPath + " requires unsupported glTF extension " +
+                std::string(data->extensions_required[index]);
+            return result;
+        }
     }
     for (size_t bufferIndex = 0; bufferIndex < data->buffers_count; ++bufferIndex)
     {
@@ -1002,15 +1874,19 @@ ModelLoadResult GltfModelLoader::load(
 
     std::shared_ptr<ModelAsset> asset = std::make_shared<ModelAsset>();
     asset->sourcePath = virtualPath;
-    if (!loadImages(assetFileSystem, virtualPath, *data, *asset, result.error) ||
-        !loadMaterials(*data, *asset, result.error) ||
+    std::vector<bool> authoredEdgeDarkening;
+    if (!loadImages(pAssetFileSystem, virtualPath, *data, *asset, result.error) ||
+        !loadMaterials(*data, *asset, authoredEdgeDarkening, result.error) ||
         !loadMeshes(*data, *asset, result.error) ||
         !loadNodes(*data, *asset, result.error) ||
+        !validateMeshLods(*asset, result.error) ||
         !loadSkins(*data, *asset, result.error) ||
         !loadAnimations(*data, *asset, result.error))
     {
         return result;
     }
+    applyCreatureEdgeDarkening(*asset, authoredEdgeDarkening);
+    splitCardPrimitives(*asset);
     calculateStaticBounds(*asset);
     result.asset = std::move(asset);
     return result;

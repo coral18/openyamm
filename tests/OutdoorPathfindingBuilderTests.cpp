@@ -13,6 +13,8 @@
 #include <optional>
 #include <vector>
 
+TEST_SUITE_BEGIN(OpenYAMM::Tests::SharedRegressionMapSuite);
+
 using OpenYAMM::Game::FaceAttribute;
 using OpenYAMM::Game::MapDeltaData;
 using OpenYAMM::Game::MapBoundaryEdge;
@@ -472,7 +474,8 @@ TEST_CASE("outdoor pathfinding builder materializes terrain triangles matching r
     mapData.heightMap[terrainSampleIndex(64, 64)] = 1;
     mapData.heightMap[terrainSampleIndex(65, 64)] = 5;
     mapData.heightMap[terrainSampleIndex(64, 65)] = 9;
-    mapData.heightMap[terrainSampleIndex(65, 65)] = 13;
+    // Non-planar cell: the opposite diagonal must produce different floor heights.
+    mapData.heightMap[terrainSampleIndex(65, 65)] = 2;
 
     OutdoorPathMapBuildOptions options = {};
     options.includeBModels = false;
@@ -488,6 +491,7 @@ TEST_CASE("outdoor pathfinding builder materializes terrain triangles matching r
     const float firstTriangleX = outdoorGridCornerWorldX(64) + 128.0f;
     const float firstTriangleY = outdoorGridCornerWorldY(64) - 128.0f;
     const float firstExpectedHeight = sampleOutdoorRenderedTerrainHeight(mapData, firstTriangleX, firstTriangleY);
+    CHECK(firstExpectedHeight == doctest::Approx(40.0f));
     const OpenYAMM::Game::PathFloorSample firstFloor =
         result.pathMap.floorAt({firstTriangleX, firstTriangleY, firstExpectedHeight + 256.0f});
 
@@ -499,6 +503,7 @@ TEST_CASE("outdoor pathfinding builder materializes terrain triangles matching r
     const float secondTriangleX = outdoorGridCornerWorldX(64) + 384.0f;
     const float secondTriangleY = outdoorGridCornerWorldY(64) - 384.0f;
     const float secondExpectedHeight = sampleOutdoorRenderedTerrainHeight(mapData, secondTriangleX, secondTriangleY);
+    CHECK(secondExpectedHeight == doctest::Approx(56.0f));
     const OpenYAMM::Game::PathFloorSample secondFloor =
         result.pathMap.floorAt({secondTriangleX, secondTriangleY, secondExpectedHeight + 256.0f});
 
@@ -1373,3 +1378,5 @@ TEST_CASE("BModel-world cooked navigation merges marked coplanar triangle pairs"
     CHECK_EQ(result.pathMap.facets()[0].vertices.size(), 4);
     CHECK(result.pathMap.floorAt({50.0f, 50.0f, 32.0f}).hasFloor);
 }
+
+TEST_SUITE_END();

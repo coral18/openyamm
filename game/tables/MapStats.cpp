@@ -9,6 +9,8 @@
 #include <optional>
 #include <sstream>
 #include <string>
+#include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 namespace OpenYAMM::Game
@@ -200,6 +202,8 @@ std::vector<std::string> splitString(const std::string &value, char separator)
     return parts;
 }
 
+// The destination edge the party enters by. MMerge's "left" and "right" enter by the east and west start
+// decorations respectively (Erathia's "left" leads to Tatalia's only start, "east start").
 std::optional<MapBoundaryEdge> parseMergedOutdoorTravelSide(const std::string &value)
 {
     const std::string side = lowercaseCopy(trimCopy(value));
@@ -216,35 +220,15 @@ std::optional<MapBoundaryEdge> parseMergedOutdoorTravelSide(const std::string &v
 
     if (side == "left" || side == "3")
     {
-        return MapBoundaryEdge::West;
+        return MapBoundaryEdge::East;
     }
 
     if (side == "right" || side == "4")
     {
-        return MapBoundaryEdge::East;
+        return MapBoundaryEdge::West;
     }
 
     return std::nullopt;
-}
-
-int boundaryTravelHeadingDegrees(MapBoundaryEdge edge)
-{
-    switch (edge)
-    {
-        case MapBoundaryEdge::North:
-            return 90;
-
-        case MapBoundaryEdge::South:
-            return 270;
-
-        case MapBoundaryEdge::East:
-            return 0;
-
-        case MapBoundaryEdge::West:
-            return 180;
-    }
-
-    return 0;
 }
 
 bool parseRequiredQBitsAny(const std::string &value, std::vector<uint32_t> &qbits)
@@ -504,12 +488,10 @@ bool applyMergedOutdoorTravelDirection(
     transition.destinationMapFileName = direction.mapName;
     transition.travelDays = static_cast<int>(direction.days.value_or(0));
     transition.straightTravel = straightTravel;
-    transition.straightTravelSide = straightTravel ? parseMergedOutdoorTravelSide(direction.side) : std::nullopt;
-    transition.useMapStartPosition = !transition.straightTravelSide.has_value();
-    if (transition.straightTravelSide.has_value())
-    {
-        transition.directionDegrees = boundaryTravelHeadingDegrees(edge);
-    }
+    transition.arrivalSide = parseMergedOutdoorTravelSide(direction.side);
+    // Straight travel keeps the party's own heading, as MMerge does; the arrival is mirrored from the departure.
+    // Otherwise the party enters at the destination's start decoration for that side.
+    transition.useMapStartPosition = !straightTravel || !transition.arrivalSide.has_value();
 
     std::string errorMessage;
 
@@ -523,6 +505,31 @@ bool applyMergedOutdoorTravelDirection(
     *pTransition = std::move(transition);
     return true;
 }
+}
+
+std::string mapStartPointName(std::optional<MapBoundaryEdge> side)
+{
+    if (!side.has_value())
+    {
+        return {};
+    }
+
+    switch (*side)
+    {
+        case MapBoundaryEdge::North:
+            return "north start";
+
+        case MapBoundaryEdge::South:
+            return "south start";
+
+        case MapBoundaryEdge::East:
+            return "east start";
+
+        case MapBoundaryEdge::West:
+            return "west start";
+    }
+
+    return {};
 }
 
 const std::optional<MapEdgeTransition> *MapStatsEntry::edgeTransition(MapBoundaryEdge edge) const
@@ -667,6 +674,7 @@ bool MapStats::loadFromRows(const std::vector<std::vector<std::string>> &rows, c
         entry.name = getColumnValue(row, NameColumn);
         entry.fileName = getColumnValue(row, FileNameColumn);
         const std::string explicitWorldId = trimCopy(getColumnValue(row, WorldIdColumn));
+        entry.explicitWorldId = !explicitWorldId.empty();
         entry.worldId = explicitWorldId.empty()
             ? inferWorldIdFromMapFileName(entry.fileName, worldId)
             : normalizeWorldId(explicitWorldId);
@@ -876,6 +884,109 @@ bool MapStats::applyMergedOutdoorTravels(const MergedOutdoorTravelTable &outdoor
     }
 
     return true;
+}
+
+bool MapStats::applyWorldOwnership(const std::vector<std::pair<std::string, std::string>> &worldMapFiles)
+{
+    std::unordered_map<std::string, std::string> ownerByFileName;
+    std::unordered_set<std::string> sharedFileNames;
+
+    for (const auto &[worldId, fileName] : worldMapFiles)
+    {
+        const std::string normalizedFileName = normalizeFileName(fileName);
+        const std::string normalizedWorldId = normalizeWorldId(worldId);
+        const auto [iterator, inserted] = ownerByFileName.emplace(normalizedFileName, normalizedWorldId);
+
+        if (!inserted && iterator->second != normalizedWorldId)
+        {
+            sharedFileNames.insert(normalizedFileName);
+        }
+    }
+
+    for (MapStatsEntry &entry : m_entries)
+    {
+        if (entry.explicitWorldId)
+        {
+            continue;
+        }
+
+        const std::string normalizedFileName = normalizeFileName(entry.fileName);
+
+        if (sharedFileNames.contains(normalizedFileName))
+        {
+            std::cerr << "MapStats map " << entry.fileName
+                      << " is shipped by more than one world; set its world id column\n";
+            return false;
+        }
+
+        const auto owner = ownerByFileName.find(normalizedFileName);
+
+        if (owner != ownerByFileName.end())
+        {
+            entry.worldId = owner->second;
+            entry.canonicalId = buildCanonicalMapId(entry.worldId, entry.fileName);
+        }
+    }
+
+    return true;
+}
+
+bool MapStats::applyOpenAirMaps(const std::string &worldId, const std::vector<std::string> &fileNames)
+{
+    for (const std::string &fileName : fileNames)
+    {
+        MapStatsEntry *pEntry = findMutableByFileName(fileName);
+        const std::string normalizedFileName = normalizeFileName(fileName);
+
+        if (pEntry == nullptr || pEntry->worldId != normalizeWorldId(worldId)
+            || !normalizedFileName.ends_with(".blv"))
+        {
+            std::cerr << "world.yml openAirMaps of " << worldId << ": " << fileName
+                      << " is not a BLV map of that world\n";
+            return false;
+        }
+
+        pEntry->openAir = true;
+    }
+
+    return true;
+}
+
+bool MapStats::applyNoTeleportMaps(const std::string &worldId, const std::vector<std::string> &fileNames)
+{
+    for (const std::string &fileName : fileNames)
+    {
+        MapStatsEntry *pEntry = findMutableByFileName(fileName);
+
+        if (pEntry == nullptr || pEntry->worldId != normalizeWorldId(worldId))
+        {
+            std::cerr << "world.yml noTeleportMaps of " << worldId << ": " << fileName << " is not a map of that world\n";
+            return false;
+        }
+
+        pEntry->noTeleport = true;
+    }
+
+    return true;
+}
+
+std::vector<std::pair<std::string, std::string>> MapStats::legacyCanonicalIdRenames() const
+{
+    std::vector<std::pair<std::string, std::string>> renames;
+
+    for (const MapStatsEntry &entry : m_entries)
+    {
+        // Before world ownership, maps without an explicit world were assigned by file name alone.
+        const std::string legacyCanonicalId =
+            buildCanonicalMapId(inferWorldIdFromMapFileName(entry.fileName, DefaultWorldId), entry.fileName);
+
+        if (!entry.explicitWorldId && legacyCanonicalId != entry.canonicalId)
+        {
+            renames.emplace_back(legacyCanonicalId, entry.canonicalId);
+        }
+    }
+
+    return renames;
 }
 
 const std::vector<MapStatsEntry> &MapStats::getEntries() const

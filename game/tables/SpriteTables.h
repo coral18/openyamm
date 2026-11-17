@@ -76,7 +76,11 @@ struct DecorationLookupResult
 class DecorationTable
 {
 public:
+    // Rows in increasing '#' order (decoration id = '#' - 1). Numbers may skip (a world's rows start in its own range
+    // past the engine's): a skipped id is no decoration, get() returns null for it. Fails on a repeated or decreasing
+    // number.
     bool loadRows(const std::vector<std::vector<std::string>> &rows);
+    // Null for an id past the table or skipped by its rows.
     const DecorationEntry *get(uint16_t decorationId) const;
     const DecorationEntry *findByInternalName(const std::string &internalName) const;
     std::optional<uint16_t> findIdByInternalName(const std::string &internalName) const;
@@ -84,6 +88,8 @@ public:
 
 private:
     std::vector<DecorationEntry> m_entries;
+    // False for the ids the rows skip.
+    std::vector<bool> m_entryPresent;
     std::unordered_map<std::string, uint16_t> m_entryIndexByInternalName;
     std::unordered_map<std::string, uint16_t> m_entryIndexByMapAlias;
 };
@@ -114,6 +120,12 @@ public:
     const SpriteFrameEntry *getFrame(uint16_t spriteId, uint32_t timeTicks) const;
     std::vector<std::string> collectTextureNames(uint16_t spriteId) const;
     std::optional<uint16_t> findFrameIndexBySpriteName(const std::string &spriteName) const;
+    // Authored timing of monster attack sprites (rendering/sprite_attack_timing.yml).
+    bool loadAttackTimingFromYaml(const std::string &yamlText, std::string &errorMessage);
+    // Ticks from the start of an attack sprite's animation to its contact frame, when one is authored.
+    std::optional<int32_t> attackImpactTicks(uint16_t spriteId) const;
+    // Delay of the attack sound after the attack starts; 0 plays it as the attack starts.
+    float attackSoundDelaySeconds(uint16_t spriteId) const;
     static ResolvedSpriteTexture resolveTexture(const SpriteFrameEntry &frame, int octant);
     static bool hasFlag(uint32_t flags, SpriteFrameFlag flag);
 
@@ -127,5 +139,14 @@ private:
     std::vector<bool> m_framePresent;
     std::vector<uint16_t> m_eFrames;
     std::unordered_map<std::string, uint16_t> m_spriteNameIndex;
+    struct AttackTiming
+    {
+        uint32_t contactFrame = 0;
+        float soundDelaySeconds = 0.0f;
+    };
+
+    const AttackTiming *findAttackTiming(uint16_t spriteId) const;
+
+    std::unordered_map<std::string, AttackTiming> m_attackTimings;
 };
 }

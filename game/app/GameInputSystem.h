@@ -1,12 +1,14 @@
 #pragma once
 
 #include "game/app/GameSettings.h"
+#include "game/app/GamepadUiInput.h"
 #include "game/app/MobileJumpDoubleTapGesture.h"
 #include "game/gameplay/GameplayInputFrame.h"
 #include "game/gameplay/GameplayTouchControl.h"
 
 #include <array>
 #include <cstdint>
+#include <deque>
 #include <optional>
 #include <span>
 #include <string>
@@ -17,6 +19,11 @@ class GameInputSystem
 {
 public:
     void handleSdlEvent(const SDL_Event &event);
+    std::optional<SDL_Event> handleGamepadEvent(const SDL_Event &event);
+    void setGamepadUiContext(const void *pContext);
+    void shutdownGamepad();
+    bool selectVirtualGamepad(SDL_JoystickID id);
+    bool positionVirtualGamepad(SDL_JoystickID id, float u, float v);
 
     void updateFromEngineInput(
         int screenWidth,
@@ -28,13 +35,24 @@ public:
         bool mobileJumpGestureEnabled = true,
         bool mobileFlightControlsEnabled = false,
         bool mobileInspectControlEnabled = true,
-        std::span<const GameplayTouchControl> touchControls = {});
+        bool mobileLongPressInspectEnabled = false,
+        std::span<const GameplayTouchControl> touchControls = {},
+        float deltaSeconds = 0.0f,
+        SDL_JoystickID virtualTestGamepad = 0);
 
     const GameplayInputFrame &frame() const;
     GameplayInputFrame &frame();
     bool consumeMobileDebugConsoleToggleRequested();
     void resetRelativeMouseMotion();
     void suppressMouseButtonsUntilReleased();
+    // A window opened from play under a mouse click (a pedestal, an NPC, a house, a chest): the button that opened it
+    // counts only once released, and a press in the next WindowClickGuardNanoseconds is dropped with its release, so
+    // the second click of a quick double click does not land in the new window. Keys are never held back, and a
+    // window opened with no click in the last ClickOpenedWindowNanoseconds is not guarded.
+    void guardClicksAfterWindowOpened();
+
+    static constexpr uint64_t WindowClickGuardNanoseconds = 250'000'000ULL;
+    static constexpr uint64_t ClickOpenedWindowNanoseconds = 500'000'000ULL;
 
 private:
     enum class MobileTouchRole
@@ -46,6 +64,7 @@ private:
         FlyDown,
         InspectModifier,
         InspectTarget,
+        LongPressInspect,
         Hud,
         DebugConsoleGesture
     };
@@ -57,21 +76,33 @@ private:
         MobileTouchRole role = MobileTouchRole::None;
         float startX = 0.0f;
         float startY = 0.0f;
+        uint64_t startTimestampNanoseconds = 0;
         float x = 0.0f;
         float y = 0.0f;
         float deltaX = 0.0f;
         float deltaY = 0.0f;
         bool dragThresholdExceeded = false;
         bool dragStartDelivered = false;
+        bool longPressCandidate = false;
         bool debugConsoleGestureCandidate = false;
         bool debugConsoleGestureTriggered = false;
     };
 
     GameplayInputFrame m_frame = {};
+    GamepadUiInput m_gamepadUi;
+    bool m_gamepadInitializationAttempted = false;
+    bool m_ownsGamepadSubsystem = false;
+    std::array<uint16_t, SDL_SCANCODE_COUNT> m_pendingGamepadPressCounts = {};
     std::optional<std::array<float, 2>> m_mobilePointerPosition;
     std::string m_pendingTextInput;
     std::array<uint16_t, SDL_SCANCODE_COUNT> m_pendingKeyboardPressCounts = {};
     std::array<bool, SDL_SCANCODE_COUNT> m_previousKeyboardHeld = {};
+    // Left, middle and right button events not yet applied to a frame.
+    std::array<std::deque<SDL_MouseButtonEvent>, 3> m_pendingMouseButtonEvents = {};
+    // Mouse motion not yet applied to a frame, summed from motion events. SDL's own relative state also counts the
+    // pointer position a compositor reports after a warp it did not make (Wayland), which turned the camera.
+    float m_pendingRelativeMouseX = 0.0f;
+    float m_pendingRelativeMouseY = 0.0f;
     std::array<bool, KeyboardActionCount> m_previousActionHeld = {};
     std::array<MobileTouchPoint, 8> m_mobileTouches = {};
     bool m_mobilePendingHudTap = false;
@@ -100,5 +131,8 @@ private:
     bool m_suppressLeftMouseButtonUntilReleased = false;
     bool m_suppressRightMouseButtonUntilReleased = false;
     bool m_suppressMiddleMouseButtonUntilReleased = false;
+    // The last mouse button press (SDL ticks), and the end of the click guard (0 when none).
+    uint64_t m_lastMouseButtonDownNanoseconds = 0;
+    uint64_t m_clickGuardUntilNanoseconds = 0;
 };
 } // namespace OpenYAMM::Game

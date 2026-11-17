@@ -34,6 +34,8 @@ public:
         int16_t paletteId,
         const char *pLoadPhase = "render");
     static void invalidateRenderAssets(OutdoorGameView &view);
+    // Decoration billboard the context action points at and its outline colour (sprites and decoration models).
+    static std::optional<std::pair<size_t, uint32_t>> highlightedDecoration(const OutdoorGameView &view);
     static void destroyRenderAssets(OutdoorGameView &view);
     static void renderDecorationBillboards(
         OutdoorGameView &view,
@@ -50,12 +52,8 @@ public:
         const bx::Vec3 &cameraPosition,
         const ViewFrustum &frustum,
         const WaterRenderer::Reflection *pReflection = nullptr);
-    static void renderRuntimeWorldItems(
-        OutdoorGameView &view,
-        uint16_t viewId,
-        const float *pViewMatrix,
-        const bx::Vec3 &cameraPosition,
-        const ViewFrustum &frustum);
+    // Hover and context-action outlines of the item models on the ground.
+    static void outlineRuntimeWorldItems(OutdoorGameView &view, const float *pViewMatrix);
     static void renderRuntimeProjectiles(
         OutdoorGameView &view,
         uint16_t viewId,
@@ -64,10 +62,6 @@ public:
     static void renderFxContactShadows(
         OutdoorGameView &view,
         uint16_t viewId);
-    static void renderFxGlowBillboards(
-        OutdoorGameView &view,
-        uint16_t viewId,
-        const float *pViewMatrix);
     static void renderFxSegmentProjectiles(
         OutdoorGameView &view,
         uint16_t viewId,
@@ -100,7 +94,8 @@ private:
         const bx::Vec3 &up,
         float u0,
         float u1,
-        uint32_t lightContributionAbgr);
+        uint32_t lightContributionAbgr,
+        float hitFlash = 0.0f);
     static void writeLitBillboardVertices(
         OutdoorGameView::LitBillboardVertex *pVertices,
         const bx::Vec3 &center,
@@ -108,7 +103,8 @@ private:
         const bx::Vec3 &up,
         float u0,
         float u1,
-        uint32_t lightContributionAbgr);
+        uint32_t lightContributionAbgr,
+        float hitFlash = 0.0f);
     static uint32_t computeBillboardLightContributionAbgr(
         OutdoorGameView &view,
         float x,

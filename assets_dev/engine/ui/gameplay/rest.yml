@@ -151,10 +151,23 @@ elements:
       align_y: middle
       scale: 0.55
     notes: 'Native action/hit target with live Fondamento label and shared hover, pressed, selected and disabled states.'
+  - id: RestWeekdayText
+    anchor: top_left
+    offset_x: 487.5
+    offset_y: 161
+    width: 114.1
+    height: 19
+    z_index: 40
+    text:
+      value: '{weekday}'
+      font: Create
+      align_x: center
+      align_y: top
+      color: '#e5dcc7'
   - id: RestTimeText
     anchor: top_left
     offset_x: 487.5
-    offset_y: 168.1
+    offset_y: 185
     width: 114.1
     height: 19
     z_index: 40
@@ -167,7 +180,7 @@ elements:
   - id: RestDayText
     anchor: top_left
     offset_x: 487.5
-    offset_y: 195.6
+    offset_y: 209
     width: 59.2
     height: 19
     z_index: 40
@@ -180,7 +193,7 @@ elements:
   - id: RestDayValueText
     anchor: top_left
     offset_x: 558.9
-    offset_y: 195.6
+    offset_y: 209
     width: 42.7
     height: 19
     z_index: 40
@@ -193,7 +206,7 @@ elements:
   - id: RestMonthText
     anchor: top_left
     offset_x: 487.5
-    offset_y: 227.4
+    offset_y: 233
     width: 59.2
     height: 19
     z_index: 40
@@ -206,7 +219,7 @@ elements:
   - id: RestMonthValueText
     anchor: top_left
     offset_x: 558.9
-    offset_y: 227.4
+    offset_y: 233
     width: 42.7
     height: 19
     z_index: 40
@@ -219,7 +232,7 @@ elements:
   - id: RestYearText
     anchor: top_left
     offset_x: 487.5
-    offset_y: 259.2
+    offset_y: 257
     width: 59.2
     height: 19
     z_index: 40
@@ -232,7 +245,7 @@ elements:
   - id: RestYearValueText
     anchor: top_left
     offset_x: 558.9
-    offset_y: 259.2
+    offset_y: 257
     width: 42.7
     height: 19
     z_index: 40

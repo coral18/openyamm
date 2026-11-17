@@ -2,6 +2,22 @@
 
 namespace OpenYAMM::Game
 {
+int16_t resolveMapDeltaActorMonsterId(const MapDeltaActor &actor)
+{
+    if (actor.monsterInfoId > 0)
+    {
+        return actor.monsterInfoId;
+    }
+
+    if (actor.monsterId > 0)
+    {
+        return actor.monsterId;
+    }
+
+    return 0;
+}
+
+
 std::string resolveMapDeltaActorName(const MonsterTable &monsterTable, const MapDeltaActor &actor)
 {
     if (actor.uniqueNameIndex > 0)
@@ -12,6 +28,13 @@ std::string resolveMapDeltaActorName(const MonsterTable &monsterTable, const Map
         {
             return *uniqueName;
         }
+    }
+
+    // An MM9 person with its own RUDE dialogue is called by its name (the one its dialogue shows: Ludwig Van, Brother
+    // Kennet), not by its body's row (Commoner, Shopkeeper, Monk).
+    if (actor.mm9RudeId > 0 && !actor.name.empty())
+    {
+        return actor.name;
     }
 
     const MonsterTable::MonsterDisplayNameEntry *pDisplayEntry =
@@ -37,5 +60,15 @@ std::string resolveMapDeltaActorName(const MonsterTable &monsterTable, const Map
     const std::optional<std::string> displayName =
         monsterTable.findDisplayNameByInternalName(pMonsterEntry->internalName);
     return displayName ? *displayName : pMonsterEntry->internalName;
+}
+std::string resolveSpawnedMapActorName(const MonsterTable &monsterTable,
+    const MonsterTable::MonsterStatsEntry &stats, uint32_t uniqueNameId)
+{
+    if (uniqueNameId != 0)
+    {
+        const std::optional<std::string> name = monsterTable.getUniqueName(int32_t(uniqueNameId));
+        if (name && !name->empty()) return *name;
+    }
+    return stats.name;
 }
 }

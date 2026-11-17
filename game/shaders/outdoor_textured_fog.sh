@@ -2,12 +2,19 @@
 #include "common.sh"
 #include "world_clip.sh"
 
-#if TERRAIN_TEXTURE_ARRAY
+// ALPHA_TO_COVERAGE (terrain decorations in a multisampled world target): a grass blade's alpha test becomes
+// coverage for alpha to coverage, sharpened to about a pixel around its cutoff, so blade edges cover part of each
+// pixel's samples instead of stair-stepping and shimmering as the camera moves. Stones keep their dissolve.
+#ifndef ALPHA_TO_COVERAGE
+#define ALPHA_TO_COVERAGE 0
+#endif
+
+#if TERRAIN_DECORATION
 SAMPLER2DARRAY(s_texColor, 0);
-SAMPLER2DARRAY(s_texTerrainWater, 1);
-SAMPLER2DARRAY(s_texWaterCoverage, 4);
-#elif TERRAIN_DECORATION
+#elif BMODEL_TEXTURE_ARRAY
+// A bmodel face whose texture lives in a size array (u_bmodelTextureLayer.x is its layer).
 SAMPLER2DARRAY(s_texColor, 0);
+uniform vec4 u_bmodelTextureLayer;
 #else
 SAMPLER2D(s_texColor, 0);
 #endif
@@ -23,91 +30,17 @@ uniform vec4 u_bakedTerrainBounds;
 uniform vec4 u_outdoorSunlight;
 #endif
 
-uniform vec4 u_fogColor;
-uniform vec4 u_fogDensities;
-uniform vec4 u_fogDistances;
 uniform vec4 u_cameraPosition;
-uniform vec4 u_fxLightPositions[8];
-uniform vec4 u_fxLightColors[8];
-uniform vec4 u_fxLightParams;
 uniform vec4 u_secretPulseParams;
 uniform vec4 u_waterSurfaceControl;
 
-float safeSmoothstep(float edge0, float edge1, float value)
-{
-    if (edge0 == edge1)
-    {
-        return 0.0;
-    }
-
-    float t = clamp((value - edge0) / (edge1 - edge0), 0.0, 1.0);
-    return t * t * (3.0 - 2.0 * t);
-}
-
-float getFogRatio(float dist)
-{
-    if (u_fogDensities.w > 0.5)
-    {
-        return clamp((dist - u_fogDistances.x) / max(u_fogDistances.y - u_fogDistances.x, 1.0), 0.0, 1.0);
-    }
-
-    return
-        u_fogDensities.x
-        + (u_fogDensities.y - u_fogDensities.x) * safeSmoothstep(u_fogDistances.x, u_fogDistances.y, dist)
-        + (1.0 - u_fogDensities.y) * safeSmoothstep(u_fogDistances.y, u_fogDistances.z, dist);
-}
-
-float getFogAlpha(float dist)
-{
-    if (u_fogDensities.w > 0.5)
-    {
-        return 1.0;
-    }
-
-    return 1.0 - safeSmoothstep(u_fogDistances.y, u_fogDistances.z, dist);
-}
-
-vec3 getFxLighting(vec3 worldPosition, float sunlight)
-{
-    // Only base illumination receives sunlight; local spell/torch contributions retain their full strength.
-#if BAKED_SOURCES
-    float base = 0.0;
-#else
-#if SUN_SHADOWS
-    float direct = max(sunlight - u_outdoorSunlight.w, 0.0);
-    if (u_sunShadowParams[0].x > 0.5 && direct > 0.0)
-    {
-        vec3 normal = cross(dFdx(worldPosition), dFdy(worldPosition));
-        normal *= inversesqrt(max(dot(normal, normal), 0.000001));
-        if (dot(normal, u_sunShadowParams[3].xyz) < 0.0)
-        {
-            normal = -normal;
-        }
-        sunlight -= direct * (1.0 - sunShadowVisibility(worldPosition, normal));
-    }
+// Buildings take their dynamic lights from the light grid; grass keeps the shared list of its vertex lighting.
+#if !TERRAIN_DECORATION
+#define OUTDOOR_LIGHT_GRID 1
 #endif
-    float base = u_fxLightParams.y * sunlight;
-#endif
-    vec3 lighting = vec3(base, base, base);
-
-    for (int i = 0; i < 8; ++i)
-    {
-        if (float(i) >= u_fxLightParams.x)
-        {
-            continue;
-        }
-
-        vec3 toLight = u_fxLightPositions[i].xyz - worldPosition;
-        float radius = max(u_fxLightPositions[i].w, 1.0);
-        float distanceSquared = dot(toLight, toLight);
-        float inverseRadiusSquared = 1.0 / (radius * radius);
-        float attenuation = 1.0 - clamp(distanceSquared * inverseRadiusSquared, 0.0, 1.0);
-        attenuation *= attenuation;
-        lighting += u_fxLightColors[i].rgb * (u_fxLightColors[i].w * attenuation * u_fxLightParams.z);
-    }
-
-    return clamp(lighting, vec3(0.0, 0.0, 0.0), vec3(2.0, 2.0, 2.0));
-}
+#include "outdoor_lighting.sh"
+#include "sky_common.sh"
+#include "weather_wetness.sh"
 
 void main()
 {
@@ -115,52 +48,8 @@ void main()
     vec2 texcoord = v_texcoord0;
     bool terrainWater = v_texcoord1.x < -0.5;
 
-#if TERRAIN_TEXTURE_ARRAY
-    if (terrainWater && v_flowInfo.y > 0.5
-        && (u_waterSurfaceControl.x > 0.5 || abs(u_worldClipPlane.z) > 0.5))
-    {
-        float coverage = v_texcoord1.x < -1.5
-            ? texture2DArray(s_texWaterCoverage, vec3(texcoord, v_flowInfo.x)).r : 1.0;
-        if (coverage >= 0.999)
-        {
-            discard;
-        }
-    }
-#endif
-
-    if (terrainWater && v_texcoord1.x > -1.5)
-    {
-#if TERRAIN_TEXTURE_ARRAY
-        vec2 atlasMin = vec2(0.0, 0.0);
-        vec2 atlasMax = vec2(1.0, 1.0);
-#else
-        vec2 atlasMin = v_flowInfo.xy;
-        vec2 atlasMax = v_flowInfo.zw;
-#endif
-        vec2 atlasSpan = max(atlasMax - atlasMin, vec2(0.0001, 0.0001));
-        vec2 localCoord = clamp((texcoord - atlasMin) / atlasSpan, vec2(0.0, 0.0), vec2(1.0, 1.0));
-
-        float pongPhase = sin(mod(u_secretPulseParams.y, 10.0) * 6.2831853 / 10.0);
-        float swirlPhase = mod(u_secretPulseParams.y, 8.0) * 6.2831853 / 8.0;
-        float ripplePhase = mod(u_secretPulseParams.y, 6.0) * 6.2831853 / 6.0;
-
-        vec2 localDelta = vec2(0.0, 0.0);
-        localDelta.x += pongPhase * 0.004 * sin(localCoord.x * 6.2831853);
-        localDelta.y += pongPhase * 0.004 * sin(localCoord.y * 6.2831853);
-        localDelta.x += 0.0025 * sin(swirlPhase + localCoord.y * 6.2831853);
-        localDelta.y += 0.0025 * cos(swirlPhase + localCoord.x * 6.2831853);
-        localDelta.x -= 0.001 * cos(ripplePhase + (localCoord.y + localDelta.y) * 6.2831853 * 6.0);
-        float edgeFade =
-            safeSmoothstep(0.04, 0.12, localCoord.x)
-            * (1.0 - safeSmoothstep(0.88, 0.96, localCoord.x))
-            * safeSmoothstep(0.04, 0.12, localCoord.y)
-            * (1.0 - safeSmoothstep(0.88, 0.96, localCoord.y));
-        localDelta *= edgeFade;
-
-        texcoord = clamp(texcoord + localDelta * atlasSpan, atlasMin, atlasMax);
-    }
-#if !TERRAIN_TEXTURE_ARRAY && !TERRAIN_DECORATION
-    else
+#if !TERRAIN_DECORATION
+    if (!terrainWater)
     {
         texcoord.xy += v_flowInfo.xy * u_secretPulseParams.y;
 
@@ -172,20 +61,10 @@ void main()
     }
 
 #endif
-#if TERRAIN_TEXTURE_ARRAY
-    // Water repeats across cells. Land and shore overlays retain clamped sampling because
-    // their opposite edges can contain different materials. Both samplers share one array.
-    vec4 textureColor;
-    if (terrainWater && v_texcoord1.x > -1.5)
-    {
-        textureColor = texture2DArray(s_texTerrainWater, vec3(texcoord, v_flowInfo.x));
-    }
-    else
-    {
-        textureColor = texture2DArray(s_texColor, vec3(texcoord, v_flowInfo.x));
-    }
-#elif TERRAIN_DECORATION
+#if TERRAIN_DECORATION
     vec4 textureColor = texture2DArray(s_texColor, vec3(texcoord, v_flowInfo.x));
+#elif BMODEL_TEXTURE_ARRAY
+    vec4 textureColor = texture2DArray(s_texColor, vec3(texcoord, u_bmodelTextureLayer.x));
 #else
     vec4 textureColor = texture2D(s_texColor, texcoord);
 #endif
@@ -195,20 +74,62 @@ void main()
         textureColor = vec4(1.0, 1.0, 1.0, 1.0);
     }
     textureColor *= v_color0;
-    // Fixed object-space noise, independent of frame/time and screen position. Coverage fades
-    // without shrinking the mesh or introducing a screen-space pattern that crawls over it.
-    vec2 coverageCell = floor(v_texcoord0 * vec2(128.0, 96.0));
-    float coverageNoise = fract(sin(dot(coverageCell, vec2(12.9898, 78.233))
-                                   + v_texcoord1.w * 91.7) * 43758.5453);
-    if (textureColor.a < 0.4 || v_texcoord1.z <= coverageNoise)
+#if ALPHA_TO_COVERAGE
+    // Outside the branches below: derivatives need every pixel of the quad.
+    float alphaWidth = max(fwidth(textureColor.a), 0.0001);
+    float coverage = 1.0;
+#endif
+    if (v_texcoord1.y > 0.5)
+    {
+        // Stones: fixed object-space noise, independent of frame/time and screen position. Coverage fades
+        // without shrinking the mesh or introducing a screen-space pattern that crawls over it.
+        vec2 coverageCell = floor(v_texcoord0 * vec2(128.0, 96.0));
+        float coverageNoise = fract(sin(dot(coverageCell, vec2(12.9898, 78.233))
+                                       + v_texcoord1.w * 91.7) * 43758.5453);
+        if (textureColor.a < 0.4 || v_texcoord1.z <= coverageNoise)
+        {
+            discard;
+        }
+    }
+#if ALPHA_TO_COVERAGE
+    else if (v_texcoord1.z <= 0.0)
     {
         discard;
     }
+    else
+    {
+        coverage = clamp((textureColor.a - mix(1.0, 0.4, v_texcoord1.z)) / alphaWidth + 0.5, 0.0, 1.0);
+    }
+#else
+    else if (v_texcoord1.z <= 0.0 || textureColor.a < mix(1.0, 0.4, v_texcoord1.z))
+    {
+        // Grass: a fading tuft's blades thin from their soft edges inward (vs_terrain_decoration).
+        discard;
+    }
 #endif
+#if !SUN_SHADOWS
+    // Lit per vertex (vs_terrain_decoration); decorations are never secret faces.
+    textureColor.rgb = mix(textureColor.rgb, u_fogColor.rgb, u_fogDensities.z) * v_flowInfo.yzw;
+    float decorationFogDistance = length(v_worldPosition - u_cameraPosition.xyz);
+    float decorationFogRatio =
+        skyFogRatio(getFogRatio(decorationFogDistance), v_worldPosition, decorationFogDistance, u_fogDistances.z);
+    gl_FragColor = mix(textureColor,
+        vec4(skyFogDisplayColor(decorationFogRatio, u_fogColor.rgb, v_worldPosition),
+            getFogAlpha(decorationFogDistance)),
+        decorationFogRatio);
+    gl_FragColor.rgb = mistApply(gl_FragColor.rgb, v_worldPosition);
+#if ALPHA_TO_COVERAGE
+    gl_FragColor.a = coverage;
+#endif
+    return;
+#endif
+#endif
+#if !(TERRAIN_DECORATION && ALPHA_TO_COVERAGE)
     if (textureColor.a <= 0.1)
     {
         discard;
     }
+#endif
 
     textureColor.rgb = mix(textureColor.rgb, u_fogColor.rgb, u_fogDensities.z);
 #if BAKED_SOURCES
@@ -219,6 +140,12 @@ void main()
         baked + getFxLighting(v_worldPosition, 0.0)), textureColor.a);
 #else
     vec4 litTextureColor = vec4(textureColor.rgb * getFxLighting(v_worldPosition, v_sunlight), textureColor.a);
+#endif
+#if !TERRAIN_DECORATION
+    if (!terrainWater)
+    {
+        litTextureColor.rgb = applyWetness(litTextureColor.rgb, v_worldPosition);
+    }
 #endif
 
     bool classicSecret = v_texcoord1.x > 0.5 && v_texcoord1.x < 1.5;
@@ -240,8 +167,12 @@ void main()
     }
 
     float fogDistance = length(v_worldPosition - u_cameraPosition.xyz);
-    float fogRatio = getFogRatio(fogDistance);
+    float fogRatio = skyFogRatio(getFogRatio(fogDistance), v_worldPosition, fogDistance, u_fogDistances.z);
     float fogAlpha = getFogAlpha(fogDistance);
-    vec4 fogColor = vec4(u_fogColor.rgb, fogAlpha);
+    vec4 fogColor = vec4(skyFogDisplayColor(fogRatio, u_fogColor.rgb, v_worldPosition), fogAlpha);
     gl_FragColor = mix(litTextureColor, fogColor, fogRatio);
+    gl_FragColor.rgb = mistApply(gl_FragColor.rgb, v_worldPosition);
+#if TERRAIN_DECORATION && ALPHA_TO_COVERAGE
+    gl_FragColor.a = coverage;
+#endif
 }

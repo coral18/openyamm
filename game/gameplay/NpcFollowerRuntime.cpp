@@ -1,6 +1,9 @@
 #include "game/gameplay/NpcFollowerRuntime.h"
+#include "engine/Localization.h"
 
+#include "game/mm9/Mm9HirelingTable.h"
 #include "game/party/Party.h"
+#include "game/rules/SkillRules.h"
 #include "game/tables/MergedBaseTables.h"
 #include "game/tables/NpcDialogTable.h"
 
@@ -143,23 +146,6 @@ std::vector<HiredNpcFollowerView> buildHiredNpcFollowerViews(
     return buildHiredNpcFollowerViews(syncedRuntimeState, npcDialogTable, npcProfessionTable);
 }
 
-uint32_t totalHiredNpcFollowerFeePercent(const EventRuntimeState &eventRuntimeState)
-{
-    uint32_t total = 0;
-
-    for (const EventRuntimeState::HiredNpcFollower &follower : eventRuntimeState.hiredNpcFollowers)
-    {
-        total += follower.weeklyCost / 100u;
-    }
-
-    return total;
-}
-
-uint32_t hiredNpcFollowerGoldShare(uint32_t goldAmount, const EventRuntimeState &eventRuntimeState)
-{
-    return goldAmount * totalHiredNpcFollowerFeePercent(eventRuntimeState) / 100u;
-}
-
 bool hiredNpcHasProfession(std::span<const HiredNpcFollower> followers, uint32_t professionId)
 {
     return std::find_if(
@@ -240,57 +226,68 @@ int hiredNpcRestFoodReduction(const EventRuntimeState &eventRuntimeState)
     return reduction;
 }
 
-int hiredNpcSkillBonus(std::span<const HiredNpcFollower> followers, const std::string &skillName)
+int hiredNpcSkillBonus(
+    std::span<const HiredNpcFollower> followers,
+    const std::string &skillName,
+    bool strongestOnly,
+    const SkillRules *pRules)
 {
     int bonus = 0;
 
     for (const EventRuntimeState::HiredNpcFollower &follower : followers)
     {
         const uint32_t professionId = follower.professionId;
+        // MMerge adds every follower's bonus; a ruleset may count only the strongest (MAW) or change the amount.
+        const auto add = [&bonus, strongestOnly, pRules, professionId, &skillName](int amount)
+        {
+            const int adjusted =
+                pRules != nullptr ? pRules->followerSkillBonus(professionId, skillName, amount) : amount;
+            bonus = strongestOnly ? std::max(bonus, adjusted) : bonus + adjusted;
+        };
 
         if (skillName == "Learning")
         {
-            if (professionId == 4) bonus += 5;
-            else if (professionId == 13) bonus += 10;
-            else if (professionId == 14) bonus += 15;
+            if (professionId == 4) add(5);
+            else if (professionId == 13) add(10);
+            else if (professionId == 14) add(15);
         }
         else if (skillName == "Merchant")
         {
-            if (professionId == 20) bonus += 4;
-            else if (professionId == 21) bonus += 6;
-            else if (professionId == 48) bonus += 3;
-            else if (professionId == 49) bonus += 4;
-            else if (professionId == 50) bonus += 8;
+            if (professionId == 20) add(4);
+            else if (professionId == 21) add(6);
+            else if (professionId == 48) add(3);
+            else if (professionId == 49) add(4);
+            else if (professionId == 50) add(8);
         }
         else if (skillName == "DisarmTraps")
         {
-            if (professionId == 25) bonus += 4;
-            else if (professionId == 26) bonus += 6;
-            else if (professionId == 51) bonus += 8;
+            if (professionId == 25) add(4);
+            else if (professionId == 26) add(6);
+            else if (professionId == 51) add(8);
         }
         else if (skillName == "Perception")
         {
-            if (professionId == 22) bonus += 6;
-            else if (professionId == 47) bonus += 5;
+            if (professionId == 22) add(6);
+            else if (professionId == 47) add(5);
         }
         else if (skillName == "LeatherArmor" || skillName == "ChainArmor" || skillName == "PlateArmor")
         {
-            if (professionId == 46) bonus += 2;
+            if (professionId == 46) add(2);
         }
         else if (skillName == "Staff" || skillName == "Sword" || skillName == "Dagger" || skillName == "Axe"
             || skillName == "Spear" || skillName == "Bow" || skillName == "Mace")
         {
-            if (professionId == 15) bonus += 2;
-            else if (professionId == 16) bonus += 3;
-            else if (professionId == 46) bonus += 2;
+            if (professionId == 15) add(2);
+            else if (professionId == 16) add(3);
+            else if (professionId == 46) add(2);
         }
         else if (skillName == "FireMagic" || skillName == "AirMagic" || skillName == "WaterMagic"
             || skillName == "EarthMagic" || skillName == "SpiritMagic" || skillName == "MindMagic"
             || skillName == "BodyMagic" || skillName == "LightMagic" || skillName == "DarkMagic")
         {
-            if (professionId == 17) bonus += 2;
-            else if (professionId == 18) bonus += 3;
-            else if (professionId == 19) bonus += 4;
+            if (professionId == 17) add(2);
+            else if (professionId == 18) add(3);
+            else if (professionId == 19) add(4);
         }
     }
 
@@ -338,30 +335,74 @@ int hiredNpcResistanceBonus(std::span<const HiredNpcFollower> followers, const s
     });
 }
 
-uint32_t hiredNpcGoldFindBonusPercent(const EventRuntimeState &eventRuntimeState)
+FoundGold resolveFoundGold(uint32_t goldAmount, const EventRuntimeState *pEventRuntimeState, const Party *pParty)
 {
-    uint32_t percent = 0;
+    FoundGold foundGold = {};
+    foundGold.amount = goldAmount;
 
-    for (const EventRuntimeState::HiredNpcFollower &follower : eventRuntimeState.hiredNpcFollowers)
+    // MM9's Edina A'Mor: gold the party gains times 1.2 (cshell@0x10053de0). Applied to found gold (the world, chests,
+    // corpses); the MM9 world has no followers, so nothing below changes it there.
+    const int hirelingPercent = pParty != nullptr && goldAmount != 0 ? pParty->mm9HirelingPassives().goldPercent : 0;
+
+    if (hirelingPercent > 0)
     {
-        if (follower.professionId == 31 || follower.professionId == 45)
-        {
-            percent += 10;
-        }
-        else if (follower.professionId == 32)
-        {
-            percent += 20;
-        }
+        foundGold.amount += uint32_t(uint64_t(foundGold.amount) * uint32_t(hirelingPercent) / 100u);
     }
 
-    return percent;
+    if (pEventRuntimeState == nullptr || goldAmount == 0)
+    {
+        foundGold.partyAmount = foundGold.amount;
+        return foundGold;
+    }
+
+    const std::vector<HiredNpcFollower> &followers = pEventRuntimeState->hiredNpcFollowers;
+    uint32_t totalWeeklyCost = 0;
+
+    for (const HiredNpcFollower &follower : followers)
+    {
+        totalWeeklyCost += follower.weeklyCost;
+    }
+
+    // Factor, Banker and Pirate each raise the find once, in this order.
+    constexpr uint32_t FactorProfessionId = 31;
+    constexpr uint32_t BankerProfessionId = 32;
+    constexpr uint32_t PirateProfessionId = 45;
+
+    if (hiredNpcHasProfession(followers, FactorProfessionId))
+    {
+        foundGold.amount += foundGold.amount * 10 / 100;
+    }
+
+    if (hiredNpcHasProfession(followers, BankerProfessionId))
+    {
+        foundGold.amount += foundGold.amount * 20 / 100;
+    }
+
+    if (hiredNpcHasProfession(followers, PirateProfessionId))
+    {
+        foundGold.amount += foundGold.amount * 10 / 100;
+    }
+
+    // Weekly costs are hundredths of a percent of the find; anyone with a fee takes at least one coin.
+    if (totalWeeklyCost != 0)
+    {
+        const uint64_t share = uint64_t(foundGold.amount) * totalWeeklyCost / 10000;
+        foundGold.followerShare = std::min<uint32_t>(std::max<uint64_t>(share, 1), foundGold.amount);
+    }
+
+    foundGold.partyAmount = foundGold.amount - foundGold.followerShare;
+    return foundGold;
 }
 
-uint32_t hiredNpcGoldAfterBonusAndFees(uint32_t goldAmount, const EventRuntimeState &eventRuntimeState)
+std::string foundGoldStatusText(const FoundGold &foundGold)
 {
-    const uint32_t withBonus = goldAmount + goldAmount * hiredNpcGoldFindBonusPercent(eventRuntimeState) / 100u;
-    const uint32_t fee = hiredNpcFollowerGoldShare(withBonus, eventRuntimeState);
-    return withBonus > fee ? withBonus - fee : 0;
+    if (foundGold.followerShare > 0)
+    {
+        return Engine::tr("You found {gold} gold (followers take {share})!",
+            {{"gold", int64_t(foundGold.amount)}, {"share", int64_t(foundGold.followerShare)}});
+    }
+
+    return Engine::tr("You found {gold} gold!", {{"gold", int64_t(foundGold.amount)}});
 }
 
 bool hiredNpcCanRepairItemKind(std::span<const HiredNpcFollower> followers, const std::string &equipStat)

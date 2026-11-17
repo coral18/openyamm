@@ -6,32 +6,57 @@
 #include "game/events/EventRuntime.h"
 #include "game/party/Party.h"
 #include "game/party/PartySpellSystem.h"
+#include "game/party/SpeechIds.h"
 #include "game/tables/FaceAnimationTable.h"
 #include "game/tables/PortraitFxEventTable.h"
 #include "game/ui/GameplayHudArcMesh.h"
 #include "game/ui/GameplayHudCommon.h"
 #include "game/ui/GameplayHudLayoutCache.h"
 #include "game/ui/GameplayUiController.h"
+#include "game/ui/HudDrawList.h"
 #include "game/ui/UiLayoutManager.h"
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
 #include <span>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 #include <vector>
 
 namespace OpenYAMM::Game
 {
+class ActorModelPreview;
+struct Mm9DialogueSpeaker;
+class IGameplayWorldRuntime;
 class SpriteAtlasCache;
 
 struct GameplayHudRenderBackend
 {
+    // The HUD draw list's program (vs_hud, fs_hud): the texture times the vertex colour. Everything on the HUD view
+    // draws with it; the two below remain for quads placed in the world (submitWorldHudQuadBatch).
+    bgfx::ProgramHandle drawListProgramHandle = BGFX_INVALID_HANDLE;
     bgfx::ProgramHandle texturedProgramHandle = BGFX_INVALID_HANDLE;
+    // Draws quads multiplied by tintUniformHandle, such as coloured text.
+    bgfx::ProgramHandle tintedProgramHandle = BGFX_INVALID_HANDLE;
+    bgfx::UniformHandle tintUniformHandle = BGFX_INVALID_HANDLE;
     bgfx::UniformHandle textureSamplerHandle = BGFX_INVALID_HANDLE;
     uint16_t viewId = 2;
 };
+
+// A solid colour's texel in the shared HUD palette texture.
+struct GameplayHudPaletteColor
+{
+    bgfx::TextureHandle textureHandle = BGFX_INVALID_HANDLE;
+    float u = 0.0f;
+    float v = 0.0f;
+};
+
+// A batch quad drawn in a palette colour.
+GameplayHudBatchQuad gameplayHudPaletteQuad(
+    const GameplayHudPaletteColor &color, float x, float y, float width, float height);
 
 struct GameplayPortraitFxState
 {
@@ -50,17 +75,19 @@ struct GameplayPortraitMeterState
 
 struct GameplayPortraitPresentationState
 {
-    std::array<GameplayPortraitMeterState, 5> meters;
+    // Per combatant: the five members, then up to three MM9 hirelings (Party::combatant).
+    std::array<GameplayPortraitMeterState, 8> meters;
     uint32_t lastAnimationUpdateTicks = 0;
     std::vector<uint32_t> memberSpeechCooldownUntilTicks;
     std::vector<uint32_t> memberCombatSpeechCooldownUntilTicks;
+    // When each member last said each line, for the "Repeated voice lines" setting.
+    std::vector<std::unordered_map<SpeechId, uint32_t>> memberSpeechLastPlayedTicks;
 };
 
 struct GameplayHudLoopingAnimationState
 {
     bool initialized = false;
     bool advancing = false;
-    std::string animationName;
     uint32_t accumulatedSourceTicks = 0;
     uint32_t lastSourceTicks = 0;
 };
@@ -74,7 +101,6 @@ enum class GameplayUiAssetLoadKind : uint8_t
     DynamicTexture,
     HudTextureColor,
     HudTextureColorModulated,
-    HudFontColor,
 };
 
 struct GameplayUiAssetLoadPerformanceEvent
@@ -141,9 +167,10 @@ public:
 
     void clear();
     void bindDataRepository(const GameDataRepository *pDataRepository);
-    void setFontSettings(const Engine::FontSettings &settings);
     void bindAssetFileSystem(const Engine::AssetFileSystem *pAssetFileSystem);
     void bindSpriteAtlasCache(SpriteAtlasCache &cache);
+    void bindActorModelPreview(ActorModelPreview &preview);
+    void bindActorTalkPortrait(ActorModelPreview &preview);
     const Engine::AssetFileSystem *assetFileSystem() const;
 
     bool ensureGameplayLayoutsLoaded(const GameplayUiController &uiController);
@@ -165,9 +192,6 @@ public:
     std::vector<GameplayHudFontData> &hudFontHandles();
     const std::vector<GameplayHudFontData> &hudFontHandles() const;
 
-    std::vector<GameplayHudFontColorTextureData> &hudFontColorTextureHandles();
-    const std::vector<GameplayHudFontColorTextureData> &hudFontColorTextureHandles() const;
-
     std::vector<GameplayHudTextureColorTextureData> &hudTextureColorTextureHandles();
     const std::vector<GameplayHudTextureColorTextureData> &hudTextureColorTextureHandles() const;
 
@@ -179,10 +203,16 @@ public:
     void clearRenderedInspectableHudItems();
     GameplayHudScreenState renderedInspectableHudScreenState() const;
     void setRenderedInspectableHudScreenState(GameplayHudScreenState state);
-    bool ensureTownPortalDestinationsLoaded(const std::string &currentMapFileName);
-    bool ensureDimensionDoorDestinationsLoaded(uint32_t dayIndex, bool crossContinentsUnlocked);
+    // Loads every continent's Town Portal map and shows `continentGroupName`'s (empty: the current map's continent).
+    bool ensureTownPortalDestinationsLoaded(
+        const std::string &currentMapFileName,
+        const std::string &continentGroupName);
+    bool ensureDimensionDoorDestinationsLoaded();
     const std::string &townPortalBackgroundTextureName() const;
     const std::vector<GameplayTownPortalDestination> &townPortalDestinations() const;
+    const std::vector<GameplayTownPortalContinent> &townPortalContinents() const;
+    size_t townPortalContinentIndex() const;
+    size_t townPortalHomeContinentIndex() const;
 
     bool loadHudTexture(const std::string &textureName);
     bool loadItemIconTexture(const std::string &textureName);
@@ -227,10 +257,15 @@ public:
     std::optional<std::string> iconAnimationFrameTextureName(
         const std::string &animationName,
         std::optional<uint32_t> elapsedTicks = std::nullopt) const;
-    std::optional<std::string> flyBuffIconAnimationFrameTextureName(bool active, uint32_t tickDivisor);
+    // A movement indicator's frame (Fly, Levitate, Water Walk): the animation plays while the movement is in use and
+    // holds its frame otherwise, slowed to 50/128 of the data's pace as the original HUD does.
+    std::optional<std::string> movementIconAnimationFrameTextureName(const std::string &animationName, bool active);
     std::optional<GameplayHudTextureHandle> ensureSolidHudTextureLoaded(
         const std::string &textureName,
         uint32_t abgrColor);
+    // Solid colours (minimap lines and markers) share one palette texture: a quad whose UVs all lie on a colour's
+    // texel draws in that colour, so quads of different colours batch into one draw.
+    std::optional<GameplayHudPaletteColor> ensureHudPaletteColor(uint32_t abgrColor);
     std::optional<GameplayHudTextureHandle> ensureDynamicHudTexture(
         const std::string &textureName,
         int width,
@@ -255,6 +290,9 @@ public:
         int &opaqueMaxX,
         int &opaqueMaxY);
     std::optional<GameplayHudFontHandle> findHudFont(const std::string &fontName);
+    // An independent outline face (menu_*, fondamento) rasterized at pixelHeight, the way the menus draw it. The
+    // shared cache owns it and may release it on a resize; the handle finds it again by name and height.
+    std::optional<GameplayHudFontHandle> findHudFont(const std::string &fontName, int pixelHeight);
     float measureHudTextWidth(const GameplayHudFontHandle &font, const std::string &text) const;
     std::vector<std::string> wrapHudTextToWidth(
         const GameplayHudFontHandle &font,
@@ -264,7 +302,7 @@ public:
     bgfx::TextureHandle ensureHudTextureColorModulated(
         const GameplayHudTextureHandle &texture,
         uint32_t colorAbgr);
-    bgfx::TextureHandle ensureHudFontMainTextureColor(const GameplayHudFontHandle &font, uint32_t colorAbgr);
+    GameplayHudFontLayer hudFontMainLayer(const GameplayHudFontHandle &font, uint32_t colorAbgr) const;
     void addRenderedInspectableHudItem(const GameplayRenderedInspectableHudItem &item);
     bool isOpaqueHudPixelAtPoint(const GameplayRenderedInspectableHudItem &item, float x, float y);
     void releaseHudGpuResources(bool destroyBgfxResources);
@@ -272,6 +310,7 @@ public:
     void clearHudRenderBackend();
     bool hasHudRenderResources() const;
     void prepareHudView(int width, int height) const;
+    std::array<float, 2> hudTextureUvScale(bgfx::TextureHandle textureHandle) const;
     void submitHudTexturedQuad(
         bgfx::TextureHandle textureHandle,
         float x,
@@ -287,12 +326,20 @@ public:
     void submitHudTexturedEllipse(
         bgfx::TextureHandle textureHandle, float x, float y, float width, float height,
         float u0 = 0.0f, float v0 = 0.0f, float u1 = 1.0f, float v1 = 1.0f) const;
+    // `uRepeat` tiles the texture that many times along the drawn range (a wrapping pattern such as hatching).
     void submitHudTexturedArc(bgfx::TextureHandle textureHandle,
         const GameplayResolvedHudLayoutElement &rect, float strokeWidth, float startDegrees, float sweepDegrees,
-        float begin = 0, float end = 1) const;
+        float begin = 0, float end = 1, float uRepeat = 1) const;
     uint32_t actorInspectAnimationTicks(bool visible, uint32_t nowTicks);
-    void renderActorInspectPreview(const std::string &name, int16_t paletteId,
-        const GameplayResolvedHudLayoutElement &rect, float scale, int yOffset);
+    // A speaking MM9 actor's live head and shoulders (ActorModelPreview, Talk), or a talking prop's from its
+    // decoration model, drawn into a circle (the talk ring) or a square (a venue's sidebar); false, drawing nothing,
+    // when the speaker has no model.
+    bool renderTalkPortrait(const IGameplayWorldRuntime &world, const Mm9DialogueSpeaker &speaker,
+        const GameplayResolvedHudLayoutElement &rect, bool round);
+    // The inspected actor's 3D portrait when it has a model, otherwise its sprite (name, palette).
+    void renderActorInspectPreview(const IGameplayWorldRuntime &world, size_t actorIndex, uint32_t animationTicks,
+        const std::string &name, int16_t paletteId, const GameplayResolvedHudLayoutElement &rect, float scale,
+        int yOffset);
     void submitHudTexturedQuadRotatedCounterClockwise(
         bgfx::TextureHandle textureHandle,
         float x,
@@ -302,20 +349,41 @@ public:
         TextureFilterProfile filterProfile = TextureFilterProfile::Ui) const;
     void submitHudQuadBatch(
         std::span<const GameplayHudBatchQuad> quads,
-        int screenWidth,
-        int screenHeight,
         TextureFilterProfile filterProfile = TextureFilterProfile::Ui) const;
+    // Draws what the HUD functions above have collected since the last flush (devdocs/HUD_RENDERING.md). Called
+    // before every frame is presented, and before anything else draws into the HUD view.
+    void flushHudDrawList() const;
+    // What the HUD view has drawn since the game started, for the performance log's per-frame averages.
+    struct HudDrawListStats
+    {
+        uint64_t draws = 0;
+        uint64_t primitives = 0;
+        uint64_t vertices = 0;
+    };
+    const HudDrawListStats &hudDrawListStats() const;
+    // Prints the next flush's draws, one line each with its texture and primitive count ([HudDraw]): what a HUD
+    // change costs in draws, and which textures break its batches.
+    void logNextHudDrawList() const;
     void submitWorldHudQuadBatch(std::span<const GameplayHudBatchQuad> quads,
         uint16_t viewId, const bx::Vec3 &origin, const bx::Vec3 &right, const bx::Vec3 &up,
         TextureFilterProfile filterProfile = TextureFilterProfile::UiIllustration) const;
+    // The textured program, or the tinted one with its colour set for the next submit.
+    bgfx::ProgramHandle hudProgramForTint(uint32_t tintAbgr) const;
     void renderHudFontLayer(
         const GameplayHudFontHandle &font,
-        bgfx::TextureHandle textureHandle,
+        const GameplayHudFontLayer &layer,
         const std::string &text,
         float textX,
         float textY,
         float fontScale,
         const GameplayResolvedHudLayoutElement *pClip = nullptr) const;
+    // Several lines of one font layer in one batch: an outline's copies or a row of labels cost one draw, not one
+    // each. Lines that overlap draw in the order given.
+    void renderHudFontLayerRuns(
+        const GameplayHudFontHandle &font,
+        const GameplayHudFontLayer &layer,
+        std::span<const GameplayHudTextRun> runs,
+        float fontScale) const;
     bool ensurePortraitRuntimeLoaded();
     void resetPortraitFxStates(size_t memberCount);
     void resetPortraitPresentationState(size_t memberCount);
@@ -343,6 +411,9 @@ public:
     bool renderHouseVideoFrame(float x, float y, float quadWidth, float quadHeight) const;
 
 private:
+    void registerHudTextureUvScales(size_t firstTexture);
+    // The loaded face a handle names: a HUD font, or the shared cache's face at the handle's pixel height.
+    const GameplayHudFontData *hudFontData(const GameplayHudFontHandle &font) const;
     void recordPerformanceAssetLoad(
         GameplayUiAssetLoadKind kind,
         const std::string &name,
@@ -362,20 +433,37 @@ private:
         int screenHeight = 0;
         float fallbackWidth = 0.0f;
         float fallbackHeight = 0.0f;
+    };
 
-        bool operator==(const HudLayoutResolutionCacheKey &other) const
-        {
-            return layoutId == other.layoutId
-                && screenWidth == other.screenWidth
-                && screenHeight == other.screenHeight
-                && fallbackWidth == other.fallbackWidth
-                && fallbackHeight == other.fallbackHeight;
-        }
+    // Looks the cache up without copying the layout id (the HUD resolves many elements every frame).
+    struct HudLayoutResolutionCacheView
+    {
+        std::string_view layoutId;
+        int screenWidth = 0;
+        int screenHeight = 0;
+        float fallbackWidth = 0.0f;
+        float fallbackHeight = 0.0f;
     };
 
     struct HudLayoutResolutionCacheKeyHash
     {
+        using is_transparent = void;
         size_t operator()(const HudLayoutResolutionCacheKey &key) const;
+        size_t operator()(const HudLayoutResolutionCacheView &key) const;
+    };
+
+    struct HudLayoutResolutionCacheKeyEqual
+    {
+        using is_transparent = void;
+        template <typename First, typename Second>
+        bool operator()(const First &first, const Second &second) const
+        {
+            return first.layoutId == second.layoutId
+                && first.screenWidth == second.screenWidth
+                && first.screenHeight == second.screenHeight
+                && first.fallbackWidth == second.fallbackWidth
+                && first.fallbackHeight == second.fallbackHeight;
+        }
     };
 
     const UiLayoutManager::LayoutElement *findStaticHudLayoutElement(const char *pLayoutId) const;
@@ -383,9 +471,7 @@ private:
 
     const Engine::AssetFileSystem *m_pAssetFileSystem = nullptr;
     std::string m_assetWorldId;
-    Engine::AssetScaleTier m_uiAssetScaleTier = Engine::AssetScaleTier::X1;
     Engine::AssetScaleTier m_iconAssetScaleTier = Engine::AssetScaleTier::X1;
-    Engine::AssetScaleTier m_fontAssetScaleTier = Engine::AssetScaleTier::X1;
     bool m_layoutsLoaded = false;
     bool m_assetsPreloaded = false;
     bool m_portraitRuntimeLoaded = false;
@@ -404,32 +490,70 @@ private:
     mutable std::unordered_map<
         HudLayoutResolutionCacheKey,
         std::optional<GameplayResolvedHudLayoutElement>,
-        HudLayoutResolutionCacheKeyHash> m_hudLayoutResolutionCache;
+        HudLayoutResolutionCacheKeyHash,
+        HudLayoutResolutionCacheKeyEqual> m_hudLayoutResolutionCache;
     std::vector<GameplayHudTextureData> m_hudTextureHandles;
+    // UV scales of cooked HUD art padded to whole 4x4 blocks, by texture handle (see GameplayHudTextureData::uScale).
+    // How a texture draws through the HUD draw list, for the handles that need more than their own texture as it
+    // is: cooked art is padded (its UVs are scaled), and a solid colour's 1x1 texture draws as that colour's texel
+    // of the shared palette, so every solid colour on the HUD shares one texture and can share a draw.
+    struct HudDrawTexture
+    {
+        float uScale = 1.0f;
+        float vScale = 1.0f;
+        std::optional<GameplayHudPaletteColor> paletteColor;
+    };
+    std::unordered_map<uint16_t, HudDrawTexture> m_hudDrawTextures;
+    // Where a primitive's vertices go: the draw state, and the primitive's UVs as that state's texture takes them.
+    struct HudDrawTarget
+    {
+        HudDrawState state;
+        HudDrawTexture texture;
+
+        float u(float value) const
+        {
+            return texture.paletteColor ? texture.paletteColor->u : value * texture.uScale;
+        }
+
+        float v(float value) const
+        {
+            return texture.paletteColor ? texture.paletteColor->v : value * texture.vScale;
+        }
+    };
+    HudDrawTarget hudDrawTarget(bgfx::TextureHandle textureHandle, TextureFilterProfile filterProfile,
+        uint32_t samplerFlags) const;
     std::unordered_map<std::string, size_t> m_hudTextureIndexByName;
     std::unordered_map<std::string, std::string> m_dynamicHudTextureContentSignatures;
-    Engine::FontSettings m_fontSettings;
     std::vector<GameplayHudFontData> m_hudFontHandles;
-    std::vector<GameplayHudFontColorTextureData> m_hudFontColorTextureHandles;
     std::vector<GameplayHudTextureColorTextureData> m_hudTextureColorTextureHandles;
+    bgfx::TextureHandle m_hudPaletteTextureHandle = BGFX_INVALID_HANDLE;
+    std::unordered_map<uint32_t, uint16_t> m_hudPaletteSlotByColor;
     std::unordered_map<std::string, float> m_hudLayoutRuntimeWidthOverrides;
     std::unordered_map<std::string, float> m_hudLayoutRuntimeHeightOverrides;
     std::vector<GameplayRenderedInspectableHudItem> m_renderedInspectableHudItems;
     GameplayHudScreenState m_renderedInspectableHudScreenState = GameplayHudScreenState::Gameplay;
     std::string m_townPortalDestinationsMapFileName;
-    std::string m_townPortalBackgroundTextureName;
-    std::vector<GameplayTownPortalDestination> m_townPortalDestinations;
+    std::vector<GameplayTownPortalContinent> m_townPortalContinents;
+    size_t m_townPortalContinentIndex = 0;
+    size_t m_townPortalHomeContinentIndex = 0;
     bool m_townPortalDestinationsLoaded = false;
     GameplayHudRenderBackend m_hudRenderBackend;
     mutable HudArcMeshCache m_hudArcMeshCache;
+    mutable HudDrawList m_hudDrawList;
+    mutable HudDrawListStats m_hudDrawListStats;
+    mutable bool m_logNextHudDrawList = false;
+    void logHudDrawList() const;
+    void hudPrimitivesAdded() const;
     SpriteAtlasCache *m_pSpriteAtlasCache = nullptr;
+    ActorModelPreview *m_pActorModelPreview = nullptr;
+    ActorModelPreview *m_pActorTalkPortrait = nullptr;
     GameplayActorInspectClock m_actorInspectClock;
     std::array<bgfx::UniformHandle, 6> m_previewUniforms = {{
         BGFX_INVALID_HANDLE, BGFX_INVALID_HANDLE, BGFX_INVALID_HANDLE,
         BGFX_INVALID_HANDLE, BGFX_INVALID_HANDLE, BGFX_INVALID_HANDLE}};
     std::vector<GameplayPortraitFxState> m_portraitFxStates;
     GameplayPortraitPresentationState m_portraitPresentationState;
-    GameplayHudLoopingAnimationState m_flyBuffIconAnimationState;
+    std::unordered_map<std::string, GameplayHudLoopingAnimationState> m_movementIconAnimationStates;
     HouseVideoPlayer m_houseVideoPlayer;
 };
 }

@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <array>
 #include <cctype>
+#include <cmath>
 #include <cstdlib>
 #include <exception>
 #include <limits>
@@ -433,6 +434,7 @@ std::string parseLegacyOptionalTextCell(const std::vector<std::string> &row, siz
 bool DecorationTable::loadRows(const std::vector<std::vector<std::string>> &rows)
 {
     m_entries.clear();
+    m_entryPresent.clear();
     m_entryIndexByInternalName.clear();
     m_entryIndexByMapAlias.clear();
 
@@ -446,10 +448,15 @@ bool DecorationTable::loadRows(const std::vector<std::vector<std::string>> &rows
         const int decorationNumber = std::stoi(trimCopy(row[0]));
         const int decorationId = decorationNumber - 1;
 
-        if (decorationId < 0 || static_cast<size_t>(decorationId) != m_entries.size())
+        if (decorationId < 0 || static_cast<size_t>(decorationId) < m_entries.size()
+            || decorationId > std::numeric_limits<uint16_t>::max())
         {
             return false;
         }
+
+        // Skipped numbers stay empty: no name, no sprite, never resolved.
+        m_entries.resize(static_cast<size_t>(decorationId));
+        m_entryPresent.resize(static_cast<size_t>(decorationId), false);
 
         DecorationEntry entry = {};
         entry.internalName = row.size() > 1 ? toLowerCopy(trimCopy(row[1])) : std::string();
@@ -470,6 +477,7 @@ bool DecorationTable::loadRows(const std::vector<std::vector<std::string>> &rows
         }
 
         m_entries.push_back(std::move(entry));
+        m_entryPresent.push_back(true);
         if (!m_entries.back().internalName.empty())
         {
             m_entryIndexByInternalName[m_entries.back().internalName] = static_cast<uint16_t>(m_entries.size() - 1);
@@ -523,7 +531,7 @@ bool DecorationTable::loadRows(const std::vector<std::vector<std::string>> &rows
 
 const DecorationEntry *DecorationTable::get(uint16_t decorationId) const
 {
-    if (decorationId >= m_entries.size())
+    if (decorationId >= m_entries.size() || !m_entryPresent[decorationId])
     {
         return nullptr;
     }
@@ -892,6 +900,129 @@ std::vector<std::string> SpriteFrameTable::collectTextureNames(uint16_t spriteId
     }
 
     return textureNames;
+}
+
+bool SpriteFrameTable::loadAttackTimingFromYaml(const std::string &yamlText, std::string &errorMessage)
+{
+    YAML::Node root;
+
+    try
+    {
+        root = YAML::Load(yamlText);
+    }
+    catch (const std::exception &exception)
+    {
+        errorMessage = exception.what();
+        return false;
+    }
+
+    const YAML::Node spritesNode = root["sprites"];
+
+    if (!spritesNode || !spritesNode.IsMap())
+    {
+        errorMessage = "sprites must be a map of sprite name to attack timing";
+        return false;
+    }
+
+    std::unordered_map<std::string, AttackTiming> timings;
+
+    for (const auto &sprite : spritesNode)
+    {
+        const std::string spriteName = toLowerCopy(trimCopy(sprite.first.as<std::string>()));
+
+        if (spriteName.empty() || !sprite.second.IsMap() || sprite.second.size() == 0)
+        {
+            errorMessage = "attack timing of sprite " + spriteName + " must be a map";
+            return false;
+        }
+
+        AttackTiming timing = {};
+
+        for (const auto &field : sprite.second)
+        {
+            const std::string key = field.first.as<std::string>();
+
+            if (key == "contact_frame")
+            {
+                // Frame 0 would apply the attack as it starts; the contact is always drawn after a wind-up.
+                const int frame = field.second.as<int>(-1);
+
+                if (frame < 1)
+                {
+                    errorMessage = "invalid contact_frame for sprite " + spriteName;
+                    return false;
+                }
+
+                timing.contactFrame = static_cast<uint32_t>(frame);
+            }
+            else if (key == "sound_delay")
+            {
+                const float delay = field.second.as<float>(-1.0f);
+
+                if (!std::isfinite(delay) || delay < 0.0f)
+                {
+                    errorMessage = "invalid sound_delay for sprite " + spriteName;
+                    return false;
+                }
+
+                timing.soundDelaySeconds = delay;
+            }
+            else
+            {
+                errorMessage = "unknown attack timing field " + key + " for sprite " + spriteName;
+                return false;
+            }
+        }
+
+        timings[spriteName] = timing;
+    }
+
+    m_attackTimings = std::move(timings);
+    return true;
+}
+
+const SpriteFrameTable::AttackTiming *SpriteFrameTable::findAttackTiming(uint16_t spriteId) const
+{
+    if (spriteId >= m_frames.size() || spriteId >= m_framePresent.size() || !m_framePresent[spriteId])
+    {
+        return nullptr;
+    }
+
+    const auto timing = m_attackTimings.find(m_frames[spriteId].spriteName);
+    return timing != m_attackTimings.end() ? &timing->second : nullptr;
+}
+
+std::optional<int32_t> SpriteFrameTable::attackImpactTicks(uint16_t spriteId) const
+{
+    const AttackTiming *pTiming = findAttackTiming(spriteId);
+
+    if (pTiming == nullptr || pTiming->contactFrame == 0)
+    {
+        return std::nullopt;
+    }
+
+    int32_t ticks = 0;
+    size_t frameIndex = spriteId;
+
+    for (uint32_t frame = 0; frame < pTiming->contactFrame; ++frame, ++frameIndex)
+    {
+        if (frameIndex >= m_frames.size() || !m_framePresent[frameIndex]
+            || !hasFlag(m_frames[frameIndex].flags, SpriteFrameFlag::HasMore))
+        {
+            // The contact frame lies past the animation's last frame.
+            return std::nullopt;
+        }
+
+        ticks += m_frames[frameIndex].frameLengthTicks;
+    }
+
+    return ticks;
+}
+
+float SpriteFrameTable::attackSoundDelaySeconds(uint16_t spriteId) const
+{
+    const AttackTiming *pTiming = findAttackTiming(spriteId);
+    return pTiming != nullptr ? pTiming->soundDelaySeconds : 0.0f;
 }
 
 std::optional<uint16_t> SpriteFrameTable::findFrameIndexBySpriteName(const std::string &spriteName) const

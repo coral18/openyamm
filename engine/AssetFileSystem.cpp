@@ -24,7 +24,9 @@ struct AssetReadStream::Impl
 {
     ~Impl()
     {
-        if (pFile != nullptr)
+        // PHYSFS_deinit closes every open file itself: a stream outliving it (a house video when an exception unwinds
+        // the game) must not close its handle again.
+        if (pFile != nullptr && PHYSFS_isInit() != 0)
         {
             PHYSFS_close(pFile);
         }
@@ -86,25 +88,38 @@ const std::string &AssetReadStream::virtualPath() const
 
 namespace
 {
-constexpr const char *EditorDevelopmentRootName = "assets_editor_dev";
+// Where a package's files live in the virtual tree: the engine at the root, a world under worlds/.
+std::string packageMountFolder(const std::string &package)
+{
+    return package == "engine" ? package : "worlds/" + package;
+}
+
 constexpr const char *EngineDevelopmentRootName = "engine";
 constexpr const char *WorldsDevelopmentRootName = "worlds";
 constexpr const char *DefaultActiveWorldId = "mm8";
 constexpr const char *IconsDirectoryName = "icons";
+// The icon folder a language pack may replace images in (mountLanguagePack).
+constexpr const char *LanguageIconsDirectoryName = "icons_x2";
 constexpr const char *AudioDirectoryName = "audio";
 constexpr const char *MusicDirectoryName = "music";
 constexpr const char *VideosDirectoryName = "videos";
 constexpr const char *MapsDirectoryName = "maps";
 constexpr const char *EventsDirectoryName = "events";
 constexpr const char *TexturesDirectoryName = "textures";
-constexpr const char *TerrainDirectoryName = "terrain";
 constexpr const char *SpritesDirectoryName = "sprites";
-constexpr const char *TerrainTextureFallbackDirectoryName = "terrain_textures";
+
+// PhysFS paths and the log are UTF-8, with forward slashes.
+std::string utf8String(const std::filesystem::path &path)
+{
+    const std::u8string text = path.generic_u8string();
+    return std::string(text.begin(), text.end());
+}
+// The mod files the log names at a start; later ones are counted.
+constexpr size_t LoggedModFileCount = 100;
 constexpr const char *SkyTextureDirectoryName = "sky_textures";
 constexpr const char *LegacyDirectoryName = "_legacy";
 constexpr const char *SingleAssetPackageName = "assets.zip";
-constexpr const char *EngineAssetPackageName = "engine.zip";
-constexpr std::array<const char *, 4> KnownWorldPackageIds = {"mm6", "mm7", "mm8", "mmmerge"};
+constexpr std::array<const char *, 3> KnownWorldPackageIds = {"mm6", "mm7", "mm8"};
 
 struct TieredAssetDirectory
 {
@@ -112,20 +127,12 @@ struct TieredAssetDirectory
     AssetScaleCategory category;
 };
 
-constexpr std::array<TieredAssetDirectory, 13> TieredAssetDirectories = {
+constexpr std::array<TieredAssetDirectory, 5> TieredAssetDirectories = {
     TieredAssetDirectory{"Data/bitmaps", AssetScaleCategory::Textures},
-    TieredAssetDirectory{"Data/terrain", AssetScaleCategory::Terrain},
-    TieredAssetDirectory{"Data/sprites", AssetScaleCategory::Sprites},
     TieredAssetDirectory{"Data/icons", AssetScaleCategory::Icons},
-    TieredAssetDirectory{"Data/ui", AssetScaleCategory::Ui},
     TieredAssetDirectory{"bitmaps", AssetScaleCategory::Textures},
     TieredAssetDirectory{"textures", AssetScaleCategory::Textures},
-    TieredAssetDirectory{"terrain", AssetScaleCategory::Terrain},
-    TieredAssetDirectory{"sprites", AssetScaleCategory::Sprites},
-    TieredAssetDirectory{"icons", AssetScaleCategory::Icons},
-    TieredAssetDirectory{"ui", AssetScaleCategory::Ui},
-    TieredAssetDirectory{"effects", AssetScaleCategory::Effects},
-    TieredAssetDirectory{"fonts", AssetScaleCategory::Fonts}
+    TieredAssetDirectory{"icons", AssetScaleCategory::Icons}
 };
 
 struct VirtualPathAlias
@@ -140,13 +147,12 @@ struct MergedRootFile
     std::filesystem::path filePath;
 };
 
-constexpr std::array<VirtualPathAlias, 35> PackagePathAliases = {
+constexpr std::array<VirtualPathAlias, 31> PackagePathAliases = {
     VirtualPathAlias{"engine/audio", "audio"},
     VirtualPathAlias{"engine/data_tables/english", "data_tables/english"},
     VirtualPathAlias{"engine/data_tables", "data_tables"},
     VirtualPathAlias{"engine/events", "events"},
     VirtualPathAlias{"engine/fonts/english_text", "fonts/english_text"},
-    VirtualPathAlias{"engine/fonts/icons", "fonts/icons"},
     VirtualPathAlias{"engine/fonts", "fonts"},
     VirtualPathAlias{"engine/icons", "icons"},
     VirtualPathAlias{"engine/music", "music"},
@@ -154,7 +160,6 @@ constexpr std::array<VirtualPathAlias, 35> PackagePathAliases = {
     VirtualPathAlias{"engine/rendering", "rendering"},
     VirtualPathAlias{"engine/scripts", "scripts"},
     VirtualPathAlias{"engine/sprites", "sprites"},
-    VirtualPathAlias{"engine/terrain", "terrain"},
     VirtualPathAlias{"engine/textures", "textures"},
     VirtualPathAlias{"Data/data_tables/english", "data_tables/english"},
     VirtualPathAlias{"Data/data_tables", "data_tables"},
@@ -168,10 +173,8 @@ constexpr std::array<VirtualPathAlias, 35> PackagePathAliases = {
     VirtualPathAlias{"Data/EnglishT", "data_tables/english"},
     VirtualPathAlias{"Data/EnglishT", "fonts/english_text"},
     VirtualPathAlias{"Data/icons", "icons"},
-    VirtualPathAlias{"Data/icons", "fonts/icons"},
     VirtualPathAlias{"Data/bitmaps", "textures"},
     VirtualPathAlias{"Data/bitmaps", "effects"},
-    VirtualPathAlias{"Data/terrain", "terrain"},
     VirtualPathAlias{"Data/sprites", "sprites"},
     VirtualPathAlias{"Data/sprites", "effects"},
     VirtualPathAlias{"Videos", "videos"},
@@ -182,16 +185,6 @@ constexpr std::array<VirtualPathAlias, 2> RootPathAliases = {
     VirtualPathAlias{"Music", "music"},
     VirtualPathAlias{"_legacy", "_legacy"}
 };
-
-std::filesystem::path deriveEditorDevelopmentRoot(const std::filesystem::path &assetRoot)
-{
-    if (assetRoot.filename() == EditorDevelopmentRootName)
-    {
-        return assetRoot;
-    }
-
-    return assetRoot.parent_path() / EditorDevelopmentRootName;
-}
 
 std::string toLowerAscii(std::string value)
 {
@@ -337,36 +330,6 @@ bool isZipArchivePath(const std::filesystem::path &path)
     return std::filesystem::is_regular_file(path) && toLowerAscii(path.extension().string()) == ".zip";
 }
 
-std::vector<std::filesystem::path> collectExistingWorldPackageArchives(
-    const std::filesystem::path &assetRoot)
-{
-    std::vector<std::filesystem::path> packageArchives;
-    const std::filesystem::path worldsRoot = assetRoot / WorldsDevelopmentRootName;
-
-    if (!std::filesystem::is_directory(worldsRoot))
-    {
-        return packageArchives;
-    }
-
-    for (const std::filesystem::directory_entry &entry : std::filesystem::directory_iterator(worldsRoot))
-    {
-        if (isZipArchivePath(entry.path()))
-        {
-            packageArchives.push_back(entry.path());
-        }
-    }
-
-    std::sort(
-        packageArchives.begin(),
-        packageArchives.end(),
-        [](const std::filesystem::path &left, const std::filesystem::path &right)
-        {
-            return left.generic_string() < right.generic_string();
-        });
-
-    return packageArchives;
-}
-
 bool legacyDirectoryExistsForTier(
     const std::filesystem::path &assetRoot,
     const std::string &legacyDirectoryName,
@@ -428,6 +391,9 @@ struct AssetFileSystem::LookupCache
     std::mutex mutex;
     std::unordered_map<std::string, std::unordered_map<std::string, Name>> directories;
     std::unordered_map<std::string, std::optional<std::string>> files;
+    // enumerate() results by virtual directory: a mounted directory lists through every mount and alias, which
+    // costs milliseconds for the large merged ones (icons, bitmaps, sprites).
+    std::unordered_map<std::string, std::vector<std::string>> listings;
 };
 
 std::optional<std::string> AssetFileSystem::findCaseInsensitiveVirtualPath(const std::string &virtualPath) const
@@ -496,6 +462,7 @@ void AssetFileSystem::refreshLookupCache() const
     std::lock_guard lock(m_pLookupCache->mutex);
     m_pLookupCache->directories.clear();
     m_pLookupCache->files.clear();
+    m_pLookupCache->listings.clear();
     ++m_contentGeneration;
 }
 
@@ -548,6 +515,17 @@ bool AssetFileSystem::initialize(
     const AssetScaleProfile &assetScaleProfile,
     const std::string &activeWorldId)
 {
+    return initialize(basePath, assetRoot, assetScaleTier, assetScaleProfile, activeWorldId, {});
+}
+
+bool AssetFileSystem::initialize(
+    const std::filesystem::path &basePath,
+    const std::filesystem::path &assetRoot,
+    AssetScaleTier assetScaleTier,
+    const AssetScaleProfile &assetScaleProfile,
+    const std::string &activeWorldId,
+    const InstalledContentOptions &installedContentOptions)
+{
     shutdown();
 
     if (!initializePhysicsFs(basePath))
@@ -556,10 +534,15 @@ bool AssetFileSystem::initialize(
         return false;
     }
 
+    // Asset trees contain no symbolic links. With links disallowed PhysFS would lstat every entry of a directory it
+    // lists, only to filter them out: about 7 microseconds an entry, 0.25 s for the large merged directories.
+    PHYSFS_permitSymbolicLinks(1);
+
     m_isInitialized = true;
     m_basePath = basePath;
     m_assetScaleTier = assetScaleTier;
     m_assetScaleProfile = assetScaleProfile;
+    m_installedContentOptions = installedContentOptions;
     m_activeWorldId = normalizePackageId(activeWorldId, DefaultActiveWorldId);
 
     const bool androidApkAssetRoot = isAndroidApkAssetRoot(assetRoot);
@@ -598,6 +581,13 @@ bool AssetFileSystem::initialize(
             shutdown();
             return false;
         }
+
+        // The named mods behind the loose folders: a player's own loose file still wins.
+        if (!mountLanguagePack(true) || !mountNamedMods(true) || !mountMods(m_installedContentOptions.modsRoot))
+        {
+            shutdown();
+            return false;
+        }
     }
     else
     {
@@ -612,6 +602,29 @@ bool AssetFileSystem::initialize(
             shutdown();
             return false;
         }
+
+        // Named mods behind the extra mount: a map build played from its folder wins over an installed mod.
+        if (!mountNamedMods(false))
+        {
+            shutdown();
+            return false;
+        }
+
+        if (!mountExtraDevelopmentRoot(m_installedContentOptions.extraMountRoot))
+        {
+            shutdown();
+            return false;
+        }
+    }
+
+    // Mods mount after the pack in a release (a player's mod still wins); Android and development roots have no mods.
+    if (!packagedAssetRoot || androidApkAssetRoot)
+    {
+        if (!mountLanguagePack(packagedAssetRoot))
+        {
+            shutdown();
+            return false;
+        }
     }
 
     if (!loadIconPackagePolicy())
@@ -621,39 +634,6 @@ bool AssetFileSystem::initialize(
     }
 
     m_developmentRoot = assetRoot;
-    m_editorDevelopmentRoot = deriveEditorDevelopmentRoot(assetRoot);
-
-    if (packagedAssetRoot)
-    {
-        return true;
-    }
-
-    const std::filesystem::path editorDevelopmentRoot = deriveEditorDevelopmentRoot(assetRoot);
-    std::error_code createDirectoriesError;
-    std::filesystem::create_directories(editorDevelopmentRoot, createDirectoriesError);
-
-    if (createDirectoriesError)
-    {
-        std::cerr << "Could not create editor development root " << editorDevelopmentRoot << ": "
-                  << createDirectoriesError.message() << '\n';
-        shutdown();
-        return false;
-    }
-
-    const std::filesystem::path editorWorldRoot =
-        editorDevelopmentRoot / WorldsDevelopmentRootName / m_activeWorldId;
-    std::filesystem::create_directories(editorWorldRoot, createDirectoriesError);
-
-    if (createDirectoriesError)
-    {
-        std::cerr << "Could not create editor world package root " << editorWorldRoot << ": "
-                  << createDirectoriesError.message() << '\n';
-        shutdown();
-        return false;
-    }
-
-    m_editorDevelopmentRoot = editorDevelopmentRoot;
-
     return true;
 }
 
@@ -668,8 +648,37 @@ bool AssetFileSystem::switchActiveWorld(const std::string &activeWorldId)
     const std::filesystem::path assetRoot = m_developmentRoot;
     const AssetScaleTier assetScaleTier = m_assetScaleTier;
     const AssetScaleProfile assetScaleProfile = m_assetScaleProfile;
+    const InstalledContentOptions installedContentOptions = m_installedContentOptions;
 
-    return initialize(basePath, assetRoot, assetScaleTier, assetScaleProfile, activeWorldId);
+    return initialize(basePath, assetRoot, assetScaleTier, assetScaleProfile, activeWorldId, installedContentOptions);
+}
+
+bool AssetFileSystem::setNamedMods(const std::vector<std::string> &modIds)
+{
+    if (!isInitialized())
+    {
+        return false;
+    }
+
+    if (modIds == m_installedContentOptions.namedMods)
+    {
+        return true;
+    }
+
+    const std::filesystem::path basePath = m_basePath;
+    const std::filesystem::path assetRoot = m_developmentRoot;
+    const AssetScaleTier assetScaleTier = m_assetScaleTier;
+    const AssetScaleProfile assetScaleProfile = m_assetScaleProfile;
+    const std::string activeWorldId = m_activeWorldId;
+    InstalledContentOptions installedContentOptions = m_installedContentOptions;
+    installedContentOptions.namedMods = modIds;
+
+    return initialize(basePath, assetRoot, assetScaleTier, assetScaleProfile, activeWorldId, installedContentOptions);
+}
+
+const InstalledContentOptions &AssetFileSystem::installedContentOptions() const
+{
+    return m_installedContentOptions;
 }
 
 bool AssetFileSystem::mountDevelopmentRoot(const std::filesystem::path &assetRoot)
@@ -683,7 +692,6 @@ bool AssetFileSystem::mountDevelopmentRoot(const std::filesystem::path &assetRoo
 
         m_activeWorldId = DefaultActiveWorldId;
         m_developmentRoot = assetRoot;
-        m_editorDevelopmentRoot = deriveEditorDevelopmentRoot(assetRoot);
         return true;
     }
 
@@ -696,7 +704,6 @@ bool AssetFileSystem::mountDevelopmentRoot(const std::filesystem::path &assetRoo
 
         m_activeWorldId = DefaultActiveWorldId;
         m_developmentRoot = assetRoot;
-        m_editorDevelopmentRoot = deriveEditorDevelopmentRoot(assetRoot);
         return true;
     }
 
@@ -713,7 +720,6 @@ bool AssetFileSystem::mountDevelopmentRoot(const std::filesystem::path &assetRoo
     }
 
     m_developmentRoot = assetRoot;
-    m_editorDevelopmentRoot = deriveEditorDevelopmentRoot(assetRoot);
     return true;
 }
 
@@ -783,6 +789,94 @@ bool AssetFileSystem::mountDevelopmentPackageRoots(
     return true;
 }
 
+bool AssetFileSystem::mountExtraDevelopmentRoot(const std::filesystem::path &extraRoot)
+{
+    if (extraRoot.empty())
+    {
+        return true;
+    }
+
+    std::error_code error;
+
+    if (!std::filesystem::is_directory(extraRoot, error))
+    {
+        std::cerr << "Extra mount is not a directory: " << extraRoot << '\n';
+        return false;
+    }
+
+    return mountDevelopmentOverlayRoot(extraRoot);
+}
+
+bool AssetFileSystem::mountDevelopmentOverlayRoot(const std::filesystem::path &extraRoot)
+{
+    std::error_code error;
+
+    // The same places a development root's files are read from, each in front of the root's own: the folder itself,
+    // its engine and active world packages, and the map folders of every world merged by name. The active world's
+    // are mounted last, so they are found first.
+    if (!mountSearchRoot(extraRoot, false))
+    {
+        return false;
+    }
+
+    const std::filesystem::path engineRoot = extraRoot / EngineDevelopmentRootName;
+    const std::filesystem::path worldsRoot = extraRoot / WorldsDevelopmentRootName;
+    const std::filesystem::path activeWorldRoot = worldsRoot / m_activeWorldId;
+    std::vector<std::filesystem::path> worldRoots;
+
+    for (std::filesystem::directory_iterator entry(worldsRoot, error), end; !error && entry != end;
+         entry.increment(error))
+    {
+        std::error_code typeError;
+
+        if (entry->is_directory(typeError) && entry->path() != activeWorldRoot)
+        {
+            worldRoots.push_back(entry->path());
+        }
+    }
+
+    std::sort(worldRoots.begin(), worldRoots.end());
+
+    if (std::filesystem::is_directory(engineRoot, error) && !mountSearchRoot(engineRoot, false))
+    {
+        return false;
+    }
+
+    if (std::filesystem::is_directory(activeWorldRoot, error))
+    {
+        if (!mountSearchRoot(activeWorldRoot, false))
+        {
+            return false;
+        }
+
+        worldRoots.push_back(activeWorldRoot);
+    }
+
+    const AssetScaleTier textureTier = assetScaleTierForCategory(m_assetScaleProfile, AssetScaleCategory::Textures);
+    std::vector<std::string> mergedDirectoryNames = {MapsDirectoryName, EventsDirectoryName, TexturesDirectoryName};
+
+    if (textureTier != AssetScaleTier::X1)
+    {
+        mergedDirectoryNames.push_back(TexturesDirectoryName + assetScaleTierDirectorySuffix(textureTier));
+    }
+
+    for (const std::filesystem::path &worldRoot : worldRoots)
+    {
+        for (const std::string &directoryName : mergedDirectoryNames)
+        {
+            const std::filesystem::path packageRoot = worldRoot / directoryName;
+
+            if (std::filesystem::is_directory(packageRoot, error)
+                && !mountSearchRootAt(packageRoot, "/" + directoryName, false))
+            {
+                return false;
+            }
+        }
+    }
+
+    return true;
+}
+
 bool AssetFileSystem::isPackagedAssetRoot(const std::filesystem::path &assetRoot) const
 {
     if (isZipArchivePath(assetRoot))
@@ -796,8 +890,7 @@ bool AssetFileSystem::isPackagedAssetRoot(const std::filesystem::path &assetRoot
     }
 
     return isZipArchivePath(assetRoot / SingleAssetPackageName)
-        || isZipArchivePath(assetRoot / EngineAssetPackageName)
-        || !collectExistingWorldPackageArchives(assetRoot).empty();
+        || std::filesystem::is_regular_file(assetRoot / AssetPackIndexFileName);
 }
 
 bool AssetFileSystem::isAndroidApkAssetRoot(const std::filesystem::path &assetRoot) const
@@ -833,6 +926,7 @@ bool AssetFileSystem::mountAndroidApkAssetRoot(const std::string &activeWorldId)
         return false;
     }
 
+    // The APK itself stays mounted for its own files (licenses); content comes from the packs stored inside it.
     if (!PHYSFS_mount(pApkPath, "/", 1))
     {
         std::cerr << "PHYSFS_mount failed for Android APK " << pApkPath << ": "
@@ -849,7 +943,75 @@ bool AssetFileSystem::mountAndroidApkAssetRoot(const std::string &activeWorldId)
     m_activeWorldId = normalizePackageId(activeWorldId, DefaultActiveWorldId);
     m_androidApkAssetRoot = true;
 
-    std::cout << "Mounted Android APK asset root: " << pApkPath << '\n';
+    const std::string apkAssets = "assets/";
+    std::string error;
+    std::optional<AssetPackIndex> index;
+
+    if (PHYSFS_File *pIndexFile = PHYSFS_openRead((apkAssets + AssetPackIndexFileName).c_str()))
+    {
+        std::string text(size_t(std::max<PHYSFS_sint64>(PHYSFS_fileLength(pIndexFile), 0)), '\0');
+        const bool complete = PHYSFS_readBytes(pIndexFile, text.data(), text.size()) == PHYSFS_sint64(text.size());
+        PHYSFS_close(pIndexFile);
+        index = complete ? parseAssetPackIndex(text, error) : std::nullopt;
+    }
+
+    if (!index)
+    {
+        std::cerr << "The APK carries no usable content index: " << error << '\n';
+        return false;
+    }
+
+    const std::string storeRoot = apkAssets + index->store + "/";
+    const bool mounted = mountContentPacks(
+        *index,
+        m_activeWorldId,
+        [this, &storeRoot, pApkPath](const AssetPackRecord &pack, bool appendToPath)
+        {
+            // Packs are stored uncompressed in the APK (noCompress "zip"), so PhysicsFS reads them in place.
+            const std::string path = storeRoot + pack.file;
+
+            // The APK ships no language packs: a language's packs are downloaded into app storage.
+            if (!pack.language.empty() && !PHYSFS_exists(path.c_str()))
+            {
+                m_languagePacksMissing = true;
+                return true;
+            }
+
+            PHYSFS_File *pPackFile = PHYSFS_openRead(path.c_str());
+
+            if (pPackFile == nullptr || PHYSFS_fileLength(pPackFile) != PHYSFS_sint64(pack.size))
+            {
+                std::cerr << "Missing or damaged content pack in the APK: " << path << '\n';
+                PHYSFS_close(pPackFile);
+                return false;
+            }
+
+            const std::string mountName = std::string(pApkPath) + "/" + path;
+
+            if (!PHYSFS_mountHandle(pPackFile, mountName.c_str(), pack.mount.c_str(), appendToPath ? 1 : 0))
+            {
+                std::cerr << "PHYSFS_mountHandle failed for " << path << ": "
+                          << PHYSFS_getErrorByCode(PHYSFS_getLastErrorCode()) << '\n';
+                PHYSFS_close(pPackFile);
+                return false;
+            }
+
+            SearchMount packMount;
+            packMount.root = mountName;
+            packMount.mountPoint = normalizeVirtualPath(pack.mount);
+            packMount.packageMountPoint = packageMountFolder(pack.package);
+            packMount.archive = true;
+            packMount.languagePack = !pack.language.empty();
+            recordSearchMount(std::move(packMount), appendToPath);
+            return true;
+        });
+
+    if (!mounted)
+    {
+        return false;
+    }
+
+    std::cout << "Mounted " << index->packs.size() << " content packs from the Android APK: " << pApkPath << '\n';
     return true;
 #else
     (void)activeWorldId;
@@ -861,8 +1023,6 @@ bool AssetFileSystem::mountPackagedAssetRoot(
     const std::filesystem::path &assetRoot,
     const std::string &activeWorldId)
 {
-    const std::string normalizedWorldId = normalizePackageId(activeWorldId, DefaultActiveWorldId);
-
     if (isZipArchivePath(assetRoot))
     {
         return mountSearchRoot(assetRoot, true);
@@ -874,39 +1034,88 @@ bool AssetFileSystem::mountPackagedAssetRoot(
         return false;
     }
 
-    if (!mountPackageArchiveIfPresent(assetRoot / SingleAssetPackageName, true))
+    if (std::filesystem::exists(assetRoot / SingleAssetPackageName))
     {
+        return mountPackageArchiveIfPresent(assetRoot / SingleAssetPackageName, true);
+    }
+
+    std::string error;
+    const std::optional<AssetPackIndex> index = loadAssetPackIndex(assetRoot / AssetPackIndexFileName, error);
+    const std::filesystem::path storeRoot = assetRoot / (index ? index->store : std::string());
+
+    // Kept modified packs have sizes of their own; only a missing one still makes the content unusable.
+    if (!index
+        || !(m_installedContentOptions.acceptModifiedPacks ? assetPackFilesExist(*index, storeRoot, error)
+                                                           : validateAssetPackFiles(*index, storeRoot, error)))
+    {
+        std::cerr << "Installed content is unusable (" << error << "); reinstall or verify the game files.\n";
         return false;
     }
 
-    const std::filesystem::path engineArchive = assetRoot / EngineAssetPackageName;
-    if (std::filesystem::exists(engineArchive) && !mountSearchRootAt(engineArchive, "/engine", true))
+    m_missingLanguageBytes.clear();
+
+    for (const std::string &language : assetPackLanguages(*index))
     {
-        return false;
+        m_missingLanguageBytes.emplace_back(language, Engine::missingLanguagePackBytes(*index, storeRoot, language));
     }
 
-    const std::filesystem::path activeWorldArchive =
-        assetRoot / WorldsDevelopmentRootName / (normalizedWorldId + ".zip");
-
-    if (std::filesystem::exists(activeWorldArchive)
-        && !mountSearchRootAt(activeWorldArchive, "/worlds/" + normalizedWorldId, false))
-    {
-        return false;
-    }
-
-    const std::vector<std::filesystem::path> worldArchives = collectExistingWorldPackageArchives(assetRoot);
-
-    // PhysicsFS mounts a physical archive only once. Mount each world at its canonical namespace;
-    // unqualified legacy requests expand through these mounts in the same precedence order.
-    for (const std::filesystem::path &worldArchive : worldArchives)
-    {
-        if (worldArchive == activeWorldArchive)
+    return mountContentPacks(
+        *index,
+        activeWorldId,
+        [this, &storeRoot](const AssetPackRecord &pack, bool appendToPath)
         {
-            continue;
+            const std::string packageMount = "/" + packageMountFolder(pack.package);
+            std::error_code fileError;
+
+            // A language's packs are optional: downloaded only once the player chooses it.
+            if (!pack.language.empty() && !std::filesystem::is_regular_file(storeRoot / pack.file, fileError))
+            {
+                std::cout << "Language pack not installed: " << pack.id << '\n';
+                m_languagePacksMissing = true;
+                return true;
+            }
+
+            return mountSearchRootAt(storeRoot / pack.file, pack.mount, appendToPath, packageMount,
+                                     !pack.language.empty());
+        });
+}
+
+bool AssetFileSystem::mountContentPacks(
+    const AssetPackIndex &index,
+    const std::string &activeWorldId,
+    const std::function<bool(const AssetPackRecord &, bool appendToPath)> &mountPack)
+{
+    const std::string normalizedWorldId = normalizePackageId(activeWorldId, DefaultActiveWorldId);
+
+    // Packs of one package never overlap, so only the order between packages matters: the active world first (as a
+    // single world archive was), then the engine, then the other worlds for unqualified legacy requests.
+    for (const AssetPackRecord &pack : index.packs)
+    {
+        if (pack.language.empty() && pack.package == normalizedWorldId && !mountPack(pack, false))
+        {
+            return false;
         }
-        const std::string worldPackageId = normalizePackageId(worldArchive.stem().string(), {});
-        if (worldPackageId.empty()
-            || !mountSearchRootAt(worldArchive, "/worlds/" + worldPackageId, true))
+    }
+
+    for (const bool engine : {true, false})
+    {
+        for (const AssetPackRecord &pack : index.packs)
+        {
+            if (pack.language.empty() && (pack.package == "engine") == engine && pack.package != normalizedWorldId
+                && !mountPack(pack, true))
+            {
+                return false;
+            }
+        }
+    }
+
+    // The interface language's fonts, sounds and videos in front of the game's (they replace files of the packs
+    // above); the other languages' stay unmounted. A language whose packs were never downloaded has none here.
+    const std::string &languageId = m_installedContentOptions.languageId;
+
+    for (const AssetPackRecord &pack : index.packs)
+    {
+        if (!languageId.empty() && pack.language == languageId && !mountPack(pack, false))
         {
             return false;
         }
@@ -933,6 +1142,339 @@ bool AssetFileSystem::mountPackageArchiveIfPresent(
     return mountSearchRoot(archivePath, appendToPath);
 }
 
+bool AssetFileSystem::mountMods(const std::filesystem::path &modsRoot)
+{
+    std::error_code error;
+
+    if (modsRoot.empty() || !std::filesystem::is_directory(modsRoot, error))
+    {
+        return true;
+    }
+
+    // Each folder mirrors a package root as the packs mount it: mods/engine/data_tables/x.txt replaces
+    // engine/data_tables/x.txt. Unreadable entries are skipped, never thrown at the start.
+    std::vector<std::pair<std::filesystem::path, std::string>> folders;
+
+    for (std::filesystem::directory_iterator entry(modsRoot, error), end; !error && entry != end;
+         entry.increment(error))
+    {
+        const std::string name = utf8String(entry->path().filename());
+        std::error_code typeError;
+
+        if (name == EngineDevelopmentRootName && entry->is_directory(typeError))
+        {
+            folders.emplace_back(entry->path(), EngineDevelopmentRootName);
+            continue;
+        }
+
+        if (name == WorldsDevelopmentRootName && entry->is_directory(typeError))
+        {
+            std::error_code worldError;
+
+            for (std::filesystem::directory_iterator world(entry->path(), worldError); !worldError && world != end;
+                 world.increment(worldError))
+            {
+                if (world->is_directory(typeError))
+                {
+                    folders.emplace_back(world->path(), name + "/" + utf8String(world->path().filename()));
+                }
+                else
+                {
+                    std::cout << "Mods: ignoring " << utf8String(world->path())
+                              << ": mods/worlds holds one folder per world\n";
+                }
+            }
+
+            continue;
+        }
+
+        // A named mod's folder and the list that switches them on (mountNamedMods) are not loose files.
+        if ((name == "enabled.yml" && entry->is_regular_file(typeError))
+            || (entry->is_directory(typeError) && std::filesystem::is_regular_file(entry->path() / "mod.yml", typeError)))
+        {
+            continue;
+        }
+
+        std::cout << "Mods: ignoring " << utf8String(entry->path()) << ": mods holds only engine and worlds\n";
+    }
+
+    std::sort(folders.begin(), folders.end());
+    // Enough to recognise a mod in a log; someone who extracted a whole pack learns the count.
+    size_t loggedFileBudget = LoggedModFileCount;
+    const size_t fileCount = logModFiles(folders, "Mods: ", loggedFileBudget);
+
+    for (const auto &[folder, package] : folders)
+    {
+        if (!mountSearchRootAt(folder, "/" + package, false))
+        {
+            return false;
+        }
+    }
+
+    if (fileCount > LoggedModFileCount)
+    {
+        std::cout << "Mods: and " << fileCount - LoggedModFileCount << " more files\n";
+    }
+
+    if (fileCount > 0)
+    {
+        std::cout << "Mods: " << fileCount << (fileCount == 1 ? " file" : " files") << " from " << utf8String(modsRoot)
+                  << '\n';
+    }
+
+    return true;
+}
+
+size_t AssetFileSystem::logModFiles(
+    std::vector<std::pair<std::filesystem::path, std::string>> &folders,
+    const std::string &logPrefix,
+    size_t &loggedFileBudget) const
+{
+    size_t fileCount = 0;
+    std::vector<std::pair<std::filesystem::path, std::string>> foldersWithFiles;
+
+    for (const auto &[folder, package] : folders)
+    {
+        std::vector<std::string> files;
+        std::error_code fileError;
+
+        for (std::filesystem::recursive_directory_iterator file(folder, fileError), end; !fileError && file != end;
+             file.increment(fileError))
+        {
+            std::error_code typeError;
+
+            if (file->is_regular_file(typeError))
+            {
+                files.push_back(package + "/" + utf8String(file->path().lexically_relative(folder)));
+            }
+        }
+
+        if (files.empty())
+        {
+            continue;
+        }
+
+        std::sort(files.begin(), files.end());
+
+        // Before mounting, so the game's own files are what the mod files are compared with.
+        for (size_t index = 0; index < files.size() && loggedFileBudget > 0; ++index, --loggedFileBudget)
+        {
+            const std::string &file = files[index];
+            const bool replaces = PHYSFS_exists(file.c_str()) != 0;
+            const std::optional<std::string> spelling = replaces ? std::nullopt : findCaseInsensitiveVirtualPath(file);
+            std::cout << logPrefix << file;
+
+            if (replaces)
+            {
+                std::cout << " replaces the game's file\n";
+            }
+            else if (spelling)
+            {
+                std::cout << " may be ignored: name it exactly like the game's file, " << *spelling << '\n';
+            }
+            else
+            {
+                std::cout << " is a new file\n";
+            }
+        }
+
+        fileCount += files.size();
+        foldersWithFiles.emplace_back(folder, package);
+    }
+
+    folders = std::move(foldersWithFiles);
+    return fileCount;
+}
+
+bool AssetFileSystem::mountNamedMods(bool packagedRoot)
+{
+    const std::filesystem::path &modsRoot = m_installedContentOptions.modsRoot;
+
+    if (m_installedContentOptions.namedMods.empty() || modsRoot.empty())
+    {
+        return true;
+    }
+
+    size_t loggedFileBudget = LoggedModFileCount;
+
+    for (const std::string &modId : m_installedContentOptions.namedMods)
+    {
+        const std::filesystem::path modRoot = modsRoot / modId;
+        std::error_code error;
+
+        // The game chose the list from the folder at its start; a folder gone since is an error, not silence.
+        if (modId.empty() || modId.find_first_of("/\\.") != std::string::npos
+            || !std::filesystem::is_directory(modRoot, error))
+        {
+            std::cerr << "Mods: named mod " << modId << " is not a folder in " << utf8String(modsRoot) << '\n';
+            return false;
+        }
+
+        // Its package folders, as mods/ holds them: engine/ and worlds/<id>/. Its manifest and tables/ are read by the
+        // game, not mounted in a release.
+        std::vector<std::pair<std::filesystem::path, std::string>> folders;
+
+        if (std::filesystem::is_directory(modRoot / EngineDevelopmentRootName, error))
+        {
+            folders.emplace_back(modRoot / EngineDevelopmentRootName, EngineDevelopmentRootName);
+        }
+
+        for (std::filesystem::directory_iterator world(modRoot / WorldsDevelopmentRootName, error), end;
+             !error && world != end; world.increment(error))
+        {
+            std::error_code typeError;
+
+            if (world->is_directory(typeError))
+            {
+                folders.emplace_back(world->path(), std::string(WorldsDevelopmentRootName) + "/"
+                    + utf8String(world->path().filename()));
+            }
+        }
+
+        std::sort(folders.begin(), folders.end());
+        const size_t fileCount = logModFiles(folders, "Mods: " + modId + ": ", loggedFileBudget);
+
+        if (packagedRoot)
+        {
+            for (const auto &[folder, package] : folders)
+            {
+                if (!mountSearchRootAt(folder, "/" + package, false))
+                {
+                    return false;
+                }
+            }
+        }
+        else if (!mountDevelopmentOverlayRoot(modRoot))
+        {
+            return false;
+        }
+
+        std::cout << "Mods: " << modId << ": " << fileCount << (fileCount == 1 ? " file" : " files") << " from "
+                  << utf8String(modRoot) << '\n';
+    }
+
+    return true;
+}
+
+bool AssetFileSystem::mountLanguagePack(bool packagedRoot)
+{
+    std::error_code error;
+    const std::filesystem::path &userLanguagesRoot = m_installedContentOptions.userLanguagesRoot;
+
+    if (!userLanguagesRoot.empty() && std::filesystem::is_directory(userLanguagesRoot, error)
+        && !mountSearchRootAt(userLanguagesRoot, "/languages", false))
+    {
+        return false;
+    }
+
+    const std::string &languageId = m_installedContentOptions.languageId;
+
+    if (languageId.empty() || languageId == "en" || languageId.find_first_of("/\\.") != std::string::npos)
+    {
+        return true;
+    }
+
+    const std::optional<std::filesystem::path> pack = resolvePhysicalPath("languages/" + languageId);
+
+    if (!pack || !std::filesystem::is_directory(*pack, error))
+    {
+        return true;
+    }
+
+    // The pack mirrors the game's tree like mods/, but only these folders mount: its text goes through its
+    // translation files, never through replaced game files. A release reads them at their package path
+    // (/engine/fonts, /worlds/mm7/audio); a development root at the merged folder (/fonts, /audio:
+    // mountMerged*Roots), where only the active world's mount. PhysFS mounts a folder once, so each takes one place.
+    constexpr std::array<const char *, 3> OverlayDirectories = {"fonts", "audio", "videos"};
+    const auto mountOverlay = [this, &error, packagedRoot](const std::filesystem::path &folder,
+                                                            const std::string &packagePoint, const char *pDirectory)
+    {
+        if (!std::filesystem::is_directory(folder, error))
+        {
+            return true;
+        }
+
+        const std::string mountPoint = packagedRoot ? packagePoint + "/" + pDirectory : std::string("/") + pDirectory;
+        std::cout << "Language: " << utf8String(folder) << " over " << mountPoint << '\n';
+        return mountSearchRootAt(folder, mountPoint, false);
+    };
+
+    for (const char *pDirectory : OverlayDirectories)
+    {
+        if (!mountOverlay(*pack / EngineDevelopmentRootName / pDirectory, "/engine", pDirectory))
+        {
+            return false;
+        }
+    }
+
+    const std::filesystem::path worldsRoot = *pack / WorldsDevelopmentRootName;
+
+    for (std::filesystem::directory_iterator world(worldsRoot, error), end; packagedRoot && !error && world != end;
+         world.increment(error))
+    {
+        const std::string worldId = utf8String(world->path().filename());
+
+        // The active world's files mount last, in front of the engine's and the other worlds'.
+        if (worldId == m_activeWorldId)
+        {
+            continue;
+        }
+
+        for (const char *pDirectory : {"audio", "videos"})
+        {
+            if (!mountOverlay(world->path() / pDirectory, "/worlds/" + worldId, pDirectory))
+            {
+                return false;
+            }
+        }
+    }
+
+    error.clear();
+
+    for (const char *pDirectory : {"audio", "videos"})
+    {
+        if (!mountOverlay(worldsRoot / m_activeWorldId / pDirectory, "/worlds/" + m_activeWorldId, pDirectory))
+        {
+            return false;
+        }
+    }
+
+    // Images with text in them (the Arcomage card sheet, maps): a pack's icons_x2 folders replace the game's icons of
+    // the same name (OY-579). Icon requests name their package (engine/icons_x2/..., worlds/mm7/icons_x2/...), so
+    // these mount at that path in a release and in a development root alike.
+    const auto mountIcons = [this, &error](const std::filesystem::path &folder, const std::string &mountPoint)
+    {
+        if (!std::filesystem::is_directory(folder, error))
+        {
+            return true;
+        }
+
+        std::cout << "Language: " << utf8String(folder) << " over " << mountPoint << '\n';
+        return mountSearchRootAt(folder, mountPoint, false);
+    };
+
+    if (!mountIcons(*pack / EngineDevelopmentRootName / LanguageIconsDirectoryName,
+            std::string("/") + EngineDevelopmentRootName + "/" + LanguageIconsDirectoryName))
+    {
+        return false;
+    }
+
+    for (std::filesystem::directory_iterator world(worldsRoot, error), end; !error && world != end;
+         world.increment(error))
+    {
+        const std::string worldId = utf8String(world->path().filename());
+
+        if (!mountIcons(world->path() / LanguageIconsDirectoryName,
+                std::string("/") + WorldsDevelopmentRootName + "/" + worldId + "/" + LanguageIconsDirectoryName))
+        {
+            return false;
+        }
+    }
+
+    error.clear();
+    return true;
+}
+
 bool AssetFileSystem::mountSearchRoot(const std::filesystem::path &assetRoot, bool appendToPath)
 {
     return mountSearchRootAt(assetRoot, "/", appendToPath);
@@ -941,7 +1483,9 @@ bool AssetFileSystem::mountSearchRoot(const std::filesystem::path &assetRoot, bo
 bool AssetFileSystem::mountSearchRootAt(
     const std::filesystem::path &assetRoot,
     const std::string &mountPoint,
-    bool appendToPath)
+    bool appendToPath,
+    const std::string &packageMountPoint,
+    bool languagePack)
 {
     if (!isInitialized())
     {
@@ -964,19 +1508,26 @@ bool AssetFileSystem::mountSearchRootAt(
     SearchMount searchMount;
     searchMount.root = assetRoot;
     searchMount.mountPoint = normalizeVirtualPath(mountPoint);
+    searchMount.packageMountPoint =
+        packageMountPoint.empty() ? searchMount.mountPoint : normalizeVirtualPath(packageMountPoint);
     searchMount.archive = isZipArchivePath(assetRoot);
+    searchMount.languagePack = languagePack;
+    recordSearchMount(std::move(searchMount), appendToPath);
+    return true;
+}
 
+void AssetFileSystem::recordSearchMount(SearchMount searchMount, bool appendToPath)
+{
     if (appendToPath)
     {
-        m_searchMounts.push_back(searchMount);
+        m_searchMounts.push_back(std::move(searchMount));
     }
     else
     {
-        m_searchMounts.insert(m_searchMounts.begin(), searchMount);
+        m_searchMounts.insert(m_searchMounts.begin(), std::move(searchMount));
     }
 
     refreshLookupCache();
-    return true;
 }
 
 bool AssetFileSystem::validateMergedPackageRoots(
@@ -1132,17 +1683,11 @@ bool AssetFileSystem::mountMergedWorldMapRuntimeRoots(
     return mountMergedWorldPackageRoots(assetRoot, activeWorldId, MapsDirectoryName)
         && mountMergedWorldPackageRoots(assetRoot, activeWorldId, EventsDirectoryName)
         && mountMergedWorldPackageRoots(assetRoot, activeWorldId, TexturesDirectoryName)
-        && mountMergedWorldPackageRoots(assetRoot, activeWorldId, TerrainDirectoryName)
         && mountMergedWorldScaledPackageRoots(
             assetRoot,
             activeWorldId,
             TexturesDirectoryName,
             assetScaleTierForCategory(m_assetScaleProfile, AssetScaleCategory::Textures))
-        && mountMergedWorldScaledPackageRoots(
-            assetRoot,
-            activeWorldId,
-            TerrainDirectoryName,
-            assetScaleTierForCategory(m_assetScaleProfile, AssetScaleCategory::Terrain))
         && mountMergedWorldPackageRoots(assetRoot, activeWorldId, LegacyDirectoryName);
 }
 
@@ -1246,6 +1791,15 @@ std::vector<std::string> AssetFileSystem::enumerate(const std::string &virtualPa
         return entries;
     }
 
+    {
+        std::lock_guard lock(m_pLookupCache->mutex);
+        const auto listing = m_pLookupCache->listings.find(virtualPath);
+        if (listing != m_pLookupCache->listings.end())
+        {
+            return listing->second;
+        }
+    }
+
     const std::vector<std::string> resolvedPaths = resolveVirtualPathCandidates(virtualPath);
 
     for (const std::string &resolvedPath : resolvedPaths)
@@ -1268,6 +1822,8 @@ std::vector<std::string> AssetFileSystem::enumerate(const std::string &virtualPa
     }
 
     std::sort(entries.begin(), entries.end());
+    std::lock_guard lock(m_pLookupCache->mutex);
+    m_pLookupCache->listings.try_emplace(virtualPath, entries);
     return entries;
 }
 
@@ -1424,11 +1980,6 @@ const std::filesystem::path &AssetFileSystem::getDevelopmentRoot() const
     return m_developmentRoot;
 }
 
-const std::filesystem::path &AssetFileSystem::getEditorDevelopmentRoot() const
-{
-    return m_editorDevelopmentRoot;
-}
-
 const std::string &AssetFileSystem::getActiveWorldId() const
 {
     return m_activeWorldId;
@@ -1466,6 +2017,24 @@ AssetScaleTier AssetFileSystem::getAssetScaleTierForVirtualPath(const std::strin
     return getAssetScaleTier(category);
 }
 
+bool AssetFileSystem::languagePacksMissing() const
+{
+    return m_languagePacksMissing;
+}
+
+uint64_t AssetFileSystem::missingLanguagePackBytes(const std::string &languageId) const
+{
+    for (const auto &[language, bytes] : m_missingLanguageBytes)
+    {
+        if (language == languageId)
+        {
+            return bytes;
+        }
+    }
+
+    return 0;
+}
+
 const AssetScaleProfile &AssetFileSystem::getAssetScaleProfile() const
 {
     return m_assetScaleProfile;
@@ -1483,13 +2052,15 @@ void AssetFileSystem::shutdown()
     m_isInitialized = false;
     m_basePath.clear();
     m_developmentRoot.clear();
-    m_editorDevelopmentRoot.clear();
     m_activeWorldId = DefaultActiveWorldId;
     m_assetScaleTier = AssetScaleTier::X1;
     m_assetScaleProfile = createUniformAssetScaleProfile(AssetScaleTier::X1);
+    m_installedContentOptions = {};
     m_iconPackages.clear();
     m_searchMounts.clear();
     m_androidApkAssetRoot = false;
+    m_languagePacksMissing = false;
+    m_missingLanguageBytes.clear();
 }
 
 bool AssetFileSystem::isInitialized() const
@@ -1506,10 +2077,8 @@ bool AssetFileSystem::validateTierDirectories(const std::filesystem::path &asset
         const char *pLegacyDirectoryName;
     };
 
-    constexpr std::array<RequiredTieredDirectory, 4> RequiredTieredDirectories = {
+    constexpr std::array<RequiredTieredDirectory, 2> RequiredTieredDirectories = {
         RequiredTieredDirectory{AssetScaleCategory::Textures, "textures", "Data/bitmaps"},
-        RequiredTieredDirectory{AssetScaleCategory::Terrain, "terrain", "Data/terrain"},
-        RequiredTieredDirectory{AssetScaleCategory::Sprites, "sprites", "Data/sprites"},
         RequiredTieredDirectory{AssetScaleCategory::Icons, "icons", "Data/icons"}
     };
 
@@ -1551,10 +2120,8 @@ bool AssetFileSystem::validateTierDirectoriesInMountedPackages() const
         const char *pLegacyDirectoryName;
     };
 
-    constexpr std::array<RequiredTieredDirectory, 4> RequiredTieredDirectories = {
+    constexpr std::array<RequiredTieredDirectory, 2> RequiredTieredDirectories = {
         RequiredTieredDirectory{AssetScaleCategory::Textures, "textures", "Data/bitmaps"},
-        RequiredTieredDirectory{AssetScaleCategory::Terrain, "terrain", "Data/terrain"},
-        RequiredTieredDirectory{AssetScaleCategory::Sprites, "sprites", "Data/sprites"},
         RequiredTieredDirectory{AssetScaleCategory::Icons, "icons", "Data/icons"}
     };
 
@@ -1688,12 +2255,7 @@ std::vector<std::string> AssetFileSystem::resolveVirtualPathCandidates(const std
                 {
                     continue;
                 }
-                const std::string candidate = root + "/icons" + assetScaleTierDirectorySuffix(tier) + suffix;
-                if (m_androidApkAssetRoot)
-                {
-                    resolvedPaths.push_back("assets/" + candidate);
-                }
-                resolvedPaths.push_back(candidate);
+                resolvedPaths.push_back(root + "/icons" + assetScaleTierDirectorySuffix(tier) + suffix);
             }
             // No native or other-package fallback for a qualified icon request.
             return resolvedPaths;
@@ -1709,34 +2271,37 @@ std::vector<std::string> AssetFileSystem::resolveVirtualPathCandidates(const std
         }
     };
 
-    const auto appendCandidateWithAndroidApkPrefixes =
+    // Player language folders mount at /languages, while shipped catalogs live at /engine/languages.
+    // This explicit namespace must take precedence over the package search, including same-named .po files.
+    if (normalizedPath.starts_with("languages/"))
+    {
+        appendCandidate(normalizedPath);
+    }
+
+    const auto appendPackageCandidates =
         [this, &appendCandidate, packageQualified](const std::string &candidate)
     {
         if (!packageQualified)
         {
+            // Once per package, in mount precedence; a package's content packs share its root. A language's packs,
+            // mounted in front of all others, would put their package first (an MM7 game read MM8's world.yml).
             for (const SearchMount &mount : m_searchMounts)
             {
-                if (mount.archive)
+                if (mount.archive && !mount.languagePack)
                 {
-                    appendCandidate(mount.mountPoint.empty() ? candidate : mount.mountPoint + "/" + candidate);
+                    appendCandidate(
+                        mount.packageMountPoint.empty() ? candidate : mount.packageMountPoint + "/" + candidate);
                 }
             }
         }
         appendCandidate(candidate);
-
-        const std::vector<std::string> androidCandidates = expandAndroidApkAssetCandidates(candidate);
-
-        for (const std::string &androidCandidate : androidCandidates)
-        {
-            appendCandidate(androidCandidate);
-        }
     };
 
     const auto appendPathWithTierFallbacks =
-        [this, &appendCandidateWithAndroidApkPrefixes](const std::string &candidate)
+        [this, &appendPackageCandidates](const std::string &candidate)
     {
-        appendCandidateWithAndroidApkPrefixes(remapTieredVirtualPath(candidate, m_assetScaleProfile));
-        appendCandidateWithAndroidApkPrefixes(baseTieredVirtualPath(candidate));
+        appendPackageCandidates(remapTieredVirtualPath(candidate, m_assetScaleProfile));
+        appendPackageCandidates(baseTieredVirtualPath(candidate));
     };
 
     if (packageQualified)
@@ -1755,54 +2320,6 @@ std::vector<std::string> AssetFileSystem::resolveVirtualPathCandidates(const std
     }
 
     return resolvedPaths;
-}
-
-std::vector<std::string> AssetFileSystem::expandAndroidApkAssetCandidates(const std::string &virtualPath) const
-{
-    std::vector<std::string> candidates;
-
-    if (!m_androidApkAssetRoot || virtualPath.empty())
-    {
-        return candidates;
-    }
-
-    if (virtualPath == "." || virtualPath == "/")
-    {
-        candidates.emplace_back("assets/worlds/" + m_activeWorldId);
-        candidates.emplace_back("assets/engine");
-        candidates.emplace_back("assets");
-        return candidates;
-    }
-
-    const auto appendCandidate = [&candidates](const std::string &candidate)
-    {
-        if (std::find(candidates.begin(), candidates.end(), candidate) == candidates.end())
-        {
-            candidates.push_back(candidate);
-        }
-    };
-
-    appendCandidate("assets/worlds/" + m_activeWorldId + "/" + virtualPath);
-    appendCandidate("assets/engine/" + virtualPath);
-
-    for (const char *pWorldId : KnownWorldPackageIds)
-    {
-        if (m_activeWorldId != pWorldId)
-        {
-            appendCandidate(std::string("assets/worlds/") + pWorldId + "/" + virtualPath);
-        }
-    }
-
-    if (virtualPath.starts_with("assets/"))
-    {
-        appendCandidate(virtualPath);
-    }
-    else
-    {
-        appendCandidate("assets/" + virtualPath);
-    }
-
-    return candidates;
 }
 
 std::string AssetFileSystem::normalizeVirtualPath(const std::string &virtualPath)
@@ -1902,12 +2419,6 @@ AssetScaleCategory AssetFileSystem::assetScaleCategoryForVirtualPath(const std::
         }
     }
 
-    if (virtualPath == TerrainTextureFallbackDirectoryName
-        || virtualPath.starts_with(std::string(TerrainTextureFallbackDirectoryName) + "/"))
-    {
-        return AssetScaleCategory::Terrain;
-    }
-
     if (virtualPath == SkyTextureDirectoryName
         || virtualPath.starts_with(std::string(SkyTextureDirectoryName) + "/"))
     {
@@ -1936,18 +2447,6 @@ AssetScaleCategory AssetFileSystem::assetScaleCategoryForVirtualPath(const std::
 
 std::string AssetFileSystem::baseTieredVirtualPath(const std::string &virtualPath)
 {
-    if (virtualPath == TerrainTextureFallbackDirectoryName
-        || virtualPath.starts_with(std::string(TerrainTextureFallbackDirectoryName) + "/"))
-    {
-        if (virtualPath == TerrainTextureFallbackDirectoryName)
-        {
-            return TexturesDirectoryName;
-        }
-
-        return std::string(TexturesDirectoryName)
-            + virtualPath.substr(std::string(TerrainTextureFallbackDirectoryName).size());
-    }
-
     if (virtualPath == SkyTextureDirectoryName
         || virtualPath.starts_with(std::string(SkyTextureDirectoryName) + "/"))
     {
@@ -1979,18 +2478,6 @@ std::string AssetFileSystem::remapTieredVirtualPath(
                 + remapTieredVirtualPath(virtualPath.substr(separator + 1), assetScaleProfile);
         }
     }
-    if (virtualPath == TerrainTextureFallbackDirectoryName
-        || virtualPath.starts_with(std::string(TerrainTextureFallbackDirectoryName) + "/"))
-    {
-        if (virtualPath == TerrainTextureFallbackDirectoryName)
-        {
-            return TexturesDirectoryName;
-        }
-
-        return std::string(TexturesDirectoryName)
-            + virtualPath.substr(std::string(TerrainTextureFallbackDirectoryName).size());
-    }
-
     if (virtualPath == SkyTextureDirectoryName
         || virtualPath.starts_with(std::string(SkyTextureDirectoryName) + "/"))
     {

@@ -9,8 +9,17 @@
 #include "game/party/SpellIds.h"
 
 #include <algorithm>
+#include <cctype>
+#include <filesystem>
+#include <fstream>
+#include <map>
+#include <optional>
+#include <set>
+#include <sstream>
+#include <string>
 #include <vector>
 
+using OpenYAMM::Game::GameplayProjectileEndPresentationState;
 using OpenYAMM::Game::GameplayProjectileService;
 using OpenYAMM::Game::SoundId;
 using OpenYAMM::Game::SkillMastery;
@@ -43,6 +52,36 @@ float storedReferenceRoundParticleSize(float particleSize = 1.0f)
 {
     return particleSize * 24.0f / 5.04f;
 }
+}
+
+TEST_CASE("actor disintegration particles are bounded, expire and resume at the death clock")
+{
+    using namespace OpenYAMM::Game;
+    ParticleSystem particles;
+    FxRecipes::spawnActorDisintegrationParticles(particles, 42, 10, 20, 30, 179, 0, 1.25f);
+    CHECK(particles.particleCount() == 80);
+    const ParticleSystem::DebugStats stats = particles.debugStats();
+    CHECK(stats.activeByMaterial[size_t(FxParticleMaterial::Mist)] == 64);
+    CHECK(stats.activeByMaterial[size_t(FxParticleMaterial::Smoke)] == 16);
+    particles.update(0.5f);
+    ParticleSystem resumed;
+    FxRecipes::spawnActorDisintegrationParticles(resumed, 42, 10, 20, 30, 179, 0.5f, 1.25f);
+    REQUIRE(resumed.particleCount() == particles.particleCount());
+    for (size_t i = 0; i < particles.particleCount(); ++i)
+    {
+        CHECK(resumed.particles()[i].z == doctest::Approx(particles.particles()[i].z));
+    }
+    particles.update(1.0f);
+    CHECK(particles.particleCount() == 0);
+    FxRecipes::spawnActorDisintegrationParticles(particles, 42, 10, 20, 30, 179, 1.25f, 1.25f);
+    CHECK(particles.particleCount() == 0);
+    for (uint32_t i = 0; i < 100; ++i)
+    {
+        FxRecipes::spawnActorDisintegrationParticles(particles, i, 10, 20, 30, 179, 0, 1.25f);
+    }
+    CHECK(particles.particleCount() == particles.maxParticleCount());
+    particles.update(1.3f);
+    CHECK(particles.particleCount() == 0);
 }
 
 TEST_CASE("projectile area impact hits party and filters actors without map runtime")
@@ -401,12 +440,21 @@ TEST_CASE("Normal-sprite projectile families do not get particle-only recipes")
         int spellId = 0;
         const char *pObjectName = "";
         const char *pSpriteName = "";
+        ProjectileRecipe expectedRecipe = ProjectileRecipe::None;
     };
 
     const Fixture fixtures[] = {
-        {0, "FireArrow", "FrArw"},
-        {static_cast<int>(SpellId::DeadlySwarm), "Deadly Swarm", "spell37"},
-        {static_cast<int>(SpellId::PrismaticLight), "Prismatic Light", "spell84"},
+        {0, "FireArrow", "FrArw", ProjectileRecipe::FireArrow},
+        {static_cast<int>(SpellId::DeadlySwarm), "Deadly Swarm", "spell37", ProjectileRecipe::DeadlySwarm},
+        {0, "Deadly Swarm", "spell37", ProjectileRecipe::DeadlySwarm},
+        {static_cast<int>(SpellId::PrismaticLight), "Prismatic Light", "spell84", ProjectileRecipe::PrismaticLight},
+        {static_cast<int>(SpellId::ShrinkingRay), "Shrinking Ray", "spell92", ProjectileRecipe::ShrinkingRay},
+        {static_cast<int>(SpellId::Lifedrain), "LifeDrain", "spell107", ProjectileRecipe::Lifedrain},
+        // Chest traps share the monster missiles' sprites.
+        {0, "FireTrap", "spell103", ProjectileRecipe::FireTrap},
+        {0, "ElecTrap", "spell101", ProjectileRecipe::ElecTrap},
+        {0, "ColdTrap", "spell104", ProjectileRecipe::ColdTrap},
+        {0, "PoisonTrap", "spell105", ProjectileRecipe::PoisonTrap},
     };
 
     for (const Fixture &fixture : fixtures)
@@ -419,8 +467,12 @@ TEST_CASE("Normal-sprite projectile families do not get particle-only recipes")
         const OpenYAMM::Game::FxRecipes::ProjectileFxRecipe &fxRecipe =
             OpenYAMM::Game::FxRecipes::projectileFxRecipe(recipe);
 
-        CHECK(recipe == ProjectileRecipe::None);
+        // These recipes exist only so the enhanced style can bind them; classically they are plain.
+        CHECK(recipe == fixture.expectedRecipe);
+        CHECK(OpenYAMM::Game::FxRecipes::projectileRecipeIsBindingOnly(recipe));
         CHECK(fxRecipe.renderProjectileBillboard);
+        CHECK_EQ(fxRecipe.trailPrimitive, OpenYAMM::Game::FxRecipes::ProjectileFxPrimitive::None);
+        CHECK_EQ(OpenYAMM::Game::FxRecipes::projectileRecipeGlowRadius(recipe), doctest::Approx(0.0f));
         CHECK_FALSE(OpenYAMM::Game::FxRecipes::projectileRecipeUsesDedicatedImpactFx(recipe));
     }
 }
@@ -716,6 +768,26 @@ TEST_CASE("summoned actor projectiles do not collide with party allies")
     CHECK(service.isProjectileSourceFriendlyToActor(projectile, facts));
 }
 
+TEST_CASE("hostile monster projectiles strike party summons of a friendly faction")
+{
+    GameplayProjectileService service;
+    const GameplayProjectileService::ProjectileState projectile = makeActorProjectile();
+
+    // The shooter's faction is friendly to the summon's monster (a Will o' Wisp among the Temple of Baa's monsters).
+    GameplayProjectileService::ProjectileActorRelationFacts facts = {};
+    facts.sourceMonsterKnown = true;
+    facts.sourceMonsterFriendlyToTarget = true;
+    facts.sourceHostileToParty = true;
+    CHECK(service.isProjectileSourceFriendlyToActor(projectile, facts));
+
+    facts.targetPartyControlled = true;
+    CHECK_FALSE(service.isProjectileSourceFriendlyToActor(projectile, facts));
+
+    // A monster at peace with the party keeps its faction's relation to the party's summons.
+    facts.sourceHostileToParty = false;
+    CHECK(service.isProjectileSourceFriendlyToActor(projectile, facts));
+}
+
 TEST_CASE("fire spike spawn limits are mastery based and actor trigger chooses nearest hostile")
 {
     GameplayProjectileService service;
@@ -782,6 +854,17 @@ TEST_CASE("fire spike spawn limits are mastery based and actor trigger chooses n
     CHECK_EQ(triggerResult.actorIndex, 4u);
     CHECK_EQ(triggerResult.actorId, 301u);
     CHECK(triggerResult.damage > 0);
+
+    // A hostile behind a closed door does not set the spike off (OY-490): the farther one does.
+    triggerInput.actors[1].blockedFromTrap = true;
+    CHECK(GameplayProjectileService::fireSpikeTrapReaches(triggerInput, triggerInput.actors[1]));
+    const GameplayProjectileService::FireSpikeTrapTriggerResult blockedResult =
+        service.buildFireSpikeTrapTrigger(triggerInput);
+    CHECK(blockedResult.triggered);
+    CHECK_EQ(blockedResult.actorIndex, 9u);
+
+    triggerInput.actors[0].blockedFromTrap = true;
+    CHECK_FALSE(service.buildFireSpikeTrapTrigger(triggerInput).triggered);
 }
 
 TEST_CASE("projectile frame without collision advances motion without expiring")
@@ -865,6 +948,40 @@ TEST_CASE("direct party projectile impact does not also apply splash to the part
     REQUIRE(result.areaImpact.has_value());
     CHECK_FALSE(result.areaImpact->impact.hitParty);
     CHECK(result.expireProjectile);
+}
+
+TEST_CASE("projectile that hits something ends at the hit point for its flight effect")
+{
+    GameplayProjectileService service;
+    GameplayProjectileService::ProjectileState projectile = makeActorProjectile();
+    projectile.projectileId = 42;
+    projectile.x = 0.0f;
+    projectile.y = 0.0f;
+    projectile.z = 64.0f;
+    projectile.velocityX = 8000.0f;
+    projectile.lifetimeTicks = 1000;
+
+    GameplayProjectileService::ProjectileFrameFacts facts = {};
+    facts.deltaSeconds = 1.0f / 60.0f;
+    facts.hasCollision = true;
+    facts.collision.kind = GameplayProjectileService::ProjectileFrameCollisionKind::Party;
+    facts.collision.point = {120.0f, 0.0f, 64.0f};
+    facts.canHitParty = true;
+
+    const GameplayProjectileService::ProjectileFrameResult result =
+        service.updateProjectileFrame(projectile, facts);
+
+    REQUIRE(result.expireProjectile);
+    REQUIRE(result.endPoint.has_value());
+    service.expireProjectile(projectile, result.endPoint);
+    CHECK(projectile.isExpired);
+
+    const std::vector<GameplayProjectileEndPresentationState> ended = service.takeEndedProjectiles();
+    REQUIRE_EQ(ended.size(), 1u);
+    CHECK_EQ(ended[0].projectileId, 42u);
+    CHECK_EQ(ended[0].x, doctest::Approx(120.0f));
+    CHECK_EQ(ended[0].z, doctest::Approx(64.0f));
+    CHECK(service.takeEndedProjectiles().empty());
 }
 
 TEST_CASE("projectile lifetime advances at 128hz instead of render-frame rate")
@@ -996,4 +1113,311 @@ TEST_CASE("center anchored projectile impact visuals keep the collision point z"
     REQUIRE(centerAnchoredResult.spawned);
     REQUIRE(centerAnchoredResult.pImpact != nullptr);
     CHECK_EQ(centerAnchoredResult.pImpact->z, 100.0f);
+}
+
+TEST_CASE("Every spell's projectile object classifies to the same recipe as the spell itself")
+{
+    // Sprite tokens must not catch other spells' sprites: "spell10" (Inferno) once caught MM8's "spell100" breath
+    // weapon, so Flame Blast flew as an invisible Inferno.
+    const std::filesystem::path tables = std::filesystem::path(OPENYAMM_SOURCE_DIR) / "assets_dev/engine/data_tables";
+    const auto readRows = [](const std::filesystem::path &path)
+    {
+        std::vector<std::vector<std::string>> rows;
+        std::ifstream file(path);
+        std::string line;
+        while (std::getline(file, line))
+        {
+            std::vector<std::string> columns;
+            std::stringstream row(line);
+            std::string column;
+            while (std::getline(row, column, '\t'))
+            {
+                columns.push_back(column);
+            }
+            rows.push_back(std::move(columns));
+        }
+        return rows;
+    };
+    std::map<int, std::pair<std::string, std::string>> objects;
+    for (const std::vector<std::string> &row : readRows(tables / "object_list.txt"))
+    {
+        if (row.size() > 2 && !row[2].empty() && std::isdigit(static_cast<unsigned char>(row[2][0])) != 0)
+        {
+            objects[std::stoi(row[2])] = {row[0], row[1]};
+        }
+    }
+    size_t checked = 0;
+    for (const std::vector<std::string> &row : readRows(tables / "spells.txt"))
+    {
+        if (row.size() < 21 || row[0].empty() || std::isdigit(static_cast<unsigned char>(row[0][0])) == 0
+            || row[20].empty() || std::isdigit(static_cast<unsigned char>(row[20][0])) == 0)
+        {
+            continue;
+        }
+        const int spellId = std::stoi(row[0]);
+        const ProjectileRecipe bySpell = OpenYAMM::Game::FxRecipes::classifyProjectileRecipe(spellId, "", "", 0);
+        const auto object = objects.find(std::stoi(row[20]));
+        if (bySpell == ProjectileRecipe::None || object == objects.end())
+        {
+            continue;
+        }
+        INFO(spellId, " ", row[2], " object ", object->second.first, " sprite ", object->second.second);
+        CHECK(OpenYAMM::Game::FxRecipes::classifyProjectileRecipe(
+                  spellId, object->second.first, object->second.second, 0) == bySpell);
+        ++checked;
+    }
+    CHECK(checked > 20);
+    CHECK(OpenYAMM::Game::FxRecipes::classifyProjectileRecipe(123, "Breath Weapon 2", "spell100", 0)
+        == ProjectileRecipe::DragonBreath);
+}
+
+TEST_CASE("a Carnage arrow explodes like a fireball where it strikes")
+{
+    GameplayProjectileService service;
+    const auto strike = [&service](float explosionRadius)
+    {
+        GameplayProjectileService::ProjectileState projectile = makePartyProjectile(30);
+        projectile.lifetimeTicks = 1000;
+        projectile.explosionRadius = explosionRadius;
+        GameplayProjectileService::ProjectileFrameFacts facts = {};
+        facts.deltaSeconds = 1.0f / 128.0f;
+        facts.hasCollision = true;
+        facts.collision.kind = GameplayProjectileService::ProjectileFrameCollisionKind::Actor;
+        facts.collision.actorIndex = 0;
+        facts.collision.point = {0.0f, 0.0f, 64.0f};
+        facts.partyPosition = {4000.0f, 0.0f, 0.0f};
+        facts.partyCollisionRadius = 64.0f;
+        facts.partyCollisionHeight = 128.0f;
+        GameplayProjectileService::ProjectileAreaImpactActorFacts struck = {};
+        struck.actorIndex = 0;
+        struck.actorId = 100;
+        struck.radius = 32;
+        struck.height = 128;
+        struck.directImpactActor = true;
+        GameplayProjectileService::ProjectileAreaImpactActorFacts neighbour = struck;
+        neighbour.actorIndex = 1;
+        neighbour.actorId = 101;
+        neighbour.x = 200.0f;
+        neighbour.directImpactActor = false;
+        facts.areaActors = {struck, neighbour};
+        return service.updateProjectileFrame(projectile, facts);
+    };
+
+    const GameplayProjectileService::ProjectileFrameResult carnage =
+        strike(GameplayProjectileService::spellImpactDamageRadius(uint32_t(SpellId::Fireball)));
+    REQUIRE(carnage.areaImpact.has_value());
+    REQUIRE_EQ(carnage.areaImpact->impact.actorHits.size(), 1u);
+    CHECK_EQ(carnage.areaImpact->impact.actorHits[0].actorIndex, 1u);
+    CHECK_EQ(carnage.areaImpact->impact.actorHits[0].damage, 30);
+
+    // A plain arrow strikes only what it hits.
+    CHECK_FALSE(strike(0.0f).areaImpact.has_value());
+}
+
+TEST_CASE("a Carnage blast rolls each monster's damage and adds what a direct hit on it would")
+{
+    GameplayProjectileService service;
+    GameplayProjectileService::ProjectileState arrow = makePartyProjectile(30);
+    GameplayProjectileService::ProjectileDirectActorImpactInput target = {};
+    target.actorId = 7;
+
+    // A blast without a damage range (a fireball) deals its one damage.
+    CHECK_EQ(service.partyBlastDamageToActor(arrow, 30, target), 30);
+
+    arrow.blastMinimumDamage = 10;
+    arrow.blastMaximumDamage = 60;
+    std::set<int> rolls;
+
+    for (uint32_t actorId = 1; actorId <= 40; ++actorId)
+    {
+        target.actorId = actorId;
+        const int damage = service.partyBlastDamageToActor(arrow, 30, target);
+        CHECK(damage >= 10);
+        CHECK(damage <= 60);
+        rolls.insert(damage);
+    }
+
+    CHECK(rolls.size() > 5);
+
+    // Its bonus against the monster's kind doubles the monster's own roll.
+    target.actorId = 3;
+    const int plain = service.partyBlastDamageToActor(arrow, 30, target);
+    target.damageMultiplier = 2;
+    CHECK_EQ(service.partyBlastDamageToActor(arrow, 30, target), plain * 2);
+}
+
+TEST_CASE("an event missile flies to its target in its flight time, passes the party and bursts there on actors")
+{
+    GameplayProjectileService service;
+    GameplayProjectileService::ProjectileSpawnRequest request = {};
+    request.sourceKind = GameplayProjectileService::ProjectileState::SourceKind::Event;
+    request.definition.speed = 6000.0f;
+    request.definition.lifetimeTicks = 64;
+    request.damage = 1500;
+    request.explosionRadius = 600.0f;
+    request.eventMissile = true;
+    request.flightSeconds = 0.15f;
+    request.targetX = 9000.0f;
+    request.targetZ = 100.0f;
+    request.sourceZ = 100.0f;
+
+    const GameplayProjectileService::ProjectileSpawnResult spawned = service.spawnProjectile(request);
+    REQUIRE(spawned.kind == GameplayProjectileService::ProjectileSpawnResult::Kind::SpawnedProjectile);
+    GameplayProjectileService::ProjectileState projectile = spawned.projectile;
+    // Whole ticks (0.15 s is 19.2 of 128): the speed fitted so the last tick ends on the target.
+    CHECK_EQ(projectile.lifetimeTicks, 20u);
+    CHECK_EQ(projectile.velocityX * 20.0f / 128.0f, doctest::Approx(9000.0f));
+    CHECK_FALSE(service.canProjectileCollideWithParty(projectile));
+
+    GameplayProjectileService::ProjectileFrameFacts facts = {};
+    facts.deltaSeconds = 1.0f / 64.0f;
+    facts.canHitParty = true;
+    facts.nonPartyProjectileDamage = 1500;
+    facts.partyPosition = {9000.0f, 0.0f, 40.0f};
+    facts.partyCollisionRadius = 64.0f;
+    facts.partyCollisionHeight = 128.0f;
+    GameplayProjectileService::ProjectileAreaImpactActorFacts near = {};
+    near.actorIndex = 0;
+    near.actorId = 7;
+    near.x = 9400.0f;
+    near.z = 0.0f;
+    near.radius = 60;
+    near.height = 200;
+    GameplayProjectileService::ProjectileAreaImpactActorFacts far = near;
+    far.actorIndex = 1;
+    far.actorId = 8;
+    far.x = 10000.0f;
+    facts.areaActors = {near, far};
+
+    std::optional<GameplayProjectileService::ProjectileFrameResult> burst;
+    for (int frame = 0; frame < 20 && !burst; ++frame)
+    {
+        GameplayProjectileService::ProjectileFrameResult result = service.updateProjectileFrame(projectile, facts);
+        if (result.expireProjectile)
+        {
+            burst = std::move(result);
+        }
+        else if (result.applyMotionEnd)
+        {
+            projectile.x = result.motion.endX;
+            projectile.y = result.motion.endY;
+            projectile.z = result.motion.endZ;
+        }
+    }
+
+    REQUIRE(burst.has_value());
+    REQUIRE(burst->areaImpact.has_value());
+    CHECK_EQ(burst->areaImpact->point.x, doctest::Approx(9000.0f));
+    CHECK_EQ(burst->areaImpact->radius, doctest::Approx(600.0f));
+    CHECK_FALSE(burst->areaImpact->impact.hitParty);
+    REQUIRE_EQ(burst->areaImpact->impact.actorHits.size(), 1u);
+    CHECK_EQ(burst->areaImpact->impact.actorHits[0].actorIndex, 0u);
+    REQUIRE(burst->fxRequest.has_value());
+    CHECK_EQ(burst->fxRequest->point.x, doctest::Approx(9000.0f));
+}
+
+TEST_CASE("an event missile that strikes the party collides with it and deals the event's damage")
+{
+    GameplayProjectileService service;
+    GameplayProjectileService::ProjectileSpawnRequest request = {};
+    request.sourceKind = GameplayProjectileService::ProjectileState::SourceKind::Event;
+    request.definition.speed = 3000.0f;
+    request.definition.lifetimeTicks = 64;
+    request.damage = 20;
+    request.damageType = OpenYAMM::Game::CombatDamageType::Fire;
+    request.eventMissile = true;
+    request.eventMissileStrikesParty = true;
+    request.targetX = 400.0f;
+    request.targetZ = 100.0f;
+    request.sourceZ = 100.0f;
+
+    const GameplayProjectileService::ProjectileSpawnResult spawned = service.spawnProjectile(request);
+    REQUIRE(spawned.kind == GameplayProjectileService::ProjectileSpawnResult::Kind::SpawnedProjectile);
+    const GameplayProjectileService::ProjectileState &projectile = spawned.projectile;
+    CHECK(service.canProjectileCollideWithParty(projectile));
+
+    GameplayProjectileService::ProjectilePartyImpactDamageInput damageInput = {};
+    damageInput.sourceKind = projectile.sourceKind;
+    damageInput.projectileDamage = projectile.damage;
+    damageInput.eventSource = true;
+    const int damage = service.resolveProjectilePartyImpactDamage(damageInput);
+    CHECK_EQ(damage, 20);
+
+    GameplayProjectileService::ProjectileFrameFacts facts = {};
+    facts.deltaSeconds = 1.0f / 64.0f;
+    facts.canHitParty = true;
+    facts.nonPartyProjectileDamage = damage;
+    facts.partyPosition = {400.0f, 0.0f, 0.0f};
+    facts.hasCollision = true;
+    facts.collision.kind = GameplayProjectileService::ProjectileFrameCollisionKind::Party;
+    facts.collision.point = {350.0f, 0.0f, 100.0f};
+    GameplayProjectileService::ProjectileState flying = projectile;
+    const GameplayProjectileService::ProjectileFrameResult result = service.updateProjectileFrame(flying, facts);
+    REQUIRE(result.directPartyDamage.has_value());
+    CHECK_EQ(*result.directPartyDamage, 20);
+}
+
+TEST_CASE("in turn-based mode a party shot the queue waits on vanishes beyond 5120 from the party")
+{
+    GameplayProjectileService service;
+    GameplayProjectileService::ProjectileState projectile = makePartyProjectile(10);
+    projectile.turnBasedPendingAction = true;
+    projectile.lifetimeTicks = 768;
+    projectile.x = 6000.0f;
+    projectile.velocityX = 4000.0f;
+
+    GameplayProjectileService::ProjectileFrameFacts facts = {};
+    facts.deltaSeconds = 1.0f / 128.0f;
+    facts.partyPosition = {0.0f, 0.0f, 0.0f};
+
+    // Real time: it flies on until its lifetime ends.
+    GameplayProjectileService::ProjectileState realTime = projectile;
+    CHECK_FALSE(service.updateProjectileFrame(realTime, facts).expireProjectile);
+
+    facts.turnBasedActive = true;
+    GameplayProjectileService::ProjectileState farShot = projectile;
+    const GameplayProjectileService::ProjectileFrameResult farResult = service.updateProjectileFrame(farShot, facts);
+    CHECK(farResult.expireProjectile);
+    CHECK_FALSE(farResult.areaImpact.has_value());
+    CHECK_FALSE(farResult.fxRequest.has_value());
+
+    GameplayProjectileService::ProjectileState nearShot = projectile;
+    nearShot.x = 5000.0f;
+    CHECK_FALSE(service.updateProjectileFrame(nearShot, facts).expireProjectile);
+
+    // A monster's shot or one the queue does not wait on keeps the real-time rules.
+    GameplayProjectileService::ProjectileState unwaited = projectile;
+    unwaited.turnBasedPendingAction = false;
+    CHECK_FALSE(service.updateProjectileFrame(unwaited, facts).expireProjectile);
+}
+
+TEST_CASE("the party's hit reach makes real-time party shots vanish beyond it")
+{
+    GameplayProjectileService service;
+    GameplayProjectileService::ProjectileState projectile = makePartyProjectile(10);
+    projectile.lifetimeTicks = 768;
+    projectile.x = 6000.0f;
+    projectile.velocityX = 4000.0f;
+
+    GameplayProjectileService::ProjectileFrameFacts facts = {};
+    facts.deltaSeconds = 1.0f / 128.0f;
+    facts.partyPosition = {0.0f, 0.0f, 0.0f};
+
+    // Without a reach (monster shots), the shot keeps flying.
+    GameplayProjectileService::ProjectileState unlimitedShot = projectile;
+    CHECK_FALSE(service.updateProjectileFrame(unlimitedShot, facts).expireProjectile);
+
+    // The party's: 5120, the yellow alert and turn-based reach (GameplayActorService::partyHitReach).
+    facts.partyShotReach = 5120.0f;
+    GameplayProjectileService::ProjectileState farShot = projectile;
+    CHECK(service.updateProjectileFrame(farShot, facts).expireProjectile);
+
+    GameplayProjectileService::ProjectileState nearShot = projectile;
+    nearShot.x = 5000.0f;
+    CHECK_FALSE(service.updateProjectileFrame(nearShot, facts).expireProjectile);
+
+    // A monster's missile is not the party's shot.
+    GameplayProjectileService::ProjectileState monsterShot = projectile;
+    monsterShot.sourceKind = GameplayProjectileService::ProjectileState::SourceKind::Actor;
+    CHECK_FALSE(service.updateProjectileFrame(monsterShot, facts).expireProjectile);
 }

@@ -1,6 +1,6 @@
 # Support OpenYAMM Atlas
 
-I'm Karol, and I'm building a native interactive Atlas for Might & Magic VII and VIII on top of
+I'm Karol, and I'm building a native interactive Atlas for Might & Magic VI, VII and VIII on top of
 [OpenYAMM](https://github.com/pjasicek/openyamm). OpenYAMM Atlas is a free, open-source community project.
 
 ## Why support helps
@@ -29,7 +29,7 @@ My Ko-fi page supports OpenYAMM Atlas and future projects. Contributions are opt
 ## Other ways to help
 
 - Report reproducible issues, with the source revision, world/map and steps to reproduce.
-- Review the [Atlas integration handover](https://github.com/coral18/openyamm/blob/extended/atlas-mm8/ATLAS_HANDOFF.md) or contribute a focused compatibility fix.
+- Review the [Atlas integration handover](https://github.com/coral18/openyamm/blob/main/ATLAS_PORT.md) or contribute a focused compatibility fix.
 - Share the project with Might & Magic players interested in an in-game Atlas.
 
 ## Community credits

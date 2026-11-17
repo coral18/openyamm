@@ -310,3 +310,110 @@ TEST_CASE("version 66 timer migration converts its remaining duration exactly on
     REQUIRE_EQ(reconciledAgain.size(), 1u);
     CHECK_EQ(reconciledAgain[0].nextAlarmGameMinutes, doctest::Approx(112.5));
 }
+
+TEST_CASE("native repeating timer drops missed intervals instead of firing every frame")
+{
+    OpenYAMM::Game::ScriptedEventTimerState state = {};
+    state.definition.scope = OpenYAMM::Game::ScriptedEventScope::Map;
+    state.definition.origin = OpenYAMM::Game::ScriptedEventTimerOrigin::Native;
+    state.definition.eventId = 210;
+    state.definition.repeating = true;
+    state.definition.intervalGameMinutes = 5.0;
+    state.nextAlarmGameMinutes = 10.0;
+
+    std::vector<OpenYAMM::Game::ScriptedEventTimerState> states = {state};
+    int executionCount = 0;
+    const auto execute =
+        [&executionCount](const OpenYAMM::Game::ScriptedEventTimerDefinition &)
+        {
+            ++executionCount;
+            return true;
+        };
+
+    // Eight hours of rest leave 96 intervals behind the clock.
+    CHECK(OpenYAMM::Game::updateScriptedEventTimers(states, 490.0, execute));
+    CHECK_EQ(executionCount, 1);
+    CHECK_EQ(states[0].nextAlarmGameMinutes, doctest::Approx(495.0));
+
+    CHECK_FALSE(OpenYAMM::Game::updateScriptedEventTimers(states, 490.1, execute));
+    CHECK_EQ(executionCount, 1);
+
+    CHECK(OpenYAMM::Game::updateScriptedEventTimers(states, 495.5, execute));
+    CHECK_EQ(executionCount, 2);
+    CHECK_EQ(states[0].nextAlarmGameMinutes, doctest::Approx(500.0));
+}
+
+TEST_CASE("a timer handler that restarts itself keeps its period whatever the frame length")
+{
+    // Training Hall's pole room beams: a 3 s native timer whose handler restarts it every quarter second (7.5 game
+    // seconds) and counts the ticks as its clock. Frames of 1/30 s used to add the alarm's overshoot and a frame to
+    // every tick (0.3 s), so the beams waited 4 s at the end of their stroke instead of MM9's 3 s.
+    OpenYAMM::Game::ScriptedEventTimerState state = {};
+    state.definition.origin = OpenYAMM::Game::ScriptedEventTimerOrigin::Native;
+    state.definition.eventId = 402;
+    state.definition.repeating = true;
+    state.definition.intervalGameMinutes = 1.5;
+    state.nextAlarmGameMinutes = 0.125;
+
+    std::vector<OpenYAMM::Game::ScriptedEventTimerState> states = {state};
+    std::vector<OpenYAMM::Game::ScriptedEventTimerControl> controls;
+    int ticks = 0;
+    const auto execute =
+        [&](const OpenYAMM::Game::ScriptedEventTimerDefinition &definition)
+        {
+            controls.push_back({definition.eventId, true, 0.125});
+            ++ticks;
+            return true;
+        };
+
+    // 25 real seconds (12.5 game minutes) of 1/30 s frames (1/60 game minute each).
+    for (int frame = 1; frame <= 751; ++frame)
+    {
+        OpenYAMM::Game::updateScriptedEventTimers(states, frame / 60.0, execute, &controls);
+    }
+
+    CHECK_EQ(ticks, 100);
+    CHECK(controls.empty());
+    CHECK_EQ(states[0].nextAlarmGameMinutes, doctest::Approx(12.625));
+}
+
+TEST_CASE("a timer handler's own restart counts from the clock after skipped time, other requests from the clock")
+{
+    OpenYAMM::Game::ScriptedEventTimerState state = {};
+    state.definition.origin = OpenYAMM::Game::ScriptedEventTimerOrigin::Native;
+    state.definition.eventId = 402;
+    state.definition.repeating = true;
+    state.definition.intervalGameMinutes = 1.5;
+    state.nextAlarmGameMinutes = 0.125;
+    OpenYAMM::Game::ScriptedEventTimerState other = state;
+    other.definition.eventId = 403;
+    other.nextAlarmGameMinutes = 1000.0;
+
+    std::vector<OpenYAMM::Game::ScriptedEventTimerState> states = {state, other};
+    std::vector<OpenYAMM::Game::ScriptedEventTimerControl> controls;
+    int ticks = 0;
+    const auto execute =
+        [&](const OpenYAMM::Game::ScriptedEventTimerDefinition &definition)
+        {
+            if (definition.eventId == 402)
+            {
+                controls.push_back({402, true, 0.125});
+                controls.push_back({403, true, 0.5});
+                ++ticks;
+            }
+            return true;
+        };
+
+    // Eight hours of rest: the alarm lies far behind, so the restart counts from now and fires once.
+    CHECK(OpenYAMM::Game::updateScriptedEventTimers(states, 480.0, execute, &controls));
+    CHECK_EQ(ticks, 1);
+    CHECK_EQ(states[0].nextAlarmGameMinutes, doctest::Approx(480.125));
+    CHECK_EQ(states[1].nextAlarmGameMinutes, doctest::Approx(480.5));
+    CHECK_FALSE(OpenYAMM::Game::updateScriptedEventTimers(states, 480.1, execute, &controls));
+
+    // A request made outside a timer's handler is applied at the next update, from its clock.
+    controls.push_back({402, false, -1.0});
+    CHECK_FALSE(OpenYAMM::Game::updateScriptedEventTimers(states, 480.2, execute, &controls));
+    CHECK(states[0].stopped);
+    CHECK(controls.empty());
+}

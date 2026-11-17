@@ -50,7 +50,16 @@ public:
         std::string description;
         std::string usage;
         CommandCallback callback;
+        // Only reads or shows things (help, loc): running it does not mark the playthrough as assisted.
+        bool readOnly = false;
+        // For a command that also changes the game: whether these arguments only read or show things
+        // (qbit dump, gold get).
+        std::function<bool(const std::vector<std::string> &args)> readOnlyWith;
     };
+
+    // Told of every successful command that could change the game: not read-only by readOnly or readOnlyWith
+    // (the playthrough statistics' "debug console" assist).
+    using CommandObserver = std::function<void(const CommandDefinition &)>;
 
     struct ItemOption
     {
@@ -77,6 +86,7 @@ public:
         MapOptionKind kind = MapOptionKind::Outdoor;
     };
 
+    void setCommandObserver(CommandObserver observer);
     void registerCommand(CommandDefinition definition);
     void clearCommands();
     void setItemOptions(std::vector<ItemOption> itemOptions);
@@ -92,7 +102,13 @@ public:
 
     void addMessage(MessageKind kind, const std::string &message);
     void clearMessages();
+    const std::vector<Message> &messages() const;
+    // Messages added since construction, including ones already dropped from the bounded history.
+    size_t totalMessageCount() const;
     void executeLine(const std::string &line);
+    // Runs a file of console commands, one line each (';' chains as typed, '#' starts a comment line), all at once and
+    // outside the input history; reports failed lines and a summary.
+    CommandResult executeFile(const std::string &path);
     void render(int width, int height);
     int handleInputTextCallback(ImGuiInputTextCallbackData *pData);
 
@@ -104,6 +120,8 @@ private:
     static int mapOptionSearchScore(const MapOption &map, const std::string &query);
 
     std::string joinedMessageText() const;
+    // Runs one command (no ';'); returns false for an unknown command or a failed callback.
+    bool dispatchCommand(const std::string &commandLine, bool reportSuccess);
 
     void renderConsoleWindow(int width, int height);
     void renderMobileConsoleWindow(int width, int height);
@@ -124,7 +142,9 @@ private:
     void applyActiveMobileConsoleScale() const;
 
     std::unordered_map<std::string, CommandDefinition> m_commands;
+    CommandObserver m_commandObserver;
     std::vector<Message> m_messages;
+    size_t m_totalMessageCount = 0;
     std::vector<std::string> m_history;
     std::vector<ItemOption> m_itemOptions;
     std::vector<MapOption> m_mapOptions;

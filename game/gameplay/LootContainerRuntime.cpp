@@ -1,6 +1,5 @@
 #include "game/gameplay/LootContainerRuntime.h"
 
-#include "game/StringUtils.h"
 #include "game/events/EvtEnums.h"
 #include "game/tables/ChestTable.h"
 #include "game/tables/ItemTable.h"
@@ -47,7 +46,7 @@ uint32_t findGoldHeapItemId(const ItemTable *pItemTable)
 
     for (const ItemDefinition &item : pItemTable->entries())
     {
-        if (toLowerCopy(item.equipStat) == "gold")
+        if (item.isGold())
         {
             return item.itemId;
         }
@@ -148,7 +147,10 @@ MapDeltaChest buildLootContainerChest(
     }
     else if (!source.goldOnly && (source.random || source.aiDrop) && source.randomTreasureLevel > 0)
     {
-        appendRecord(chest, -std::clamp(source.randomTreasureLevel, 1, 7));
+        for (uint32_t record = 0; record < source.randomRecords; ++record)
+        {
+            appendRecord(chest, -std::clamp(source.randomTreasureLevel, 1, 7));
+        }
     }
     return chest;
 }

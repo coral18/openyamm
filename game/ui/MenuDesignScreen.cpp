@@ -1,7 +1,10 @@
 #include "game/ui/MenuDesignScreen.h"
 
+#include "engine/FontAsset.h"
+#include "engine/Utf8Text.h"
 #include "game/audio/GameAudioSystem.h"
 #include "game/audio/SoundIds.h"
+#include "game/render/WaterMath.h"
 
 #include <algorithm>
 #include <cmath>
@@ -16,25 +19,13 @@ constexpr float CanvasWidth = 853.333333f;
 constexpr float CanvasHeight = 480.0f;
 constexpr float BrowserToLogical = 8.0f / 15.0f;
 const std::string ArtRoot = "hud_x2/menus/omenu_";
-
-std::string menuEncoding(const std::string &text)
-{
-    char *pEncoded = SDL_iconv_string("WINDOWS-1252", "UTF-8", text.c_str(), text.size() + 1);
-    if (pEncoded == nullptr)
-    {
-        return text; // Existing imported game names may already be CP1252.
-    }
-    const std::string result(pEncoded);
-    SDL_free(pEncoded);
-    return result;
-}
 } // namespace
 
 MenuDesignScreen::MenuDesignScreen(const Engine::AssetFileSystem &assetFileSystem, bool overGameplay,
                                    GameAudioSystem *pAudio)
     : MenuScreenBase(assetFileSystem), m_overGameplay(overGameplay), m_pAudio(pAudio)
 {
-    setRenderViewId(240);
+    setRenderViewId(MenuDesignView);
     setClearBackground(!overGameplay);
 }
 
@@ -116,6 +107,7 @@ void MenuDesignScreen::beginDesign(const std::string &screen)
         m_focusTargets.clear();
         m_pressed.clear();
         m_scrollDragOffset.reset();
+        m_contentDrag.reset();
     }
     m_designScreen = screen;
     setDesignClip(std::nullopt);
@@ -167,19 +159,29 @@ void MenuDesignScreen::revealFocus(const Rect &viewport, float &scroll) const
     }
 }
 
-void MenuDesignScreen::scrollViewport(const Rect &viewport, float contentHeight, float &scroll, float wheelStep)
+void MenuDesignScreen::scrollViewport(const Rect &viewport, float contentHeight, float &scroll, float wheelStep,
+                                      bool enabled)
 {
+    // A press that moves this far (logical units) along the content becomes a drag.
+    constexpr float ContentDragThreshold = 6;
     const float unit = designScale();
     const float maxScroll = std::max(0.0f, contentHeight - viewport.height / unit);
+    // A confirmation's own scroll box (its notes) takes input while the confirmation draws; a viewport behind it
+    // leaves the drag alone, which belongs to the box.
+    const bool interactive = enabled && (!modalOpen() || m_drawingConfirmation);
     revealFocus(viewport, scroll);
-    if (!modalOpen() && pointerInside(viewport))
+    if (interactive && pointerInside(viewport))
     {
         scroll -= mouseWheelDelta() * wheelStep;
     }
     scroll = std::clamp(scroll, 0.0f, maxScroll);
-    if (!leftMouseDown() || modalOpen() || maxScroll == 0)
+    if (interactive && (!leftMouseDown() || maxScroll == 0))
     {
         m_scrollDragOffset.reset();
+    }
+    if (m_contentDrag && m_contentDrag->pScroll == &scroll && (!leftMouseDown() || !interactive || maxScroll == 0))
+    {
+        m_contentDrag.reset();
     }
     if (maxScroll == 0)
     {
@@ -190,7 +192,7 @@ void MenuDesignScreen::scrollViewport(const Rect &viewport, float contentHeight,
     const float travel = viewport.height - thumbHeight;
     const Rect track{viewport.x + viewport.width - 12 * unit, viewport.y, 12 * unit, viewport.height};
     float thumbY = viewport.y + travel * scroll / maxScroll;
-    if (!modalOpen() && leftMouseJustPressed() && pointerInside(track))
+    if (interactive && leftMouseJustPressed() && pointerInside(track))
     {
         if (mouseY() >= thumbY && mouseY() <= thumbY + thumbHeight)
         {
@@ -202,14 +204,37 @@ void MenuDesignScreen::scrollViewport(const Rect &viewport, float contentHeight,
             scroll = std::clamp(scroll + (mouseY() < thumbY ? -1 : 1) * viewport.height / unit, 0.0f, maxScroll);
         }
     }
-    if (m_scrollDragOffset && travel > 0)
+    else if (interactive && leftMouseJustPressed() && pointerInside(viewport))
+    {
+        m_contentDrag = ContentDrag{&scroll, mouseY(), scroll, false};
+    }
+    if (interactive && m_scrollDragOffset && travel > 0)
     {
         scroll = std::clamp((mouseY() - viewport.y - *m_scrollDragOffset) / travel, 0.0f, 1.0f) * maxScroll;
+    }
+    if (m_contentDrag && m_contentDrag->pScroll == &scroll)
+    {
+        const float moved = mouseY() - m_contentDrag->startY;
+        if (!m_contentDrag->moving && std::abs(moved) >= ContentDragThreshold * unit)
+        {
+            // The press is a drag now: the control under it neither shows as pressed nor clicks on release.
+            m_contentDrag->moving = true;
+            m_pressed.clear();
+        }
+        if (m_contentDrag->moving)
+        {
+            scroll = std::clamp(m_contentDrag->startScroll - moved / unit, 0.0f, maxScroll);
+        }
     }
     thumbY = viewport.y + travel * scroll / maxScroll;
     drawSolidRect({track.x + 4.5f * unit, viewport.y, 3 * unit, viewport.height}, 0xff29382au);
     drawSolidRect({track.x + 3 * unit, thumbY, 6 * unit, thumbHeight},
-                  m_scrollDragOffset || pointerInside(track) ? 0xff90bedau : 0xff6a8dacu);
+                  (interactive && m_scrollDragOffset) || pointerInside(track) ? 0xff90bedau : 0xff6a8dacu);
+}
+
+void MenuDesignScreen::cancelContentDrag()
+{
+    m_contentDrag.reset();
 }
 
 void MenuDesignScreen::drawDesign()
@@ -266,16 +291,39 @@ void MenuDesignScreen::drawDesign()
     }
 }
 
+// The lines of one paragraph word-wrapped to width (pixels); an empty paragraph is one empty line. Any run of
+// whitespace separates words.
+std::vector<std::string> MenuDesignScreen::wrapParagraph(const std::string &paragraph, const std::string &font,
+                                                         float scale, float width)
+{
+    std::istringstream input(paragraph);
+    std::string word, words;
+    while (input >> word)
+    {
+        words += (words.empty() ? "" : " ") + word;
+    }
+    return Engine::Utf8::wrap(words, width + 0.5f,
+        [&](const std::string &line)
+        {
+            return measureTextWidth(font, line, scale);
+        });
+}
+
 void MenuDesignScreen::textInRect(const Rect &rect, const std::string &text, const std::string &font, float logicalSize,
-                                  uint32_t color, bool centered)
+                                  uint32_t color, bool centered, bool topAligned, float *pContentHeight)
 {
     const int faceHeight = std::max(1, fontHeight(font));
     float scale = designScale() * logicalSize / faceHeight;
-    std::string encoded = menuEncoding(text);
-    if (encoded.find('\n') == std::string::npos && rect.height < logicalSize * designScale() * 1.9f)
+    std::string encoded = text;
+    // One line, shrunk or cut with an ellipsis, unless a second line fits by the draw loop's own rule below: otherwise
+    // the text wrapped, its second line was dropped and the first was centred as if both were drawn (OY-266).
+    const float singleGlyphHeight = logicalSize * designScale();
+    const bool secondLineFits = singleGlyphHeight * 2.2f <= rect.height + 3 * designScale();
+    if (encoded.find('\n') == std::string::npos && !secondLineFits)
     {
         const float width = measureTextWidth(font, encoded, scale);
-        const float fit = width > 0 ? std::min(1.0f, std::max(0.85f, rect.width / width)) : 1.0f;
+        // A longer language's label is set down to 60 % of its size before it is cut.
+        const float fit = width > 0 ? std::min(1.0f, std::max(0.6f, rect.width / width)) : 1.0f;
         if (fit < 1.0f)
         {
             // A fractional reduction can round back to the same raster size and wrongly trigger an ellipsis.
@@ -287,7 +335,7 @@ void MenuDesignScreen::textInRect(const Rect &rect, const std::string &text, con
         {
             while (!encoded.empty() && measureTextWidth(font, encoded + "...", scale) > rect.width + 0.5f)
             {
-                encoded.pop_back();
+                Engine::Utf8::popBack(encoded);
             }
             encoded += "...";
         }
@@ -298,26 +346,13 @@ void MenuDesignScreen::textInRect(const Rect &rect, const std::string &text, con
     std::string paragraph;
     while (std::getline(paragraphs, paragraph))
     {
-        std::istringstream words(paragraph);
-        std::string word, line;
-        while (words >> word)
-        {
-            const std::string candidate = line.empty() ? word : line + " " + word;
-            if (!line.empty() && measureTextWidth(font, candidate, scale) > rect.width + 0.5f)
-            {
-                lines.push_back(line);
-                line = word;
-            }
-            else
-            {
-                line = candidate;
-            }
-        }
-        lines.push_back(line);
+        const std::vector<std::string> wrapped = wrapParagraph(paragraph, font, scale, rect.width);
+        lines.insert(lines.end(), wrapped.begin(), wrapped.end());
     }
     const float glyphHeight = logicalSize * designScale();
     const float blockHeight = glyphHeight + (lines.empty() ? 0 : lines.size() - 1) * lineHeight;
-    float y = rect.y + std::max(0.0f, (rect.height - blockHeight) / 2);
+    if (pContentHeight != nullptr) *pContentHeight = blockHeight;
+    float y = rect.y + (topAligned ? 0 : std::max(0.0f, (rect.height - blockHeight) / 2));
     for (const std::string &line : lines)
     {
         if (y + glyphHeight > rect.y + rect.height + 3 * designScale())
@@ -330,7 +365,23 @@ void MenuDesignScreen::textInRect(const Rect &rect, const std::string &text, con
     }
 }
 
-void MenuDesignScreen::label(const std::string &id, const std::string &text, uint32_t color, float offsetY)
+float MenuDesignScreen::textBlockHeight(const std::string &text, const std::string &font, float logicalSize,
+                                       float width)
+{
+    const float scale = designScale() * logicalSize / std::max(1, fontHeight(font));
+    size_t lineCount = 0;
+    std::istringstream paragraphs(text);
+    std::string paragraph;
+    while (std::getline(paragraphs, paragraph))
+    {
+        lineCount += wrapParagraph(paragraph, font, scale, width).size();
+    }
+    const float glyphHeight = logicalSize * designScale();
+    return lineCount == 0 ? 0 : glyphHeight + (lineCount - 1) * glyphHeight * 1.2f;
+}
+
+void MenuDesignScreen::label(const std::string &id, const std::string &text, uint32_t color, float offsetY,
+                             float offsetX)
 {
     const UiLayoutManager::LayoutElement *pElement = m_designLayouts.findElement(id);
     if (pElement == nullptr || pElement->fontName.empty())
@@ -339,6 +390,8 @@ void MenuDesignScreen::label(const std::string &id, const std::string &text, uin
     }
     Rect rect = designRect(id);
     rect.y += offsetY * designScale();
+    rect.x += offsetX * designScale();
+    rect.width = std::max(1.0f, rect.width - offsetX * designScale());
     const float padding = pElement->textPadX * designScale();
     rect.x += padding;
     rect.width = std::max(1.0f, rect.width - padding * 2);
@@ -346,7 +399,7 @@ void MenuDesignScreen::label(const std::string &id, const std::string &text, uin
     if (pElement->textAlignX == UiLayoutManager::TextAlignX::Right)
     {
         const float width =
-            measureTextWidth(pElement->fontName, menuEncoding(text), pElement->textScale * designScale());
+            measureTextWidth(pElement->fontName, text, pElement->textScale * designScale());
         rect.x += std::max(0.0f, rect.width - width);
         rect.width = std::min(rect.width, width);
     }
@@ -407,9 +460,9 @@ void MenuDesignScreen::setDesignClip(const std::optional<Rect> &rect)
     setClipRect(rect);
 }
 
-bool MenuDesignScreen::button(const std::string &id, const Rect &rect, const std::string &text, const std::string &name,
-                              bool enabled, bool selected)
+MenuDesignScreen::Hotspot MenuDesignScreen::hotspot(const std::string &id, const Rect &rect, bool enabled)
 {
+    Hotspot result;
     const bool available = enabled && (!modalOpen() || m_drawingConfirmation);
     if (available)
     {
@@ -419,18 +472,18 @@ bool MenuDesignScreen::button(const std::string &id, const Rect &rect, const std
             m_focusRects[id] = rect;
         }
     }
-    const bool hovered = available && pointerInside(rect);
-    if (hovered && leftMouseJustPressed())
+    result.hovered = available && pointerInside(rect);
+    if (result.hovered && leftMouseJustPressed())
     {
         m_pressed = id;
         m_focus = id;
     }
-    const bool pressed = hovered && leftMouseDown() && m_pressed == id;
-    const bool activated = available && !(m_drawingConfirmation && m_confirmationNew) &&
-                           ((hovered && leftMouseJustReleased() && m_pressed == id) ||
-                            ((!m_textEditing || m_drawingConfirmation) && m_focus == id &&
-                             (keyPressed(SDL_SCANCODE_RETURN) || keyPressed(SDL_SCANCODE_SPACE))));
-    if (activated)
+    result.pressed = result.hovered && leftMouseDown() && m_pressed == id;
+    result.activated = available && !(m_drawingConfirmation && m_confirmationNew) &&
+                       ((result.hovered && leftMouseJustReleased() && m_pressed == id) ||
+                        ((!m_textEditing || m_drawingConfirmation) && m_focus == id &&
+                         (keyPressed(SDL_SCANCODE_RETURN) || keyPressed(SDL_SCANCODE_SPACE))));
+    if (result.activated)
     {
         m_pressed.clear();
         if (m_pAudio != nullptr)
@@ -438,11 +491,27 @@ bool MenuDesignScreen::button(const std::string &id, const Rect &rect, const std
             m_pAudio->playCommonSound(SoundId::ClickIn, GameAudioSystem::PlaybackGroup::Ui);
         }
     }
+    if (m_keyboardFocus && m_focus == id && available)
+    {
+        outline(rect, 0xff8dc5e1u);
+    }
+    return result;
+}
+
+bool MenuDesignScreen::button(const std::string &id, const Rect &rect, const std::string &text, const std::string &name,
+                              bool enabled, bool selected, const std::string &font, const Rect *pVisualRect)
+{
+    const Rect &visual = pVisualRect != nullptr ? *pVisualRect : rect;
+    const bool available = enabled && (!modalOpen() || m_drawingConfirmation);
+    const Hotspot input = hotspot(id, rect, enabled);
+    const bool hovered = input.hovered;
+    const bool pressed = input.pressed;
+    const bool activated = input.activated;
     const bool standard = name.starts_with("button");
     const std::string state = !enabled ? "disabled" : pressed ? "pressed" : hovered ? "hover" : "default";
     // Toggle artwork includes the checkbox; scale the whole plate together rather than stretching its centre.
     const bool sliced = name != "toggle_on" && name != "toggle_off";
-    skin(name + (standard ? "_" + state : selected ? "_selected" : ""), rect, sliced, standard ? 6 : 0);
+    skin(name + (standard ? "_" + state : selected ? "_selected" : ""), visual, sliced, standard ? 6 : 0);
     if (m_keyboardFocus && m_focus == id && available)
     {
         outline(rect, 0xff8dc5e1u);
@@ -452,9 +521,36 @@ bool MenuDesignScreen::button(const std::string &id, const Rect &rect, const std
         Rect textRect = rect;
         textRect.x += 5 * designScale();
         textRect.width -= 10 * designScale();
-        textInRect(textRect, text, "fondamento", name == "button_square" ? 11.7f : 13.8667f,
+        const float labelSize = name == "button_square" ? 11.7f : 13.8667f;
+        // A button label is one line. A tall plate otherwise lets the paragraph path accept an overlong word
+        // without fitting it; translated labels must shrink or ellipsize inside their own button.
+        const float labelHeight = std::min(textRect.height, labelSize * 1.5f * designScale());
+        textRect.y += (textRect.height - labelHeight) * 0.5f;
+        textRect.height = labelHeight;
+        textInRect(textRect, text, font, labelSize,
                    enabled ? hovered ? 0xffc0f0ffu : 0xffa4d1e8u : 0xff6b777au, true);
     }
+    return activated;
+}
+
+bool MenuDesignScreen::selectBox(const std::string &id, const Rect &rect, const std::string &value, bool enabled,
+                                float logicalSize, const std::string &font)
+{
+    const bool available = enabled && (!modalOpen() || m_drawingConfirmation);
+    const bool hovered = available && pointerInside(rect);
+    const bool activated = button(id, rect, "", "button_quiet", enabled);
+    const bool pressed = hovered && leftMouseDown() && m_pressed == id;
+    const std::string state = !enabled ? "disabled" : pressed ? "pressed" : hovered ? "hover" : "default";
+    const float scale = designScale();
+    const Rect arrow{rect.x + rect.width - rect.height, rect.y, rect.height, rect.height};
+    skin("button_square_" + state, arrow, true, 6);
+    const uint32_t color = !enabled ? 0xff6b777au : hovered ? 0xffc0f0ffu : 0xffc6dfeau;
+    textInRect({rect.x + 9 * scale, rect.y, rect.width - arrow.width - 18 * scale, rect.height},
+               value, font, logicalSize, color);
+    const float centerX = arrow.x + arrow.width / 2;
+    const float centerY = arrow.y + arrow.height / 2;
+    drawTextureColor(ArtRoot + "chevron_down.png",
+                     {centerX - 6 * scale, centerY - 4 * scale, 12 * scale, 8 * scale}, color);
     return activated;
 }
 
@@ -479,9 +575,11 @@ bool MenuDesignScreen::action(const std::string &id, bool enabled, const std::st
 }
 
 void MenuDesignScreen::confirm(const std::string &title, const std::string &body, std::vector<std::string> choices,
-                               std::function<void(int)> callback, bool dismissOnOutsideClick)
+                               std::function<void(int)> callback, bool dismissOnOutsideClick, bool twoColumns,
+                               std::vector<std::string> choiceIcons)
 {
-    m_confirmation = Confirmation{title, body, std::move(choices), std::move(callback), 0, dismissOnOutsideClick};
+    m_confirmation = Confirmation{title, body, std::move(choices), std::move(callback), 0,
+                                  dismissOnOutsideClick, twoColumns, std::move(choiceIcons)};
     m_confirmationNew = true;
     m_focus = "modal-0";
     m_pressed.clear();
@@ -499,6 +597,21 @@ void MenuDesignScreen::setModalBody(const std::string &text)
         m_confirmation->body = text;
     }
 }
+void MenuDesignScreen::setModalNotes(const std::string &text)
+{
+    if (m_confirmation)
+    {
+        m_confirmation->notes = text;
+        m_confirmation->notesScroll = 0;
+    }
+}
+void MenuDesignScreen::setModalChoiceFont(const std::string &font)
+{
+    if (m_confirmation)
+    {
+        m_confirmation->choiceFont = font;
+    }
+}
 
 void MenuDesignScreen::drawConfirmation()
 {
@@ -509,31 +622,146 @@ void MenuDesignScreen::drawConfirmation()
     loadDesign("menu/confirmation");
     setDesignClip(std::nullopt);
     m_drawingConfirmation = true;
+    const bool twoColumns = m_confirmation->twoColumns;
     const bool list = m_confirmation->choices.size() > 3;
-    const int count = std::min(8, int(m_confirmation->choices.size()));
+    const int total = int(m_confirmation->choices.size());
+    const int count = twoColumns ? total : std::min(8, total);
+    // The grid: two columns, three when two would run off the 480-unit canvas (MAW's twenty classes); rows close up
+    // to fit what still would not.
+    constexpr float GridTop = 126;
+    constexpr float GridBottom = 46;
+    constexpr float GridRowPitch = 46;
+    constexpr float GridCanvasHeight = 472;
+    const int columns = !twoColumns ? 1
+        : GridTop + GridBottom + (count + 1) / 2 * GridRowPitch > GridCanvasHeight ? std::min(3, count)
+        : std::min(2, count);
+    const int gridRows = (count + columns - 1) / columns;
+    const float gridRowPitch = gridRows > 0
+        ? std::min(GridRowPitch, std::floor((GridCanvasHeight - GridTop - GridBottom) / gridRows)) : GridRowPitch;
     const auto *pPanel = m_designLayouts.findElement("MenuConfirmationPanel");
-    const float height = list ? 155.0f + count * 25 : pPanel->height;
+    const auto *pBody = m_designLayouts.findElement("MenuConfirmationBody");
+    const float unit = designScale();
+    const float bodySize = pBody->textScale * fontHeight(pBody->fontName);
+    const float bodyScale = unit * bodySize / std::max(1, fontHeight(pBody->fontName));
+    const float bodyLineHeight = bodySize * 1.2f;
+    // Release notes widen the panel so their lines wrap less; the title, body and buttons widen with it.
+    constexpr float NotesPanelWidth = 560;
+    const float widen = !list && !twoColumns && !m_confirmation->notes.empty()
+        ? std::max(0.0f, NotesPanelWidth - pPanel->width) : 0.0f;
+    const float bodyWidth = pBody->width + widen;
+    // With a row of buttons the panel grows to fit a long body, and by the notes box above it.
+    constexpr float NotesPadding = 6;
+    float bodyExtra = 0;
+    float notesHeight = 0;
+    struct NoteLine
+    {
+        std::string text;
+        float indent = 0;
+    };
+    std::vector<NoteLine> noteLines;
+    if (!list && !twoColumns)
+    {
+        size_t bodyLines = 0;
+        std::istringstream paragraphs(m_confirmation->body);
+        std::string paragraph;
+        while (std::getline(paragraphs, paragraph))
+        {
+            bodyLines += wrapParagraph(paragraph, pBody->fontName, bodyScale, bodyWidth * unit).size();
+        }
+        if (bodyLines > 0)
+        {
+            bodyExtra = std::max(0.0f, bodySize + (bodyLines - 1) * bodyLineHeight - pBody->height);
+        }
+
+        // A "- " line is a bullet: its wrapped lines align after the dash.
+        constexpr float NotesMaxHeight = 150;
+        const float wrapWidth = (bodyWidth - 2 * NotesPadding - 14) * unit;
+        std::istringstream notes(m_confirmation->notes);
+        while (std::getline(notes, paragraph))
+        {
+            const bool bullet = paragraph.starts_with("- ");
+            const float indent = bullet ? measureTextWidth(pBody->fontName, "- ", bodyScale) : 0;
+            const std::vector<std::string> wrapped =
+                wrapParagraph(bullet ? paragraph.substr(2) : paragraph, pBody->fontName, bodyScale, wrapWidth - indent);
+            for (size_t i = 0; i < wrapped.size(); ++i)
+            {
+                noteLines.push_back({(bullet && i == 0 ? "- " : "") + wrapped[i], bullet && i > 0 ? indent : 0});
+            }
+        }
+        if (!noteLines.empty())
+        {
+            notesHeight = std::min(NotesMaxHeight, noteLines.size() * bodyLineHeight + 2 * NotesPadding);
+        }
+    }
+    constexpr float NotesGap = 10;
+    const float notesShift = notesHeight > 0 ? notesHeight + NotesGap : 0;
+    const float height = twoColumns ? GridTop + gridRows * gridRowPitch + GridBottom
+                                   : list ? 155.0f + count * 25 : pPanel->height + bodyExtra + notesShift;
     const float verticalShift = (pPanel->height - height) / 2 * designScale();
-    const auto modalRect = [this, verticalShift](const std::string &id)
+    const auto modalRect = [this, verticalShift, widen](const std::string &id)
     {
         Rect rect = designRect(id);
         rect.y += verticalShift;
+        if (id != "MenuConfirmationSeal")
+        {
+            rect.x -= widen / 2 * designScale();
+            rect.width += widen * designScale();
+        }
         return rect;
     };
-    const auto modalText = [this, &modalRect](const std::string &id, const std::string &text)
+    Rect panel = modalRect("MenuConfirmationPanel");
+    if (twoColumns)
+    {
+        const float width = (columns > 2 ? 720 : 600) * designScale();
+        panel.x += (panel.width - width) / 2;
+        panel.width = width;
+    }
+    panel.height = height * designScale();
+    const auto modalText = [this, &modalRect, twoColumns, &panel](const std::string &id, const std::string &text)
     {
         const auto *pElement = m_designLayouts.findElement(id);
-        textInRect(modalRect(id), text, pElement->fontName, pElement->textScale * fontHeight(pElement->fontName),
+        Rect rect = modalRect(id);
+        if (twoColumns)
+        {
+            rect.x = panel.x + 36 * designScale();
+            rect.width = panel.width - 72 * designScale();
+        }
+        textInRect(rect, text, pElement->fontName, pElement->textScale * fontHeight(pElement->fontName),
                    pElement->textColorAbgr, true);
     };
     drawTexture(m_designLayouts.findElement("MenuConfirmationVeil")->primaryAsset,
                 {0, 0, float(frameWidth()), float(frameHeight())});
-    Rect panel = modalRect("MenuConfirmationPanel");
-    panel.height = height * designScale();
     drawTexture(pPanel->primaryAsset, panel);
     drawTexture(m_designLayouts.findElement("MenuConfirmationSeal")->primaryAsset, modalRect("MenuConfirmationSeal"));
     modalText("MenuConfirmationTitle", m_confirmation->title);
-    modalText("MenuConfirmationBody", m_confirmation->body);
+    if (notesHeight > 0)
+    {
+        Rect box = modalRect("MenuConfirmationBody");
+        box.height = notesHeight * unit;
+        outline(box, 0xff29382au);
+        const Rect viewport{box.x + NotesPadding * unit, box.y + NotesPadding * unit,
+                            box.width - 2 * NotesPadding * unit, box.height - 2 * NotesPadding * unit};
+        scrollViewport(viewport, noteLines.size() * bodyLineHeight, m_confirmation->notesScroll, bodyLineHeight * 3);
+        setDesignClip(viewport);
+        float y = viewport.y - m_confirmation->notesScroll * unit;
+        for (const NoteLine &line : noteLines)
+        {
+            drawText(pBody->fontName, line.text, viewport.x + line.indent, y, pBody->textColorAbgr, bodyScale);
+            y += bodyLineHeight * unit;
+        }
+        setDesignClip(std::nullopt);
+    }
+    if (twoColumns || list)
+    {
+        modalText("MenuConfirmationBody", m_confirmation->body);
+    }
+    else
+    {
+        Rect body = modalRect("MenuConfirmationBody");
+        body.y += notesShift * unit;
+        body.height += bodyExtra * unit;
+        textInRect(body, m_confirmation->body, pBody->fontName, bodySize, pBody->textColorAbgr, true);
+    }
     int selected = -2;
     if (!m_confirmationNew &&
         (keyPressed(SDL_SCANCODE_ESCAPE) ||
@@ -541,18 +769,26 @@ void MenuDesignScreen::drawConfirmation()
     {
         selected = -1;
     }
-    if (!m_confirmationNew && list && mouseWheelDelta() != 0)
+    if (!m_confirmationNew && list && !twoColumns && mouseWheelDelta() != 0)
     {
         m_confirmation->scroll = std::clamp(m_confirmation->scroll - int(mouseWheelDelta()), 0,
                                             std::max(0, int(m_confirmation->choices.size()) - count));
         m_focus.clear();
     }
     int navigation = 0;
-    if (keyPressed(SDL_SCANCODE_DOWN) || keyPressed(SDL_SCANCODE_RIGHT))
+    if (keyPressed(SDL_SCANCODE_DOWN))
+    {
+        navigation = columns;
+    }
+    if (keyPressed(SDL_SCANCODE_UP))
+    {
+        navigation = -columns;
+    }
+    if (keyPressed(SDL_SCANCODE_RIGHT))
     {
         navigation = 1;
     }
-    if (keyPressed(SDL_SCANCODE_UP) || keyPressed(SDL_SCANCODE_LEFT))
+    if (keyPressed(SDL_SCANCODE_LEFT))
     {
         navigation = -1;
     }
@@ -571,7 +807,6 @@ void MenuDesignScreen::drawConfirmation()
     if (!m_confirmationNew && (navigation != 0 || keyPressed(SDL_SCANCODE_HOME) || keyPressed(SDL_SCANCODE_END)))
     {
         m_keyboardFocus = true;
-        const int total = int(m_confirmation->choices.size());
         int index = m_focus.starts_with("modal-") ? std::stoi(m_focus.substr(6)) : m_confirmation->scroll;
         index = (index + navigation + total) % total;
         if (keyPressed(SDL_SCANCODE_HOME))
@@ -587,24 +822,42 @@ void MenuDesignScreen::drawConfirmation()
     }
     for (int i = 0; i < count; ++i)
     {
-        const int index = i + (list ? m_confirmation->scroll : 0);
+        const int index = i + (list && !twoColumns ? m_confirmation->scroll : 0);
         const float scale = designScale();
         const Rect body = modalRect("MenuConfirmationBody");
         const float width = list ? body.width - 18 * scale : (body.width - 8 * scale) / count - 6 * scale;
         Rect rect = modalRect("MenuConfirmationCancelButton");
-        if (list)
+        if (twoColumns)
+        {
+            const float width = (panel.width - 72 * scale - (columns - 1) * 12 * scale) / columns;
+            rect = {panel.x + 36 * scale + (i % columns) * (width + 12 * scale),
+                    panel.y + (GridTop + (i / columns) * gridRowPitch) * scale, width, (gridRowPitch - 8) * scale};
+        }
+        else if (list)
         {
             rect = {panel.x + (panel.width - width) / 2, panel.y + (133 + i * 25) * scale, width, 22 * scale};
         }
         else
         {
             rect.x += i * (width + 6 * scale);
+            rect.y += (bodyExtra + notesShift) * scale;
             rect.width = width;
         }
-        if (button("modal-" + std::to_string(index), rect, m_confirmation->choices[index],
-                   index == count - 1 && !list ? "button_primary" : "button_quiet"))
+        const bool hasIcon = index < int(m_confirmation->choiceIcons.size())
+            && !m_confirmation->choiceIcons[index].empty();
+        if (button("modal-" + std::to_string(index), rect, hasIcon ? "" : m_confirmation->choices[index],
+                   index == count - 1 && !list && !twoColumns ? "button_primary" : "button_quiet", true, false,
+                   m_confirmation->choiceFont))
         {
             selected = index;
+        }
+        if (hasIcon)
+        {
+            drawTexture(m_confirmation->choiceIcons[index],
+                        {rect.x + 8 * scale, rect.y + (rect.height - 28 * scale) / 2, 28 * scale, 28 * scale});
+            textInRect({rect.x + 44 * scale, rect.y, rect.width - 52 * scale, rect.height},
+                       m_confirmation->choices[index], m_confirmation->choiceFont, 13.8667f,
+                       pointerInside(rect) ? 0xffc0f0ffu : 0xffa4d1e8u);
         }
     }
     m_drawingConfirmation = false;

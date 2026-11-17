@@ -5,11 +5,13 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 
 namespace OpenYAMM::Game::GameplayUiSkin
 {
 namespace
 {
+constexpr float Pi = 3.14159265358979f;
 constexpr std::array<std::array<uint32_t, 3>, 3> HealthColors = {{
     {{0xacd69b, 0x80ad77, 0x315834}},
     {{0xead28c, 0xc7a557, 0x766031}},
@@ -59,14 +61,17 @@ std::optional<GameplayHudTextureHandle> healthMeterTexture(const GameplayScreenR
 void renderArc(GameplayScreenRuntime &context, const GameplayResolvedHudLayoutElement &rect,
     float strokeWidth, float startDegrees, float sweepDegrees, ArcMaterial material, float begin, float end)
 {
-    constexpr std::array<std::array<uint32_t, 3>, 9> Colors = {{
+    constexpr std::array<std::array<uint32_t, 3>, 12> Colors = {{
         HealthColors[0], HealthColors[1], HealthColors[2],
         {{0xabcfd8, 0x73a4b7, 0x2d596a}},
         {{0xb6a47b, 0x938666, 0x544d3d}},
         {{0x15201d, 0x0a1312, 0x080e0c}},
         {{0xc2ad80, 0x938666, 0x665b44}},
         {{0xffedbc, 0xf0dca3, 0xc6af77}},
-        {{0xf2d8ad, 0xe4c793, 0xa88651}}
+        {{0xf2d8ad, 0xe4c793, 0xa88651}},
+        {{0xa8f3ff, 0x4ad2f0, 0x166a8a}},
+        {{0x243a4a, 0x1a2934, 0x101a22}},
+        {{0xffffff, 0xd8f8ff, 0x90dcf0}}
     }};
     GameplayUiRuntime &runtime = context.gameplayUiRuntime();
     const std::string name = "__obsidian_arc_" + std::to_string(int(material));
@@ -108,6 +113,82 @@ void renderArc(GameplayScreenRuntime &context, const GameplayResolvedHudLayoutEl
         runtime.submitHudTexturedArc(texture->textureHandle, rect, strokeWidth * rect.scale,
             startDegrees, sweepDegrees, begin, end);
     }
+}
+
+void renderReservedArc(GameplayScreenRuntime &context, const GameplayResolvedHudLayoutElement &rect,
+    float strokeWidth, float startDegrees, float sweepDegrees, float begin, bool health)
+{
+    begin = std::clamp(begin, 0.0f, 1.0f);
+    if (begin >= 1 || rect.width <= 0 || rect.height <= 0)
+    {
+        return;
+    }
+    GameplayUiRuntime &runtime = context.gameplayUiRuntime();
+    const std::string name = health ? "__obsidian_reserved_hp__" : "__obsidian_reserved_sp__";
+    constexpr const char *pSignature = "reserved-hatch-v1";
+    std::optional<GameplayHudTextureHandle> texture = runtime.findCachedDynamicHudTexture(name, pSignature);
+    if (!texture)
+    {
+        // One square tile of two diagonal stripes over a dark base, with the arc materials' edge fade across the
+        // stroke; it wraps along the arc.
+        constexpr int Size = HudArcTextureHeight;
+        const uint32_t base = health ? 0x25301f : 0x1b2a36;
+        const uint32_t stripe = health ? 0x718a60 : 0x557a90;
+        std::vector<uint8_t> pixels(Size * Size * 4);
+        for (int y = 0; y < Size; ++y)
+        {
+            const float opacity = std::min(1.0f, std::min(y, Size - 1 - y) / HudArcEdgeTexels);
+            for (int x = 0; x < Size; ++x)
+            {
+                const uint32_t color = (x + y) % (Size / 2) < Size / 5 ? stripe : base;
+                const size_t pixel = size_t(y * Size + x) * 4;
+                for (int channel = 0; channel < 3; ++channel)
+                {
+                    pixels[pixel + channel] = static_cast<uint8_t>((color >> (channel * 8)) & 0xff);
+                }
+                pixels[pixel + 3] = static_cast<uint8_t>(255 * opacity);
+            }
+        }
+        texture = runtime.ensureDynamicHudTexture(name, Size, Size, pixels);
+        if (texture)
+        {
+            runtime.setDynamicHudTextureContentSignature(name, pSignature);
+        }
+    }
+    // The band's length on screen, so a tile spans one stroke width and the stripes stay at 45 degrees.
+    constexpr int Steps = 32;
+    float length = 0;
+    float previousX = 0;
+    float previousY = 0;
+    for (int step = 0; step <= Steps; ++step)
+    {
+        const float radians = (startDegrees + sweepDegrees * (begin + (1 - begin) * step / Steps)) * Pi / 180;
+        const float x = rect.width * 0.5f * std::cos(radians);
+        const float y = rect.height * 0.5f * std::sin(radians);
+        if (step > 0)
+        {
+            length += std::hypot(x - previousX, y - previousY);
+        }
+        previousX = x;
+        previousY = y;
+    }
+    const float stroke = strokeWidth * rect.scale;
+    if (texture)
+    {
+        runtime.submitHudTexturedArc(texture->textureHandle, rect, stroke, startDegrees, sweepDegrees, begin, 1,
+            std::max(1.0f, length / stroke));
+    }
+}
+
+void renderReservedMark(GameplayScreenRuntime &context, const GameplayResolvedHudLayoutElement &rect,
+    float strokeWidth, float startDegrees, float sweepDegrees, float at)
+{
+    // About 1.2 logical units along the arc, measured where the mark sits.
+    const float radians = (startDegrees + sweepDegrees * at) * Pi / 180;
+    const float radius = std::hypot(rect.width * 0.5f * std::sin(radians), rect.height * 0.5f * std::cos(radians));
+    const float span = radius > 0 ? 1.2f * rect.scale / (radius * std::abs(sweepDegrees) * Pi / 180) : 0;
+    renderArc(context, rect, strokeWidth * 1.6f, startDegrees, sweepDegrees, ArcMaterial::SelectedRim,
+        std::max(0.0f, at - span * 0.5f), std::min(1.0f, at + span * 0.5f));
 }
 
 GameplayResolvedHudLayoutElement scrollbarThumb(const GameplayResolvedHudLayoutElement &viewport,
@@ -164,7 +245,7 @@ void renderIconButton(GameplayScreenRuntime &context, const GameplayResolvedHudL
 }
 
 void renderButton(GameplayScreenRuntime &context, const std::string &id, int width, int height,
-    bool selected, bool enabled)
+    bool selected, bool enabled, const std::string *pLabel)
 {
     const UiLayoutManager::LayoutElement *pLayout = context.findHudLayoutElement(id);
     const std::optional<GameplayResolvedHudLayoutElement> rect =
@@ -192,9 +273,11 @@ void renderButton(GameplayScreenRuntime &context, const std::string &id, int wid
         labelRect.y += pressed ? rect->scale : 0.0f;
         context.renderLayoutLabel(label, labelRect, label.labelText, false);
     };
-    if (!pLayout->labelText.empty())
+    if (pLabel != nullptr || !pLayout->labelText.empty())
     {
-        drawLabel(*pLayout, *rect);
+        UiLayoutManager::LayoutElement labelled = *pLayout;
+        labelled.labelText = pLabel != nullptr ? *pLabel : pLayout->labelText;
+        drawLabel(labelled, *rect);
     }
     for (const std::string &childId : context.sortedHudLayoutIdsForScreen(pLayout->screen))
     {
@@ -220,7 +303,28 @@ void renderButton(GameplayScreenRuntime &context, const std::string &id, int wid
     }
 }
 
-void renderSurface(GameplayScreenRuntime &context, const GameplayResolvedHudLayoutElement &rect, uint8_t alpha)
+namespace
+{
+void appendQuad(std::vector<GameplayHudBatchQuad> &quads, bgfx::TextureHandle texture,
+    float x, float y, float width, float height, float u1 = 1.0f, float v1 = 1.0f)
+{
+    if (!bgfx::isValid(texture) || width <= 0.0f || height <= 0.0f)
+    {
+        return;
+    }
+    GameplayHudBatchQuad quad;
+    quad.textureHandle = texture;
+    quad.x = x;
+    quad.y = y;
+    quad.width = width;
+    quad.height = height;
+    quad.u1 = u1;
+    quad.v1 = v1;
+    quads.push_back(quad);
+}
+
+void appendSurface(GameplayScreenRuntime &context, std::vector<GameplayHudBatchQuad> &quads,
+    const GameplayResolvedHudLayoutElement &rect, uint8_t alpha)
 {
     const std::optional<GameplayHudTextureHandle> texture =
         context.gameplayUiRuntime().ensureHudTextureLoaded("obsidian_reading_surface");
@@ -238,77 +342,146 @@ void renderSurface(GameplayScreenRuntime &context, const GameplayResolvedHudLayo
         {
             const float w = std::min(tileWidth, rect.width - x);
             const float h = std::min(tileHeight, rect.height - y);
-            context.gameplayUiRuntime().submitHudTexturedQuad(surfaceTexture,
-                rect.x + x, rect.y + y, w, h, 0, 0, w / tileWidth, h / tileHeight);
+            appendQuad(quads, surfaceTexture, rect.x + x, rect.y + y, w, h, w / tileWidth, h / tileHeight);
         }
     }
+}
+}
+
+void renderSurface(GameplayScreenRuntime &context, const GameplayResolvedHudLayoutElement &rect, uint8_t alpha)
+{
+    std::vector<GameplayHudBatchQuad> quads;
+    appendSurface(context, quads, rect, alpha);
+    context.gameplayUiRuntime().submitHudQuadBatch(quads);
 }
 
 void renderPanel(GameplayScreenRuntime &context, const GameplayResolvedHudLayoutElement &rect,
     bool openBottom, float borderScale, uint8_t surfaceAlpha)
 {
+    // One batch: the surface tiles and frame pieces draw in order, one draw per run of a texture.
     const float corner = 30.933333f * rect.scale * borderScale;
     const float tile = 48.286179f * rect.scale * borderScale;
     const float inset = 8.533333f * rect.scale * borderScale;
-    renderSurface(context, {rect.x + inset, rect.y + inset,
-        rect.width - 2 * inset, rect.height - inset - (openBottom ? 1.6f * rect.scale : inset), rect.scale}, surfaceAlpha);
+    std::vector<GameplayHudBatchQuad> quads;
+    appendSurface(context, quads, {rect.x + inset, rect.y + inset, rect.width - 2 * inset,
+        rect.height - inset - (openBottom ? 1.6f * rect.scale : inset), rect.scale}, surfaceAlpha);
+    GameplayUiRuntime &runtime = context.gameplayUiRuntime();
+    const auto textureOf = [&](const char *pAsset) -> bgfx::TextureHandle
+    {
+        const std::optional<GameplayHudTextureHandle> texture = runtime.ensureHudTextureLoaded(pAsset);
+        return texture ? texture->textureHandle : bgfx::TextureHandle(BGFX_INVALID_HANDLE);
+    };
     const auto edge = [&](const char *pAsset, float x, float y, float length, bool vertical)
     {
-        const std::optional<GameplayHudTextureHandle> texture =
-            context.gameplayUiRuntime().ensureHudTextureLoaded(pAsset);
-        if (!texture)
-        {
-            return;
-        }
+        const bgfx::TextureHandle texture = textureOf(pAsset);
         for (float offset = 0; offset < length; offset += tile)
         {
             const float segment = std::min(tile, length - offset);
-            context.gameplayUiRuntime().submitHudTexturedQuad(texture->textureHandle,
-                x + (vertical ? 0 : offset), y + (vertical ? offset : 0),
+            appendQuad(quads, texture, x + (vertical ? 0 : offset), y + (vertical ? offset : 0),
                 vertical ? corner : segment, vertical ? segment : corner,
-                0, 0, vertical ? 1 : segment / tile, vertical ? segment / tile : 1);
+                vertical ? 1 : segment / tile, vertical ? segment / tile : 1);
         }
+    };
+    const auto cornerPiece = [&](const char *pAsset, float x, float y)
+    {
+        appendQuad(quads, textureOf(pAsset), x, y, corner, corner);
     };
     edge("obsidian_frame_top", rect.x + corner, rect.y, rect.width - 2 * corner, false);
     edge("obsidian_frame_left", rect.x, rect.y + corner,
         rect.height - (openBottom ? corner : 2 * corner), true);
     edge("obsidian_frame_right", rect.x + rect.width - corner, rect.y + corner,
         rect.height - (openBottom ? corner : 2 * corner), true);
-    renderTexture(context, "obsidian_frame_tl", {rect.x, rect.y, corner, corner, rect.scale});
-    renderTexture(context, "obsidian_frame_tr",
-        {rect.x + rect.width - corner, rect.y, corner, corner, rect.scale});
+    cornerPiece("obsidian_frame_tl", rect.x, rect.y);
+    cornerPiece("obsidian_frame_tr", rect.x + rect.width - corner, rect.y);
     if (!openBottom)
     {
         edge("obsidian_frame_bottom", rect.x + corner, rect.y + rect.height - corner,
             rect.width - 2 * corner, false);
-        renderTexture(context, "obsidian_frame_bl",
-            {rect.x, rect.y + rect.height - corner, corner, corner, rect.scale});
-        renderTexture(context, "obsidian_frame_br",
-            {rect.x + rect.width - corner, rect.y + rect.height - corner, corner, corner, rect.scale});
+        cornerPiece("obsidian_frame_bl", rect.x, rect.y + rect.height - corner);
+        cornerPiece("obsidian_frame_br", rect.x + rect.width - corner, rect.y + rect.height - corner);
     }
+    runtime.submitHudQuadBatch(quads);
+}
+
+namespace
+{
+// An end ornament of the party frame: its unchanged generated RGBA sprite, the registered foreground bounds (UVs; the
+// right ornament mirrors them) and its width over its height.
+struct PartyBasebarOrnament
+{
+    const char *pTexture = nullptr;
+    float u0 = 0;
+    float u1 = 0;
+    float v0 = 0;
+    float v1 = 0;
+    float widthPerHeight = 0;
+};
+
+constexpr PartyBasebarOrnament CompactOrnament = {
+    "obsidian_party_endcap_compact", 330.0f / 992, 722.0f / 992, 103.0f / 1585, 1429.0f / 1585, 0.293f};
+// The same ornament with a round socket carved for the potion and scroll buttons (level_generation/ui/
+// potion_scroll_popups_20261102, socket v2 "medallion boss"): the same rail and height, wider outward.
+constexpr PartyBasebarOrnament SocketOrnament = {
+    "obsidian_party_endcap_socket", 156.0f / 992, 745.0f / 992, 104.0f / 1586, 1430.0f / 1586, 589.0f / 1326};
+// The socket within the socket ornament's bounds: its centre (from the outer edge, and from the top) and radius.
+constexpr float SocketCentreX = 0.4066f;
+constexpr float SocketCentreY = 0.5004f;
+constexpr float SocketRadius = 0.1301f;
+
+const PartyBasebarOrnament &partyBasebarOrnament(GameplayScreenRuntime &context)
+{
+    return partyBasebarHasSockets(context) ? SocketOrnament : CompactOrnament;
+}
+}
+
+bool partyBasebarHasSockets(GameplayScreenRuntime &context)
+{
+    return context.settingsSnapshot().basebarItemButtons
+        && context.currentHudScreenState() == GameplayHudScreenState::Gameplay;
+}
+
+float partyBasebarLeft(GameplayScreenRuntime &context, const GameplayResolvedHudLayoutElement &rect)
+{
+    return rect.x + 7 * rect.scale - rect.height * partyBasebarOrnament(context).widthPerHeight;
+}
+
+PartyBasebarSocket partyBasebarSocket(const GameplayResolvedHudLayoutElement &rect, bool right)
+{
+    const float width = rect.height * SocketOrnament.widthPerHeight;
+    const float x = right ? rect.x + rect.width - 7 * rect.scale + width * (1.0f - SocketCentreX)
+                          : rect.x + 7 * rect.scale - width + width * SocketCentreX;
+    return {x, rect.y + rect.height * SocketCentreY, rect.height * SocketRadius};
 }
 
 void renderPartyBasebar(GameplayScreenRuntime &context, const GameplayResolvedHudLayoutElement &rect)
 {
     renderPanel(context, rect, false, 0.75f);
-    const std::optional<GameplayHudTextureHandle> ornament =
-        context.gameplayUiRuntime().ensureHudTextureLoaded("obsidian_party_endcap_compact");
-    if (!ornament)
+    const PartyBasebarOrnament &ornament = partyBasebarOrnament(context);
+    const std::optional<GameplayHudTextureHandle> texture =
+        context.gameplayUiRuntime().ensureHudTextureLoaded(ornament.pTexture);
+    if (!texture)
     {
         return;
     }
     const float height = rect.height;
-    const float width = height * 0.293f;
-    const float inset = 7 * rect.scale;
-    const float y = rect.y;
-    // Registered foreground bounds of the unchanged generated RGBA sprite; mirror only the UVs.
-    constexpr float U0 = 330.0f / 992;
-    constexpr float U1 = 722.0f / 992;
-    constexpr float V0 = 103.0f / 1585;
-    constexpr float V1 = 1429.0f / 1585;
-    context.gameplayUiRuntime().submitHudTexturedQuad(ornament->textureHandle,
-        rect.x + inset - width, y, width, height, U0, V0, U1, V1);
-    context.gameplayUiRuntime().submitHudTexturedQuad(ornament->textureHandle,
-        rect.x + rect.width - inset, y, width, height, U1, V0, U0, V1);
+    const float width = height * ornament.widthPerHeight;
+    std::vector<GameplayHudBatchQuad> ornaments(2);
+    for (GameplayHudBatchQuad &quad : ornaments)
+    {
+        quad.textureHandle = texture->textureHandle;
+        quad.y = rect.y;
+        quad.width = width;
+        quad.height = height;
+        quad.v0 = ornament.v0;
+        quad.v1 = ornament.v1;
+    }
+    // The rails meet the frame where the compact ornament's did; a wider ornament grows outward.
+    ornaments[0].x = partyBasebarLeft(context, rect);
+    ornaments[0].u0 = ornament.u0;
+    ornaments[0].u1 = ornament.u1;
+    ornaments[1].x = rect.x + rect.width - 7 * rect.scale;
+    ornaments[1].u0 = ornament.u1;
+    ornaments[1].u1 = ornament.u0;
+    context.gameplayUiRuntime().submitHudQuadBatch(ornaments);
 }
 }

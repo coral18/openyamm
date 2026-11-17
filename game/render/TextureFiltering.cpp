@@ -5,6 +5,11 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
+#include <memory>
+#include <stdexcept>
+#include <string>
+#include <utility>
 #include <vector>
 
 namespace OpenYAMM::Game
@@ -16,10 +21,12 @@ TextureFilteringConfig g_textureFilteringConfig = {};
 
 bool profileUsesMipmaps(TextureFilterProfile profile)
 {
+    // Smooth text atlases are rasterized at four times the logical size; without mips, small labels alias.
     return profile == TextureFilterProfile::Terrain
         || profile == TextureFilterProfile::BModel
         || profile == TextureFilterProfile::Sky
-        || profile == TextureFilterProfile::UiIllustration;
+        || profile == TextureFilterProfile::UiIllustration
+        || profile == TextureFilterProfile::SmoothText;
 }
 
 bool profileNeedsTransparentEdgeBleed(TextureFilterProfile profile)
@@ -108,144 +115,46 @@ std::vector<uint8_t> convertBgraToRgba(const uint8_t *pPixels, uint32_t pixelByt
     return rgbaPixels;
 }
 
-bool hasMixedTransparency(const uint8_t *pPixels, size_t pixelCount)
+// Hands the pixels to bgfx instead of copying them; bgfx frees them once uploaded. Large atlases spend more time in
+// the copy than in their mip chain.
+const bgfx::Memory *takeBgraTextureUploadMemory(std::vector<uint8_t> &&pixels)
 {
-    bool foundTransparent = false;
-    bool foundOpaque = false;
-
-    for (size_t pixelIndex = 0; pixelIndex < pixelCount; ++pixelIndex)
+    if (pixels.empty())
     {
-        const uint8_t alpha = pPixels[pixelIndex * 4 + 3];
-
-        if (alpha == 0)
-        {
-            foundTransparent = true;
-        }
-        else
-        {
-            foundOpaque = true;
-        }
-
-        if (foundTransparent && foundOpaque)
-        {
-            return true;
-        }
+        return nullptr;
     }
 
-    return false;
+#if defined(__ANDROID__)
+    std::vector<uint8_t> rgbaPixels = convertBgraToRgba(pixels.data(), static_cast<uint32_t>(pixels.size()));
+    pixels = std::move(rgbaPixels);
+#endif
+    std::unique_ptr<std::vector<uint8_t>> pOwned = std::make_unique<std::vector<uint8_t>>(std::move(pixels));
+    const bgfx::Memory *pMemory = bgfx::makeRef(
+        pOwned->data(),
+        static_cast<uint32_t>(pOwned->size()),
+        [](void *, void *pUserData)
+        {
+            std::unique_ptr<std::vector<uint8_t>>(static_cast<std::vector<uint8_t> *>(pUserData));
+        },
+        pOwned.get());
+    pOwned.release();
+    return pMemory;
 }
 
-void bleedTransparentEdgeColors(uint16_t width, uint16_t height, std::vector<uint8_t> &pixels)
-{
-    const size_t pixelCount = static_cast<size_t>(width) * static_cast<size_t>(height);
-
-    if (pixelCount == 0 || pixels.size() < pixelCount * 4)
-    {
-        return;
-    }
-
-    std::vector<int32_t> owner(pixelCount, -1);
-    std::vector<uint32_t> queue;
-    queue.reserve(pixelCount);
-
-    for (uint32_t pixelIndex = 0; pixelIndex < pixelCount; ++pixelIndex)
-    {
-        if (pixels[static_cast<size_t>(pixelIndex) * 4 + 3] != 0)
-        {
-            owner[pixelIndex] = static_cast<int32_t>(pixelIndex);
-            queue.push_back(pixelIndex);
-        }
-    }
-
-    size_t queueHead = 0;
-
-    while (queueHead < queue.size())
-    {
-        const uint32_t currentIndex = queue[queueHead++];
-        const uint32_t x = currentIndex % width;
-        const uint32_t y = currentIndex / width;
-
-        for (int dy = -1; dy <= 1; ++dy)
-        {
-            for (int dx = -1; dx <= 1; ++dx)
-            {
-                if (dx == 0 && dy == 0)
-                {
-                    continue;
-                }
-
-                const int neighborX = static_cast<int>(x) + dx;
-                const int neighborY = static_cast<int>(y) + dy;
-
-                if (neighborX < 0
-                    || neighborY < 0
-                    || neighborX >= static_cast<int>(width)
-                    || neighborY >= static_cast<int>(height))
-                {
-                    continue;
-                }
-
-                const uint32_t neighborIndex =
-                    static_cast<uint32_t>(neighborY) * static_cast<uint32_t>(width) + static_cast<uint32_t>(neighborX);
-                const size_t neighborOffset = static_cast<size_t>(neighborIndex) * 4;
-
-                if (pixels[neighborOffset + 3] != 0 || owner[neighborIndex] != -1)
-                {
-                    continue;
-                }
-
-                owner[neighborIndex] = owner[currentIndex];
-                queue.push_back(neighborIndex);
-            }
-        }
-    }
-
-    for (size_t pixelIndex = 0; pixelIndex < pixelCount; ++pixelIndex)
-    {
-        const size_t pixelOffset = pixelIndex * 4;
-
-        if (pixels[pixelOffset + 3] != 0)
-        {
-            continue;
-        }
-
-        const int32_t sourceIndex = owner[pixelIndex];
-
-        if (sourceIndex < 0)
-        {
-            continue;
-        }
-
-        const size_t sourceOffset = static_cast<size_t>(sourceIndex) * 4;
-        pixels[pixelOffset + 0] = pixels[sourceOffset + 0];
-        pixels[pixelOffset + 1] = pixels[sourceOffset + 1];
-        pixels[pixelOffset + 2] = pixels[sourceOffset + 2];
-    }
-}
-
+// Consumes the levels' pixels once the texture exists.
 bgfx::TextureHandle createBgraTextureWithMipChain(
-    uint16_t width,
-    uint16_t height,
-    const uint8_t *pPixels,
-    uint32_t pixelBytes,
+    std::vector<BgraMipLevel> &mipLevels,
     TextureFilterProfile profile,
     uint64_t extraFlags)
 {
-    if (pPixels == nullptr || pixelBytes == 0)
-    {
-        return BGFX_INVALID_HANDLE;
-    }
-
-    const std::vector<BgraMipLevel> mipLevels = prepareBgraMipChain(width, height, std::span<const uint8_t>(pPixels, pixelBytes));
-
     if (mipLevels.empty())
     {
         return BGFX_INVALID_HANDLE;
     }
 
     const bgfx::TextureHandle textureHandle = bgfx::createTexture2D(
-        width,
-        height,
+        mipLevels.front().width,
+        mipLevels.front().height,
         true,
         1,
         bgraTextureUploadFormat(),
@@ -258,7 +167,7 @@ bgfx::TextureHandle createBgraTextureWithMipChain(
 
     for (uint8_t mipLevelIndex = 0; mipLevelIndex < mipLevels.size(); ++mipLevelIndex)
     {
-        const BgraMipLevel &mipLevel = mipLevels[mipLevelIndex];
+        BgraMipLevel &mipLevel = mipLevels[mipLevelIndex];
         bgfx::updateTexture2D(
             textureHandle,
             0,
@@ -267,7 +176,7 @@ bgfx::TextureHandle createBgraTextureWithMipChain(
             0,
             mipLevel.width,
             mipLevel.height,
-            copyBgraTextureUploadMemory(mipLevel.pixels.data(), static_cast<uint32_t>(mipLevel.pixels.size())));
+            takeBgraTextureUploadMemory(std::move(mipLevel.pixels)));
     }
 
     return textureHandle;
@@ -351,12 +260,12 @@ bool prepareBgraTexturePixelsForUploadInPlace(
     if (!profileNeedsTransparentEdgeBleed(profile)
         || pixelCount == 0
         || pixels.size() < expectedPixelBytes
-        || !hasMixedTransparency(pixels.data(), pixelCount))
+        || !Engine::hasMixedBgraTransparency(pixels.data(), pixelCount))
     {
         return false;
     }
 
-    bleedTransparentEdgeColors(width, height, pixels);
+    Engine::bleedTransparentBgraEdgeColors(width, height, pixels);
     return true;
 }
 
@@ -391,10 +300,10 @@ bgfx::TextureHandle createBgraTexture2D(
     {
         const size_t pixelCount = static_cast<size_t>(width) * static_cast<size_t>(height);
 
-        if (pixelBytes >= pixelCount * 4 && hasMixedTransparency(pPixels, pixelCount))
+        if (pixelBytes >= pixelCount * 4 && Engine::hasMixedBgraTransparency(pPixels, pixelCount))
         {
             uploadPixels.assign(pPixels, pPixels + pixelBytes);
-            bleedTransparentEdgeColors(width, height, uploadPixels);
+            Engine::bleedTransparentBgraEdgeColors(width, height, uploadPixels);
         }
     }
 
@@ -402,8 +311,9 @@ bgfx::TextureHandle createBgraTexture2D(
 
     if (profileUsesMipmaps(profile))
     {
-        const bgfx::TextureHandle mipTextureHandle =
-            createBgraTextureWithMipChain(width, height, pUploadPixels, pixelBytes, profile, extraFlags);
+        std::vector<BgraMipLevel> mipLevels =
+            prepareBgraMipChain(width, height, std::span<const uint8_t>(pUploadPixels, pixelBytes));
+        const bgfx::TextureHandle mipTextureHandle = createBgraTextureWithMipChain(mipLevels, profile, extraFlags);
 
         if (bgfx::isValid(mipTextureHandle))
         {
@@ -419,6 +329,93 @@ bgfx::TextureHandle createBgraTexture2D(
         bgraTextureUploadFormat(),
         textureFilterSamplerFlags(profile) | extraFlags,
         copyBgraTextureUploadMemory(pUploadPixels, pixelBytes));
+}
+
+PreparedBgraTexture prepareBgraTexture2D(
+    uint16_t width,
+    uint16_t height,
+    const uint8_t *pPixels,
+    uint32_t pixelBytes,
+    TextureFilterProfile profile,
+    BgraTexturePixelPreparation pixelPreparation)
+{
+    if (pPixels == nullptr || pixelBytes == 0)
+    {
+        return {};
+    }
+
+    return prepareBgraTexture2D(
+        width, height, std::vector<uint8_t>(pPixels, pPixels + pixelBytes), profile, pixelPreparation);
+}
+
+PreparedBgraTexture prepareBgraTexture2D(
+    uint16_t width,
+    uint16_t height,
+    std::vector<uint8_t> pixels,
+    TextureFilterProfile profile,
+    BgraTexturePixelPreparation pixelPreparation)
+{
+    PreparedBgraTexture prepared;
+
+    if (pixels.empty())
+    {
+        return prepared;
+    }
+
+    if (pixelPreparation == BgraTexturePixelPreparation::Required)
+    {
+        prepareBgraTexturePixelsForUploadInPlace(width, height, pixels, profile);
+    }
+
+    if (profileUsesMipmaps(profile))
+    {
+        prepared.levels = prepareBgraMipChain(width, height, std::move(pixels));
+        prepared.mips = !prepared.levels.empty();
+    }
+
+    if (prepared.levels.empty())
+    {
+        prepared.levels.push_back({width, height, std::move(pixels)});
+    }
+
+    return prepared;
+}
+
+bgfx::TextureHandle createPreparedBgraTexture2D(
+    const PreparedBgraTexture &prepared, TextureFilterProfile profile, uint64_t extraFlags)
+{
+    PreparedBgraTexture copy = prepared;
+    return createPreparedBgraTexture2D(std::move(copy), profile, extraFlags);
+}
+
+bgfx::TextureHandle createPreparedBgraTexture2D(
+    PreparedBgraTexture &&prepared, TextureFilterProfile profile, uint64_t extraFlags)
+{
+    if (prepared.levels.empty())
+    {
+        return BGFX_INVALID_HANDLE;
+    }
+
+    if (prepared.mips)
+    {
+        const bgfx::TextureHandle mipTextureHandle =
+            createBgraTextureWithMipChain(prepared.levels, profile, extraFlags);
+
+        if (bgfx::isValid(mipTextureHandle))
+        {
+            return mipTextureHandle;
+        }
+    }
+
+    BgraMipLevel &top = prepared.levels.front();
+    return bgfx::createTexture2D(
+        top.width,
+        top.height,
+        false,
+        1,
+        bgraTextureUploadFormat(),
+        textureFilterSamplerFlags(profile) | extraFlags,
+        takeBgraTextureUploadMemory(std::move(top.pixels)));
 }
 
 void updateBgraTextureArrayLayer(
@@ -448,6 +445,74 @@ void updateBgraTextureArrayLayer(
     {
         updateBgraTextureArrayLayer(texture, layer, prepareBgraMipChain(width, height, pixels, alphaCutoff));
     }
+}
+
+namespace
+{
+bgfx::TextureFormat::Enum checkedCookedTextureFormat(const Engine::CookedTexture &texture)
+{
+    const bgfx::TextureFormat::Enum format = Engine::textureBlockFormat(texture.codec);
+    if ((bgfx::getCaps()->formats[format] & BGFX_CAPS_FORMAT_TEXTURE_2D) == 0)
+    {
+        throw std::runtime_error("The GPU cannot sample " + std::string(Engine::textureBlockCodecName(texture.codec))
+            + " cooked textures; install the asset package built for this platform's texture profile");
+    }
+    if (texture.width > bgfx::getCaps()->limits.maxTextureSize
+        || texture.height > bgfx::getCaps()->limits.maxTextureSize)
+    {
+        throw std::runtime_error("Cooked texture exceeds the GPU size limit");
+    }
+    return format;
+}
+}
+
+bgfx::TextureHandle createCookedTexture2D(
+    const Engine::CookedTexture &texture, TextureFilterProfile profile, uint64_t extraFlags)
+{
+    const bgfx::TextureFormat::Enum format = checkedCookedTextureFormat(texture);
+    return bgfx::createTexture2D(texture.width, texture.height, texture.levels > 1, 1, format,
+        textureFilterSamplerFlags(profile) | extraFlags,
+        bgfx::copy(texture.blocks.data(), uint32_t(texture.blocks.size())));
+}
+
+bgfx::TextureHandle createCookedTexture2DArray(
+    std::span<const Engine::CookedTexture *const> layers, TextureFilterProfile profile)
+{
+    if (layers.empty())
+    {
+        return BGFX_INVALID_HANDLE;
+    }
+    const Engine::CookedTexture &first = *layers.front();
+    const bgfx::TextureFormat::Enum format = checkedCookedTextureFormat(first);
+    // bgfx array memory: each layer's whole mip chain in turn.
+    const bgfx::Memory *pMemory = bgfx::alloc(uint32_t(first.blocks.size() * layers.size()));
+    uint8_t *pTarget = pMemory->data;
+    for (const Engine::CookedTexture *pLayer : layers)
+    {
+        if (pLayer->codec != first.codec || pLayer->width != first.width || pLayer->height != first.height
+            || pLayer->levels != first.levels)
+        {
+            throw std::invalid_argument("Cooked array layers differ in codec, size or mips");
+        }
+        std::memcpy(pTarget, pLayer->blocks.data(), pLayer->blocks.size());
+        pTarget += pLayer->blocks.size();
+    }
+    return bgfx::createTexture2D(first.width, first.height, first.levels > 1, uint16_t(layers.size()), format,
+        textureFilterSamplerFlags(profile), pMemory);
+}
+
+bgfx::TextureHandle createSurfaceTexture2D(
+    uint16_t width,
+    uint16_t height,
+    const std::vector<uint8_t> &pixels,
+    const Engine::CookedTexture *pCookedTexture,
+    TextureFilterProfile profile)
+{
+    if (pCookedTexture != nullptr)
+    {
+        return createCookedTexture2D(*pCookedTexture, profile);
+    }
+    return createBgraTexture2D(width, height, pixels.data(), uint32_t(pixels.size()), profile);
 }
 
 bgfx::TextureHandle createEmptyBgraTexture2D(

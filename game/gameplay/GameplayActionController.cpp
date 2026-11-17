@@ -1,17 +1,35 @@
 #include "game/gameplay/GameplayActionController.h"
+#include "engine/Localization.h"
 
 #include "game/audio/GameAudioSystem.h"
+#include "game/gameplay/CorpseLootRuntime.h"
+#include "game/gameplay/GameplayActorHitFeedback.h"
 #include "game/gameplay/GameplayFxService.h"
+#include "game/gameplay/GameplayProjectileService.h"
 #include "game/gameplay/GameplayScreenRuntime.h"
+#include "game/gameplay/GameplayItemService.h"
 #include "game/gameplay/GameplaySpellService.h"
+#include "game/gameplay/MeleeContactEffects.h"
 #include "game/gameplay/TurnBasedCombatRuntime.h"
+#include "game/items/InventoryItemUseRuntime.h"
 #include "game/items/ItemEnchantRuntime.h"
+#include "game/items/PotionUpkeep.h"
+#include "game/mm9/Mm9HirelingCombat.h"
+#include "game/mm9/Mm9HirelingTable.h"
 #include "game/party/PartySpellSystem.h"
+#include "game/party/SkillData.h"
+#include "game/party/SpellIds.h"
+#include "game/party/WorldSpells.h"
+#include "game/rules/GameRules.h"
+#include "game/rules/SoloTalents.h"
 #include "game/StringUtils.h"
 #include "game/tables/ItemTable.h"
+#include "game/tables/MergedBaseTables.h"
+#include "game/tables/MonsterProjectileTable.h"
 #include "game/tables/MonsterTable.h"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <limits>
 #include <random>
@@ -26,11 +44,23 @@ constexpr float DragonBreathSourceHeight = 96.0f;
 constexpr float PartyMemberProjectileLateralSpacing = 28.0f;
 constexpr float ProjectileRightVectorEpsilon = 0.0001f;
 constexpr float MeleeContactNormalEpsilon = 0.0001f;
+// A blow below this fraction of the target's maximum HP glances; at or above the crushing fraction (or a kill or
+// critical damage) it crushes.
+constexpr float MeleeGlancingDamageFraction = 0.06f;
+constexpr float MeleeCrushingDamageFraction = 0.3f;
+// The camera kick on a critical or killing melee blow, about 1.5 degrees.
+constexpr float MeleeCameraKickRadians = 0.026f;
+// A solo dragon's breath: its source this far in front of the eye on the ray through the mouth on screen (inside the
+// party's collision radius, so it never starts beyond a wall), and the view's upward kick as it leaves, about 2 degrees.
+constexpr float BreathCameraKickRadians = 0.035f;
+// Fireball's explosion, where a Carnage arrow strikes.
+constexpr uint32_t FireballExplosionObjectId = 1051;
 
 void resetQuickCastRepeatState(GameplayScreenState::QuickSpellState &quickSpellState)
 {
     quickSpellState.castRepeatCooldownSeconds = 0.0f;
     quickSpellState.castLatch = false;
+    quickSpellState.castRepeating = false;
     quickSpellState.readyMemberAvailableWhileHeld = false;
 }
 
@@ -57,7 +87,7 @@ GameplayActionController::WorldPoint actorRangedTargetPoint(
     return GameplayActionController::WorldPoint{
         .x = actor.position.x,
         .y = actor.position.y,
-        .z = actor.position.z + std::max(48.0f, static_cast<float>(actor.height) * 0.6f),
+        .z = actor.position.z + actor.targetHeight,
     };
 }
 
@@ -70,23 +100,18 @@ GameplayWorldPoint toRuntimeWorldPoint(const GameplayActionController::WorldPoin
     };
 }
 
-void queueMeleeHitBloodEffect(
+struct MeleeContact
+{
+    GameplayActionController::WorldPoint point = {};
+    GameplayActionController::WorldPoint normal = {};
+};
+
+// Where the blow lands: the crosshair hit on the target, else the world's visual contact point, else the target's body
+// surface facing the party. The normal points outward from the target's centre.
+std::optional<MeleeContact> resolveMeleeContact(
     const GameplayActionController::PartyAttackConfig &config,
     const GameplayActionController::PartyAttackActorFacts &target)
 {
-    if (config.pRuntime == nullptr
-        || !config.pRuntime->settingsSnapshot().meleeHitBloodEffects
-        || config.pMonsterTable == nullptr)
-    {
-        return;
-    }
-
-    const MonsterTable::MonsterStatsEntry *pStats = config.pMonsterTable->findStatsById(target.monsterId);
-    if (pStats == nullptr || !pStats->bloodSplatOnDeath)
-    {
-        return;
-    }
-
     const GameplayActionController::WorldPoint center = {
         .x = target.position.x,
         .y = target.position.y,
@@ -133,7 +158,7 @@ void queueMeleeHitBloodEffect(
     }
     if (!std::isfinite(normalLength) || normalLength <= MeleeContactNormalEpsilon)
     {
-        return;
+        return std::nullopt;
     }
     normal.x /= normalLength;
     normal.y /= normalLength;
@@ -147,9 +172,208 @@ void queueMeleeHitBloodEffect(
         contact.z += normal.z * contactRadius;
     }
 
-    config.pRuntime->fxService().queueMeleeHitBloodEffect(
-        {contact.x, contact.y, contact.z},
-        {normal.x, normal.y, normal.z});
+    return MeleeContact{contact, normal};
+}
+
+// The struck material's contact effect (blood, sparks, chips, drops) on the contact point, out of the body, more of it
+// for a harder blow. Blood and gore follow the blood setting, the rest the hit effects setting.
+void queueMeleeContactParticles(
+    const GameplayActionController::PartyAttackConfig &config,
+    const GameplayActionController::PartyAttackActorFacts &target,
+    const MeleeContact &contact,
+    MeleeHitStrength strength)
+{
+    if (config.pRuntime == nullptr || config.pMonsterTable == nullptr)
+    {
+        return;
+    }
+
+    const MonsterTable::MeleeHitMaterial *pMaterial = config.pMonsterTable->findMeleeHitMaterial(target.monsterId);
+    const GameSettings &settings = config.pRuntime->settingsSnapshot();
+
+    if (pMaterial == nullptr
+        || pMaterial->contactEffectId.empty()
+        || !(pMaterial->blood ? settings.meleeHitBloodEffects : settings.meleeHitEffects))
+    {
+        return;
+    }
+
+    config.pRuntime->fxService().queueSurfaceEffect(
+        meleeContactEffectVariant(pMaterial->contactEffectId, strength),
+        {contact.point.x, contact.point.y, contact.point.z},
+        {contact.normal.x, contact.normal.y, contact.normal.z},
+        meleeContactParticleScale(static_cast<float>(target.height)));
+}
+
+MeleeHitStrength resolveMeleeHitStrength(
+    const GameplayActionController::PartyAttackActorFacts &target,
+    const CharacterAttackResult &attack,
+    int appliedDamage,
+    bool killed)
+{
+    const float damageFraction = target.maxHp > 0
+        ? static_cast<float>(appliedDamage) / static_cast<float>(target.maxHp) : 1.0f;
+
+    if (killed || attack.criticalDamage || damageFraction >= MeleeCrushingDamageFraction)
+    {
+        return MeleeHitStrength::Crushing;
+    }
+
+    return damageFraction < MeleeGlancingDamageFraction ? MeleeHitStrength::Glancing : MeleeHitStrength::Normal;
+}
+
+// Where and how the attacker's blow is drawn over the contact point: the weapon's class and element, from the
+// attacker's side of the party. Empty when the blow cannot face the camera.
+std::optional<MeleeContactEffectPlacement> placeMeleeBlow(
+    const GameplayActionController::PartyAttackConfig &config,
+    const Character &attacker,
+    size_t attackerIndex,
+    const GameplayActionController::PartyAttackActorFacts &target,
+    const MeleeContact &contact,
+    MeleeHitStrength strength,
+    bool missed)
+{
+    const ItemDefinition *pWeapon = config.pItemTable != nullptr && attacker.equipment.mainHand != 0
+            && !attacker.equipmentRuntime.mainHand.broken
+        ? config.pItemTable->get(attacker.equipment.mainHand) : nullptr;
+    std::mt19937 rng(config.randomSeed
+        ^ static_cast<uint32_t>((target.actorIndex + 1) * 2246822519u)
+        ^ static_cast<uint32_t>((attackerIndex + 1) * 3266489917u));
+    std::uniform_real_distribution<float> variation(-1.0f, 1.0f);
+
+    MeleeContactEffectInput input;
+    // A dragon (who holds no weapon) rakes with its claws (devdocs/solo_action/DRAGON.md).
+    input.weaponClass = gameRulesFor(config.pParty).classes.isDragon(attacker)
+        ? MeleeWeaponClass::Claw
+        : meleeWeaponClassForSkill(canonicalSkillName(pWeapon != nullptr ? pWeapon->skillGroup : "Unarmed"));
+    input.strength = strength;
+    input.missed = missed;
+    ElementalDamageBonuses weaponElements = ItemEnchantRuntime::characterAttackElementalDamageRange(
+        attacker,
+        CharacterAttackMode::Melee,
+        config.pItemTable,
+        config.pSpecialItemEnchantTable).maximum;
+    weaponElements += ItemEnchantRuntime::characterWeaponDamageElements(
+        attacker, CharacterAttackMode::Melee, config.pItemTable);
+    input.elements = meleeWeaponElementsFor(weaponElements);
+    input.contact = {contact.point.x, contact.point.y, contact.point.z};
+    input.viewer = {config.rangedSource.x, config.rangedSource.y, config.rangedSource.z};
+
+    // The camera from the attack's view matrix (bx column-major rows: right, up, back; translation in 12 to 14).
+    const std::array<float, 16> &view = config.fallbackQuery.viewMatrix;
+    const std::array<float, 3> cameraRight = {view[0], view[4], view[8]};
+    const std::array<float, 3> cameraUp = {view[1], view[5], view[9]};
+    const std::array<float, 3> cameraBack = {view[2], view[6], view[10]};
+
+    if (std::abs(cameraRight[0] * cameraRight[0] + cameraRight[1] * cameraRight[1] + cameraRight[2] * cameraRight[2]
+            - 1.0f) < 0.01f)
+    {
+        for (size_t axis = 0; axis < 3; ++axis)
+        {
+            input.viewer[axis] =
+                -(view[12] * cameraRight[axis] + view[13] * cameraUp[axis] + view[14] * cameraBack[axis]);
+        }
+        input.screenRight = cameraRight;
+        input.screenUp = cameraUp;
+    }
+    input.memberIndex = attackerIndex;
+    input.memberCount = config.pParty != nullptr ? config.pParty->memberCount() : 1;
+    input.targetHeight = static_cast<float>(target.height);
+    input.twoHanded = pWeapon != nullptr
+        && (pWeapon->equipStat == "Weapon2" || (pWeapon->equipStat == "Weapon1or2" && attacker.equipment.offHand == 0));
+    input.variation = variation(rng);
+    input.blowDirection = config.blowScreenDirection;
+    return buildMeleeContactEffect(input);
+}
+
+// The blow's effect and its element accents, when hit effects are on.
+void queueMeleeBlowEffects(
+    const GameplayActionController::PartyAttackConfig &config,
+    const MeleeContactEffectPlacement &placement)
+{
+    if (config.pRuntime == nullptr || !config.pRuntime->settingsSnapshot().meleeHitEffects)
+    {
+        return;
+    }
+
+    GameplayFxService &fxService = config.pRuntime->fxService();
+    fxService.queueWorldEffect(placement.effectId, placement.position, placement.rotation, placement.scale);
+
+    for (const std::string &accentEffectId : placement.accentEffectIds)
+    {
+        fxService.queueWorldEffect(accentEffectId, placement.position, placement.rotation, placement.scale);
+    }
+}
+
+// A small turn of the view along a critical or killing blow, when the camera kick is on.
+void kickCameraAlongMeleeBlow(
+    const GameplayActionController::PartyAttackConfig &config,
+    const MeleeContactEffectPlacement &placement)
+{
+    if (config.pRuntime == nullptr
+        || config.pWorldRuntime == nullptr
+        || !config.pRuntime->settingsSnapshot().meleeCameraKick)
+    {
+        return;
+    }
+
+    config.pWorldRuntime->actorHitFeedback().triggerCameraKick(
+        placement.blowScreenDirection[0],
+        placement.blowScreenDirection[1],
+        MeleeCameraKickRadians);
+}
+
+// Impact sound of the struck material, then an optional flash and a hitstop on the target, scaled by the blow's
+// strength.
+void presentMeleeHitFeedback(
+    const GameplayActionController::PartyAttackConfig &config,
+    const GameplayActionController::PartyAttackActorFacts &target,
+    const MeleeContact &contact,
+    MeleeHitStrength strength)
+{
+    if (config.pRuntime == nullptr
+        || config.pWorldRuntime == nullptr
+        || !config.pRuntime->settingsSnapshot().meleeHitFeedback)
+    {
+        return;
+    }
+
+    const MonsterTable::MeleeHitMaterial *pMaterial =
+        config.pMonsterTable != nullptr ? config.pMonsterTable->findMeleeHitMaterial(target.monsterId) : nullptr;
+    GameAudioSystem *pAudioSystem = config.pRuntime->audioSystem();
+
+    if (pMaterial != nullptr && pAudioSystem != nullptr)
+    {
+        const std::string &soundPath = pMaterial->impactSoundPaths[static_cast<size_t>(strength)];
+
+        if (!soundPath.empty())
+        {
+            pAudioSystem->playAssetInstance(
+                soundPath,
+                GameAudioSystem::PlaybackGroup::World,
+                GameAudioSystem::WorldPosition{contact.point.x, contact.point.y, contact.point.z},
+                false);
+        }
+    }
+
+    struct HitFeedbackTuning
+    {
+        float flashSeconds;
+        float flashPeak;
+        float hitstopSeconds;
+    };
+    static constexpr std::array<HitFeedbackTuning, 3> TuningByStrength = {{
+        {0.07f, 0.12f, 0.0f},
+        {0.09f, 0.18f, 0.05f},
+        {0.12f, 0.25f, 0.09f},
+    }};
+    const HitFeedbackTuning &tuning = TuningByStrength[static_cast<size_t>(strength)];
+    const bool flash = config.pRuntime->settingsSnapshot().meleeHitFlash;
+    config.pWorldRuntime->actorHitFeedback().trigger(
+        target.actorIndex,
+        flash ? tuning.flashSeconds : 0.0f,
+        flash ? tuning.flashPeak : 0.0f,
+        tuning.hitstopSeconds);
 }
 
 float partyMemberProjectileLateralOffset(size_t memberIndex, size_t memberCount)
@@ -216,9 +440,11 @@ GameplayActionController::WorldPoint dragonBreathSourcePoint(
 
 CharacterAttackMode choosePartyAttackMode(
     const CharacterAttackProfile &profile,
-    bool targetInMeleeRange)
+    bool targetInMeleeRange,
+    bool eyeUnderWater)
 {
-    if (profile.hasDragonBreath && profile.rangedAttackBonus.has_value())
+    // A dragon bites a target in melee range and breathes at anything further.
+    if (profile.hasDragonBreath && profile.rangedAttackBonus.has_value() && !targetInMeleeRange)
     {
         return CharacterAttackMode::DragonBreath;
     }
@@ -238,12 +464,33 @@ CharacterAttackMode choosePartyAttackMode(
         return CharacterAttackMode::Melee;
     }
 
-    if (profile.hasBow && profile.rangedAttackBonus.has_value())
+    // No bow, crossbow or thrown weapon is fired with the eye under a scene water volume (MM9 object.lto 0x100b3ede).
+    if (profile.hasBow && profile.rangedAttackBonus.has_value() && !eyeUnderWater)
     {
         return CharacterAttackMode::Bow;
     }
 
     return CharacterAttackMode::Melee;
+}
+
+// Energy Blades Grandmaster: the hit may cut a raised shield to a share of what is left before it lands
+// (MonsterShieldTable::overloadRules). Only rolls against a raised shield, so other targets keep their dice.
+void tryOverloadActorShield(const GameplayActionController::PartyAttackConfig &config, size_t actorIndex,
+    std::mt19937 &rng, std::optional<float> chance = std::nullopt)
+{
+    GameplayActorShields *pShields = config.pWorldRuntime->actorShields();
+
+    if (pShields == nullptr || pShields->table() == nullptr || pShields->shieldPoints(actorIndex) <= 0.0f)
+    {
+        return;
+    }
+
+    const ShieldOverloadRules &rules = pShields->table()->overloadRules();
+
+    if (std::uniform_real_distribution<float>(0.0f, 1.0f)(rng) < chance.value_or(rules.chance))
+    {
+        pShields->cutRaisedShield(actorIndex, rules.remainingFraction);
+    }
 }
 
 CharacterAttackResult buildUntargetedMeleeAttack(const CharacterAttackProfile &profile)
@@ -254,6 +501,7 @@ CharacterAttackResult buildUntargetedMeleeAttack(const CharacterAttackProfile &p
     attack.hit = false;
     attack.attackBonus = profile.meleeAttackBonus;
     attack.recoverySeconds = profile.meleeRecoverySeconds;
+    attack.shieldTier = profile.meleeShieldTier;
     attack.attackSoundHook = "melee_swing";
     attack.voiceHook = "attack";
     return attack;
@@ -290,7 +538,9 @@ CharacterAttackResult buildRangedReleaseAttack(
     attack.skillLevel = profile.rangedSkillLevel;
     attack.skillMastery = profile.rangedSkillMastery;
     attack.projectileCount = profile.rangedProjectileCount;
+    attack.projectileSpreadArcRadians = profile.rangedSpreadArcRadians;
     attack.spellId = profile.rangedSpellId;
+    attack.shieldTier = profile.rangedShieldTier;
     attack.attackSoundHook = "wand_cast";
 
     if (mode == CharacterAttackMode::Bow)
@@ -299,7 +549,7 @@ CharacterAttackResult buildRangedReleaseAttack(
     }
     else if (mode == CharacterAttackMode::Blaster)
     {
-        attack.attackSoundHook = "blaster_shot";
+        attack.attackSoundHook = attack.projectileSpreadArcRadians > 0.0f ? "blaster_scatter_shot" : "blaster_shot";
         attack.damageType = CombatDamageType::Irresistible;
     }
     else if (mode == CharacterAttackMode::DragonBreath)
@@ -311,9 +561,9 @@ CharacterAttackResult buildRangedReleaseAttack(
 
     if (attack.canAttack)
     {
-        const int minimumDamage = profile.rangedMinDamage;
-        const int maximumDamage = std::max(profile.rangedMinDamage, profile.rangedMaxDamage);
-        attack.damage = std::uniform_int_distribution<int>(minimumDamage, maximumDamage)(rng);
+        attack.minimumDamage = profile.rangedMinDamage;
+        attack.maximumDamage = std::max(profile.rangedMinDamage, profile.rangedMaxDamage);
+        attack.damage = std::uniform_int_distribution<int>(attack.minimumDamage, attack.maximumDamage)(rng);
     }
 
     return attack;
@@ -347,10 +597,12 @@ std::optional<GameplayActionController::PartyAttackActorFacts> resolveUsableActo
         },
         .radius = actor->radius,
         .height = actor->height,
+        .targetHeight = actor->targetHeight,
         .currentHp = actor->currentHp,
         .maxHp = actor->maxHp,
         .effectiveArmorClass = actor->effectiveArmorClass,
         .hourOfPowerPower = actor->hourOfPowerPower,
+        .rulesetFacts = actor->rulesetFacts,
         .isDead = actor->isDead,
         .isInvisible = actor->isInvisible,
         .hostileToParty = actor->hostileToParty,
@@ -390,10 +642,12 @@ std::optional<GameplayActionController::PartyAttackActorFacts> chooseFallbackRan
             },
             .radius = actor.radius,
             .height = actor.height,
+            .targetHeight = actor.targetHeight,
             .currentHp = actor.currentHp,
             .maxHp = actor.maxHp,
             .effectiveArmorClass = actor.effectiveArmorClass,
             .hourOfPowerPower = actor.hourOfPowerPower,
+            .rulesetFacts = actor.rulesetFacts,
             .isDead = actor.isDead,
             .isInvisible = actor.isInvisible,
             .hostileToParty = actor.hostileToParty,
@@ -417,6 +671,28 @@ std::optional<GameplayActionController::PartyAttackActorFacts> chooseFallbackRan
     return bestActor;
 }
 
+// The world missile an attacker's equipped gun fires (monster_projectiles.yml party), the main hand's first.
+std::optional<PartyGunMissile> resolvePartyGunMissile(
+    const GameplayActionController::PartyAttackConfig &config,
+    const Character &attacker,
+    const CharacterAttackResult &attack)
+{
+    if (attack.mode != CharacterAttackMode::Blaster || config.pMonsterProjectileTable == nullptr)
+    {
+        return std::nullopt;
+    }
+
+    for (const uint32_t itemId : {attacker.equipment.mainHand, attacker.equipment.bow})
+    {
+        if (const std::optional<PartyGunMissile> gun = config.pMonsterProjectileTable->findPartyGun(itemId))
+        {
+            return gun;
+        }
+    }
+
+    return std::nullopt;
+}
+
 void playPartyAttackSound(
     const GameplayActionController::PartyAttackConfig &config,
     const Character &attacker,
@@ -438,9 +714,26 @@ void playPartyAttackSound(
     {
         soundId = SoundId::ShootBow;
     }
+    else if (const std::optional<PartyGunMissile> gun = resolvePartyGunMissile(config, attacker, attack);
+             gun && gun->shotSoundId != 0)
+    {
+        if (GameAudioSystem *pAudioSystem = config.pRuntime->audioSystem())
+        {
+            pAudioSystem->playSound(
+                gun->shotSoundId,
+                GameAudioSystem::PlaybackGroup::World,
+                GameAudioSystem::WorldPosition{config.rangedSource.x, config.rangedSource.y, config.rangedSource.z});
+        }
+
+        return;
+    }
     else if (attack.attackSoundHook == "blaster_shot")
     {
         soundId = SoundId::ShootBlaster;
+    }
+    else if (attack.attackSoundHook == "blaster_scatter_shot")
+    {
+        soundId = SoundId::ShootBlasterScatter;
     }
     else
     {
@@ -460,13 +753,16 @@ void playPartyAttackSound(
         GameAudioSystem::WorldPosition{config.rangedSource.x, config.rangedSource.y, config.rangedSource.z});
 }
 
+// The blow's damage after the monster's resistances; `elementalDamage` gets what its enchantments and auras added.
 int resolveMeleeAppliedDamage(
     const GameplayActionController::PartyAttackConfig &config,
     const Character &attacker,
     const GameplayActionController::PartyAttackActorFacts &target,
     const CharacterAttackResult &attack,
-    std::mt19937 &rng)
+    std::mt19937 &rng,
+    int &elementalDamage)
 {
+    elementalDamage = 0;
     int appliedDamage = attack.damage;
 
     if (config.pMonsterTable == nullptr)
@@ -481,43 +777,77 @@ int resolveMeleeAppliedDamage(
         return appliedDamage;
     }
 
-    const int multiplier =
-        ItemEnchantRuntime::characterAttackDamageMultiplierAgainstMonster(
+    const int multiplier = gameRulesFor(config.pParty).combat.weaponKindMultiplierApplies()
+        ? ItemEnchantRuntime::characterAttackDamageMultiplierAgainstMonster(
+              attacker,
+              CharacterAttackMode::Melee,
+              config.pItemTable,
+              config.pSpecialItemEnchantTable,
+              pStats->kindFlags)
+        : 1;
+    // The weapons' elemental enchantments roll for each blow and join it; a weapon's poison share is already in it.
+    // Each part is resisted by its own element. A ruleset that builds its blows' elements itself supplies them.
+    ElementalDamageBonuses additionalDamage = {};
+
+    if (!attack.rulesWeaponElements && gameRulesFor(config.pParty).combat.addsWeaponElementalDamage())
+    {
+        const ElementalDamageBonuses enchantDamage = ItemEnchantRuntime::rollCharacterAttackElementalDamage(
             attacker,
             CharacterAttackMode::Melee,
             config.pItemTable,
             config.pSpecialItemEnchantTable,
-            pStats->kindFlags);
-    ElementalDamageBonuses additionalDamage = ItemEnchantRuntime::characterAttackElementalDamageBonuses(
-        attacker,
-        CharacterAttackMode::Melee,
-        config.pItemTable,
-        config.pSpecialItemEnchantTable);
+            rng);
+        appliedDamage += enchantDamage.total();
+        additionalDamage = enchantDamage;
+        additionalDamage += ItemEnchantRuntime::characterWeaponDamageElements(
+            attacker, CharacterAttackMode::Melee, config.pItemTable);
+    }
+
     additionalDamage.fire *= multiplier;
     additionalDamage.air *= multiplier;
     additionalDamage.water *= multiplier;
     additionalDamage.body *= multiplier;
     additionalDamage.light *= multiplier;
     additionalDamage.dark *= multiplier;
+    additionalDamage.fire += attack.rulesElementalDamage.fire;
+    additionalDamage.air += attack.rulesElementalDamage.air;
+    additionalDamage.water += attack.rulesElementalDamage.water;
+    additionalDamage.body += attack.rulesElementalDamage.body;
+    additionalDamage.light += attack.rulesElementalDamage.light;
+    additionalDamage.dark += attack.rulesElementalDamage.dark;
+    elementalDamage = additionalDamage.fire + additionalDamage.air + additionalDamage.water + additionalDamage.body
+        + additionalDamage.light + additionalDamage.dark;
 
-    return GameMechanics::resolveMonsterIncomingWeaponDamage(
-        appliedDamage * multiplier,
-        attack.damageType,
-        additionalDamage,
-        MonsterDamageResistances{
-            .fire = pStats->fireResistance,
-            .air = pStats->airResistance,
-            .water = pStats->waterResistance,
-            .earth = pStats->earthResistance,
-            .spirit = pStats->spiritResistance,
-            .mind = pStats->mindResistance,
-            .body = pStats->bodyResistance,
-            .light = pStats->lightResistance,
-            .dark = pStats->darkResistance,
-            .physical = pStats->physicalResistance,
-        },
-        target.hourOfPowerPower,
-        rng);
+    // A world enchantment's bonus against its monsters (Hesper's Kreegan-bane).
+    if (attacker.meleeWeaponEnchant.bonusAgainst(target.monsterId))
+    {
+        appliedDamage += appliedDamage * attacker.meleeWeaponEnchant.bonusDamagePercent / 100;
+    }
+
+    MonsterDamageHit hit = {};
+    hit.amount = appliedDamage * multiplier;
+    hit.type = attack.damageType;
+    hit.weaponElements = additionalDamage;
+    hit.resistances = MonsterDamageResistances{
+        .fire = pStats->fireResistance,
+        .air = pStats->airResistance,
+        .water = pStats->waterResistance,
+        .earth = pStats->earthResistance,
+        .spirit = pStats->spiritResistance,
+        .mind = pStats->mindResistance,
+        .body = pStats->bodyResistance,
+        .light = pStats->lightResistance,
+        .dark = pStats->darkResistance,
+        .physical = pStats->physicalResistance,
+    };
+    hit.hourOfPowerResistanceBonus = target.hourOfPowerPower;
+    hit.targetFacts = target.rulesetFacts;
+    hit.pMeleeAttacker = &attacker;
+    hit.lateDamage = attack.rulesLateDamage;
+    hit.pItemTable = config.pItemTable;
+    hit.targetCurrentHp = target.currentHp;
+    hit.pRng = &rng;
+    return gameRulesFor(config.pParty).combat.damageToMonster(hit);
 }
 
 std::mt19937 buildPartyAttackRng(
@@ -531,7 +861,348 @@ std::mt19937 buildPartyAttackRng(
         ^ static_cast<uint32_t>(actingMemberIndex * 40503u);
     return std::mt19937(seed);
 }
+
+void clearInvisibility(Party &party)
+{
+    if (party.hasPartyBuff(PartyBuffId::Invisibility))
+    {
+        party.clearPartyBuff(PartyBuffId::Invisibility);
+    }
+}
+
+// The ranged weapon a Shoot order fires, choosePartyAttackMode's choice at a target out of reach; none without one.
+std::optional<CharacterAttackMode> shootingAttackMode(const CharacterAttackProfile &profile, bool eyeUnderWater)
+{
+    const CharacterAttackMode mode = choosePartyAttackMode(profile, false, eyeUnderWater);
+    return mode != CharacterAttackMode::Melee ? std::optional<CharacterAttackMode>(mode) : std::nullopt;
+}
+
+BattleOrderSituation battleOrderSituation(
+    const Party &party,
+    size_t memberIndex,
+    std::optional<float> targetDistance,
+    const IGameplayWorldRuntime *pWorldRuntime)
+{
+    BattleOrderSituation situation;
+    situation.targetDistance = targetDistance;
+    situation.indoors = pWorldRuntime != nullptr && !pWorldRuntime->isOpenAirMap();
+
+    // Every combatant: MM9's hirelings fight beside the members and take their heals (OY-583).
+    for (size_t index = 0; index < party.combatantCount(); ++index)
+    {
+        const Character &member = *party.combatant(index);
+        const int maximum = party.reachableMaximumHealth(index);
+
+        // The dead, eradicated and stoned are beyond a heal.
+        if (maximum <= 0
+            || member.conditions.test(size_t(CharacterCondition::Dead))
+            || member.conditions.test(size_t(CharacterCondition::Eradicated))
+            || member.conditions.test(size_t(CharacterCondition::Petrified)))
+        {
+            continue;
+        }
+
+        situation.lowestAllyHealthShare =
+            std::min(situation.lowestAllyHealthShare, std::max(0.0f, float(member.health) / float(maximum)));
+    }
+
+    if (const Character *pMember = party.member(memberIndex))
+    {
+        situation.spellPoints = pMember->spellPoints;
+        situation.maximumSpellPoints = party.reachableMaximumSpellPoints(memberIndex);
+        const int maximumHealth = party.reachableMaximumHealth(memberIndex);
+
+        if (maximumHealth > 0)
+        {
+            situation.ownHealthShare = std::max(0.0f, float(pMember->health) / float(maximumHealth));
+        }
+    }
+
+    return situation;
+}
+
+// A spell order the member can cast now: known, paid for (mana and the rules' other means: an Assassin's combo
+// points), its conditions met with the SP it leaves, not a buff already up on everyone it reaches, and allowed at this
+// place and hour. Whether it finds a target is the cast's own business.
+bool castableOrderSpell(
+    const GameplayActionController::PartyAttackConfig &config,
+    size_t memberIndex,
+    const Character &member,
+    const BattleOrder &order,
+    const BattleOrderSituation &situation)
+{
+    if (config.pParty == nullptr || config.pSpellTable == nullptr || config.pRuntime == nullptr
+        || config.pSpellService == nullptr)
+    {
+        return false;
+    }
+
+    const SpellEntry *pSpellEntry = config.pSpellTable->findByName(order.spellName, spellKnownBy(member));
+
+    if (pSpellEntry == nullptr || !member.knowsSpell(uint32_t(pSpellEntry->id)))
+    {
+        return false;
+    }
+
+    const uint32_t spellId = uint32_t(pSpellEntry->id);
+    const Party &party = *config.pParty;
+    const std::optional<uint32_t> manaCost = PartySpellSystem::manaCost(party, member, *config.pSpellTable, spellId);
+
+    if ((manaCost && !party.canSpendSpellPoints(memberIndex, int(*manaCost)))
+        || party.rules().spells.castRefusal(party, memberIndex, spellId).has_value()
+        || !battleOrderConditionsHold(order, situation, manaCost.value_or(0)))
+    {
+        return false;
+    }
+
+    // A buff, on the party or on members (Bless, Preservation) or several at once (Hour of Power), waits until it is
+    // gone from someone, as an upkeep order without early renewal does (OY-487). A spell the rules cast as an aura
+    // keeps the party buff test: a press while it is on would switch it off.
+    if (PartySpellSystem::isUpkeepBuffSpell(spellId) && !party.rules().spells.castsAsAura(party, memberIndex, spellId))
+    {
+        if (!PartySpellSystem::upkeepNeed(party, memberIndex, spellId, config.pSpellTable, std::nullopt))
+        {
+            return false;
+        }
+    }
+    else if (const std::optional<PartyBuffId> partyBuff = PartySpellSystem::partyBuffOfSpell(party, spellId);
+             partyBuff && party.hasPartyBuff(*partyBuff))
+    {
+        return false;
+    }
+
+    return config.pWorldRuntime == nullptr || PartySpellSystem::worldAllowsSpell(party, *config.pWorldRuntime, spellId);
+}
+
+// An MM9 hireling's turn (devdocs/mm9/MM9_HIRELINGS.md 9.2): it acts from the party's position at the creature under
+// the crosshair. A blow or shot rolls the row's dice with the monster attack rules (Mm9HirelingCombat; its numbers are
+// a MONSTERS row) and lands through the party's own melee and missile paths, so monster resistances, kills and
+// experience stay with them. A caster's spell goes through PartySpellSystem::castSpell as a wand's does, at the row's
+// skill and mastery and without mana, so each spell keeps its one implementation. Then the row's recovery.
+GameplayActionController::PartyAttackExecutionResult executeHirelingAttack(
+    const GameplayActionController::PartyAttackConfig &config,
+    size_t combatantIndex)
+{
+    GameplayActionController::PartyAttackExecutionResult result = {};
+    Party &party = *config.pParty;
+    const Mm9PartyHireling *pPartyHireling = party.hirelingCombatant(combatantIndex);
+    const Mm9Hireling *pRow = pPartyHireling != nullptr && config.pMm9HirelingTable != nullptr
+        ? config.pMm9HirelingTable->find(pPartyHireling->rudeId)
+        : nullptr;
+    Character *pHireling = party.combatant(combatantIndex);
+
+    if (pRow == nullptr || pHireling == nullptr || !GameMechanics::canTakeGameplayAction(*pHireling))
+    {
+        return result;
+    }
+
+    // The rules' scale of the row (MAW: the party's level, MawClassRules::scaleHirelings); 1 under Standard.
+    const double damageScale = pPartyHireling->rulesDamageScale;
+    const double skillScale = pPartyHireling->rulesSkillScale;
+    result.attempted = true;
+    result.actingMemberIndex = combatantIndex;
+
+    if (party.hasPartyBuff(PartyBuffId::Invisibility))
+    {
+        party.clearPartyBuff(PartyBuffId::Invisibility);
+    }
+
+    const std::optional<GameplayActionController::PartyAttackActorFacts> target =
+        resolveUsableActorTarget(config, config.directTargetActorIndex);
+    result.targetActorIndex = target ? std::optional<size_t>(target->actorIndex) : std::nullopt;
+    const float targetDistance = target ? actorDistanceFromParty(*target, config.partyPosition) : 0.0f;
+    const bool targetInMeleeRange = target.has_value() && targetDistance <= CharacterMeleeAttackDistance;
+    std::mt19937 rng = buildPartyAttackRng(config, combatantIndex, result.targetActorIndex);
+    const bool turnBased = config.pRuntime != nullptr && config.pRuntime->turnBasedCombatRuntime().active();
+    const Mm9HirelingAction action = chooseMm9HirelingAction(
+        *pRow, target.has_value(), targetInMeleeRange, std::uniform_int_distribution<int>(1, 100)(rng), turnBased);
+    CharacterAttackResult attack = {};
+    attack.recoverySeconds = Party::hirelingRecoverySeconds(*pHireling, pRow->recoverySeconds);
+    bool actionPerformed = false;
+    bool attacked = false;
+    bool killed = false;
+    std::optional<int> appliedMeleeDamage;
+    GameplayActionController::WorldPoint rangedTarget = target ? actorRangedTargetPoint(*target)
+        : config.hasRayRangedTarget ? config.rayRangedTarget
+                                    : config.defaultRangedTarget;
+
+    if (action.kind == Mm9HirelingActionKind::Spell && config.pSpellTable != nullptr && config.pWorldRuntime != nullptr)
+    {
+        const SpellEntry *pSpellEntry = config.pSpellTable->findByName(action.pSpell->name);
+
+        if (pSpellEntry != nullptr)
+        {
+            PartySpellCastRequest spellRequest = {};
+            spellRequest.casterMemberIndex = combatantIndex;
+            spellRequest.spellId = uint32_t(pSpellEntry->id);
+            spellRequest.quickCast = true;
+            spellRequest.targetActorIndex = result.targetActorIndex;
+            spellRequest.hasTargetPoint = true;
+            spellRequest.targetX = rangedTarget.x;
+            spellRequest.targetY = rangedTarget.y;
+            spellRequest.targetZ = rangedTarget.z;
+            spellRequest.skillLevelOverride =
+                std::max<uint32_t>(1, uint32_t(std::lround(action.pSpell->skillLevel * skillScale)));
+            spellRequest.skillMasteryOverride = action.pSpell->mastery;
+            spellRequest.bypassRequiredMastery = true;
+            spellRequest.turnBasedPendingAction = turnBased;
+            spellRequest.spendMana = false;
+            spellRequest.applyRecovery = false;
+            const PartySpellCastResult spellResult =
+                PartySpellSystem::castSpell(party, *config.pWorldRuntime, *config.pSpellTable, spellRequest);
+            attacked = spellResult.status == PartySpellCastStatus::Succeeded;
+            actionPerformed = attacked;
+            attack.mode = CharacterAttackMode::Wand;
+            attack.canAttack = true;
+            attack.spellId = pSpellEntry->id;
+
+            if (attacked)
+            {
+                config.pWorldRuntime->applyPendingSpellCastWorldEffects(spellResult);
+            }
+        }
+    }
+    else if (action.kind == Mm9HirelingActionKind::Melee && config.pWorldRuntime != nullptr)
+    {
+        attack.mode = CharacterAttackMode::Melee;
+        attack.canAttack = true;
+        attack.damageType = action.pAttack->damageType;
+        actionPerformed = true;
+
+        // Turn-based with nothing in reach: the blow swings at the air and spends the turn.
+        if (targetInMeleeRange)
+        {
+            attack.targetArmorClass = target->effectiveArmorClass;
+            attack.targetDistance = targetDistance;
+            attack.hit = mm9HirelingAttackHits(*pHireling, true, target->effectiveArmorClass, rng);
+            attack.damage = attack.hit
+                ? int(std::lround(rollMm9HirelingAttackDamage(*action.pAttack, *pHireling, true, rng) * damageScale))
+                : 0;
+        }
+
+        if (attack.hit)
+        {
+            int elementalDamage = 0;
+            const int appliedDamage =
+                resolveMeleeAppliedDamage(config, *pHireling, *target, attack, rng, elementalDamage);
+            appliedMeleeDamage = appliedDamage;
+            const int beforeHp = target->currentHp;
+            attacked = GameplayCombatController::partyHitLands(appliedDamage, false)
+                && config.pWorldRuntime->applyPartyAttackMeleeDamage(
+                    target->actorIndex,
+                    appliedDamage,
+                    toRuntimeWorldPoint(config.partyPosition),
+                    attack.shieldTier,
+                    attack.shieldModifiers,
+                    attack.criticalDamage);
+
+            if (attacked)
+            {
+                const std::optional<GameplayPartyAttackActorFacts> afterTarget =
+                    config.pWorldRuntime->partyAttackActorFacts(target->actorIndex, false);
+                killed = beforeHp > 0 && afterTarget && afterTarget->currentHp <= 0;
+
+                if (const std::optional<MeleeContact> contact = resolveMeleeContact(config, *target))
+                {
+                    const MeleeHitStrength strength = resolveMeleeHitStrength(*target, attack, appliedDamage, killed);
+                    queueMeleeContactParticles(config, *target, *contact, strength);
+                    presentMeleeHitFeedback(config, *target, *contact, strength);
+                }
+
+                config.pWorldRuntime->refreshWorldHover(config.worldInspectionRefreshRequest);
+            }
+        }
+    }
+    else if (action.kind == Mm9HirelingActionKind::Ranged && config.pWorldRuntime != nullptr)
+    {
+        attack.mode = CharacterAttackMode::Bow;
+        attack.canAttack = true;
+        attack.damageType = action.pAttack->damageType;
+        attack.damage =
+            int(std::lround(rollMm9HirelingAttackDamage(*action.pAttack, *pHireling, false, rng) * damageScale));
+        // The missile's hit roll on impact takes the hireling's level as its attack bonus, as a monster's level
+        // drives its own hit roll.
+        attack.attackBonus = int(pHireling->level) + pHireling->magicalBonuses.rangedAttack;
+        const GameplayPartyAttackProjectileRequest projectileRequest = {
+            .sourcePartyMemberIndex = combatantIndex,
+            .objectId = config.arrowProjectileObjectId,
+            .damage = attack.damage,
+            .attackBonus = attack.attackBonus,
+            .useActorHitChance = true,
+            .damageType = attack.damageType,
+            .source = toRuntimeWorldPoint(config.rangedSource),
+            .target = toRuntimeWorldPoint(rangedTarget),
+            .turnBasedPendingAction = turnBased,
+            .targetActorIndex = result.targetActorIndex,
+        };
+        attacked = config.pWorldRuntime->spawnPartyAttackProjectile(projectileRequest);
+        actionPerformed = attacked;
+    }
+
+    if (actionPerformed)
+    {
+        playPartyAttackSound(config, *pHireling, attack);
+
+        if (turnBased)
+        {
+            config.pRuntime->turnBasedCombatRuntime().storeMemberTurnRecovery(combatantIndex, attack.recoverySeconds);
+        }
+        else
+        {
+            party.applyRecoveryToMember(combatantIndex, attack.recoverySeconds);
+            party.switchToNextReadyMember();
+        }
+    }
+    else if (!turnBased && action.kind == Mm9HirelingActionKind::None)
+    {
+        // Nothing in reach: MM9 passes the hireling over (9.1).
+        party.switchToNextReadyMember();
+    }
+
+    GameplayCombatController::handlePartyAttackPresentation(
+        config.pRuntime,
+        GameplayCombatController::PartyAttackPresentation{
+            .memberIndex = combatantIndex,
+            .attackerName = pHireling->name,
+            .targetName = target ? (!config.directTargetName.empty() ? config.directTargetName : target->displayName)
+                                 : std::string(),
+            .attack = attack,
+            .appliedDamage = appliedMeleeDamage,
+            .actionPerformed = actionPerformed && attack.mode != CharacterAttackMode::Wand,
+            .attacked = attacked,
+            .hadMeleeTarget = targetInMeleeRange,
+            .killed = killed,
+            .targetStrongEnemy = target.has_value() && target->maxHp >= 100,
+        });
+
+    if (config.pWorldRuntime != nullptr)
+    {
+        config.pWorldRuntime->recordPartyAttackWorldResult(result.targetActorIndex, attacked, actionPerformed,
+            attack.mode == CharacterAttackMode::Melee && targetInMeleeRange && actionPerformed && !attacked);
+    }
+
+    result.actionPerformed = actionPerformed;
+    result.attacked = attacked;
+    result.killed = killed;
+    result.attack = attack;
+    return result;
+}
 } // namespace
+
+bool GameplayActionController::partyAttackTargetInMeleeReach(IGameplayWorldRuntime &world,
+    const GameplayPartyAttackFrameInput &input, std::optional<size_t> directActorIndex)
+{
+    PartyAttackConfig config;
+    config.pWorldRuntime = &world;
+    config.fallbackQuery = input.fallbackQuery;
+    config.partyPosition = {input.partyPosition.x, input.partyPosition.y, input.partyPosition.z};
+    std::optional<PartyAttackActorFacts> target = resolveUsableActorTarget(config, directActorIndex);
+    if (!target)
+    {
+        target = chooseFallbackRangedTarget(config);
+    }
+    return target && actorDistanceFromParty(*target, config.partyPosition) <= CharacterMeleeAttackDistance;
+}
 
 void GameplayActionController::updateCooldowns(GameplayScreenState &screenState, float deltaSeconds)
 {
@@ -547,6 +1218,35 @@ void GameplayActionController::updateCooldowns(GameplayScreenState &screenState,
         std::max(0.0f, attackActionState.inspectRepeatCooldownSeconds - deltaSeconds);
     quickSpellState.castRepeatCooldownSeconds =
         std::max(0.0f, quickSpellState.castRepeatCooldownSeconds - deltaSeconds);
+    GameplayScreenState::UpkeepActionState &upkeepActionState = screenState.upkeepActionState();
+    upkeepActionState.repeatCooldownSeconds = std::max(0.0f, upkeepActionState.repeatCooldownSeconds - deltaSeconds);
+}
+
+GameplayActionController::UpkeepActionDecision GameplayActionController::updateUpkeepAction(
+    GameplayScreenState::UpkeepActionState &upkeepActionState,
+    bool upkeepPressed,
+    bool turnBased)
+{
+    if (!upkeepPressed)
+    {
+        upkeepActionState = {};
+        return {};
+    }
+
+    const bool pressedThisFrame = !upkeepActionState.latch;
+
+    if (!pressedThisFrame && (turnBased || upkeepActionState.repeatCooldownSeconds > 0.0f))
+    {
+        return {};
+    }
+
+    upkeepActionState.latch = true;
+    upkeepActionState.repeatCooldownSeconds =
+        pressedThisFrame ? HeldActionFirstRepeatDelaySeconds : HeldActionRepeatDebounceSeconds;
+    return UpkeepActionDecision{
+        .shouldAttemptUpkeep = true,
+        .pressedThisFrame = pressedThisFrame,
+    };
 }
 
 GameplayActionController::QuickCastActionDecision GameplayActionController::updateQuickCastAction(
@@ -573,16 +1273,23 @@ GameplayActionController::QuickCastActionDecision GameplayActionController::upda
     }
 
     const bool pressedThisFrame = config.quickCastPressed && !quickSpellState.castLatch;
+    // Turn-based mode repeats a held key only on its interval, as the original's key repeat: never at once when a
+    // member becomes ready, and never before the first-repeat pause, so a tap acts for one member (OY-354).
     const bool repeatReady =
         config.quickCastPressed
         && quickSpellState.castLatch
-        && (quickSpellState.castRepeatCooldownSeconds <= 0.0f || readyMemberTransitionWhileHeld);
+        && (quickSpellState.castRepeatCooldownSeconds <= 0.0f
+            || (!config.turnBased && (quickSpellState.castRepeating || config.fastRepeat)
+                && readyMemberTransitionWhileHeld));
 
     if (pressedThisFrame || repeatReady)
     {
         quickSpellState.attackFallbackRequested = false;
         quickSpellState.castLatch = true;
-        quickSpellState.castRepeatCooldownSeconds = HeldActionRepeatDebounceSeconds;
+        quickSpellState.castRepeating = repeatReady;
+        quickSpellState.castRepeatCooldownSeconds = repeatReady || (config.fastRepeat && !config.turnBased)
+            ? HeldActionRepeatDebounceSeconds
+            : HeldActionFirstRepeatDelaySeconds;
         return QuickCastActionDecision{
             .shouldBeginQuickCast = true,
         };
@@ -630,17 +1337,24 @@ GameplayActionController::AttackActionDecision GameplayActionController::updateA
 
     const bool pressedThisFrame =
         (config.attackPressed || attackTriggeredByQuickCastFallback) && !attackActionState.inspectLatch;
+    // Turn-based mode repeats a held key only on its interval, as updateQuickCastAction.
     const bool repeatReady =
         (config.attackPressed || attackTriggeredByQuickCastFallback)
         && attackActionState.inspectLatch
-        && (attackActionState.inspectRepeatCooldownSeconds <= 0.0f || readyMemberTransitionWhileHeld);
+        && (attackActionState.inspectRepeatCooldownSeconds <= 0.0f
+            || (!config.turnBased && (attackActionState.inspectRepeating || config.fastRepeat)
+                && readyMemberTransitionWhileHeld));
 
     quickSpellState.attackFallbackRequested = false;
 
     if (pressedThisFrame || repeatReady)
     {
         attackActionState.inspectLatch = true;
-        attackActionState.inspectRepeatCooldownSeconds = HeldActionRepeatDebounceSeconds;
+        attackActionState.inspectRepeating = repeatReady;
+        attackActionState.inspectRepeatCooldownSeconds =
+            attackActionState.inspectRepeating || (config.fastRepeat && !config.turnBased)
+            ? HeldActionRepeatDebounceSeconds
+            : HeldActionFirstRepeatDelaySeconds;
 
         return AttackActionDecision{
             .shouldAttemptAttack = true,
@@ -656,7 +1370,15 @@ GameplayActionController::AttackActionDecision GameplayActionController::updateA
     return {};
 }
 
-GameplayActionController::PartyAttackExecutionResult GameplayActionController::executePartyAttack(
+bool GameplayActionController::crosshairDestructibleOverridesFallback(
+    bool crosshairOnStandingDestructible,
+    float fallbackDistance)
+{
+    return crosshairOnStandingDestructible && fallbackDistance > CharacterMeleeAttackDistance;
+}
+
+// One press for the active combatant: a hireling's attack, or a member's battle orders and weapon.
+GameplayActionController::PartyAttackExecutionResult GameplayActionController::executeActiveCombatantAttack(
     const PartyAttackConfig &config)
 {
     PartyAttackExecutionResult result = {};
@@ -667,11 +1389,33 @@ GameplayActionController::PartyAttackExecutionResult GameplayActionController::e
     }
 
     Party &party = *config.pParty;
+
+    // An MM9 hireling's turn in the rotation (Party::activeCombatantIndex).
+    {
+        const Character *pActing = party.combatant(party.activeCombatantIndex());
+
+        if (party.activeHireling() != nullptr
+            && (pActing == nullptr || !GameMechanics::canTakeGameplayAction(*pActing)))
+        {
+            party.switchToNextReadyMember();
+        }
+
+        if (party.activeHireling() != nullptr)
+        {
+            return executeHirelingAttack(config, party.activeCombatantIndex());
+        }
+    }
+
     Character *pAttacker = party.activeMember();
 
     if ((pAttacker == nullptr || !GameMechanics::canTakeGameplayAction(*pAttacker))
         && party.switchToNextReadyMember())
     {
+        if (party.activeHireling() != nullptr)
+        {
+            return executeHirelingAttack(config, party.activeCombatantIndex());
+        }
+
         pAttacker = party.activeMember();
     }
 
@@ -681,35 +1425,131 @@ GameplayActionController::PartyAttackExecutionResult GameplayActionController::e
     }
 
     const size_t actingMemberIndex = party.activeMemberIndex();
-    result.attempted = true;
     result.actingMemberIndex = actingMemberIndex;
-    if (party.hasPartyBuff(PartyBuffId::Invisibility))
+
+    // A world target a blow or missile damages: a standing destructible BModel or face, or a destructible decoration
+    // (an entity).
+    const bool bModelTargetHit = config.pWorldRuntime != nullptr
+        && config.directTargetBModelIndex.has_value()
+        && config.pWorldRuntime->isPartyAttackMeleeBModelTarget(*config.directTargetBModelIndex);
+    const bool entityTargetHit = config.pWorldRuntime != nullptr
+        && config.directTargetEntityIndex.has_value()
+        && config.pWorldRuntime->isPartyAttackMeleeEntityTarget(*config.directTargetEntityIndex);
+    std::optional<PartyAttackActorFacts> target = resolveUsableActorTarget(config, config.directTargetActorIndex);
+
+    if (!target)
     {
-        party.clearPartyBuff(PartyBuffId::Invisibility);
+        target = chooseFallbackRangedTarget(config);
+
+        // A standing destructible under the crosshair wins over a fallback hostile out of blow reach: the shot flies
+        // at the crosshair (devdocs/INDOOR_DESTRUCTIBLES.md "Aiming").
+        if (target
+            && crosshairDestructibleOverridesFallback(
+                bModelTargetHit || entityTargetHit,
+                actorDistanceFromParty(*target, config.partyPosition)))
+        {
+            target.reset();
+        }
     }
 
-    if (!pAttacker->attackSpellName.empty())
-    {
-        AttackCastResult attackCastResult = {};
+    result.targetActorIndex = target ? std::optional<size_t>(target->actorIndex) : std::nullopt;
 
-        if (config.pRuntime != nullptr && config.pSpellService != nullptr)
+    const float targetDistance = target ? actorDistanceFromParty(*target, config.partyPosition) : 0.0f;
+    const bool targetInMeleeRange = target.has_value() && targetDistance <= CharacterMeleeAttackDistance;
+    const bool worldTargetInMeleeRange = (bModelTargetHit || entityTargetHit)
+        && config.directWorldTargetDistance <= CharacterMeleeAttackDistance;
+    const CharacterAttackTuning attackTuning = config.pRuntime != nullptr
+        ? characterAttackTuningFromSettings(config.pRuntime->settingsSnapshot())
+        : CharacterAttackTuning{};
+    const CharacterAttackProfile attackProfile =
+        GameMechanics::buildCharacterAttackProfile(*pAttacker, config.pItemTable, config.pSpellTable, attackTuning);
+    const bool eyeUnderWater =
+        config.pWorldRuntime != nullptr && config.pWorldRuntime->partyBreathFraction().has_value();
+    // The battle orders (game/party/BattleOrders.h): the first that holds and can be done now; a spell without a target
+    // passes to the next order.
+    const BattleOrderSituation situation =
+        battleOrderSituation(party, actingMemberIndex, target ? std::optional<float>(targetDistance) : std::nullopt,
+            config.pWorldRuntime);
+    std::optional<CharacterAttackMode> orderedMode;
+
+    const bool talentBlow = config.talentBlow;
+
+    for (const BattleOrder &order : pAttacker->battleOrders)
+    {
+        if (talentBlow)
         {
-            const GameplaySpellActionController::AttackCastResult spellAttackCastResult =
-                GameplaySpellActionController::tryBeginAttackCast(
-                    *config.pRuntime,
-                    *config.pSpellService,
-                    actingMemberIndex,
-                    pAttacker->attackSpellName,
-                    config.targetQueries);
-            attackCastResult.castStarted =
-                spellAttackCastResult.disposition
-                == GameplaySpellActionController::AttackCastDisposition::CastStarted;
-            attackCastResult.followupUiActive = spellAttackCastResult.followupUiActive;
+            break;
         }
 
-        if (attackCastResult.castStarted
-            && !attackCastResult.followupUiActive
-            && (config.pRuntime == nullptr || !config.pRuntime->turnBasedCombatRuntime().active()))
+        if (!order.enabled)
+        {
+            continue;
+        }
+
+        if (order.kind == BattleOrderKind::Melee)
+        {
+            if ((targetInMeleeRange || worldTargetInMeleeRange) && battleOrderConditionsHold(order, situation))
+            {
+                orderedMode = CharacterAttackMode::Melee;
+                break;
+            }
+
+            continue;
+        }
+
+        if (order.kind == BattleOrderKind::Shoot)
+        {
+            const std::optional<CharacterAttackMode> shooting = shootingAttackMode(attackProfile, eyeUnderWater);
+
+            if (shooting && battleOrderConditionsHold(order, situation))
+            {
+                orderedMode = shooting;
+                break;
+            }
+
+            continue;
+        }
+
+        if (order.kind == BattleOrderKind::Talent)
+        {
+            if (config.useTalentOrder && battleOrderConditionsHold(order, situation)
+                && config.useTalentOrder(order.talentId))
+            {
+                result.attempted = true;
+                result.talentUsed = true;
+                clearInvisibility(party);
+                return result;
+            }
+
+            continue;
+        }
+
+        if (!castableOrderSpell(config, actingMemberIndex, *pAttacker, order, situation))
+        {
+            continue;
+        }
+
+        GameplaySpellActionController::TargetQueries targetQueries = config.targetQueries;
+        targetQueries.preferredActorIndex = target ? std::optional<size_t>(target->actorIndex)
+                                                   : config.directTargetActorIndex;
+        const GameplaySpellActionController::AttackCastResult cast = GameplaySpellActionController::tryBeginAttackCast(
+            *config.pRuntime,
+            *config.pSpellService,
+            actingMemberIndex,
+            order.spellName,
+            targetQueries);
+
+        if (cast.disposition == GameplaySpellActionController::AttackCastDisposition::NoTarget)
+        {
+            continue;
+        }
+
+        result.attempted = true;
+        clearInvisibility(party);
+
+        if (cast.disposition == GameplaySpellActionController::AttackCastDisposition::CastStarted
+            && !cast.followupUiActive
+            && !config.pRuntime->turnBasedCombatRuntime().active())
         {
             party.switchToNextReadyMember();
         }
@@ -717,27 +1557,30 @@ GameplayActionController::PartyAttackExecutionResult GameplayActionController::e
         return result;
     }
 
-    std::optional<PartyAttackActorFacts> target = resolveUsableActorTarget(config, config.directTargetActorIndex);
-
-    if (!target)
+    if (config.talentShot)
     {
-        target = chooseFallbackRangedTarget(config);
+        orderedMode = shootingAttackMode(attackProfile, eyeUnderWater);
+    }
+    else if (config.preferBow)
+    {
+        orderedMode = GameMechanics::soloBowShotMode(attackProfile, eyeUnderWater);
     }
 
-    result.targetActorIndex = target ? std::optional<size_t>(target->actorIndex) : std::nullopt;
+    if (!orderedMode && pAttacker->battleOrderFallback == BattleOrderFallback::Hold && !talentBlow)
+    {
+        result.held = true;
+        return result;
+    }
 
-    const float targetDistance = target ? actorDistanceFromParty(*target, config.partyPosition) : 0.0f;
-    const bool targetInMeleeRange = target.has_value() && targetDistance <= CharacterMeleeAttackDistance;
-    const bool worldTargetInMeleeRange = config.pWorldRuntime != nullptr
-        && config.directTargetBModelIndex.has_value()
-        && config.pWorldRuntime->isPartyAttackMeleeBModelTarget(*config.directTargetBModelIndex)
-        && config.directWorldTargetDistance <= CharacterMeleeAttackDistance;
-    const CharacterAttackTuning attackTuning = config.pRuntime != nullptr
-        ? characterAttackTuningFromSettings(config.pRuntime->settingsSnapshot())
-        : CharacterAttackTuning{};
-    const CharacterAttackProfile attackProfile =
-        GameMechanics::buildCharacterAttackProfile(*pAttacker, config.pItemTable, config.pSpellTable, attackTuning);
-    const CharacterAttackMode attackMode = choosePartyAttackMode(attackProfile, targetInMeleeRange);
+    result.attempted = true;
+    clearInvisibility(party);
+    // A destructible under the crosshair in blow reach takes a blow, as a hostile there would.
+    CharacterAttackMode attackMode = orderedMode.value_or(
+        choosePartyAttackMode(attackProfile, targetInMeleeRange || worldTargetInMeleeRange, eyeUnderWater));
+    if (config.preferMelee && !config.talentShot && attackMode == CharacterAttackMode::Bow)
+    {
+        attackMode = CharacterAttackMode::Melee;
+    }
     std::mt19937 rng = buildPartyAttackRng(config, actingMemberIndex, result.targetActorIndex);
     CharacterAttackResult attack = {};
 
@@ -766,22 +1609,102 @@ GameplayActionController::PartyAttackExecutionResult GameplayActionController::e
     else
     {
         attack = buildRangedReleaseAttack(attackMode, attackProfile, rng);
+        GameMechanics::applyExplosiveArrows(*pAttacker, attack);
+    }
+
+    CharacterAttackOnMonster attackContext = {};
+    attackContext.pCharacter = pAttacker;
+    attackContext.pItemTable = config.pItemTable;
+    attackContext.pSpecialItemEnchantTable = config.pSpecialItemEnchantTable;
+    attackContext.minimumDamage =
+        attack.mode == CharacterAttackMode::Melee ? attackProfile.meleeMinDamage : attackProfile.rangedMinDamage;
+    attackContext.maximumDamage =
+        attack.mode == CharacterAttackMode::Melee ? attackProfile.meleeMaxDamage : attackProfile.rangedMaxDamage;
+    // A blow reads the target in reach; a missile the actor it is aimed at (rules crit against its level).
+    attackContext.pTargetFacts = target && (attack.mode != CharacterAttackMode::Melee || targetInMeleeRange)
+        ? &target->rulesetFacts
+        : nullptr;
+    attackContext.targetCurrentHp = attackContext.pTargetFacts != nullptr ? target->currentHp : 0;
+
+    if (target && config.pMonsterTable != nullptr)
+    {
+        if (const MonsterTable::MonsterStatsEntry *pStats = config.pMonsterTable->findStatsById(target->monsterId))
+        {
+            attackContext.targetKindFlags = pStats->kindFlags;
+        }
+    }
+
+    if (attackContext.pTargetFacts != nullptr && config.pWorldRuntime != nullptr)
+    {
+        attackContext.targetKey = mapActorKey(config.pWorldRuntime->mapName(), target->actorIndex);
+        // A game minute is two real seconds.
+        attackContext.nowSeconds = double(config.pWorldRuntime->gameMinutes()) * 2.0;
+
+        attackContext.targetHostile = target->hostileToParty;
+
+        // The crowd around a blow's target (MAW's Assassination thins its bonus by it, MCC:414-421).
+        if (attack.mode == CharacterAttackMode::Melee)
+        {
+            for (const size_t nearIndex : config.pWorldRuntime->collectMapActorIndicesWithinRadius(target->position.x,
+                     target->position.y, target->position.z, 384.0f, false, target->position.x, target->position.y,
+                     target->position.z))
+            {
+                GameplayRuntimeActorState nearActor = {};
+                attackContext.monstersNearTarget +=
+                    config.pWorldRuntime->actorRuntimeState(nearIndex, nearActor) && !nearActor.isDead ? 1 : 0;
+            }
+        }
+    }
+    attackContext.partyCount = config.pParty != nullptr ? int(std::max<size_t>(1, config.pParty->members().size())) : 1;
+    attackContext.pRng = &rng;
+    attackContext.extraBlow = config.talentExtraBlow;
+
+    // The rules' damage and crit, a talent's share and Weak's halving of a missile: once for the attack, and again for
+    // each further arrow of a shot that looses several (a Master bow's second), which rolls its own.
+    const auto finishAttack = [&](CharacterAttackResult &shot)
+    {
+        gameRulesFor(config.pParty).combat.resolveCharacterAttack(shot, attackContext);
+
+        if (config.talentShare != 1.0f && shot.damage > 0)
+        {
+            const auto scaled = [&config](int value)
+            {
+                return std::max(1, int(std::lround(value * config.talentShare)));
+            };
+            shot.damage = scaled(shot.damage);
+            shot.minimumDamage = scaled(shot.minimumDamage);
+            shot.maximumDamage = scaled(shot.maximumDamage);
+        }
+
+        if (shot.canAttack && shot.mode != CharacterAttackMode::Melee
+            && pAttacker->conditions.test(static_cast<size_t>(CharacterCondition::Weak))
+            && gameRulesFor(config.pParty).combat.callerHalvesWeakMissile(shot.mode))
+        {
+            shot.damage /= 2;
+            shot.minimumDamage /= 2;
+            shot.maximumDamage /= 2;
+        }
+    };
+    finishAttack(attack);
+
+    // Multishot's fan: as many headings as its arrows, each shot as the bow shoots (a Master bow's two arrows).
+    uint8_t arrowsPerHeading = 1;
+    if (config.talentFanArrows > 1 && attack.mode == CharacterAttackMode::Bow)
+    {
+        arrowsPerHeading = std::max<uint8_t>(1, attack.projectileCount);
+        attack.projectileCount = config.talentFanArrows;
+        attack.projectileSpreadArcRadians = config.talentFanArcRadians;
     }
 
     result.attack = attack;
-
-    if (attack.canAttack && attack.mode != CharacterAttackMode::Melee
-        && pAttacker->conditions.test(static_cast<size_t>(CharacterCondition::Weak)))
-    {
-        attack.damage /= 2;
-        result.attack = attack;
-    }
 
     bool actionPerformed = false;
     bool attacked = false;
     bool killed = false;
     std::optional<int> appliedMeleeDamage;
     const bool hadMeleeTarget = target.has_value() && targetInMeleeRange;
+    // A hit the target fully resists plays out as a miss, as in the original game.
+    bool hitWithoutDamage = false;
 
     if (attack.mode == CharacterAttackMode::Melee)
     {
@@ -790,17 +1713,36 @@ GameplayActionController::PartyAttackExecutionResult GameplayActionController::e
         if (target
             && targetInMeleeRange
             && attack.hit
-            && attack.damage > 0
             && config.pWorldRuntime != nullptr)
         {
-            const int appliedDamage = resolveMeleeAppliedDamage(config, *pAttacker, *target, attack, rng);
+            int elementalDamage = 0;
+            const int appliedDamage =
+                resolveMeleeAppliedDamage(config, *pAttacker, *target, attack, rng, elementalDamage);
             appliedMeleeDamage = appliedDamage;
+            hitWithoutDamage = !GameplayCombatController::partyHitLands(appliedDamage, attack.stunTarget);
             const int beforeHp = target->currentHp;
-            queueMeleeHitBloodEffect(config, *target);
-            attacked = config.pWorldRuntime->applyPartyAttackMeleeDamage(
-                target->actorIndex,
-                appliedDamage,
-                toRuntimeWorldPoint(config.partyPosition));
+            const std::optional<MeleeContact> contact = resolveMeleeContact(config, *target);
+
+            if (attack.shieldOverload && !hitWithoutDamage)
+            {
+                tryOverloadActorShield(config, target->actorIndex, rng);
+            }
+
+            // A world enchantment's overload (Hesper's Overloading): its own chance, the rules' cut.
+            if (attack.shieldOverloadChance > 0.0f && !hitWithoutDamage)
+            {
+                tryOverloadActorShield(config, target->actorIndex, rng, attack.shieldOverloadChance);
+            }
+
+            attacked = !hitWithoutDamage
+                && config.pWorldRuntime->applyPartyAttackMeleeDamage(
+                    target->actorIndex,
+                    appliedDamage,
+                    toRuntimeWorldPoint(config.partyPosition),
+                    attack.shieldTier,
+                    attack.shieldModifiers,
+                    attack.criticalDamage,
+                    !config.talentNoHitReaction);
 
             if (attacked)
             {
@@ -812,6 +1754,57 @@ GameplayActionController::PartyAttackExecutionResult GameplayActionController::e
                 const std::optional<GameplayPartyAttackActorFacts> afterTarget =
                     config.pWorldRuntime->partyAttackActorFacts(target->actorIndex, false);
                 killed = beforeHp > 0 && afterTarget && afterTarget->currentHp <= 0;
+                PartyHitOnMonster hit;
+                hit.memberIndex = actingMemberIndex;
+                hit.pTarget = &target->rulesetFacts;
+                hit.damage = appliedDamage;
+                hit.elementalDamage = std::min(elementalDamage, appliedDamage);
+                hit.type = attack.damageType;
+                hit.melee = true;
+                hit.killed = killed;
+                hit.pWorld = config.pWorldRuntime;
+                hit.targetActorIndex = target->actorIndex;
+                hit.extraBlow = config.talentExtraBlow;
+                gameRulesFor(config.pParty).combat.applyPartyHitEffects(party, hit);
+
+                // A solo run's ordinary blow that hits takes the talents' cooldown_per_hit off (Multishot), and
+                // cooldown_per_crit when it is critical (Power Shot).
+                if (!config.talentBlow && config.pRuntime != nullptr && config.pRuntime->soloTalents())
+                {
+                    shortenTalentCooldowns(soloTalentTable(), *pAttacker, true);
+
+                    if (attack.criticalDamage)
+                    {
+                        shortenTalentCooldownsOnCritical(soloTalentTable(), *pAttacker);
+                    }
+                }
+
+                // A kill may shorten the blow's recovery (MAW's Legendary 11), before it is applied below.
+                if (killed)
+                {
+                    attack.recoverySeconds *= gameRulesFor(config.pParty).combat.killRecoveryScale(*pAttacker);
+                }
+
+                if (contact)
+                {
+                    const MeleeHitStrength strength =
+                        resolveMeleeHitStrength(*target, attack, appliedDamage, killed);
+                    queueMeleeContactParticles(config, *target, *contact, strength);
+                    const std::optional<MeleeContactEffectPlacement> blow = placeMeleeBlow(
+                        config, *pAttacker, actingMemberIndex, *target, *contact, strength, false);
+
+                    if (blow)
+                    {
+                        queueMeleeBlowEffects(config, *blow);
+
+                        if (killed || attack.criticalDamage)
+                        {
+                            kickCameraAlongMeleeBlow(config, *blow);
+                        }
+                    }
+
+                    presentMeleeHitFeedback(config, *target, *contact, strength);
+                }
 
                 if (pAttacker->vampiricHealFraction > 0.0f && appliedDamage > 0)
                 {
@@ -828,15 +1821,32 @@ GameplayActionController::PartyAttackExecutionResult GameplayActionController::e
             }
         }
         else if (worldTargetInMeleeRange
-            && config.directTargetBModelIndex
             && attack.hit
             && attack.damage > 0
             && config.pWorldRuntime != nullptr)
         {
             appliedMeleeDamage = attack.damage;
-            attacked = config.pWorldRuntime->applyPartyAttackMeleeBModelDamage(
-                *config.directTargetBModelIndex,
-                attack.damage);
+            attacked = bModelTargetHit
+                ? config.pWorldRuntime->applyPartyAttackMeleeBModelDamage(
+                    *config.directTargetBModelIndex,
+                    attack.damage)
+                : config.pWorldRuntime->applyPartyAttackMeleeEntityDamage(
+                    *config.directTargetEntityIndex,
+                    attack.damage);
+        }
+
+        // A miss shows the blow passing the target; the swing sound already plays.
+        if (target && targetInMeleeRange && attack.canAttack && (!attack.hit || hitWithoutDamage))
+        {
+            const std::optional<MeleeContact> contact = resolveMeleeContact(config, *target);
+            const std::optional<MeleeContactEffectPlacement> blow = contact
+                ? placeMeleeBlow(config, *pAttacker, actingMemberIndex, *target, *contact, MeleeHitStrength::Normal, true)
+                : std::nullopt;
+
+            if (blow)
+            {
+                queueMeleeBlowEffects(config, *blow);
+            }
         }
     }
     else if (attack.canAttack)
@@ -883,7 +1893,16 @@ GameplayActionController::PartyAttackExecutionResult GameplayActionController::e
                         .impactSoundIdOverride = static_cast<uint32_t>(SoundId::DragonBreathImpact),
                         .turnBasedPendingAction =
                             config.pRuntime != nullptr && config.pRuntime->turnBasedCombatRuntime().active(),
+                        .targetActorIndex = result.targetActorIndex,
+                        .critical = attack.criticalDamage,
                     });
+
+                // A solo dragon's view kicks up as the breath leaves its mouth.
+                if (attacked && party.soloRun() && config.pRuntime != nullptr
+                    && config.pRuntime->settingsSnapshot().meleeCameraKick)
+                {
+                    config.pWorldRuntime->actorHitFeedback().triggerCameraKick(0.0f, 1.0f, BreathCameraKickRadians);
+                }
             }
         }
         else if (attack.mode == CharacterAttackMode::Wand)
@@ -919,7 +1938,9 @@ GameplayActionController::PartyAttackExecutionResult GameplayActionController::e
         }
         else if (config.pWorldRuntime != nullptr)
         {
-            uint32_t projectileObjectId = config.arrowProjectileObjectId;
+            uint32_t projectileObjectId = attack.fireArrow && config.fireArrowProjectileObjectId != 0
+                ? config.fireArrowProjectileObjectId
+                : config.arrowProjectileObjectId;
             const ItemDefinition *pRangedWeapon = config.pItemTable != nullptr
                 ? config.pItemTable->get(pAttacker->equipment.bow)
                 : nullptr;
@@ -931,34 +1952,112 @@ GameplayActionController::PartyAttackExecutionResult GameplayActionController::e
                     : config.throwingDaggerProjectileObjectId;
             }
 
+            const std::optional<PartyGunMissile> partyGun = resolvePartyGunMissile(config, *pAttacker, attack);
             GameplayPartyAttackProjectileRequest projectileRequest = {
                 .sourcePartyMemberIndex = actingMemberIndex,
-                .objectId =
-                    attack.mode == CharacterAttackMode::Blaster
+                .objectId = partyGun ? uint32_t(partyGun->pMissile->objectId)
+                    : attack.mode == CharacterAttackMode::Blaster
                         ? config.blasterProjectileObjectId
                         : projectileObjectId,
-                .impactObjectId = attack.mode == CharacterAttackMode::Blaster
-                    ? config.blasterProjectileObjectId + 1 : 0,
+                .impactObjectId = partyGun ? uint32_t(partyGun->pMissile->impactObjectId)
+                    : attack.mode == CharacterAttackMode::Blaster ? config.blasterProjectileObjectId + 1
+                    : attack.explosiveArrow                       ? FireballExplosionObjectId
+                                                                  : 0,
+                .impactSoundId = partyGun ? partyGun->pMissile->impactSoundId : 0,
                 .damage = attack.damage,
                 .attackBonus = attack.attackBonus,
-                .useActorHitChance = true,
+                // A Carnage arrow never misses (it explodes).
+                .useActorHitChance = !attack.explosiveArrow,
                 .damageType = attack.damageType,
+                .shieldTier = attack.shieldTier,
+                .shieldModifiers = attack.shieldModifiers,
+                .weakerOfPhysicalAndFire = attack.fireArrow,
+                .explosionRadius = attack.explosiveArrow
+                    ? GameplayProjectileService::spellImpactDamageRadius(uint32_t(SpellId::Fireball))
+                    : 0.0f,
+                .blastMinimumDamage = attack.explosiveArrow ? attack.minimumDamage : 0,
+                .blastMaximumDamage = attack.explosiveArrow ? attack.maximumDamage : 0,
                 .source = toRuntimeWorldPoint(rangedSource),
                 .target = toRuntimeWorldPoint(rangedTarget),
                 .turnBasedPendingAction =
                     config.pRuntime != nullptr && config.pRuntime->turnBasedCombatRuntime().active(),
+                // A fanned volley spreads on purpose; only a single shot homes.
+                .targetActorIndex =
+                    attack.projectileSpreadArcRadians > 0.0f ? std::nullopt : result.targetActorIndex,
+                .homing = attack.homing,
+                .critical = attack.criticalDamage,
+                .chainCount = attack.mode == CharacterAttackMode::Bow ? config.chainCount : uint8_t(0),
+                .chainShare = config.chainShare,
+                .chainRadius = config.chainRadius,
+                // A solo run's ordinary bow attack: all its arrows share one cooldown_per_hit credit.
+                .hitCredit = attack.mode == CharacterAttackMode::Bow && !config.talentBlow && config.pRuntime != nullptr
+                        && config.pRuntime->soloTalents()
+                    ? std::make_shared<bool>(true)
+                    : nullptr,
             };
-            attacked = config.pWorldRuntime->spawnPartyAttackProjectile(projectileRequest);
-
-            for (uint8_t projectileIndex = 1; projectileIndex < attack.projectileCount; ++projectileIndex)
+            if (attack.projectileSpreadArcRadians > 0.0f)
             {
-                const WorldPoint secondSource = offsetPartyProjectileSourceForMember(
-                    config,
-                    rangedTarget,
-                    actingMemberIndex + projectileIndex,
-                    party.members().size() + attack.projectileCount - 1);
-                projectileRequest.source = toRuntimeWorldPoint(secondSource);
-                attacked = config.pWorldRuntime->spawnPartyAttackProjectile(projectileRequest) || attacked;
+                // A fanned volley: every projectile flies its own heading and rolls its own damage.
+                const float deltaX = rangedTarget.x - rangedSource.x;
+                const float deltaY = rangedTarget.y - rangedSource.y;
+                const float aimYawRadians = std::atan2(deltaY, deltaX);
+                const float fanDistance = std::max(512.0f, std::sqrt(deltaX * deltaX + deltaY * deltaY));
+                std::uniform_int_distribution<int> damageDistribution(attack.minimumDamage, attack.maximumDamage);
+
+                for (uint8_t projectileIndex = 0; projectileIndex < attack.projectileCount; ++projectileIndex)
+                {
+                    const float yawRadians = aimYawRadians + GameMechanics::projectileFanYawOffsetRadians(
+                        attack.projectileCount,
+                        projectileIndex,
+                        attack.projectileSpreadArcRadians);
+                    projectileRequest.critical = false;
+                    // The volley's arrows leave close together, a few units apart across the aim, each on its own
+                    // heading; a Master bow's second arrow flies a few degrees beside the heading's first.
+                    for (uint8_t copy = 0; copy < arrowsPerHeading; ++copy)
+                    {
+                        constexpr float PairOffsetRadians = 3.0f * 3.14159265f / 180.0f;
+                        constexpr float SourceSpacing = 4.0f;
+                        const float arrowYaw = yawRadians
+                            + (arrowsPerHeading > 1 ? (float(copy) - float(arrowsPerHeading - 1) * 0.5f) : 0.0f)
+                                * PairOffsetRadians;
+                        const float arrows = float(attack.projectileCount) * float(arrowsPerHeading);
+                        const float across = (float(projectileIndex * arrowsPerHeading + copy) - (arrows - 1) * 0.5f)
+                            * SourceSpacing;
+                        projectileRequest.source = toRuntimeWorldPoint(WorldPoint{
+                            .x = rangedSource.x + std::sin(aimYawRadians) * across,
+                            .y = rangedSource.y - std::cos(aimYawRadians) * across,
+                            .z = rangedSource.z,
+                        });
+                        projectileRequest.target = toRuntimeWorldPoint(WorldPoint{
+                            .x = rangedSource.x + std::cos(arrowYaw) * fanDistance,
+                            .y = rangedSource.y + std::sin(arrowYaw) * fanDistance,
+                            .z = rangedTarget.z,
+                        });
+                        projectileRequest.damage = damageDistribution(rng);
+                        attacked = config.pWorldRuntime->spawnPartyAttackProjectile(projectileRequest) || attacked;
+                    }
+                }
+            }
+            else
+            {
+                attacked = config.pWorldRuntime->spawnPartyAttackProjectile(projectileRequest);
+
+                for (uint8_t projectileIndex = 1; projectileIndex < attack.projectileCount; ++projectileIndex)
+                {
+                    const WorldPoint secondSource = offsetPartyProjectileSourceForMember(
+                        config,
+                        rangedTarget,
+                        actingMemberIndex + projectileIndex,
+                        party.members().size() + attack.projectileCount - 1);
+                    projectileRequest.source = toRuntimeWorldPoint(secondSource);
+                    // Each further arrow rolls its own damage and crit, as a fanned volley's arrows do.
+                    CharacterAttackResult arrow = buildRangedReleaseAttack(attack.mode, attackProfile, rng);
+                    GameMechanics::applyExplosiveArrows(*pAttacker, arrow);
+                    finishAttack(arrow);
+                    projectileRequest.damage = arrow.damage;
+                    projectileRequest.critical = arrow.criticalDamage;
+                    attacked = config.pWorldRuntime->spawnPartyAttackProjectile(projectileRequest) || attacked;
+                }
             }
         }
 
@@ -990,7 +2089,7 @@ GameplayActionController::PartyAttackExecutionResult GameplayActionController::e
             party.applyDamageToMember(
                 actingMemberIndex,
                 std::max(1, pAttacker->maxHealth / 10),
-                "The weapon backfires");
+                Engine::tr("The weapon backfires"));
             equippedStateChanged = true;
         }
 
@@ -1007,17 +2106,25 @@ GameplayActionController::PartyAttackExecutionResult GameplayActionController::e
             party.refreshDerivedState();
         }
 
-        playPartyAttackSound(config, *pAttacker, attack);
+        if (!(config.swingSoundPlayed && attack.mode == CharacterAttackMode::Melee) && !config.talentExtraBlow)
+        {
+            playPartyAttackSound(config, *pAttacker, attack);
+        }
 
-        if (config.pRuntime != nullptr && config.pRuntime->turnBasedCombatRuntime().active())
+        if (config.talentExtraBlow)
+        {
+            // The talent's first blow paid the recovery.
+        }
+        else if (config.pRuntime != nullptr && config.pRuntime->turnBasedCombatRuntime().active())
         {
             config.pRuntime->turnBasedCombatRuntime().storeMemberTurnRecovery(
                 actingMemberIndex,
-                attack.recoverySeconds);
+                attack.recoverySeconds * config.talentRecoveryScale);
         }
         else
         {
-            party.applyRecoveryToActiveMember(attack.recoverySeconds);
+            party.applyRecoveryToActiveMember(
+                std::max(0.0f, attack.recoverySeconds * config.talentRecoveryScale - config.recoverySpentSeconds));
             party.switchToNextReadyMember();
         }
     }
@@ -1046,13 +2153,343 @@ GameplayActionController::PartyAttackExecutionResult GameplayActionController::e
 
     if (config.pWorldRuntime != nullptr)
     {
-        config.pWorldRuntime->recordPartyAttackWorldResult(result.targetActorIndex, attacked, actionPerformed);
+        config.pWorldRuntime->recordPartyAttackWorldResult(result.targetActorIndex, attacked, actionPerformed,
+            attack.mode == CharacterAttackMode::Melee && hadMeleeTarget && actionPerformed && !attacked);
     }
 
     result.actionPerformed = actionPerformed;
     result.attacked = attacked;
     result.killed = killed;
     result.attack = attack;
+    return result;
+}
+
+void GameplayActionController::playMeleeSwingSound(
+    GameplayScreenRuntime &runtime, const Character &attacker, const ItemTable *pItemTable, float x, float y, float z)
+{
+    if (GameAudioSystem *pAudioSystem = runtime.audioSystem())
+    {
+        pAudioSystem->playCommonSound(
+            GameMechanics::resolveCharacterAttackSoundId(attacker, pItemTable, CharacterAttackMode::Melee),
+            GameAudioSystem::PlaybackGroup::World,
+            GameAudioSystem::WorldPosition{x, y, z});
+    }
+}
+
+GameplayActionController::PartyAttackExecutionResult GameplayActionController::executePartyAttack(
+    const PartyAttackConfig &config)
+{
+    PartyAttackExecutionResult result = executeActiveCombatantAttack(config);
+
+    if (!result.held
+        || config.pParty == nullptr
+        || (config.pRuntime != nullptr && config.pRuntime->turnBasedCombatRuntime().active()))
+    {
+        return result;
+    }
+
+    // Real time: the holder stays ready and the press goes to the next ready combatant, each tried once.
+    Party &party = *config.pParty;
+    const size_t holder = party.activeCombatantIndex();
+    std::vector<bool> tried(party.combatantCount(), false);
+
+    if (holder < tried.size())
+    {
+        tried[holder] = true;
+    }
+
+    while (party.switchToNextReadyMember())
+    {
+        const size_t next = party.activeCombatantIndex();
+
+        if (next >= tried.size() || tried[next])
+        {
+            break;
+        }
+
+        tried[next] = true;
+        const PartyAttackExecutionResult nextResult = executeActiveCombatantAttack(config);
+
+        if (!nextResult.held)
+        {
+            return nextResult;
+        }
+    }
+
+    // Everyone ready holds: the selection stays with the first holder, and a fresh press says so.
+    party.setActiveCombatantIndex(holder);
+
+    if (config.pressedThisFrame && config.pRuntime != nullptr)
+    {
+        if (const Character *pHolder = party.member(result.actingMemberIndex))
+        {
+            config.pRuntime->setStatusBarEvent(Engine::tr("{member} holds", {{"member", pHolder->name}}));
+        }
+    }
+
+    return result;
+}
+
+GameplayActionController::PartyUpkeepResult GameplayActionController::executePartyUpkeep(
+    const PartyUpkeepConfig &config)
+{
+    PartyUpkeepResult result = {};
+
+    if (config.pParty == nullptr || config.pSpellTable == nullptr || config.pRuntime == nullptr
+        || config.pSpellService == nullptr || config.pWorldRuntime == nullptr)
+    {
+        return result;
+    }
+
+    Party &party = *config.pParty;
+    const size_t memberCount = party.members().size();
+    const bool turnBased = config.pRuntime->turnBasedCombatRuntime().active();
+
+    // Auto-brew: a fresh press first brews what the potion stock lacks, so a potion that ran out can be drunk now. What
+    // it brewed stays in the status line over the drink's.
+    std::string restockText;
+
+    if (config.pressedThisFrame && config.pRuntime->settingsSnapshot().upkeepAutoBrew
+        && !PotionUpkeep::stockTargets(party).empty())
+    {
+        restockText = config.pRuntime->itemService().restockUpkeepPotions(*config.pRuntime, true);
+    }
+
+    // Who may cast: in turn-based mode the member whose turn it is; in real time the ready members, the active first.
+    std::vector<size_t> casters;
+
+    if (turnBased)
+    {
+        const std::optional<size_t> acting = config.pRuntime->turnBasedCombatRuntime().readyMemberIndex(party);
+
+        if (acting && *acting < memberCount)
+        {
+            casters.push_back(*acting);
+        }
+    }
+    else
+    {
+        const size_t first = party.activeHireling() == nullptr ? party.activeMemberIndex() : 0;
+
+        for (size_t offset = 0; offset < memberCount; ++offset)
+        {
+            const size_t memberIndex = (first + offset) % memberCount;
+
+            if (GameMechanics::canTakeGameplayAction(party.members()[memberIndex]))
+            {
+                casters.push_back(memberIndex);
+            }
+        }
+    }
+
+    bool anyOrder = false;
+    // A due spell its caster cannot pay for, and a due potion nobody carries, for the message.
+    std::string unaffordable;
+    std::string missingPotion;
+    const MergedPotionSettingTable *pPotionSettings = config.pRuntime->mergedPotionSettingTable();
+    const ItemTable *pItemTable = config.pRuntime->itemTable();
+
+    for (const Character &member : party.members())
+    {
+        anyOrder = anyOrder || std::any_of(member.upkeepOrders.begin(), member.upkeepOrders.end(),
+            [](const BattleOrder &order) { return order.enabled; });
+    }
+
+    for (const size_t memberIndex : casters)
+    {
+        const Character &member = party.members()[memberIndex];
+        const BattleOrderSituation situation = battleOrderSituation(party, memberIndex, std::nullopt,
+            config.pWorldRuntime);
+
+        for (const BattleOrder &order : member.upkeepOrders)
+        {
+            // A potion (devdocs/BATTLE_ORDERS.md "Potions"): the bottle its rule picks from the member's bags first,
+            // drunk when one of its timed effects is due at that bottle's power.
+            if (order.enabled && order.kind == BattleOrderKind::Potion)
+            {
+                const PotionDefinition *pPotion =
+                    pPotionSettings != nullptr ? pPotionSettings->effects().find(order.potionItemId) : nullptr;
+
+                if (pPotion == nullptr || !battleOrderConditionsHold(order, situation))
+                {
+                    continue;
+                }
+
+                const PotionEffectTable &effects = pPotionSettings->effects();
+                const PotionUpkeep::OrderBottle bottle = PotionUpkeep::orderBottle(party, memberIndex, order, effects);
+
+                if (!PotionUpkeep::potionDue(party, memberIndex, *pPotion, bottle.power,
+                        InventoryItemUseRuntime::potionDurationSeconds(party, effects, bottle.power),
+                        order.renewBelowMinutes))
+                {
+                    continue;
+                }
+
+                if (!bottle.location)
+                {
+                    const ItemDefinition *pDefinition =
+                        pItemTable != nullptr ? pItemTable->get(order.potionItemId) : nullptr;
+
+                    if (missingPotion.empty() && pDefinition != nullptr)
+                    {
+                        missingPotion = Engine::localize(pDefinition->name);
+                    }
+
+                    continue;
+                }
+
+                // The drinker becomes the active member, as a caster does, and the selection moves on after the drink.
+                party.setActiveMemberIndex(memberIndex);
+                const bool drunk = config.pRuntime->itemService().useCarriedItem(*config.pRuntime, memberIndex,
+                    *bottle.location);
+                result.attempted = true;
+                result.castStarted = drunk;
+                result.actingMemberIndex = memberIndex;
+
+                if (drunk && !turnBased)
+                {
+                    party.switchToNextReadyMember();
+                }
+
+                if (!restockText.empty())
+                {
+                    config.pRuntime->setStatusBarEvent(restockText);
+                }
+
+                return result;
+            }
+
+            const SpellEntry *pSpellEntry = order.enabled && order.kind == BattleOrderKind::Spell
+                ? config.pSpellTable->findByName(order.spellName, spellKnownBy(member))
+                : nullptr;
+
+            if (pSpellEntry == nullptr || !member.knowsSpell(uint32_t(pSpellEntry->id)))
+            {
+                continue;
+            }
+
+            const uint32_t spellId = uint32_t(pSpellEntry->id);
+            const std::optional<uint32_t> manaCost =
+                PartySpellSystem::manaCost(party, member, *config.pSpellTable, spellId);
+
+            if (!battleOrderConditionsHold(order, situation, manaCost.value_or(0))
+                || !PartySpellSystem::worldAllowsSpell(party, *config.pWorldRuntime, spellId))
+            {
+                continue;
+            }
+
+            const std::optional<PartySpellSystem::UpkeepNeed> need = PartySpellSystem::upkeepNeed(
+                party, memberIndex, spellId, config.pSpellTable, order.renewBelowMinutes);
+
+            if (!need)
+            {
+                continue;
+            }
+
+            if ((manaCost && !party.canSpendSpellPoints(memberIndex, int(*manaCost)))
+                || party.rules().spells.castRefusal(party, memberIndex, spellId).has_value())
+            {
+                if (unaffordable.empty())
+                {
+                    unaffordable = Engine::localize(partySpellName(&party, member, *pSpellEntry), "spell");
+                }
+
+                continue;
+            }
+
+            // The caster becomes the active member, as an attack's does, and the selection moves on after the cast.
+            party.setActiveMemberIndex(memberIndex);
+            GameplaySpellService::TargetQueries targetQueries = {};
+            targetQueries.characterTargetIndex = need->targetCharacterIndex;
+            const GameplaySpellService::MemberSpellCastResolution cast = config.pSpellService->castSpellFromMember(
+                *config.pRuntime, memberIndex, spellId, pSpellEntry->name, true, &targetQueries);
+            result.attempted = true;
+            result.castStarted = cast.castStarted;
+            result.actingMemberIndex = memberIndex;
+
+            if (cast.castStarted && !cast.followupUiActive && !turnBased)
+            {
+                party.switchToNextReadyMember();
+            }
+
+            return result;
+        }
+    }
+
+    if (config.pressedThisFrame && restockText.empty())
+    {
+        config.pRuntime->setStatusBarEvent(!anyOrder ? Engine::tr("Nothing set to keep up (Battle Orders)")
+            : !unaffordable.empty()
+                ? Engine::tr("Upkeep: not enough spell points for {spell}", {{"spell", unaffordable}})
+            : !missingPotion.empty() ? Engine::tr("Upkeep: no {potion} left", {{"potion", missingPotion}})
+                : casters.empty() ? Engine::tr("Upkeep: nobody is ready")
+                                  : Engine::tr("Upkeep: nothing to cast"));
+    }
+
+    return result;
+}
+
+bool GameplayActionController::tryUnstuckParty(
+    Party &party,
+    IGameplayWorldRuntime &worldRuntime,
+    std::string &statusText)
+{
+    const std::optional<float> lift = party.rules().classes.unstuckLift(worldRuntime.gameMinutes());
+
+    if (!lift)
+    {
+        statusText = Engine::tr("You can't do that yet");
+        return false;
+    }
+
+    return worldRuntime.liftParty(*lift);
+}
+
+std::optional<std::string> GameplayActionController::tryPartyCharge(
+    Party &party,
+    IGameplayWorldRuntime &worldRuntime,
+    std::optional<size_t> targetActorIndex)
+{
+    return party.rules().classes.partyCharge(party, worldRuntime, targetActorIndex);
+}
+
+GameplayActionController::GatherLootResult GameplayActionController::gatherLoot(
+    Party &party,
+    IGameplayWorldRuntime &worldRuntime)
+{
+    const ItemRules &items = party.rules().items;
+    const std::optional<LootGathering> gathering = items.lootGathering();
+    GatherLootResult result = {};
+
+    if (!gathering)
+    {
+        return result;
+    }
+
+    // A completed map has nothing left to fight for its loot: the satchels empty straight into the bags, and only
+    // what did not fit is gathered.
+    const std::optional<RulesetMapProgress> progress = party.rules().monsters.mapProgress(worldRuntime);
+
+    if (progress && progress->complete && progress->kind != RulesetMapProgress::Kind::Arena)
+    {
+        result.summary = lootAllCorpses(worldRuntime, party);
+    }
+
+    const size_t corpses = worldRuntime.gatherCorpsesToParty(gathering->corpses);
+    const size_t gathered = worldRuntime.gatherWorldItemsToParty(gathering->items,
+        [&items](const InventoryItem &item)
+        {
+            return items.gathersItem(item);
+        });
+    // English says "monsters" and "crafting items" for every count; a language gives its own forms.
+    const std::string corpseText =
+        Engine::trn("{count} monsters", "{count} monsters", uint64_t(corpses), {{"count", uint64_t(corpses)}});
+    const std::string itemText = Engine::trn(
+        "{count} crafting items", "{count} crafting items", uint64_t(gathered), {{"count", uint64_t(gathered)}});
+    result.statusText = gathered == 0 ? Engine::tr("Teleported {monsters}", {{"monsters", corpseText}})
+        : corpses == 0               ? Engine::tr("Teleported {items}", {{"items", itemText}})
+                                     : Engine::tr("Teleported {monsters} and {items}",
+                                         {{"monsters", corpseText}, {"items", itemText}});
     return result;
 }
 } // namespace OpenYAMM::Game

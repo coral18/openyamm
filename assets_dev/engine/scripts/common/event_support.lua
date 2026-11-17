@@ -191,12 +191,15 @@ support.varTag = support.varTag or {
     Invisible = 0x013A,
     ItemEquipped = 0x013B,
     Players = 0x013E,
+    -- OpenYAMM's technology skills (no EVT encoding).
+    EnergyGunsSkill = 0x0140,
+    EnergyBladesSkill = 0x0141,
+    ShieldTechSkill = 0x0142,
+    HackingSkill = 0x0143,
+    CyberneticsSkill = 0x0144,
 }
 
-support.houseId = support.houseId or {
-    ThroneroomWinGood = 600,
-    ThroneroomWinEvil = 601,
-}
+support.houseId = support.houseId or {}
 
 support.houseAction = support.houseAction or {
     TempleHeal = 1,
@@ -223,6 +226,8 @@ support.houseAction = support.houseAction or {
     TransportRoute = 22,
     ExtraExit = 23,
     LorettaPriceFixing = 24,
+    OpenTeacherLedgerMenu = 33,
+    BuyTeacherLedger = 34,
 }
 
 support.faceAttribute = support.faceAttribute or {
@@ -412,6 +417,7 @@ support.itemType = support.itemType or {
     Weapon_ = 20,
     Armor_ = 21,
     Misc = 22,
+    Amulet = 12,
     Ring_ = 40,
     Scroll_ = 43,
 }
@@ -437,6 +443,12 @@ support.damage = support.damage or {
 support.skills = support.skills or {
     Perception = 31,
     DisarmTraps = 33,
+    -- The technology skills check by their event variables.
+    EnergyGuns = 0x0140,
+    EnergyBlades = 0x0141,
+    ShieldTech = 0x0142,
+    Hacking = 0x0143,
+    Cybernetics = 0x0144,
 }
 
 support.skillCheck = support.skillCheck or {
@@ -468,6 +480,8 @@ support.actorKillCheck = support.actorKillCheck or {
     MonsterId = 2,
     ActorIdOe = 3,
     UniqueNameId = 4,
+    -- OpenYAMM's own: every actor except the party's summons and other allies.
+    Hostile = 5,
 }
 
 support.skillJoinedMask = support.skillJoinedMask or {
@@ -497,6 +511,7 @@ local function ensureMetaScope(scopeName)
     meta.chestOpenHooks = meta.chestOpenHooks or {}
     meta.title = meta.title or {}
     meta.hint = meta.hint or {}
+    meta.learnedEffect = meta.learnedEffect or {}
     meta.openedChestIds = meta.openedChestIds or {}
     meta.contextActions = meta.contextActions or {}
     meta.textureNames = meta.textureNames or {}
@@ -505,6 +520,18 @@ local function ensureMetaScope(scopeName)
     meta.timers = meta.timers or {}
 
     return meta
+end
+
+-- Global hooks and on-load events add new events, so their id must not belong to another event: replacing would
+-- silently take it over (the 2026-10-24 audit, CNT-1: MAW's hooks took the Amethyst and Diamond crystal events). The
+-- same event registering again (its script runs once for the global program and again beside a map's) is fine.
+local function requireFreeGlobalEvent(eventId, title)
+    local meta = ensureMetaScope("global")
+
+    if evt.global[eventId] ~= nil and meta.title[eventId] ~= title then
+        error(string.format("global event %d (%s) is already registered as '%s'; use a free id",
+            eventId, tostring(title), tostring(meta.title[eventId])), 3)
+    end
 end
 
 local function removeArrayValue(values, value)
@@ -797,7 +824,7 @@ function support.registerScopeEvent(scopeName, tableName, eventId, title, handle
     if handler ~= nil then
         evt[tableName][eventId] = function(...)
             evt._BeginEvent(eventId)
-            handler(...)
+            evt._InvokeEventHandler(eventId, scopeName, handler, ...)
         end
     end
 end
@@ -848,8 +875,14 @@ function support.removeGlobalEvent(eventId)
 end
 
 function support.replaceMapEvent(eventId, title, handler, hint)
+    local meta = ensureMetaScope("map")
+    local contextAction = meta.contextActions[eventId]
+    local openedChestIds = meta.openedChestIds[eventId]
     support.removeMapEvent(eventId)
     support.registerEvent(eventId, title, handler, hint)
+    -- Replacing behavior keeps the interaction type; repurposed events can set or clear it explicitly.
+    meta.contextActions[eventId] = contextAction
+    meta.openedChestIds[eventId] = openedChestIds
 end
 
 function support.replaceGlobalEvent(eventId, title, handler, hint)
@@ -868,7 +901,7 @@ function support.appendScopeEvent(scopeName, tableName, eventId, handler)
         end
 
         if handler ~= nil then
-            handler(...)
+            evt._InvokeEventHandler(eventId, scopeName, handler, ...)
         end
     end
 end
@@ -892,6 +925,12 @@ end
 function support.registerNoOpEvent(eventId, title, hint)
     support.registerEvent(eventId, title, function()
     end, hint)
+end
+
+-- Once the party has autonote `autonoteId`, the event's hover name shows `effect` after it in parentheses, e.g.
+-- "Orange Barrel (+2 Intellect)" after the party has drunk from an orange barrel.
+function support.registerGlobalEventLearnedEffect(eventId, autonoteId, effect)
+    ensureMetaScope("global").learnedEffect[eventId] = {autonote = autonoteId, effect = effect}
 end
 
 function support.registerGlobalNoOpEvent(eventId, title, hint)
@@ -973,6 +1012,11 @@ function support.askQuestionWithAnswerSteps(eventId, fallbackStep, question, cho
     evt.AskQuestionWithAnswerSteps(eventId, fallbackStep, question, choices)
 end
 
+-- The same answers as dialog buttons: a click continues the event at that answer's step.
+function support.askChoiceWithAnswerSteps(eventId, fallbackStep, question, choices)
+    evt.AskChoiceWithAnswerSteps(eventId, fallbackStep, question, choices)
+end
+
 function support.setMapMetadata(metadata)
     local meta = ensureMetaScope("map")
     local existingOnLoad = meta.onLoad or {}
@@ -983,21 +1027,23 @@ function support.setMapMetadata(metadata)
         meta[key] = value
     end
 
-    if #existingOnLoad > 0 then
+    -- Merge earlier entries back only where the metadata replaced the list. A field the metadata leaves out keeps
+    -- the existing table, and appending a table to itself while iterating it never ends.
+    if #existingOnLoad > 0 and meta.onLoad ~= existingOnLoad then
         meta.onLoad = meta.onLoad or {}
         for _, eventId in ipairs(existingOnLoad) do
             table.insert(meta.onLoad, eventId)
         end
     end
 
-    if #existingOnLeave > 0 then
+    if #existingOnLeave > 0 and meta.onLeave ~= existingOnLeave then
         meta.onLeave = meta.onLeave or {}
         for _, eventId in ipairs(existingOnLeave) do
             table.insert(meta.onLeave, eventId)
         end
     end
 
-    if #existingTimers > 0 then
+    if #existingTimers > 0 and meta.timers ~= existingTimers then
         meta.timers = meta.timers or {}
         for _, timer in ipairs(existingTimers) do
             table.insert(meta.timers, timer)
@@ -1008,6 +1054,159 @@ end
 function support.setMapContextAction(eventId, metadata)
     local meta = ensureMetaScope("map")
     meta.contextActions[eventId] = metadata
+end
+
+function support.setMapInteractionReference(eventId, reference)
+    local handler = evt.map[eventId]
+    assert(type(handler) == "function", "Interaction reference requires a registered event handler")
+    local meta = ensureMetaScope("map")
+    meta.interactionReferences = meta.interactionReferences or {}
+    meta.interactionReferences[eventId] = {handler = handler, reference = reference}
+end
+
+function support.setMapSiteGroups(eventId, groups)
+    local handler = evt.map[eventId]
+    assert(type(handler) == "function", "Site groups require a registered map callback")
+    local meta = ensureMetaScope("map")
+    meta.siteGroups = meta.siteGroups or {}
+    meta.siteGroups[eventId] = {handler = handler, groups = groups}
+end
+
+function support.setMapConnectionTargets(eventId, maps)
+    local handler = evt.map[eventId]
+    assert(type(handler) == "function", "Connection targets require a registered map callback")
+    local meta = ensureMetaScope("map")
+    meta.connectionTargets = meta.connectionTargets or {}
+    meta.connectionTargets[eventId] = {handler = handler, maps = maps}
+end
+
+function support.setMapMonsterSpawns(eventId, spawns)
+    local handler = evt.map[eventId]
+    assert(type(handler) == "function", "Monster spawn references require a registered map callback")
+    local meta = ensureMetaScope("map")
+    meta.monsterSpawns = meta.monsterSpawns or {}
+    meta.monsterSpawns[eventId] = {handler = handler, spawns = spawns}
+end
+
+local function setItemRewards(scopeName, eventId, items)
+    local handler = evt[scopeName][eventId]
+    assert(type(handler) == "function", "Item reward metadata requires a registered event handler")
+    local meta = ensureMetaScope(scopeName)
+    meta.itemRewards = meta.itemRewards or {}
+    -- Binding to the actual callback prevents an overlay from inheriting stale base rewards.
+    meta.itemRewards[eventId] = {handler = handler, items = items}
+end
+
+function support.setMapItemRewards(eventId, items)
+    setItemRewards("map", eventId, items)
+end
+
+function support.setGlobalItemRewards(eventId, items)
+    setItemRewards("global", eventId, items)
+end
+
+local function setSiteReference(scopeName, eventId, text, kind, dependencies)
+    local handler = evt[scopeName][eventId]
+    assert(type(handler) == "function", "Site reference requires a registered event handler")
+    local meta = ensureMetaScope(scopeName)
+    meta.siteReferences = meta.siteReferences or {}
+    local captured = nil
+    if dependencies ~= nil then
+        assert(scopeName == "map" and type(dependencies) == "table" and #dependencies <= 64,
+            "Site reference dependencies require a dense array of map callbacks")
+        captured = {}
+        local count = 0
+        for index, id in pairs(dependencies) do
+            assert(math.type(index) == "integer" and index >= 1 and index <= #dependencies
+                and math.type(id) == "integer" and id > 0 and id <= 65535 and id ~= eventId
+                and captured[id] == nil, "Invalid site reference dependency")
+            assert(type(evt.map[id]) == "function", "Site reference dependency requires a registered map callback")
+            captured[id] = evt.map[id]
+            count = count + 1
+        end
+        assert(count == #dependencies, "Site reference dependencies must be dense")
+    end
+    meta.siteReferences[eventId] = {handler = handler, text = text, kind = kind, dependencies = captured}
+end
+
+function support.setMapSiteReference(eventId, text, kind, dependencies)
+    setSiteReference("map", eventId, text, kind, dependencies)
+end
+
+function support.setGlobalSiteReference(eventId, text)
+    setSiteReference("global", eventId, text)
+end
+
+local function setAutonoteReferences(scopeName, eventId, notes)
+    local handler = evt[scopeName][eventId]
+    assert(type(handler) == "function", "Autonote metadata requires a registered event handler")
+    local meta = ensureMetaScope(scopeName)
+    meta.autonoteReferences = meta.autonoteReferences or {}
+    meta.autonoteReferences[eventId] = {handler = handler, notes = notes}
+end
+
+function support.setMapAutonoteRefs(eventId, notes)
+    setAutonoteReferences("map", eventId, notes)
+end
+
+function support.setGlobalAutonoteRefs(eventId, notes)
+    setAutonoteReferences("global", eventId, notes)
+end
+
+local function setNpcLocations(scopeName, eventId, locations)
+    local handler = evt[scopeName][eventId]
+    assert(type(handler) == "function", "NPC location metadata requires a registered event handler")
+    local meta = ensureMetaScope(scopeName)
+    meta.npcLocations = meta.npcLocations or {}
+    meta.npcLocations[eventId] = {handler = handler, locations = locations}
+end
+
+function support.setMapNpcLocations(eventId, locations)
+    setNpcLocations("map", eventId, locations)
+end
+
+function support.setGlobalNpcLocations(eventId, locations)
+    setNpcLocations("global", eventId, locations)
+end
+
+local function setQBitGrants(scopeName, eventId, qbits)
+    local handler = evt[scopeName][eventId]
+    assert(type(handler) == "function", "Campaign flag references require a registered event handler")
+    local meta = ensureMetaScope(scopeName)
+    meta.qbitGrants = meta.qbitGrants or {}
+    meta.qbitGrants[eventId] = {handler = handler, qbits = qbits}
+end
+
+function support.setMapQBitGrants(eventId, qbits)
+    setQBitGrants("map", eventId, qbits)
+end
+
+function support.setGlobalQBitGrants(eventId, qbits)
+    setQBitGrants("global", eventId, qbits)
+end
+
+local function setNpcTopicReferences(scopeName, eventId, topics)
+    local handler = evt[scopeName][eventId]
+    assert(type(handler) == "function", "NPC topic references require a registered event handler")
+    local meta = ensureMetaScope(scopeName)
+    meta.npcTopicReferences = meta.npcTopicReferences or {}
+    meta.npcTopicReferences[eventId] = {handler = handler, topics = topics}
+end
+
+function support.setMapNpcTopicRefs(eventId, topics)
+    setNpcTopicReferences("map", eventId, topics)
+end
+
+function support.setMapNpcEncounters(eventId, npcs)
+    local handler = evt.map[eventId]
+    assert(type(handler) == "function", "NPC encounter references require a registered map handler")
+    local meta = ensureMetaScope("map")
+    meta.npcEncounters = meta.npcEncounters or {}
+    meta.npcEncounters[eventId] = {handler = handler, npcs = npcs}
+end
+
+function support.setGlobalNpcTopicRefs(eventId, topics)
+    setNpcTopicReferences("global", eventId, topics)
 end
 
 function support.appendMapOnLoadEvent(eventId)
@@ -1054,6 +1253,7 @@ function support.appendGlobalOnLoadEvent(eventId)
 end
 
 function support.registerGlobalOnLoadEvent(eventId, title, handler, hint)
+    requireFreeGlobalEvent(eventId, title)
     support.registerGlobalEvent(eventId, title, handler, hint)
     support.appendGlobalOnLoadEvent(eventId)
 end
@@ -1090,6 +1290,7 @@ local function registerMapHook(hookName, eventId, title, handler)
 end
 
 local function registerGlobalHook(hookName, eventId, title, handler)
+    requireFreeGlobalEvent(eventId, title)
     support.replaceGlobalEvent(eventId, title, function()
         handler(evt.GetHookContext())
     end)
@@ -1243,6 +1444,10 @@ function support.advanceGameMinutes(minutes)
     evt.AdvanceGameMinutes(minutes or 0)
 end
 
+function support.restAndHealParty()
+    evt.RestAndHealParty()
+end
+
 function support.getRuntimeVariable(variableId)
     return evt.GetRuntimeVariable(variableId)
 end
@@ -1303,6 +1508,10 @@ function support.playerKnowsSpell(playerIndex, spellId)
     return evt.PartyMemberKnowsSpell(playerIndex, spellId or 0)
 end
 
+function support.forgetPlayerSpell(playerIndex, spellId)
+    return evt.ForgetPartyMemberSpell(playerIndex, spellId or 0)
+end
+
 function support.removePlayerItem(playerIndex, itemId, quantity)
     return evt.RemovePartyMemberItem(playerIndex, itemId or 0, quantity or 1)
 end
@@ -1321,6 +1530,16 @@ end
 
 function support.canPlayerLearnSkill(playerIndex, skillName, requiredMastery)
     return evt.CanPlayerLearnSkill(playerIndex, skillName or "", requiredMastery or 1)
+end
+
+-- Returns the base level and the mastery (0 none .. 4 Grandmaster) of a skill.
+function support.getPlayerSkill(playerIndex, skillName)
+    return evt.GetPlayerSkill(playerIndex, skillName or "")
+end
+
+-- Level or mastery 0 removes the skill.
+function support.setPlayerSkill(playerIndex, skillName, level, mastery)
+    return evt.SetPlayerSkill(playerIndex, skillName or "", level or 0, mastery or 0)
 end
 
 local function normalizeClassId(classIdOrName)
@@ -1438,13 +1657,17 @@ function support.promotePlayers(promotion)
     return result
 end
 
-function support.applyLocalMonsterRelations(relations)
-    if relations == nil then
-        return
-    end
+-- MMMerge's per-map hostile.txt cells (LocalHostileTxt(), then Game.HostileTxt[faction][otherFaction] = relation):
+-- {faction, otherFaction, relation} in the table's faction numbers, where faction 0 is the party and monster id m is
+-- faction (m - 1) // 3 + 1. Call at the top level of a map script: the game reads them when the map loads, before its
+-- actors take their starting hostility, and they last while the map is loaded. Group and actor hostility bits,
+-- reputation and party attacks still decide over them, as in MMMerge.
+function support.setLocalFactionRelations(relations)
+    local meta = ensureMetaScope("map")
+    meta.factionRelations = meta.factionRelations or {}
 
     for _, relation in ipairs(relations) do
-        evt.SetMonsterRelation(relation[1] or 0, relation[2] or 0, relation[3] or 0)
+        table.insert(meta.factionRelations, {relation[1], relation[2], relation[3]})
     end
 end
 
@@ -1470,21 +1693,23 @@ function support.setGlobalMetadata(metadata)
         meta[key] = value
     end
 
-    if #existingOnLoad > 0 then
+    -- Merge earlier entries back only where the metadata replaced the list. A field the metadata leaves out keeps
+    -- the existing table, and appending a table to itself while iterating it never ends.
+    if #existingOnLoad > 0 and meta.onLoad ~= existingOnLoad then
         meta.onLoad = meta.onLoad or {}
         for _, eventId in ipairs(existingOnLoad) do
             table.insert(meta.onLoad, eventId)
         end
     end
 
-    if #existingOnLeave > 0 then
+    if #existingOnLeave > 0 and meta.onLeave ~= existingOnLeave then
         meta.onLeave = meta.onLeave or {}
         for _, eventId in ipairs(existingOnLeave) do
             table.insert(meta.onLeave, eventId)
         end
     end
 
-    if #existingTimers > 0 then
+    if #existingTimers > 0 and meta.timers ~= existingTimers then
         meta.timers = meta.timers or {}
         for _, timer in ipairs(existingTimers) do
             table.insert(meta.timers, timer)
@@ -1560,6 +1785,7 @@ RegisterEvent = support.registerEvent
 RegisterGlobalEvent = support.registerGlobalEvent
 RegisterNoOpEvent = support.registerNoOpEvent
 RegisterGlobalNoOpEvent = support.registerGlobalNoOpEvent
+RegisterGlobalEventLearnedEffect = support.registerGlobalEventLearnedEffect
 RemoveMapEvent = support.removeMapEvent
 RemoveGlobalEvent = support.removeGlobalEvent
 ReplaceMapEvent = support.replaceMapEvent
@@ -1580,8 +1806,26 @@ ClearTransportRouteOverride = support.clearTransportRouteOverride
 CastSpellFromTo = support.castSpellFromTo
 PickRandomOption = support.pickRandomOption
 AskQuestionWithAnswerSteps = support.askQuestionWithAnswerSteps
+AskChoiceWithAnswerSteps = support.askChoiceWithAnswerSteps
 SetMapMetadata = support.setMapMetadata
 SetMapContextAction = support.setMapContextAction
+SetMapInteractionReference = support.setMapInteractionReference
+SetMapSiteGroups = support.setMapSiteGroups
+SetMapConnectionTargets = support.setMapConnectionTargets
+SetMapItemRewards = support.setMapItemRewards
+SetMapMonsterSpawns = support.setMapMonsterSpawns
+SetGlobalItemRewards = support.setGlobalItemRewards
+SetMapSiteReference = support.setMapSiteReference
+SetGlobalSiteReference = support.setGlobalSiteReference
+SetMapAutonoteRefs = support.setMapAutonoteRefs
+SetGlobalAutonoteRefs = support.setGlobalAutonoteRefs
+SetMapNpcLocations = support.setMapNpcLocations
+SetGlobalNpcLocations = support.setGlobalNpcLocations
+SetMapNpcTopicRefs = support.setMapNpcTopicRefs
+SetMapNpcEncounters = support.setMapNpcEncounters
+SetGlobalNpcTopicRefs = support.setGlobalNpcTopicRefs
+SetMapQBitGrants = support.setMapQBitGrants
+SetGlobalQBitGrants = support.setGlobalQBitGrants
 AppendMapOnLoadEvent = support.appendMapOnLoadEvent
 AppendMapOnLeaveEvent = support.appendMapOnLeaveEvent
 RegisterMapOnLoadEvent = support.registerMapOnLoadEvent
@@ -1624,6 +1868,7 @@ CurrentGameMinutes = support.currentGameMinutes
 NPCText = support.npcText
 CurrentContinent = support.currentContinent
 AdvanceGameMinutes = support.advanceGameMinutes
+RestAndHealParty = support.restAndHealParty
 GetRuntimeVariable = support.getRuntimeVariable
 SetRuntimeVariable = support.setRuntimeVariable
 CurrentEventSpellId = support.currentEventSpellId
@@ -1638,15 +1883,18 @@ PlayerItemCount = support.playerItemCount
 PlayerHasItem = support.playerHasItem
 GivePlayerItem = support.givePlayerItem
 PlayerKnowsSpell = support.playerKnowsSpell
+ForgetPlayerSpell = support.forgetPlayerSpell
 RemovePlayerItem = support.removePlayerItem
 ApplyLichTransformation = support.applyLichTransformation
 GetClassSkillCap = support.getClassSkillCap
 CanClassLearnSkill = support.canClassLearnSkill
 CanPlayerLearnSkill = support.canPlayerLearnSkill
+GetPlayerSkill = support.getPlayerSkill
+SetPlayerSkill = support.setPlayerSkill
 PlayerClassMatches = support.playerClassMatches
 ApplyPlayerRewards = support.applyPlayerRewards
 PromotePlayers = support.promotePlayers
-ApplyLocalMonsterRelations = support.applyLocalMonsterRelations
+SetLocalFactionRelations = support.setLocalFactionRelations
 SetNPCName = support.setNpcName
 SetNPCPicture = support.setNpcPicture
 SetNPCProfession = support.setNpcProfession
@@ -1743,12 +1991,15 @@ setPlayerClass = support.setPlayerClass
 playerItemCount = support.playerItemCount
 playerHasItem = support.playerHasItem
 playerKnowsSpell = support.playerKnowsSpell
+forgetPlayerSpell = support.forgetPlayerSpell
 removePlayerItem = support.removePlayerItem
 applyLichTransformation = support.applyLichTransformation
 getClassSkillCap = support.getClassSkillCap
 canClassLearnSkill = support.canClassLearnSkill
 canPlayerLearnSkill = support.canPlayerLearnSkill
+getPlayerSkill = support.getPlayerSkill
+setPlayerSkill = support.setPlayerSkill
 playerClassMatches = support.playerClassMatches
 applyPlayerRewards = support.applyPlayerRewards
 promotePlayers = support.promotePlayers
-applyLocalMonsterRelations = support.applyLocalMonsterRelations
+setLocalFactionRelations = support.setLocalFactionRelations

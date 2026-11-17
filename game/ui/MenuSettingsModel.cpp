@@ -1,12 +1,55 @@
 #include "game/ui/MenuSettingsModel.h"
+#include "engine/Localization.h"
 #include "game/render/CombatActorHealthBarPolicy.h"
+#include <algorithm>
+#include <array>
 #include <charconv>
 #include <stdexcept>
 
 namespace OpenYAMM::Game
 {
+namespace
+{
+// Low is the Android default, High the desktop default and the best quality, Medium in between. Presets own these menu
+// options and three INI-only terrain and sky fields; display, taste and gameplay-feel options stay the player's.
+constexpr std::array<std::string_view, 3> GraphicsQualityPresets = {"low", "medium", "high"};
+
+struct GraphicsQualityOption
+{
+    std::string_view id;
+    std::array<std::string_view, 3> values;
+};
+
+constexpr GraphicsQualityOption GraphicsQualityOptions[] = {
+    {"antialiasing", {"off", "off", "4x"}},
+    {"ambient_occlusion", {"false", "false", "true"}},
+    {"bloom", {"false", "true", "true"}},
+    {"model_shadow_quality", {"0", "0", "2"}},
+    {"terrain_decorations", {"false", "true", "true"}},
+    {"terrain_anisotropy", {"2x", "4x", "8x"}},
+    {"terrain_specular", {"false", "true", "true"}},
+    {"wet_surfaces", {"true", "true", "true"}},
+    {"weather_quality", {"medium", "high", "high"}},
+    {"light_grid", {"low", "high", "high"}},
+    {"water_reflections", {"true", "true", "true"}},
+    {"water_reflection_size", {"256", "512", "512"}},
+    {"water_sprite_reflections", {"false", "false", "true"}},
+    {"water_movement_ripples", {"true", "true", "true"}},
+    {"rain_ripples", {"true", "true", "true"}},
+    {"view_distance", {"default", "default", "default"}},
+};
+constexpr std::array<int, 3> GraphicsQualityTerrainSubdivisions = {2, 4, 4};
+// Anti-tiling costs about 0.1 ms of GPU time at ground level (Harmondale, 1600x900), so only High keeps it.
+constexpr std::array<bool, 3> GraphicsQualityTerrainAntiTiling = {false, false, true};
+constexpr std::array<float, 3> GraphicsQualitySkyResolutionScales = {0.5f, 1.0f, 1.0f};
+}
+
 std::string menuSettingValue(const GameSettings &settings, std::string_view id)
 {
+    if (id == "graphics_quality")
+    {
+        return graphicsQualityPreset(settings);
+    }
     if (id == "bolster_monsters")
     {
         return settings.bolsterMonsters ? "true" : "false";
@@ -15,9 +58,41 @@ std::string menuSettingValue(const GameSettings &settings, std::string_view id)
     {
         return settings.questMarkers ? "true" : "false";
     }
+    if (id == "map_style")
+    {
+        return settings.paintedMaps ? "painted" : "lines";
+    }
+    if (id == "party_frame")
+    {
+        return settings.partyFrame ? "true" : "false";
+    }
+    if (id == "quick_item_rings")
+    {
+        return settings.quickItemRings ? "true" : "false";
+    }
+    if (id == "item_buttons")
+    {
+        return settings.basebarItemButtons ? "true" : "false";
+    }
     if (id == "combat_text")
     {
         return settings.combatText ? "true" : "false";
+    }
+    if (id == "combat_log")
+    {
+        return combatLogModeValue(settings.combatLog);
+    }
+    if (id == "turn_based_monster_speed")
+    {
+        return turnBasedSpeedValue(settings.turnBasedMonsterSpeed);
+    }
+    if (id == "turn_based_party_speed")
+    {
+        return turnBasedSpeedValue(settings.turnBasedPartySpeed);
+    }
+    if (id == "language")
+    {
+        return settings.language;
     }
     if (id == "enemy_health_bars")
     {
@@ -31,6 +106,22 @@ std::string menuSettingValue(const GameSettings &settings, std::string_view id)
     {
         return settings.enemyHealthBarDamageTrail ? "true" : "false";
     }
+    if (id == "enemy_health_bar_effects")
+    {
+        return settings.enemyHealthBarEffects ? "true" : "false";
+    }
+    if (id == "potion_expiry_warnings")
+    {
+        return settings.potionExpiryWarnings ? "true" : "false";
+    }
+    if (id == "workbench_keep_mixed_potions")
+    {
+        return settings.workbenchKeepMixedPotions ? "true" : "false";
+    }
+    if (id == "upkeep_auto_brew")
+    {
+        return settings.upkeepAutoBrew ? "true" : "false";
+    }
     if (id == "show_hits")
     {
         return settings.showHits ? "true" : "false";
@@ -38,6 +129,14 @@ std::string menuSettingValue(const GameSettings &settings, std::string_view id)
     if (id == "context_action_popup")
     {
         return settings.contextActionPopup ? "true" : "false";
+    }
+    if (id == "rarity_glow")
+    {
+        return settings.rarityGlow;
+    }
+    if (id == "craft_preview")
+    {
+        return settings.craftPreview;
     }
     if (id == "skip_event_cutscenes")
     {
@@ -47,9 +146,25 @@ std::string menuSettingValue(const GameSettings &settings, std::string_view id)
     {
         return settings.verticalSync ? "true" : "false";
     }
+    if (id == "check_for_updates")
+    {
+        return settings.updateCheck;
+    }
+    if (id == "antialiasing")
+    {
+        return antialiasingValue(settings.antialiasing);
+    }
     if (id == "view_distance")
     {
         return settings.viewDistance;
+    }
+    if (id == "model_shadow_quality")
+    {
+        return std::to_string(settings.shadows ? settings.modelShadowQuality : 0);
+    }
+    if (id == "model_lods")
+    {
+        return settings.modelLods ? "true" : "false";
     }
     if (id == "texture_filtering")
     {
@@ -62,10 +177,6 @@ std::string menuSettingValue(const GameSettings &settings, std::string_view id)
     if (id == "terrain_decorations")
     {
         return settings.terrainDecorations ? "true" : "false";
-    }
-    if (id == "water_shader")
-    {
-        return settings.waterShader ? "true" : "false";
     }
     if (id == "water_reflections")
     {
@@ -83,6 +194,62 @@ std::string menuSettingValue(const GameSettings &settings, std::string_view id)
     {
         return settings.waterSpriteReflections ? "true" : "false";
     }
+    if (id == "weather_quality")
+    {
+        return weatherQualityValue(settings.weatherQuality);
+    }
+    if (id == "light_grid")
+    {
+        return lightGridQualityValue(settings.lightGrid);
+    }
+    if (id == "wet_surfaces")
+    {
+        return settings.wetSurfaces ? "true" : "false";
+    }
+    if (id == "terrain_specular")
+    {
+        return settings.terrainSpecular ? "true" : "false";
+    }
+    if (id == "surface_materials")
+    {
+        return settings.surfaceMaterials ? "true" : "false";
+    }
+    if (id == "surface_parallax")
+    {
+        return settings.surfaceParallax ? "true" : "false";
+    }
+    if (id == "surface_reflections")
+    {
+        return settings.surfaceReflections ? "true" : "false";
+    }
+    if (id == "rain_ripples")
+    {
+        return settings.rainRipples ? "true" : "false";
+    }
+    if (id == "ambient_occlusion")
+    {
+        return settings.ambientOcclusion ? "true" : "false";
+    }
+    if (id == "ambient_occlusion_strength")
+    {
+        return std::to_string(settings.ambientOcclusionStrength);
+    }
+    if (id == "bloom")
+    {
+        return settings.bloom ? "true" : "false";
+    }
+    if (id == "bloom_strength")
+    {
+        return std::to_string(settings.bloomStrength);
+    }
+    if (id == "mist")
+    {
+        return settings.mist ? "true" : "false";
+    }
+    if (id == "mist_strength")
+    {
+        return std::to_string(settings.mistStrength);
+    }
     if (id == "cinematic_grading")
     {
         return settings.cinematicGrading ? "true" : "false";
@@ -91,9 +258,17 @@ std::string menuSettingValue(const GameSettings &settings, std::string_view id)
     {
         return std::to_string(settings.cinematicStrength);
     }
+    if (id == "sharpening")
+    {
+        return std::to_string(settings.sharpening);
+    }
     if (id == "colored_lights")
     {
         return settings.coloredLights ? "true" : "false";
+    }
+    if (id == "warm_torch_light")
+    {
+        return settings.warmTorchLight ? "true" : "false";
     }
     if (id == "tinting")
     {
@@ -106,6 +281,46 @@ std::string menuSettingValue(const GameSettings &settings, std::string_view id)
     if (id == "melee_hit_blood_effects")
     {
         return settings.meleeHitBloodEffects ? "true" : "false";
+    }
+    if (id == "melee_hit_effects")
+    {
+        return settings.meleeHitEffects ? "true" : "false";
+    }
+    if (id == "melee_hit_feedback")
+    {
+        return settings.meleeHitFeedback ? "true" : "false";
+    }
+    if (id == "melee_hit_flash")
+    {
+        return settings.meleeHitFlash ? "true" : "false";
+    }
+    if (id == "melee_camera_kick")
+    {
+        return settings.meleeCameraKick ? "true" : "false";
+    }
+    if (id == "fast_attack_repeat")
+    {
+        return settings.fastAttackRepeat ? "true" : "false";
+    }
+    if (id == "formations_everywhere")
+    {
+        return settings.formationsEverywhere ? "true" : "false";
+    }
+    if (id == "shop_list_view")
+    {
+        return settings.shopListView ? "true" : "false";
+    }
+    if (id == "loot_sparkle")
+    {
+        return settings.lootSparkle ? "true" : "false";
+    }
+    if (id == "quicksave_slots")
+    {
+        return std::to_string(settings.quickSaveSlots);
+    }
+    if (id == "mm9_loot_in_older_worlds")
+    {
+        return settings.mm9LootInOlderWorlds ? "true" : "false";
     }
     if (id == "sound_volume")
     {
@@ -123,6 +338,10 @@ std::string menuSettingValue(const GameSettings &settings, std::string_view id)
     {
         return settings.walksound ? "true" : "false";
     }
+    if (id == "repeated_voice_lines")
+    {
+        return repeatedVoiceLineIntervalValue(settings.repeatedVoiceLineIntervalMs);
+    }
     if (id == "mouse_sensitivity")
     {
         return std::to_string(settings.mouseSensitivity);
@@ -131,9 +350,17 @@ std::string menuSettingValue(const GameSettings &settings, std::string_view id)
     {
         return settings.invertMouseY ? "true" : "false";
     }
+    if (id == "smart_click")
+    {
+        return settings.smartClick ? "true" : "false";
+    }
     if (id == "always_run")
     {
         return settings.alwaysRun ? "true" : "false";
+    }
+    if (id == "bag_number_keys")
+    {
+        return settings.bagNumberKeys;
     }
     if (id == "flip_on_exit")
     {
@@ -189,6 +416,11 @@ std::string menuSettingValue(const GameSettings &settings, std::string_view id)
 
 bool setMenuSettingValue(GameSettings &settings, std::string_view id, const std::string &value)
 {
+    if (id == "graphics_quality")
+    {
+        // Custom only names a mix of presets, so choosing it keeps the current options.
+        return value == "custom" || applyGraphicsQualityPreset(settings, value);
+    }
     if (id == "bolster_monsters")
     {
         if (value != "true" && value != "false")
@@ -207,6 +439,33 @@ bool setMenuSettingValue(GameSettings &settings, std::string_view id, const std:
         settings.questMarkers = value == "true";
         return true;
     }
+    if (id == "map_style")
+    {
+        if (value != "painted" && value != "lines")
+        {
+            return false;
+        }
+        settings.paintedMaps = value == "painted";
+        return true;
+    }
+    if (id == "party_frame")
+    {
+        if (value != "true" && value != "false")
+        {
+            return false;
+        }
+        settings.partyFrame = value == "true";
+        return true;
+    }
+    if (id == "quick_item_rings" || id == "item_buttons")
+    {
+        if (value != "true" && value != "false")
+        {
+            return false;
+        }
+        (id == "quick_item_rings" ? settings.quickItemRings : settings.basebarItemButtons) = value == "true";
+        return true;
+    }
     if (id == "combat_text")
     {
         if (value != "true" && value != "false")
@@ -214,6 +473,33 @@ bool setMenuSettingValue(GameSettings &settings, std::string_view id, const std:
             return false;
         }
         settings.combatText = value == "true";
+        return true;
+    }
+    if (id == "combat_log")
+    {
+        const std::optional<CombatLogMode> mode = parseCombatLogModeValue(value);
+        if (!mode)
+        {
+            return false;
+        }
+        settings.combatLog = *mode;
+        return true;
+    }
+    if (id == "turn_based_monster_speed")
+    {
+        return parseTurnBasedSpeedValue(value, settings.turnBasedMonsterSpeed);
+    }
+    if (id == "turn_based_party_speed")
+    {
+        return parseTurnBasedSpeedValue(value, settings.turnBasedPartySpeed);
+    }
+    if (id == "language")
+    {
+        if (!Engine::validLanguageId(value))
+        {
+            return false;
+        }
+        settings.language = value;
         return true;
     }
     if (id == "enemy_health_bars")
@@ -243,6 +529,26 @@ bool setMenuSettingValue(GameSettings &settings, std::string_view id, const std:
         settings.enemyHealthBarDamageTrail = value == "true";
         return true;
     }
+    if (id == "enemy_health_bar_effects")
+    {
+        if (value != "true" && value != "false")
+        {
+            return false;
+        }
+        settings.enemyHealthBarEffects = value == "true";
+        return true;
+    }
+    if (id == "potion_expiry_warnings" || id == "workbench_keep_mixed_potions" || id == "upkeep_auto_brew")
+    {
+        if (value != "true" && value != "false")
+        {
+            return false;
+        }
+        (id == "potion_expiry_warnings"         ? settings.potionExpiryWarnings
+            : id == "workbench_keep_mixed_potions" ? settings.workbenchKeepMixedPotions
+                                                   : settings.upkeepAutoBrew) = value == "true";
+        return true;
+    }
     if (id == "show_hits")
     {
         if (value != "true" && value != "false")
@@ -259,6 +565,24 @@ bool setMenuSettingValue(GameSettings &settings, std::string_view id, const std:
             return false;
         }
         settings.contextActionPopup = value == "true";
+        return true;
+    }
+    if (id == "rarity_glow")
+    {
+        if (!validRarityGlowValue(value))
+        {
+            return false;
+        }
+        settings.rarityGlow = value;
+        return true;
+    }
+    if (id == "craft_preview")
+    {
+        if (!validRarityGlowValue(value))
+        {
+            return false;
+        }
+        settings.craftPreview = value;
         return true;
     }
     if (id == "skip_event_cutscenes")
@@ -279,6 +603,23 @@ bool setMenuSettingValue(GameSettings &settings, std::string_view id, const std:
         settings.verticalSync = value == "true";
         return true;
     }
+    if (id == "check_for_updates")
+    {
+        if (value != "ask" && value != "auto" && value != "off")
+        {
+            return false;
+        }
+        settings.updateCheck = value;
+        return true;
+    }
+    if (id == "antialiasing")
+    {
+        if (value != "off" && value != "2x" && value != "4x")
+        {
+            return false;
+        }
+        return parseAntialiasingValue(value, settings.antialiasing);
+    }
     if (id == "view_distance")
     {
         if (value != "default" && value != "32768" && value != "unlimited")
@@ -286,6 +627,25 @@ bool setMenuSettingValue(GameSettings &settings, std::string_view id, const std:
             return false;
         }
         settings.viewDistance = value;
+        return true;
+    }
+    if (id == "model_shadow_quality")
+    {
+        if (value != "0" && value != "1" && value != "2" && value != "3")
+        {
+            return false;
+        }
+        settings.modelShadowQuality = value[0] - '0';
+        settings.shadows = settings.modelShadowQuality != 0;
+        return true;
+    }
+    if (id == "model_lods")
+    {
+        if (value != "true" && value != "false")
+        {
+            return false;
+        }
+        settings.modelLods = value == "true";
         return true;
     }
     if (id == "texture_filtering")
@@ -321,18 +681,13 @@ bool setMenuSettingValue(GameSettings &settings, std::string_view id, const std:
         settings.terrainDecorations = value == "true";
         return true;
     }
-    if (id == "water_shader" || id == "water_reflections" || id == "water_sprite_reflections"
-        || id == "water_movement_ripples")
+    if (id == "water_reflections" || id == "water_sprite_reflections" || id == "water_movement_ripples")
     {
         if (value != "true" && value != "false")
         {
             return false;
         }
-        if (id == "water_shader")
-        {
-            settings.waterShader = value == "true";
-        }
-        else if (id == "water_reflections")
+        if (id == "water_reflections")
         {
             settings.waterReflections = value == "true";
         }
@@ -346,6 +701,28 @@ bool setMenuSettingValue(GameSettings &settings, std::string_view id, const std:
         }
         return true;
     }
+    if (id == "weather_quality")
+    {
+        return parseWeatherQualityValue(value, settings.weatherQuality);
+    }
+    if (id == "light_grid")
+    {
+        return parseLightGridQualityValue(value, settings.lightGrid);
+    }
+    if (id == "wet_surfaces" || id == "rain_ripples" || id == "terrain_specular" || id == "surface_materials"
+        || id == "surface_parallax" || id == "surface_reflections")
+    {
+        if (value != "true" && value != "false")
+        {
+            return false;
+        }
+        (id == "wet_surfaces" ? settings.wetSurfaces
+            : id == "rain_ripples" ? settings.rainRipples
+            : id == "terrain_specular" ? settings.terrainSpecular
+            : id == "surface_materials" ? settings.surfaceMaterials
+            : id == "surface_parallax" ? settings.surfaceParallax : settings.surfaceReflections) = value == "true";
+        return true;
+    }
     if (id == "water_reflection_size")
     {
         int number = 0;
@@ -356,6 +733,66 @@ bool setMenuSettingValue(GameSettings &settings, std::string_view id, const std:
             return false;
         }
         settings.waterReflectionSize = number;
+        return true;
+    }
+    if (id == "ambient_occlusion")
+    {
+        if (value != "true" && value != "false")
+        {
+            return false;
+        }
+        settings.ambientOcclusion = value == "true";
+        return true;
+    }
+    if (id == "ambient_occlusion_strength")
+    {
+        int number = 0;
+        const auto result = std::from_chars(value.data(), value.data() + value.size(), number);
+        if (result.ec != std::errc{} || result.ptr != value.data() + value.size() || number < 0 || number > 100)
+        {
+            return false;
+        }
+        settings.ambientOcclusionStrength = number;
+        return true;
+    }
+    if (id == "bloom")
+    {
+        if (value != "true" && value != "false")
+        {
+            return false;
+        }
+        settings.bloom = value == "true";
+        return true;
+    }
+    if (id == "mist")
+    {
+        if (value != "true" && value != "false")
+        {
+            return false;
+        }
+        settings.mist = value == "true";
+        return true;
+    }
+    if (id == "mist_strength")
+    {
+        int number = 0;
+        const auto result = std::from_chars(value.data(), value.data() + value.size(), number);
+        if (result.ec != std::errc{} || result.ptr != value.data() + value.size() || number < 0 || number > 200)
+        {
+            return false;
+        }
+        settings.mistStrength = number;
+        return true;
+    }
+    if (id == "bloom_strength")
+    {
+        int number = 0;
+        const auto result = std::from_chars(value.data(), value.data() + value.size(), number);
+        if (result.ec != std::errc{} || result.ptr != value.data() + value.size() || number < 0 || number > 100)
+        {
+            return false;
+        }
+        settings.bloomStrength = number;
         return true;
     }
     if (id == "cinematic_grading")
@@ -378,6 +815,17 @@ bool setMenuSettingValue(GameSettings &settings, std::string_view id, const std:
         settings.cinematicStrength = number;
         return true;
     }
+    if (id == "sharpening")
+    {
+        int number = 0;
+        const auto result = std::from_chars(value.data(), value.data() + value.size(), number);
+        if (result.ec != std::errc{} || result.ptr != value.data() + value.size() || number < 0 || number > 100)
+        {
+            return false;
+        }
+        settings.sharpening = number;
+        return true;
+    }
     if (id == "colored_lights")
     {
         if (value != "true" && value != "false")
@@ -385,6 +833,15 @@ bool setMenuSettingValue(GameSettings &settings, std::string_view id, const std:
             return false;
         }
         settings.coloredLights = value == "true";
+        return true;
+    }
+    if (id == "warm_torch_light")
+    {
+        if (value != "true" && value != "false")
+        {
+            return false;
+        }
+        settings.warmTorchLight = value == "true";
         return true;
     }
     if (id == "tinting")
@@ -412,6 +869,98 @@ bool setMenuSettingValue(GameSettings &settings, std::string_view id, const std:
             return false;
         }
         settings.meleeHitBloodEffects = value == "true";
+        return true;
+    }
+    if (id == "melee_hit_effects")
+    {
+        if (value != "true" && value != "false")
+        {
+            return false;
+        }
+        settings.meleeHitEffects = value == "true";
+        return true;
+    }
+    if (id == "melee_hit_feedback")
+    {
+        if (value != "true" && value != "false")
+        {
+            return false;
+        }
+        settings.meleeHitFeedback = value == "true";
+        return true;
+    }
+    if (id == "melee_hit_flash")
+    {
+        if (value != "true" && value != "false")
+        {
+            return false;
+        }
+        settings.meleeHitFlash = value == "true";
+        return true;
+    }
+    if (id == "melee_camera_kick")
+    {
+        if (value != "true" && value != "false")
+        {
+            return false;
+        }
+        settings.meleeCameraKick = value == "true";
+        return true;
+    }
+    if (id == "fast_attack_repeat")
+    {
+        if (value != "true" && value != "false")
+        {
+            return false;
+        }
+        settings.fastAttackRepeat = value == "true";
+        return true;
+    }
+    if (id == "formations_everywhere")
+    {
+        if (value != "true" && value != "false")
+        {
+            return false;
+        }
+        settings.formationsEverywhere = value == "true";
+        return true;
+    }
+    if (id == "shop_list_view")
+    {
+        if (value != "true" && value != "false")
+        {
+            return false;
+        }
+        settings.shopListView = value == "true";
+        return true;
+    }
+    if (id == "loot_sparkle")
+    {
+        if (value != "true" && value != "false")
+        {
+            return false;
+        }
+        settings.lootSparkle = value == "true";
+        return true;
+    }
+    if (id == "quicksave_slots")
+    {
+        int number = 0;
+        const auto result = std::from_chars(value.data(), value.data() + value.size(), number);
+        if (result.ec != std::errc{} || result.ptr != value.data() + value.size() || number < 1 || number > 20)
+        {
+            return false;
+        }
+        settings.quickSaveSlots = number;
+        return true;
+    }
+    if (id == "mm9_loot_in_older_worlds")
+    {
+        if (value != "true" && value != "false")
+        {
+            return false;
+        }
+        settings.mm9LootInOlderWorlds = value == "true";
         return true;
     }
     if (id == "sound_volume")
@@ -456,6 +1005,10 @@ bool setMenuSettingValue(GameSettings &settings, std::string_view id, const std:
         settings.walksound = value == "true";
         return true;
     }
+    if (id == "repeated_voice_lines")
+    {
+        return parseRepeatedVoiceLineIntervalValue(value, settings.repeatedVoiceLineIntervalMs);
+    }
     if (id == "mouse_sensitivity")
     {
         int number = 0;
@@ -476,6 +1029,15 @@ bool setMenuSettingValue(GameSettings &settings, std::string_view id, const std:
         settings.invertMouseY = value == "true";
         return true;
     }
+    if (id == "smart_click")
+    {
+        if (value != "true" && value != "false")
+        {
+            return false;
+        }
+        settings.smartClick = value == "true";
+        return true;
+    }
     if (id == "always_run")
     {
         if (value != "true" && value != "false")
@@ -483,6 +1045,15 @@ bool setMenuSettingValue(GameSettings &settings, std::string_view id, const std:
             return false;
         }
         settings.alwaysRun = value == "true";
+        return true;
+    }
+    if (id == "bag_number_keys")
+    {
+        if (!validBagNumberKeysValue(value))
+        {
+            return false;
+        }
+        settings.bagNumberKeys = value;
         return true;
     }
     if (id == "flip_on_exit")
@@ -572,6 +1143,46 @@ bool setMenuSettingValue(GameSettings &settings, std::string_view id, const std:
     return false;
 }
 
+std::string graphicsQualityPreset(const GameSettings &settings)
+{
+    for (size_t preset = 0; preset < GraphicsQualityPresets.size(); ++preset)
+    {
+        bool matches = settings.terrainSubdivision == GraphicsQualityTerrainSubdivisions[preset]
+            && settings.terrainAntiTiling == GraphicsQualityTerrainAntiTiling[preset]
+            && settings.skyResolutionScale == GraphicsQualitySkyResolutionScales[preset];
+        for (const GraphicsQualityOption &option : GraphicsQualityOptions)
+        {
+            matches = matches && menuSettingValue(settings, option.id) == option.values[preset];
+        }
+        if (matches)
+        {
+            return std::string(GraphicsQualityPresets[preset]);
+        }
+    }
+    return "custom";
+}
+
+bool applyGraphicsQualityPreset(GameSettings &settings, std::string_view preset)
+{
+    const auto found = std::find(GraphicsQualityPresets.begin(), GraphicsQualityPresets.end(), preset);
+    if (found == GraphicsQualityPresets.end())
+    {
+        return false;
+    }
+    const size_t index = size_t(found - GraphicsQualityPresets.begin());
+    for (const GraphicsQualityOption &option : GraphicsQualityOptions)
+    {
+        if (!setMenuSettingValue(settings, option.id, std::string(option.values[index])))
+        {
+            throw std::logic_error("Invalid graphics quality value for " + std::string(option.id));
+        }
+    }
+    settings.terrainSubdivision = GraphicsQualityTerrainSubdivisions[index];
+    settings.terrainAntiTiling = GraphicsQualityTerrainAntiTiling[index];
+    settings.skyResolutionScale = GraphicsQualitySkyResolutionScales[index];
+    return true;
+}
+
 bool sameMenuBinding(const InputBinding &left, const InputBinding &right)
 {
     return left.kind == right.kind &&
@@ -580,14 +1191,16 @@ bool sameMenuBinding(const InputBinding &left, const InputBinding &right)
                                                          : true);
 }
 
-bool reservedMenuBinding(const InputBinding &binding)
+bool reservedMenuBinding(const InputBinding &binding, KeyboardAction action)
 {
     if (binding.kind != InputBindingKind::Keyboard)
     {
         return false;
     }
-    return binding.scancode == SDL_SCANCODE_ESCAPE || binding.scancode == SDL_SCANCODE_F9 ||
-           binding.scancode == SDL_SCANCODE_F10 || binding.scancode == SDL_SCANCODE_GRAVE ||
-           (binding.scancode >= SDL_SCANCODE_1 && binding.scancode <= SDL_SCANCODE_5);
+    // The party's number keys 1-5 select members, except for the bags and a solo run's action bar.
+    const bool numberKeyAction = (action >= KeyboardAction::Bag1 && action <= KeyboardAction::Bag4)
+        || (action >= KeyboardAction::ActionBar1 && action <= KeyboardAction::ActionBar10);
+    return binding.scancode == SDL_SCANCODE_ESCAPE || binding.scancode == SDL_SCANCODE_GRAVE ||
+           (!numberKeyAction && binding.scancode >= SDL_SCANCODE_1 && binding.scancode <= SDL_SCANCODE_5);
 }
 } // namespace OpenYAMM::Game

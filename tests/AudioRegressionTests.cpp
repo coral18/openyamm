@@ -5,11 +5,13 @@
 #include "engine/AudioSpatialization.h"
 #include "engine/TextTable.h"
 #include "game/audio/GameAudioSystem.h"
+#include "game/audio/MusicStream.h"
 #include "game/audio/ActorAudioRules.h"
 #include "game/audio/SoundCatalog.h"
 #include "game/audio/SoundIds.h"
 #include "game/gameplay/GameplaySpeechRules.h"
 #include "game/items/InventoryItemUseRuntime.h"
+#include "game/tables/ItemTable.h"
 #include "game/party/Party.h"
 #include "game/party/SpellIds.h"
 
@@ -19,9 +21,13 @@
 
 #include <array>
 #include <cctype>
+#include <chrono>
 #include <filesystem>
+#include <fstream>
+#include <iterator>
 #include <numbers>
 #include <string>
+#include <thread>
 #include <unordered_set>
 #include <vector>
 
@@ -48,6 +54,46 @@ TEST_CASE("registered audio clips can be released from the decode cache")
     CHECK_EQ(audioSystem.cacheStats().sampleBytes, 0);
     CHECK_FALSE(audioSystem.releaseClip("test-release"));
 }
+
+// Reads frameCount frames as the mixer would, waiting while the stream's decoder catches up.
+std::vector<float> readMusicStream(OpenYAMM::Game::MusicStream &stream, uint32_t frameCount)
+{
+    std::vector<float> samples;
+    std::vector<float> chunk(1024 * 2);
+
+    for (int idleReads = 0; samples.size() / 2 < frameCount && idleReads < 20000;)
+    {
+        const uint32_t wanted = std::min<uint32_t>(1024, frameCount - uint32_t(samples.size() / 2));
+        const uint32_t read = stream.read(chunk.data(), wanted);
+
+        if (read == 0)
+        {
+            ++idleReads;
+            std::this_thread::sleep_for(std::chrono::microseconds(100));
+            continue;
+        }
+
+        idleReads = 0;
+        samples.insert(samples.end(), chunk.begin(), chunk.begin() + read * 2);
+    }
+
+    return samples;
+}
+
+class SilentStreamSource : public OpenYAMM::Engine::AudioStreamSource
+{
+public:
+    uint32_t read(float *pSamples, uint32_t frameCount) override
+    {
+        std::fill(pSamples, pSamples + frameCount * 2, 0.0f);
+        return frameCount;
+    }
+
+    bool finished() const override
+    {
+        return false;
+    }
+};
 
 bool initializeRegressionAssetFileSystem(
     OpenYAMM::Engine::AssetFileSystem &assetFileSystem,
@@ -181,6 +227,180 @@ bool isMetalImpactSound(OpenYAMM::Game::SoundId soundId)
         || soundId == OpenYAMM::Game::SoundId::MetalArmorStrike02
         || soundId == OpenYAMM::Game::SoundId::MetalArmorStrike03;
 }
+}
+
+TEST_CASE("audio starts on the silent dummy driver when no playback device opens")
+{
+    // SDL_Quit frees the environment, so it is fetched after each quit.
+    SDL_Quit();
+    REQUIRE(SDL_SetEnvironmentVariable(SDL_GetEnvironment(), "SDL_AUDIODRIVER", "no_such_driver", true));
+
+    OpenYAMM::Engine::AssetFileSystem assetFileSystem;
+    std::string failure;
+    REQUIRE_MESSAGE(initializeRegressionAssetFileSystem(assetFileSystem, failure), failure);
+
+    OpenYAMM::Engine::AudioSystem audioSystem;
+    CHECK(audioSystem.initialize(assetFileSystem));
+    const char *pDriver = SDL_GetCurrentAudioDriver();
+    REQUIRE(pDriver != nullptr);
+    CHECK_EQ(std::string(pDriver), "dummy");
+
+    audioSystem.shutdown();
+    SDL_ResetHint(SDL_HINT_AUDIO_DRIVER);
+    SDL_Quit();
+    CHECK(SDL_SetEnvironmentVariable(SDL_GetEnvironment(), "SDL_AUDIODRIVER", "dummy", true));
+}
+
+TEST_CASE("music streams decode a track the same way every time")
+{
+    std::ifstream file(std::filesystem::path(OPENYAMM_SOURCE_DIR) / "assets_dev/worlds/mm7/music/32.mp3",
+        std::ios::binary);
+    REQUIRE(file);
+    const std::shared_ptr<const std::vector<uint8_t>> pTrack = std::make_shared<const std::vector<uint8_t>>(
+        std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>());
+    OpenYAMM::Game::MusicStream first(pTrack);
+    OpenYAMM::Game::MusicStream second(pTrack);
+    const std::vector<float> firstSamples = readMusicStream(first, 96000);
+    const std::vector<float> secondSamples = readMusicStream(second, 96000);
+
+    REQUIRE_EQ(firstSamples.size(), 96000 * 2);
+    CHECK(firstSamples == secondSamples);
+    CHECK(std::any_of(firstSamples.begin(), firstSamples.end(), [](float sample) { return sample != 0.0f; }));
+    CHECK_FALSE(first.finished());
+}
+
+TEST_CASE("a music stream with a repeat gap plays the track, the silence, then the track again")
+{
+    // MM9 plays a map's song once, waits 10 s and plays it again (world.yml music repeatGapSeconds).
+    std::ifstream file(std::filesystem::path(OPENYAMM_SOURCE_DIR) / "assets_dev/engine/audio/01Female_Wince.wav",
+        std::ios::binary);
+    REQUIRE(file);
+    const std::shared_ptr<const std::vector<uint8_t>> pTrack = std::make_shared<const std::vector<uint8_t>>(
+        std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>());
+    constexpr uint32_t GapFrames = 48000;
+    OpenYAMM::Game::MusicStream stream(pTrack, 1.0f);
+    const std::vector<float> samples = readMusicStream(stream, 3 * 48000);
+    REQUIRE_EQ(samples.size(), size_t(3 * 48000 * 2));
+    const size_t frames = samples.size() / 2;
+    const auto silent = [&samples](size_t frame)
+    {
+        return samples[frame * 2] == 0.0f && samples[frame * 2 + 1] == 0.0f;
+    };
+
+    size_t firstSound = 0;
+    while (firstSound < frames && silent(firstSound))
+    {
+        ++firstSound;
+    }
+
+    // the first long silence after the sound starts, at least the gap long, and the track again after it
+    size_t runStart = firstSound;
+    size_t runEnd = firstSound;
+    for (size_t frame = firstSound; frame < frames; ++frame)
+    {
+        if (!silent(frame))
+        {
+            if (runEnd - runStart >= GapFrames)
+            {
+                break;
+            }
+            runStart = frame + 1;
+        }
+        runEnd = frame + 1;
+    }
+
+    REQUIRE(runEnd - runStart >= GapFrames);
+    REQUIRE(runEnd + 2000 < frames);
+    CHECK(runEnd - runStart < GapFrames + 48000 / 2);
+    bool repeats = true;
+    for (size_t frame = 0; frame < 2000; ++frame)
+    {
+        repeats = repeats && samples[(runEnd + frame) * 2] == samples[(firstSound + frame) * 2];
+    }
+    CHECK(repeats);
+}
+
+TEST_CASE("battle music suspends the map track and resumes it after its fade")
+{
+    const OpenYAMM::Tests::RegressionGameData &gameData = requireRegressionGameData();
+    OpenYAMM::Engine::AssetFileSystem assetFileSystem;
+    OpenYAMM::Game::GameAudioSystem audioSystem;
+    std::string failure;
+
+    REQUIRE_MESSAGE(
+        initializeRegressionAudioSystem(gameData, assetFileSystem, audioSystem, failure),
+        failure.c_str());
+
+    audioSystem.setBackgroundMusicTrack(38, 10.0f);
+    for (int attempt = 0; attempt < 10000 && audioSystem.currentBackgroundMusicTrack() != 38; ++attempt)
+    {
+        audioSystem.update(0.0f, 0.0f, 0.0f, 0.001f);
+    }
+    REQUIRE_EQ(audioSystem.currentBackgroundMusicTrack(), 38);
+
+    // nothing without a battle track or while inactive
+    audioSystem.setBattleMusic(0, true, 0.2f);
+    audioSystem.setBattleMusic(14, false, 0.2f);
+    CHECK_FALSE(audioSystem.isBattleMusicPlaying());
+
+    audioSystem.setBattleMusic(14, true, 0.2f);
+    CHECK(audioSystem.isBattleMusicPlaying());
+    audioSystem.update(0.0f, 0.0f, 0.0f, 0.05f);
+    CHECK(audioSystem.isBattleMusicPlaying());
+    CHECK_EQ(audioSystem.currentBackgroundMusicTrack(), 38);
+
+    // a map track asked for under it stays the same track (suspended), and the battle music fades out
+    audioSystem.setBackgroundMusicTrack(38, 10.0f);
+    audioSystem.setBattleMusic(14, false, 0.2f);
+    for (int step = 0; step < 3; ++step)
+    {
+        audioSystem.update(0.0f, 0.0f, 0.0f, 0.05f);
+    }
+    CHECK(audioSystem.isBattleMusicPlaying());
+    for (int step = 0; step < 4; ++step)
+    {
+        audioSystem.update(0.0f, 0.0f, 0.0f, 0.05f);
+    }
+    CHECK_FALSE(audioSystem.isBattleMusicPlaying());
+    CHECK_EQ(audioSystem.currentBackgroundMusicTrack(), 38);
+
+    // another map's track under battle music starts once the battle music has ended
+    audioSystem.setBattleMusic(14, true, 0.2f);
+    audioSystem.setBackgroundMusicTrack(90007);
+    audioSystem.update(0.0f, 0.0f, 0.0f, 0.05f);
+    CHECK_EQ(audioSystem.currentBackgroundMusicTrack(), 0);
+    audioSystem.setBattleMusic(14, false, 0.2f);
+    for (int attempt = 0; attempt < 10000 && audioSystem.currentBackgroundMusicTrack() != 90007; ++attempt)
+    {
+        audioSystem.update(0.0f, 0.0f, 0.0f, 0.01f);
+    }
+    CHECK_FALSE(audioSystem.isBattleMusicPlaying());
+    CHECK_EQ(audioSystem.currentBackgroundMusicTrack(), 90007);
+    audioSystem.shutdown();
+}
+
+TEST_CASE("a music stream that cannot be decoded finishes")
+{
+    OpenYAMM::Game::MusicStream stream(std::make_shared<const std::vector<uint8_t>>(4096, uint8_t(0)));
+
+    for (int attempt = 0; attempt < 2000 && !stream.finished(); ++attempt)
+    {
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+
+    CHECK(stream.finished());
+}
+
+TEST_CASE("streams play until stopped like clips")
+{
+    OpenYAMM::Engine::AudioSystem audioSystem;
+    const uint64_t instanceId = audioSystem.playStream(std::make_shared<SilentStreamSource>(), {});
+
+    REQUIRE_NE(instanceId, 0);
+    CHECK(audioSystem.isClipPlaying(instanceId));
+    audioSystem.stopClip(instanceId);
+    CHECK_FALSE(audioSystem.isClipPlaying(instanceId));
+    CHECK_EQ(audioSystem.playStream(nullptr, {}), 0);
 }
 
 TEST_CASE("background music pause remains active across cutscene track requests")
@@ -534,6 +754,44 @@ TEST_CASE("sound catalog resolves flat sound rows against engine and world audio
     CHECK(assetFileSystem.exists(*flatHousePath));
 }
 
+TEST_CASE("MM6-MM8 sounds keep their own files beside a world's subfolder files of the same name")
+{
+    OpenYAMM::Engine::AssetFileSystem assetFileSystem;
+    std::string failure;
+
+    REQUIRE_MESSAGE(initializeRegressionAssetFileSystem(assetFileSystem, failure), failure.c_str());
+
+    const std::optional<std::string> engineSoundCatalogText =
+        assetFileSystem.readTextFile("engine/data_tables/sounds.txt");
+    REQUIRE(engineSoundCatalogText.has_value());
+
+    const std::optional<OpenYAMM::Engine::TextTable> parsedEngineSoundCatalog =
+        OpenYAMM::Engine::TextTable::parseTabSeparated(*engineSoundCatalogText);
+    REQUIRE(parsedEngineSoundCatalog.has_value());
+
+    OpenYAMM::Game::SoundCatalog soundCatalog;
+    std::string errorMessage;
+    REQUIRE(soundCatalog.loadFromScopedRows(rowsFromTextTable(*parsedEngineSoundCatalog), {}, errorMessage));
+    soundCatalog.initializeVirtualPathIndex(assetFileSystem);
+
+    // MM9's audio has spells/heal.wav, spells/bless.wav, events/error.wav and magic/teleport.wav in the same merged
+    // folder: the engine's sounds of those names stay the top-level MM6-MM8 files.
+    for (const uint32_t soundId : {16010u, 14010u, 10040u, 135u, 27u, 133u, 165u})
+    {
+        CAPTURE(soundId);
+        const std::optional<std::string> path = soundCatalog.buildVirtualPath(soundId);
+        REQUIRE(path.has_value());
+        CHECK(path->find('/', std::string("audio/").size()) == std::string::npos);
+        CHECK(assetFileSystem.exists(*path));
+    }
+
+    // MM9's own files still answer to their paths.
+    const std::optional<std::string> mm9Heal =
+        soundCatalog.buildVirtualPathByName(OpenYAMM::Game::SoundScope::World, "spells/heal.wav");
+    REQUIRE(mm9Heal.has_value());
+    CHECK(toLowerAsciiCopy(*mm9Heal).ends_with("spells/heal.wav"));
+}
+
 TEST_CASE("sound catalog resolves registered physical audio through merged audio namespace")
 {
     OpenYAMM::Engine::AssetFileSystem assetFileSystem;
@@ -795,6 +1053,128 @@ TEST_CASE("major damage threshold queues minor and major speech reactions")
     CHECK_EQ(requests[1].speechId, OpenYAMM::Game::SpeechId::DamageMajor);
 }
 
+namespace
+{
+size_t countSpeech(const OpenYAMM::Game::Party &party, size_t memberIndex, OpenYAMM::Game::SpeechId speechId)
+{
+    size_t count = 0;
+
+    for (const OpenYAMM::Game::Party::PendingAudioRequest &request : party.pendingAudioRequests())
+    {
+        if (request.kind == OpenYAMM::Game::Party::PendingAudioRequest::Kind::Speech
+            && request.memberIndex == memberIndex
+            && request.speechId == speechId)
+        {
+            ++count;
+        }
+    }
+
+    return count;
+}
+}
+
+TEST_CASE("an unconscious member hit by area damage queues no dying speech")
+{
+    const OpenYAMM::Tests::RegressionGameData &gameData = requireRegressionGameData();
+    OpenYAMM::Game::Party party = makeAudioRegressionParty(gameData);
+    const size_t memberIndex = party.activeMemberIndex();
+    OpenYAMM::Game::Character *pMember = party.activeMember();
+
+    REQUIRE(pMember != nullptr);
+
+    pMember->health = -5;
+    pMember->conditions.set(size_t(OpenYAMM::Game::CharacterCondition::Unconscious));
+    party.clearPendingAudioRequests();
+
+    REQUIRE(party.applyDamageToMember(memberIndex, 5, "", true));
+    CHECK_LT(pMember->health, -5);
+
+    for (const OpenYAMM::Game::Party::PendingAudioRequest &request : party.pendingAudioRequests())
+    {
+        CHECK_FALSE((request.kind == OpenYAMM::Game::Party::PendingAudioRequest::Kind::Speech
+            && request.memberIndex == memberIndex));
+    }
+}
+
+TEST_CASE("dying speech is queued once, when health crosses zero")
+{
+    const OpenYAMM::Tests::RegressionGameData &gameData = requireRegressionGameData();
+    OpenYAMM::Game::Party party = makeAudioRegressionParty(gameData);
+    const size_t memberIndex = party.activeMemberIndex();
+    OpenYAMM::Game::Character *pMember = party.activeMember();
+
+    REQUIRE(pMember != nullptr);
+
+    pMember->health = 3;
+    party.clearPendingAudioRequests();
+
+    REQUIRE(party.applyDamageToMember(memberIndex, 10, ""));
+    CHECK_EQ(countSpeech(party, memberIndex, OpenYAMM::Game::SpeechId::Dying), 1u);
+    CHECK_EQ(countSpeech(party, memberIndex, OpenYAMM::Game::SpeechId::DamageMinor), 0u);
+}
+
+TEST_CASE("falling speech needs a member who could act before the fall")
+{
+    const OpenYAMM::Tests::RegressionGameData &gameData = requireRegressionGameData();
+    OpenYAMM::Game::Party party = makeAudioRegressionParty(gameData);
+    const size_t memberIndex = party.activeMemberIndex();
+    OpenYAMM::Game::Character *pMember = party.activeMember();
+
+    REQUIRE(pMember != nullptr);
+
+    pMember->health = pMember->maxHealth;
+    party.clearPendingAudioRequests();
+    REQUIRE(party.applyDamageToMember(memberIndex, 1, "falling"));
+    CHECK_EQ(countSpeech(party, memberIndex, OpenYAMM::Game::SpeechId::Falling), 1u);
+
+    pMember->conditions.set(size_t(OpenYAMM::Game::CharacterCondition::Asleep));
+    party.clearPendingAudioRequests();
+    REQUIRE(party.applyDamageToMember(memberIndex, 1, "falling"));
+    CHECK_EQ(countSpeech(party, memberIndex, OpenYAMM::Game::SpeechId::Falling), 0u);
+}
+
+TEST_CASE("incapacitated members only speak about their state")
+{
+    using OpenYAMM::Game::CharacterCondition;
+    using OpenYAMM::Game::SpeechId;
+    using OpenYAMM::Game::canMemberSpeak;
+    OpenYAMM::Game::Character healthy;
+    healthy.maxHealth = 50;
+    healthy.health = 50;
+
+    for (SpeechId speechId : {SpeechId::AttackHit, SpeechId::KillWeakEnemy, SpeechId::Falling, SpeechId::Dying,
+             SpeechId::CheatedDeath, SpeechId::Awaken, SpeechId::DamageMinor})
+    {
+        CAPTURE(uint32_t(speechId));
+        CHECK(canMemberSpeak(healthy, speechId));
+    }
+
+    OpenYAMM::Game::Character unconscious = healthy;
+    unconscious.health = -3;
+    unconscious.conditions.set(size_t(CharacterCondition::Unconscious));
+    CHECK_FALSE(canMemberSpeak(unconscious, SpeechId::AttackHit));
+    CHECK_FALSE(canMemberSpeak(unconscious, SpeechId::KillWeakEnemy));
+    CHECK_FALSE(canMemberSpeak(unconscious, SpeechId::DamageMinor));
+    CHECK(canMemberSpeak(unconscious, SpeechId::Dying));
+    CHECK(canMemberSpeak(unconscious, SpeechId::CheatedDeath));
+    CHECK(canMemberSpeak(unconscious, SpeechId::Awaken));
+
+    OpenYAMM::Game::Character asleep = healthy;
+    asleep.conditions.set(size_t(CharacterCondition::Asleep));
+    CHECK_FALSE(canMemberSpeak(asleep, SpeechId::AttackMiss));
+    CHECK(canMemberSpeak(asleep, SpeechId::Awaken));
+
+    for (CharacterCondition condition :
+        {CharacterCondition::Dead, CharacterCondition::Petrified, CharacterCondition::Eradicated})
+    {
+        OpenYAMM::Game::Character member = healthy;
+        member.conditions.set(size_t(condition));
+        CAPTURE(size_t(condition));
+        CHECK_FALSE(canMemberSpeak(member, SpeechId::Awaken));
+        CHECK_FALSE(canMemberSpeak(member, SpeechId::KillStrongEnemy));
+    }
+}
+
 TEST_CASE("damage minor speech ignores combat cooldown")
 {
     OpenYAMM::Game::GameplayPortraitPresentationState presentationState = {};
@@ -844,6 +1224,29 @@ TEST_CASE("item inspection speech bypasses active speech cooldowns")
             speechId,
             1500u));
     }
+}
+
+TEST_CASE("repeated voice line interval holds back only the same line of the same member")
+{
+    using OpenYAMM::Game::SpeechId;
+    using OpenYAMM::Game::isRepeatedSpeechReaction;
+
+    OpenYAMM::Game::GameplayPortraitPresentationState presentationState = {};
+    presentationState.memberSpeechLastPlayedTicks.resize(2);
+    presentationState.memberSpeechLastPlayedTicks[0][SpeechId::DamageMinor] = 1000u;
+
+    // Off: every repeat plays, as before the setting.
+    CHECK_FALSE(isRepeatedSpeechReaction(presentationState, 0, SpeechId::DamageMinor, 1001u, 0u));
+
+    CHECK(isRepeatedSpeechReaction(presentationState, 0, SpeechId::DamageMinor, 1999u, 1000u));
+    CHECK_FALSE(isRepeatedSpeechReaction(presentationState, 0, SpeechId::DamageMinor, 2000u, 1000u));
+    CHECK_FALSE(isRepeatedSpeechReaction(presentationState, 0, SpeechId::DamageMajor, 1500u, 1000u));
+    CHECK_FALSE(isRepeatedSpeechReaction(presentationState, 1, SpeechId::DamageMinor, 1500u, 1000u));
+    CHECK_FALSE(isRepeatedSpeechReaction(presentationState, 4, SpeechId::DamageMinor, 1500u, 1000u));
+
+    // The tick counter wrapping past zero still measures the interval.
+    presentationState.memberSpeechLastPlayedTicks[0][SpeechId::RepairSuccess] = 0xffffff00u;
+    CHECK(isRepeatedSpeechReaction(presentationState, 0, SpeechId::RepairSuccess, 0x100u, 1000u));
 }
 
 TEST_CASE("damage impact sound request uses armor family mapping")
@@ -977,4 +1380,21 @@ TEST_CASE("actor audio owns four moving voices and replaces only quieter actors"
     CHECK(audio.playActorSound(0, worldSound(1030), {8192, 0, 0}) != 0);
     audio.stopAllPlayback();
     CHECK_FALSE(audio.isSoundInstancePlaying(ui));
+}
+
+TEST_CASE("instruments play their own sound and a flute is not a lute")
+{
+    const auto instrumentSound = [](const std::string &name)
+    {
+        OpenYAMM::Game::ItemDefinition definition;
+        definition.name = name;
+        return OpenYAMM::Game::InventoryItemUseRuntime::instrumentSound(definition);
+    };
+
+    CHECK(instrumentSound("Flute") == OpenYAMM::Game::SoundId::Flute);
+    CHECK(instrumentSound("Pan Flute") == OpenYAMM::Game::SoundId::PanFlute);
+    CHECK(instrumentSound("Faerie Pipes") == OpenYAMM::Game::SoundId::PanFlute);
+    CHECK(instrumentSound("Lute") == OpenYAMM::Game::SoundId::LuteGuitar);
+    CHECK(instrumentSound("Trumpet") == OpenYAMM::Game::SoundId::Trumpet);
+    CHECK_FALSE(instrumentSound("Iron Longsword").has_value());
 }

@@ -14,10 +14,12 @@
 #include <optional>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 namespace OpenYAMM::Game
 {
 struct DecorationBillboardSet;
+class DecorationTable;
 class GameplayActorService;
 class GameplayCombatController;
 class GameplayProjectileService;
@@ -45,6 +47,9 @@ public:
         std::optional<IndoorMoveState> lastProcessedPartyMoveStateForFaceTriggers;
         std::optional<size_t> lastPartyFloorFaceForPressurePlateTriggers;
         float mechanismAccumulatorMilliseconds = 0.0f;
+        // The map's layout this state belongs to (MapAssetInfo::layoutIdentity), stamped by GameSession when it is
+        // captured; 0 in saves before version 160. Entering a map of another layout resets its state.
+        uint64_t mapLayoutIdentity = 0;
     };
 
     IndoorSceneRuntime(
@@ -118,6 +123,10 @@ public:
     const std::optional<ScriptedEventProgram> &globalEventProgram() const override;
     IndoorPartyRuntime &partyRuntime();
     const IndoorPartyRuntime &partyRuntime() const;
+    const IndoorMapData *indoorMapData() const
+    {
+        return m_pIndoorMapData;
+    }
     IndoorWorldRuntime &worldRuntime();
     const IndoorWorldRuntime &worldRuntime() const;
     Snapshot snapshot() const;
@@ -126,6 +135,8 @@ public:
     void applyMapReentryReset();
     void prepareTimers();
     bool advanceSimulation(float deltaMilliseconds);
+    // Doors and lifts only; turn-based mode keeps them moving while game time stays frozen.
+    bool advanceMechanisms(float deltaMilliseconds);
     bool activateEvent(
         uint16_t eventId,
         const std::string &sourceKind,
@@ -137,17 +148,34 @@ private:
     {
         bool loopStarted = false;
     };
+    // What a door with its own sounds was last heard doing. The click that starts it, or turns it round, changes its
+    // mechanism before the step's snapshot is taken, so the snapshot cannot show that change.
+    struct MechanismSoundState
+    {
+        uint16_t state = 0;
+        bool moving = false;
+    };
 
     bool updateTimers(float deltaGameMinutes);
     void initializeTimers(double registrationGameMinutes);
     bool updatePartyFaceTriggers();
+    bool enterPartyFloorFace(size_t floorFaceIndex);
     void updateMechanismAudio(
         const std::unordered_map<uint32_t, RuntimeMechanismState> &previousMechanisms,
         float deltaMilliseconds);
+    // Rotating movers and MM9 door behaviours (devdocs/INDOOR_ROTATING_MOVERS_AND_LADDERS.md), per mechanism step.
+    bool hasPendingMoverWork() const;
+    void chooseMoverOpenAwayDirections();
+    void advanceMoverAutoClose(float stepMilliseconds);
+    // The spinning movers' speed and angle (IndoorMoverSpin, evt.SpinMover).
+    void advanceMoverSpins(float stepMilliseconds);
+    void applyMoverBodyRules(const std::unordered_map<uint32_t, RuntimeMechanismState> &previousMechanisms);
+    void carryPartyOnRotatingMovers(const std::unordered_map<uint32_t, RuntimeMechanismState> &previousMechanisms);
 
     MapStatsEntry m_map;
     std::string m_mapFileName;
     const IndoorMapData *m_pIndoorMapData = nullptr;
+    const DecorationTable *m_pIndoorDecorationTable = nullptr;
     Party *m_pSessionParty = nullptr;
     std::optional<MapDeltaData> m_mapDeltaData;
     std::optional<EventRuntimeState> m_eventRuntimeState;
@@ -161,8 +189,12 @@ private:
     bool m_resetLegacyTimersOnInitialize = false;
     std::optional<IndoorMoveState> m_lastProcessedPartyMoveStateForFaceTriggers;
     std::optional<size_t> m_lastPartyFloorFaceForPressurePlateTriggers;
+    std::vector<size_t> m_partyFloorFacesForPressurePlateTriggers;
     std::unordered_map<uint32_t, MechanismAudioState> m_mechanismAudioStates;
+    std::unordered_map<uint32_t, MechanismSoundState> m_mechanismSoundStates;
     float m_mechanismAccumulatorMilliseconds = 0.0f;
+    // The rotating movers' poses per step (only their own vertices are written); empty on maps without movers.
+    std::vector<IndoorVertex> m_moverPoseVertices;
     Mm9PositionedTransitionRuntime m_mm9PositionedTransitionRuntime;
     Mm9TeacherScheduleRuntime m_mm9TeacherScheduleRuntime;
 };

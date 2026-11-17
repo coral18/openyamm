@@ -2,12 +2,20 @@
 
 #include "game/gameplay/GameplayRuntimeInterfaces.h"
 #include "game/party/Party.h"
+#include "game/tables/MapStats.h"
 
 #include <algorithm>
 
 namespace OpenYAMM::Game
 {
-void applyTravelDaysSideEffects(
+bool walkingTravelQuestRequirementsMet(const MapEdgeTransition &transition,
+    const std::function<bool(uint32_t)> &hasQuestBit)
+{
+    return transition.requiredQuestBitsAny.empty()
+        || std::any_of(transition.requiredQuestBitsAny.begin(), transition.requiredQuestBitsAny.end(), hasQuestBit);
+}
+
+bool applyTravelDaysSideEffects(
     Party &party,
     IGameplayWorldRuntime *pWorldRuntime,
     int travelDays,
@@ -16,18 +24,19 @@ void applyTravelDaysSideEffects(
     travelDays = std::max(0, travelDays);
     foodRequired = std::max(0, foodRequired);
     constexpr float MinutesPerDay = 24.0f * 60.0f;
+    if (travelDays == 0 && foodRequired == 0)
+    {
+        return false;
+    }
+
+    // The party rests while travelling, so heal first: the days on the road are not days without rest.
+    party.restAndHealAll();
     if (travelDays > 0 && pWorldRuntime != nullptr)
     {
         const float travelMinutes = static_cast<float>(travelDays) * MinutesPerDay;
         pWorldRuntime->advanceGameMinutes(travelMinutes);
         party.advanceTimedStates(travelMinutes * 60.0f);
     }
-    if (travelDays == 0 && foodRequired == 0)
-    {
-        return;
-    }
-
-    party.restAndHealAll();
     const int availableFood = party.food();
     if (availableFood > 0)
     {
@@ -35,7 +44,7 @@ void applyTravelDaysSideEffects(
     }
     if (availableFood >= foodRequired)
     {
-        return;
+        return true;
     }
 
     const float gameMinutes = pWorldRuntime != nullptr ? pWorldRuntime->gameMinutes() : 0.0f;
@@ -47,5 +56,8 @@ void applyTravelDaysSideEffects(
             party.applyMemberCondition(memberIndex, CharacterCondition::Weak, gameMinutes);
         }
     }
+    party.addDayWithoutRest();
+
+    return true;
 }
 }

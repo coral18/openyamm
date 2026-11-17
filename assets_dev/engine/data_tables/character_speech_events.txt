@@ -1,7 +1,7 @@
 Id	Name	SoundTypes	FaceAnimation
-DisarmTrap	Disarm Trap	Disarmed	AttackHit
+DisarmTrap	Disarm Trap	Disarmed	DisarmTrap
 StoreClosed	Store Closed	Closed1,Closed2	StoreClosed
-TrapExploded	Trap Exploded	FailedDisarm1,FailedDisarm2	Damaged
+TrapExploded	Trap Exploded	FailedDisarm1,FailedDisarm2	TrapExploded
 SelectCharacter	Select Character	ChooseMe1,ChooseMe2	ChooseMe
 IdentifyWeakItem	Identify Weak Item	BadItem1,BadItem2	IdentifyUseless
 IdentifyGreatItem	Identify Great Item	GoodItem1,GoodItem2	IdentifyGreat
@@ -11,8 +11,8 @@ RepairFail	Repair Fail	CantRep1,CantRep2	RepairFail
 SetQuickSpell	Set Quick Spell	QuickSpell1,QuickSpell2	SetQuickSpell
 Hungry	Hungry	Hungry1,Hungry2	NotEnoughFood
 DamageMinor	Damage Minor	SoftInjure1	Damaged
-DamageMajor	Damage Major	HardInjured1,HardInjured2	Damaged
-Dying	Dying	Dying1,Dying2	AlmostDead
+DamageMajor	Damage Major	HardInjured1,HardInjured2	AlmostDead
+Dying	Dying	Dying1,Dying2	Death
 Drunk	Drunk	Drunk1,Drunk2	Drunk
 Insane	Insane	Insane1,Insane2	Insane
 Poisoned	Poisoned	Poison1,Poison2	Poisoned
@@ -21,68 +21,70 @@ Falling	Falling	Fall1,Fall2	Falling
 CantRestHere	Can't Rest Here	CantRestHere1,CantRestHere2	CantRestHere
 NotEnoughGold	Not Enough Gold	NeedMoreGold1,NeedMoreGold2	NotEnoughGold
 InventoryRoom	Inventory Room	InventoryFull1,InventoryFull2	InventoryFull
-PotionSuccess	Potion Success	PotionMixed1,PotionMixed2	DrinkPotion
+PotionSuccess	Potion Success	PotionMixed1,PotionMixed2	MixPotion
 PotionFail	Potion Fail	FailMixing1,FailMixing2	PotionExplode
 DoorLocked	Door Locked	NeedAKey1,NeedAKey2	DoorLocked
 LearnSpell	Learn Spell	LearnSpell1,LearnSpell2	LearnSpell
 CantLearnSpell	Can't Learn Spell	CantLearn1,CantLearn2	CantLearnSpell
 CantEquip	Can't Equip	CantEquip1,CantEquip2	CantEquip
-HelloDay	Hello Day	Hello1,Hello2	Hello
-HelloEvening	Hello Evening	Hello3,Hello4	HelloNight
-HelloHouse	Hello House	Hello5,Hello6	HelloHouse
-KillStrongEnemy	Kill Strong Enemy	BigMonster1,BigMonster2	AttackHit
-KillWeakEnemy	Kill Weak Enemy	WeakMonster1,WeakMonster2	AttackHit
+HelloDay	Hello Day	Hello1,Hello2,Hello3,Hello4	Hello
+HelloEvening	Hello Evening	Hello5,Hello6	HelloNight
+HelloHouse	Hello House	Hello1,Hello2,Hello3,Hello4	HelloHouse
+KillStrongEnemy	Kill Strong Enemy	Win!1,Win!2	KillBigEnemy
+KillWeakEnemy	Kill Weak Enemy	Heh1,Heh2	KillSmallEnemy
 LastPersonStanding	Last Person Standing	LastStanding1,LastStanding2	LastManStanding
 LeaveDungeon	Leave Dungeon	Leave1,Leave2	LeaveDungeon
 EnterDungeon	Enter Dungeon	Enter1,Enter2	EnterDungeon
-Yes	Yes	Yes1,Yes2	AttackHit
-ThankYou	Thank You	Thanks1,Thanks2	AttackHit
+Yes	Yes		AttackHit
+ThankYou	Thank You		AttackHit
 Indignant	Indignant	Indignant	AttackMiss
 Yell	Yell	Move!1,Move!2	Yell
 AttackHit	Attack Hit		AttackHit
 AttackMiss	Attack Miss		AttackMiss
 Shoot	Shoot		Shoot
 CastSpell	Cast Spell		CastSpell
-DamagedParty	Damaged Party	SoftInjure1	DamagedParty
+DamagedParty	Damaged Party		DamagedParty
 FoundItem	Found Item		FoundItem
-SkillIncreased	Skill Increased	Thanks1,Thanks2	SkillIncreased
+SkillIncreased	Skill Increased		SkillIncreased
 QuestGot	Quest Got		QuestGot
 AwardGot	Award Got		AwardGot
-TempleHeal	Temple Heal	Thanks1,Thanks2	TempleHeal
-TempleDonate	Temple Donate	Thanks1,Thanks2	TempleDonate
-TravelBoat	Travel Boat	Thanks1,Thanks2	TravelBoat
-TravelHorse	Travel Horse	Thanks1,Thanks2	TravelHorse
-ShopIdentify	Shop Identify	GoodItem1,GoodItem2	ShopIdentify
-ShopRepair	Shop Repair	Repaired1,Repaired2	ShopRepair
-AlreadyIdentified	Already Identified	CantIdent1,CantIdent2	ShopAlreadyIdentified
-ItemSold	Item Sold	Thanks1,Thanks2	ShopItemSold
-WrongShop	Wrong Shop	CantEquip1,CantEquip2	ShopWrongShop
-BankDeposit	Bank Deposit	Thanks1,Thanks2	BankDeposit
-LevelUp	Level Up	Win!1,Win!2	LevelUp
+TempleHeal	Temple Heal		TempleHeal
+TempleDonate	Temple Donate		TempleDonate
+TravelBoat	Travel Boat		TravelBoat
+TravelHorse	Travel Horse		TravelHorse
+ShopIdentify	Shop Identify		ShopIdentify
+ShopRepair	Shop Repair		ShopRepair
+AlreadyIdentified	Already Identified		ShopAlreadyIdentified
+ItemSold	Item Sold		ShopItemSold
+WrongShop	Wrong Shop		ShopWrongShop
+BankDeposit	Bank Deposit		BankDeposit
+LevelUp	Level Up		LevelUp
 Beg	Beg		Beg
-BegFail	Beg Fail	Indignant	BegFail
-Threat	Threat	Move!1,Move!2	Threat
-ThreatFail	Threat Fail	Indignant	ThreatFail
-Bribe	Bribe	Thanks1,Thanks2	Bribe
-BribeFail	Bribe Fail	Indignant	BribeFail
-NpcDontTalk	NPC Does Not Talk	Indignant	NpcDontTalk
-HireNpc	Hire NPC	Thanks1,Thanks2	HireNpc
-TavernPacksFull	Tavern Packs Full	InventoryFull1,InventoryFull2	TavernPacksFull
-TavernDrink	Tavern Drink	PotionMixed1,PotionMixed2	TavernDrink
-TavernGotDrunk	Tavern Got Drunk	Drunk1,Drunk2	TavernGotDrunk
-TavernTip	Tavern Tip	Thanks1,Thanks2	TavernTip
-ShopItemBought	Shop Item Bought	Thanks1,Thanks2	ShopItemBought
-SkillLearned	Skill Learned	Thanks1,Thanks2	SkillLearned
+BegFail	Beg Fail		BegFail
+Threat	Threat		Threat
+ThreatFail	Threat Fail		ThreatFail
+Bribe	Bribe		Bribe
+BribeFail	Bribe Fail		BribeFail
+NpcDontTalk	NPC Does Not Talk		NpcDontTalk
+HireNpc	Hire NPC		HireNpc
+TavernPacksFull	Tavern Packs Full		TavernPacksFull
+TavernDrink	Tavern Drink		TavernDrink
+TavernGotDrunk	Tavern Got Drunk		TavernGotDrunk
+TavernTip	Tavern Tip		TavernTip
+ShopItemBought	Shop Item Bought		ShopItemBought
+SkillLearned	Skill Learned		SkillLearned
 ShopRude	Shop Rude	Indignant	ShopRude
-SkillMasteryIncreased	Skill Mastery Increased	Thanks1,Thanks2	SkillMasteryIncreased
-JoinedGuild	Joined Guild	Thanks1,Thanks2	JoinedGuild
+SkillMasteryIncreased	Skill Mastery Increased		SkillMasteryIncreased
+JoinedGuild	Joined Guild		JoinedGuild
 StatBonusIncreased	Stat Bonus Increased		StatBonusIncreased
 StatBaseIncreased	Stat Base Increased		StatBaseIncreased
 AfraidSilent	Afraid Silent		AfraidSilent
-CheatedDeath	Cheated Death	Yes1,Yes2	CheatedDeath
-InPrison	In Prison	Indignant	InPrison
-Awaken	Awaken	Hello1,Hello2	Awaken
-IdentifyMonsterWeak	Identify Monster Weak	BadItem1,BadItem2	IdentifyMonsterWeak
-IdentifyMonsterBig	Identify Monster Big	GoodItem1,GoodItem2	IdentifyMonsterBig
+CheatedDeath	Cheated Death		CheatedDeath
+InPrison	In Prison		InPrison
+Awaken	Awaken		Awaken
+IdentifyMonsterWeak	Identify Monster Weak	WeakMonster1,WeakMonster2	IdentifyMonsterWeak
+IdentifyMonsterBig	Identify Monster Big	BigMonster1,BigMonster2	IdentifyMonsterBig
 IdentifyMonsterFail	Identify Monster Fail	CantIdMon1,CantIdMon2	IdentifyMonsterFail
-DeathBlow	Death Blow	Heh1,Heh2	DeathBlow
+DeathBlow	Death Blow	Dying1,Dying2	DeathBlow
+DrinkPotion	Drink Potion		DrinkPotion
+Tired	Tired		Tired

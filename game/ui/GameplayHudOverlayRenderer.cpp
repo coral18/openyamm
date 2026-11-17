@@ -1,13 +1,20 @@
 #include "game/ui/GameplayHudOverlayRenderer.h"
+#include "engine/Localization.h"
+#include "game/ui/GameplayHudOverlaySupport.h"
 #include "game/gameplay/GameplayInputFrame.h"
 #include "game/gameplay/GameplayScreenRuntime.h"
 
+#include "game/items/InventoryBags.h"
 #include "game/items/ItemRuntime.h"
+#include "game/rules/GameRules.h"
+#include "game/ui/GameplayUiSkin.h"
+#include "game/ui/InventoryBagOverview.h"
 #include "game/tables/ItemTable.h"
 #include "game/StringUtils.h"
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 #include <limits>
 #include <optional>
 #include <string>
@@ -188,6 +195,43 @@ void renderViewportParchmentSidePanels(GameplayScreenRuntime &view, int width, i
 {
     view.renderViewportSidePanels(width, height, "obsidian_reading_surface");
 }
+// Several bags (MAW): a button per bag over a chest's or shop's party inventory, the active member's open bag
+// selected (none while a shop shows the bag overview), with its tags in the corners; the bag that takes what is moved
+// there.
+void renderPartyBagButtons(GameplayScreenRuntime &view, int width, int height)
+{
+    const Party *pParty = view.partyReadOnly();
+    const Character *pCharacter = pParty != nullptr ? pParty->activeMember() : nullptr;
+    const int bagCount = pParty != nullptr ? gameRulesFor(pParty).items.bagCount(*pParty) : 1;
+    // The buttons name the bags of the open bag's tab.
+    const int firstBag = pCharacter != nullptr ? InventoryBagOverview::firstBag(*pCharacter) : 0;
+
+    for (int bag = firstBag; pCharacter != nullptr && bagCount > 1 && bag < std::min(bagCount,
+             firstBag + InventoryBagOverview::Bags); ++bag)
+    {
+        const std::string id = "ChestInventoryBag" + std::to_string(bag - firstBag + 1);
+        const GameplayScreenRuntime::HudLayoutElement *pLayout = view.findHudLayoutElement(id);
+
+        if (pLayout == nullptr)
+        {
+            continue;
+        }
+
+        GameplayUiSkin::renderButton(view, id, width, height,
+            !GameplayHudOverlaySupport::shopBagOverviewActive(view) && pCharacter->rulesetState.currentBag == bag,
+            true);
+        const std::optional<GameplayScreenRuntime::ResolvedHudLayoutElement> button =
+            view.resolveHudLayoutElement(id, width, height, pLayout->width, pLayout->height);
+
+        if (button)
+        {
+            const float markSize = std::round(11.0f * button->scale);
+            GameplayHudOverlaySupport::renderBagTagMarks(view, *pCharacter, uint8_t(bag),
+                button->x - 2.0f * button->scale, button->y + button->height - markSize + 3.0f * button->scale,
+                button->width + 4.0f * button->scale, markSize);
+        }
+    }
+}
 } // namespace
 
 void GameplayHudOverlayRenderer::renderChestPanel(GameplayScreenRuntime &view, int width, int height, bool renderAboveHud)
@@ -228,7 +272,8 @@ void GameplayHudOverlayRenderer::renderChestPanel(GameplayScreenRuntime &view, i
             continue;
         }
 
-        if (normalizedLayoutId.rfind("chestnestedinventory", 0) == 0)
+        if (normalizedLayoutId.rfind("chestnestedinventory", 0) == 0
+            || normalizedLayoutId.rfind("chestinventorybag", 0) == 0)
         {
             continue;
         }
@@ -318,6 +363,11 @@ void GameplayHudOverlayRenderer::renderChestPanel(GameplayScreenRuntime &view, i
             {
                 label = replaceAll(label, "{gold}", std::to_string(pParty->gold()));
                 label = replaceAll(label, "{food}", std::to_string(pParty->food()));
+            }
+
+            if (normalizedLayoutId == "chestinventorybutton" && view.inventoryNestedOverlay().active)
+            {
+                label = Engine::tr("Chest");
             }
 
             view.renderLayoutLabel(*pLayout, *resolved, label);
@@ -410,6 +460,9 @@ void GameplayHudOverlayRenderer::renderChestPanel(GameplayScreenRuntime &view, i
                 static_cast<float>(itemTexture->height) * gridMetrics.scale * pItemDefinition->inventoryDrawScale;
             const InventoryItemScreenRect itemRect =
                 computeInventoryItemScreenRect(gridMetrics, renderItem, itemWidth, itemHeight);
+            GameplayHudOverlaySupport::renderItemRarityGlow(
+                view, item.item, *itemTexture, itemRect.x, itemRect.y, itemRect.width, itemRect.height,
+                gridMetrics.scale);
             view.submitHudTexturedQuad(*itemTexture, itemRect.x, itemRect.y, itemRect.width, itemRect.height);
 
             if (pItemDefinition->itemId == 0)
@@ -431,6 +484,12 @@ void GameplayHudOverlayRenderer::renderChestPanel(GameplayScreenRuntime &view, i
             inspectableItem.height = itemRect.height;
             view.addRenderedInspectableHudItem(inspectableItem);
         }
+    }
+
+    // The bag that takes what is moved out of the chest (the nested inventory draws its own buttons).
+    if (renderAboveHud && !view.inventoryNestedOverlay().active)
+    {
+        renderPartyBagButtons(view, width, height);
     }
 }
 
@@ -498,68 +557,150 @@ void GameplayHudOverlayRenderer::renderInventoryNestedOverlay(
         return;
     }
 
-    const InventoryGridMetrics gridMetrics = computeInventoryGridMetrics(
-        resolvedInventoryGrid->x,
-        resolvedInventoryGrid->y,
-        resolvedInventoryGrid->width,
-        resolvedInventoryGrid->height,
-        resolvedInventoryGrid->scale);
+    // The grid shows the active member's open bag, or a shop the four bags at once; several bags have a button each.
+    renderPartyBagButtons(view, width, height);
 
-    for (const InventoryItem &item : pCharacter->inventory)
+    // Sell trash's pick (the sell screen): the picked items' cells are lit in gold under the icon and outlined over it,
+    // and the other items are dimmed.
+    const GameplayUiController::InventoryNestedOverlayState &overlay = view.inventoryNestedOverlay();
+    const bool sellTrashPicking =
+        overlay.mode == GameplayUiController::InventoryNestedOverlayMode::ShopSell && overlay.sellTrashPicking;
+    const size_t activeMemberIndex = view.partyReadOnly()->activeMemberIndex();
+    const auto fillRect = [&view](float x, float y, float rectWidth, float rectHeight, uint32_t colorAbgr)
     {
-        const ItemDefinition *pItemDefinition =
-            view.itemTable() != nullptr ? view.itemTable()->get(item.objectDescriptionId) : nullptr;
+        char name[40] = {};
+        std::snprintf(name, sizeof(name), "__sell_trash_%08x__", colorAbgr);
+        const std::optional<GameplayScreenRuntime::HudTextureHandle> texture =
+            view.gameplayUiRuntime().ensureSolidHudTextureLoaded(name, colorAbgr);
 
-        if (pItemDefinition == nullptr || pItemDefinition->iconName.empty())
+        if (texture)
         {
-            continue;
+            view.submitHudTexturedQuad(*texture, x, y, rectWidth, rectHeight);
         }
+    };
 
-        const std::optional<GameplayScreenRuntime::HudTextureHandle> itemTexture =
-            view.gameplayUiRuntime().ensureItemIconTextureLoaded(pItemDefinition->iconName);
-
-        if (!itemTexture)
+    // One bag's items on its grid, each inspected in the bag it lies in.
+    const auto renderBagItems =
+        [&](const std::vector<InventoryItem> &items, const InventoryGridMetrics &gridMetrics, uint8_t bag)
         {
-            continue;
-        }
+            for (const InventoryItem &item : items)
+            {
+                const bool picked = sellTrashPicking
+                    && std::find(overlay.sellTrashItems.begin(), overlay.sellTrashItems.end(),
+                           BagItemRef{activeMemberIndex, bag, item.gridX, item.gridY})
+                        != overlay.sellTrashItems.end();
+                const float cellsX = std::round(gridMetrics.x + float(item.gridX) * gridMetrics.cellWidth);
+                const float cellsY = std::round(gridMetrics.y + float(item.gridY) * gridMetrics.cellHeight);
+                const float cellsWidth = std::round(float(item.width) * gridMetrics.cellWidth);
+                const float cellsHeight = std::round(float(item.height) * gridMetrics.cellHeight);
+                const float line = std::max(1.0f, std::round(2.0f * gridMetrics.scale));
 
-        const float itemWidth =
-            static_cast<float>(itemTexture->width) * gridMetrics.scale * pItemDefinition->inventoryDrawScale;
-        const float itemHeight =
-            static_cast<float>(itemTexture->height) * gridMetrics.scale * pItemDefinition->inventoryDrawScale;
-        const InventoryItemScreenRect itemRect =
-            computeInventoryItemScreenRect(gridMetrics, item, itemWidth, itemHeight);
+                if (picked)
+                {
+                    fillRect(cellsX, cellsY, cellsWidth, cellsHeight, 0x6030a0d8u);
+                }
 
-        // OE keeps status tints unchanged between Display, Sell, Identify, and Repair.
-        const ItemTintContext tintContext =
-            isShopInventory ? ItemTintContext::ShopInventory : ItemTintContext::Inventory;
-        const uint32_t tintColor = itemTintColorAbgr(&item, pItemDefinition, tintContext);
-        const bgfx::TextureHandle tintedTextureHandle =
-            view.gameplayUiRuntime().ensureHudTextureColorModulated(*itemTexture, tintColor);
+                const ItemDefinition *pItemDefinition =
+                    view.itemTable() != nullptr ? view.itemTable()->get(item.objectDescriptionId) : nullptr;
 
-        GameplayScreenRuntime::HudTextureHandle renderedTexture = *itemTexture;
-        if (bgfx::isValid(tintedTextureHandle))
-        {
-            renderedTexture.textureHandle = tintedTextureHandle;
-        }
+                if (pItemDefinition == nullptr || pItemDefinition->iconName.empty())
+                {
+                    continue;
+                }
 
-        view.submitHudTexturedQuad(renderedTexture, itemRect.x, itemRect.y, itemRect.width, itemRect.height);
+                const std::optional<GameplayScreenRuntime::HudTextureHandle> itemTexture =
+                    view.gameplayUiRuntime().ensureItemIconTextureLoaded(pItemDefinition->iconName);
 
-        GameplayRenderedInspectableHudItem inspectableItem = {};
-        inspectableItem.objectDescriptionId = pItemDefinition->itemId;
-        inspectableItem.hasItemState = true;
-        inspectableItem.itemState = item;
-        inspectableItem.sourceType = GameplayUiController::ItemInspectSourceType::Inventory;
-        inspectableItem.sourceMemberIndex = view.partyReadOnly()->activeMemberIndex();
-        inspectableItem.sourceGridX = item.gridX;
-        inspectableItem.sourceGridY = item.gridY;
-        inspectableItem.textureName = pItemDefinition->iconName;
-        inspectableItem.textureUsesItemIconTransparency = true;
-        inspectableItem.x = itemRect.x;
-        inspectableItem.y = itemRect.y;
-        inspectableItem.width = itemRect.width;
-        inspectableItem.height = itemRect.height;
-        view.addRenderedInspectableHudItem(inspectableItem);
+                if (!itemTexture)
+                {
+                    continue;
+                }
+
+                const float itemWidth =
+                    static_cast<float>(itemTexture->width) * gridMetrics.scale * pItemDefinition->inventoryDrawScale;
+                const float itemHeight =
+                    static_cast<float>(itemTexture->height) * gridMetrics.scale * pItemDefinition->inventoryDrawScale;
+                const InventoryItemScreenRect itemRect =
+                    computeInventoryItemScreenRect(gridMetrics, item, itemWidth, itemHeight);
+
+                // OE keeps status tints unchanged between Display, Sell, Identify, and Repair.
+                const ItemTintContext tintContext =
+                    isShopInventory ? ItemTintContext::ShopInventory : ItemTintContext::Inventory;
+                uint32_t tintColor = itemTintColorAbgr(&item, pItemDefinition, tintContext);
+
+                // While picking, what stays is dimmed and faded so that the pick stands out.
+                if (sellTrashPicking && !picked)
+                {
+                    const auto scaled = [tintColor](int shift, uint32_t percent)
+                    {
+                        return (((tintColor >> shift) & 0xffu) * percent / 100u) << shift;
+                    };
+                    tintColor = scaled(24, 60) | scaled(16, 40) | scaled(8, 40) | scaled(0, 40);
+                }
+
+                const bgfx::TextureHandle tintedTextureHandle =
+                    view.gameplayUiRuntime().ensureHudTextureColorModulated(*itemTexture, tintColor);
+
+                GameplayScreenRuntime::HudTextureHandle renderedTexture = *itemTexture;
+                if (bgfx::isValid(tintedTextureHandle))
+                {
+                    renderedTexture.textureHandle = tintedTextureHandle;
+                }
+
+                // What stays loses its rarity glow too: a bright outline would outshine the pick.
+                if (!sellTrashPicking || picked)
+                {
+                    GameplayHudOverlaySupport::renderItemRarityGlow(
+                        view, item, *itemTexture, itemRect.x, itemRect.y, itemRect.width, itemRect.height,
+                        gridMetrics.scale);
+                }
+
+                view.submitHudTexturedQuad(renderedTexture, itemRect.x, itemRect.y, itemRect.width, itemRect.height);
+
+                if (picked)
+                {
+                    const uint32_t gold = 0xff4cc0f0u;
+                    fillRect(cellsX, cellsY, cellsWidth, line, gold);
+                    fillRect(cellsX, cellsY + cellsHeight - line, cellsWidth, line, gold);
+                    fillRect(cellsX, cellsY + line, line, cellsHeight - 2 * line, gold);
+                    fillRect(cellsX + cellsWidth - line, cellsY + line, line, cellsHeight - 2 * line, gold);
+                }
+
+                GameplayRenderedInspectableHudItem inspectableItem = {};
+                inspectableItem.objectDescriptionId = pItemDefinition->itemId;
+                inspectableItem.hasItemState = true;
+                inspectableItem.itemState = item;
+                inspectableItem.sourceType = GameplayUiController::ItemInspectSourceType::Inventory;
+                inspectableItem.sourceMemberIndex = view.partyReadOnly()->activeMemberIndex();
+                inspectableItem.sourceGridX = item.gridX;
+                inspectableItem.sourceGridY = item.gridY;
+                inspectableItem.sourceBag = bag;
+                inspectableItem.textureName = pItemDefinition->iconName;
+                inspectableItem.textureUsesItemIconTransparency = true;
+                inspectableItem.x = itemRect.x;
+                inspectableItem.y = itemRect.y;
+                inspectableItem.width = itemRect.width;
+                inspectableItem.height = itemRect.height;
+                view.addRenderedInspectableHudItem(inspectableItem);
+            }
+        };
+
+    if (GameplayHudOverlaySupport::shopBagOverviewActive(view))
+    {
+        const GameplayScreenRuntime::ResolvedHudLayoutElement &grid = *resolvedInventoryGrid;
+        GameplayHudOverlaySupport::renderBagOverview(view, grid, *pCharacter,
+            [&](const InventoryBagOverview::Slot &slot, uint8_t bag)
+            {
+                renderBagItems(InventoryBags::itemsInBag(*pCharacter, bag),
+                    computeInventoryGridMetrics(slot.x, slot.y, slot.width, slot.height, grid.scale * slot.fraction),
+                    bag);
+            });
+        return;
     }
+
+    renderBagItems(pCharacter->inventory,
+        computeInventoryGridMetrics(resolvedInventoryGrid->x, resolvedInventoryGrid->y, resolvedInventoryGrid->width,
+            resolvedInventoryGrid->height, resolvedInventoryGrid->scale),
+        pCharacter->rulesetState.currentBag);
 }
 } // namespace OpenYAMM::Game

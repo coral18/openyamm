@@ -4,7 +4,7 @@
 #include "game/render/WaterMath.h"
 #include "game/fx/WaterRippleRuntime.h"
 #include "game/render/WaterAppearance.h"
-#include "game/render/IndoorWaterGeometry.h"
+#include "game/render/WaterGeometry.h"
 #include "game/indoor/IndoorPortalVisibility.h"
 #include "game/render/WaterCoverage.h"
 #include "game/render/WaterReflectionUpdate.h"
@@ -28,38 +28,62 @@ TEST_CASE("indoor water visibility respects both sectors and keeps unassigned ge
     CHECK(indoorGeometrySectorsVisible({}, 2, 3));
 }
 
-TEST_CASE("indoor water classification excludes lava and sky even when marked fluid")
+TEST_CASE("face liquid classification follows the texture's liquid only, never sky")
 {
     const uint32_t fluid = faceAttributeBit(FaceAttribute::Fluid);
-    CHECK(isIndoorWaterSurface(fluid, SurfaceMaterialSemantic::GenericAnimated));
-    CHECK(isIndoorWaterSurface(0, SurfaceMaterialSemantic::Water));
-    CHECK_FALSE(isIndoorWaterSurface(0, SurfaceMaterialSemantic::GenericAnimated));
-    CHECK_FALSE(isIndoorWaterSurface(fluid, SurfaceMaterialSemantic::Lava));
-    CHECK_FALSE(isIndoorWaterSurface(fluid | faceAttributeBit(FaceAttribute::Lava), SurfaceMaterialSemantic::Water));
-    CHECK_FALSE(isIndoorWaterSurface(fluid | faceAttributeBit(FaceAttribute::IndoorSky),
-        SurfaceMaterialSemantic::Water));
+    const uint32_t lava = faceAttributeBit(FaceAttribute::Lava);
+    // Fluid also marks rippling floors such as Tsantsa's safe path; only liquids.yml textures draw as liquid.
+    CHECK(faceLiquidKind(fluid, LiquidKind::None) == LiquidKind::None);
+    CHECK(faceLiquidKind(0, LiquidKind::Water) == LiquidKind::Water);
+    CHECK(faceLiquidKind(0, LiquidKind::None) == LiquidKind::None);
+    CHECK(faceLiquidKind(fluid | lava, LiquidKind::Lava) == LiquidKind::Lava);
+    CHECK(faceLiquidKind(fluid, LiquidKind::Tar) == LiquidKind::Tar);
+    // A lava-damage face of an ordinary texture is not drawn as water.
+    CHECK(faceLiquidKind(fluid | lava, LiquidKind::None) == LiquidKind::None);
+    CHECK(faceLiquidKind(fluid | faceAttributeBit(FaceAttribute::IndoorSky), LiquidKind::Water) == LiquidKind::None);
 }
 
-TEST_CASE("indoor water pools use enhanced water while walls and cube undersides retain native animation")
+TEST_CASE("liquid face geometry keeps each liquid apart and lava out of reflections")
 {
-    const uint32_t fluid = faceAttributeBit(FaceAttribute::Fluid);
-    for (const SurfaceMaterialSemantic semantic :
-        {SurfaceMaterialSemantic::Water, SurfaceMaterialSemantic::GenericAnimated})
+    const auto vertex = [](float x, float y, float liquid)
     {
-        CHECK(isIndoorWaterPool(fluid, semantic, {0, 0, 1}));
-        CHECK(isIndoorWaterPool(fluid, semantic, {0, 0, 65536}));
-        CHECK(isIndoorWaterPool(fluid, semantic, {0.05f, 0, 1}));
-        CHECK_FALSE(isIndoorWaterPool(fluid, semantic, {1, 0, 0}));
-        CHECK_FALSE(isIndoorWaterPool(fluid, semantic, {0, -1, 0}));
-        CHECK_FALSE(isIndoorWaterPool(fluid, semantic, {0, 0, -1}));
-        CHECK_FALSE(isIndoorWaterPool(fluid, semantic, {0, 1, 1}));
-        CHECK_FALSE(isIndoorWaterPool(fluid, semantic, {0, 0, 0}));
-        CHECK_FALSE(isIndoorWaterPool(fluid | faceAttributeBit(FaceAttribute::IndoorSky), semantic, {0, 0, 1}));
-        CHECK_FALSE(isIndoorWaterPool(fluid | faceAttributeBit(FaceAttribute::Lava), semantic, {0, 0, 1}));
+        return WaterVertex{x, y, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, -1.0f, 0.0f, 0xff000000u, liquid};
+    };
+    std::vector<WaterVertex> vertices;
+    for (const float liquid : {liquidShaderValue(LiquidKind::Water), liquidShaderValue(LiquidKind::Lava),
+             liquidShaderValue(LiquidKind::Tar)})
+    {
+        vertices.push_back(vertex(0.0f, 0.0f, liquid));
+        vertices.push_back(vertex(100.0f, 0.0f, liquid));
+        vertices.push_back(vertex(0.0f, 100.0f, liquid));
     }
-    CHECK(isIndoorWaterPool(0, SurfaceMaterialSemantic::Water, {0, 0, 1}));
-    CHECK_FALSE(isIndoorWaterPool(0, SurfaceMaterialSemantic::GenericAnimated, {0, 0, 1}));
-    CHECK_FALSE(isIndoorWaterPool(fluid, SurfaceMaterialSemantic::Lava, {0, 0, 1}));
+    const std::vector<WaterSurfaceGeometry> surfaces = buildWaterFaceGeometry(vertices, -1, -1);
+    REQUIRE(surfaces.size() == 3);
+    for (const WaterSurfaceGeometry &surface : surfaces)
+    {
+        REQUIRE(surface.vertices.size() == 3);
+        CHECK(surface.liquid == liquidFromShaderValue(surface.vertices.front().liquid));
+        CHECK(liquidReflects(surface.liquid) == (surface.liquid != LiquidKind::Lava));
+    }
+}
+
+TEST_CASE("liquid face geometry keeps see-through liquids apart from opaque ones at one height")
+{
+    const auto vertex = [](float x, float y, uint32_t colorAbgr)
+    { return WaterVertex{x, y, 10.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, -1.0f, 0.0f, colorAbgr}; };
+    const std::vector<WaterVertex> vertices = {
+        vertex(0, 0, 0xff4a4429u), vertex(100, 0, 0xff4a4429u), vertex(0, 100, 0xff4a4429u),
+        vertex(200, 0, 0x664a4429u), vertex(300, 0, 0x664a4429u), vertex(200, 100, 0x664a4429u),
+        vertex(0, 200, 0xff4a4429u), vertex(100, 200, 0xff4a4429u), vertex(0, 300, 0xff4a4429u)};
+    const std::vector<WaterSurfaceGeometry> surfaces = buildWaterFaceGeometry(vertices, 3, -1);
+    REQUIRE(surfaces.size() == 2);
+    CHECK_FALSE(surfaces[0].seeThrough);
+    CHECK(surfaces[0].vertices.size() == 6);
+    CHECK(surfaces[1].seeThrough);
+    CHECK(surfaces[1].vertices.size() == 3);
+    CHECK(surfaces[1].planar);
+    CHECK(surfaces[1].height == 10.0f);
+    CHECK(surfaces[1].sectorId == 3);
 }
 
 TEST_CASE("indoor water separates pool elevations and keeps waterfalls out of planar reflections")
@@ -73,7 +97,7 @@ TEST_CASE("indoor water separates pool elevations and keeps waterfalls out of pl
         vertex(0, 0, 10), vertex(100, 0, 10), vertex(0, 0, 20),
         vertex(0, 0, 10), vertex(0, 0, 10), vertex(0, 0, 10)
     };
-    const std::vector<WaterSurfaceGeometry> geometry = buildIndoorWaterGeometry(triangles, 12, -1);
+    const std::vector<WaterSurfaceGeometry> geometry = buildWaterFaceGeometry(triangles, 12, -1);
     REQUIRE(geometry.size() == 3);
     CHECK(geometry[0].planar);
     CHECK(geometry[0].height == 10);
@@ -89,24 +113,63 @@ TEST_CASE("indoor water separates pool elevations and keeps waterfalls out of pl
         CHECK(surface.backSectorId == -1);
         CHECK(surface.vertices.front().colorAbgr == 0xff4a4429u);
     }
-    CHECK(buildIndoorWaterGeometry({}, 1, -1).empty());
+    const std::array<WaterVertex, 3> underside = {vertex(0, 0, 10), vertex(0, 100, 10), vertex(100, 0, 10)};
+    const std::vector<WaterSurfaceGeometry> below = buildWaterFaceGeometry(underside, -1, -1);
+    REQUIRE(below.size() == 1);
+    CHECK_FALSE(below.front().planar);
+    CHECK(below.front().vertices.front().normalZ == -1.0f);
+    CHECK(buildWaterFaceGeometry({}, 1, -1).empty());
 }
 
-TEST_CASE("indoor water directional flow follows native UV orientation on horizontal and vertical faces")
+TEST_CASE("water face directional flow follows native UV orientation on horizontal and vertical faces")
 {
     const std::array<std::array<float, 2>, 3> uvs = {{{0, 0}, {1, 0}, {0, 1}}};
     const std::array<bx::Vec3, 3> flat = {bx::Vec3{0, 0, 0}, bx::Vec3{128, 0, 0}, bx::Vec3{0, -128, 0}};
     const std::array<bx::Vec3, 3> wall = {bx::Vec3{0, 0, 0}, bx::Vec3{128, 0, 0}, bx::Vec3{0, 0, -128}};
-    const std::array<float, 2> flatFlow = indoorWaterFlow(flat, uvs, 0.0f, -0.5f);
-    const std::array<float, 2> wallFlow = indoorWaterFlow(wall, uvs, 0.0f, -0.5f);
+    const std::array<float, 2> flatFlow = waterFaceFlow(flat, uvs, 0.0f, -0.5f);
+    const std::array<float, 2> wallFlow = waterFaceFlow(wall, uvs, 0.0f, -0.5f);
     CHECK(flatFlow[0] == 0);
-    CHECK(flatFlow[1] == doctest::Approx(-64.0 / 2048.0));
+    CHECK(flatFlow[1] == doctest::Approx(-64.0 / 768.0));
     CHECK(wallFlow[0] == 0);
-    CHECK(wallFlow[1] == doctest::Approx(64.0 / 2048.0));
-    const std::array<float, 2> reverse = indoorWaterFlow(wall, uvs, 0.0f, 0.5f);
+    CHECK(wallFlow[1] == doctest::Approx(64.0 / 768.0));
+    const std::array<float, 2> reverse = waterFaceFlow(wall, uvs, 0.0f, 0.5f);
     CHECK(reverse[1] == -wallFlow[1]);
     const std::array<bx::Vec3, 3> collapsed = {bx::Vec3{0, 0, 0}, bx::Vec3{0, 0, 0}, bx::Vec3{0, 0, 0}};
-    CHECK(indoorWaterFlow(collapsed, uvs, 1, 1) == std::array<float, 2>{0, 0});
+    CHECK(waterFaceFlow(collapsed, uvs, 1, 1) == std::array<float, 2>{0, 0});
+}
+
+TEST_CASE("sprite fountain water stays inside authored streams and follows billboard mirroring")
+{
+    const std::string yaml = R"(textures:
+  fountain1:
+    - [[0.2, 0.3, 0.4], [0.25, 0.35, 0.9]]
+)";
+    const auto materials = parseSpriteWaterStrips(yaml);
+    const BillboardQuad quad = billboardQuad({10, 20, 30}, {1, 0, 0}, {0, 0, 1}, 100, 200);
+    const auto &strips = materials.at("fountain1");
+    REQUIRE(strips.size() == 1);
+    const std::vector<WaterVertex> ordinary = buildSpriteWaterGeometry(quad, strips, false);
+    const std::vector<WaterVertex> mirrored = buildSpriteWaterGeometry(quad, strips, true);
+    REQUIRE(ordinary.size() == 6);
+    REQUIRE(mirrored.size() == ordinary.size());
+    for (size_t index = 0; index < ordinary.size(); ++index)
+    {
+        CHECK(ordinary[index].x + mirrored[index].x == doctest::Approx(quad.center.x * 2));
+        CHECK(ordinary[index].z >= -50);
+        CHECK(ordinary[index].z <= 50);
+        CHECK(ordinary[index].layer == -2);
+        CHECK(ordinary[index].v == mirrored[index].v);
+    }
+    CHECK_FALSE(materials.contains("stone"));
+    std::string invalid = yaml;
+    invalid.replace(invalid.find("0.9"), 3, "1.9");
+    CHECK_THROWS_AS(parseSpriteWaterStrips(invalid), std::invalid_argument);
+    invalid = yaml;
+    invalid.replace(invalid.find("0.9"), 3, "0.1");
+    CHECK_THROWS_AS(parseSpriteWaterStrips(invalid), std::invalid_argument);
+    invalid = yaml;
+    invalid.replace(invalid.find("0.9"), 3, "bad");
+    CHECK_THROWS_AS(parseSpriteWaterStrips(invalid), std::invalid_argument);
 }
 
 TEST_CASE("water body tint keeps regional colour without the source wave pattern or resolution")
@@ -159,6 +222,20 @@ TEST_CASE("water reflection reuse refreshes animation and immediately invalidate
     CHECK(prepare(0.0f, 180.0f, 2048, 8, false)); // Time reset/load.
     state = {};
     CHECK(prepare(0.0f, 180.0f, 2048, 8, false)); // GPU resources recreated at the same pose.
+}
+
+TEST_CASE("water reflection camera refreshes are capped while time runs")
+{
+    WaterReflectionUpdate state;
+    float matrix[16];
+    bx::mtxIdentity(matrix);
+    CHECK(state.prepare(matrix, 0.0f, 512, 10.0f, 7, true));
+    matrix[12] = 1.0f;
+    CHECK_FALSE(state.prepare(matrix, 0.0f, 512, 10.001f, 7, true)); // Moving at 1000 FPS: within 1/120 s.
+    CHECK(state.prepare(matrix, 0.0f, 512, 10.009f, 7, true));
+    matrix[12] = 2.0f;
+    CHECK(state.prepare(matrix, 0.0f, 512, 10.009f, 7, true)); // Paused: immediate.
+    CHECK(state.prepare(matrix, 0.0f, 512, 10.0095f, 8, true)); // Content change: immediate.
 }
 
 TEST_CASE("water covered rotations still refresh animation, content and capture quality")
@@ -331,16 +408,30 @@ TEST_CASE("water shoreline coverage preserves opaque land, open water and partia
     CHECK_THROWS_AS(waterCoverageFromOverlay(overlay, 3, 2), std::invalid_argument);
 }
 
+TEST_CASE("sky resolution round-trips through settings; the classic sky style is gone")
+{
+    GameSettings settings = GameSettings::createDefault();
+    CHECK_THROWS_AS(menuSettingValue(settings, "sky_style"), std::invalid_argument);
+
+    const std::filesystem::path path = std::filesystem::temp_directory_path() / "openyamm-sky-settings.ini";
+    std::string error;
+    CHECK(settings.skyResolutionScale == 1.0f);
+    settings.skyResolutionScale = 0.5f;
+    REQUIRE(saveGameSettings(path, settings, error));
+    const std::optional<GameSettings> reloaded = loadGameSettings(path, error);
+    REQUIRE(reloaded);
+    CHECK(reloaded->skyResolutionScale == doctest::Approx(0.5f));
+    std::filesystem::remove(path);
+}
+
 TEST_CASE("menu water controls accept supported quality values and reject invalid edits")
 {
     GameSettings settings = GameSettings::createDefault();
-    CHECK(menuSettingValue(settings, "water_shader") == "true");
-    REQUIRE(setMenuSettingValue(settings, "water_shader", "false"));
-    CHECK_FALSE(settings.waterShader);
     REQUIRE(setMenuSettingValue(settings, "water_reflections", "false"));
     CHECK_FALSE(settings.waterReflections);
     CHECK(menuSettingValue(settings, "water_reflections") == "false");
-    CHECK(menuSettingValue(settings, "water_sprite_reflections") == "false");
+    CHECK(menuSettingValue(settings, "water_sprite_reflections") == "true"); // Desktop default.
+    REQUIRE(setMenuSettingValue(settings, "water_sprite_reflections", "false"));
     REQUIRE(setMenuSettingValue(settings, "water_sprite_reflections", "true"));
     CHECK(settings.waterSpriteReflections);
     CHECK(menuSettingValue(settings, "water_sprite_reflections") == "true");
@@ -350,7 +441,6 @@ TEST_CASE("menu water controls accept supported quality values and reject invali
     CHECK_FALSE(setMenuSettingValue(settings, "water_reflection_size", "1024bad"));
     CHECK_FALSE(setMenuSettingValue(settings, "water_reflection_size", "700"));
     CHECK_FALSE(setMenuSettingValue(settings, "water_reflection_size", "0"));
-    CHECK_FALSE(setMenuSettingValue(settings, "water_shader", "bad"));
     CHECK(settings.waterReflectionSize == 1024);
 }
 
@@ -464,33 +554,62 @@ TEST_CASE("water reflection scissor covers visible water and distorted samples a
     CHECK(samples > 1000);
 }
 
-TEST_CASE("sunlight shadows precede water reflections and world rendering without duplicate views")
+TEST_CASE("world post processing orders solid geometry AO transparencies grading and HUD exactly once")
 {
     for (bool grading : {false, true})
     {
-        const std::array<uint16_t, WorldGradingView + 1> order = worldRenderViewOrder(grading);
-        const auto position = [&](uint16_t view) { return std::find(order.begin(), order.end(), view); };
-        CHECK(position(0) < position(1));
-        CHECK(position(1) < position(2));
-        for (uint16_t view = FirstSunShadowView; view < FirstSunShadowView + SunShadowViews; ++view)
+        for (bool ambientOcclusion : {false, true})
         {
-            CHECK(position(view) < position(FirstWaterReflectionView));
-        }
-        for (uint16_t view = FirstWaterReflectionView;
-            view < FirstWaterReflectionView + MaxWaterReflections * 2; ++view)
-        {
-            CHECK(position(view) < position(0));
-        }
-        if (grading)
-        {
-            CHECK(position(1) < position(WorldGradingView));
-            CHECK(position(WorldGradingView) < position(2));
-        }
-        std::array<uint16_t, WorldGradingView + 1> sorted = order;
-        std::sort(sorted.begin(), sorted.end());
-        for (uint16_t view = 0; view <= WorldGradingView; ++view)
-        {
-            CHECK(sorted[view] == view);
+            const std::array<uint16_t, FirstPersonViewModelView + 1> order =
+                worldRenderViewOrder(grading, ambientOcclusion);
+            const auto position = [&](uint16_t view) { return std::find(order.begin(), order.end(), view); };
+            CHECK(position(0) < position(1));
+            CHECK(position(1) < position(2));
+            for (uint16_t view = FirstIndoorDebugPassView; view < FirstIndoorDebugPassView + IndoorDebugPassViews;
+                ++view)
+            {
+                CHECK(position(0) < position(view));
+                CHECK(position(view) < position(1));
+            }
+            CHECK(position(SkyImageView) < position(0));
+            CHECK(position(ActorPortraitView) < position(2));
+            for (uint16_t view = FirstSunShadowView; view < FirstSunShadowView + SunShadowViews; ++view)
+            {
+                CHECK(position(view) < position(FirstWaterReflectionView));
+            }
+            for (uint16_t view = FirstWaterReflectionView;
+                view < FirstWaterReflectionView + MaxWaterReflections * 2; ++view)
+            {
+                CHECK(position(view) < position(0));
+            }
+            if (ambientOcclusion)
+            {
+                CHECK(position(1) < position(AmbientOcclusionDepthView));
+                CHECK(position(AmbientOcclusionDepthView) < position(AmbientOcclusionView));
+                CHECK(position(AmbientOcclusionView) < position(AmbientOcclusionBlurView));
+                CHECK(position(AmbientOcclusionBlurView) < position(AmbientOcclusionCompositeView));
+                CHECK(position(AmbientOcclusionCompositeView) < position(WorldTransparentView));
+                CHECK(position(WorldTransparentView) < position(grading ? WorldGradingView : 2));
+            }
+            if (grading)
+            {
+                CHECK(position(1) < position(WorldGradingView));
+                CHECK(position(WorldGradingView) < position(2));
+            }
+            // The view model draws over the finished world (after AO's transparencies) and before grading and HUD.
+            CHECK(position(1) < position(FirstPersonViewModelView));
+            if (ambientOcclusion)
+            {
+                CHECK(position(WorldTransparentView) < position(FirstPersonViewModelView));
+            }
+            CHECK(position(FirstPersonViewModelView) < position(grading ? WorldGradingView : 2));
+            CHECK(position(FirstPersonViewModelView) < position(2));
+            std::array<uint16_t, FirstPersonViewModelView + 1> sorted = order;
+            std::sort(sorted.begin(), sorted.end());
+            for (uint16_t view = 0; view <= FirstPersonViewModelView; ++view)
+            {
+                CHECK(sorted[view] == view);
+            }
         }
     }
 }
@@ -506,7 +625,6 @@ TEST_CASE("water quality settings survive save load and clamp reflection allocat
         ~Cleanup() { std::filesystem::remove(path); }
     } cleanup{path};
     GameSettings settings = GameSettings::createDefault();
-    settings.waterShader = false;
     settings.waterReflections = false;
     settings.waterSpriteReflections = true;
     settings.waterMovementRipples = false;
@@ -515,7 +633,6 @@ TEST_CASE("water quality settings survive save load and clamp reflection allocat
     REQUIRE(saveGameSettings(path, settings, error));
     const std::optional<GameSettings> loaded = loadGameSettings(path, error);
     REQUIRE_MESSAGE(loaded.has_value(), error);
-    CHECK_FALSE(loaded->waterShader);
     CHECK_FALSE(loaded->waterReflections);
     CHECK(loaded->waterSpriteReflections);
     CHECK_FALSE(loaded->waterMovementRipples);

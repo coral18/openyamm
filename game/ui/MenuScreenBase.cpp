@@ -1,6 +1,8 @@
 #include "game/ui/MenuScreenBase.h"
 #include "engine/BgfxContext.h"
 #include "engine/ImageAssetLoader.h"
+#include "engine/render/CookedTexture.h"
+#include "engine/Utf8Text.h"
 #include "game/render/TextureFiltering.h"
 #include "game/ui/UiLayoutManager.h"
 
@@ -12,7 +14,6 @@
 #include <array>
 #include <cctype>
 #include <cstdint>
-#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -24,28 +25,6 @@ namespace OpenYAMM::Game
 {
 namespace
 {
-struct PcxHeader
-{
-    uint8_t manufacturer = 0;
-    uint8_t version = 0;
-    uint8_t encoding = 0;
-    uint8_t bitsPerPixel = 0;
-    uint16_t xMin = 0;
-    uint16_t yMin = 0;
-    uint16_t xMax = 0;
-    uint16_t yMax = 0;
-    uint16_t hDpi = 0;
-    uint16_t vDpi = 0;
-    uint8_t colorMap[48] = {};
-    uint8_t reserved = 0;
-    uint8_t colorPlanes = 0;
-    uint16_t bytesPerLine = 0;
-    uint16_t paletteType = 0;
-    uint16_t hScreenSize = 0;
-    uint16_t vScreenSize = 0;
-    uint8_t filler[54] = {};
-};
-
 std::string toLowerCopy(const std::string &value)
 {
     std::string normalized = value;
@@ -61,7 +40,7 @@ std::string toLowerCopy(const std::string &value)
 bool isIndependentOutlineFont(const std::string &fontName)
 {
     const std::string name = toLowerCopy(fontName);
-    return name.starts_with("menu_") || name == "fondamento";
+    return name.starts_with("menu_") || name == "fondamento" || name == "alegreya_semibold";
 }
 
 std::filesystem::path getShaderPath(bgfx::RendererType::Enum rendererType, const char *pShaderName)
@@ -85,6 +64,10 @@ std::filesystem::path getShaderPath(bgfx::RendererType::Enum rendererType, const
 
     case bgfx::RendererType::Vulkan:
         rendererDirectory = "spirv";
+        break;
+
+    case bgfx::RendererType::Metal:
+        rendererDirectory = "metal";
         break;
 
     default:
@@ -194,216 +177,58 @@ bgfx::ProgramHandle loadProgram(const char *pVertexShaderName, const char *pFrag
     return bgfx::createProgram(vertexShader, fragmentShader, true);
 }
 
-bool decodePcxRleScanline(const std::vector<uint8_t> &bytes, size_t &offset, std::vector<uint8_t> &scanline)
-{
-    size_t writeOffset = 0;
-
-    while (writeOffset < scanline.size() && offset < bytes.size())
-    {
-        uint8_t value = bytes[offset++];
-        uint8_t count = 1;
-
-        if ((value & 0xc0) == 0xc0)
-        {
-            count = value & 0x3f;
-
-            if (offset >= bytes.size())
-            {
-                return false;
-            }
-
-            value = bytes[offset++];
-        }
-
-        for (uint8_t repeatIndex = 0; repeatIndex < count && writeOffset < scanline.size(); ++repeatIndex)
-        {
-            scanline[writeOffset++] = value;
-        }
-    }
-
-    return writeOffset == scanline.size();
-}
-
-std::optional<std::vector<uint8_t>> decodePcxPixelsBgra(const std::vector<uint8_t> &bytes, int &width, int &height)
-{
-    if (bytes.size() < sizeof(PcxHeader))
-    {
-        return std::nullopt;
-    }
-
-    PcxHeader header = {};
-    std::memcpy(&header, bytes.data(), sizeof(PcxHeader));
-
-    if (header.manufacturer != 0x0a || header.encoding != 1 || header.bitsPerPixel != 8)
-    {
-        return std::nullopt;
-    }
-
-    width = static_cast<int>(header.xMax) - static_cast<int>(header.xMin) + 1;
-    height = static_cast<int>(header.yMax) - static_cast<int>(header.yMin) + 1;
-
-    if (width <= 0 || height <= 0 || header.bytesPerLine == 0)
-    {
-        return std::nullopt;
-    }
-
-    const size_t scanlineSize = static_cast<size_t>(header.bytesPerLine) * header.colorPlanes;
-    size_t offset = sizeof(PcxHeader);
-    std::vector<uint8_t> scanline(scanlineSize);
-    std::vector<uint8_t> pixels(static_cast<size_t>(width) * static_cast<size_t>(height) * 4, 255);
-
-    std::array<uint8_t, 256 * 3> palette = {};
-    const bool hasPalette = header.colorPlanes != 1
-        || (bytes.size() >= 769 && bytes[bytes.size() - 769] == 0x0c);
-
-    if (header.colorPlanes == 1)
-    {
-        if (!hasPalette)
-        {
-            return std::nullopt;
-        }
-
-        std::memcpy(palette.data(), bytes.data() + bytes.size() - 768, 768);
-    }
-
-    for (int y = 0; y < height; ++y)
-    {
-        if (!decodePcxRleScanline(bytes, offset, scanline))
-        {
-            return std::nullopt;
-        }
-
-        for (int x = 0; x < width; ++x)
-        {
-            const size_t pixelOffset = static_cast<size_t>((y * width + x) * 4);
-            uint8_t red = 0;
-            uint8_t green = 0;
-            uint8_t blue = 0;
-
-            if (header.colorPlanes == 1)
-            {
-                const size_t paletteOffset = static_cast<size_t>(scanline[static_cast<size_t>(x)]) * 3;
-                red = palette[paletteOffset + 0];
-                green = palette[paletteOffset + 1];
-                blue = palette[paletteOffset + 2];
-            }
-            else if (header.colorPlanes == 3)
-            {
-                red = scanline[static_cast<size_t>(x)];
-                green = scanline[static_cast<size_t>(header.bytesPerLine) + static_cast<size_t>(x)];
-                blue = scanline[static_cast<size_t>(header.bytesPerLine) * 2 + static_cast<size_t>(x)];
-            }
-            else
-            {
-                return std::nullopt;
-            }
-
-            pixels[pixelOffset + 0] = blue;
-            pixels[pixelOffset + 1] = green;
-            pixels[pixelOffset + 2] = red;
-
-            const bool isMagentaKey = red >= 248 && green <= 8 && blue >= 248;
-            const bool isPinkKey = red >= 248 && green >= 48 && green <= 64 && blue >= 248;
-            const bool isTealKey = red <= 8 && green >= 248 && blue >= 248;
-            const bool isBlueKey = red <= 8 && green <= 8 && blue >= 248;
-            pixels[pixelOffset + 3] = (isMagentaKey || isPinkKey || isTealKey || isBlueKey) ? 0 : 255;
-        }
-    }
-
-    return pixels;
-}
-
 std::optional<std::vector<uint8_t>> loadTexturePixelsBgra(
     const std::vector<uint8_t> &bytes,
     const std::string &path,
     int &width,
     int &height)
 {
+    Engine::ImageDecodeOptions decodeOptions = {};
+    decodeOptions.applyMagentaTransparencyKey = true;
+    decodeOptions.applyTealTransparencyKey = true;
+    std::optional<Engine::ImagePixelsBgra> image = Engine::decodeImagePixelsBgra(bytes, path, decodeOptions);
+
+    if (!image)
+    {
+        return std::nullopt;
+    }
+
+    // Preserve legacy menu color keys, including PNG replacements with PCX/BMP names.
     const std::string lowerPath = toLowerCopy(path);
-
-    if (lowerPath.size() >= 4 && lowerPath.substr(lowerPath.size() - 4) == ".pcx")
+    const bool isPcx = lowerPath.ends_with(".pcx");
+    const bool isBmp = lowerPath.ends_with(".bmp");
+    if (isPcx || isBmp)
     {
-        return decodePcxPixelsBgra(bytes, width, height);
-    }
-
-    if (lowerPath.size() >= 4 && lowerPath.substr(lowerPath.size() - 4) == ".png")
-    {
-        Engine::ImageDecodeOptions decodeOptions = {};
-        decodeOptions.applyMagentaTransparencyKey = true;
-        decodeOptions.applyTealTransparencyKey = true;
-
-        const std::optional<Engine::ImagePixelsBgra> image =
-            Engine::decodeImagePixelsBgra(bytes, path, decodeOptions);
-
-        if (!image)
+        for (size_t offset = 0; offset < image->pixels.size(); offset += 4)
         {
-            return std::nullopt;
-        }
-
-        width = image->width;
-        height = image->height;
-        return image->pixels;
-    }
-
-    SDL_IOStream *pIoStream = SDL_IOFromConstMem(bytes.data(), bytes.size());
-
-    if (pIoStream == nullptr)
-    {
-        return std::nullopt;
-    }
-
-    SDL_Surface *pLoadedSurface = SDL_LoadBMP_IO(pIoStream, true);
-
-    if (pLoadedSurface == nullptr)
-    {
-        return std::nullopt;
-    }
-
-    SDL_Surface *pConvertedSurface = SDL_ConvertSurface(pLoadedSurface, SDL_PIXELFORMAT_BGRA32);
-    SDL_DestroySurface(pLoadedSurface);
-
-    if (pConvertedSurface == nullptr)
-    {
-        return std::nullopt;
-    }
-
-    width = pConvertedSurface->w;
-    height = pConvertedSurface->h;
-    std::vector<uint8_t> pixels(static_cast<size_t>(width) * static_cast<size_t>(height) * 4);
-    std::memcpy(pixels.data(), pConvertedSurface->pixels, pixels.size());
-    SDL_DestroySurface(pConvertedSurface);
-
-    for (size_t pixelOffset = 0; pixelOffset + 3 < pixels.size(); pixelOffset += 4)
-    {
-        const uint8_t blue = pixels[pixelOffset + 0];
-        const uint8_t green = pixels[pixelOffset + 1];
-        const uint8_t red = pixels[pixelOffset + 2];
-        const bool isMagentaKey = red >= 248 && green <= 8 && blue >= 248;
-        const bool isPinkKey = red >= 248 && green >= 48 && green <= 64 && blue >= 248;
-        const bool isTealKey = red <= 8 && green >= 248 && blue >= 248;
-
-        if (isMagentaKey || isPinkKey || isTealKey)
-        {
-            pixels[pixelOffset + 3] = 0;
+            const uint8_t blue = image->pixels[offset];
+            const uint8_t green = image->pixels[offset + 1];
+            const uint8_t red = image->pixels[offset + 2];
+            const bool isPinkKey = red >= 248 && green >= 48 && green <= 64 && blue >= 248;
+            const bool isBlueKey = isPcx && red <= 8 && green <= 8 && blue >= 248;
+            if (isPinkKey || isBlueKey)
+            {
+                image->pixels[offset + 3] = 0;
+            }
         }
     }
 
-    return pixels;
+    width = image->width;
+    height = image->height;
+    return std::move(image->pixels);
 }
 }
 
 bgfx::VertexLayout MenuScreenBase::MenuVertex::ms_layout;
 std::vector<MenuScreenBase::TextureHandle> MenuScreenBase::s_textureHandles;
 std::vector<MenuScreenBase::DynamicTextureHandle> MenuScreenBase::s_dynamicTextureHandles;
-std::vector<MenuScreenBase::FontHandle> MenuScreenBase::s_fontHandles;
 std::unordered_map<std::string, size_t> MenuScreenBase::s_textureIndexByName;
-std::unordered_map<std::string, size_t> MenuScreenBase::s_fontIndexByName;
 int MenuScreenBase::s_fontFrameWidth = 0;
 int MenuScreenBase::s_fontFrameHeight = 0;
 std::unordered_map<std::string, std::unordered_map<std::string, std::string>>
     MenuScreenBase::s_directoryEntriesByPath;
 std::unordered_map<std::string, std::optional<std::string>> MenuScreenBase::s_resolvedTexturePaths;
-std::unordered_map<std::string, std::optional<std::string>> MenuScreenBase::s_resolvedFontPaths;
+uint64_t MenuScreenBase::s_assetContentGeneration = 0;
 
 void MenuScreenBase::MenuVertex::init()
 {
@@ -425,64 +250,45 @@ MenuScreenBase::~MenuScreenBase()
 
 void MenuScreenBase::shutdownSharedResources()
 {
-    if (!Engine::BgfxContext::isBgfxInitialized())
-    {
-        s_textureHandles.clear();
-        s_textureIndexByName.clear();
-        s_resolvedTexturePaths.clear();
-        s_dynamicTextureHandles.clear();
-        s_fontHandles.clear();
-        s_fontIndexByName.clear();
-        s_resolvedFontPaths.clear();
-        s_directoryEntriesByPath.clear();
-        return;
-    }
+    releaseSharedTextures();
+    SharedFontCache::release(Engine::BgfxContext::isBgfxInitialized());
+}
+
+void MenuScreenBase::releaseSharedTextures()
+{
+    const bool destroyGpu = Engine::BgfxContext::isBgfxInitialized();
 
     for (TextureHandle &textureHandle : s_textureHandles)
     {
-        if (bgfx::isValid(textureHandle.handle))
+        if (destroyGpu && bgfx::isValid(textureHandle.handle))
         {
             bgfx::destroy(textureHandle.handle);
-            textureHandle.handle = BGFX_INVALID_HANDLE;
+        }
+    }
+
+    for (DynamicTextureHandle &textureHandle : s_dynamicTextureHandles)
+    {
+        if (destroyGpu && bgfx::isValid(textureHandle.handle))
+        {
+            bgfx::destroy(textureHandle.handle);
         }
     }
 
     s_textureHandles.clear();
     s_textureIndexByName.clear();
     s_resolvedTexturePaths.clear();
-
-
-    for (DynamicTextureHandle &textureHandle : s_dynamicTextureHandles)
-    {
-        if (bgfx::isValid(textureHandle.handle))
-        {
-            bgfx::destroy(textureHandle.handle);
-            textureHandle.handle = BGFX_INVALID_HANDLE;
-        }
-    }
-
     s_dynamicTextureHandles.clear();
-
-    for (FontHandle &fontHandle : s_fontHandles)
-    {
-        if (bgfx::isValid(fontHandle.mainTextureHandle))
-        {
-            bgfx::destroy(fontHandle.mainTextureHandle);
-            fontHandle.mainTextureHandle = BGFX_INVALID_HANDLE;
-        }
-
-        if (bgfx::isValid(fontHandle.shadowTextureHandle))
-        {
-            bgfx::destroy(fontHandle.shadowTextureHandle);
-            fontHandle.shadowTextureHandle = BGFX_INVALID_HANDLE;
-        }
-    }
-
-    s_fontHandles.clear();
-    s_fontIndexByName.clear();
-    s_resolvedFontPaths.clear();
-
     s_directoryEntriesByPath.clear();
+}
+
+void MenuScreenBase::releaseTexturesIfAssetsChanged()
+{
+    // Menu art lives for the whole run; a world switch or an asset edit changes what its names resolve to.
+    if (m_pAssetFileSystem != nullptr && m_pAssetFileSystem->contentGeneration() != s_assetContentGeneration)
+    {
+        releaseSharedTextures();
+        s_assetContentGeneration = m_pAssetFileSystem->contentGeneration();
+    }
 }
 
 void MenuScreenBase::renderFrame(
@@ -496,6 +302,7 @@ void MenuScreenBase::renderFrame(
     m_pInputFrame = &inputFrame;
     m_mouseWheelDelta = inputFrame.mouseWheelDelta;
     ensureRendererInitialized();
+    releaseTexturesIfAssetsChanged();
     resizeFontCache(width, height);
 
     m_mouseX = inputFrame.pointerX;
@@ -784,10 +591,12 @@ void MenuScreenBase::drawTextureRegionColor(
     const float top = rect.y;
     const float bottom = rect.y + rect.height;
     const bool useSourceRect = sourceRect.width > 0.0f && sourceRect.height > 0.0f;
-    const float u0 = useSourceRect ? sourceRect.x / static_cast<float>(pTexture->width) : 0.0f;
-    const float v0 = useSourceRect ? sourceRect.y / static_cast<float>(pTexture->height) : 0.0f;
-    const float u1 = useSourceRect ? (sourceRect.x + sourceRect.width) / static_cast<float>(pTexture->width) : 1.0f;
-    const float v1 = useSourceRect ? (sourceRect.y + sourceRect.height) / static_cast<float>(pTexture->height) : 1.0f;
+    const float uScale = pTexture->uScale / static_cast<float>(pTexture->width);
+    const float vScale = pTexture->vScale / static_cast<float>(pTexture->height);
+    const float u0 = useSourceRect ? sourceRect.x * uScale : 0.0f;
+    const float v0 = useSourceRect ? sourceRect.y * vScale : 0.0f;
+    const float u1 = useSourceRect ? (sourceRect.x + sourceRect.width) * uScale : pTexture->uScale;
+    const float v1 = useSourceRect ? (sourceRect.y + sourceRect.height) * vScale : pTexture->vScale;
     pVertices[0] = MenuVertex{left, top, 0.0f, u0, v0};
     pVertices[1] = MenuVertex{right, top, 0.0f, u1, v0};
     pVertices[2] = MenuVertex{right, bottom, 0.0f, u1, v1};
@@ -822,7 +631,7 @@ void MenuScreenBase::drawTextureRegionColor(
         0,
         m_textureUniformHandle,
         textureHandle,
-        TextureFilterProfile::Ui,
+        pTexture->filterProfile,
         BGFX_SAMPLER_U_CLAMP | BGFX_SAMPLER_V_CLAMP);
     bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A | BGFX_STATE_BLEND_ALPHA | BGFX_STATE_MSAA);
     applyClipRect();
@@ -874,6 +683,42 @@ bool MenuScreenBase::drawText(
     float scale,
     bool drawShadow)
 {
+    // Colour codes split the line into runs, each drawn in its own colour; the caller's alpha still applies.
+    if (text.find('\f') != std::string::npos)
+    {
+        std::optional<uint32_t> runColor;
+        std::string run;
+        float penX = pixelX;
+        bool drawn = true;
+        const auto drawRun = [&]()
+        {
+            const uint32_t color =
+                runColor ? (*runColor & 0x00ffffffu) | (colorAbgr & 0xff000000u) : colorAbgr;
+            drawn = drawText(fontName, run, penX, pixelY, color, scale, drawShadow) && drawn;
+            penX += measureTextWidth(fontName, run, scale);
+            run.clear();
+        };
+
+        for (size_t index = 0; index < text.size() && text[index] != '\r' && text[index] != '\n'; ++index)
+        {
+            std::optional<uint32_t> codeColor;
+
+            if (GameplayHudCommon::readTextColorCode(text, index, codeColor))
+            {
+                drawRun();
+                runColor = codeColor;
+                index += GameplayHudCommon::TextColorCodeLength - 1;
+            }
+            else
+            {
+                run.push_back(text[index]);
+            }
+        }
+
+        drawRun();
+        return drawn;
+    }
+
     const FontHandle *pFont = ensureTextFont(fontName, scale);
 
     if (pFont == nullptr || !bgfx::isValid(pFont->mainTextureHandle))
@@ -888,167 +733,121 @@ bool MenuScreenBase::drawText(
         return false;
     }
 
-    uint32_t glyphCount = 0;
-
-    for (unsigned char character : text)
-    {
-        if (character == '\r' || character == '\n')
-        {
-            break;
-        }
-
-        if (character >= pFont->firstChar
-            && character <= pFont->lastChar
-            && pFont->glyphMetrics[character].width > 0)
-        {
-            ++glyphCount;
-        }
-    }
-
-    if (glyphCount == 0)
-    {
-        return true;
-    }
-
-    const uint32_t vertexCount = glyphCount * 6;
-
-    if (bgfx::getAvailTransientVertexBuffer(vertexCount, MenuVertex::ms_layout) < vertexCount)
-    {
-        return false;
-    }
-
     const bool pixelSized = isIndependentOutlineFont(fontName);
     if (pixelSized)
     {
         pixelY = std::round(pixelY);
     }
-    pixelX -= pFont->atlasPadding * scale;
-    pixelY -= pFont->atlasPadding * scale;
 
-    const float shadowOffset = std::max(1.0f, scale);
-
-    m_drawTint = 0xffffffffu;
-    if (drawShadow && bgfx::isValid(pFont->shadowTextureHandle))
+    // The quads of the line's glyphs, laid out once for the shadow and the text. Glyph geometry is in raster pixels;
+    // a Unicode face's raster differs from its layout height.
+    struct GlyphQuad
     {
-        bgfx::TransientVertexBuffer shadowBuffer;
-        bgfx::allocTransientVertexBuffer(&shadowBuffer, vertexCount, MenuVertex::ms_layout);
-        MenuVertex *pShadowVertices = reinterpret_cast<MenuVertex *>(shadowBuffer.data);
-        float penX = pixelX + shadowOffset;
-        uint8_t previous = 0;
-        uint32_t vertexIndex = 0;
+        float left = 0.0f;
+        float top = 0.0f;
+        float width = 0.0f;
+        float height = 0.0f;
+        float u0 = 0.0f;
+        float v0 = 0.0f;
+        float u1 = 0.0f;
+        float v1 = 0.0f;
+    };
+    std::vector<GlyphQuad> quads;
+    const float glyphScale = scale * pFont->layoutScale;
+    const float atlasWidth = static_cast<float>(pFont->atlasWidth / pFont->atlasScale);
+    const float atlasHeight = static_cast<float>(pFont->atlasHeight / pFont->atlasScale);
+    float pen = 0.0f;
+    uint32_t previous = 0;
 
-        for (unsigned char character : text)
-        {
-            if (character == '\r' || character == '\n')
-            {
-                break;
-            }
-
-            if (character < pFont->firstChar || character > pFont->lastChar)
-            {
-                penX += static_cast<float>(pFont->atlasCellWidth) * scale;
-                continue;
-            }
-
-            const FontGlyphMetrics &glyphMetrics = pFont->glyphMetrics[character];
-            penX += (glyphMetrics.leftSpacing + pFont->kerning(previous, character)) * scale;
-            previous = character;
-
-            if (glyphMetrics.width > 0)
-            {
-                const int cellX = (character % 16) * (pFont->atlasCellWidth + 2 * pFont->atlasPadding);
-                const int cellY = (character / 16) * (pFont->fontHeight + 2 * pFont->atlasPadding);
-                const float u0 = static_cast<float>(cellX) / static_cast<float>(pFont->atlasWidth / pFont->atlasScale);
-                const float v0 = static_cast<float>(cellY) / static_cast<float>(pFont->atlasHeight / pFont->atlasScale);
-                const float u1 = static_cast<float>(cellX + glyphMetrics.width + 2 * pFont->atlasPadding)
-                    / static_cast<float>(pFont->atlasWidth / pFont->atlasScale);
-                const float v1 = static_cast<float>(cellY + pFont->fontHeight + 2 * pFont->atlasPadding)
-                    / static_cast<float>(pFont->atlasHeight / pFont->atlasScale);
-                const float glyphWidth = static_cast<float>(glyphMetrics.width + 2 * pFont->atlasPadding) * scale;
-                const float glyphHeight = static_cast<float>(pFont->fontHeight + 2 * pFont->atlasPadding) * scale;
-                const float top = pixelY + shadowOffset;
-                const float bottom = top + glyphHeight;
-
-                const float left = pixelSized ? std::round(penX) : penX;
-                pShadowVertices[vertexIndex + 0] = MenuVertex{left, top, 0.0f, u0, v0};
-                pShadowVertices[vertexIndex + 1] = MenuVertex{left + glyphWidth, top, 0.0f, u1, v0};
-                pShadowVertices[vertexIndex + 2] = MenuVertex{left + glyphWidth, bottom, 0.0f, u1, v1};
-                pShadowVertices[vertexIndex + 3] = MenuVertex{left, top, 0.0f, u0, v0};
-                pShadowVertices[vertexIndex + 4] = MenuVertex{left + glyphWidth, bottom, 0.0f, u1, v1};
-                pShadowVertices[vertexIndex + 5] = MenuVertex{left, bottom, 0.0f, u0, v1};
-                vertexIndex += 6;
-            }
-
-            penX += (glyphMetrics.advance() - glyphMetrics.leftSpacing) * scale;
-        }
-
-        bgfx::setVertexBuffer(0, &shadowBuffer);
-        bindTexture(0, m_textureUniformHandle, pFont->shadowTextureHandle,
-                    pixelSized || pFont->atlasScale > 1 ? TextureFilterProfile::SmoothText
-                                                        : TextureFilterProfile::Text);
-        bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A | BGFX_STATE_BLEND_ALPHA | BGFX_STATE_MSAA);
-        applyClipRect();
-        bgfx::submit(m_renderViewId, m_texturedProgramHandle);
-    }
-
-    bgfx::TransientVertexBuffer vertexBuffer;
-    bgfx::allocTransientVertexBuffer(&vertexBuffer, vertexCount, MenuVertex::ms_layout);
-    MenuVertex *pVertices = reinterpret_cast<MenuVertex *>(vertexBuffer.data);
-    float penX = pixelX;
-    uint8_t previous = 0;
-    uint32_t vertexIndex = 0;
-
-    for (unsigned char character : text)
+    for (const uint32_t character : Engine::Utf8::codePoints(text))
     {
         if (character == '\r' || character == '\n')
         {
             break;
         }
 
-        if (character < pFont->firstChar || character > pFont->lastChar)
+        const int glyph = pFont->glyphIndex(character);
+
+        if (glyph < 0)
         {
-            penX += static_cast<float>(pFont->atlasCellWidth) * scale;
+            pen += static_cast<float>(pFont->atlasCellWidth);
             continue;
         }
 
-        const FontGlyphMetrics &glyphMetrics = pFont->glyphMetrics[character];
-        penX += (glyphMetrics.leftSpacing + pFont->kerning(previous, character)) * scale;
-        previous = character;
+        pen += pFont->kerning(previous, character);
+        const FontGlyphMetrics &metrics = pFont->glyph(glyph);
 
-        if (glyphMetrics.width > 0)
+        if (metrics.width > 0)
         {
-            const int cellX = (character % 16) * (pFont->atlasCellWidth + 2 * pFont->atlasPadding);
-            const int cellY = (character / 16) * (pFont->fontHeight + 2 * pFont->atlasPadding);
-            const float u0 = static_cast<float>(cellX) / static_cast<float>(pFont->atlasWidth / pFont->atlasScale);
-            const float v0 = static_cast<float>(cellY) / static_cast<float>(pFont->atlasHeight / pFont->atlasScale);
-            const float u1 = static_cast<float>(cellX + glyphMetrics.width + 2 * pFont->atlasPadding)
-                / static_cast<float>(pFont->atlasWidth / pFont->atlasScale);
-            const float v1 = static_cast<float>(cellY + pFont->fontHeight + 2 * pFont->atlasPadding)
-                / static_cast<float>(pFont->atlasHeight / pFont->atlasScale);
-            const float glyphWidth = static_cast<float>(glyphMetrics.width + 2 * pFont->atlasPadding) * scale;
-            const float glyphHeight = static_cast<float>(pFont->fontHeight + 2 * pFont->atlasPadding) * scale;
-            const float bottom = pixelY + glyphHeight;
-
-            const float left = pixelSized ? std::round(penX) : penX;
-            pVertices[vertexIndex + 0] = MenuVertex{left, pixelY, 0.0f, u0, v0};
-            pVertices[vertexIndex + 1] = MenuVertex{left + glyphWidth, pixelY, 0.0f, u1, v0};
-            pVertices[vertexIndex + 2] = MenuVertex{left + glyphWidth, bottom, 0.0f, u1, v1};
-            pVertices[vertexIndex + 3] = MenuVertex{left, pixelY, 0.0f, u0, v0};
-            pVertices[vertexIndex + 4] = MenuVertex{left + glyphWidth, bottom, 0.0f, u1, v1};
-            pVertices[vertexIndex + 5] = MenuVertex{left, bottom, 0.0f, u0, v1};
-            vertexIndex += 6;
+            const Engine::FontGlyphPlacement place = pFont->placement(glyph);
+            quads.push_back(GlyphQuad{
+                pixelX + (pen + metrics.leftSpacing - pFont->atlasPadding) * glyphScale,
+                pixelY + place.top * glyphScale,
+                place.width * glyphScale,
+                place.height * glyphScale,
+                place.x / atlasWidth,
+                place.y / atlasHeight,
+                (place.x + place.width) / atlasWidth,
+                (place.y + place.height) / atlasHeight});
         }
 
-        penX += (glyphMetrics.advance() - glyphMetrics.leftSpacing) * scale;
+        pen += metrics.advance();
+        previous = character;
     }
 
-    bgfx::setVertexBuffer(0, &vertexBuffer);
+    if (quads.empty())
+    {
+        return true;
+    }
+
+    const uint32_t vertexCount = static_cast<uint32_t>(quads.size()) * 6;
+    const bool withShadow = drawShadow && bgfx::isValid(pFont->shadowTextureHandle);
+
+    if (bgfx::getAvailTransientVertexBuffer(vertexCount * (withShadow ? 2 : 1), MenuVertex::ms_layout)
+        < vertexCount * (withShadow ? 2 : 1))
+    {
+        return false;
+    }
+
+    const TextureFilterProfile filter =
+        pixelSized || pFont->atlasScale > 1 ? TextureFilterProfile::SmoothText : TextureFilterProfile::Text;
+    const auto submitQuads =
+        [&](bgfx::TextureHandle texture, float offset)
+        {
+            bgfx::TransientVertexBuffer buffer;
+            bgfx::allocTransientVertexBuffer(&buffer, vertexCount, MenuVertex::ms_layout);
+            MenuVertex *pVertex = reinterpret_cast<MenuVertex *>(buffer.data);
+
+            for (const GlyphQuad &quad : quads)
+            {
+                // Pixel-sized faces snap each glyph, shadow included, to whole pixels.
+                const float left = pixelSized ? std::round(quad.left + offset) : quad.left + offset;
+                const float right = left + quad.width;
+                const float top = quad.top + offset;
+                const float bottom = top + quad.height;
+                *pVertex++ = MenuVertex{left, top, 0.0f, quad.u0, quad.v0};
+                *pVertex++ = MenuVertex{right, top, 0.0f, quad.u1, quad.v0};
+                *pVertex++ = MenuVertex{right, bottom, 0.0f, quad.u1, quad.v1};
+                *pVertex++ = MenuVertex{left, top, 0.0f, quad.u0, quad.v0};
+                *pVertex++ = MenuVertex{right, bottom, 0.0f, quad.u1, quad.v1};
+                *pVertex++ = MenuVertex{left, bottom, 0.0f, quad.u0, quad.v1};
+            }
+
+            bgfx::setVertexBuffer(0, &buffer);
+            bindTexture(0, m_textureUniformHandle, texture, filter);
+            bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A | BGFX_STATE_BLEND_ALPHA | BGFX_STATE_MSAA);
+            applyClipRect();
+            bgfx::submit(m_renderViewId, m_texturedProgramHandle);
+        };
+
+    if (withShadow)
+    {
+        m_drawTint = 0xffffffffu;
+        submitQuads(pFont->shadowTextureHandle, std::max(1.0f, scale));
+    }
+
     m_drawTint = colorAbgr;
-    bindTexture(0, m_textureUniformHandle, mainTextureHandle,
-                pixelSized || pFont->atlasScale > 1 ? TextureFilterProfile::SmoothText : TextureFilterProfile::Text);
-    bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A | BGFX_STATE_BLEND_ALPHA | BGFX_STATE_MSAA);
-    applyClipRect();
-    bgfx::submit(m_renderViewId, m_texturedProgramHandle);
+    submitQuads(mainTextureHandle, 0.0f);
     return true;
 }
 
@@ -1061,28 +860,39 @@ float MenuScreenBase::measureTextWidth(const std::string &fontName, const std::s
         return 0.0f;
     }
 
-    float widthPixels = 0.0f;
-    uint8_t previous = 0;
+    float pen = 0.0f;
+    uint32_t previous = 0;
+    std::optional<uint32_t> ignoredColor;
 
-    for (unsigned char character : text)
+    for (size_t index = 0; index < text.size();)
     {
+        // Colour codes take no room.
+        if (GameplayHudCommon::readTextColorCode(text, index, ignoredColor))
+        {
+            index += GameplayHudCommon::TextColorCodeLength;
+            continue;
+        }
+
+        const uint32_t character = Engine::Utf8::next(text, index);
+
         if (character == '\r' || character == '\n')
         {
             break;
         }
 
-        if (character < pFont->firstChar || character > pFont->lastChar)
+        const int glyph = pFont->glyphIndex(character);
+
+        if (glyph < 0)
         {
-            widthPixels += static_cast<float>(pFont->atlasCellWidth) * scale;
+            pen += static_cast<float>(pFont->atlasCellWidth);
             continue;
         }
 
-        const FontGlyphMetrics &glyphMetrics = pFont->glyphMetrics[character];
-        widthPixels += (glyphMetrics.advance() + pFont->kerning(previous, character)) * scale;
+        pen += pFont->kerning(previous, character) + pFont->glyph(glyph).advance();
         previous = character;
     }
 
-    return widthPixels;
+    return pen * scale * pFont->layoutScale;
 }
 
 int MenuScreenBase::fontHeight(const std::string &fontName)
@@ -1187,6 +997,7 @@ void MenuScreenBase::preloadTexture(const std::string &textureName)
     }
 
     ensureRendererInitialized();
+    releaseTexturesIfAssetsChanged();
     ensureTexture(textureName);
 }
 
@@ -1288,6 +1099,11 @@ const MenuScreenBase::TextureHandle *MenuScreenBase::ensureTexture(const std::st
         return nullptr;
     }
 
+    if (Engine::hasCookedTextureSignature(*bytes))
+    {
+        return ensureCookedTexture(textureName, *resolvedPath, *bytes);
+    }
+
     int width = 0;
     int height = 0;
     const std::optional<std::vector<uint8_t>> pixels = loadTexturePixelsBgra(*bytes, *resolvedPath, width, height);
@@ -1332,25 +1148,51 @@ const MenuScreenBase::TextureHandle *MenuScreenBase::ensureTexture(const std::st
     return &s_textureHandles.back();
 }
 
-void MenuScreenBase::setFontSettings(const Engine::FontSettings &settings)
+// HUD art cooked by tools/cook_ui_textures.py (the Obsidian illustrations have no PNG at runtime).
+const MenuScreenBase::TextureHandle *MenuScreenBase::ensureCookedTexture(
+    const std::string &textureName, const std::string &resolvedPath, const std::vector<uint8_t> &bytes)
 {
-    m_fontSettings = settings;
-}
-
-std::string MenuScreenBase::fontCacheKey(const std::string &fontName, int pixelHeight) const
-{
-    if (isIndependentOutlineFont(fontName))
+    TextureHandle textureHandle = {};
+    textureHandle.normalizedTextureName = toLowerCopy(textureName);
+    textureHandle.filterProfile = textureHandle.normalizedTextureName.starts_with("obsidian_")
+        ? TextureFilterProfile::UiIllustration
+        : TextureFilterProfile::Ui;
+    try
     {
-        return toLowerCopy(fontName) + "|pixels:" + std::to_string(pixelHeight);
+        const Engine::CookedTexture cooked = Engine::decodeCookedTexture(bytes);
+        const int width = cooked.contentWidth != 0 ? cooked.contentWidth : cooked.width;
+        const int height = cooked.contentHeight != 0 ? cooked.contentHeight : cooked.height;
+        const Engine::AssetScaleTier loadedTier = Engine::assetScaleTierFromResolvedPath(resolvedPath);
+        textureHandle.width = Engine::scalePhysicalPixelsToLogical(width, loadedTier);
+        textureHandle.height = Engine::scalePhysicalPixelsToLogical(height, loadedTier);
+        textureHandle.physicalWidth = width;
+        textureHandle.physicalHeight = height;
+        textureHandle.uScale = float(width) / float(cooked.width);
+        textureHandle.vScale = float(height) / float(cooked.height);
+        textureHandle.handle = createCookedTexture2D(
+            cooked, textureHandle.filterProfile, BGFX_SAMPLER_U_CLAMP | BGFX_SAMPLER_V_CLAMP);
     }
-    return toLowerCopy(fontName) + (m_fontSettings.usesTrueType(fontName) ? "|ttf" : "|bitmap");
+    catch (const std::exception &exception)
+    {
+        std::cerr << "MenuScreenBase could not load cooked texture " << resolvedPath << ": " << exception.what()
+                  << '\n';
+        return nullptr;
+    }
+
+    if (!bgfx::isValid(textureHandle.handle))
+    {
+        std::cerr << "MenuScreenBase could not create bgfx texture: " << resolvedPath << '\n';
+        return nullptr;
+    }
+
+    s_textureHandles.push_back(std::move(textureHandle));
+    s_textureIndexByName[s_textureHandles.back().normalizedTextureName] = s_textureHandles.size() - 1;
+    return &s_textureHandles.back();
 }
 
 const MenuScreenBase::FontHandle *MenuScreenBase::findFont(const std::string &fontName, int pixelHeight) const
 {
-    const std::string normalized = fontCacheKey(fontName, pixelHeight);
-    const std::unordered_map<std::string, size_t>::const_iterator it = s_fontIndexByName.find(normalized);
-    return it != s_fontIndexByName.end() ? &s_fontHandles[it->second] : nullptr;
+    return SharedFontCache::find(fontName, isIndependentOutlineFont(fontName) ? pixelHeight : 0);
 }
 
 const MenuScreenBase::FontHandle *MenuScreenBase::ensureTextFont(const std::string &fontName, float &scale)
@@ -1378,24 +1220,8 @@ void MenuScreenBase::resizeFontCache(int width, int height)
     }
     s_fontFrameWidth = width;
     s_fontFrameHeight = height;
-    // Resizing must not accumulate every intermediate raster size. Keep only the
-    // base layout faces.
-    std::erase_if(s_fontHandles,
-                  [](const FontHandle &font)
-                  {
-                      if (font.rasterPixelHeight == 0)
-                      {
-                          return false;
-                      }
-                      bgfx::destroy(font.mainTextureHandle);
-                      bgfx::destroy(font.shadowTextureHandle);
-                      return true;
-                  });
-    s_fontIndexByName.clear();
-    for (size_t index = 0; index < s_fontHandles.size(); ++index)
-    {
-        s_fontIndexByName[s_fontHandles[index].normalizedFontName] = index;
-    }
+    // Resizing must not accumulate every intermediate raster size. Keep only the base layout faces.
+    SharedFontCache::releaseRasterSizes();
 }
 
 const MenuScreenBase::FontHandle *MenuScreenBase::ensureFont(const std::string &fontName, int pixelHeight)
@@ -1404,67 +1230,13 @@ const MenuScreenBase::FontHandle *MenuScreenBase::ensureFont(const std::string &
     {
         return pExisting;
     }
-
-    std::string error;
-    std::optional<Engine::FontAtlasImage> image;
-    const bool independentOutline = isIndependentOutlineFont(fontName);
-    if (independentOutline)
+    if (m_pAssetFileSystem == nullptr)
     {
-        image = Engine::loadTrueTypeFontAtlas(*m_pAssetFileSystem, fontName, error, pixelHeight);
-    }
-    else
-    {
-        const std::optional<std::string> path = resolveFontPath(fontName);
-        const std::optional<std::vector<uint8_t>> bytes =
-            path ? m_pAssetFileSystem->readBinaryFile(*path) : std::nullopt;
-        if (!bytes || bytes->empty())
-        {
-            return nullptr;
-        }
-        image = Engine::loadFontAtlas(*m_pAssetFileSystem, *bytes, fontName, m_fontSettings, error);
-    }
-    if (!image)
-    {
-        std::cerr << "Menu font load failed: font=\"" << fontName << "\" reason=" << error << '\n';
         return nullptr;
     }
-
-    FontHandle fontHandle = {};
-    static_cast<Engine::FontAtlas &>(fontHandle) = std::move(image->atlas);
-    fontHandle.normalizedFontName = fontCacheKey(fontName, pixelHeight);
-    fontHandle.rasterPixelHeight = pixelHeight;
-    const int atlasWidth = fontHandle.atlasWidth;
-    const int atlasHeight = fontHandle.atlasHeight;
-    const std::vector<uint8_t> &mainPixels = fontHandle.mainAtlasPixels;
-    const std::vector<uint8_t> &shadowPixels = image->shadowPixels;
-    const TextureFilterProfile filter =
-        independentOutline || fontHandle.atlasScale > 1 ? TextureFilterProfile::SmoothText : TextureFilterProfile::Text;
-
-    fontHandle.mainTextureHandle =
-        createBgraTexture2D(uint16_t(atlasWidth), uint16_t(atlasHeight), mainPixels.data(), uint32_t(mainPixels.size()),
-                            filter, BGFX_SAMPLER_U_CLAMP | BGFX_SAMPLER_V_CLAMP);
-    fontHandle.shadowTextureHandle =
-        createBgraTexture2D(uint16_t(atlasWidth), uint16_t(atlasHeight), shadowPixels.data(),
-                            uint32_t(shadowPixels.size()), filter, BGFX_SAMPLER_U_CLAMP | BGFX_SAMPLER_V_CLAMP);
-
-    if (!bgfx::isValid(fontHandle.mainTextureHandle) || !bgfx::isValid(fontHandle.shadowTextureHandle))
-    {
-        if (bgfx::isValid(fontHandle.mainTextureHandle))
-        {
-            bgfx::destroy(fontHandle.mainTextureHandle);
-        }
-
-        if (bgfx::isValid(fontHandle.shadowTextureHandle))
-        {
-            bgfx::destroy(fontHandle.shadowTextureHandle);
-        }
-
-        return nullptr;
-    }
-
-    s_fontHandles.push_back(std::move(fontHandle));
-    s_fontIndexByName[s_fontHandles.back().normalizedFontName] = s_fontHandles.size() - 1;
-    return &s_fontHandles.back();
+    SharedFontCache::ensure(
+        *m_pAssetFileSystem, {{fontName, isIndependentOutlineFont(fontName) ? pixelHeight : 0}});
+    return findFont(fontName, pixelHeight);
 }
 
 bgfx::TextureHandle MenuScreenBase::ensureDynamicTexture(
@@ -1554,56 +1326,17 @@ std::optional<std::string> MenuScreenBase::resolveTexturePath(const std::string 
     {
         return m_pAssetFileSystem->resolveExistingFilePath(textureName);
     }
-    return Engine::findImageAssetPath(
+    const std::filesystem::path path(textureName);
+    if (path.has_parent_path())
+    {
+        if (path.extension() == ".oytex") return m_pAssetFileSystem->resolveExistingFilePath(textureName);
+        return Engine::findCookedOrImageAssetPath(*m_pAssetFileSystem, path.parent_path().generic_string(),
+            path.filename().string(), s_directoryEntriesByPath, s_resolvedTexturePaths);
+    }
+    return Engine::findCookedOrImageAssetPath(
         *m_pAssetFileSystem, "Data/icons", textureName, s_directoryEntriesByPath, s_resolvedTexturePaths);
 }
 
-std::optional<std::string> MenuScreenBase::resolveFontPath(const std::string &fontName)
-{
-    const std::string normalizedName = toLowerCopy(fontName);
-    const std::unordered_map<std::string, std::optional<std::string>>::const_iterator cachedIt =
-        s_resolvedFontPaths.find(normalizedName);
-
-    if (cachedIt != s_resolvedFontPaths.end())
-    {
-        return cachedIt->second;
-    }
-
-    const std::array<std::string, 2> directories = {
-        "Data/icons",
-        "Data/EnglishT"
-    };
-
-    for (const std::string &directory : directories)
-    {
-        std::unordered_map<std::string, std::unordered_map<std::string, std::string>>::iterator entriesIt =
-            s_directoryEntriesByPath.find(directory);
-
-        if (entriesIt == s_directoryEntriesByPath.end())
-        {
-            std::unordered_map<std::string, std::string> entries;
-
-            for (const std::string &entry : m_pAssetFileSystem->enumerate(directory))
-            {
-                entries.emplace(toLowerCopy(entry), directory + "/" + entry);
-            }
-
-            entriesIt = s_directoryEntriesByPath.emplace(directory, std::move(entries)).first;
-        }
-
-        const std::unordered_map<std::string, std::string>::const_iterator resolvedIt =
-            entriesIt->second.find(normalizedName + ".fnt");
-
-        if (resolvedIt != entriesIt->second.end())
-        {
-            s_resolvedFontPaths[normalizedName] = resolvedIt->second;
-            return resolvedIt->second;
-        }
-    }
-
-    s_resolvedFontPaths[normalizedName] = std::nullopt;
-    return std::nullopt;
-}
 void MenuScreenBase::setClipRect(const std::optional<Rect> &rect)
 {
     m_clipRect = rect;
@@ -1668,4 +1401,28 @@ void MenuScreenBase::drawEllipseOutline(const Rect &rect, float thickness, uint3
     bgfx::submit(m_renderViewId, m_texturedProgramHandle);
 }
 
+void MenuScreenBase::drawLine(float x1, float y1, float x2, float y2, float thickness, uint32_t colorAbgr)
+{
+    const float dx = x2 - x1, dy = y2 - y1;
+    const float length = std::hypot(dx, dy);
+    if (!std::isfinite(length) || length <= 0 || thickness <= 0
+        || bgfx::getAvailTransientVertexBuffer(6, MenuVertex::ms_layout) < 6)
+        return;
+    const float nx = -dy / length * thickness / 2, ny = dx / length * thickness / 2;
+    const bgfx::TextureHandle white = ensureDynamicTexture("menu-white", 1, 1, {255, 255, 255, 255});
+    bgfx::TransientVertexBuffer vertices;
+    bgfx::allocTransientVertexBuffer(&vertices, 6, MenuVertex::ms_layout);
+    MenuVertex *pVertices = reinterpret_cast<MenuVertex *>(vertices.data);
+    const MenuVertex corners[] = {{x1 + nx, y1 + ny, 0, 0.5f, 0.5f},
+        {x2 + nx, y2 + ny, 0, 0.5f, 0.5f}, {x2 - nx, y2 - ny, 0, 0.5f, 0.5f},
+        {x1 - nx, y1 - ny, 0, 0.5f, 0.5f}};
+    for (size_t i = 0; i < 6; ++i)
+        pVertices[i] = corners[std::array{0, 1, 2, 0, 2, 3}[i]];
+    m_drawTint = colorAbgr;
+    bgfx::setVertexBuffer(0, &vertices);
+    bindTexture(0, m_textureUniformHandle, white, TextureFilterProfile::Ui);
+    bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A | BGFX_STATE_BLEND_ALPHA | BGFX_STATE_MSAA);
+    applyClipRect();
+    bgfx::submit(m_renderViewId, m_texturedProgramHandle);
+}
 } // namespace OpenYAMM::Game

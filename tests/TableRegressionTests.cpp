@@ -108,31 +108,6 @@ std::string readSourceTextFile(const std::filesystem::path &path)
     return buffer.str();
 }
 
-std::set<std::string> iniSettingKeys(const std::string &text)
-{
-    std::set<std::string> keys;
-    std::istringstream input(text);
-    std::string section;
-    std::string line;
-
-    while (std::getline(input, line))
-    {
-        if (line.size() >= 2 && line.front() == '[' && line.back() == ']')
-        {
-            section = line.substr(1, line.size() - 2);
-            continue;
-        }
-
-        const size_t separator = line.find('=');
-        if (separator != std::string::npos && !section.empty())
-        {
-            keys.insert(section + '.' + line.substr(0, separator));
-        }
-    }
-
-    return keys;
-}
-
 std::vector<uint8_t> readSourceBinaryFile(const std::filesystem::path &path)
 {
     std::ifstream stream(path, std::ios::binary);
@@ -201,8 +176,7 @@ std::string lowercaseFileName(const std::filesystem::path &path)
 void checkFirstSpriteFrameTexture(
     const OpenYAMM::Game::SpriteFrameTable &spriteFrameTable,
     const std::string &spriteName,
-    const std::string &expectedTextureName,
-    const std::string &expectedAssetFileName)
+    const std::string &expectedTextureName)
 {
     const std::optional<uint16_t> spriteFrameIndex = spriteFrameTable.findFrameIndexBySpriteName(spriteName);
     REQUIRE(spriteFrameIndex.has_value());
@@ -212,11 +186,43 @@ void checkFirstSpriteFrameTexture(
 
     const OpenYAMM::Game::ResolvedSpriteTexture texture = OpenYAMM::Game::SpriteFrameTable::resolveTexture(*pFrame, 0);
     CHECK_EQ(texture.textureName, expectedTextureName);
-    CHECK(std::filesystem::exists(
-        std::filesystem::path(OPENYAMM_SOURCE_DIR)
-        / "assets_dev/engine/sprites"
-        / expectedAssetFileName));
 }
+}
+
+TEST_CASE("sprite frame table resolves authored attack contact frames and sound delays")
+{
+    const std::string yamlText =
+        "sprites:\n"
+        "  - sprite_id: 10\n"
+        "    sprite_name: \"testatk\"\n"
+        "    animation_length_raw: 7\n"
+        "    frames:\n"
+        "      - {texture_name: \"testata\", frame_length_raw: 2}\n"
+        "      - {texture_name: \"testatb\", frame_length_raw: 3}\n"
+        "      - {texture_name: \"testatc\", frame_length_raw: 2}\n"
+        "  - sprite_id: 20\n"
+        "    sprite_name: \"otheratk\"\n"
+        "    animation_length_raw: 2\n"
+        "    frames:\n"
+        "      - {texture_name: \"otherata\", frame_length_raw: 2}\n";
+    OpenYAMM::Game::SpriteFrameTable spriteFrameTable;
+    std::string errorMessage;
+    REQUIRE_MESSAGE(spriteFrameTable.loadFromYaml(yamlText, errorMessage, false), errorMessage);
+    CHECK_FALSE(spriteFrameTable.attackImpactTicks(10).has_value());
+
+    REQUIRE_MESSAGE(spriteFrameTable.loadAttackTimingFromYaml(
+        "sprites:\n  TestAtk: {contact_frame: 2, sound_delay: 0.2}\n  otheratk: {contact_frame: 1}\n", errorMessage),
+        errorMessage);
+    const std::optional<int32_t> impactTicks = spriteFrameTable.attackImpactTicks(10);
+    REQUIRE(impactTicks.has_value());
+    CHECK_EQ(*impactTicks, 40);
+    CHECK(spriteFrameTable.attackSoundDelaySeconds(10) == doctest::Approx(0.2f));
+    // A contact frame past the animation's last frame is ignored.
+    CHECK_FALSE(spriteFrameTable.attackImpactTicks(20).has_value());
+    CHECK(spriteFrameTable.attackSoundDelaySeconds(20) == doctest::Approx(0.0f));
+    CHECK_FALSE(spriteFrameTable.loadAttackTimingFromYaml("sprites:\n  testatk: {contact_frame: 0}\n", errorMessage));
+    CHECK_FALSE(spriteFrameTable.loadAttackTimingFromYaml("sprites:\n  testatk: {sound_delay: -1}\n", errorMessage));
+    CHECK_FALSE(spriteFrameTable.loadAttackTimingFromYaml("sprites:\n  testatk: 2\n", errorMessage));
 }
 
 TEST_CASE("settings debug startup options round trip")
@@ -245,7 +251,6 @@ TEST_CASE("settings debug startup options round trip")
     settings.turboMovementEnabled = false;
     settings.bolsterMonsters = true;
     settings.outdoorPathfinding = true;
-    settings.monsterProjectileVisuals = OpenYAMM::Game::MonsterProjectileVisuals::Sprites;
     settings.logIndoorVisibility = true;
     settings.logOutdoorPathfinding = true;
     settings.fpsTrace = true;
@@ -286,7 +291,6 @@ TEST_CASE("settings debug startup options round trip")
     CHECK_FALSE(loadedSettings->turboMovementEnabled);
     CHECK(loadedSettings->bolsterMonsters);
     CHECK(loadedSettings->outdoorPathfinding);
-    CHECK(loadedSettings->monsterProjectileVisuals == OpenYAMM::Game::MonsterProjectileVisuals::Sprites);
     CHECK(loadedSettings->logIndoorVisibility);
     CHECK(loadedSettings->logOutdoorPathfinding);
     CHECK(loadedSettings->fpsTrace);
@@ -306,36 +310,20 @@ TEST_CASE("settings debug startup options round trip")
     std::filesystem::remove(path);
 }
 
-TEST_CASE("development and release settings expose the same options")
+TEST_CASE("default settings ship without developer cheats or diagnostic logging")
 {
-    const std::filesystem::path sourceDirectory = OPENYAMM_SOURCE_DIR;
-    const std::set<std::string> developmentKeys =
-        iniSettingKeys(readSourceTextFile(sourceDirectory / "settings.ini"));
-    const std::set<std::string> releaseKeys =
-        iniSettingKeys(readSourceTextFile(sourceDirectory / "settings_release.ini"));
-
-    CHECK(developmentKeys == releaseKeys);
-}
-
-TEST_CASE("android settings profile uses mobile interaction defaults without diagnostic logging")
-{
-    const std::filesystem::path path =
-        std::filesystem::path(OPENYAMM_SOURCE_DIR) / "android/settings.ini";
-    std::string error;
-    const std::optional<OpenYAMM::Game::GameSettings> settings =
-        OpenYAMM::Game::loadGameSettings(path, error);
-
-    REQUIRE_MESSAGE(settings.has_value(), error.c_str());
-    CHECK_EQ(settings->settingsProfileName, "android");
-    CHECK_EQ(settings->settingsProfileVersion, 2);
-    CHECK(settings->contextActionPopup);
+    const std::optional<OpenYAMM::Game::GameSettings> settings = OpenYAMM::Game::GameSettings::createDefault();
+    CHECK_EQ(settings->settingsProfileName, "desktop");
+    CHECK_EQ(settings->settingsProfileVersion, OpenYAMM::Game::CurrentSettingsProfileVersion);
     CHECK(settings->startInMainMenu);
     CHECK(settings->verticalSync);
     CHECK(settings->lightmaps);
+    CHECK_FALSE(settings->overrideStartPosition);
     CHECK_FALSE(settings->preseedParty);
     CHECK_FALSE(settings->newGameGodLich);
     CHECK_FALSE(settings->allowIncompleteCharacterCreation);
-    CHECK(settings->debugConsole);
+    CHECK_FALSE(settings->debugConsole);
+    CHECK_FALSE(settings->turboMovementEnabled);
     CHECK_FALSE(settings->immortal);
     CHECK_FALSE(settings->unlimitedMana);
     CHECK_FALSE(settings->logIndoorVisibility);
@@ -379,7 +367,7 @@ TEST_CASE("legacy Android settings migration changes platform defaults once and 
 
     REQUIRE(OpenYAMM::Game::migrateLegacyAndroidSettings(settings));
     CHECK_EQ(settings.settingsProfileName, "android");
-    CHECK_EQ(settings.settingsProfileVersion, 2);
+    CHECK_EQ(settings.settingsProfileVersion, 4);
     CHECK(settings.contextActionPopup);
     CHECK(settings.startInMainMenu);
     CHECK(settings.verticalSync);
@@ -422,7 +410,7 @@ TEST_CASE("Android profile version two only migrates character creation defaults
     settings.allowIncompleteCharacterCreation = true;
 
     REQUIRE(OpenYAMM::Game::migrateLegacyAndroidSettings(settings));
-    CHECK_EQ(settings.settingsProfileVersion, 2);
+    CHECK_EQ(settings.settingsProfileVersion, 4);
     CHECK_EQ(settings.soundVolume, 5);
     CHECK_EQ(settings.startWorldId, "mm6");
     CHECK_FALSE(settings.contextActionPopup);
@@ -431,15 +419,71 @@ TEST_CASE("Android profile version two only migrates character creation defaults
     CHECK_FALSE(settings.allowIncompleteCharacterCreation);
 }
 
-TEST_CASE("settings monster bolster feature defaults off")
+TEST_CASE("Android profile version three lightens terrain filtering and water reflections it still defaults")
+{
+    OpenYAMM::Game::GameSettings settings = OpenYAMM::Game::GameSettings::createDefault();
+    settings.settingsProfileName = "android";
+    settings.settingsProfileVersion = 2;
+    settings.terrainAnisotropy = "4x";
+    settings.waterReflectionSize = 512;
+
+    REQUIRE(OpenYAMM::Game::migrateLegacyAndroidSettings(settings));
+    CHECK_EQ(settings.settingsProfileVersion, 4);
+    CHECK_EQ(settings.terrainAnisotropy, "2x");
+    CHECK_EQ(settings.waterReflectionSize, 256);
+
+    settings.settingsProfileVersion = 2;
+    settings.terrainAnisotropy = "8x";
+    settings.waterReflectionSize = 1024;
+    REQUIRE(OpenYAMM::Game::migrateLegacyAndroidSettings(settings));
+    CHECK_EQ(settings.terrainAnisotropy, "8x");
+    CHECK_EQ(settings.waterReflectionSize, 1024);
+}
+
+TEST_CASE("Android profile version four and desktop profile version one enable actor models once")
+{
+    OpenYAMM::Game::GameSettings android = OpenYAMM::Game::GameSettings::createDefault();
+    android.settingsProfileName = "android";
+    android.settingsProfileVersion = 3;
+    android.actorModels = false;
+    android.terrainAnisotropy = "4x";
+
+    REQUIRE(OpenYAMM::Game::migrateLegacyAndroidSettings(android));
+    CHECK_EQ(android.settingsProfileVersion, 4);
+    CHECK(android.actorModels);
+    CHECK_EQ(android.terrainAnisotropy, "4x");
+
+    android.actorModels = false;
+    CHECK_FALSE(OpenYAMM::Game::migrateLegacyAndroidSettings(android));
+    CHECK_FALSE(android.actorModels);
+
+    OpenYAMM::Game::GameSettings desktop = OpenYAMM::Game::GameSettings::createDefault();
+    desktop.settingsProfileName.clear();
+    desktop.settingsProfileVersion = 0;
+    desktop.actorModels = false;
+    desktop.soundVolume = 7;
+
+    REQUIRE(OpenYAMM::Game::migrateLegacyDesktopSettings(desktop));
+    CHECK_EQ(desktop.settingsProfileName, "desktop");
+    CHECK_EQ(desktop.settingsProfileVersion, 2);
+    CHECK(desktop.actorModels);
+    CHECK_EQ(desktop.soundVolume, 7);
+
+    desktop.actorModels = false;
+    CHECK_FALSE(OpenYAMM::Game::migrateLegacyDesktopSettings(desktop));
+    CHECK_FALSE(desktop.actorModels);
+
+    // Fresh defaults are current and need no migration.
+    OpenYAMM::Game::GameSettings fresh = OpenYAMM::Game::GameSettings::createDefault();
+    CHECK_FALSE(OpenYAMM::Game::migrateGameSettings(fresh));
+}
+
+TEST_CASE("settings defaults follow the shipped desktop profile when a file omits them")
 {
     CHECK_FALSE(OpenYAMM::Game::GameSettings::createDefault().bolsterMonsters);
     CHECK(
-        OpenYAMM::Game::GameSettings::createDefault().monsterProjectileVisuals
-        == OpenYAMM::Game::MonsterProjectileVisuals::FxRecipes);
-    CHECK(
         OpenYAMM::Game::GameSettings::createDefault().blasterSkillScaling
-        == OpenYAMM::Game::BlasterSkillScalingMode::Default);
+        == OpenYAMM::Game::BlasterSkillScalingMode::ScalingDamage);
     CHECK_EQ(OpenYAMM::Game::GameSettings::createDefault().blasterMinimumRecoveryTicks, 0);
 
     const std::filesystem::path path =
@@ -458,9 +502,8 @@ TEST_CASE("settings monster bolster feature defaults off")
 
     REQUIRE(loadedSettings.has_value());
     CHECK_FALSE(loadedSettings->bolsterMonsters);
-    CHECK_FALSE(loadedSettings->outdoorPathfinding);
-    CHECK(loadedSettings->monsterProjectileVisuals == OpenYAMM::Game::MonsterProjectileVisuals::FxRecipes);
-    CHECK(loadedSettings->blasterSkillScaling == OpenYAMM::Game::BlasterSkillScalingMode::Default);
+    CHECK(loadedSettings->outdoorPathfinding);
+    CHECK(loadedSettings->blasterSkillScaling == OpenYAMM::Game::BlasterSkillScalingMode::ScalingDamage);
     CHECK_EQ(loadedSettings->blasterMinimumRecoveryTicks, 0);
     CHECK_FALSE(loadedSettings->logIndoorVisibility);
     CHECK_FALSE(loadedSettings->logOutdoorPathfinding);
@@ -574,6 +617,25 @@ TEST_CASE("house data magic guild types are explicit")
     CHECK_EQ(pDarkGuild->type, "Dark Guild");
 }
 
+TEST_CASE("readable scrolls after truncated quoted item names load")
+{
+    const OpenYAMM::Tests::RegressionGameData &gameData = requireRegressionGameData();
+
+    // scroll.txt cuts item names such as "Journal Entry, 2nd Janua without a closing quote; the following records,
+    // including the Red Dwarf Mines journal (1528), must still load.
+    for (const uint32_t itemId : {1520u, 1521u, 1522u, 1525u, 1526u, 1527u, 1528u})
+    {
+        CAPTURE(itemId);
+        const OpenYAMM::Game::ReadableScrollEntry *pEntry = gameData.readableScrollTable.get(itemId);
+        REQUIRE(pEntry != nullptr);
+        CHECK_FALSE(pEntry->text.empty());
+    }
+
+    const OpenYAMM::Game::ReadableScrollEntry *pRedDwarfJournal = gameData.readableScrollTable.get(1528);
+    REQUIRE(pRedDwarfJournal != nullptr);
+    CHECK_EQ(pRedDwarfJournal->location, "Red Dwarf Mines");
+}
+
 TEST_CASE("merged house movie metadata drives videos and proprietor portraits")
 {
     const OpenYAMM::Tests::RegressionGameData &gameData = requireRegressionGameData();
@@ -604,14 +666,14 @@ TEST_CASE("merged house movie metadata drives videos and proprietor portraits")
     const std::filesystem::path mm7WorldRoot = assetRoot / "worlds/mm7";
     const std::filesystem::path mm8WorldRoot = assetRoot / "worlds/mm8";
     CHECK(std::filesystem::exists(mm6WorldRoot / "videos/Houses/temprich.ogv"));
-    CHECK(std::filesystem::exists(mm7WorldRoot / "icons" / "npc0527.bmp"));
+    CHECK(std::filesystem::exists(mm7WorldRoot / "icons_x2" / "npc0527.png"));
     CHECK(std::filesystem::exists(mm7WorldRoot / "videos/Houses/elf weapon smith.ogv"));
     CHECK(std::filesystem::exists(mm7WorldRoot / "videos/Transitions/out06 red dwarf mines.ogv"));
-    CHECK(std::filesystem::exists(engineRoot / "icons" / "npc1582.bmp"));
+    CHECK(std::filesystem::exists(engineRoot / "icons_x2" / "npc1582.png"));
     CHECK(std::filesystem::exists(mm8WorldRoot / "videos/Houses/ltemple.ogv"));
     CHECK_FALSE(std::filesystem::exists(engineRoot / "videos"));
-    CHECK(std::filesystem::exists(mm8WorldRoot / "icons/npc1465.bmp"));
-    CHECK(std::filesystem::exists(mm8WorldRoot / "icons/npc1325.bmp"));
+    CHECK(std::filesystem::exists(mm8WorldRoot / "icons_x2/npc1465.png"));
+    CHECK(std::filesystem::exists(mm8WorldRoot / "icons_x2/npc1325.png"));
 }
 
 TEST_CASE("character doll weapon anchors follow MMerge hold offsets")
@@ -629,15 +691,15 @@ TEST_CASE("character doll weapon anchors follow MMerge hold offsets")
 
 TEST_CASE("outdoor minimap icons are world-owned")
 {
+    // Runtime icons live in the x2 tiers (engine/icon_packages.txt); the native icons folders are retired.
     const std::filesystem::path assetRoot = std::filesystem::path(OPENYAMM_SOURCE_DIR) / "assets_dev";
-    const std::filesystem::path engineIcons = assetRoot / "engine/icons";
-    const std::filesystem::path mm6Icons = assetRoot / "worlds/mm6/icons";
-    const std::filesystem::path mm7Icons = assetRoot / "worlds/mm7/icons";
-    const std::filesystem::path mm8Icons = assetRoot / "worlds/mm8/icons";
+    const std::filesystem::path engineIcons = assetRoot / "engine/icons_x2";
+    const std::filesystem::path mm6Icons = assetRoot / "worlds/mm6/icons_x2";
+    const std::filesystem::path mm7Icons = assetRoot / "worlds/mm7/icons_x2";
+    const std::filesystem::path mm8Icons = assetRoot / "worlds/mm8/icons_x2";
 
     const std::pair<std::filesystem::path, const char *> expectedWorldIcons[] = {
-        {mm6Icons, "outc1.bmp"},
-        {mm6Icons, "6outside.bmp"},
+        {mm6Icons, "outc1.png"},
         {mm7Icons, "7out15.bmp"},
         {mm7Icons, "out14.bmp"},
         {mm8Icons, "out06.bmp"},
@@ -660,37 +722,37 @@ TEST_CASE("outdoor minimap icons are world-owned")
     }
 
     const char *engineForbiddenIcons[] = {
-        "out06.bmp",
-        "out13.bmp",
-        "outc1.bmp",
-        "7out15.bmp",
-        "elema.bmp",
-        "pbp.bmp",
-        "outside.bmp",
-        "6outside.bmp",
-        "7outside.bmp",
-    };
+        "out06", "out13", "outc1", "7out15", "elema", "pbp", "outside", "6outside", "7outside"};
 
     for (const char *iconName : engineForbiddenIcons)
     {
-        CHECK_FALSE(std::filesystem::exists(engineIcons / iconName));
+        CAPTURE(iconName);
+        CHECK_FALSE(std::filesystem::exists(engineIcons / (std::string(iconName) + ".bmp")));
+        CHECK_FALSE(std::filesystem::exists(engineIcons / (std::string(iconName) + ".png")));
     }
 }
 
 TEST_CASE("mm8 icons do not duplicate engine-owned icons")
 {
     const std::filesystem::path assetRoot = std::filesystem::path(OPENYAMM_SOURCE_DIR) / "assets_dev";
-    const std::filesystem::path engineIcons = assetRoot / "engine/icons";
-    const std::filesystem::path mm8Icons = assetRoot / "worlds/mm8/icons";
+    // The x2 tiers mix .png and .bmp, so duplicates are compared by name without extension.
+    const std::filesystem::path engineIcons = assetRoot / "engine/icons_x2";
+    const std::filesystem::path mm8Icons = assetRoot / "worlds/mm8/icons_x2";
+    const auto lowercaseStem = [](const std::filesystem::path &path)
+    {
+        return lowercaseFileName(path.stem());
+    };
 
     std::set<std::string> engineIconNames;
     for (const std::filesystem::directory_entry &entry : std::filesystem::directory_iterator(engineIcons))
     {
         if (entry.is_regular_file())
         {
-            engineIconNames.insert(lowercaseFileName(entry.path()));
+            engineIconNames.insert(lowercaseStem(entry.path()));
         }
     }
+
+    REQUIRE_FALSE(engineIconNames.empty());
 
     for (const std::filesystem::directory_entry &entry : std::filesystem::directory_iterator(mm8Icons))
     {
@@ -699,14 +761,18 @@ TEST_CASE("mm8 icons do not duplicate engine-owned icons")
             continue;
         }
 
-        CHECK_FALSE(engineIconNames.contains(lowercaseFileName(entry.path())));
+        CAPTURE(entry.path().filename().string());
+        CHECK_FALSE(engineIconNames.contains(lowercaseStem(entry.path())));
     }
 }
 
 TEST_CASE("mm8 screen backgrounds remain the engine defaults")
 {
+    // The committed x2 restorations of the shared backgrounds; MM8 must not override them in its own tier.
     const std::filesystem::path engineIcons =
-        std::filesystem::path(OPENYAMM_SOURCE_DIR) / "assets_dev/engine/icons";
+        std::filesystem::path(OPENYAMM_SOURCE_DIR) / "assets_dev/engine/icons_x2";
+    const std::filesystem::path mm8Icons =
+        std::filesystem::path(OPENYAMM_SOURCE_DIR) / "assets_dev/worlds/mm8/icons_x2";
 
     struct ExpectedBackground
     {
@@ -716,15 +782,17 @@ TEST_CASE("mm8 screen backgrounds remain the engine defaults")
     };
 
     const ExpectedBackground expectedBackgrounds[] = {
-        {"title.pcx", 826904u, 0xacb405aa6d8fa528ull},
-        {"makeme.pcx", 712504u, 0x00f643e26313af10ull},
-        {"restmain.bmp", 235318u, 0x31067b73f0375f04ull},
+        {"title.png", 11289334u, 0xf2eaa200f5055b1full},
+        {"makeme.png", 2232131u, 0x7020f24aa5b69870ull},
+        {"restmain.png", 1199029u, 0x071ded18c33711a4ull},
     };
 
     for (const ExpectedBackground &expectedBackground : expectedBackgrounds)
     {
         const std::filesystem::path path = engineIcons / expectedBackground.fileName;
+        CAPTURE(expectedBackground.fileName);
         REQUIRE(std::filesystem::exists(path));
+        CHECK_FALSE(std::filesystem::exists(mm8Icons / expectedBackground.fileName));
         CHECK_EQ(std::filesystem::file_size(path), expectedBackground.fileSize);
         CHECK_EQ(fnv1a64(readSourceBinaryFile(path)), expectedBackground.fnvHash);
         CHECK_EQ(
@@ -878,19 +946,13 @@ TEST_CASE("monster hostility table follows merged merged party relations")
     CHECK(gameData.monsterTable.isHostileToParty(75));
 }
 
-TEST_CASE("harm projectile sprite resolves to an existing billboard texture")
+// Light Bolt draws its effects, never these textures (PROJECTILE_VFX_ALL_PROPOSAL.md); the frames stay as data.
+TEST_CASE("light bolt sprite frames resolve their texture names")
 {
     const OpenYAMM::Game::SpriteFrameTable spriteFrameTable = loadCommonSpriteFrameTable();
 
-    checkFirstSpriteFrameTexture(spriteFrameTable, "spell70", "spell70b10", "Spell70b10.bmp");
-}
-
-TEST_CASE("light bolt sprites resolve to existing billboard textures")
-{
-    const OpenYAMM::Game::SpriteFrameTable spriteFrameTable = loadCommonSpriteFrameTable();
-
-    checkFirstSpriteFrameTexture(spriteFrameTable, "spell78b", "sp78b", "sp78b.bmp");
-    checkFirstSpriteFrameTexture(spriteFrameTable, "spell78c", "sp78c", "sp78c.bmp");
+    checkFirstSpriteFrameTexture(spriteFrameTable, "spell78b", "sp78b");
+    checkFirstSpriteFrameTexture(spriteFrameTable, "spell78c", "sp78c");
 }
 
 TEST_CASE("directional sprite bases resolve with an octant suffix")

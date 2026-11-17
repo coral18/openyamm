@@ -1,15 +1,11 @@
 {
-  "asset_helper_sha256": "a5bf67908d541b5f0827414edbc6a038c77d4a90142e7eac7c7b28d19b2ebc7a",
+  "asset_helper_sha256": "21a30a76c9361bd6689ade3fb30d8d2118cf2781068d1cbff67950b4ba987373",
   "backend": "5.2.2 LTS",
-  "decoration_helper_sha256": "db1620396b53be1646643ce2385eabf9b8b54dcc20d738459c57496384905dda",
-  "geometry_helper_sha256": "791c7cc5333fc0299872f71ce003e8d6114656580e3ed79c2885d78a3b6472e3",
-  "model_probe_backend": "5.2.2 LTS",
-  "model_probe_producer_sha256": "2de97b1338f1de43a5bd2395ca363c5e4e8874b449d7ba2745b59f7512968b39",
-  "producer_sha256": "1528a72e7781ce0526c7c88719c2b5e8571c5ae2af7ad0ac0e2280c53dcda7f4",
+  "geometry_helper_sha256": "aa0823810bcf2fbed4da16c0d50b7ddc57e1e54e684f1a31381fc0eee3e49332",
+  "producer_sha256": "127a2a0458bd58c62673a5ff8578c6a472d2de39bf3733582c6705c838425e79",
   "profile": {
-    "azimuth": 225.0,
+    "azimuth": 315,
     "building_page_size": 1024,
-    "decoration_shadows": true,
     "elevation": 45,
     "map": "out02.odm",
     "preview_position": [
@@ -28,7 +24,5 @@
     "terrain_size": 1024,
     "units_per_texel": 32,
     "world": "mm8"
-  },
-  "sun_direct_backend": "5.2.2 LTS",
-  "sun_direct_producer_sha256": "38806ceb8e963f46b8ec48ae585854441f849f2a2b5969a3e2b7ea4b25ae9280"
+  }
 }

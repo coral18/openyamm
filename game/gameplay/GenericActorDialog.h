@@ -29,6 +29,12 @@ struct GenericActorDialogResolution
     uint32_t generatedProfessionId = 0;
 };
 
+bool isGeneratedNpcSlot(uint32_t npcId);
+const std::string *generatedNpcActorKey(const EventRuntimeState &state, uint32_t npcId,
+    const std::string &mapFileName, uint32_t actorGroup, uint32_t actorIndex);
+
+void refreshGenericActorNpcRoster(EventRuntimeState &runtimeState, float gameMinutes);
+
 std::optional<GenericActorDialogResolution> resolveGenericActorDialog(
     const std::string &mapFileName,
     const std::string &actorName,

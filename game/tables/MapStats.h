@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace OpenYAMM::Game
@@ -56,7 +57,9 @@ struct MapEdgeTransition
     std::optional<int> arrivalY;
     std::optional<int> arrivalZ;
     bool straightTravel = false;
-    std::optional<MapBoundaryEdge> straightTravelSide;
+    // The side of the destination the party enters: its "<side> start" decoration, or the mirrored crossing point
+    // for straight travel.
+    std::optional<MapBoundaryEdge> arrivalSide;
     MapTransitionSurfaceRequirement requiredOriginSurface = MapTransitionSurfaceRequirement::Land;
     std::vector<uint32_t> requiredQuestBitsAny;
 };
@@ -65,6 +68,7 @@ struct MapStatsEntry
 {
     int id;
     std::string worldId;
+    bool explicitWorldId = false;
     std::string canonicalId;
     std::string name;
     std::string fileName;
@@ -90,10 +94,18 @@ struct MapStatsEntry
     std::optional<MapEdgeTransition> westTransition;
     MapRuntimeRestrictions runtimeRestrictions = {};
     std::optional<MapArenaDefinition> arena;
+    // A BLV its world declares open to the sky (world.yml openAirMaps): spells follow the outdoor rules there
+    // (IGameplayWorldRuntime::isOpenAirMap). False for every other map.
+    bool openAir = false;
+    // Town Portal and Lloyd's Beacon fail here (world.yml noTeleportMaps). False for every other map.
+    bool noTeleport = false;
 
     const std::optional<MapEdgeTransition> *edgeTransition(MapBoundaryEdge edge) const;
     std::optional<MapEdgeTransition> *edgeTransition(MapBoundaryEdge edge);
 };
+
+// The start decoration a party entering from the given side uses ("north start", ...); empty without a side.
+std::string mapStartPointName(std::optional<MapBoundaryEdge> side);
 
 class MapStats
 {
@@ -105,6 +117,16 @@ public:
     bool applyMergedBolsterMaps(const MergedBolsterMapTable &bolsterMaps);
     bool applyOutdoorNavigationRows(const std::vector<std::vector<std::string>> &rows);
     bool applyMergedOutdoorTravels(const MergedOutdoorTravelTable &outdoorTravels);
+    // Assigns each map without an explicit world column to the world package that ships its file
+    // (pairs of world id and file name found under worlds/<world>/maps). A file shipped by two worlds is an error.
+    bool applyWorldOwnership(const std::vector<std::pair<std::string, std::string>> &worldMapFiles);
+    // Marks the world's maps open to the sky (world.yml openAirMaps). A name that is no BLV of that world is an error.
+    bool applyOpenAirMaps(const std::string &worldId, const std::vector<std::string> &fileNames);
+    // Marks the world's maps where Town Portal and Lloyd's Beacon fail (world.yml noTeleportMaps). A name that is no
+    // map of that world is an error.
+    bool applyNoTeleportMaps(const std::string &worldId, const std::vector<std::string> &fileNames);
+    // Canonical ids that older saves used for maps whose world is now resolved differently (legacy, current).
+    std::vector<std::pair<std::string, std::string>> legacyCanonicalIdRenames() const;
     const std::vector<MapStatsEntry> &getEntries() const;
     const MapStatsEntry *findById(uint32_t id) const;
     const MapStatsEntry *findByFileName(const std::string &fileName) const;

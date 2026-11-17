@@ -25,6 +25,57 @@ SDL_AudioSpec buildOutputSpec()
     spec.freq = 48000;
     return spec;
 }
+
+SDL_AudioStream *openPlaybackStream(const SDL_AudioSpec &spec)
+{
+    SDL_AudioStream *pStream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &spec, nullptr, nullptr);
+
+    if (pStream == nullptr)
+    {
+        std::cerr << "AudioSystem: SDL_OpenAudioDeviceStream failed: " << SDL_GetError() << '\n';
+        return nullptr;
+    }
+
+    if (!SDL_ResumeAudioStreamDevice(pStream))
+    {
+        std::cerr << "AudioSystem: SDL_ResumeAudioStreamDevice failed: " << SDL_GetError() << '\n';
+        SDL_DestroyAudioStream(pStream);
+        return nullptr;
+    }
+
+    return pStream;
+}
+
+// Restarts the audio subsystem on SDL's silent dummy driver, which consumes audio in real time, so clips and video
+// soundtracks still finish on schedule. The hint stays set, so every later stream (house videos, cutscenes) opens on
+// it too.
+bool switchToDummyAudioDriver()
+{
+    const char *pCurrentDriver = SDL_GetCurrentAudioDriver();
+
+    if (pCurrentDriver != nullptr && std::strcmp(pCurrentDriver, "dummy") == 0)
+    {
+        return false;
+    }
+
+    std::cerr << "AudioSystem: no usable playback device on audio driver '"
+              << (pCurrentDriver != nullptr ? pCurrentDriver : "none") << "', continuing without sound\n";
+    SDL_SetHintWithPriority(SDL_HINT_AUDIO_DRIVER, "dummy", SDL_HINT_OVERRIDE);
+
+    if (isAudioSubsystemInitialized())
+    {
+        SDL_QuitSubSystem(SDL_INIT_AUDIO);
+    }
+
+    if (!SDL_InitSubSystem(SDL_INIT_AUDIO))
+    {
+        std::cerr << "AudioSystem: SDL_InitSubSystem(SDL_INIT_AUDIO) with the dummy driver failed: "
+                  << SDL_GetError() << '\n';
+        return false;
+    }
+
+    return true;
+}
 }
 
 AudioSystem::AudioSystem()
@@ -42,29 +93,23 @@ bool AudioSystem::initialize(const AssetFileSystem &assetFileSystem)
     shutdown();
     m_pAssetFileSystem = &assetFileSystem;
 
-    if (!isAudioSubsystemInitialized())
+    if (!isAudioSubsystemInitialized() && !SDL_InitSubSystem(SDL_INIT_AUDIO))
     {
-        if (!SDL_InitSubSystem(SDL_INIT_AUDIO))
-        {
-            std::cerr << "AudioSystem: SDL_InitSubSystem(SDL_INIT_AUDIO) failed: " << SDL_GetError() << '\n';
-            return false;
-        }
+        std::cerr << "AudioSystem: SDL_InitSubSystem(SDL_INIT_AUDIO) failed: " << SDL_GetError() << '\n';
+    }
+    else
+    {
+        m_pAudioStream = openPlaybackStream(m_outputSpec);
     }
 
-    m_pAudioStream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &m_outputSpec, nullptr, nullptr);
+    // A machine without a playback device (none attached, or all disabled) still runs the game, silently.
+    if (m_pAudioStream == nullptr && switchToDummyAudioDriver())
+    {
+        m_pAudioStream = openPlaybackStream(m_outputSpec);
+    }
 
     if (m_pAudioStream == nullptr)
     {
-        std::cerr << "AudioSystem: SDL_OpenAudioDeviceStream failed: " << SDL_GetError() << '\n';
-        m_pAssetFileSystem = nullptr;
-        return false;
-    }
-
-    if (!SDL_ResumeAudioStreamDevice(m_pAudioStream))
-    {
-        std::cerr << "AudioSystem: SDL_ResumeAudioStreamDevice failed: " << SDL_GetError() << '\n';
-        SDL_DestroyAudioStream(m_pAudioStream);
-        m_pAudioStream = nullptr;
         m_pAssetFileSystem = nullptr;
         return false;
     }
@@ -172,11 +217,35 @@ uint64_t AudioSystem::playClip(const std::string &virtualPath, const PlaybackOpt
     instance.volume = std::clamp(options.volume * GlobalSoundGain, 0.0f, 2.0f);
     instance.positional = options.positional;
     instance.attenuate = options.attenuate;
+    instance.pan = options.pan;
     instance.loop = options.loop;
     instance.x = options.x;
     instance.y = options.y;
     instance.z = options.z;
     instance.pitch = std::clamp(options.pitch, 0.125f, 8.0f);
+    instance.innerRadius = options.innerRadius;
+    instance.outerRadius = options.outerRadius;
+    m_playingInstances.push_back(std::move(instance));
+    return m_playingInstances.back().instanceId;
+}
+
+uint64_t AudioSystem::playStream(std::shared_ptr<AudioStreamSource> pSource, const PlaybackOptions &options)
+{
+    if (pSource == nullptr)
+    {
+        return 0;
+    }
+
+    PlayingInstance instance = {};
+    instance.instanceId = m_nextInstanceId++;
+    instance.pStream = std::move(pSource);
+    instance.volume = std::clamp(options.volume * GlobalSoundGain, 0.0f, 2.0f);
+    instance.positional = options.positional;
+    instance.attenuate = options.attenuate;
+    instance.pan = options.pan;
+    instance.x = options.x;
+    instance.y = options.y;
+    instance.z = options.z;
     instance.innerRadius = options.innerRadius;
     instance.outerRadius = options.outerRadius;
     m_playingInstances.push_back(std::move(instance));
@@ -386,7 +455,8 @@ bool AudioSystem::hasMixableInstances() const
         m_playingInstances.end(),
         [](const PlayingInstance &instance)
         {
-            return !instance.paused && instance.pClip != nullptr && instance.pClip->frameCount > 0;
+            return !instance.paused
+                && (instance.pStream != nullptr || (instance.pClip != nullptr && instance.pClip->frameCount > 0));
         });
 }
 
@@ -396,7 +466,30 @@ void AudioSystem::mixNextChunk(const ListenerState &listenerState)
 
     for (PlayingInstance &instance : m_playingInstances)
     {
-        if (instance.paused || instance.pClip == nullptr || instance.pClip->frameCount == 0)
+        if (instance.paused)
+        {
+            continue;
+        }
+
+        if (instance.pStream != nullptr)
+        {
+            float leftGain = 0.0f;
+            float rightGain = 0.0f;
+            calculateStereoGains(listenerState, instance, leftGain, rightGain);
+            m_streamSamples.resize(static_cast<size_t>(MixChunkFrames * OutputChannels));
+            const uint32_t frameCount = instance.pStream->read(m_streamSamples.data(), MixChunkFrames);
+
+            for (uint32_t frameIndex = 0; frameIndex < frameCount; ++frameIndex)
+            {
+                const size_t index = static_cast<size_t>(frameIndex) * OutputChannels;
+                mixedSamples[index] += m_streamSamples[index] * leftGain;
+                mixedSamples[index + 1] += m_streamSamples[index + 1] * rightGain;
+            }
+
+            continue;
+        }
+
+        if (instance.pClip == nullptr || instance.pClip->frameCount == 0)
         {
             continue;
         }
@@ -448,6 +541,11 @@ void AudioSystem::mixNextChunk(const ListenerState &listenerState)
             m_playingInstances.end(),
             [](const PlayingInstance &instance)
             {
+                if (instance.pStream != nullptr)
+                {
+                    return instance.pStream->finished();
+                }
+
                 return instance.pClip == nullptr
                     || (!instance.loop && instance.frameOffset >= static_cast<double>(instance.pClip->frameCount));
             }),
@@ -505,7 +603,7 @@ void AudioSystem::calculateStereoGains(
         const float normalizedDistance = distance / 768.0f;
         attenuation = 1.0f / (1.0f + normalizedDistance * normalizedDistance);
     }
-    const float pan = positionalAudioPan(deltaX, deltaY, listenerState.yawRadians);
+    const float pan = instance.pan ? positionalAudioPan(deltaX, deltaY, listenerState.yawRadians) : 0.0f;
     leftGain = instance.volume * attenuation * (pan <= 0.0f ? 1.0f : (1.0f - pan));
     rightGain = instance.volume * attenuation * (pan >= 0.0f ? 1.0f : (1.0f + pan));
 }

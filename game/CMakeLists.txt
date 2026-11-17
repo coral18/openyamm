@@ -9,8 +9,15 @@ add_library(openyamm_game STATIC
     render/RuntimeShader.cpp
     render/CinematicGrading.cpp
     render/WaterRenderer.cpp
+    render/ShieldDomeRenderer.cpp
+    render/SurfaceReflectionBinding.cpp
+    render/WeatherRenderer.cpp
+    render/WeatherRoofMap.cpp
+    render/SkyPresets.cpp
+    render/SkyRenderer.cpp
     app/ScreenManager.cpp
     app/GameInputSystem.cpp
+    app/GamepadUiInput.cpp
     app/ProfilingControl.cpp
     arcomage/ArcomageAi.cpp
     arcomage/ArcomageLoader.cpp
@@ -18,13 +25,21 @@ add_library(openyamm_game STATIC
     data/ActorNameResolver.cpp
     debug/DebugConsole.cpp
     debug/GameplayDebugTrace.cpp
+    debug/MawTestParties.cpp
     debug/GameImGuiBgfxRenderer.cpp
     debug/ScreenshotCaptureService.cpp
+    debug/VideoCapture.cpp
     debug/ScreenshotTour.cpp
+    debug/PinInbox.cpp
+    debug/ExitPose.cpp
+    debug/AiArena.cpp
+    debug/AiArenaOverlay.cpp
     debug/MenuInputTour.cpp
     data/GameDataRepository.cpp
     app/GameSession.cpp
     audio/GameAudioSystem.cpp
+    audio/WorldAmbientSounds.cpp
+    audio/MusicStream.cpp
     tables/ChestTable.cpp
     tables/AwardTable.cpp
     tables/JournalAutonoteTable.cpp
@@ -36,33 +51,58 @@ add_library(openyamm_game STATIC
     tables/ClassSkillTable.cpp
     events/EventDialogContent.cpp
     events/EventRuntime.cpp
-    events/ScriptedEventProgram.cpp
+    events/MechanismAudio.cpp
     events/ScriptedEventTimer.cpp
     tables/FaceAnimationTable.cpp
     fx/ParticleRecipes.cpp
+    fx/ProjectileEffectBindings.cpp
+    fx/ProjectileModelBindings.cpp
+    tables/ItemModelBindings.cpp
+    fx/SpellAuraEffectBindings.cpp
     fx/EffectSystem.cpp
     fx/EffectRenderer.cpp
     fx/import/EffectDefinitionLoader.cpp
     fx/import/EffectResourceLibrary.cpp
     fx/ParticleRenderer.cpp
     fx/ParticleSystem.cpp
+    fx/MistWisps.cpp
     fx/WorldFxRenderer.cpp
     fx/WorldFxRenderResources.cpp
+    fx/TalkPortraitFrame.cpp
+    fx/ActorClipSounds.cpp
+    fx/ActorClipEffects.cpp
     fx/WorldFxSystem.cpp
     gameplay/GameMechanics.cpp
     gameplay/GameplayActionController.cpp
     gameplay/GameplayWorldItemPolicy.cpp
     gameplay/SearchableLootPropRuntime.cpp
     gameplay/LootContainerRuntime.cpp
+    gameplay/CombatLog.cpp
     gameplay/GameplayCombatController.cpp
     gameplay/GameplayController.cpp
     gameplay/CorpseLootRuntime.cpp
+    gameplay/GameplayLootFilter.cpp
+    gameplay/MonsterDeathExplosion.cpp
     gameplay/ChestRuntime.cpp
     gameplay/BountyHuntRuntime.cpp
+    gameplay/ActorNameText.cpp
     gameplay/ArenaRuntime.cpp
+    gameplay/ArmageddonSpell.cpp
     gameplay/AwardRuntime.cpp
     gameplay/GameplayBolsterRuntime.cpp
+    gameplay/ActorBehaviorCatalog.cpp
+    gameplay/ActorBehaviorRuntime.cpp
+    gameplay/ActorAiTrace.cpp
     gameplay/GameplayActorAiSystem.cpp
+    gameplay/ScriptedActorMoves.cpp
+    gameplay/Mm9ActorRules.cpp
+    gameplay/Mm9DialogueSpeaker.cpp
+    gameplay/GameplayActorHitFeedback.cpp
+    gameplay/GameplayActorShields.cpp
+    gameplay/GameplayActorModifiers.cpp
+    gameplay/CinematicRuntime.cpp
+    gameplay/GameplayMonsterSpawn.cpp
+    gameplay/MeleeContactEffects.cpp
     gameplay/GameplayActorService.cpp
     gameplay/GameplayDialogController.cpp
     gameplay/GameplayDialogUiFlow.cpp
@@ -77,6 +117,8 @@ add_library(openyamm_game STATIC
     gameplay/MonsterSpellSupport.cpp
     gameplay/MercenaryRecruitmentRuntime.cpp
     gameplay/GameplayOverlayInputController.cpp
+    gameplay/GameplayAlchemyBenchInputController.cpp
+    gameplay/GameplayCraftingBenchInputController.cpp
     gameplay/GameplayPartyOverlayInputController.cpp
     gameplay/GameplayProjectileService.cpp
     gameplay/GameplayScreenController.cpp
@@ -87,6 +129,7 @@ add_library(openyamm_game STATIC
     gameplay/GenericActorDialog.cpp
     gameplay/HouseInteraction.cpp
     gameplay/HouseServiceRuntime.cpp
+    gameplay/JournalArcomageRuntime.cpp
     gameplay/JournalQuestRuntime.cpp
     gameplay/NpcFollowerRuntime.cpp
     gameplay/ReputationRuntime.cpp
@@ -97,17 +140,23 @@ add_library(openyamm_game STATIC
     gameplay/TurnBasedCombatRuntime.cpp
     gameplay/TravelRuntime.cpp
     pathfinding/ActorPathRuntime.cpp
-    pathfinding/PathMap.cpp
-    pathfinding/PathPlanner.cpp
     audio/HouseVideoPlayer.cpp
+    content/CompletionCertificates.cpp
     content/ContentManifest.cpp
     content/ContentTableComposer.cpp
+    content/NamedMods.cpp
+    content/WorldDecorations.cpp
+    content/RulesetDefinition.cpp
+    content/RulesetOptions.cpp
     items/InventoryItemUseRuntime.cpp
+    items/AlchemyBenchRuntime.cpp
+    items/PotionUpkeep.cpp
+    items/CraftingRuntime.cpp
+    items/InventoryBags.cpp
+    items/ItemSearch.cpp
+    items/QuickItemSlots.cpp
     items/InventoryItemMixingRuntime.cpp
-    maps/IndoorSceneYml.cpp
-    maps/MapItemSourceYml.cpp
     maps/MapPresentation.cpp
-    maps/MapDeltaData.cpp
     mm9/Mm9MapTransition.cpp
     mm9/Mm9BarrelRuntime.cpp
     mm9/Mm9PrimaryStats.cpp
@@ -115,10 +164,13 @@ add_library(openyamm_game STATIC
     mm9/Mm9TransportRoute.cpp
     mm9/Mm9PositionedTransitionRuntime.cpp
     mm9/Mm9RudeDialogue.cpp
+    mm9/Mm9HirelingTable.cpp
+    mm9/Mm9HirelingCombat.cpp
+    mm9/Mm9HirelingServices.cpp
+    mm9/Mm9HirelingHud.cpp
+    mm9/Mm9Formation.cpp
     mm9/Mm9SkillTrainer.cpp
     mm9/Mm9QuestMarkers.cpp
-    maps/OutdoorSceneYml.cpp
-    maps/TerrainTileData.cpp
     data/GameDataLoader.cpp
     outdoor/HeadlessOutdoorDiagnostics.cpp
     tables/HouseTable.cpp
@@ -127,32 +179,93 @@ add_library(openyamm_game STATIC
     items/ItemEnchantRuntime.cpp
     items/ItemGenerator.cpp
     items/ItemRuntime.cpp
+    items/WorldItemShape.cpp
     tables/ItemTable.cpp
     indoor/IndoorRenderer.cpp
     indoor/IndoorGameView.cpp
-    indoor/IndoorCollisionPrimitives.cpp
-    indoor/IndoorGeometryUtils.cpp
+    indoor/IndoorTerrainSurface.cpp
+    indoor/IndoorOpenSkyWeather.cpp
+    indoor/IndoorFaceDrawGroups.cpp
     indoor/IndoorLightingRuntime.cpp
-    indoor/IndoorMapData.cpp
-    indoor/IndoorMovementController.cpp
-    indoor/IndoorPathfindingBuilder.cpp
     indoor/IndoorPartyRuntime.cpp
-    indoor/IndoorPortalGraph.cpp
+    indoor/IndoorLightReach.cpp
     indoor/IndoorPortalVisibility.cpp
+    indoor/IndoorPortalDebugView.cpp
+    indoor/IndoorRendererPortalDebug.cpp
     indoor/IndoorWorldRuntime.cpp
     maps/MapAssetLoader.cpp
+    maps/DecorationModelPlacement.cpp
+    maps/ActorModelManifest.cpp
+    maps/DecorationModelManifest.cpp
+    maps/DecorationModelSet.cpp
     maps/MapDecorationTextures.cpp
-    maps/MapIdentity.cpp
-    maps/MapRegistry.cpp
+    maps/MapLayoutIdentity.cpp
     tables/MapStats.cpp
     gameplay/MasteryTeacherDialog.cpp
+    gameplay/TrainerDirectory.cpp
     tables/MonsterProjectileTable.cpp
     tables/MonsterTable.cpp
+    tables/MonsterShields.cpp
+    tables/MonsterModifiers.cpp
+    tables/MonsterRelationAddOns.cpp
     tables/MergedBaseTables.cpp
+    tables/PotionEffectTable.cpp
+    rules/CombatRules.cpp
+    rules/ExperienceRules.cpp
+    rules/GameRules.cpp
+    rules/ItemRules.cpp
+    rules/LootFilter.cpp
+    rules/MonsterRules.cpp
+    rules/maw/MawAuraReport.cpp
+    rules/maw/MawAuras.cpp
+    rules/maw/MawBalanceModel.cpp
+    rules/maw/MawCharacterSheet.cpp
+    rules/maw/MawCombatFormulas.cpp
+    rules/maw/MawCombatRules.cpp
+    rules/maw/MawExperienceCurve.cpp
+    rules/maw/MawExperienceRules.cpp
+    rules/maw/MawGameState.cpp
+    rules/maw/MawItemData.cpp
+    rules/maw/MawItemFormulas.cpp
+    rules/maw/MawItemRules.cpp
+    rules/maw/MawMadnessLedger.cpp
+    rules/maw/MawMonsterLevels.cpp
+    rules/maw/MawMonsterInspect.cpp
+    rules/maw/MawMonsterRules.cpp
+    rules/maw/MawProgress.cpp
+    rules/maw/MawNpcPresence.cpp
+    rules/maw/MawRules.cpp
+    rules/maw/MawRulesFactory.cpp
+    rules/maw/MawSkillFormulas.cpp
+    rules/maw/MawClassRules.cpp
+    rules/maw/MawClassSpells.cpp
+    rules/maw/MawCraftingData.cpp
+    rules/maw/MawDimensionMaps.cpp
+    rules/maw/MawCraftingRules.cpp
+    rules/maw/MawPotionRules.cpp
+    rules/maw/MawPromotions.cpp
+    rules/maw/MawSkillRules.cpp
+    rules/maw/MawSpellFormulas.cpp
+    rules/maw/MawSoloTalents.cpp
+    rules/maw/MawSpellRules.cpp
+    rules/maw/MawTexts.cpp
+    rules/maw/MawTrainerHints.cpp
+    rules/RandomStreams.cpp
+    rules/ClassRules.cpp
+    rules/CraftingRules.cpp
+    rules/PotionRules.cpp
+    rules/SkillRules.cpp
+    rules/SoloTalents.cpp
+    rules/SpellRules.cpp
     tables/NpcDialogTable.cpp
     tables/ObjectTable.cpp
     render/SpriteAtlasCook.cpp
     render/SpriteAtlasCache.cpp
+    render/ActorModelPreview.cpp
+    render/FirstPersonViewModel.cpp
+    render/FirstPersonViewModelFx.cpp
+    render/FirstPersonViewModelKit.cpp
+    render/HeldWeapons.cpp
     render/NativeSpriteTextureCache.cpp
     render/SpriteAtlasMipmaps.cpp
     outdoor/OutdoorBillboardRenderer.cpp
@@ -161,27 +274,40 @@ add_library(openyamm_game STATIC
     outdoor/OutdoorInteractionController.cpp
     outdoor/OutdoorLightingRuntime.cpp
     outdoor/OutdoorLightingData.cpp
-    outdoor/OutdoorMapData.cpp
+    render/lighting/BakedLightingFormat.cpp
+    indoor/IndoorBakedLighting.cpp
+    indoor/IndoorBakeSceneExport.cpp
+    render/IndoorStaticLighting.cpp
     outdoor/OutdoorNavigationData.cpp
     outdoor/OutdoorRenderData.cpp
     outdoor/OutdoorMechanismRuntime.cpp
     outdoor/OutdoorPresentationController.cpp
+    outdoor/TerrainBushSet.cpp
     outdoor/TerrainDecorationData.cpp
     outdoor/TerrainDecorationRenderer.cpp
+    outdoor/OutdoorTerrainMaterials.cpp
     outdoor/OutdoorRenderer.cpp
-    outdoor/OutdoorGeometryUtils.cpp
-    outdoor/OutdoorMovementController.cpp
+    outdoor/OutdoorMeadow.cpp
     outdoor/OutdoorMovementDriver.cpp
-    outdoor/OutdoorPathfindingBuilder.cpp
     outdoor/OutdoorPartyRuntime.cpp
     outdoor/OutdoorWorldRuntime.cpp
+    outdoor/WeatherAudio.cpp
+    outdoor/WeatherModel.cpp
+    outdoor/WeatherPresentation.cpp
     party/Party.cpp
+    party/BattleOrders.cpp
     party/EventSpellBuffs.cpp
     party/LloydsBeaconRuntime.cpp
+    party/PlaythroughNames.cpp
+    party/PlaythroughStatistics.cpp
+    party/PlaythroughSeal.cpp
     party/PartySpellSystem.cpp
+    party/WorldSpells.cpp
     items/PriceCalculator.cpp
     tables/ReadableScrollTable.cpp
     render/TextureFiltering.cpp
+    render/TerrainMaterialConfig.cpp
+    render/TerrainMaterialSet.cpp
     tables/PortraitFxEventTable.cpp
     tables/PotionMixingTable.cpp
     tables/PotionNoteTable.cpp
@@ -203,15 +329,27 @@ add_library(openyamm_game STATIC
     tables/SpellTable.cpp
     tables/SpellFxTable.cpp
     tables/TransitionTable.cpp
-    tables/SpriteTables.cpp
-    tables/SurfaceMaterialTable.cpp
+    tables/LiquidTable.cpp
     tables/TextureFrameTable.cpp
     outdoor/OutdoorGameView.cpp
+    outdoor/OutdoorDistantSea.cpp
     ui/GameplayDialogueRenderer.cpp
+    ui/HouseShopLayout.cpp
+    ui/HouseShopLedger.cpp
+    ui/GameplayHouseShopLedgerRenderer.cpp
+    ui/SpellbookKnowledgeMarkers.cpp
+    ui/CombatFloatingText.cpp
     ui/EnemyHealthBarRenderer.cpp
     ui/GameplayHudRenderer.cpp
     ui/GameplayUiSkin.cpp
+    ui/HudDrawList.cpp
+    ui/GameplayPortraitGems.cpp
     ui/GameplayBuffHud.cpp
+    ui/GameplaySoloHud.cpp
+    ui/GameplaySoloTalentsPage.cpp
+    ui/GameplaySoloBarSelector.cpp
+    ui/GameplayCombatLogPanel.cpp
+    ui/CalendarText.cpp
     ui/GameplayHudCommon.cpp
     ui/GameplayHudOverlaySupport.cpp
     ui/GameplayHudOverlayRenderer.cpp
@@ -219,22 +357,43 @@ add_library(openyamm_game STATIC
     ui/GameplaySpellTargetingOverlayRenderer.cpp
     ui/GameplayUiRenderer.cpp
     gameplay/GameplaySpeechRules.cpp
+    gameplay/PartyHostileAlert.cpp
     gameplay/GameplayScreenRuntime.cpp
+    ui/GameplayAlchemyBenchRenderer.cpp
+    ui/GameplayAlchemyBenchView.cpp
+    ui/GameplayLootSummaryRenderer.cpp
+    ui/GameplayFormationBuilder.cpp
+    ui/GameplayBattleOrders.cpp
+    ui/GameplayCraftingBenchRenderer.cpp
+    ui/GameplayCraftingBenchView.cpp
+    ui/GameplayJournalAuras.cpp
+    ui/GameplayJournalProgress.cpp
+    ui/GameplayJournalTrainers.cpp
+    ui/GameplayMapProgressBar.cpp
+    ui/GameplayMapProgressText.cpp
+    ui/GameplayQuickItems.cpp
+    ui/GameplayTransportSchedule.cpp
+    ui/GameplayMm9TalkBar.cpp
     ui/GameplayPartyOverlayRenderer.cpp
+    ui/GameplayStatisticsScreen.cpp
     ui/GameplayUiOverlayOrchestrator.cpp
     ui/GameplayUiRuntime.cpp
     ui/KeyboardScreenLayout.cpp
     ui/MenuScreenBase.cpp
+    ui/ControllerPointerOverlay.cpp
     ui/GameplayUiController.cpp
     ui/UiLayoutManager.cpp
     ui/MenuSettingsModel.cpp
     ui/MenuDesignScreen.cpp
+    ui/screens/MainMenuLootFilter.cpp
     ui/screens/MainMenuScreen.cpp
     ui/screens/ArcomageScreen.cpp
     ui/screens/CutsceneVideoScreen.cpp
     ui/screens/LoadGameScreen.cpp
     ui/screens/LoadingOverlayScreen.cpp
     ui/screens/NewGameScreen.cpp
+    ui/screens/NewGameScreenPartySheet.cpp
+    ui/screens/PartyCreationSheet.cpp
     ui/screens/WinGameScreen.cpp
     scene/IndoorSceneRuntime.cpp
     scene/OutdoorSceneRuntime.cpp
@@ -242,8 +401,21 @@ add_library(openyamm_game STATIC
     app/GameApplication.cpp
     app/KeyboardBindings.cpp
     app/GameSettings.cpp
+    app/ContentSetup.cpp
+    app/GameUpdater.cpp
     ${OPENYAMM_IMGUI_SOURCE_DIR}/backends/imgui_impl_sdl3.cpp
 )
+
+if (APPLE)
+    target_sources(openyamm_game PRIVATE app/AppleBundlePaths.cpp)
+    # Package builds pass OPENYAMM_RELEASE_VERSION with -D; the top CMakeLists.txt declares it after this file.
+    if (NOT IOS AND DEFINED OPENYAMM_RELEASE_VERSION AND NOT OPENYAMM_RELEASE_VERSION MATCHES "^(dev)?$")
+        # The release the downloaded OpenYAMM.app installs (packaging/UPDATER_PLAN.md 9.4); development bundles install
+        # nothing.
+        set_property(SOURCE app/AppleBundlePaths.cpp APPEND PROPERTY COMPILE_DEFINITIONS
+            "OPENYAMM_APPLE_PACKAGE_VERSION=\"${OPENYAMM_RELEASE_VERSION}\"")
+    endif()
+endif()
 
 target_include_directories(openyamm_game
     PRIVATE
@@ -263,7 +435,7 @@ set_property(
 
 if (NOT OPENYAMM_RUNTIME_SHADER_PATH STREQUAL "")
     set(openyammBgfxShaderDir "${OPENYAMM_RUNTIME_SHADER_PATH}")
-elseif (ANDROID OR WIN32)
+elseif (ANDROID OR WIN32 OR APPLE)
     set(openyammBgfxShaderDir "runtime/shaders")
 else()
     set(openyammBgfxShaderDir "${OPENYAMM_RUNTIME_SHADER_DIR}")
@@ -277,11 +449,19 @@ target_compile_definitions(openyamm_game
 
 target_link_libraries(openyamm_game
     PRIVATE
+        openyamm_core
         openyamm_engine
         imgui::imgui
         Threads::Threads
         yaml-cpp::yaml-cpp
+        openyamm_monocypher
 )
+
+# The playthrough statistics' release key: a private source given at configure time (cmake/PlaythroughStatisticsKey.cmake).
+target_include_directories(openyamm_game PRIVATE "${CMAKE_BINARY_DIR}/generated")
+if (OPENYAMM_STATS_PRIVATE_KEY_SOURCE)
+    target_sources(openyamm_game PRIVATE "${OPENYAMM_STATS_PRIVATE_KEY_SOURCE}")
+endif()
 
 target_compile_features(openyamm_game PRIVATE cxx_std_20)
 add_dependencies(openyamm_game openyamm_runtime_shaders)
@@ -315,6 +495,11 @@ if (OPENYAMM_BUILD_DESKTOP_EXECUTABLE)
 
     target_compile_features(openyamm PRIVATE cxx_std_20)
 
+    if (APPLE)
+        include(AppleBundle)
+        openyamm_configure_apple_bundle(openyamm)
+    endif()
+
     if (OPENYAMM_ENABLE_GPROF_SAMPLING)
         if (NOT CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR NOT UNIX OR APPLE)
             message(FATAL_ERROR "OPENYAMM_ENABLE_GPROF_SAMPLING requires GNU C++ on Linux.")
@@ -342,51 +527,51 @@ if (OPENYAMM_BUILD_DESKTOP_EXECUTABLE)
             PROPERTIES
                 WIN32_EXECUTABLE "$<OR:$<CONFIG:Release>,$<CONFIG:MinSizeRel>>"
         )
+
+        # OpenYAMM.exe of a versioned installation (packaging/UPDATER_PLAN.md 9.1): standard library and Windows only.
+        add_executable(openyamm_launcher WIN32
+            launcher/WindowsLauncher.cpp
+            ${CMAKE_SOURCE_DIR}/engine/update/AppInstallation.cpp
+            "${CMAKE_CURRENT_BINARY_DIR}/openyamm.rc"
+        )
+        target_include_directories(openyamm_launcher PRIVATE ${CMAKE_SOURCE_DIR})
+        target_compile_features(openyamm_launcher PRIVATE cxx_std_20)
+        if (MINGW)
+            target_link_options(openyamm_launcher PRIVATE -municode)
+        endif()
+        set_target_properties(openyamm_launcher
+            PROPERTIES
+                OUTPUT_NAME OpenYAMM
+                RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/launcher"
+        )
+    elseif (UNIX AND NOT IOS)
+        # OpenYAMM of a versioned installation on Linux and macOS (packaging/UPDATER_PLAN.md 9.1): standard library
+        # only.
+        add_executable(openyamm_launcher
+            launcher/UnixLauncher.cpp
+            ${CMAKE_SOURCE_DIR}/engine/update/AppInstallation.cpp
+        )
+        target_include_directories(openyamm_launcher PRIVATE ${CMAKE_SOURCE_DIR})
+        target_compile_features(openyamm_launcher PRIVATE cxx_std_20)
+        set_target_properties(openyamm_launcher
+            PROPERTIES
+                OUTPUT_NAME OpenYAMM
+                RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/launcher"
+        )
     endif()
 
-    if (UNIX AND NOT APPLE)
+    if (UNIX AND NOT APPLE AND NOT OPENYAMM_STATIC_LIBSTDCXX)
         target_link_options(openyamm
             PRIVATE
                 "-Wl,-rpath,$ORIGIN/../_deps/sdl3-build"
         )
     endif()
 
-    install(TARGETS openyamm
-        RUNTIME DESTINATION bin
-    )
-
-    if (UNIX AND NOT APPLE)
-        set(openyammDesktopId "io.github.openyamm.OpenYAMM")
-        set(openyammIconRoot "${CMAKE_SOURCE_DIR}/packaging/icons/hicolor")
-        foreach(openyammIconSize IN ITEMS 16 24 32 48 64 128 256 512)
-            install(FILES
-                "${openyammIconRoot}/${openyammIconSize}x${openyammIconSize}/apps/${openyammDesktopId}.png"
-                DESTINATION "share/icons/hicolor/${openyammIconSize}x${openyammIconSize}/apps"
-                COMPONENT DesktopIntegration
-            )
-        endforeach()
-        install(FILES "${CMAKE_SOURCE_DIR}/packaging/flatpak/${openyammDesktopId}.svg"
-            DESTINATION share/icons/hicolor/scalable/apps
-            COMPONENT DesktopIntegration
-        )
-    endif()
-
-    install(FILES
-        "${CMAKE_SOURCE_DIR}/LICENSE"
-        "${CMAKE_SOURCE_DIR}/COPYRIGHT"
-        DESTINATION "share/licenses/openyamm"
-    )
-
-    install(DIRECTORY "${OPENYAMM_RUNTIME_SHADER_DIR}/"
-        DESTINATION "share/openyamm/runtime/shaders"
-    )
-
-    if (IS_DIRECTORY "${CMAKE_SOURCE_DIR}/assets")
-        install(DIRECTORY "${CMAKE_SOURCE_DIR}/assets/"
-            DESTINATION "share/openyamm/assets"
-            FILES_MATCHING
-                PATTERN "*.zip"
-        )
+    if (OPENYAMM_STATIC_LIBSTDCXX)
+        # Release packages need only the system's C library: libstdc++ of the build's newer compiler is not on older
+        # distributions (packaging/check_linux_binary.sh).
+        target_link_options(openyamm PRIVATE -static-libstdc++ -static-libgcc)
+        target_link_options(openyamm_launcher PRIVATE -static-libstdc++ -static-libgcc)
     endif()
 endif()
 
@@ -395,10 +580,20 @@ if (NOT CMAKE_CROSSCOMPILING)
     add_executable(openyamm_sprite_atlas_cook EXCLUDE_FROM_ALL
         ../tools/cook_sprite_atlases_main.cpp
         ../tools/SpriteAtlasEncode.cpp
+        ../tools/TextureBlockEncode.cpp
         render/SpriteAtlasCook.cpp
         render/SpriteAtlasMipmaps.cpp)
-    target_include_directories(openyamm_sprite_atlas_cook PRIVATE ${CMAKE_SOURCE_DIR})
+    # The ASTC encoder is compiled into openyamm_bgfx (bimg's astc-encoder); tools/TextureBlockEncode.cpp calls it.
+    target_include_directories(openyamm_sprite_atlas_cook PRIVATE ${CMAKE_SOURCE_DIR}
+        ${OPENYAMM_BIMG_SOURCE_DIR}/3rdparty/astc-encoder/include)
     target_link_libraries(openyamm_sprite_atlas_cook PRIVATE openyamm_engine libzstd_static openyamm_atlas_encoders)
+    add_executable(openyamm_model_texture_cook EXCLUDE_FROM_ALL
+        ../tools/cook_model_textures_main.cpp
+        ../tools/CookModelGeometry.cpp
+        ../tools/TextureBlockEncode.cpp)
+    target_include_directories(openyamm_model_texture_cook PRIVATE ${CMAKE_SOURCE_DIR}
+        ${OPENYAMM_BIMG_SOURCE_DIR}/3rdparty/astc-encoder/include ${OPENYAMM_BGFX_SOURCE_DIR}/3rdparty)
+    target_link_libraries(openyamm_model_texture_cook PRIVATE openyamm_engine libzstd_static openyamm_atlas_encoders)
     if (IS_DIRECTORY "${CMAKE_SOURCE_DIR}/assets_source/engine/sprites_new")
         add_custom_target(openyamm_cook_sprite_atlases
             COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tools/cook_sprite_atlases.py"
@@ -408,6 +603,59 @@ if (NOT CMAKE_CROSSCOMPILING)
             DEPENDS openyamm_sprite_atlas_cook
             COMMENT "Preparing changed sprite atlas runtime pages"
             VERBATIM)
+    endif()
+    # Desktop asset cooks into assets_dev (openyamm_cook_assets): incremental, they redo only what changed (receipts
+    # record each cook's COOK_REVISION/COOKER_REVISION, not the cooker binary) and run with every openyamm build unless
+    # OPENYAMM_COOK_ON_BUILD is off. Android cooks only on demand: tools/cook_android.sh. The cooks need the
+    # assets_source checkout; release checkouts package the committed cooked files.
+    option(OPENYAMM_COOK_ON_BUILD "Run the desktop asset cooks (openyamm_cook_assets) with every openyamm build" ON)
+    add_custom_target(openyamm_cook_assets COMMENT "Desktop asset cooks done")
+    # World surface textures: the x4 sources in assets_source (tools/cook_surface_textures.py).
+    if (IS_DIRECTORY "${CMAKE_SOURCE_DIR}/assets_source" AND IS_DIRECTORY "${OPENYAMM_DEV_ASSETS_DIR}/worlds")
+        add_custom_target(openyamm_cook_surface_textures
+            COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tools/cook_surface_textures.py" --profile desktop
+                --sources "${CMAKE_SOURCE_DIR}/assets_source" --output "${OPENYAMM_DEV_ASSETS_DIR}"
+                --cooker "$<TARGET_FILE:openyamm_model_texture_cook>"
+            DEPENDS openyamm_model_texture_cook
+            COMMENT "Cooking changed world surface textures"
+            VERBATIM)
+        add_dependencies(openyamm_cook_assets openyamm_cook_surface_textures)
+    endif()
+    # 3D models (tools/cook_models.py): source GLBs in assets_source cook into assets_dev (geometry passes, compressed
+    # textures).
+    if (IS_DIRECTORY "${CMAKE_SOURCE_DIR}/assets_source")
+        add_custom_target(openyamm_cook_models
+            COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tools/cook_models.py" --profile desktop
+                --source "${CMAKE_SOURCE_DIR}/assets_source" --output "${OPENYAMM_DEV_ASSETS_DIR}"
+                --cooker "$<TARGET_FILE:openyamm_model_texture_cook>"
+            DEPENDS openyamm_model_texture_cook
+            COMMENT "Cooking changed 3D models"
+            VERBATIM)
+        add_dependencies(openyamm_cook_assets openyamm_cook_models)
+    endif()
+    # Obsidian HUD art (sources in assets_source) and portrait face set atlases (tools/cook_ui_textures.py), cooked
+    # into assets_dev for desktop.
+    if (IS_DIRECTORY "${CMAKE_SOURCE_DIR}/assets_source" AND IS_DIRECTORY "${OPENYAMM_DEV_ASSETS_DIR}/engine/icons_x2")
+        add_custom_target(openyamm_cook_ui_textures
+            COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tools/cook_ui_textures.py"
+                --assets "${OPENYAMM_DEV_ASSETS_DIR}" --cooker "$<TARGET_FILE:openyamm_model_texture_cook>"
+            DEPENDS openyamm_model_texture_cook
+            COMMENT "Cooking changed HUD art"
+            VERBATIM)
+        add_dependencies(openyamm_cook_assets openyamm_cook_ui_textures)
+    endif()
+    # Enhanced sky textures (sources in assets_source, tools/cook_sky_textures.py), cooked into assets_dev for desktop.
+    if (IS_DIRECTORY "${CMAKE_SOURCE_DIR}/assets_source/engine/rendering/sky")
+        add_custom_target(openyamm_cook_sky_textures
+            COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tools/cook_sky_textures.py" --profile desktop
+                --assets "${OPENYAMM_DEV_ASSETS_DIR}" --cooker "$<TARGET_FILE:openyamm_model_texture_cook>"
+            DEPENDS openyamm_model_texture_cook
+            COMMENT "Cooking changed sky textures"
+            VERBATIM)
+        add_dependencies(openyamm_cook_assets openyamm_cook_sky_textures)
+    endif()
+    if (OPENYAMM_COOK_ON_BUILD AND TARGET openyamm)
+        add_dependencies(openyamm openyamm_cook_assets)
     endif()
     if (IS_DIRECTORY "${OPENYAMM_DEV_ASSETS_DIR}/engine/sprites_new")
         add_custom_target(openyamm_verify_sprite_atlases
@@ -423,3 +671,38 @@ if (NOT CMAKE_CROSSCOMPILING)
 endif()
 
 target_link_libraries(openyamm_game PRIVATE libzstd_static)
+
+# First port slice: pure projection/reveal logic, without a UI or save-format extension.
+if (OPENYAMM_BUILD_ATLAS_CORE)
+    target_sources(openyamm_game PRIVATE
+        world/WorldFloorPlan.cpp
+        world/WorldMapExploration.cpp
+    )
+endif()
+
+if (OPENYAMM_BUILD_ATLAS)
+    target_compile_definitions(openyamm_game PUBLIC OPENYAMM_WITH_ATLAS=1)
+    target_sources(openyamm_game PRIVATE
+        world/WorldAtlasPresentation.cpp
+        world/WorldConnectionGraph.cpp
+        world/WorldDatabase.cpp
+        world/WorldGateCatalog.cpp
+        world/WorldGuide.cpp
+        world/WorldGuildStockKnowledge.cpp
+        world/WorldInteractionSites.cpp
+        world/WorldItemSources.cpp
+        world/WorldMapFeatures.cpp
+        world/WorldMapKnowledge.cpp
+        world/WorldMapLocations.cpp
+        world/WorldMapNotes.cpp
+        world/WorldMonsterKnowledge.cpp
+        world/WorldNpcKnowledge.cpp
+        world/WorldSiteObservations.cpp
+        world/WorldTransportKnowledge.cpp
+        gameplay/GuildSpellbookRules.cpp
+        gameplay/MapEncounterDefinition.cpp
+        items/ItemInspectionText.cpp
+        ui/screens/AtlasScreen.cpp
+        ui/screens/AtlasConnections.cpp
+    )
+endif()

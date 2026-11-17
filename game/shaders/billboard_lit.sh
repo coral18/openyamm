@@ -1,5 +1,6 @@
 
 #include "common.sh"
+#include "sky_common.sh"
 #include "world_clip.sh"
 
 SAMPLER2D(s_texColor, 0);
@@ -169,6 +170,12 @@ void main()
     textureColor.rgb *= u_spriteAtlasTexel.w;
 #endif
     vec3 litColor = textureColor.rgb * (u_billboardAmbient.rgb + v_color0.rgb);
+    // Actor hit flash (v_texcoord1.x, gameplay.melee_hit_flash): a brief mix towards warm white over the sprite's own
+    // pixels; zero for every other sprite.
+    if (v_texcoord1.x > 0.0)
+    {
+        litColor = mix(litColor, vec3(1.0, 0.94, 0.86), v_texcoord1.x);
+    }
     litColor = mix(litColor, u_fogColor.rgb, u_fogDensities.z);
     vec4 shadedColor = vec4(litColor, textureColor.a * v_color0.a);
     float baseAlpha = shadedColor.a;
@@ -235,7 +242,7 @@ void main()
         discard;
     }
 
-    float fogRatio = getFogRatio(v_depth);
-    vec3 foggedColor = mix(fragmentColor.rgb, u_fogColor.rgb, fogRatio);
-    gl_FragColor = vec4(foggedColor, fragmentColor.a);
+    float fogRatio = skyFogRatio(getFogRatio(v_depth), v_worldPosition, v_depth, u_fogDistances.z);
+    vec3 foggedColor = mix(fragmentColor.rgb, skyFogDisplayColor(fogRatio, u_fogColor.rgb, v_worldPosition), fogRatio);
+    gl_FragColor = vec4(mistApply(foggedColor, v_worldPosition), fragmentColor.a);
 }

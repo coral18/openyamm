@@ -7,6 +7,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <string>
 #include <vector>
 
 namespace OpenYAMM::Game
@@ -39,6 +40,8 @@ struct ChestTrapMemberResult
 struct ChestTrapOpenResult
 {
     bool shouldOpenChest = true;
+    // Why the rules keep the chest shut before any trap (MAW's Doom chests); empty when they do not.
+    std::string refusal;
     bool trapWasPresent = false;
     bool trapDisarmed = false;
     bool trapDischarged = false;
@@ -57,7 +60,8 @@ GameplayChestViewState buildMaterializedChestView(
     uint32_t sessionChestSeed,
     const ChestTable *pChestTable,
     const ItemTable *pItemTable,
-    Party *pParty);
+    Party *pParty,
+    const std::string &worldId);
 
 bool takeChestItem(GameplayChestViewState &view, size_t itemIndex, GameplayChestItemState &item);
 bool takeChestItemAt(GameplayChestViewState &view, uint8_t gridX, uint8_t gridY, GameplayChestItemState &item);
@@ -77,4 +81,11 @@ ChestTrapOpenResult resolveChestTrapOpen(
     const SpecialItemEnchantTable *pSpecialItemEnchantTable);
 
 void applyChestTrapOpenResultToParty(Party &party, const ChestTrapOpenResult &result);
+
+// Value of one chest or corpse entry: its gold, or the item's value with enchantments times its quantity.
+int chestItemValue(
+    const GameplayChestItemState &item,
+    const ItemTable *pItemTable,
+    const StandardItemEnchantTable *pStandardItemEnchantTable,
+    const SpecialItemEnchantTable *pSpecialItemEnchantTable);
 }

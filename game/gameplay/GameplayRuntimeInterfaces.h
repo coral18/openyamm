@@ -2,22 +2,41 @@
 
 #include "game/events/EventRuntime.h"
 #include "game/gameplay/GameMechanics.h"
+#include "game/gameplay/GameplayActorShields.h"
 #include "game/gameplay/GameplayWorldInteraction.h"
+#include "game/gameplay/GameplayWorldPoint.h"
+#include "game/items/WorldItemShape.h"
 #include "game/party/Party.h"
 #include "game/party/SkillData.h"
+#include "game/rules/ActorRulesetFacts.h"
 #include "game/tables/MonsterTable.h"
 
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <functional>
+#include <memory>
 #include <optional>
 #include <string>
 #include <vector>
 
 namespace OpenYAMM::Game
 {
+// How far ahead of the party MAW's gather key tries to put what it brings, the nearer ones when a wall or a drop is in
+// the way of the farther; at the party's feet when none will do.
+inline constexpr std::array<float, 3> LootGatherDistances = {192.0f, 128.0f, 64.0f};
+
+class ActorAiTrace;
+class ISceneEventContext;
+class ActorBehaviorRuntime;
+class GameplayActorHitFeedback;
+class GameplayProjectileService;
 class MergedBolsterMonsterTable;
-struct MapArenaDefinition;
+struct MapStatsEntry;
+struct WorldAmbientSound;
+struct GameplayMonsterSpawnRequest;
+struct MapDeltaHeldItem;
+struct MapKillProgress;
 struct GameplayMinimapState;
 struct GameplayMinimapLineState;
 struct GameplayMinimapMarkerState;
@@ -103,6 +122,8 @@ struct GameplayWorldItemInspectState
     InventoryItem item = {};
     uint32_t goldAmount = 0;
     bool isGold = false;
+    std::optional<std::array<float, 3>> position;
+    int16_t lootMonsterId = 0;
 };
 
 enum class ActorAiAnimationState : uint8_t
@@ -117,38 +138,163 @@ enum class ActorAiAnimationState : uint8_t
     Bored = 7,
 };
 
+// Charges (MonsterModifiers charge) on a map since it loaded: started, and how they ended.
+struct GameplayChargeCounts
+{
+    uint32_t started = 0;
+    uint32_t hits = 0;
+    uint32_t misses = 0;
+    // Frenzies (MonsterModifierSet::frenzy) started so far.
+    uint32_t frenzies = 0;
+};
+
+enum class ActorTurnBasedMode : uint8_t
+{
+    // Real-time play: actors attack whenever their recovery cooldown allows.
+    RealTime,
+    // Turn-based wait stage: actors move but never attack.
+    MoveOnly,
+    // Turn-based attack and movement stages: actors hold position and only granted actors take their action.
+    Hold,
+};
+
+// What the rules read of an actor, without the presentation GameplayRuntimeActorState carries (animation, shield,
+// behaviour clips): cheap enough for a pass over every actor each frame (audit ROB-2-5).
+struct GameplayActorRulesView
+{
+    uint32_t actorId = 0;
+    int16_t monsterId = 0;
+    float preciseX = 0.0f;
+    float preciseY = 0.0f;
+    float preciseZ = 0.0f;
+    uint16_t radius = 0;
+    bool isDead = false;
+    bool isInvisible = false;
+    bool hostileToParty = false;
+    bool hasDetectedParty = false;
+    // Fights for the party (a summon, a reanimated or controlled monster: ally 999).
+    bool partyAlly = false;
+    int currentHp = 0;
+    int maxHp = 0;
+    ActorRulesetFacts rulesetFacts;
+};
+
 struct GameplayRuntimeActorState
 {
     uint32_t actorId = 0;
     float yawRadians = 0.0f;
     ActorAiAnimationState animationState = ActorAiAnimationState::Standing;
     float animationTimeTicks = 0.0f;
+    // Presentation observes the same action clock and movement as combat; it never drives either.
+    float actionSeconds = 0.0f;
+    float velocityX = 0.0f;
+    float velocityY = 0.0f;
+    // Horizontal speed the AI asked for before collision (0 when not moving): what velocity would be without walls.
+    float intendedSpeed = 0.0f;
+    // Pursuing or fleeing (moving at twice the wander speed): a 3D model prefers its run clip.
+    bool hurrying = false;
+    // A skirmisher's footwork (strafe attack, evade, circle, back-off: MM9's Strafe and Backpedal states, which face
+    // the target), from the AI's skirmish phase in any world: its model keeps the AI's facing. While the AI backs it
+    // away (skirmishBackpedals) the model plays its backpedal clip, or its gait reversed without one; every other move
+    // plays the gait forwards at any angle, as MM9's Strafe state does (devdocs/mm9_rework/MM9_ANIMATION_AUDIT.md A2).
+    bool footwork = false;
+    bool backpedalling = false;
+    bool castingSpell = false;
+    bool secondaryAttack = false;
+    uint32_t castingSpellId = 0;
+    bool attackImpactTriggered = false;
+    // Action seconds still to run once the attack applies at its sprite's contact frame; 0 when it applies at the end.
+    float attackImpactLeadSeconds = 0.0f;
     float visualScale = 1.0f;
     int16_t monsterId = 0;
+    int32_t uniqueNameIndex = 0;
     int32_t mm9RudeId = 0;
     uint32_t mm9SourceObjectIndex = 0;
     float preciseX = 0.0f;
     float preciseY = 0.0f;
     float preciseZ = 0.0f;
     uint16_t radius = 0;
+    // Collision height: indoors at least 2 x radius + 2, so wide monsters fit the floor/ceiling sweep.
     uint16_t height = 0;
+    // The actor's own height (map placement or descriptor), unpadded; presentation (3D model scale) uses this.
+    uint16_t bodyHeight = 0;
+    // Its 3D model's scale against its binding's (scene draw_scale); when set it replaces bodyHeight's ratio to the
+    // descriptor's height. 0: none.
+    float drawScale = 0.0f;
+    // Where the party aims at it, above its feet (actorTargetHeight: on its 3D model when that is shorter).
+    float targetHeight = 0.0f;
+    // The items it holds (MapDeltaActor::heldItems), owned by the world runtime for the frame; null or empty: none.
+    // heldItemsHidden: a routine put them down for now (Mm9AiRoutineStep hide_items).
+    const std::vector<MapDeltaHeldItem> *pHeldItems = nullptr;
+    bool heldItemsHidden = false;
     bool isDead = false;
     bool isInvisible = false;
     bool hostileToParty = false;
     bool hasDetectedParty = false;
     bool combatTargetingParty = false;
+    // The party member whose spell summoned the actor, -1 for none.
+    int32_t summonerMemberIndex = -1;
+    int currentHp = 0;
+    int maxHp = 0;
+    // What the ruleset resolved for the actor (empty under Standard).
+    ActorRulesetFacts rulesetFacts;
+    // A behaviour script's clip role (actors.yml `script_clips`; `fidget` the binding's own fidget) and its playback
+    // time; empty when none plays. Past its end it holds its last frame, loops, or releases the actor's own animation.
+    std::string scriptedClip;
+    // Clips that follow scriptedClip in order (a map script's clip sequence); the end rule applies to the last one.
+    std::vector<std::string> scriptedClipThen;
+    float scriptedClipSeconds = 0.0f;
+    enum class ScriptedClipEnd : uint8_t
+    {
+        Hold,
+        Loop,
+        Release,
+    };
+    ScriptedClipEnd scriptedClipEnd = ScriptedClipEnd::Hold;
+    // Hit flash mixed over the sprite or model (GameplayActorHitFeedback), 0 when none.
+    float hitFlash = 0.0f;
+    // Multiplier of the model's emission (a frenzy's glow, GameplayActorModifiers), 1 when none.
+    float emissionMultiplier = 1.0f;
+    // Energy shield (GameplayActorShields); `present` is false for every monster without a shield profile.
+    GameplayActorShieldView shield;
+    // The target an actor with tactics is engaging (ActorBehaviorRuntime; its attack aim point), for a model whose
+    // look follows its combat target (actors.yml `look.target: combat`). Unset for every other actor.
+    bool hasAimTarget = false;
+    float aimTargetX = 0.0f;
+    float aimTargetY = 0.0f;
+    float aimTargetZ = 0.0f;
+    // An idle turret scanning (tactics `scan`): its look holds `hold_clip` and pitches its nodes to aimScanPitchRadians
+    // (the body's yaw is the scan itself). Unset for every other actor.
+    bool aimScanning = false;
+    float aimScanPitchRadians = 0.0f;
+    // An actor on MM9's loop (MM9_AMBIENT_ANIMATION.md section 2.4): its model's look turns only toward the target its
+    // AI holds (the party, or another actor's head at heldTarget*) or toward the party talking to it, never toward a
+    // party that is merely near; headTurn false (its row's HeadTurn 0): its head turns toward nothing.
+    bool looksAtHeldTarget = false;
+    bool headTurn = true;
+    bool holdsPartyTarget = false;
+    bool holdsActorTarget = false;
+    float heldTargetX = 0.0f;
+    float heldTargetY = 0.0f;
+    float heldTargetZ = 0.0f;
 };
 
 struct GameplayCombatFeedbackEvent
 {
     size_t actorIndex = 0;
     int damage = 0;
+    // Points a raised energy shield took instead (the body took none): shown as a blue number.
+    int shieldDamage = 0;
     int experience = 0;
     float x = 0.0f;
     float y = 0.0f;
     float z = 0.0f;
     float height = 0.0f;
     bool killed = false;
+    // A critical hit: its number pops (CombatFloatingText).
+    bool critical = false;
+    // A blow or missile that missed the monster (or did it no harm): "Miss" floats instead of a number.
+    bool miss = false;
 };
 
 enum class GameplayActorControlMode : uint8_t
@@ -160,6 +306,24 @@ enum class GameplayActorControlMode : uint8_t
     ControlUndead = 4,
     Reanimated = 5,
 };
+
+// How long evt.TurnActor's "for good" lasts: a control that never runs out in play (about thirty years).
+constexpr float TurnedForGoodSeconds = 1.0e9f;
+
+// A monster that fights for the party for good (MAW's Ally 9999): a summon, controlled undead, the reanimated. A
+// charmed or berserk monster is only borrowed.
+inline bool gameplayActorFightsForParty(GameplayActorControlMode mode)
+{
+    return mode == GameplayActorControlMode::Enslaved || mode == GameplayActorControlMode::ControlUndead
+        || mode == GameplayActorControlMode::Reanimated;
+}
+
+// A monster the party's mind spell turned for a while (Charm, Berserk): what it kills, and its own death at another
+// monster's hand, are the party's doing (MonsterKillReward::mindControlled).
+inline bool gameplayActorMindControlled(GameplayActorControlMode mode)
+{
+    return mode == GameplayActorControlMode::Charm || mode == GameplayActorControlMode::Berserk;
+}
 
 enum class GameplayActorAiType : uint8_t
 {
@@ -206,6 +370,8 @@ struct GameplayActorInspectState
     float fearRemainingSeconds = 0.0f;
     float shrinkRemainingSeconds = 0.0f;
     float darkGraspRemainingSeconds = 0.0f;
+    // How long the actor's charm, berserk or enslavement (controlMode) still holds.
+    float controlRemainingSeconds = 0.0f;
     float dayOfProtectionRemainingSeconds = 0.0f;
     float hourOfPowerRemainingSeconds = 0.0f;
     float painReflectionRemainingSeconds = 0.0f;
@@ -218,6 +384,8 @@ struct GameplayActorInspectState
     float heroismRemainingSeconds = 0.0f;
     std::string pendingSelfBuffName;
     GameplayActorControlMode controlMode = GameplayActorControlMode::None;
+    // What the ruleset resolved for the actor (MAW: its level and boss affix); empty under Standard.
+    ActorRulesetFacts rulesetFacts;
 };
 
 struct GameplayActorSpellEffectState
@@ -266,6 +434,9 @@ struct GameplayActorTargetPolicyState
     uint16_t height = 0;
     bool hostileToParty = false;
     GameplayActorControlMode controlMode = GameplayActorControlMode::None;
+    uint32_t actorId = 0;
+    // The monster that last hit it (the original's lastCharacterIdToHit): it fights that one back at long range.
+    std::optional<uint32_t> lastActorAttackerId;
 };
 
 struct GameplayActorTargetPolicyResult
@@ -307,6 +478,10 @@ struct GameplayPartySpellProjectileRequest
     uint32_t effectSoundIdOverride = 0;
     uint32_t impactSoundIdOverride = 0;
     bool turnBasedPendingAction = false;
+    // The actor the spell was aimed at, for rules whose missiles home (MAW).
+    std::optional<size_t> targetActorIndex;
+    // Its damage was a critical hit (the status line and combat log say so where it lands).
+    bool critical = false;
 };
 
 enum class GameplayProjectileVisualMode
@@ -326,6 +501,8 @@ struct GameplayProjectilePresentationState
     uint16_t radius = 0;
     uint16_t height = 0;
     int spellId = 0;
+    // The monster that threw it (0: party, event or unknown), for per-monster enhanced visuals.
+    int16_t sourceMonsterId = 0;
     std::string objectName;
     std::string objectSpriteName;
     float x = 0.0f;
@@ -339,6 +516,37 @@ struct GameplayProjectilePresentationState
     bool isSettled = false;
 };
 
+// An item lying on the ground (or dropped and still falling), for its 3D model.
+struct GameplayWorldItemPresentationState
+{
+    // Stable while the item lies there: the world's item id outdoors, its map object index indoors.
+    uint32_t key = 0;
+    uint32_t itemId = 0;
+    float x = 0.0f;
+    float y = 0.0f;
+    float z = 0.0f;
+    int16_t sectorId = -1;
+    // In flight or sliding: drawn flat at its simulated height; at rest it is fitted to the ground under it.
+    bool moving = false;
+    // Floats where it was placed (NoGravity objects): never fitted to the ground.
+    bool floating = false;
+    // A treasure bag holding loot rather than an item: it draws lootBagModelBinding().
+    bool lootBag = false;
+    WorldItemSparkle sparkle = WorldItemSparkle::None;
+    // A placed item's authored pose (a scene world item's `pose`): drawn turned so, resting on its position.
+    std::optional<WorldItemPose> pose;
+};
+
+// A projectile that ended (hit something or ran out of lifetime) and where it stopped, so its flight effect can
+// reach that point before it fades.
+struct GameplayProjectileEndPresentationState
+{
+    uint32_t projectileId = 0;
+    float x = 0.0f;
+    float y = 0.0f;
+    float z = 0.0f;
+};
+
 struct GameplayProjectileImpactPresentationState
 {
     uint32_t effectId = 0;
@@ -347,6 +555,11 @@ struct GameplayProjectileImpactPresentationState
     uint16_t objectSpriteFrameIndex = 0;
     uint16_t sourceObjectFlags = 0;
     int sourceSpellId = 0;
+    int16_t sourceMonsterId = 0;
+    // The unit direction the projectile flew when it struck; zero when unknown.
+    float flightDirectionX = 0.0f;
+    float flightDirectionY = 0.0f;
+    float flightDirectionZ = 0.0f;
     std::string objectName;
     std::string objectSpriteName;
     std::string sourceObjectName;
@@ -370,13 +583,6 @@ struct GameplayHeldItemDropRequest
     float yawRadians = 0.0f;
 };
 
-struct GameplayWorldPoint
-{
-    float x = 0.0f;
-    float y = 0.0f;
-    float z = 0.0f;
-};
-
 struct GameplayPartyAttackActorFacts
 {
     size_t actorIndex = 0;
@@ -385,10 +591,14 @@ struct GameplayPartyAttackActorFacts
     GameplayWorldPoint position = {};
     uint16_t radius = 0;
     uint16_t height = 0;
+    // Where a party shot aims at it: GameplayRuntimeActorState::targetHeight, raised toward its top when the line from
+    // the party to there is blocked and a higher one is clear (GameMechanics::clearPartyShotAimHeight).
+    float targetHeight = 0.0f;
     int currentHp = 0;
     int maxHp = 0;
     int effectiveArmorClass = 0;
     int hourOfPowerPower = 0;
+    ActorRulesetFacts rulesetFacts;
     bool isDead = false;
     bool isInvisible = false;
     bool hostileToParty = false;
@@ -396,11 +606,19 @@ struct GameplayPartyAttackActorFacts
     bool lineOfSightToParty = true;
 };
 
+// A debuff a party member's hit leaves on an actor (MAW's Death Grasp and Icy Touch).
+enum class GameplayActorHitDebuff : uint8_t
+{
+    DarkGrasp,
+    Slow,
+};
+
 struct GameplayCombatActorInfo
 {
     uint32_t actorId = 0;
     int16_t monsterId = 0;
     int monsterLevel = 0;
+    int currentHp = 0;
     int maxHp = 0;
     uint32_t attackPreferences = 0;
     int attackBonus = 0;
@@ -408,6 +626,17 @@ struct GameplayCombatActorInfo
     MonsterSpecialAttackKind specialAttackKind = MonsterSpecialAttackKind::None;
     int specialAttackLevel = 0;
     std::string displayName;
+    // Shrinking Ray or Dark Grasp holds the attacker; rules that recompute its damage cut it themselves.
+    bool damageDebuffed = false;
+    // What the ruleset resolved for the attacker (empty under Standard).
+    ActorRulesetFacts rulesetFacts;
+    // spell_conditions (MonsterModifiers.h): the condition a hit by its Spell1 / Spell2 leaves, the chance (0-1), and
+    // the game minutes until it wears off (0: until cured).
+    MonsterSpecialAttackKind spell1Condition = MonsterSpecialAttackKind::None;
+    MonsterSpecialAttackKind spell2Condition = MonsterSpecialAttackKind::None;
+    float spellConditionChance = 1.0f;
+    float spell1ConditionMinutes = 0.0f;
+    float spell2ConditionMinutes = 0.0f;
 };
 
 struct GameplayPartyAttackSpellRequest
@@ -428,13 +657,38 @@ struct GameplayPartyAttackProjectileRequest
     size_t sourcePartyMemberIndex = 0;
     uint32_t objectId = 0;
     uint32_t impactObjectId = 0;
+    // Its impact's sound (a party gun's world missile), 0: the object's own.
+    uint32_t impactSoundId = 0;
     int damage = 0;
     int attackBonus = 0;
     bool useActorHitChance = false;
     CombatDamageType damageType = CombatDamageType::Physical;
+    ShieldAttackTier shieldTier = ShieldAttackTier::Physical;
+    ShieldHitModifiers shieldModifiers;
+    // Resisted by the lower of the monster's physical and fire resistance (MAW's Grandmaster fire arrows).
+    bool weakerOfPhysicalAndFire = false;
+    // The radius the missile's damage reaches around its impact (Carnage arrows); 0 strikes only what it hits.
+    float explosionRadius = 0.0f;
+    // The shot's damage range, rolled again for each monster its blast reaches (Carnage arrows); 0: its one damage.
+    int blastMinimumDamage = 0;
+    int blastMaximumDamage = 0;
     GameplayWorldPoint source = {};
     GameplayWorldPoint target = {};
     bool turnBasedPendingAction = false;
+    // The actor the shot was aimed at, for rules whose missiles home (MAW).
+    std::optional<size_t> targetActorIndex;
+    // Its shots home (CharacterAttackResult::homing).
+    bool homing = false;
+    // Its damage was a critical hit (CharacterAttackResult::criticalDamage).
+    bool critical = false;
+    // A solo run's Chaining Arrows: it leaps on from the monster it strikes to this many more, each within
+    // chainRadius of the one before and struck at chainShare of its damage (ProjectileState::chainLeft).
+    uint8_t chainCount = 0;
+    float chainShare = 0.0f;
+    float chainRadius = 0.0f;
+    // A solo run's ordinary bow attack: one credit its arrows share, spent by the first of them to hit a monster
+    // (ProjectileState::hitCredit).
+    std::shared_ptr<bool> hitCredit;
 };
 
 struct GameplayPartyAttackFallbackQuery
@@ -471,6 +725,7 @@ public:
     virtual ~IGameplayWorldRuntime() = default;
 
     virtual const std::string &mapName() const = 0;
+    virtual bool hasLineOfSight(float, float, float, float, float, float) const { return false; }
     virtual const MonsterTable *monsterTable() const
     {
         return nullptr;
@@ -485,15 +740,42 @@ public:
         return GameplayWorldPoint{partyX() + 1024.0f, partyY(), partyFootZ()};
     }
     virtual bool isIndoorMap() const = 0;
-    virtual bool isUnderwaterMap() const
+    // Whether the map lies open to the sky for spells: an outdoor map that is not enclosed, or a BLV its world declares
+    // open (world.yml openAirMaps, MapStatsEntry::openAir). Meteor Shower and the other outdoor spells work there,
+    // Inferno and Prismatic Light do not.
+    virtual bool isOpenAirMap() const
+    {
+        return !isIndoorMap();
+    }
+    // The party is on a ladder (the flight arrows then climb it).
+    virtual bool partyClimbingLadder() const
     {
         return false;
+    }
+    // The party swims in a scene water volume (the flight arrows then swim up and down).
+    virtual bool partySwimming() const
+    {
+        return false;
+    }
+    // The party's breath left (1 full) while its eye is under a scene water volume; none otherwise (the HUD's meter).
+    virtual std::optional<float> partyBreathFraction() const
+    {
+        return std::nullopt;
     }
     virtual bool allowsLloydsBeacon() const
     {
         return true;
     }
+    virtual bool allowsTownPortal() const
+    {
+        return true;
+    }
     virtual bool allowsRest() const
+    {
+        return true;
+    }
+    // The map's allow_spellcasting restriction (false only in MM7's Shoals, OY-350).
+    virtual bool allowsSpellcasting() const
     {
         return true;
     }
@@ -506,20 +788,53 @@ public:
     virtual void applyMapReentryReset()
     {
     }
+    // Resolves the living actors' ruleset numbers again (a difficulty change).
+    virtual void refreshRulesetMonsters() = 0;
+    // Restores up to `amount` HP of a living actor (ruleset effects such as MAW's Regenerating bosses).
+    virtual bool healMapActor(size_t actorIndex, int amount) = 0;
+    // The ruleset facts of a living actor for rules that change them as it is hit (MAW's Spear stacks), or null.
+    virtual ActorRulesetFacts *mutableActorRulesetFacts(size_t actorIndex) = 0;
     virtual int currentLocationReputation() const = 0;
     virtual void setCurrentLocationReputation(int reputation) = 0;
     virtual void applyEventRuntimeState(bool syncPersistentHostilityMasks = false)
     {
         static_cast<void>(syncPersistentHostilityMasks);
     }
+    // The world's event context (map actors, faces, mechanisms) for shared systems outside the event runtime (a
+    // cinematic's actor steps); null in a world without one.
+    virtual ISceneEventContext *sceneEventContext()
+    {
+        return nullptr;
+    }
     virtual Party *party() = 0;
     virtual const Party *party() const = 0;
     virtual float partyX() const = 0;
     virtual float partyY() const = 0;
     virtual float partyFootZ() const = 0;
+    // Places the party's feet at a point (an AI arena's party walk); nothing in a world without one.
+    virtual void teleportParty(float x, float y, float footZ)
+    {
+        static_cast<void>(x);
+        static_cast<void>(y);
+        static_cast<void>(footZ);
+    }
+    // The map's placed ambient sounds (devdocs/AMBIENT_SOUNDS.md), or none.
+    virtual const std::vector<WorldAmbientSound> *ambientSounds() const
+    {
+        return nullptr;
+    }
+    // The party's eyes: the camera height over the party's feet in this world.
+    virtual float partyEyeZ() const = 0;
     virtual float partyEngagementRange() const
     {
         return 10240.0f;
+    }
+    // How far from the party its shots, targeted spells and area spells reach a monster (GameplayActorService::
+    // partyHitReach): the yellow alert range, 5120, or a world's shorter one (MM9's 3800). Armageddon strikes the
+    // whole map.
+    virtual float partyHitReach() const
+    {
+        return 5120.0f;
     }
     virtual float gameplayCameraYawRadians() const
     {
@@ -528,6 +843,11 @@ public:
     virtual float gameplayCameraPitchRadians() const
     {
         return 0.0f;
+    }
+    // Width over height of the view the party sees through; the narrowest supported view until one is drawn.
+    virtual float gameplayViewAspectRatio() const
+    {
+        return 4.0f / 3.0f;
     }
     virtual bool partyIsAirborneForRest() const
     {
@@ -538,6 +858,11 @@ public:
         return false;
     }
     virtual bool partyIsActivelyFlyingForHud() const
+    {
+        return false;
+    }
+    // The party stands on water it would otherwise drown in (Water Walk carries it).
+    virtual bool partyIsWalkingOnWaterForHud() const
     {
         return false;
     }
@@ -569,12 +894,57 @@ public:
     {
         return 0;
     }
+    // The Yell key: villagers (MonsterKind::Peasant) that can act, are not hostile and stand within radius of the
+    // party flee from it for the given seconds (OE Party::yell; guards and calm monsters keep their ground).
+    virtual void scareNearbyPeasants(float radius, float seconds)
+    {
+        (void)radius;
+        (void)seconds;
+    }
     virtual bool turnBasedActorActionInProgress() const
     {
         return false;
     }
     virtual void stopTurnBasedActorMovement()
     {
+    }
+    // How many times faster than real time the frames run (fast mode times the turn-based speed settings). The
+    // world's per-frame catch-up limits, which absorb a hitch, are in real time and scale with it, so actors and
+    // missiles get the whole sped-up frame time the turn engine counts.
+    virtual void setGameSpeed(float speed)
+    {
+        (void)speed;
+    }
+    // The turn engine schedules turn-based actor actions; the world applies them to actor AI.
+    virtual void setTurnBasedActorMode(ActorTurnBasedMode mode)
+    {
+        (void)mode;
+    }
+    // Turn-based combat: the monsters' spell effects (stun, paralysis, slow, their buffs) run down once per completed
+    // turn by its game time, in equivalent real seconds, instead of by actor AI time (the original's game clock).
+    virtual void advanceTurnBasedActorTimers(float seconds)
+    {
+        (void)seconds;
+    }
+    // Lets the actor take its queued action (attack when it can) in the next actor AI step.
+    virtual void grantTurnBasedActorAction(size_t actorIndex)
+    {
+        (void)actorIndex;
+    }
+    virtual bool turnBasedActorActionGrantPending() const
+    {
+        return false;
+    }
+    // Monster recovery in turn-based initiative ticks, doubled while the actor is slowed.
+    virtual int turnBasedActorRecoveryTicks(size_t actorIndex) const
+    {
+        (void)actorIndex;
+        return 100;
+    }
+    virtual void setActorAttackCooldownSeconds(size_t actorIndex, float seconds)
+    {
+        (void)actorIndex;
+        (void)seconds;
     }
     virtual void updateWorld(float deltaSeconds) = 0;
     virtual void renderWorld(
@@ -599,6 +969,10 @@ public:
         return false;
     }
     virtual const std::optional<ScriptedEventProgram> *globalEventProgram() const = 0;
+    virtual const std::optional<ScriptedEventProgram> *localEventProgram() const
+    {
+        return nullptr;
+    }
     virtual const MapDeltaData *mapDeltaData() const
     {
         return nullptr;
@@ -619,12 +993,87 @@ public:
         int32_t toX,
         int32_t toY,
         int32_t toZ) = 0;
-    virtual const MapArenaDefinition *arenaDefinition() const
+    // The current map when it is an Arena (its definition is set).
+    virtual const MapStatsEntry *arenaMap() const
     {
         return nullptr;
     }
     virtual size_t mapActorCount() const = 0;
     virtual bool actorRuntimeState(size_t actorIndex, GameplayRuntimeActorState &state) const = 0;
+    // The actor as the rules read it; a world may answer it without building the full runtime state.
+    virtual bool actorRulesView(size_t actorIndex, GameplayActorRulesView &view) const
+    {
+        GameplayRuntimeActorState state = {};
+
+        if (!actorRuntimeState(actorIndex, state))
+        {
+            return false;
+        }
+
+        view.actorId = state.actorId;
+        view.monsterId = state.monsterId;
+        view.preciseX = state.preciseX;
+        view.preciseY = state.preciseY;
+        view.preciseZ = state.preciseZ;
+        view.radius = state.radius;
+        view.isDead = state.isDead;
+        view.isInvisible = state.isInvisible;
+        view.hostileToParty = state.hostileToParty;
+        view.hasDetectedParty = state.hasDetectedParty;
+        view.currentHp = state.currentHp;
+        view.maxHp = state.maxHp;
+        view.rulesetFacts = state.rulesetFacts;
+        return true;
+    }
+    virtual GameplayActorHitFeedback &actorHitFeedback() = 0;
+    virtual const GameplayActorHitFeedback &actorHitFeedback() const = 0;
+    // The actors' energy shields (null for a world without actors).
+    virtual GameplayActorShields *actorShields()
+    {
+        return nullptr;
+    }
+    virtual const GameplayActorShields *actorShields() const
+    {
+        return nullptr;
+    }
+    // Stuns a living actor for at least `seconds`, without damage or knockback (the EMP grenade on machines).
+    virtual bool stunActor(size_t actorIndex, float seconds)
+    {
+        (void)actorIndex;
+        (void)seconds;
+        return false;
+    }
+    // Holds a living actor under a hit debuff for at least `seconds`; Slow divides its speed and multiplies its
+    // recovery by `power`, never weakening a stronger slow.
+    virtual bool debuffActor(size_t actorIndex, GameplayActorHitDebuff debuff, float seconds, float power)
+    {
+        (void)actorIndex;
+        (void)debuff;
+        (void)seconds;
+        (void)power;
+        return false;
+    }
+    virtual ActorBehaviorRuntime *actorBehaviorRuntime()
+    {
+        return nullptr;
+    }
+    virtual const ActorBehaviorRuntime *actorBehaviorRuntime() const
+    {
+        return nullptr;
+    }
+    // Gold plus item value left in a dead actor's corpse (its loot is rolled at death); nullopt without corpse loot.
+    virtual std::optional<uint32_t> corpseLootValue(size_t actorIndex) const
+    {
+        (void)actorIndex;
+        return std::nullopt;
+    }
+    // Telepathy: what a living actor will leave when it dies. Its gold and random item are rolled now and kept for
+    // its corpse, so the reveal holds; nullopt when the actor is dead, invisible or unknown.
+    virtual std::optional<GameplayCorpseViewState> revealActorLoot(size_t actorIndex)
+    {
+        (void)actorIndex;
+        return std::nullopt;
+    }
     virtual bool tryStealFromActor(size_t actorIndex, uint32_t successRoll, uint32_t caughtRoll)
     {
         (void)actorIndex;
@@ -659,7 +1108,8 @@ public:
         float partyX,
         float partyY,
         float partyZ,
-        uint32_t sourcePartyMemberIndex) = 0;
+        uint32_t sourcePartyMemberIndex,
+        bool critical) = 0;
     virtual std::vector<size_t> collectMapActorIndicesWithinRadius(
         float centerX,
         float centerY,
@@ -692,6 +1142,24 @@ public:
         (void)viewAspectRatio;
         return collectMapActorIndicesWithinRadius(centerX, centerY, centerZ, radius, true, sourceX, sourceY, sourceZ);
     }
+    // Whether nothing of the map stands on the straight line between two points (a chaining arrow's way from the
+    // monster it struck to the next). A world without a map blocks nothing.
+    virtual bool hasClearLineBetween(const GameplayWorldPoint &from, const GameplayWorldPoint &to) const
+    {
+        (void)from;
+        (void)to;
+        return true;
+    }
+    // Items lying on the ground (their models replace the sprites, GROUND_ITEMS_3D_PLAN.md). None by default.
+    virtual void collectWorldItemPresentationStates(std::vector<GameplayWorldItemPresentationState> &items) const
+    {
+        items.clear();
+    }
+    // Armed party Fire Spike traps, as settled projectiles (their models lie on the ground). None by default.
+    virtual void collectFireSpikeTrapPresentationStates(std::vector<GameplayProjectilePresentationState> &traps) const
+    {
+        traps.clear();
+    }
     virtual bool spawnPartyFireSpikeTrap(
         uint32_t casterMemberIndex,
         uint32_t spellId,
@@ -700,13 +1168,186 @@ public:
         float x,
         float y,
         float z) = 0;
+    // `summonerMemberIndex`: the party member whose spell summons them, -1 for none (MM8's Summoner field).
     virtual bool summonFriendlyMonsterById(
         int16_t monsterId,
         uint32_t count,
         float durationSeconds,
         float x,
         float y,
-        float z) = 0;
+        float z,
+        int32_t summonerMemberIndex) = 0;
+    // Debug and scenarios: the actor fires its attack or spell at the party now, through the path of an AI shot (a
+    // true_aim monster's shot homes), with `damage`, regardless of range, recovery and sight. Worlds without support
+    // return false.
+    virtual bool debugFireActorProjectileAtParty(size_t actorIndex, GameplayActorAttackAbility ability, int damage)
+    {
+        (void)actorIndex;
+        (void)ability;
+        (void)damage;
+        return false;
+    }
+    // Blinks the actor now as its blink modifier would (MonsterModifiers); false without one or without a free spot.
+    virtual bool blinkActor(size_t actorIndex)
+    {
+        (void)actorIndex;
+        return false;
+    }
+    // An actor script's self:suspendShield / self:restoreShield: its energy shield down without regeneration for the
+    // seconds (negative: until restored), or regenerating again. False without a shield.
+    virtual bool suspendActorShield(size_t actorIndex, float seconds)
+    {
+        (void)actorIndex;
+        (void)seconds;
+        return false;
+    }
+    virtual bool restoreActorShield(size_t actorIndex)
+    {
+        (void)actorIndex;
+        return false;
+    }
+    // Swaps the places of a living actor and another one, or the party without one (MAW's Swapper bosses); the
+    // actors keep their homes. False where the world cannot.
+    virtual bool swapActorPlaces(size_t actorIndex, std::optional<size_t> otherActorIndex)
+    {
+        (void)actorIndex;
+        (void)otherActorIndex;
+        return false;
+    }
+    // Indoors, marks the living actors within `radius` of the actor as having seen the party (MM's ShowOnMap: awake,
+    // and on the Wizard Eye map; MAW's Doom reveal); returns how many it marked. Outdoors: none.
+    virtual size_t revealActorsAround(size_t actorIndex, float radius)
+    {
+        (void)actorIndex;
+        (void)radius;
+        return 0;
+    }
+    // Pushes a living actor about `distance` units along the unit direction, staggering it whatever it was doing
+    // (MAW's dragon bites); false for a dead actor or where the world cannot.
+    virtual bool pushActor(size_t actorIndex, float directionX, float directionY, float distance)
+    {
+        (void)actorIndex;
+        (void)directionX;
+        (void)directionY;
+        (void)distance;
+        return false;
+    }
+    // Dashes the party `distance` units along the unit direction over a third of a second, with the world's collision
+    // (MAW's Knight Charge); false where the world cannot.
+    virtual bool dashParty(float directionX, float directionY, float distance)
+    {
+        (void)directionX;
+        (void)directionY;
+        (void)distance;
+        return false;
+    }
+    // Raises the party by `height` in place, to fall back from there (MAW's unstuck key); false where the world cannot.
+    virtual bool liftParty(float height)
+    {
+        (void)height;
+        return false;
+    }
+    // Moves at most `maxCount` lootable corpses in front of the party (MAW's gather key, LootGatherDistances); returns
+    // how many moved.
+    virtual size_t gatherCorpsesToParty(size_t maxCount)
+    {
+        (void)maxCount;
+        return 0;
+    }
+    // Moves at most `maxCount` ground items that `gathers` accepts in front of the party; returns how many moved.
+    virtual size_t gatherWorldItemsToParty(size_t maxCount, const std::function<bool(const InventoryItem &)> &gathers)
+    {
+        (void)maxCount;
+        (void)gathers;
+        return 0;
+    }
+    // The dead actors whose satchels can still be looted (MAW's gather key on a completed map loots them all).
+    virtual std::vector<size_t> lootableCorpseActorIndices() const
+    {
+        return {};
+    }
+    // Opens an actor's satchel as the active corpse view, as clicking it does; false when it holds nothing.
+    virtual bool openActorCorpseView(size_t actorIndex)
+    {
+        (void)actorIndex;
+        return false;
+    }
+    // Launches the party as the event Jump does: a heading and horizontal and vertical speeds in the event's units
+    // (MAW's Puller bosses).
+    virtual bool launchParty(float headingRadians, float horizontalSpeed, float verticalSpeed)
+    {
+        (void)headingRadians;
+        (void)horizontalSpeed;
+        (void)verticalSpeed;
+        return false;
+    }
+    // Starts the actor's charge at the party now (its wind-up, then the dash), regardless of its trigger band, sight
+    // and cooldown; false without the charge modifier or while it charges already.
+    virtual bool chargeActor(size_t actorIndex)
+    {
+        (void)actorIndex;
+        return false;
+    }
+    // Starts the actor's frenzy now (its roar, then the frenzy), regardless of its triggers and cooldown; false
+    // without the frenzy modifier, while it is in a frenzy or while it charges.
+    virtual bool frenzyActor(size_t actorIndex)
+    {
+        (void)actorIndex;
+        return false;
+    }
+    // Charges on this map so far (scenario checks, console); empty for a world without charges.
+    virtual std::optional<GameplayChargeCounts> chargeCounts() const
+    {
+        return std::nullopt;
+    }
+    // The world's projectiles (scenario checks, debug); null for a world without them.
+    virtual const GameplayProjectileService *projectileServiceView() const
+    {
+        return nullptr;
+    }
+    // Debug: the actor launches its attack or spell projectile at a point now, regardless of range, recovery and
+    // targeting, for reviewing projectile visuals. Worlds without support return false.
+    virtual bool debugFireActorProjectile(
+        size_t actorIndex,
+        GameplayActorAttackAbility ability,
+        const GameplayWorldPoint &target)
+    {
+        (void)actorIndex;
+        (void)ability;
+        (void)target;
+        return false;
+    }
+    // How far the party has cleared this map (slain and living hostile monsters); false for a world without monsters.
+    virtual bool mapKillProgress(MapKillProgress &progress) const
+    {
+        (void)progress;
+        return false;
+    }
+    // Raises the slain ordinary monsters (no bosses, named actors or NPCs) where they fell, at full health, as
+    // "Resurrected <name>", worth this share of their experience; those whose corpse was searched carry no loot
+    // (MAW's Nightmare). Returns how many rose; a world without support raises none.
+    virtual size_t reviveSlainMonsters(float experienceShare)
+    {
+        (void)experienceShare;
+        return 0;
+    }
+    // Feeds the AI decision trace (an AI arena) after every AI step and applies its overrides; null unbinds. The
+    // trace outlives the binding (GameApplication owns it).
+    virtual void bindActorAiTrace(ActorAiTrace *pTrace)
+    {
+        (void)pTrace;
+    }
+    virtual const ActorAiTrace *actorAiTrace() const
+    {
+        return nullptr;
+    }
+    // Places a script's monsters (GameplayMonsterSpawnRequest) and returns their actor indices; a world without
+    // support places none.
+    virtual std::vector<size_t> spawnMonsters(const GameplayMonsterSpawnRequest &request)
+    {
+        (void)request;
+        return {};
+    }
     virtual bool summonHostileMonsterById(
         int16_t monsterId,
         uint32_t count,
@@ -752,10 +1393,17 @@ public:
         (void)query;
         return std::nullopt;
     }
+    // shieldTier: what the blow is to an energy shield (GameplayActorShields); shieldModifiers: what the weapon's tech
+    // skill adds to it. hitReaction false: the monster neither flinches nor is knocked back (a solo run's Sweeping
+    // Blows and an arrow's Chaining Arrows leaps).
     virtual bool applyPartyAttackMeleeDamage(
         size_t actorIndex,
         int damage,
-        const GameplayWorldPoint &source) = 0;
+        const GameplayWorldPoint &source,
+        ShieldAttackTier shieldTier,
+        const ShieldHitModifiers &shieldModifiers = {},
+        bool critical = false,
+        bool hitReaction = true) = 0;
     virtual bool applyPartyAttackMeleeBModelDamage(size_t bModelIndex, int damage)
     {
         (void)bModelIndex;
@@ -765,6 +1413,18 @@ public:
     virtual bool isPartyAttackMeleeBModelTarget(size_t bModelIndex) const
     {
         (void)bModelIndex;
+        return false;
+    }
+    // A destructible decoration (an indoor entity index) a party blow damages.
+    virtual bool applyPartyAttackMeleeEntityDamage(size_t entityIndex, int damage)
+    {
+        (void)entityIndex;
+        (void)damage;
+        return false;
+    }
+    virtual bool isPartyAttackMeleeEntityTarget(size_t entityIndex) const
+    {
+        (void)entityIndex;
         return false;
     }
     virtual void applyPartyAttackMeleeEffects(
@@ -782,10 +1442,13 @@ public:
     {
         return {};
     }
+    // A party attack's outcome on its target; `missed` for a blow that reached it and missed (or did no harm), or a
+    // missile whose hit roll failed.
     virtual void recordPartyAttackWorldResult(
         std::optional<size_t> actorIndex,
         bool attacked,
-        bool actionPerformed) = 0;
+        bool actionPerformed,
+        bool missed) = 0;
     virtual bool worldInteractionReady() const = 0;
     virtual bool worldInspectModeActive() const = 0;
     virtual GameplayWorldPickRequest buildWorldPickRequest(const GameplayWorldPickRequestInput &input) const = 0;
@@ -793,7 +1456,9 @@ public:
     virtual GameplayPartyAttackFrameInput buildPartyAttackFrameInput(
         const GameplayWorldPickRequest &pickRequest) const = 0;
     virtual std::optional<size_t> spellActionHoveredActorIndex() const = 0;
-    virtual std::optional<size_t> spellActionClosestVisibleHostileActorIndex() const = 0;
+    // The hostile actors a party spell may take without a cursor target: on screen, in line of sight and aware of the
+    // party, closest first. Built only when a cast asks.
+    virtual std::vector<size_t> spellActionVisibleHostileActorIndices() const = 0;
     virtual std::optional<bx::Vec3> spellActionActorTargetPoint(size_t actorIndex) const = 0;
     virtual std::optional<bx::Vec3> spellActionGroundTargetPoint(float screenX, float screenY) const = 0;
     virtual GameplayPendingSpellWorldTargetFacts pickPendingSpellWorldTarget(
@@ -857,4 +1522,24 @@ public:
     virtual bool takeActiveCorpseItem(size_t itemIndex, GameplayChestItemState &item) = 0;
     virtual void closeActiveCorpseView() = 0;
 };
+
+// Where a world hit lands on a standing destructible a party blow or missile damages (a face, BModel or prop), or
+// none: a party missile with no actor under the crosshair flies there (devdocs/INDOOR_DESTRUCTIBLES.md "Aiming").
+inline std::optional<bx::Vec3> standingDestructibleHitPoint(
+    const IGameplayWorldRuntime &worldRuntime,
+    const GameplayWorldHit &hit)
+{
+    if (!hit.hasHit || hit.kind != GameplayWorldHitKind::EventTarget || !hit.eventTarget)
+    {
+        return std::nullopt;
+    }
+
+    const GameplayEventTargetHit &target = *hit.eventTarget;
+    const bool standing =
+        (target.targetKind == GameplayWorldEventTargetKind::Surface
+            && worldRuntime.isPartyAttackMeleeBModelTarget(target.targetIndex))
+        || (target.targetKind == GameplayWorldEventTargetKind::Entity
+            && worldRuntime.isPartyAttackMeleeEntityTarget(target.targetIndex));
+    return standing ? std::optional<bx::Vec3>(target.hitPoint) : std::nullopt;
+}
 }

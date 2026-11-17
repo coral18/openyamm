@@ -1,4 +1,8 @@
 #include "game/gameplay/GameplayScreenController.h"
+#include "engine/Localization.h"
+#include "game/ui/GameplayBuffHud.h"
+#include "game/ui/GameplayFormationBuilder.h"
+#include "game/ui/GameplayLootSummaryRenderer.h"
 
 #include "game/debug/GameplayDebugTrace.h"
 #include "game/gameplay/GameMechanics.h"
@@ -6,10 +10,17 @@
 #include "game/gameplay/GameplayInputController.h"
 #include "game/gameplay/GameplayItemService.h"
 #include "game/gameplay/GameplayPartyOverlayInputController.h"
+#include "game/items/InventoryBags.h"
+#include "game/ui/InventoryBagOverview.h"
 #include "game/items/ItemRuntime.h"
+#include "game/rules/GameRules.h"
 #include "game/ui/GameplayHudOverlaySupport.h"
 #include "game/ui/GameplayHudOverlayRenderer.h"
 #include "game/gameplay/GameplayScreenRuntime.h"
+#include "game/ui/GameplayJournalProgress.h"
+#include "game/ui/GameplayQuickItems.h"
+#include "game/ui/GameplaySoloBarSelector.h"
+#include "game/ui/GameplaySoloHud.h"
 #include "game/ui/GameplayPartyOverlayRenderer.h"
 #include "game/ui/GameplayUiRenderer.h"
 #include "game/ui/RestHourglassAnimation.h"
@@ -20,11 +31,188 @@
 #include <array>
 #include <optional>
 #include <string>
+#include <vector>
 
 namespace OpenYAMM::Game
 {
 namespace
 {
+std::string expiringPotionEffectName(
+    const Party &party, const Party::ExpiringPotionEffect &expiring, const SpellTable *pSpellTable)
+{
+    switch (expiring.kind)
+    {
+        case Party::ExpiringPotionEffect::Kind::PartyBuff:
+            return Engine::localize(GameplayBuffHudDefinitions[size_t(expiring.partyBuff)].pName, "spell");
+        case Party::ExpiringPotionEffect::Kind::CharacterBuff:
+            return Engine::localize(GameplayPersonalBuffNames[size_t(expiring.characterBuff)], "spell");
+        case Party::ExpiringPotionEffect::Kind::RulesetEffect:
+        {
+            const Character *pMember = party.member(expiring.memberIndex);
+
+            if (pMember == nullptr)
+            {
+                return {};
+            }
+
+            // The buff list's own line for it (immunities share one line, named by their first condition).
+            for (const GameplayPotionEffectLine &line : gameplayPotionEffectLines(*pMember, pSpellTable))
+            {
+                if (line.kind == expiring.rulesetEffect
+                    && (line.kind == TimedPotionEffect::Kind::Immunity || line.key == expiring.rulesetEffectKey))
+                {
+                    return line.name;
+                }
+            }
+
+            return {};
+        }
+    }
+
+    return {};
+}
+
+// Potions' effects that entered their last ten game minutes (Party::ExpiringPotionEffect) are named on one status
+// line, each with its drinker, when the setting asks. Nothing to do on most frames: the party's list is empty.
+void announceExpiringPotionEffects(GameplayScreenRuntime &context)
+{
+    Party *pParty = context.party();
+
+    if (pParty == nullptr || pParty->expiringPotionEffects().empty())
+    {
+        return;
+    }
+
+    if (context.settingsSnapshot().potionExpiryWarnings)
+    {
+        std::vector<std::string> names;
+
+        for (const Party::ExpiringPotionEffect &expiring : pParty->expiringPotionEffects())
+        {
+            std::string name = expiringPotionEffectName(*pParty, expiring, context.spellTable());
+            const Character *pDrinker = expiring.kind == Party::ExpiringPotionEffect::Kind::CharacterBuff
+                ? pParty->combatant(expiring.memberIndex)
+                : expiring.kind == Party::ExpiringPotionEffect::Kind::RulesetEffect
+                ? pParty->member(expiring.memberIndex)
+                : nullptr;
+
+            if (name.empty())
+            {
+                continue;
+            }
+
+            if (pDrinker != nullptr && pParty->members().size() > 1)
+            {
+                name = Engine::tr("{effect} ({name})", {{"effect", name}, {"name", pDrinker->name}});
+            }
+
+            if (std::find(names.begin(), names.end(), name) == names.end())
+            {
+                names.push_back(std::move(name));
+            }
+        }
+
+        if (!names.empty())
+        {
+            std::string list;
+
+            for (const std::string &name : names)
+            {
+                list += (list.empty() ? "" : Engine::tr(", ")) + name;
+            }
+
+            context.setStatusBarEvent(Engine::tr("Wearing off soon: {effects}", {{"effects", list}}), 4.0f);
+        }
+    }
+
+    pParty->clearExpiringPotionEffects();
+}
+
+// What a save from when the ruleset had more bags could not fit into the members' bags (InventoryBags::
+// fitIntoBagCount) falls at the party's feet once the world runs; an item the world refuses waits for the next frame.
+// A member whose open bag is past the bags there are now (a party of one's other tabs once another member joins)
+// opens the first; the other tabs keep their items for when the member is alone again.
+void dropBagOverflow(GameplayScreenRuntime &context)
+{
+    Party *pParty = context.party();
+    IGameplayWorldRuntime *pWorldRuntime = context.worldRuntime();
+
+    if (pParty == nullptr || pWorldRuntime == nullptr)
+    {
+        return;
+    }
+
+    const int bagCount = pParty->rules().items.bagCount(*pParty);
+    size_t dropped = 0;
+
+    for (size_t memberIndex = 0; memberIndex < pParty->members().size(); ++memberIndex)
+    {
+        Character &member = *pParty->member(memberIndex);
+
+        if (member.rulesetState.currentBag >= bagCount)
+        {
+            InventoryBags::openBag(member, 0, bagCount);
+        }
+
+        for (const InventoryItem &item : InventoryBags::takeOverflow(member))
+        {
+            GameplayHeldItemDropRequest request;
+            request.item = item;
+            request.sourceX = pWorldRuntime->partyX();
+            request.sourceY = pWorldRuntime->partyY();
+            request.sourceZ = pWorldRuntime->partyFootZ() + 40.0f;
+
+            if (pWorldRuntime->dropHeldItemToWorld(request))
+            {
+                ++dropped;
+            }
+            else
+            {
+                member.rulesetState.storedBags[InventoryBags::OverflowBag].push_back(item);
+            }
+        }
+    }
+
+    if (dropped > 0)
+    {
+        context.setStatusBarEvent(Engine::trn("{count} item from the old bags did not fit and lie at your feet", "{count} items from the old bags did not fit and lie at your feet", uint64_t(int64_t(dropped)), {{"count", int64_t(dropped)}}));
+    }
+}
+
+// The bag buttons on a chest and over a shop's or chest's party inventory (rulesets with several bags): a click opens
+// that bag of the active member (GameplayPartyOverlayInputController::openNestedInventoryBag).
+void handleNestedInventoryBagButtons(GameplayScreenRuntime &context, const GameplayInputFrame &input)
+{
+    Party *pParty = context.party();
+
+    if (!input.leftMouseButton.pressed || !GameplayPartyOverlayInputController::partyBagButtonsShown(context)
+        || pParty == nullptr || pParty->activeMember() == nullptr)
+    {
+        return;
+    }
+
+    const int bagCount = pParty->rules().items.bagCount(*pParty);
+    // The buttons name the bags of the open bag's tab.
+    const int firstBag = InventoryBagOverview::firstBag(*pParty->activeMember());
+
+    for (int bag = firstBag; bagCount > 1 && bag < std::min(bagCount, firstBag + InventoryBagOverview::Bags); ++bag)
+    {
+        const std::string id = "ChestInventoryBag" + std::to_string(bag - firstBag + 1);
+        const GameplayScreenRuntime::HudLayoutElement *pLayout = context.findHudLayoutElement(id);
+        const std::optional<GameplayScreenRuntime::ResolvedHudLayoutElement> button = pLayout != nullptr
+            ? context.resolveHudLayoutElement(id, input.screenWidth, input.screenHeight, pLayout->width,
+                  pLayout->height)
+            : std::nullopt;
+
+        if (button && input.pointerX >= button->x && input.pointerX < button->x + button->width
+            && input.pointerY >= button->y && input.pointerY < button->y + button->height)
+        {
+            GameplayPartyOverlayInputController::openNestedInventoryBag(context, bag);
+            return;
+        }
+    }
+}
+
 constexpr std::array<SDL_Scancode, 9> NumberHotkeyScancodes = {{
     SDL_SCANCODE_1,
     SDL_SCANCODE_2,
@@ -119,9 +307,11 @@ void GameplayScreenController::updateSharedFrameState(
 {
     context.fxService().syncProjectilePresentation();
     context.fxService().advanceGameplayScreenOverlay(deltaSeconds);
+    dropBagOverflow(context);
     context.updatePartyPortraitAnimations(deltaSeconds);
     context.updateDelayedSpeechReactions(deltaSeconds);
     context.consumePendingPartyAudioRequests();
+    announceExpiringPotionEffects(context);
 
     GameplayUiController::JournalScreenState &journalScreen = context.journalScreenState();
 
@@ -222,6 +412,9 @@ bool GameplayScreenController::canUpdateStandardWorldInspectOverlayFromMouse(
         || config.hasHeldItem
         || config.hasPendingSpellTarget
         || config.hasActiveLootView
+        || context.lootSummaryOverlayReadOnly().active
+        || GameplayFormationBuilder::isOpen(context)
+        || GameplaySoloBarSelector::isOpen(context)
         || context.activeEventDialog().isActive
         || context.characterScreenReadOnly().open
         || context.spellbookReadOnly().active
@@ -230,6 +423,15 @@ bool GameplayScreenController::canUpdateStandardWorldInspectOverlayFromMouse(
         || context.menuScreenState().active
         || context.saveGameScreenState().active
         || context.loadGameScreenState().active)
+    {
+        return false;
+    }
+
+    // A solo run's bar key under the pointer shows its own popup.
+    const GameplayInputFrame *pInput = context.currentGameplayInputFrame();
+
+    if (pInput != nullptr && context.soloHud()
+        && GameplaySoloHud::barSlotAt(context, config.width, config.height, pInput->pointerX, pInput->pointerY))
     {
         return false;
     }
@@ -243,6 +445,9 @@ bool GameplayScreenController::canRunStandardGameplayAction(
 {
     if (config.hasActiveLootView
         || config.hasPendingSpellCast
+        || GameplayFormationBuilder::isOpen(context)
+        || GameplaySoloBarSelector::isOpen(context)
+        || GameplaySoloBarSelector::armed(context)
         || context.activeEventDialog().isActive
         || context.spellbookReadOnly().active
         || context.restScreenState().active
@@ -279,6 +484,14 @@ bool GameplayScreenController::canEnableGameplayMouseLook(
     }
 
     if (config.hasPendingSpellTarget)
+    {
+        return false;
+    }
+
+    // The quick item ring or popup and the loot summary need the cursor.
+    if (GameplayQuickItems::needsCursor(context) || context.lootSummaryOverlayReadOnly().active
+        || GameplayFormationBuilder::isOpen(context) || GameplaySoloBarSelector::isOpen(context)
+        || GameplaySoloBarSelector::armed(context))
     {
         return false;
     }
@@ -326,7 +539,8 @@ void GameplayScreenController::updateStandardHudItemInspectOverlayFromMouse(
         return;
     }
 
-    if (updateRenderedHudItemInspectOverlay(context, width, height, requireOpaqueHitTest))
+    if (updateRenderedHudItemInspectOverlay(context, width, height, requireOpaqueHitTest)
+        || GameplayHudOverlaySupport::tryPopulateItemInspectOverlayFromSoloBar(context, width, height))
     {
         applySharedItemInspectSkillInteraction(context);
     }
@@ -348,14 +562,7 @@ void GameplayScreenController::applySharedItemInspectSkillInteraction(
         return;
     }
 
-    uint64_t interactionKey = uint64_t(overlay.objectDescriptionId);
-    interactionKey ^= uint64_t(overlay.sourceMemberIndex + 1) << 16;
-    interactionKey ^= uint64_t(overlay.sourceGridX) << 24;
-    interactionKey ^= uint64_t(overlay.sourceGridY) << 32;
-    interactionKey ^= uint64_t(overlay.sourceEquipmentSlot) << 40;
-    interactionKey ^= uint64_t(overlay.sourceWorldItemIndex) << 44;
-    interactionKey ^= uint64_t(overlay.sourceLootItemIndex) << 48;
-    interactionKey ^= uint64_t(overlay.sourceType) << 56;
+    const uint64_t interactionKey = itemInspectInteractionKey(overlay);
 
     if (context.interactionState().itemInspectInteractionLatch
         && context.interactionState().itemInspectInteractionKey == interactionKey)
@@ -438,7 +645,8 @@ void GameplayScreenController::applySharedItemInspectSkillInteraction(
                     return;
                 }
 
-                const InventoryItem *pItem = pSourceMember->inventoryItemAt(overlay.sourceGridX, overlay.sourceGridY);
+                const InventoryItem *pItem = InventoryBags::itemInBagAt(
+                    *pSourceMember, overlay.sourceBag, overlay.sourceGridX, overlay.sourceGridY);
 
                 if (pItem != nullptr)
                 {
@@ -509,6 +717,19 @@ void GameplayScreenController::applySharedItemInspectSkillInteraction(
             return context.itemService().tryRepairInspectedItem(overlay, activeMemberIndex, statusText);
         };
 
+    // A sealed spellbook (MAW) opens for an inspector with the mastery its book asks.
+    if (context.itemService().tryOpenInspectedItem(overlay, activeMemberIndex))
+    {
+        refreshOverlayItemState();
+        overlay.objectDescriptionId = overlay.itemState.objectDescriptionId;
+        pItemDefinition = pItemTable->get(overlay.objectDescriptionId);
+
+        if (pItemDefinition == nullptr)
+        {
+            return;
+        }
+    }
+
     if (!overlay.itemState.identified)
     {
         std::string statusText;
@@ -529,7 +750,7 @@ void GameplayScreenController::applySharedItemInspectSkillInteraction(
                     : SpeechId::IdentifyGreatItem;
             playSingleReaction(speechId);
         }
-        else if (statusText == "Identify Failed")
+        else if (statusText == Engine::tr("Identify Failed"))
         {
             context.setStatusBarEvent(statusText);
             playSingleReaction(SpeechId::IdentifyFailItem);
@@ -545,12 +766,28 @@ void GameplayScreenController::applySharedItemInspectSkillInteraction(
             refreshOverlayItemState();
             playSingleReaction(SpeechId::RepairSuccess);
         }
-        else if (statusText == "Repair Failed")
+        else if (statusText == Engine::tr("Repair Failed"))
         {
             context.setStatusBarEvent(statusText);
             playSingleReaction(SpeechId::RepairFail);
         }
     }
+}
+
+uint64_t GameplayScreenController::itemInspectInteractionKey(
+    const GameplayUiController::ItemInspectOverlayState &overlay)
+{
+    uint64_t interactionKey = uint64_t(overlay.objectDescriptionId);
+    interactionKey ^= uint64_t(overlay.sourceMemberIndex + 1) << 16;
+    interactionKey ^= uint64_t(overlay.sourceGridX) << 24;
+    interactionKey ^= uint64_t(overlay.sourceGridY) << 32;
+    interactionKey ^= uint64_t(overlay.sourceEquipmentSlot) << 40;
+    interactionKey ^= uint64_t(overlay.sourceWorldItemIndex) << 44;
+    interactionKey ^= uint64_t(overlay.sourceLootItemIndex) << 48;
+    interactionKey ^= uint64_t(overlay.sourceType) << 56;
+    // The same cell of another bag in MAW's bag overview is another item.
+    interactionKey ^= uint64_t(overlay.sourceBag) << 60;
+    return interactionKey;
 }
 
 void GameplayScreenController::updateRestOverlayProgress(
@@ -583,25 +820,31 @@ void GameplayScreenController::updateRestOverlayProgress(
     const float gameMinutesPerSecond = animationDurationSeconds > 0.0f
         ? restScreen.totalMinutes / animationDurationSeconds
         : restScreen.totalMinutes;
-    const float advancedMinutes = std::min(
+    float advancedMinutes = std::min(
         restScreen.remainingMinutes,
         gameMinutesPerSecond * safeDeltaSeconds);
+    const std::optional<float> minutesToAlarm = context.minutesToRestAlarm(advancedMinutes);
+    if (minutesToAlarm)
+    {
+        advancedMinutes = *minutesToAlarm;
+    }
 
     if (advancedMinutes > 0.0f)
     {
         IGameplayWorldRuntime *pWorldRuntime = context.worldRuntime();
         pWorldRuntime->advanceGameMinutes(advancedMinutes);
-        EventRuntimeState *pEventRuntimeState = pWorldRuntime->eventRuntimeState();
         Party *pParty = context.party();
         if (pParty != nullptr)
         {
             pParty->advanceTimedStates(advancedMinutes * 60.0f);
         }
-        if (pEventRuntimeState != nullptr && pParty != nullptr)
-        {
-            context.itemService().updateConnectorStoneRecharge(*pParty, *pEventRuntimeState, pWorldRuntime->gameMinutes());
-        }
         restScreen.remainingMinutes = std::max(0.0f, restScreen.remainingMinutes - advancedMinutes);
+    }
+
+    if (minutesToAlarm)
+    {
+        context.interruptRestAction();
+        return;
     }
 
     if (restScreen.remainingMinutes > 0.0f)
@@ -631,6 +874,8 @@ GameplayUiOverlayInputResult GameplayScreenController::handleSharedOverlayInput(
     const GameplayInputFrame &input,
     const GameplayUiOverlayInputConfig &config)
 {
+    GameplayPartyOverlayInputController::openFirstBagsInOverview(context);
+    handleNestedInventoryBagButtons(context, input);
     GameplayUiOverlayInputResult result = GameplayUiOverlayOrchestrator::handleStandardOverlayInput(
         context,
         input,
@@ -697,7 +942,7 @@ GameplayUiOverlayInputResult GameplayScreenController::handleStandardUiInput(
         && !activeEventDialog
         && !hasActiveLootView
         && !houseShopActive;
-#if defined(__ANDROID__)
+#if defined(__ANDROID__) || defined(OPENYAMM_IOS)
     const bool allowPortraitPointerInput =
         config.allowGameplayPointerInput
         || input.leftMouseButton.held
@@ -731,6 +976,7 @@ GameplayUiOverlayInputResult GameplayScreenController::handleStandardUiInput(
         .pointerY = config.pointerY,
         .leftButtonPressed = config.leftButtonPressed,
         .rightButtonPressed = input.rightMouseButton.held,
+        .rightPressUsesHeldItem = config.rightPressUsesHeldItem,
         .touchItemReleased = input.mobileTouchDragReleased,
         .allowInput = gameplayReadyForPortraitClicks,
         .requireGameplayReady = requirePortraitGameplayReady,
@@ -738,13 +984,30 @@ GameplayUiOverlayInputResult GameplayScreenController::handleStandardUiInput(
         .onPortraitActivated = config.onPortraitActivated,
     };
 
-    if (!input.mobileTouchDragReleased)
+    // The quick item buttons and ring (the potion radial) take their clicks before the portraits and the HUD.
+    const bool quickItemsAllowed = config.width > 0 && config.height > 0
+        && !activeEventDialog && !characterScreenOpen && !spellbookActive && !hasActiveLootView && !restActive
+        && !menuActive && !controlsActive && !keyboardActive && !videoOptionsActive && !saveGameActive
+        && !loadGameActive && !journalActive && !quickReferenceActive && !houseShopActive && !houseBankInputActive
+        && !GameplayFormationBuilder::isOpen(context)
+        && !GameplaySoloBarSelector::isOpen(context)
+        && context.currentHudScreenState() == GameplayHudScreenState::Gameplay;
+    // A solo run's bar opens its slot selector on Ctrl and a key or a Ctrl click (not over an open potion popup).
+    const bool soloBarClick = GameplaySoloBarSelector::handleBarInput(context, input, config.width, config.height,
+        quickItemsAllowed && !GameplayQuickItems::needsCursor(context), config.allowGameplayPointerInput);
+    const bool quickItemClick = soloBarClick
+        || GameplayQuickItems::handleHudInput(context, input, config.width, config.height,
+            quickItemsAllowed && !GameplaySoloBarSelector::isOpen(context), config.allowGameplayPointerInput);
+
+    if (!input.mobileTouchDragReleased && !quickItemClick)
     {
         handlePartyPortraitInput(context, portraitInputConfig);
     }
 
     const bool canUsePartyNumberHotkeys =
         !config.blockPortraitInput
+        && !GameplayUiController::characterScreenSearchActive(context.characterScreenReadOnly())
+        && !GameplaySoloBarSelector::isOpen(context)
         && !spellbookActive
         && !restActive
         && !menuActive
@@ -772,9 +1035,53 @@ GameplayUiOverlayInputResult GameplayScreenController::handleStandardUiInput(
             .onPortraitActivated = config.onPortraitActivated,
         };
 
-        for (size_t memberIndex = 0; memberIndex < 5; ++memberIndex)
+        const bool shiftHeld =
+            input.isScancodeHeld(SDL_SCANCODE_LSHIFT) || input.isScancodeHeld(SDL_SCANCODE_RSHIFT);
+        // The bag keys (by default 1-4) act on the inventory pages, with Shift or without it as the bag_number_keys
+        // setting says; the numbers otherwise select a member. A held bag key that acts there keeps its number from
+        // selecting a member on any frame of the press.
+        const bool bagKeysEnabled = shiftHeld == GameplayPartyOverlayInputController::bagKeysNeedShift(context);
+        bool bagKeyTaken = false;
+
+        for (int bag = 0; bag < 4 && bagKeysEnabled; ++bag)
         {
-            if (isNumberHotkeyNewlyPressed(input, context.previousKeyboardState(), memberIndex))
+            const GameplayButtonInputState &bagKey =
+                input.action(KeyboardAction(size_t(KeyboardAction::Bag1) + size_t(bag)));
+
+            if (bagKey.pressed)
+            {
+                bagKeyTaken = GameplayPartyOverlayInputController::openBagForKey(context, bag) || bagKeyTaken;
+            }
+            else if (bagKey.held && GameplayPartyOverlayInputController::bagKeysActive(context))
+            {
+                bagKeyTaken = true;
+            }
+        }
+
+        // A party of one's tabs: Shift and 1-5 (zzMaw-MultiBag.lua:11-14); its bags need no Shift.
+        if (shiftHeld && GameplayPartyOverlayInputController::bagTabsShown(context))
+        {
+            for (size_t tab = 0; tab < 5; ++tab)
+            {
+                if (isNumberHotkeyNewlyPressed(input, context.previousKeyboardState(), tab))
+                {
+                    GameplayPartyOverlayInputController::openBagTab(context, int(tab));
+                }
+
+                bagKeyTaken = bagKeyTaken || input.isScancodeHeld(NumberHotkeyScancodes[tab]);
+            }
+        }
+
+        // MAW's crafting bag key (Shift+B by default, zzzMaw_CraftingBag.lua:49-55) on the inventory page.
+        if (shiftHeld && input.action(KeyboardAction::CraftingBag).pressed)
+        {
+            GameplayPartyOverlayInputController::toggleBagTag(context, BagTag::Crafting);
+        }
+
+        // A solo run's number keys drive its action bar (GameplayInputController), not the member selection.
+        for (size_t memberIndex = 0; memberIndex < 5 && !context.soloHud(); ++memberIndex)
+        {
+            if (isNumberHotkeyNewlyPressed(input, context.previousKeyboardState(), memberIndex) && !bagKeyTaken)
             {
                 GameplayHudInputController::activatePartyPortrait(context, memberIndex, portraitHotkeyConfig);
             }
@@ -782,7 +1089,7 @@ GameplayUiOverlayInputResult GameplayScreenController::handleStandardUiInput(
     }
 
     const bool allowGameplayHudPointerInput =
-#if defined(__ANDROID__)
+#if defined(__ANDROID__) || defined(OPENYAMM_IOS)
         config.allowGameplayPointerInput
         || input.leftMouseButton.held
         || context.interactionState().gameplayHudClickLatch;
@@ -809,7 +1116,8 @@ GameplayUiOverlayInputResult GameplayScreenController::handleStandardUiInput(
         && !journalActive
         && !quickReferenceActive
         && !houseShopActive
-        && !houseBankInputActive;
+        && !houseBankInputActive
+        && !quickItemClick;
 
     handleGameplayHudButtonInput(
         context,
@@ -840,10 +1148,14 @@ GameplayUiOverlayInputResult GameplayScreenController::handleStandardUiInput(
         && !houseBankInputActive
         && !context.inventoryNestedOverlay().active
         && !context.readableScrollOverlayReadOnly().active
+        && !context.lootSummaryOverlayReadOnly().active
+        && !GameplayFormationBuilder::isOpen(context)
+        && !GameplaySoloBarSelector::isOpen(context)
         && !context.utilitySpellOverlayReadOnly().active
         && !context.pendingSpellTargetActive();
 
-    if (canUseFollowerNumberHotkeys)
+    // A solo run's 6-9 are action bar keys; its followers stay on the follower panel.
+    if (canUseFollowerNumberHotkeys && !context.soloHud())
     {
         for (size_t followerIndex = 0; followerIndex < 4; ++followerIndex)
         {
@@ -870,16 +1182,21 @@ GameplayUiOverlayInputResult GameplayScreenController::handleStandardUiInput(
         && !houseBankInputActive
         && !config.blockJournalToggle;
 
-    const bool mapShortcutPressed =
-        input.isScancodeHeld(SDL_SCANCODE_M)
-        || input.action(KeyboardAction::MapBook).held;
-    const bool storyShortcutPressed =
-        input.action(KeyboardAction::History).held;
-    const bool notesShortcutPressed = false;
-    const bool zoomInPressed =
-        input.action(KeyboardAction::ZoomIn).held;
-    const bool zoomOutPressed =
-        input.action(KeyboardAction::ZoomOut).held;
+    // Keys typed into the journal or inventory search are text, not journal shortcuts.
+    const bool journalTyping = GameplayUiController::journalSearchActive(context.journalScreenStateReadOnly())
+        || GameplayUiController::characterScreenSearchActive(context.characterScreenReadOnly())
+        || GameplayUiController::spellbookSearchActive(context.spellbookReadOnly())
+        || GameplaySoloBarSelector::isOpen(context);
+    const bool mapShortcutPressed = !journalTyping
+        && (input.isScancodeHeld(SDL_SCANCODE_M) || input.action(KeyboardAction::MapBook).held)
+        && !(input.action(KeyboardAction::SkillManaShield).held
+            && GameplayPartyOverlayInputController::skillSwitchForAction(context, KeyboardAction::SkillManaShield));
+    const bool storyShortcutPressed = !journalTyping && input.action(KeyboardAction::History).held;
+    const bool questsShortcutPressed = !journalTyping && input.action(KeyboardAction::QuestBook).held;
+    const bool progressShortcutPressed =
+        !journalTyping && input.action(KeyboardAction::OpenProgress).held && journalHasProgressTab(context);
+    const bool zoomInPressed = !journalTyping && input.action(KeyboardAction::ZoomIn).held;
+    const bool zoomOutPressed = !journalTyping && input.action(KeyboardAction::ZoomOut).held;
 
     const GameplayUiOverlayInputResult result = handleSharedOverlayInput(
         context,
@@ -889,7 +1206,8 @@ GameplayUiOverlayInputResult GameplayScreenController::handleStandardUiInput(
             .canToggleJournal = canToggleJournal,
             .mapShortcutPressed = mapShortcutPressed,
             .storyShortcutPressed = storyShortcutPressed,
-            .notesShortcutPressed = notesShortcutPressed,
+            .questsShortcutPressed = questsShortcutPressed,
+            .progressShortcutPressed = progressShortcutPressed,
             .zoomInPressed = zoomInPressed,
             .zoomOutPressed = zoomOutPressed,
             .mouseWheelDelta = input.mouseWheelDelta,
@@ -918,6 +1236,55 @@ GameplayStandardWorldInputGateResult GameplayScreenController::gateStandardWorld
     GameplayScreenRuntime &context,
     const GameplayStandardWorldInputGateConfig &config)
 {
+    if (context.lootSummaryOverlayReadOnly().active)
+    {
+        if (config.pInputFrame != nullptr)
+        {
+            GameplayLootSummaryRenderer::handleInput(
+                context, *config.pInputFrame, config.pInputFrame->screenWidth, config.pInputFrame->screenHeight);
+        }
+
+        return {.blocked = true};
+    }
+
+    // The formation builder pauses the game and takes the pointer.
+    if (GameplayFormationBuilder::isOpen(context))
+    {
+        if (config.pInputFrame != nullptr)
+        {
+            GameplayFormationBuilder::handleInput(
+                context, *config.pInputFrame, config.pInputFrame->screenWidth, config.pInputFrame->screenHeight);
+        }
+
+        return {.blocked = true};
+    }
+
+    // So does the solo bar's slot selector, which takes the keys as well (its search field).
+    if (GameplaySoloBarSelector::isOpen(context))
+    {
+        if (config.pInputFrame != nullptr)
+        {
+            GameplaySoloBarSelector::handleInput(
+                context, *config.pInputFrame, config.pInputFrame->screenWidth, config.pInputFrame->screenHeight);
+        }
+
+        return {.blocked = true};
+    }
+
+    // Held Ctrl over the solo bar pauses the game while the player picks a key; letting go resumes it.
+    if (GameplaySoloBarSelector::armed(context))
+    {
+        const GameplayInputFrame *pInput = config.pInputFrame;
+
+        if (pInput != nullptr
+            && (pInput->isScancodeHeld(SDL_SCANCODE_LCTRL) || pInput->isScancodeHeld(SDL_SCANCODE_RCTRL)))
+        {
+            return {.blocked = true};
+        }
+
+        GameplaySoloBarSelector::disarm(context);
+    }
+
     if (config.blockOnDialogue && context.activeEventDialog().isActive)
     {
         return {.blocked = true};
@@ -999,12 +1366,40 @@ GameplayStandardWorldInputGateResult GameplayScreenController::gateStandardWorld
         return {.blocked = true};
     }
 
+    // The basebar's potion or scroll popup pauses the game, as the inventory does.
+    if (GameplayQuickItems::popupOpen(context))
+    {
+        return {.blocked = true};
+    }
+
+    GameplayUiController::ReadableScrollOverlayState &readableScroll = context.readableScrollOverlay();
+
+    // A scroll left open until a click keeps the world paused; the click (press and release) only closes it.
+    if (readableScroll.active && readableScroll.staysUntilClick)
+    {
+        const bool buttonHeld = config.pInputFrame != nullptr
+            && (config.pInputFrame->leftMouseButton.held || config.pInputFrame->rightMouseButton.held);
+
+        if (buttonHeld)
+        {
+            readableScroll.closeClickStarted = true;
+        }
+        else if (readableScroll.closeClickStarted)
+        {
+            context.itemService().closeReadableScrollOverlay();
+        }
+
+        return {.blocked = true};
+    }
+
     if (config.clearCharacterOverlayInputState)
     {
         context.resetCharacterOverlayInteractionState();
     }
 
-    if (config.closeReadableScrollOverlay)
+    if (config.closeReadableScrollOverlay
+        && !context.itemService().readableScrollOverlayHeldByRightButton(
+            config.pInputFrame != nullptr && config.pInputFrame->rightMouseButton.held))
     {
         context.itemService().closeReadableScrollOverlay();
     }

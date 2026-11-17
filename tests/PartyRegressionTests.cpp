@@ -2,9 +2,11 @@
 
 #include "game/gameplay/GameMechanics.h"
 #include "game/events/EventRuntime.h"
+#include "game/events/EvtEnums.h"
 #include "game/gameplay/JournalQuestRuntime.h"
 #include "game/items/ItemRuntime.h"
 #include "game/maps/SaveGame.h"
+#include "engine/TextTable.h"
 #include "game/party/Party.h"
 #include "game/party/SpellIds.h"
 #include "game/tables/CharacterDollTable.h"
@@ -15,6 +17,9 @@
 #include <array>
 #include <filesystem>
 #include <optional>
+#include <sstream>
+#include <fstream>
+#include <unordered_set>
 
 namespace
 {
@@ -138,6 +143,142 @@ bool hasPendingSound(const OpenYAMM::Game::Party &party, OpenYAMM::Game::SoundId
 }
 }
 
+TEST_CASE("meditation regenerates mana on Merge five-minute game ticks")
+{
+    using namespace OpenYAMM::Game;
+    Party party;
+    party.seed(createRegressionPartySeed());
+    Character *pMember = party.member(1);
+    REQUIRE(pMember != nullptr);
+    pMember->maxSpellPoints = 100;
+    pMember->spellPoints = 0;
+    pMember->skills["Meditation"] = {"Meditation", 19, SkillMastery::Normal};
+
+    SUBCASE("mastery and effective skill determine the amount")
+    {
+        pMember->itemSkillBonuses["Meditation"] = 1;
+        for (SkillMastery mastery : {SkillMastery::Normal, SkillMastery::Expert,
+                                    SkillMastery::Master, SkillMastery::Grandmaster})
+        {
+            pMember->skills["Meditation"].mastery = mastery;
+            pMember->spellPoints = 0;
+            party.advanceTimedStates(300.0f);
+            CHECK_EQ(pMember->spellPoints, static_cast<int>(mastery) + 2);
+        }
+    }
+
+    SUBCASE("partial ticks survive derived state refresh and save restoration")
+    {
+        party.advanceTimedStates(299.0f);
+        CHECK_EQ(pMember->spellPoints, 0);
+        party.refreshDerivedState();
+        Party restored;
+        restored.restoreSnapshot(party.snapshot());
+        restored.advanceTimedStates(1.0f);
+        REQUIRE(restored.member(1) != nullptr);
+        CHECK_EQ(restored.member(1)->spellPoints, 2);
+        restored.advanceTimedStates(600.0f);
+        CHECK_EQ(restored.member(1)->spellPoints, 6);
+    }
+
+    SUBCASE("waiting caps mana and crossing the weekly boundary retains the tick phase")
+    {
+        party.advanceTimedStates(7.0f * 24.0f * 3600.0f + 299.0f);
+        CHECK_EQ(pMember->spellPoints, Party::effectiveMaximumSpellPoints(*pMember));
+        pMember->spellPoints = 0;
+        party.advanceTimedStates(1.0f);
+        CHECK_EQ(pMember->spellPoints, 2);
+    }
+
+    SUBCASE("unconscious and zombie members regenerate but dead and petrified members do not")
+    {
+        for (CharacterCondition condition : {CharacterCondition::Unconscious, CharacterCondition::Zombie,
+                                            CharacterCondition::Dead, CharacterCondition::Petrified,
+                                            CharacterCondition::Eradicated})
+        {
+            pMember->conditions.reset();
+            pMember->conditions.set(static_cast<size_t>(condition));
+            pMember->spellPoints = 0;
+            party.advanceTimedStates(300.0f);
+            const bool eligible =
+                condition == CharacterCondition::Unconscious || condition == CharacterCondition::Zombie;
+            CHECK_EQ(pMember->spellPoints, eligible ? 2 : 0);
+        }
+    }
+
+    SUBCASE("unlearned meditation does not grant mana")
+    {
+        pMember->skills["Meditation"].mastery = SkillMastery::None;
+        party.advanceTimedStates(300.0f);
+        CHECK_EQ(pMember->spellPoints, 0);
+        CHECK_EQ(party.member(0)->spellPoints, 20);
+    }
+}
+
+TEST_CASE("days without rest weaken, then starve the party at each 3 AM dawn")
+{
+    using namespace OpenYAMM::Game;
+    constexpr float MinutesPerDay = 24.0f * 60.0f;
+    Party party;
+    party.seed(createRegressionPartySeed());
+    Character *pMember = party.member(0);
+    REQUIRE(pMember != nullptr);
+    const auto isWeak = [](const Character &member)
+    {
+        return member.conditions.test(static_cast<size_t>(CharacterCondition::Weak));
+    };
+
+    // The first update only synchronises the dawn clock.
+    party.updateDaysWithoutRest(9.0f * 60.0f);
+    party.updateDaysWithoutRest(MinutesPerDay + 2.0f * 60.0f);
+    CHECK_EQ(party.daysWithoutRest(), 0);
+
+    party.updateDaysWithoutRest(MinutesPerDay + 3.0f * 60.0f);
+    CHECK_EQ(party.daysWithoutRest(), 1);
+    CHECK_FALSE(isWeak(*pMember));
+    CHECK_EQ(party.food(), 7);
+
+    SUBCASE("the second dawn weakens the party and eats one food")
+    {
+        party.updateDaysWithoutRest(2.0f * MinutesPerDay + 3.0f * 60.0f);
+        CHECK_EQ(party.daysWithoutRest(), 2);
+        CHECK(isWeak(*pMember));
+        CHECK_EQ(party.food(), 6);
+        CHECK_EQ(pMember->health, 40);
+    }
+
+    SUBCASE("without food the party loses health instead")
+    {
+        party.addFood(-party.food());
+        party.updateDaysWithoutRest(2.0f * MinutesPerDay + 3.0f * 60.0f);
+        CHECK(isWeak(*pMember));
+        CHECK_EQ(pMember->health, 40 / 3 + 1);
+    }
+
+    SUBCASE("one long time step passes a single dawn")
+    {
+        party.updateDaysWithoutRest(14.0f * MinutesPerDay);
+        CHECK_EQ(party.daysWithoutRest(), 2);
+    }
+
+    SUBCASE("resting resets the count and skips the dawns slept through")
+    {
+        party.restAndHealAll();
+        party.updateDaysWithoutRest(9.0f * MinutesPerDay);
+        party.updateDaysWithoutRest(9.0f * MinutesPerDay + 60.0f);
+        CHECK_EQ(party.daysWithoutRest(), 0);
+        CHECK_FALSE(isWeak(*pMember));
+    }
+
+    SUBCASE("the count and dawn clock survive a snapshot")
+    {
+        Party restored;
+        restored.restoreSnapshot(party.snapshot());
+        restored.updateDaysWithoutRest(2.0f * MinutesPerDay + 3.0f * 60.0f);
+        CHECK_EQ(restored.daysWithoutRest(), 2);
+    }
+}
+
 TEST_CASE("default party seed only creates the first test member")
 {
     OpenYAMM::Game::Party party = {};
@@ -225,6 +366,230 @@ TEST_CASE("party carries generated hired follower identity into a new map runtim
     CHECK_EQ(loaded->party.hiredNpcFollowers.front().pictureId, 123u);
 }
 
+TEST_CASE("autonotes are party state that survive map changes and save round trips")
+{
+    constexpr uint32_t ObeliskOneNoteId = 442;
+    constexpr uint32_t ObeliskTwoNoteId = 443;
+
+    OpenYAMM::Game::Party party = {};
+    party.seed(createRegressionPartySeed());
+    OpenYAMM::Game::EventRuntimeState firstMapState = {};
+    OpenYAMM::Game::EventRuntimeState secondMapState = {};
+    const std::vector<size_t> targetMembers = {0};
+
+    // Each map has its own event state; autonotes set on either map must stay visible from both.
+    OpenYAMM::Game::EventRuntime::setVariableValue(
+        firstMapState,
+        OpenYAMM::Game::EventRuntime::decodeVariable((ObeliskOneNoteId << 16) | 0x00e1u),
+        1,
+        &party,
+        targetMembers);
+    OpenYAMM::Game::EventRuntime::setVariableValue(
+        secondMapState,
+        OpenYAMM::Game::EventRuntime::decodeVariable((ObeliskTwoNoteId << 16) | 0x00e1u),
+        1,
+        &party,
+        targetMembers);
+
+    CHECK(party.hasAutonote(ObeliskOneNoteId));
+    CHECK(party.hasAutonote(ObeliskTwoNoteId));
+    CHECK(firstMapState.variables.empty());
+    CHECK(secondMapState.variables.empty());
+    CHECK_EQ(
+        OpenYAMM::Game::EventRuntime::getVariableValue(
+            secondMapState,
+            OpenYAMM::Game::EventRuntime::decodeVariable((ObeliskOneNoteId << 16) | 0x00e1u),
+            &party,
+            0),
+        1);
+
+    OpenYAMM::Game::GameSaveData saveData = {};
+    saveData.mapFileName = "autonote_roundtrip.odm";
+    saveData.party = party.snapshot();
+
+    const std::filesystem::path savePath =
+        std::filesystem::temp_directory_path() / "openyamm_party_autonote_roundtrip.oysav";
+    std::string error;
+    REQUIRE(OpenYAMM::Game::saveGameDataToPath(savePath, saveData, error));
+    const std::optional<OpenYAMM::Game::GameSaveData> loaded =
+        OpenYAMM::Game::loadGameDataFromPath(savePath, error);
+    std::filesystem::remove(savePath);
+
+    REQUIRE(loaded.has_value());
+    CHECK(loaded->party.autonotes.contains(ObeliskOneNoteId));
+    CHECK(loaded->party.autonotes.contains(ObeliskTwoNoteId));
+}
+
+TEST_CASE("history entries are party state shared by every map of the continent")
+{
+    const uint32_t historySevenVariable = static_cast<uint32_t>(OpenYAMM::Game::EvtVariable::HistoryBegin) + 6u;
+    const OpenYAMM::Game::EventRuntime::VariableRef historySeven =
+        OpenYAMM::Game::EventRuntime::decodeVariable(historySevenVariable);
+
+    OpenYAMM::Game::Party party = {};
+    party.seed(createRegressionPartySeed());
+    OpenYAMM::Game::EventRuntimeState firstMapState = {};
+    OpenYAMM::Game::EventRuntimeState secondMapState = {};
+    firstMapState.variables[static_cast<uint32_t>(OpenYAMM::Game::EvtVariable::Hour)] = 6;
+    OpenYAMM::Game::setActiveHistoryContinent(firstMapState, 2u);
+    OpenYAMM::Game::setActiveHistoryContinent(secondMapState, 2u);
+
+    OpenYAMM::Game::EventRuntime::addVariableValue(firstMapState, historySeven, 0, &party, {0});
+
+    CHECK_EQ(party.historyEventTimes(2u).at(7u), 360);
+    CHECK_EQ(OpenYAMM::Game::EventRuntime::getVariableValue(secondMapState, historySeven, &party), 1);
+
+    // The opening entries count as known without being stored.
+    const OpenYAMM::Game::EventRuntime::VariableRef historyTwo = OpenYAMM::Game::EventRuntime::decodeVariable(
+        static_cast<uint32_t>(OpenYAMM::Game::EvtVariable::HistoryBegin) + 1u);
+    CHECK_EQ(OpenYAMM::Game::EventRuntime::getVariableValue(secondMapState, historyTwo, &party), 1);
+    CHECK_EQ(OpenYAMM::Game::forwardHistoryEntryTime(2u, 2u), std::optional<int32_t>(2));
+    CHECK_FALSE(OpenYAMM::Game::forwardHistoryEntryTime(1u, 2u).has_value());
+
+    // Another continent keeps its own history.
+    OpenYAMM::Game::setActiveHistoryContinent(secondMapState, 1u);
+    CHECK_EQ(OpenYAMM::Game::EventRuntime::getVariableValue(secondMapState, historySeven, &party), 0);
+}
+
+TEST_CASE("legacy saves move history entries from every map state into the party")
+{
+    OpenYAMM::Game::GameSaveData saveData = {};
+    saveData.outdoorWorld.eventRuntimeState.emplace();
+    saveData.outdoorWorld.eventRuntimeState->historyEventTimesByContinent[2u] = {{1u, 1}, {7u, 900}};
+    saveData.outdoorWorldStates["mm7:7out02.odm"].eventRuntimeState.emplace();
+    saveData.outdoorWorldStates["mm7:7out02.odm"].eventRuntimeState->historyEventTimesByContinent[2u] =
+        {{7u, 360}, {9u, 2000}};
+    saveData.indoorSceneStates["mm8:d01.blv"].eventRuntimeState.emplace();
+    saveData.indoorSceneStates["mm8:d01.blv"].eventRuntimeState->historyEventTimesByContinent[1u] = {{4u, 50}};
+
+    OpenYAMM::Game::migrateLegacyMapHistory(saveData, 88);
+
+    const auto &history = saveData.party.historyEventTimesByContinent;
+    CHECK_EQ(history.at(2u).at(1u), 1);
+    CHECK_EQ(history.at(2u).at(7u), 360);
+    CHECK_EQ(history.at(2u).at(9u), 2000);
+    CHECK_EQ(history.at(1u).at(4u), 50);
+    CHECK(saveData.outdoorWorld.eventRuntimeState->historyEventTimesByContinent.empty());
+    CHECK(saveData.outdoorWorldStates.at("mm7:7out02.odm").eventRuntimeState->historyEventTimesByContinent.empty());
+}
+
+TEST_CASE("older saves move history pages recorded two pages late to their own pages")
+{
+    OpenYAMM::Game::GameSaveData saveData = {};
+    // Castle Harmondale rebuilt (page 5 recorded as 7), the Emerald Island pages 1 and 2 (recorded as 3 and 4) beside
+    // the forward page 1, and an MM8 page.
+    saveData.party.historyEventTimesByContinent[2u] = {{1u, 1}, {3u, 500}, {4u, 500}, {7u, 900}};
+    saveData.party.historyEventTimesByContinent[1u] = {{8u, 50}};
+    saveData.outdoorWorld.eventRuntimeState.emplace();
+    saveData.outdoorWorld.eventRuntimeState->historyEventTimesByContinent[2u] = {{2u, 2}, {8u, 1200}};
+
+    OpenYAMM::Game::GameSaveData currentSave = saveData;
+
+    OpenYAMM::Game::migrateLegacyHistoryNumbering(saveData, 140);
+
+    const auto &history = saveData.party.historyEventTimesByContinent;
+    CHECK_EQ(history.at(2u).size(), 3u);
+    CHECK_EQ(history.at(2u).at(1u), 1);
+    CHECK_EQ(history.at(2u).at(2u), 500);
+    CHECK_EQ(history.at(2u).at(5u), 900);
+    CHECK_EQ(history.at(1u).size(), 1u);
+    CHECK_EQ(history.at(1u).at(6u), 50);
+    const auto &mapHistory = saveData.outdoorWorld.eventRuntimeState->historyEventTimesByContinent.at(2u);
+    CHECK_EQ(mapHistory.at(2u), 2);
+    CHECK_EQ(mapHistory.at(6u), 1200);
+    CHECK_EQ(mapHistory.size(), 2u);
+
+    // A current save is already numbered by the tables.
+    OpenYAMM::Game::migrateLegacyHistoryNumbering(currentSave, 141);
+    CHECK_EQ(currentSave.party.historyEventTimesByContinent.at(2u).at(7u), 900);
+}
+
+TEST_CASE("legacy saves move journal map notes from every map state into the party")
+{
+    OpenYAMM::Game::EventRuntimeState::RuntimeMapNote newSorpigalBow = {1, 2, 3, "OutE3.odm", "Bow - Expert", true};
+    newSorpigalBow.id = 3305;
+    OpenYAMM::Game::EventRuntimeState::RuntimeMapNote castleBow = newSorpigalBow;
+    castleBow.mapFileName = "outd3.odm";
+    OpenYAMM::Game::EventRuntimeState::RuntimeMapNote hiddenNote = newSorpigalBow;
+    hiddenNote.active = false;
+    hiddenNote.id = 3306;
+
+    OpenYAMM::Game::GameSaveData saveData = {};
+    saveData.outdoorWorld.eventRuntimeState.emplace();
+    saveData.outdoorWorld.eventRuntimeState->runtimeMapNotes[newSorpigalBow.id] = newSorpigalBow;
+    saveData.outdoorWorldStates["mm6:oute3.odm"].eventRuntimeState.emplace();
+    saveData.outdoorWorldStates["mm6:oute3.odm"].eventRuntimeState->runtimeMapNotes[newSorpigalBow.id] = newSorpigalBow;
+    saveData.outdoorWorldStates["mm6:oute3.odm"].eventRuntimeState->runtimeMapNotes[hiddenNote.id] = hiddenNote;
+    saveData.outdoorWorldStates["mm6:outd3.odm"].eventRuntimeState.emplace();
+    saveData.outdoorWorldStates["mm6:outd3.odm"].eventRuntimeState->runtimeMapNotes[castleBow.id] = castleBow;
+
+    OpenYAMM::Game::migrateLegacyMapJournalNotes(saveData, 88);
+
+    // The same teacher topic on two maps keeps both pins.
+    const std::vector<OpenYAMM::Game::JournalMapNote> &notes = saveData.party.journalMapNotes;
+    REQUIRE_EQ(notes.size(), 2u);
+    const auto hasNote = [&notes](const std::string &mapFileName)
+    {
+        return std::any_of(notes.begin(), notes.end(), [&](const OpenYAMM::Game::JournalMapNote &note)
+            { return note.id == 3305 && note.mapFileName == mapFileName && note.listedWithTrainerNotes; });
+    };
+    CHECK(hasNote("oute3.odm"));
+    CHECK(hasNote("outd3.odm"));
+    CHECK(saveData.outdoorWorld.eventRuntimeState->runtimeMapNotes.empty());
+    CHECK(saveData.outdoorWorldStates.at("mm6:outd3.odm").eventRuntimeState->runtimeMapNotes.empty());
+}
+
+TEST_CASE("personal journal map notes survive a save")
+{
+    // The player's own map notes (a right click on the journal map) stay theirs after a save and a load.
+    OpenYAMM::Game::JournalMapNote personal;
+    personal.id = OpenYAMM::Game::PersonalJournalMapNoteIdBase;
+    personal.x = -1200;
+    personal.y = 3400;
+    personal.mapFileName = "oute3.odm";
+    personal.text = "Hidden cache behind the well";
+    personal.personal = true;
+    OpenYAMM::Game::JournalMapNote eventPin = personal;
+    eventPin.id = 3305;
+    eventPin.personal = false;
+
+    OpenYAMM::Game::GameSaveData save;
+    save.mapFileName = "oute3.odm";
+    save.party.journalMapNotes = {eventPin, personal};
+    const std::filesystem::path path = std::filesystem::temp_directory_path() / "openyamm_personal_map_notes.oysav";
+    std::string error;
+    REQUIRE_MESSAGE(OpenYAMM::Game::saveGameDataToPath(path, save, error), error.c_str());
+    const std::optional<OpenYAMM::Game::GameSaveData> restored = OpenYAMM::Game::loadGameDataFromPath(path, error);
+    std::filesystem::remove(path);
+    REQUIRE_MESSAGE(restored.has_value(), error.c_str());
+    REQUIRE_EQ(restored->party.journalMapNotes.size(), 2u);
+    CHECK_FALSE(restored->party.journalMapNotes[0].personal);
+    CHECK(restored->party.journalMapNotes[1].personal);
+    CHECK_EQ(restored->party.journalMapNotes[1].text, "Hidden cache behind the well");
+    CHECK_EQ(restored->party.journalMapNotes[1].x, -1200);
+}
+
+TEST_CASE("legacy saves move autonotes from every map state into the party")
+{
+    OpenYAMM::Game::GameSaveData saveData = {};
+    saveData.outdoorWorld.eventRuntimeState.emplace();
+    saveData.outdoorWorld.eventRuntimeState->variables[(442u << 16) | 0x00e1u] = 1;
+    saveData.outdoorWorld.eventRuntimeState->variables[0x1234u] = 7;
+    saveData.outdoorWorldStates["mm6:outa1.odm"].eventRuntimeState.emplace();
+    saveData.outdoorWorldStates["mm6:outa1.odm"].eventRuntimeState->variables[(443u << 16) | 0x00e1u] = 443;
+    saveData.indoorSceneStates["mm6:d01.blv"].eventRuntimeState.emplace();
+    saveData.indoorSceneStates["mm6:d01.blv"].eventRuntimeState->variables[(444u << 16) | 0x00dfu] = 1;
+    saveData.indoorSceneStates["mm6:d01.blv"].eventRuntimeState->variables[(445u << 16) | 0x00e1u] = 0;
+
+    OpenYAMM::Game::migrateLegacyMapAutonotes(saveData, 88);
+
+    CHECK(saveData.party.autonotes == std::unordered_set<uint32_t>{442u, 443u, 444u});
+    CHECK_EQ(saveData.outdoorWorld.eventRuntimeState->variables.size(), 1u);
+    CHECK(saveData.outdoorWorld.eventRuntimeState->variables.contains(0x1234u));
+    CHECK(saveData.outdoorWorldStates.at("mm6:outa1.odm").eventRuntimeState->variables.empty());
+    CHECK(saveData.indoorSceneStates.at("mm6:d01.blv").eventRuntimeState->variables.empty());
+}
+
 TEST_CASE("current quest journal entries come from party qbits and non-empty quest text")
 {
     OpenYAMM::Game::JournalQuestTable questTable = {};
@@ -245,6 +610,44 @@ TEST_CASE("current quest journal entries come from party qbits and non-empty que
 
     REQUIRE_EQ(questTexts.size(), 1u);
     CHECK_EQ(questTexts[0], "Recover the crystal.");
+}
+
+TEST_CASE("the price fixing quest lists the stables that have not yet agreed")
+{
+    std::ifstream stream(std::filesystem::path(OPENYAMM_SOURCE_DIR) / "assets_dev/engine/data_tables/english/quests.txt");
+    REQUIRE(stream.is_open());
+    std::ostringstream contents;
+    contents << stream.rdbuf();
+    const std::optional<OpenYAMM::Engine::TextTable> table =
+        OpenYAMM::Engine::TextTable::parseTabSeparated(contents.str());
+    REQUIRE(table.has_value());
+    std::vector<std::vector<std::string>> rows;
+
+    for (size_t index = 0; index < table->getRowCount(); ++index)
+    {
+        rows.push_back(table->getRow(index));
+    }
+
+    OpenYAMM::Game::JournalQuestTable questTable = {};
+    REQUIRE(questTable.loadFromRows(rows));
+
+    OpenYAMM::Game::Party party = {};
+    party.seed(createRegressionPartySeed());
+    const auto stableLines = [&]()
+    {
+        const std::vector<std::string> questTexts = OpenYAMM::Game::buildCurrentQuestTexts(questTable, party);
+        return std::count_if(questTexts.begin(), questTexts.end(),
+            [](const std::string &text) { return text.starts_with("Price fixing: "); });
+    };
+
+    CHECK_EQ(stableLines(), 0);
+    party.setQuestBit(1140, true);
+    CHECK_EQ(stableLines(), 9);
+    party.setQuestBit(1515, true);
+    party.setQuestBit(1523, true);
+    CHECK_EQ(stableLines(), 7);
+    party.setQuestBit(1140, false);
+    CHECK_EQ(stableLines(), 0);
 }
 
 TEST_CASE("journal quest table rejects malformed qbit ids")
@@ -438,6 +841,40 @@ TEST_CASE("named runtime globals survive save data round trip")
     CHECK_EQ(loaded->namedGlobalVars.at("MMerge.BountyHunt.new_sorpigal.odm.MonsterId"), 10);
     CHECK_EQ(loaded->namedGlobalVars.at("MMerge.BountyHunt.new_sorpigal.odm.Done"), 1);
     CHECK_EQ(loaded->namedGlobalVars.at("MMerge.BountyHunt.new_sorpigal.odm.Claimed"), 0);
+}
+
+TEST_CASE("consumed barrel states survive save data round trip for active and visited maps")
+{
+    using namespace OpenYAMM::Game;
+    Party party;
+    party.seed(createRegressionPartySeed());
+    GameSaveData saveData;
+    saveData.mapFileName = "oute3.odm";
+    saveData.party = party.snapshot();
+    saveData.hasOutdoorRuntimeState = true;
+    saveData.outdoorWorld.eventRuntimeState = EventRuntimeState{};
+    saveData.outdoorWorldStates["mm6:oute3.odm"] = saveData.outdoorWorld;
+    saveData.indoorScene.eventRuntimeState = EventRuntimeState{};
+    saveData.indoorScene.eventRuntimeState->decorVars[0] = 4;
+    saveData.indoorSceneStates["mm6:6d01.blv"] = saveData.indoorScene;
+
+    const std::filesystem::path savePath =
+        std::filesystem::temp_directory_path() / "openyamm_consumed_barrels_roundtrip.oysav";
+    std::string error;
+    REQUIRE(saveGameDataToPath(savePath, saveData, error));
+    const std::optional<GameSaveData> loaded = loadGameDataFromPath(savePath, error);
+    std::filesystem::remove(savePath);
+
+    REQUIRE(loaded.has_value());
+    REQUIRE(loaded->outdoorWorld.eventRuntimeState.has_value());
+    const std::array<uint8_t, 125> emptyBarrels = {};
+    CHECK_EQ(loaded->outdoorWorld.eventRuntimeState->decorVars, emptyBarrels);
+    REQUIRE(loaded->outdoorWorldStates.at("mm6:oute3.odm").eventRuntimeState.has_value());
+    CHECK_EQ(loaded->outdoorWorldStates.at("mm6:oute3.odm").eventRuntimeState->decorVars,
+        emptyBarrels);
+    REQUIRE(loaded->indoorSceneStates.at("mm6:6d01.blv").eventRuntimeState.has_value());
+    CHECK_EQ(loaded->indoorSceneStates.at("mm6:6d01.blv").eventRuntimeState->decorVars[0], 4);
+    CHECK_EQ(loaded->indoorSceneStates.at("mm6:6d01.blv").eventRuntimeState->decorVars[1], 0);
 }
 
 TEST_CASE("outdoor location reset metadata survives save data round trip")
@@ -700,6 +1137,24 @@ TEST_CASE("monster target selection skips invalid preferred members")
     CHECK_NE(*targetIndex, 1u);
 }
 
+TEST_CASE("monster target selection prefers dwarves by race")
+{
+    OpenYAMM::Game::Party party = {};
+    party.seed(createRegressionPartySeed());
+
+    for (size_t index = 0; index < party.members().size(); ++index)
+    {
+        party.member(index)->characterDataId = uint32_t(index + 1);
+        party.member(index)->raceId = 0;
+    }
+
+    party.member(2)->raceId = 9;
+    const std::optional<size_t> targetIndex = party.chooseMonsterAttackTarget(0x2000, 5);
+
+    REQUIRE(targetIndex.has_value());
+    CHECK_EQ(*targetIndex, 2u);
+}
+
 TEST_CASE("default seed monster target selection matches female preference")
 {
     REQUIRE_MESSAGE(
@@ -938,6 +1393,34 @@ TEST_CASE("party shared experience uses learning and skips incapacitated members
     CHECK_EQ(totalGrantedExperience, 273u);
 }
 
+TEST_CASE("party shared experience adds learning item bonuses once, without mastery")
+{
+    OpenYAMM::Game::Party party = {};
+    party.seed(createRegressionPartySeed());
+
+    OpenYAMM::Game::Character *pTrained = party.member(0);
+    OpenYAMM::Game::Character *pUntrained = party.member(1);
+    OpenYAMM::Game::Character *pWithoutBonus = party.member(2);
+    OpenYAMM::Game::Character *pUnconscious = party.member(3);
+    REQUIRE(pTrained != nullptr);
+    REQUIRE(pUntrained != nullptr);
+    REQUIRE(pWithoutBonus != nullptr);
+    REQUIRE(pUnconscious != nullptr);
+
+    pTrained->skills["Learning"] = {"Learning", 4, OpenYAMM::Game::SkillMastery::Master};
+    pTrained->itemSkillBonuses["Learning"] = 15;
+    pUntrained->skills.erase("Learning");
+    pUntrained->itemSkillBonuses["Learning"] = 15;
+    pWithoutBonus->skills.erase("Learning");
+    pUnconscious->conditions.set(static_cast<size_t>(OpenYAMM::Game::CharacterCondition::Unconscious));
+
+    party.grantSharedExperience(300);
+
+    CHECK_EQ(pTrained->experience, 136u);
+    CHECK_EQ(pUntrained->experience, 124u);
+    CHECK_EQ(pWithoutBonus->experience, 100u);
+}
+
 TEST_CASE("party-wide utility skills use the best actable member")
 {
     OpenYAMM::Game::Party party = {};
@@ -983,6 +1466,66 @@ TEST_CASE("party-wide utility skills use the best actable member")
     CHECK(party.bestPartyWideUtilitySkillValue("IdentifyMonster") > 0);
     CHECK(party.bestPartyWideUtilitySkillValue("Alchemy") > 0);
     CHECK(party.bestPartyWideUtilitySkillValue("Perception") > 0);
+}
+
+TEST_CASE("identify monster reveals inspect sections by skill mastery and monster level")
+{
+    using OpenYAMM::Game::GameMechanics;
+    using OpenYAMM::Game::IdentifyMonsterReveal;
+    using OpenYAMM::Game::SkillMastery;
+    using OpenYAMM::Game::SpeechId;
+
+    const IdentifyMonsterReveal untrained = GameMechanics::resolveIdentifyMonsterReveal(0, SkillMastery::None, 1);
+    CHECK_FALSE(untrained.hasSkill);
+    CHECK_FALSE(untrained.hitPointsAndArmorClass);
+    CHECK_FALSE(untrained.attackAndDamage);
+    CHECK_FALSE(untrained.spellsAndEffects);
+    CHECK_FALSE(untrained.resistances);
+
+    const IdentifyMonsterReveal novice = GameMechanics::resolveIdentifyMonsterReveal(5, SkillMastery::Normal, 15);
+    CHECK(novice.hasSkill);
+    CHECK(novice.hitPointsAndArmorClass);
+    CHECK_FALSE(novice.attackAndDamage);
+    CHECK_FALSE(novice.spellsAndEffects);
+    CHECK_FALSE(novice.resistances);
+    CHECK_FALSE(GameMechanics::resolveIdentifyMonsterReveal(5, SkillMastery::Normal, 16).identified());
+
+    const IdentifyMonsterReveal expert = GameMechanics::resolveIdentifyMonsterReveal(5, SkillMastery::Expert, 20);
+    CHECK(expert.hitPointsAndArmorClass);
+    CHECK(expert.attackAndDamage);
+    CHECK_FALSE(expert.spellsAndEffects);
+    CHECK_FALSE(expert.resistances);
+
+    const IdentifyMonsterReveal failedExpert =
+        GameMechanics::resolveIdentifyMonsterReveal(5, SkillMastery::Expert, 21);
+    CHECK(failedExpert.hasSkill);
+    CHECK_FALSE(failedExpert.hitPointsAndArmorClass);
+    CHECK_FALSE(failedExpert.attackAndDamage);
+
+    const IdentifyMonsterReveal master = GameMechanics::resolveIdentifyMonsterReveal(5, SkillMastery::Master, 25);
+    CHECK(master.hitPointsAndArmorClass);
+    CHECK(master.attackAndDamage);
+    CHECK(master.spellsAndEffects);
+    CHECK_FALSE(master.resistances);
+    CHECK_FALSE(GameMechanics::resolveIdentifyMonsterReveal(5, SkillMastery::Master, 26).spellsAndEffects);
+
+    const IdentifyMonsterReveal grandmaster =
+        GameMechanics::resolveIdentifyMonsterReveal(1, SkillMastery::Grandmaster, 200);
+    CHECK(grandmaster.hitPointsAndArmorClass);
+    CHECK(grandmaster.attackAndDamage);
+    CHECK(grandmaster.spellsAndEffects);
+    CHECK(grandmaster.resistances);
+
+    OpenYAMM::Game::Character identifier = {};
+    identifier.level = 10;
+    CHECK_FALSE(GameMechanics::resolveIdentifyMonsterReveal(identifier, 1).hasSkill);
+    CHECK(GameMechanics::resolveIdentifyMonsterSpeech(identifier, 1) == SpeechId::None);
+
+    identifier.skills["IdentifyMonster"] = {"IdentifyMonster", 2, SkillMastery::Normal};
+    CHECK(GameMechanics::resolveIdentifyMonsterReveal(identifier, 12).identified());
+    CHECK(GameMechanics::resolveIdentifyMonsterSpeech(identifier, 13) == SpeechId::IdentifyMonsterFail);
+    CHECK(GameMechanics::resolveIdentifyMonsterSpeech(identifier, 12) == SpeechId::IdentifyMonsterBig);
+    CHECK(GameMechanics::resolveIdentifyMonsterSpeech(identifier, 4) == SpeechId::IdentifyMonsterWeak);
 }
 
 TEST_CASE("inventory identify and repair use best party utility skill")
@@ -1230,6 +1773,13 @@ TEST_CASE("default party seed grants first member full spell access and preserve
     for (const std::string &skillName : OpenYAMM::Game::allCanonicalSkillNames())
     {
         const OpenYAMM::Game::CharacterSkill *pSkill = pMember->findSkill(skillName);
+
+        if (OpenYAMM::Game::isTechnologySkill(skillName) || OpenYAMM::Game::isRulesetSkill(skillName))
+        {
+            CHECK(pSkill == nullptr);
+            continue;
+        }
+
         REQUIRE(pSkill != nullptr);
         CHECK(pSkill->level == 200);
         CHECK(pSkill->mastery == OpenYAMM::Game::SkillMastery::Grandmaster);
@@ -1567,4 +2117,151 @@ TEST_CASE("temporary event bonuses survive save round trip and remain rest-clear
     CHECK_EQ(pRestoredMember->temporaryEventBonuses.intellect, 0);
     CHECK_EQ(pRestoredMember->magicalBonuses.intellect, 0);
     CHECK_EQ(pRestoredMember->magicalBonuses.resistances.fire, 0);
+}
+
+TEST_CASE("inventory sort groups weapons before potions and repacks from the top left")
+{
+    REQUIRE_MESSAGE(
+        OpenYAMM::Tests::regressionGameDataLoaded(),
+        OpenYAMM::Tests::regressionGameDataFailure().c_str());
+
+    const OpenYAMM::Game::ItemTable &itemTable = OpenYAMM::Tests::regressionGameData().itemTable;
+    const auto findItemByEquipStat =
+        [&itemTable](const std::string &equipStat) -> const OpenYAMM::Game::ItemDefinition *
+        {
+            for (const OpenYAMM::Game::ItemDefinition &definition : itemTable.entries())
+            {
+                if (definition.itemId != 0 && definition.equipStat == equipStat)
+                {
+                    return &definition;
+                }
+            }
+
+            return nullptr;
+        };
+    const OpenYAMM::Game::ItemDefinition *pWeapon = findItemByEquipStat("Weapon");
+    const OpenYAMM::Game::ItemDefinition *pPotion = findItemByEquipStat("Bottle");
+    REQUIRE(pWeapon != nullptr);
+    REQUIRE(pPotion != nullptr);
+
+    OpenYAMM::Game::Party party = makeInventoryParty();
+    party.setItemTable(&itemTable);
+    OpenYAMM::Game::Character &member = *party.member(0);
+    REQUIRE(member.addInventoryItemAt(makeInventoryItem(pPotion->itemId, 1, 1), 0, 0));
+    REQUIRE(member.addInventoryItemAt(makeInventoryItem(pWeapon->itemId, 1, 4), 9, 3));
+
+    REQUIRE(party.sortMemberInventory(0));
+
+    REQUIRE_EQ(member.inventory.size(), 2u);
+    const OpenYAMM::Game::InventoryItem *pFirst = member.inventoryItemAt(0, 0);
+    REQUIRE(pFirst != nullptr);
+    CHECK_EQ(pFirst->objectDescriptionId, pWeapon->itemId);
+    const OpenYAMM::Game::InventoryItem *pPotionItem = member.inventoryItemAt(0, 4);
+    REQUIRE(pPotionItem != nullptr);
+    CHECK_EQ(pPotionItem->objectDescriptionId, pPotion->itemId);
+}
+
+TEST_CASE("inventory sort keeps a full inventory intact")
+{
+    OpenYAMM::Game::Party party = makeInventoryParty();
+    OpenYAMM::Game::Character &member = *party.member(0);
+    fillInventory(member, 109);
+
+    REQUIRE(party.sortMemberInventory(0));
+
+    CHECK_EQ(member.inventoryItemCount(), member.inventoryCapacity());
+    CHECK_EQ(member.usedInventoryCells(), member.inventoryCapacity());
+}
+
+TEST_CASE("inventory sort leaves items in place when they cannot be repacked")
+{
+    OpenYAMM::Game::Party party = makeInventoryParty();
+    OpenYAMM::Game::Character &member = *party.member(0);
+
+    // A full pinwheel layout that column-first packing in size order cannot reproduce.
+    REQUIRE(member.addInventoryItemAt(makeInventoryItem(100, 2, 2), 0, 0));
+    REQUIRE(member.addInventoryItemAt(makeInventoryItem(101, 12, 3), 2, 0));
+    REQUIRE(member.addInventoryItemAt(makeInventoryItem(102, 13, 6), 1, 3));
+    REQUIRE(member.addInventoryItemAt(makeInventoryItem(103, 1, 7), 0, 2));
+    REQUIRE(member.addInventoryItemAt(makeInventoryItem(104, 1, 1), 1, 2));
+    REQUIRE_EQ(member.usedInventoryCells(), member.inventoryCapacity());
+    const std::vector<OpenYAMM::Game::InventoryItem> before = member.inventory;
+
+    CHECK_FALSE(party.sortMemberInventory(0));
+
+    REQUIRE_EQ(member.inventory.size(), before.size());
+
+    for (size_t itemIndex = 0; itemIndex < before.size(); ++itemIndex)
+    {
+        CHECK_EQ(member.inventory[itemIndex].objectDescriptionId, before[itemIndex].objectDescriptionId);
+        CHECK_EQ(member.inventory[itemIndex].gridX, before[itemIndex].gridX);
+        CHECK_EQ(member.inventory[itemIndex].gridY, before[itemIndex].gridY);
+    }
+}
+
+TEST_CASE("an item an event gives arrives identified (OY-182)")
+{
+    const OpenYAMM::Game::ItemTable &itemTable = OpenYAMM::Tests::regressionGameData().itemTable;
+    const OpenYAMM::Game::ItemDefinition *pScroll = itemTable.get(339);
+    REQUIRE(pScroll != nullptr);
+    REQUIRE(OpenYAMM::Game::ItemRuntime::requiresIdentification(*pScroll));
+
+    OpenYAMM::Game::Party party = {};
+    party.seed(createRegressionPartySeed());
+    party.setItemTable(&itemTable);
+    REQUIRE(party.tryGrantItem(339));
+
+    bool found = false;
+
+    for (const OpenYAMM::Game::Character &member : party.members())
+    {
+        for (const OpenYAMM::Game::InventoryItem &item : member.inventory)
+        {
+            if (item.objectDescriptionId == 339)
+            {
+                found = true;
+                CHECK(item.identified);
+            }
+        }
+    }
+
+    CHECK(found);
+}
+
+TEST_CASE("an event's item removal takes an equipped item when no bag holds one (OY-172)")
+{
+    OpenYAMM::Game::Party party = {};
+    party.seed(createRegressionPartySeed());
+    party.setItemTable(&OpenYAMM::Tests::regressionGameData().itemTable);
+    OpenYAMM::Game::Character *pMember = party.member(0);
+    REQUIRE(pMember != nullptr);
+    pMember->equipment.bow = 845;
+
+    CHECK(party.removeItemFromMember(0, 845));
+    CHECK_EQ(pMember->equipment.bow, 0u);
+    CHECK_FALSE(party.removeItemFromMember(0, 845));
+}
+
+TEST_CASE("journal ownership filters quest continents without changing quest conditions")
+{
+    using namespace OpenYAMM::Game;
+    JournalQuestTable table;
+    REQUIRE(table.loadFromRows({
+        {"1", "Jadame quest", "", "Jadame", "1", "2", "Original author"},
+        {"3", "Enroth quest", "", "Enroth"},
+        {"4", "Shared quest", "", "Shared"},
+        {"90001", "Chedian quest", "", "Chedian", "90002", "90003"},
+    }));
+    Party party;
+    for (uint32_t bit : {1u, 3u, 4u, 90002u})
+        party.setQuestBit(bit, true);
+    CHECK(buildCurrentQuestTexts(table, party, "Jadame") == std::vector<std::string>{"Jadame quest"});
+    CHECK(buildCurrentQuestTexts(table, party, "Enroth") == std::vector<std::string>{"Enroth quest"});
+    CHECK(buildCurrentQuestTexts(table, party, "Shared") == std::vector<std::string>{"Shared quest"});
+    CHECK(buildCurrentQuestTexts(table, party, "Chedian") == std::vector<std::string>{"Chedian quest"});
+    CHECK(buildCurrentQuestTexts(table, party, "Antagarich").empty());
+    CHECK_EQ(buildCurrentQuestTexts(table, party).size(), 4);
+    party.setQuestBit(2, true);
+    CHECK(buildCurrentQuestTexts(table, party, "Jadame").empty());
+    CHECK_EQ(buildCurrentQuestTexts(table, party).size(), 3);
 }

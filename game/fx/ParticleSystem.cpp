@@ -189,9 +189,9 @@ size_t ParticleSystem::tagIndex(FxParticleTag tag)
         return 2;
     case FxParticleTag::Buff:
         return 3;
-    case FxParticleTag::Weather:
-        return 4;
     case FxParticleTag::Misc:
+        return 4;
+    case FxParticleTag::MapMist:
         return 5;
     }
 

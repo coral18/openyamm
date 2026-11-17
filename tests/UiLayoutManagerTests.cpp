@@ -2,7 +2,10 @@
 
 #include "game/ui/UiLayoutManager.h"
 
+#include <yaml-cpp/yaml.h>
+
 #include <algorithm>
+#include <cctype>
 #include <filesystem>
 #include <fstream>
 #include <sstream>
@@ -18,6 +21,51 @@ std::string loadLayoutSource(const std::filesystem::path &relativePath)
     text << input.rdbuf();
     return text.str();
 }
+}
+
+TEST_CASE("menu settings catalog has complete native layout controls")
+{
+    const YAML::Node catalog = YAML::Load(loadLayoutSource("assets_dev/engine/ui/menu/settings_catalog.yml"));
+    OpenYAMM::Game::UiLayoutManager manager;
+    for (const YAML::Node &section : catalog["sections"])
+    {
+        const std::string path = "assets_dev/engine/ui/gameplay/settings_" + section["id"].as<std::string>() + ".yml";
+        REQUIRE(manager.loadLayoutText(path, loadLayoutSource(path)));
+    }
+    const auto capitalized = [](const std::string &value)
+    {
+        std::string result;
+        bool upper = true;
+        for (unsigned char character : value)
+        {
+            if (character == '_' || character == '-')
+            {
+                upper = true;
+                continue;
+            }
+            result += upper ? char(std::toupper(character)) : char(character);
+            upper = false;
+        }
+        return result;
+    };
+    for (const YAML::Node &setting : catalog["settings"])
+    {
+        const std::string prefix = "Settings" + capitalized(setting["section"].as<std::string>());
+        const std::string id = prefix + capitalized(setting["id"].as<std::string>());
+        CAPTURE(id);
+        for (const char *pSuffix : {"Label", "Description", "Control"})
+        {
+            CAPTURE(pSuffix);
+            const OpenYAMM::Game::UiLayoutManager::LayoutElement *pElement = manager.findElement(id + pSuffix);
+            REQUIRE(pElement != nullptr);
+            CHECK(pElement->parentId == prefix + "ScrollViewport");
+        }
+        CHECK(manager.findElement(id + "Control")->interactive);
+        if (setting["type"].as<std::string>() == "range" || setting["type"].as<std::string>() == "steps")
+        {
+            CHECK(manager.findElement(id + "Value") != nullptr);
+        }
+    }
 }
 
 TEST_CASE("shared Obsidian gameplay layout preserves command and follower ownership")
@@ -95,6 +143,29 @@ TEST_CASE("Obsidian layouts retain inventory geometry and distinct selected and 
     CHECK(map->height == 300);
     CHECK(map->gapX == 131);
     CHECK(map->gapY == 101);
+}
+
+TEST_CASE("alchemy bench layout loads and leaves the party bar and its own button uncovered")
+{
+    OpenYAMM::Game::UiLayoutManager manager;
+    REQUIRE(manager.loadLayoutText("character.yml", loadLayoutSource("assets_dev/engine/ui/gameplay/character.yml")));
+    REQUIRE(manager.loadLayoutText(
+        "alchemy_bench.yml",
+        loadLayoutSource("assets_dev/engine/ui/gameplay/alchemy_bench.yml")));
+    const auto *pPanel = manager.findElement("AlchemyBenchPanel");
+    const auto *pButton = manager.findElement("CharacterAlchemyButton");
+    REQUIRE(pPanel != nullptr);
+    REQUIRE(pButton != nullptr);
+    // Both are children of 640 x 480 roots, so their gaps are positions in the shared reference frame.
+    CHECK(pPanel->gapY + pPanel->height <= 366.0f);
+    CHECK(pButton->gapY >= pPanel->gapY + pPanel->height);
+
+    for (const char *pId : {"AlchemyBenchMixButton", "AlchemyBenchMixAllButton", "AlchemyBenchClearButton"})
+    {
+        const auto *pBenchButton = manager.findElement(pId);
+        REQUIRE(pBenchButton != nullptr);
+        CHECK(pBenchButton->disabledAsset == "obsidian_button_tab_disabled");
+    }
 }
 
 TEST_CASE("Obsidian split arcs and indicators stay inside the bottom anchored party frame")

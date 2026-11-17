@@ -2,6 +2,7 @@
 
 #include "game/render/lighting/RenderLight.h"
 
+#include <array>
 #include <cstdint>
 #include <unordered_map>
 
@@ -22,7 +23,6 @@ private:
     void syncActorSpatialFx(OutdoorGameView &view);
     void syncDecorationEmitters(OutdoorGameView &view);
     void syncSpriteObjectSpatialFx(OutdoorGameView &view);
-    void syncWeatherParticles(OutdoorGameView &view, float deltaSeconds);
     void addContactShadow(OutdoorGameView &view, float x, float y, float z, float radius, float heightScale);
     void addGlowBillboard(OutdoorGameView &view, float x, float y, float z, float radius, uint32_t colorAbgr);
     void addLightEmitter(
@@ -39,14 +39,11 @@ private:
     std::unordered_map<uint64_t, float> m_emitterCooldownBySourceKey;
     std::unordered_map<uint64_t, uint32_t> m_emitterSequenceBySourceKey;
     float m_spatialRefreshAccumulatorSeconds = 0.0f;
-    float m_snowEmissionAccumulator = 0.0f;
-    float m_snowMovementEmissionAccumulator = 0.0f;
-    float m_rainEmissionAccumulator = 0.0f;
-    uint32_t m_weatherEmissionSequence = 0;
-    bool m_wasSnowing = false;
-    bool m_hasWeatherCameraPosition = false;
-    float m_lastWeatherCameraX = 0.0f;
-    float m_lastWeatherCameraY = 0.0f;
     bool m_hasSpatialSnapshot = false;
+    // The party's daytime shade for the torch (0 in sunlight, 1 in full shade), eased toward the last probe sample.
+    float m_partyTorchShade = 0.0f;
+    float m_partyTorchShadeTarget = 0.0f;
+    std::array<float, 3> m_partyTorchShadePosition = {};
+    bool m_partyTorchShadeSampled = false;
 };
 }

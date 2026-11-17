@@ -20,6 +20,20 @@ constexpr float TerrainSteepTileHeight = static_cast<float>(OutdoorMapData::Terr
 constexpr float OutdoorFacePlaneScale = 65536.0f;
 constexpr uint16_t OutdoorFaceReservedNotAStep = 0x0001;
 constexpr float BModelGroundSupportRise = 128.0f;
+constexpr float MaximumTerrainSmoothingDeviation = 32.0f;
+
+float terrainVertexHeight(const OutdoorMapData &map, int gridX, int gridY)
+{
+    gridX = std::clamp(gridX, 0, OutdoorMapData::TerrainWidth - 1);
+    gridY = std::clamp(gridY, 0, OutdoorMapData::TerrainWidth - 1);
+    return float(map.heightMap[size_t(gridY * OutdoorMapData::TerrainWidth + gridX)] * OutdoorMapData::TerrainHeightScale);
+}
+
+float catmullRom(float p0, float p1, float p2, float p3, float t)
+{
+    return 0.5f * (2.0f * p1 + (p2 - p0) * t + (2.0f * p0 - 5.0f * p1 + 4.0f * p2 - p3) * t * t
+        + (3.0f * p1 - p0 - 3.0f * p2 + p3) * t * t * t);
+}
 
 bool outdoorFaceIsEthereal(uint32_t attributes)
 {
@@ -264,30 +278,7 @@ OutdoorBModel transformOutdoorBModel(
 
 float sampleOutdoorTerrainHeight(const OutdoorMapData &outdoorMapData, float x, float y)
 {
-    const float gridX = outdoorWorldToGridXFloat(x);
-    const float gridY = outdoorWorldToGridYFloat(y);
-    const int sampleX0 = std::clamp(static_cast<int>(std::floor(gridX)), 0, OutdoorMapData::TerrainWidth - 1);
-    const int sampleY0 = std::clamp(static_cast<int>(std::floor(gridY)), 0, OutdoorMapData::TerrainHeight - 1);
-    const int sampleX1 = std::clamp(sampleX0 + 1, 0, OutdoorMapData::TerrainWidth - 1);
-    const int sampleY1 = std::clamp(sampleY0 + 1, 0, OutdoorMapData::TerrainHeight - 1);
-    const float fractionX = std::clamp(gridX - static_cast<float>(sampleX0), 0.0f, 1.0f);
-    const float fractionY = std::clamp(gridY - static_cast<float>(sampleY0), 0.0f, 1.0f);
-
-    const size_t index00 = static_cast<size_t>(sampleY0 * OutdoorMapData::TerrainWidth + sampleX0);
-    const size_t index10 = static_cast<size_t>(sampleY0 * OutdoorMapData::TerrainWidth + sampleX1);
-    const size_t index01 = static_cast<size_t>(sampleY1 * OutdoorMapData::TerrainWidth + sampleX0);
-    const size_t index11 = static_cast<size_t>(sampleY1 * OutdoorMapData::TerrainWidth + sampleX1);
-
-    const float height00 = static_cast<float>(outdoorMapData.heightMap[index00]);
-    const float height10 = static_cast<float>(outdoorMapData.heightMap[index10]);
-    const float height01 = static_cast<float>(outdoorMapData.heightMap[index01]);
-    const float height11 = static_cast<float>(outdoorMapData.heightMap[index11]);
-
-    const float topHeight = height00 + (height10 - height00) * fractionX;
-    const float bottomHeight = height01 + (height11 - height01) * fractionX;
-    const float heightSample = topHeight + (bottomHeight - topHeight) * fractionY;
-
-    return heightSample * static_cast<float>(OutdoorMapData::TerrainHeightScale);
+    return sampleOutdoorRenderedTerrainHeight(outdoorMapData, x, y);
 }
 
 float sampleOutdoorRenderedTerrainHeight(const OutdoorMapData &outdoorMapData, float x, float y)
@@ -313,19 +304,20 @@ float sampleOutdoorRenderedTerrainHeight(const OutdoorMapData &outdoorMapData, f
 
     float heightSample = 0.0f;
 
-    if (fractionX + fractionY <= 1.0f)
+    // Native ODM cells share the top-left / bottom-right diagonal.
+    if (fractionX >= fractionY)
     {
         heightSample =
             height00
             + (height10 - height00) * fractionX
-            + (height01 - height00) * fractionY;
+            + (height11 - height10) * fractionY;
     }
     else
     {
         heightSample =
-            height11
-            + (height10 - height11) * (1.0f - fractionY)
-            + (height01 - height11) * (1.0f - fractionX);
+            height00
+            + (height11 - height01) * fractionX
+            + (height01 - height00) * fractionY;
     }
 
     return heightSample * static_cast<float>(OutdoorMapData::TerrainHeightScale);
@@ -357,18 +349,18 @@ bx::Vec3 sampleOutdoorRenderedTerrainNormal(const OutdoorMapData &outdoorMapData
     const float height11 =
         static_cast<float>(outdoorMapData.heightMap[index11] * OutdoorMapData::TerrainHeightScale);
 
-    if (fractionX + fractionY <= 1.0f)
+    if (fractionX >= fractionY)
     {
         return vecNormalize({
             (height00 - height10) / tileSize,
-            (height01 - height00) / tileSize,
+            (height11 - height10) / tileSize,
             1.0f
         });
     }
 
     return vecNormalize({
         (height01 - height11) / tileSize,
-        (height11 - height10) / tileSize,
+        (height01 - height00) / tileSize,
         1.0f
     });
 }
@@ -772,6 +764,31 @@ bool isOutdoorCylinderBlockedByFace(
     return isPointInsideOutdoorPolygonProjected(projectedPoint, geometry.vertices, geometry.normal);
 }
 
+namespace
+{
+// Whether (x, y) lies within the b-model's vertices' horizontal extent: no face outside it can hold the point. From the
+// vertices themselves, so moved mechanisms and edited b-models are always current.
+bool outdoorBModelSpansXY(const OutdoorBModel &bModel, float x, float y)
+{
+    if (bModel.vertices.empty())
+    {
+        return false;
+    }
+    int minX = bModel.vertices.front().x;
+    int maxX = minX;
+    int minY = bModel.vertices.front().y;
+    int maxY = minY;
+    for (const OutdoorBModelVertex &vertex : bModel.vertices)
+    {
+        minX = std::min(minX, vertex.x);
+        maxX = std::max(maxX, vertex.x);
+        minY = std::min(minY, vertex.y);
+        maxY = std::max(maxY, vertex.y);
+    }
+    return x >= float(minX) && x <= float(maxX) && y >= float(minY) && y <= float(maxY);
+}
+} // namespace
+
 OutdoorSupportFloorSample sampleOutdoorSupportFloor(
     const OutdoorMapData &outdoorMapData,
     float x,
@@ -792,6 +809,12 @@ OutdoorSupportFloorSample sampleOutdoorSupportFloor(
     for (size_t bModelIndex = 0; bModelIndex < outdoorMapData.bmodels.size(); ++bModelIndex)
     {
         const OutdoorBModel &bModel = outdoorMapData.bmodels[bModelIndex];
+
+        // The faces' own extent test below needs their geometry built first; most b-models are nowhere near.
+        if (!outdoorBModelSpansXY(bModel, x, y))
+        {
+            continue;
+        }
 
         for (size_t faceIndex = 0; faceIndex < bModel.faces.size(); ++faceIndex)
         {
@@ -886,5 +909,137 @@ float sampleOutdoorActorPlacementFloorHeight(
 float sampleOutdoorActorPlacementFloorHeight(const OutdoorMapData &outdoorMapData, float x, float y, float z)
 {
     return sampleOutdoorActorPlacementFloorHeight(outdoorMapData, x, y, z, FloorCheckSlack);
+}
+
+float outdoorNativeTerrainHeight(const OutdoorMapData &map, float gridX, float gridY)
+{
+    const int x0 = std::clamp(int(std::floor(gridX)), 0, OutdoorMapData::TerrainWidth - 2);
+    const int y0 = std::clamp(int(std::floor(gridY)), 0, OutdoorMapData::TerrainWidth - 2);
+    const float fx = std::clamp(gridX - float(x0), 0.0f, 1.0f);
+    const float fy = std::clamp(gridY - float(y0), 0.0f, 1.0f);
+    const float h00 = terrainVertexHeight(map, x0, y0);
+    const float h10 = terrainVertexHeight(map, x0 + 1, y0);
+    const float h01 = terrainVertexHeight(map, x0, y0 + 1);
+    const float h11 = terrainVertexHeight(map, x0 + 1, y0 + 1);
+    // The native diagonal runs from the north-west to the south-east corner.
+    return fx >= fy ? h00 + fx * (h10 - h00) + fy * (h11 - h10) : h00 + fy * (h01 - h00) + fx * (h11 - h01);
+}
+
+float outdoorSmoothedTerrainHeight(const OutdoorMapData &map, float gridX, float gridY, float smoothing)
+{
+    const float native = outdoorNativeTerrainHeight(map, gridX, gridY);
+    if (smoothing <= 0.0f)
+    {
+        return native;
+    }
+    const int x0 = std::clamp(int(std::floor(gridX)), 0, OutdoorMapData::TerrainWidth - 2);
+    const int y0 = std::clamp(int(std::floor(gridY)), 0, OutdoorMapData::TerrainWidth - 2);
+    const float fx = std::clamp(gridX - float(x0), 0.0f, 1.0f);
+    const float fy = std::clamp(gridY - float(y0), 0.0f, 1.0f);
+    std::array<float, 4> rows = {};
+    for (int row = 0; row < 4; ++row)
+    {
+        const int y = y0 - 1 + row;
+        rows[row] = catmullRom(terrainVertexHeight(map, x0 - 1, y), terrainVertexHeight(map, x0, y),
+            terrainVertexHeight(map, x0 + 1, y), terrainVertexHeight(map, x0 + 2, y), fx);
+    }
+    // Through every native vertex; overshoot beside cliffs is limited to the cell's own height range, and the
+    // departure from the native (collision) triangles is softly capped so creatures and walls stay grounded.
+    const float lowest = std::min({terrainVertexHeight(map, x0, y0), terrainVertexHeight(map, x0 + 1, y0),
+        terrainVertexHeight(map, x0, y0 + 1), terrainVertexHeight(map, x0 + 1, y0 + 1)});
+    const float highest = std::max({terrainVertexHeight(map, x0, y0), terrainVertexHeight(map, x0 + 1, y0),
+        terrainVertexHeight(map, x0, y0 + 1), terrainVertexHeight(map, x0 + 1, y0 + 1)});
+    const float cubic = std::clamp(catmullRom(rows[0], rows[1], rows[2], rows[3], fy), lowest - 16.0f,
+        highest + 16.0f);
+    return native + MaximumTerrainSmoothingDeviation * std::tanh((cubic - native) / MaximumTerrainSmoothingDeviation) * smoothing;
+}
+
+void capRenderedTerrainUnderBModels(const OutdoorMapData &map, std::vector<float> &heights, int side, int steps)
+{
+    // A pool cut into a hillside sits a dozen units above a flat native terrace, while the bicubic surface bulges up
+    // to its rising neighbours. Under a face the ground stays this far below it, or at most drops back to native.
+    constexpr float Clearance = 4.0f;
+    // Faces steeper than this are walls; the terrain beside them is not covered.
+    constexpr float MinimumNormalZ = 0.25f;
+    const float spacing = float(OutdoorMapData::TerrainTileSize) / float(steps);
+    // Every rendered triangle overlapping a face keeps all three corners capped.
+    const float reach = spacing * 1.5f;
+    for (const OutdoorBModel &bmodel : map.bmodels)
+    {
+        for (const OutdoorBModelFace &face : bmodel.faces)
+        {
+            const bx::Vec3 normal = {float(face.planeNormalX), float(face.planeNormalY), float(face.planeNormalZ)};
+            const float normalLength = bx::length(normal);
+            if (face.vertexIndices.size() < 3 || normalLength <= 0.0f || normal.z < normalLength * MinimumNormalZ)
+            {
+                continue;
+            }
+            std::vector<bx::Vec3> points;
+            points.reserve(face.vertexIndices.size());
+            for (uint16_t index : face.vertexIndices)
+            {
+                if (index < bmodel.vertices.size())
+                {
+                    points.push_back(outdoorBModelVertexToWorld(bmodel.vertices[index]));
+                }
+            }
+            if (points.size() != face.vertexIndices.size())
+            {
+                continue;
+            }
+            float minX = points.front().x;
+            float maxX = minX;
+            float minY = points.front().y;
+            float maxY = minY;
+            for (const bx::Vec3 &point : points)
+            {
+                minX = std::min(minX, point.x);
+                maxX = std::max(maxX, point.x);
+                minY = std::min(minY, point.y);
+                maxY = std::max(maxY, point.y);
+            }
+            const int firstI = std::max(int(std::ceil((minX - reach + 32768.0f) / spacing)), 0);
+            const int lastI = std::min(int(std::floor((maxX + reach + 32768.0f) / spacing)), side - 1);
+            const int firstJ = std::max(int(std::ceil((32768.0f - maxY - reach) / spacing)), 0);
+            const int lastJ = std::min(int(std::floor((32768.0f - minY + reach) / spacing)), side - 1);
+            for (int j = firstJ; j <= lastJ; ++j)
+            {
+                for (int i = firstI; i <= lastI; ++i)
+                {
+                    const float x = float(i) * spacing - 32768.0f;
+                    const float y = 32768.0f - float(j) * spacing;
+                    bool inside = false;
+                    float nearestSquared = std::numeric_limits<float>::max();
+                    for (size_t a = 0, b = points.size() - 1; a < points.size(); b = a++)
+                    {
+                        const bx::Vec3 &p = points[a];
+                        const bx::Vec3 &q = points[b];
+                        if ((p.y > y) != (q.y > y) && x < p.x + (y - p.y) * (q.x - p.x) / (q.y - p.y))
+                        {
+                            inside = !inside;
+                        }
+                        const float edgeX = q.x - p.x;
+                        const float edgeY = q.y - p.y;
+                        const float edgeSquared = edgeX * edgeX + edgeY * edgeY;
+                        const float t = edgeSquared > 0.0f
+                            ? std::clamp(((x - p.x) * edgeX + (y - p.y) * edgeY) / edgeSquared, 0.0f, 1.0f) : 0.0f;
+                        const float dx = x - (p.x + edgeX * t);
+                        const float dy = y - (p.y + edgeY * t);
+                        nearestSquared = std::min(nearestSquared, dx * dx + dy * dy);
+                    }
+                    if (!inside && nearestSquared > reach * reach)
+                    {
+                        continue;
+                    }
+                    const bx::Vec3 &origin = points.front();
+                    const float faceZ = origin.z - (normal.x * (x - origin.x) + normal.y * (y - origin.y)) / normal.z;
+                    const float native =
+                        outdoorNativeTerrainHeight(map, float(i) / float(steps), float(j) / float(steps));
+                    float &height = heights[size_t(j) * size_t(side) + size_t(i)];
+                    height = std::min(height, std::max(native, faceZ - Clearance));
+                }
+            }
+        }
+    }
 }
 }

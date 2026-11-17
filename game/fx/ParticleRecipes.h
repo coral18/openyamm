@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <cstdint>
 #include <optional>
 #include <string>
@@ -43,6 +44,7 @@ enum class ProjectileRecipe
     Sharpmetal,
     DragonBreath,
     DarkFireBolt,
+    MindBlast,
     ToxicCloud,
     MonsterAirBolt,
     MonsterEarthBolt,
@@ -53,6 +55,29 @@ enum class ProjectileRecipe
     MonsterSpiritBolt,
     MonsterLightBolt,
     MonsterDarkBolt,
+    Arrow,
+    FireArrow,
+    // Spells with no particle recipe of their own; the recipes only let engine/effects/projectiles.yml bind them
+    // (see projectileRecipeIsBindingOnly). Charm to Control Undead are debuffs applied at once, which fly only when a
+    // map event casts them. The traps are the bursts of discharged chest traps, which never fly.
+    DeadlySwarm,
+    MassDistortion,
+    SpiritLash,
+    PrismaticLight,
+    SoulDrinker,
+    Lifedrain,
+    ShrinkingRay,
+    Charm,
+    Blind,
+    Telepathy,
+    Berserk,
+    Enslave,
+    ControlUndead,
+    FireTrap,
+    ElecTrap,
+    ColdTrap,
+    PoisonTrap,
+    Armageddon,
     GenericParticleTrail,
     GenericFireTrail,
     GenericLineTrail,
@@ -152,6 +177,9 @@ float projectileRecipeGlowRadius(ProjectileRecipe recipe);
 float projectileRecipeAnchorOffset(ProjectileRecipe recipe, uint16_t radius, uint16_t height);
 float projectileRecipeBackOffset(ProjectileRecipe recipe, uint16_t radius);
 bool projectileRecipeUsesDedicatedImpactFx(ProjectileRecipe recipe);
+// Arrows and the spells listed after them in ProjectileRecipe have recipes only so the enhanced style can bind effects:
+// they have no classic impact burst or impact light.
+bool projectileRecipeIsBindingOnly(ProjectileRecipe recipe);
 bool projectileRecipeShowsImpactBillboard(ProjectileRecipe recipe);
 
 void spawnProjectileTrailParticles(
@@ -197,6 +225,15 @@ void spawnBuffSparkles(
     float z,
     float radius,
     uint32_t colorAbgr);
+
+void spawnActorDisintegrationParticles(ParticleSystem &particleSystem, uint32_t seed,
+    float x, float y, float z, float actorHeight, float elapsedSeconds, float durationSeconds);
+
+// One tongue of flame rising from a point of a burning creature's surface (actors.yml death_effect: burn), with an
+// occasional ember or wisp of smoke. size: the flame's width in world units. tint: the flame's RGB (flame_color);
+// without one the fire is orange.
+void spawnActorBurnFlame(ParticleSystem &particleSystem, uint32_t seed, float x, float y, float z, float size,
+    const std::optional<std::array<uint8_t, 3>> &tint = std::nullopt);
 
 void spawnActorDebuffParticles(
     ParticleSystem &particleSystem,

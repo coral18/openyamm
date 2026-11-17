@@ -60,6 +60,26 @@ std::optional<std::string> findImageAssetPath(
     AssetPathLookupCache &assetPathByKey
 );
 
+// findImageAssetPath with a cooked texture (.oytex) preferred over the images in each scale tier: world surface
+// textures, whose cooked files sit beside their sources (tools/cook_surface_textures.py).
+std::optional<std::string> findCookedOrImageAssetPath(
+    const AssetFileSystem &assetFileSystem,
+    const std::string &directoryPath,
+    const std::string &textureName,
+    DirectoryAssetPathCache &directoryAssetPathsByPath,
+    AssetPathLookupCache &assetPathByKey
+);
+
+// A world surface texture's logical size (its native texels, the size face UVs are measured in) as the game resolves
+// it through findCookedOrImageAssetPath: the cooked file or the image in the best scale tier, scaled back to the
+// native tier. Empty when there is none.
+std::optional<std::array<int, 2>> findSurfaceTextureLogicalSize(
+    const AssetFileSystem &assetFileSystem,
+    const std::string &textureName,
+    DirectoryAssetPathCache &directoryAssetPathsByPath,
+    AssetPathLookupCache &assetPathByKey
+);
+
 std::optional<ImagePixelsBgra> decodeImagePixelsBgra(
     const std::vector<uint8_t> &imageBytes,
     std::string_view virtualPath,

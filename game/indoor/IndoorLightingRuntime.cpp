@@ -4,7 +4,9 @@
 #include "game/fx/WorldFxSystem.h"
 #include "game/gameplay/InteractiveDecorationRules.h"
 #include "game/gameplay/GameplayTorchLight.h"
+#include "game/indoor/IndoorGeometryUtils.h"
 #include "game/indoor/IndoorMapData.h"
+#include "game/indoor/IndoorModelLighting.h"
 #include "game/maps/MapAssetLoader.h"
 #include "game/party/Party.h"
 #include "game/render/lighting/FxLightClustering.h"
@@ -27,9 +29,7 @@ constexpr uint8_t DefaultLightAlpha = 224;
 constexpr uint8_t FxLightAlphaFallback = 208;
 constexpr size_t InvalidDecorationDecorVarIndex = static_cast<size_t>(-1);
 constexpr size_t MaxDecorationDecorVarCount = 125;
-constexpr float IndoorFxClusterCellSize = 512.0f;
-constexpr uint32_t IndoorFxClusterThresholdPerSector = 4;
-constexpr uint32_t MaxFxClustersPerIndoorSector = 7;
+constexpr float IndoorFxClusterCellSize = 256.0f;
 constexpr float MaxIndoorFxClusterRadius = 640.0f;
 constexpr float MaxIndoorFxClusterIntensity = 2.5f;
 constexpr size_t MaxIndoorTorchLightsPerDraw = 1;
@@ -293,34 +293,30 @@ void appendFrameLight(
         frame.fxLightIndices.push_back(lightIndex);
     }
 
-    if (global || light.sectorId < 0)
+    if (global || light.sectorId < 0 || static_cast<size_t>(light.sectorId) >= frame.lightIndicesBySector.size())
     {
         frame.globalLightIndices.push_back(lightIndex);
         return;
     }
 
-    const size_t sectorId = static_cast<size_t>(light.sectorId);
-
-    if (sectorId >= frame.lightIndicesBySector.size())
+    // Listed in every room it reaches (its own when it has no reach list).
+    std::vector<std::vector<uint32_t>> &lists =
+        light.kind == IndoorRenderLightKind::Fx ? frame.dynamicLightIndicesBySector : frame.lightIndicesBySector;
+    const auto list = [&](int16_t sectorId)
     {
-        frame.globalLightIndices.push_back(lightIndex);
-        return;
-    }
-
-    if (light.kind == IndoorRenderLightKind::Fx)
+        if (sectorId >= 0 && static_cast<size_t>(sectorId) < lists.size())
+        {
+            lists[static_cast<size_t>(sectorId)].push_back(lightIndex);
+        }
+    };
+    if (light.reach.count == 0)
     {
-        if (sectorId < frame.dynamicLightIndicesBySector.size())
-        {
-            frame.dynamicLightIndicesBySector[sectorId].push_back(lightIndex);
-        }
-        else
-        {
-            frame.globalLightIndices.push_back(lightIndex);
-        }
-        return;
+        list(light.sectorId);
     }
-
-    frame.lightIndicesBySector[sectorId].push_back(lightIndex);
+    for (uint8_t entry = 0; entry < light.reach.count; ++entry)
+    {
+        list(light.reach.sectors[entry]);
+    }
 }
 
 bool lightMatchesSector(const IndoorRenderLight &light, int16_t sectorId, int16_t backSectorId)
@@ -436,12 +432,31 @@ void addLightingSample(
     rgb[2] += contribution[2];
 }
 
+// Whether a frame light is listed in the sector (appendFrameLight's rule).
+bool listedInSector(const IndoorLightingFrame &frame, uint32_t lightIndex, int16_t sectorId)
+{
+    if (sectorId < 0 || lightIndex >= frame.lights.size())
+    {
+        return false;
+    }
+    const IndoorRenderLight &light = frame.lights[lightIndex];
+    if (light.sectorId < 0)
+    {
+        return false;
+    }
+    return light.reach.count == 0 ? light.sectorId == sectorId
+        : std::find(light.reach.sectors.begin(), light.reach.sectors.begin() + light.reach.count, sectorId)
+            != light.reach.sectors.begin() + light.reach.count;
+}
+
+// skipSector: lights listed there too were already counted (a light is listed in every room it reaches).
 void addSectorLightingSample(
     const IndoorLightingFrame &frame,
     const bx::Vec3 &position,
     int16_t sectorId,
     std::array<float, 3> &rgb,
-    IndoorLightingSampleFilter filter)
+    IndoorLightingSampleFilter filter,
+    int16_t skipSector = -1)
 {
     if (sectorId < 0)
     {
@@ -452,7 +467,10 @@ void addSectorLightingSample(
     {
         for (uint32_t lightIndex : frame.lightIndicesBySector[static_cast<size_t>(sectorId)])
         {
-            addLightingSample(frame, position, lightIndex, rgb, filter);
+            if (!listedInSector(frame, lightIndex, skipSector))
+            {
+                addLightingSample(frame, position, lightIndex, rgb, filter);
+            }
         }
     }
 
@@ -463,7 +481,10 @@ void addSectorLightingSample(
 
     for (uint32_t lightIndex : frame.dynamicLightIndicesBySector[static_cast<size_t>(sectorId)])
     {
-        addLightingSample(frame, position, lightIndex, rgb, filter);
+        if (!listedInSector(frame, lightIndex, skipSector))
+        {
+            addLightingSample(frame, position, lightIndex, rgb, filter);
+        }
     }
 }
 
@@ -577,7 +598,8 @@ void appendLightCandidate(
 void appendSectorLightCandidates(
     const IndoorLightingFrame &frame,
     CandidateLightList &candidateLightIndices,
-    int16_t sectorId)
+    int16_t sectorId,
+    int16_t skipSector = -1)
 {
     if (sectorId < 0)
     {
@@ -588,7 +610,10 @@ void appendSectorLightCandidates(
     {
         for (uint32_t lightIndex : frame.lightIndicesBySector[static_cast<size_t>(sectorId)])
         {
-            appendLightCandidate(frame, candidateLightIndices, lightIndex);
+            if (!listedInSector(frame, lightIndex, skipSector))
+            {
+                appendLightCandidate(frame, candidateLightIndices, lightIndex);
+            }
         }
     }
 
@@ -599,7 +624,10 @@ void appendSectorLightCandidates(
 
     for (uint32_t lightIndex : frame.dynamicLightIndicesBySector[static_cast<size_t>(sectorId)])
     {
-        appendLightCandidate(frame, candidateLightIndices, lightIndex);
+        if (!listedInSector(frame, lightIndex, skipSector))
+        {
+            appendLightCandidate(frame, candidateLightIndices, lightIndex);
+        }
     }
 }
 
@@ -695,28 +723,6 @@ void selectRankedLightsUpToBudget(
         }
     }
 }
-
-bool previousSelectionContains(
-    const IndoorLightSelectionHistory *pPreviousSelection,
-    uint32_t stableId)
-{
-    if (pPreviousSelection == nullptr || stableId == 0)
-    {
-        return false;
-    }
-
-    const size_t previousLightCount = std::min(pPreviousSelection->lightCount, MaxIndoorDrawLights);
-
-    for (size_t index = 0; index < previousLightCount; ++index)
-    {
-        if (pPreviousSelection->lightStableIds[index] == stableId)
-        {
-            return true;
-        }
-    }
-
-    return false;
-}
 }
 
 bool IndoorLightingRuntime::isBlvLightEnabledByState(
@@ -742,6 +748,49 @@ float IndoorLightingRuntime::ambientFromMinAmbientLightLevel(int minAmbientLight
     const int clampedLevel = std::clamp(minAmbientLightLevel, 0, 31);
     const float ambient = (248.0f - static_cast<float>(clampedLevel << 3)) / 255.0f;
     return std::clamp(ambient, IndoorAmbientMin, IndoorAmbientMax);
+}
+
+int IndoorLightingRuntime::sectorAmbientLevel(const IndoorMapData &mapData, const EventRuntimeState *pState,
+    size_t sectorId)
+{
+    if (pState != nullptr && !pState->sectorAmbientLevels.empty())
+    {
+        const auto iterator = pState->sectorAmbientLevels.find(uint16_t(sectorId));
+
+        if (iterator != pState->sectorAmbientLevels.end())
+        {
+            return iterator->second;
+        }
+    }
+
+    return sectorId < mapData.sectors.size() ? int(mapData.sectors[sectorId].minAmbientLightLevel) : 0;
+}
+
+float IndoorLightingRuntime::sectorAmbient(const IndoorLightingFrame &frame, int16_t sectorId)
+{
+    return sectorId >= 0 && size_t(sectorId) < frame.sectorAmbient.size() ? frame.sectorAmbient[size_t(sectorId)]
+                                                                          : frame.ambient;
+}
+
+void IndoorLightReachList::assign(const std::vector<int16_t> &reached)
+{
+    count = reached.size() <= sectors.size() ? uint8_t(reached.size()) : 0;
+    std::copy_n(reached.begin(), count, sectors.begin());
+}
+
+bool IndoorLightReachList::reachesReceiver(int16_t sector, int16_t backSector) const
+{
+    if (sector < 0 && backSector < 0)
+    {
+        return true;
+    }
+    return (sector >= 0 && reaches(sector)) || (backSector >= 0 && reaches(backSector));
+}
+
+bool IndoorLightReachList::reaches(int16_t sector) const
+{
+    const auto last = sectors.begin() + count;
+    return count == 0 || sector < 0 || std::find(sectors.begin(), last, sector) != last;
 }
 
 std::array<float, 3> IndoorLightingRuntime::sampleLightingRgb(
@@ -783,7 +832,9 @@ std::array<float, 3> IndoorLightingRuntime::sampleLightingRgbForSectors(
         return sampleLightingRgb(frame, position, nullptr, filter);
     }
 
-    std::array<float, 3> rgb = {frame.ambient, frame.ambient, frame.ambient};
+    // The receiving room's own ambient.
+    const float ambient = sectorAmbient(frame, sectorId >= 0 ? sectorId : backSectorId);
+    std::array<float, 3> rgb = {ambient, ambient, ambient};
 
     for (uint32_t lightIndex : frame.globalLightIndices)
     {
@@ -794,10 +845,33 @@ std::array<float, 3> IndoorLightingRuntime::sampleLightingRgbForSectors(
 
     if (backSectorId != sectorId)
     {
-        addSectorLightingSample(frame, position, backSectorId, rgb, filter);
+        addSectorLightingSample(frame, position, backSectorId, rgb, filter, sectorId);
     }
 
     return clampedLightingSample(rgb);
+}
+
+float IndoorLightingRuntime::mapLightStrength()
+{
+    return float(DefaultLightAlpha) / 255.0f * IndoorLightScale;
+}
+
+std::array<float, 3> IndoorLightingRuntime::sampleModelLightRgb(
+    const IndoorLightingFrame &frame,
+    const bx::Vec3 &position,
+    float lightScale)
+{
+    std::array<float, 3> rgb = {0.0f, 0.0f, 0.0f};
+    const float scale = lightScale / mapLightStrength();
+    for (const IndoorRenderLight &light : frame.lights)
+    {
+        const float strength = alphaChannel(light.colorAbgr) * light.intensity * IndoorLightScale * scale
+            * indoorModelLightFalloff(distanceSquared(light.position, position), light.radius);
+        rgb[0] += redChannel(light.colorAbgr) * strength;
+        rgb[1] += greenChannel(light.colorAbgr) * strength;
+        rgb[2] += blueChannel(light.colorAbgr) * strength;
+    }
+    return rgb;
 }
 
 IndoorDrawLightSet IndoorLightingRuntime::selectDrawLightSetForPoint(
@@ -816,7 +890,6 @@ IndoorDrawLightSet IndoorLightingRuntime::selectDrawLightSetForPoint(
         -1,
         bounds,
         pStats,
-        nullptr,
         includeStaticLights);
 }
 
@@ -827,7 +900,6 @@ IndoorDrawLightSet IndoorLightingRuntime::selectDrawLightSetForSectors(
     int16_t sectorId,
     int16_t backSectorId,
     LightingStats *pStats,
-    const IndoorLightSelectionHistory *pPreviousSelection,
     bool includeStaticLights)
 {
     IndoorLightSelectionBounds bounds = {};
@@ -839,8 +911,27 @@ IndoorDrawLightSet IndoorLightingRuntime::selectDrawLightSetForSectors(
         backSectorId,
         bounds,
         pStats,
-        pPreviousSelection,
         includeStaticLights);
+}
+
+std::vector<Engine::LightGridLight> IndoorLightingRuntime::gridLights(const IndoorLightingFrame &frame)
+{
+    std::vector<Engine::LightGridLight> lights;
+    lights.reserve(frame.lights.size());
+    for (const IndoorRenderLight &light : frame.lights)
+    {
+        Engine::LightGridLight gridLight;
+        gridLight.position = {light.position.x, light.position.y, light.position.z};
+        gridLight.radius = light.radius;
+        gridLight.color = {redChannel(light.colorAbgr), greenChannel(light.colorAbgr), blueChannel(light.colorAbgr)};
+        gridLight.intensity = alphaChannel(light.colorAbgr) * light.intensity * IndoorLightScale;
+        gridLight.sector = light.sectorId;
+        gridLight.reach = light.reach.sectors;
+        gridLight.reachCount = light.reach.count;
+        gridLight.dynamic = !isStaticDetailLight(light.kind);
+        lights.push_back(gridLight);
+    }
+    return lights;
 }
 
 IndoorDrawLightSet IndoorLightingRuntime::selectDrawLightSetForBounds(
@@ -851,7 +942,6 @@ IndoorDrawLightSet IndoorLightingRuntime::selectDrawLightSetForBounds(
     int16_t backSectorId,
     const IndoorLightSelectionBounds &bounds,
     LightingStats *pStats,
-    const IndoorLightSelectionHistory *pPreviousSelection,
     bool includeStaticLights)
 {
     CandidateLightList candidateLightIndices = {};
@@ -874,7 +964,7 @@ IndoorDrawLightSet IndoorLightingRuntime::selectDrawLightSetForBounds(
 
         if (backSectorId != sectorId)
         {
-            appendSectorLightCandidates(frame, candidateLightIndices, backSectorId);
+            appendSectorLightCandidates(frame, candidateLightIndices, backSectorId, sectorId);
         }
 
     }
@@ -918,11 +1008,6 @@ IndoorDrawLightSet IndoorLightingRuntime::selectDrawLightSetForBounds(
         if (score <= 0.0f)
         {
             continue;
-        }
-
-        if (previousSelectionContains(pPreviousSelection, light.stableId))
-        {
-            score *= 1.20f;
         }
 
         insertRankedLight(rankedLights, rankedLightCount, lightIndex, score);
@@ -1031,9 +1116,12 @@ uint32_t IndoorLightingRuntime::lightColorAbgr(
 
 IndoorLightingRuntime::StaticLightCache IndoorLightingRuntime::buildStaticCache(
     const IndoorMapData &mapData,
-    const DecorationBillboardSet *pDecorationBillboardSet)
+    const DecorationBillboardSet *pDecorationBillboardSet,
+    const EventRuntimeState *pState,
+    const std::vector<int16_t> &mapLightSectors)
 {
     StaticLightCache cache = {};
+    cache.lightRevision = pState != nullptr ? pState->indoorLightRevision : 0;
     cache.sourceIndicesBySector.resize(mapData.sectors.size());
     const std::vector<size_t> decorationDecorVarIndices =
         buildIndoorInteractiveDecorationDecorVarIndices(mapData, pDecorationBillboardSet);
@@ -1046,51 +1134,51 @@ IndoorLightingRuntime::StaticLightCache IndoorLightingRuntime::buildStaticCache(
                 return;
             }
 
-            const uint32_t sourceIndex = static_cast<uint32_t>(cache.sources.size());
             cache.sources.push_back(source);
-
-            if (source.sectorId >= 0 && static_cast<size_t>(source.sectorId) < cache.sourceIndicesBySector.size())
-            {
-                cache.sourceIndicesBySector[static_cast<size_t>(source.sectorId)].push_back(sourceIndex);
-            }
         };
 
+    // One source per map light, in the sector it stands in (MM6 maps list most lights in most sectors; the lights a
+    // room receives are its reach, assignReach).
+    // The first sector listing each light (-1: unlisted), its sector when mapLightSectors has none.
+    std::vector<int16_t> listed(mapData.lights.size(), -1);
     for (size_t sectorId = 0; sectorId < mapData.sectors.size(); ++sectorId)
     {
-        const IndoorSector &sector = mapData.sectors[sectorId];
-
-        for (uint16_t lightId : sector.lightIds)
+        for (const uint16_t lightId : mapData.sectors[sectorId].lightIds)
         {
-            if (lightId >= mapData.lights.size())
+            if (lightId < listed.size() && listed[lightId] < 0)
             {
-                continue;
+                listed[lightId] = int16_t(sectorId);
             }
-
-            const IndoorLight &source = mapData.lights[lightId];
-
-            if (source.radius <= 0)
-            {
-                continue;
-            }
-
-            CachedLightSource light = {};
-            light.position = {
-                static_cast<float>(source.x),
-                static_cast<float>(source.y),
-                static_cast<float>(source.z)
-            };
-            light.radius = static_cast<float>(source.radius);
-            light.red = source.red;
-            light.green = source.green;
-            light.blue = source.blue;
-            light.alpha = DefaultLightAlpha;
-            light.intensity = 1.0f;
-            light.sectorId = static_cast<int16_t>(sectorId);
-            light.kind = IndoorRenderLightKind::Static;
-            light.sourceAttributes = static_cast<uint32_t>(source.attributes);
-            light.sourceLightId = lightId;
-            appendCachedLight(light);
         }
+    }
+    for (size_t lightId = 0; lightId < mapData.lights.size(); ++lightId)
+    {
+        const IndoorLight &source = mapData.lights[lightId];
+
+        if (listed[lightId] < 0 || source.radius <= 0
+            || (pDecorationBillboardSet != nullptr && pDecorationBillboardSet->mapLightReplaced(lightId)))
+        {
+            continue;
+        }
+
+        CachedLightSource light = {};
+        light.position = {
+            static_cast<float>(source.x),
+            static_cast<float>(source.y),
+            static_cast<float>(source.z)
+        };
+        light.radius = static_cast<float>(source.radius);
+        light.red = source.red;
+        light.green = source.green;
+        light.blue = source.blue;
+        light.alpha = DefaultLightAlpha;
+        light.intensity = 1.0f;
+        light.sectorId = lightId < mapLightSectors.size() && mapLightSectors[lightId] >= 0 ? mapLightSectors[lightId]
+                                                                                          : listed[lightId];
+        light.kind = IndoorRenderLightKind::Static;
+        light.sourceAttributes = static_cast<uint32_t>(source.attributes);
+        light.sourceLightId = lightId;
+        appendCachedLight(light);
     }
 
     if (pDecorationBillboardSet != nullptr)
@@ -1099,13 +1187,20 @@ IndoorLightingRuntime::StaticLightCache IndoorLightingRuntime::buildStaticCache(
         {
             const DecorationEntry *pDecoration = pDecorationBillboardSet->decorationTable.get(billboard.decorationId);
 
+            if (pDecoration == nullptr || billboard.litByMapLight)
+            {
+                continue;
+            }
+
+            pDecoration = runtimeDecorationEntry(
+                pDecorationBillboardSet->decorationTable, *pDecoration, billboard.spriteOverrideKey(), pState);
             if (pDecoration == nullptr)
             {
                 continue;
             }
 
             const SpriteFrameEntry *pFrame =
-                pDecorationBillboardSet->spriteFrameTable.getFrame(billboard.spriteId, 0);
+                pDecorationBillboardSet->spriteFrameTable.getFrame(pDecoration->spriteId, 0);
             float radius = 0.0f;
 
             if (pDecoration->lightRadius > 0)
@@ -1176,14 +1271,69 @@ IndoorLightingRuntime::StaticLightCache IndoorLightingRuntime::buildStaticCache(
 
 void IndoorLightingRuntime::rebuildStaticCache(
     const IndoorMapData &mapData,
-    const DecorationBillboardSet *pDecorationBillboardSet)
+    const DecorationBillboardSet *pDecorationBillboardSet,
+    const EventRuntimeState *pState)
 {
-    m_staticLightCache = buildStaticCache(mapData, pDecorationBillboardSet);
+    m_lightReach.build(mapData, buildIndoorPortalGraph(mapData));
+    // Each map light's own sector: where it stands, else the first sector listing it.
+    m_mapLightSectors.assign(mapData.lights.size(), -1);
+    for (size_t sectorId = 0; sectorId < mapData.sectors.size(); ++sectorId)
+    {
+        for (const uint16_t lightId : mapData.sectors[sectorId].lightIds)
+        {
+            if (lightId < m_mapLightSectors.size() && m_mapLightSectors[lightId] < 0)
+            {
+                m_mapLightSectors[lightId] = int16_t(sectorId);
+            }
+        }
+    }
+    IndoorFaceGeometryCache geometryCache(mapData.faces.size());
+    for (size_t lightId = 0; lightId < mapData.lights.size(); ++lightId)
+    {
+        const IndoorLight &light = mapData.lights[lightId];
+        if (const std::optional<int16_t> sector = findIndoorSectorForPoint(mapData, mapData.vertices,
+                {float(light.x), float(light.y), float(light.z)}, &geometryCache, false))
+        {
+            m_mapLightSectors[lightId] = *sector;
+        }
+    }
+    m_pulsingLightSectors.clear();
+    for (const IndoorPulsingLight &light : mapData.pulsingLights)
+    {
+        m_pulsingLightSectors.push_back(findIndoorSectorForPoint(mapData, mapData.vertices,
+            {light.position[0], light.position[1], light.position[2]}, &geometryCache, false).value_or(-1));
+    }
+    m_staticLightCache = buildStaticCache(mapData, pDecorationBillboardSet, pState, m_mapLightSectors);
+    assignReach(m_staticLightCache);
 }
 
 void IndoorLightingRuntime::clearStaticCache()
 {
     m_staticLightCache = {};
+    m_lightReach.clear();
+}
+
+void IndoorLightingRuntime::assignReach(StaticLightCache &cache) const
+{
+    // A source is a candidate wherever one of the sectors it reaches is visible; without a reach list, in its own.
+    std::vector<int16_t> reached;
+    for (uint32_t sourceIndex = 0; sourceIndex < cache.sources.size(); ++sourceIndex)
+    {
+        CachedLightSource &source = cache.sources[sourceIndex];
+        m_lightReach.reach(std::span<const int16_t>(&source.sectorId, 1), source.position, source.radius, reached);
+        source.reach.assign(reached);
+        if (source.reach.count == 0)
+        {
+            reached.assign(1, source.sectorId);
+        }
+        for (const int16_t sector : reached)
+        {
+            if (sector >= 0 && size_t(sector) < cache.sourceIndicesBySector.size())
+            {
+                cache.sourceIndicesBySector[size_t(sector)].push_back(sourceIndex);
+            }
+        }
+    }
 }
 
 IndoorLightingFrame IndoorLightingRuntime::buildFrame(const IndoorLightingFrameInput &input) const
@@ -1211,17 +1361,24 @@ IndoorLightingFrame IndoorLightingRuntime::buildFrame(const IndoorLightingFrameI
             }
 
             const int sectorAmbientLightLevel =
-                static_cast<int>(input.pMapData->sectors[sectorId].minAmbientLightLevel);
+                sectorAmbientLevel(*input.pMapData, input.pEventRuntimeState, sectorId);
             maxAmbientLightLevel = std::max(maxAmbientLightLevel, sectorAmbientLightLevel);
         }
 
         frame.ambient = ambientFromMinAmbientLightLevel(maxAmbientLightLevel);
+        frame.sectorAmbient.resize(input.pMapData->sectors.size());
+        for (size_t sectorId = 0; sectorId < input.pMapData->sectors.size(); ++sectorId)
+        {
+            frame.sectorAmbient[sectorId] =
+                ambientFromMinAmbientLightLevel(
+                    sectorAmbientLevel(*input.pMapData, input.pEventRuntimeState, sectorId));
+        }
     }
 
     if (input.pParty != nullptr)
     {
         if (const std::optional<GameplayTorchLight> torchLight =
-                resolveGameplayTorchLight(*input.pParty, false, true))
+                resolveGameplayTorchLight(*input.pParty, false, 1.0f, input.warmTorchLight))
         {
             IndoorRenderLight torch = {};
             torch.position = input.cameraPosition;
@@ -1272,8 +1429,8 @@ IndoorLightingFrame IndoorLightingRuntime::buildFrame(const IndoorLightingFrameI
 
         FxLightClusterConfig clusterConfig = {};
         clusterConfig.cellSize = IndoorFxClusterCellSize;
-        clusterConfig.thresholdPerSector = IndoorFxClusterThresholdPerSector;
-        clusterConfig.maxClustersPerSector = MaxFxClustersPerIndoorSector;
+        clusterConfig.thresholdPerSector = input.fxClusterThreshold;
+        clusterConfig.maxClustersPerSector = input.fxClusterThreshold;
         clusterConfig.maxRadius = MaxIndoorFxClusterRadius;
         clusterConfig.maxIntensity = MaxIndoorFxClusterIntensity;
         clusterConfig.allowSectorlessLights = true;
@@ -1282,20 +1439,77 @@ IndoorLightingFrame IndoorLightingRuntime::buildFrame(const IndoorLightingFrameI
         frame.sourceFxLightCount = static_cast<uint32_t>(fxLights.size());
         frame.clusteredFxLightCount = clusteredLights.outputClusterLights;
 
+        std::vector<int16_t> reached;
         for (const RenderLight &sourceLight : clusteredLights.lights)
         {
-            appendFrameLight(frame, indoorLightFromRenderLight(sourceLight), false);
+            IndoorRenderLight light = indoorLightFromRenderLight(sourceLight);
+            m_lightReach.reach(std::span<const int16_t>(&light.sectorId, 1), light.position, light.radius, reached);
+            light.reach.assign(reached);
+            appendFrameLight(frame, light, false);
         }
     }
 
-    StaticLightCache fallbackCache = {};
-    const StaticLightCache *pStaticCache = &m_staticLightCache;
-
-    if (!pStaticCache->valid && input.pMapData != nullptr)
+    // Scene pulsing lights (MM9's GlowingLight): dynamic lights whose intensity and radius follow their sines.
+    if (input.pMapData != nullptr && m_pulsingLightSectors.size() == input.pMapData->pulsingLights.size())
     {
-        fallbackCache = buildStaticCache(*input.pMapData, input.pDecorationBillboardSet);
-        pStaticCache = &fallbackCache;
+        const auto wave = [&input](const std::array<float, 4> &curve)
+        {
+            const float cycles = curve[2] * input.timeSeconds + curve[3];
+            const float blend = 0.5f + 0.5f * std::sin(cycles * 2.0f * bx::kPi);
+            return curve[0] + (curve[1] - curve[0]) * blend;
+        };
+        std::vector<int16_t> reached;
+
+        for (size_t index = 0; index < input.pMapData->pulsingLights.size(); ++index)
+        {
+            const IndoorPulsingLight &source = input.pMapData->pulsingLights[index];
+            const int16_t sectorId = m_pulsingLightSectors[index];
+            bool enabled = source.startOn;
+
+            if (input.pEventRuntimeState != nullptr)
+            {
+                const auto stateIt = input.pEventRuntimeState->indoorLightsEnabled.find(source.lightKey);
+                enabled = stateIt != input.pEventRuntimeState->indoorLightsEnabled.end() ? stateIt->second : enabled;
+            }
+
+            if (!enabled || sectorId < 0)
+            {
+                continue;
+            }
+
+            IndoorRenderLight light = {};
+            light.position = {source.position[0], source.position[1], source.position[2]};
+            light.radius = wave(source.radius);
+            light.intensity = wave(source.intensity);
+            light.colorAbgr = makeAbgr(source.color[0], source.color[1], source.color[2], 255);
+            light.sectorId = sectorId;
+            light.kind = IndoorRenderLightKind::Fx;
+            light.stableId = 0x706c0000u + source.lightKey;
+            m_lightReach.reach(std::span<const int16_t>(&light.sectorId, 1), light.position, light.radius, reached);
+            // drawn when a room it reaches is in view
+            if (!std::any_of(reached.begin(), reached.end(),
+                    [&input](int16_t reachedSector)
+                    {
+                        return reachedSector >= 0 && sectorVisible(input.pVisibleSectorMask, size_t(reachedSector));
+                    })
+                && !sectorVisible(input.pVisibleSectorMask, size_t(sectorId)))
+            {
+                continue;
+            }
+
+            light.reach.assign(reached);
+            appendFrameLight(frame, light, false);
+        }
     }
+
+    if (input.pMapData != nullptr
+        && (!m_staticLightCache.valid || m_staticLightCache.lightRevision != frame.indoorLightRevision))
+    {
+        m_staticLightCache = buildStaticCache(
+            *input.pMapData, input.pDecorationBillboardSet, input.pEventRuntimeState, m_mapLightSectors);
+        assignReach(m_staticLightCache);
+    }
+    const StaticLightCache *pStaticCache = &m_staticLightCache;
 
     if (pStaticCache->valid)
     {
@@ -1350,11 +1564,32 @@ IndoorLightingFrame IndoorLightingRuntime::buildFrame(const IndoorLightingFrameI
                     return;
                 }
 
-                if (!sphereIntersectsVisibleSectorFrustums(
-                        input.pVisibleSectorFrustums,
-                        source.sectorId,
-                        source.position,
-                        source.radius))
+                // Seen through the portals of any room it reaches.
+                bool seen = source.reach.count == 0
+                    && sphereIntersectsVisibleSectorFrustums(
+                        input.pVisibleSectorFrustums, source.sectorId, source.position, source.radius);
+                for (uint8_t entry = 0; entry < source.reach.count && !seen; ++entry)
+                {
+                    seen = sphereIntersectsVisibleSectorFrustums(
+                        input.pVisibleSectorFrustums, source.reach.sectors[entry], source.position, source.radius);
+                }
+                // Without occlusion (scene model_lighting): in the view of any visible room.
+                for (size_t sectorId = 0; input.lightsIgnoreReach && input.pVisibleSectorFrustums != nullptr && !seen
+                    && sectorId < input.pVisibleSectorFrustums->size(); ++sectorId)
+                {
+                    seen = !(*input.pVisibleSectorFrustums)[sectorId].empty() && sphereIntersectsVisibleSectorFrustums(
+                        input.pVisibleSectorFrustums, int16_t(sectorId), source.position, source.radius);
+                }
+                if (!seen)
+                {
+                    return;
+                }
+
+                // MM9's open-air lights follow the sun (devdocs/INDOOR_OPEN_SKY.md "Daylight"), gone at night.
+                const bool openAir = source.kind == IndoorRenderLightKind::Static && input.pMapData != nullptr
+                    && indoorOpenAirLight(input.pMapData->daylight, source.sourceLightId);
+                const float intensity = openAir ? source.intensity * input.openAirLightScale : source.intensity;
+                if (intensity <= 0.0f)
                 {
                     return;
                 }
@@ -1364,9 +1599,10 @@ IndoorLightingFrame IndoorLightingRuntime::buildFrame(const IndoorLightingFrameI
                 light.radius = source.radius;
                 light.colorAbgr =
                     lightColorAbgr(source.red, source.green, source.blue, source.alpha, input.coloredLights);
-                light.intensity = source.intensity;
+                light.intensity = intensity;
                 light.sectorId = source.sectorId;
                 light.kind = source.kind;
+                light.reach = source.reach;
                 light.stableId =
                     source.kind == IndoorRenderLightKind::Static
                         ? static_cast<uint32_t>(source.sourceLightId + 1)

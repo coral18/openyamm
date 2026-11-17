@@ -3,7 +3,14 @@
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_properties.h>
 #include <SDL3/SDL_video.h>
+#if defined(__APPLE__)
+#include <SDL3/SDL_metal.h>
+#endif
+#if defined(__linux__) && !defined(__ANDROID__)
+#include <dlfcn.h>
+#endif
 
+#include <algorithm>
 #include <cstdarg>
 #include <cstdint>
 #include <cstring>
@@ -12,13 +19,17 @@
 #include <mutex>
 #include <optional>
 #include <utility>
+#include <vector>
 
 namespace OpenYAMM::Engine
 {
 namespace
 {
 std::mutex g_screenshotMutex;
-std::optional<BgfxContext::ScreenshotCapture> g_screenshotCapture;
+// Finished captures not yet consumed, oldest first. A video capture keeps a few frames in flight; an abandoned capture
+// (timed out) is dropped once the list is full.
+constexpr size_t ScreenshotCaptureLimit = 8;
+std::vector<BgfxContext::ScreenshotCapture> g_screenshotCaptures;
 bool g_bgfxInitialized = false;
 
 bgfx::RendererType::Enum selectRendererType(bool useNoopRenderer)
@@ -32,10 +43,24 @@ bgfx::RendererType::Enum selectRendererType(bool useNoopRenderer)
     return bgfx::RendererType::OpenGLES;
 #elif defined(OPENYAMM_USE_VULKAN)
     return bgfx::RendererType::Vulkan;
+#elif defined(__APPLE__)
+    return bgfx::RendererType::Metal;
 #else
     return bgfx::RendererType::OpenGL;
 #endif
 }
+
+#if defined(__linux__) && !defined(__ANDROID__)
+// NVIDIA's EGL for Wayland (seen with egl-wayland 1.1.21 and driver 580) gives the Wayland objects it makes on the
+// game's connection interface descriptions from libwayland-server, and libglvnd unloads both when bgfx shuts EGL down.
+// The objects outlive them, so the next dispatch on the connection (SDL's roundtrip when it destroys the window) read
+// unmapped memory and crashed on exit. RTLD_NODELETE keeps the library mapped until the process ends; no handle is
+// needed. Drop this once fixed drivers are common.
+void keepWaylandServerLoaded()
+{
+    dlopen("libwayland-server.so.0", RTLD_LAZY | RTLD_NODELETE);
+}
+#endif
 }
 
 class BgfxContext::Callback final : public bgfx::CallbackI
@@ -49,10 +74,14 @@ public:
             << (pMessage != nullptr ? pMessage : "")
             << '\n';
 
+#if defined(OPENYAMM_BGFX_ABORT_ON_CHECK)
+        std::abort();
+#else
         if (code != bgfx::Fatal::DebugCheck)
         {
             std::abort();
         }
+#endif
     }
 
     void traceVargs(const char *pFilePath, uint16_t line, const char *pFormat, va_list argList) override
@@ -142,7 +171,13 @@ public:
         }
 
         std::scoped_lock lock(g_screenshotMutex);
-        g_screenshotCapture = std::move(capture);
+
+        if (g_screenshotCaptures.size() >= ScreenshotCaptureLimit)
+        {
+            g_screenshotCaptures.erase(g_screenshotCaptures.begin());
+        }
+
+        g_screenshotCaptures.push_back(std::move(capture));
     }
 
     void captureBegin(uint32_t, uint32_t, uint32_t, bgfx::TextureFormat::Enum, bool) override
@@ -161,6 +196,7 @@ public:
 BgfxContext::BgfxContext()
     : m_isInitialized(false)
     , m_verticalSync(false)
+    , m_maxAnisotropy(1)
     , m_rendererType(bgfx::RendererType::Noop)
     , m_pCallback(std::make_unique<Callback>())
 {
@@ -171,9 +207,15 @@ BgfxContext::~BgfxContext()
     shutdown();
 }
 
-uint32_t bgfxResetFlags(bool verticalSync)
+uint32_t bgfxResetFlags(bool verticalSync, uint8_t maxAnisotropy)
 {
-    uint32_t flags = BGFX_RESET_MAXANISOTROPY;
+    uint32_t flags = BGFX_RESET_NONE;
+
+    // Anisotropic samplers filter up to this level (the device maximum clamps it); without the flag they are trilinear.
+    if (maxAnisotropy > 1)
+    {
+        flags |= BGFX_RESET_MAXANISOTROPY | BGFX_RESET_MAXANISOTROPY_LEVEL(maxAnisotropy);
+    }
 
     if (verticalSync)
     {
@@ -183,7 +225,8 @@ uint32_t bgfxResetFlags(bool verticalSync)
     return flags;
 }
 
-bool BgfxContext::initialize(SDL_Window *pWindow, int windowWidth, int windowHeight, bool verticalSync)
+bool BgfxContext::initialize(
+    SDL_Window *pWindow, int windowWidth, int windowHeight, bool verticalSync, uint8_t maxAnisotropy)
 {
     shutdown();
 
@@ -194,20 +237,43 @@ bool BgfxContext::initialize(SDL_Window *pWindow, int windowWidth, int windowHei
     init.type = selectRendererType(useNoopRenderer);
     init.vendorId = BGFX_PCI_ID_NONE;
     init.platformData = resolvePlatformData(pWindow);
+#if defined(__linux__) && !defined(__ANDROID__)
+    if (init.platformData.type == bgfx::NativeWindowHandleType::Wayland)
+    {
+        keepWaylandServerLoaded();
+    }
+#endif
+#if defined(__APPLE__)
+    if (!useNoopRenderer)
+    {
+        m_pMetalView = SDL_Metal_CreateView(pWindow);
+        if (m_pMetalView == nullptr)
+        {
+            std::cerr << "SDL_Metal_CreateView failed: " << SDL_GetError() << '\n';
+            return false;
+        }
+        init.platformData.nwh = SDL_Metal_GetLayer(m_pMetalView);
+    }
+#endif
     init.resolution.width = static_cast<uint32_t>(windowWidth);
     init.resolution.height = static_cast<uint32_t>(windowHeight);
-    init.resolution.reset = bgfxResetFlags(verticalSync);
+    init.resolution.reset = bgfxResetFlags(verticalSync, maxAnisotropy);
     init.callback = m_pCallback.get();
 
     if (!bgfx::init(init))
     {
         std::cerr << "bgfx::init failed.\n";
+#if defined(__APPLE__)
+        SDL_Metal_DestroyView(m_pMetalView);
+        m_pMetalView = nullptr;
+#endif
         return false;
     }
 
     g_bgfxInitialized = true;
     m_isInitialized = true;
     m_verticalSync = verticalSync;
+    m_maxAnisotropy = maxAnisotropy;
     m_rendererType = bgfx::getRendererType();
 
     bgfx::setDebug(BGFX_DEBUG_NONE);
@@ -233,7 +299,7 @@ void BgfxContext::resize(SDL_Window *pWindow, int windowWidth, int windowHeight)
     bgfx::reset(
         static_cast<uint32_t>(windowWidth),
         static_cast<uint32_t>(windowHeight),
-        bgfxResetFlags(m_verticalSync));
+        bgfxResetFlags(m_verticalSync, m_maxAnisotropy));
 }
 
 void BgfxContext::shutdown()
@@ -244,8 +310,16 @@ void BgfxContext::shutdown()
     }
 
     bgfx::shutdown();
+#if defined(__APPLE__)
+    if (m_pMetalView != nullptr)
+    {
+        SDL_Metal_DestroyView(m_pMetalView);
+        m_pMetalView = nullptr;
+    }
+#endif
     m_isInitialized = false;
     m_verticalSync = false;
+    m_maxAnisotropy = 1;
     m_rendererType = bgfx::RendererType::Noop;
     g_bgfxInitialized = false;
 }
@@ -269,13 +343,16 @@ std::optional<BgfxContext::ScreenshotCapture> BgfxContext::consumeScreenshot(con
 {
     std::scoped_lock lock(g_screenshotMutex);
 
-    if (!g_screenshotCapture || g_screenshotCapture->token != token)
+    const auto found = std::find_if(g_screenshotCaptures.begin(), g_screenshotCaptures.end(),
+        [&token](const ScreenshotCapture &capture) { return capture.token == token; });
+
+    if (found == g_screenshotCaptures.end())
     {
         return std::nullopt;
     }
 
-    std::optional<ScreenshotCapture> capture = std::move(g_screenshotCapture);
-    g_screenshotCapture.reset();
+    std::optional<ScreenshotCapture> capture = std::move(*found);
+    g_screenshotCaptures.erase(found);
     return capture;
 }
 
